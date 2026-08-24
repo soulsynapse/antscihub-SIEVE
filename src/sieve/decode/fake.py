@@ -8,11 +8,12 @@ it meant decoding video, owning a GPU, and waiting.
 
 Three properties make it worth trusting.
 
-**Every frame says which row it is.** The row is written into the first pixels
-and recoverable with `row_in`, so a check asserts it got frame 412 rather than
-asserting it got *an* array of the right shape. A store that hands back a
+**Every frame says which row it is.** The row is written into the frame as flat
+blocks and recoverable with `row_in`, so a check asserts it got frame 412 rather
+than asserting it got *an* array of the right shape. A store that hands back a
 neighbouring frame is the failure this catches, and it is the failure a
-shape-only assertion cannot see.
+shape-only assertion cannot see. Blocks rather than pixels because these frames
+get stored, and a store worth checking encodes lossily.
 
 **Every request is recorded.** `asked` is the ordered list of rows this route
 was asked for, which is how "fill from the playhead's chunk, then wrap" stops
@@ -44,6 +45,10 @@ from sieve.frame.table import FrameTable
 #: Small enough that thousands of frames cost nothing, large enough to carry a
 #: row marker and survive a crop in a check.
 WIDTH, HEIGHT = 64, 48
+
+#: Side of one row-marker block, in pixels. Wide enough that a lossy encode
+#: leaves its median alone.
+MARK = 8
 
 
 def table(rows: int, *, gop: int = 24, step: int = 1001,
@@ -87,19 +92,34 @@ class FakeRoute:
         Deterministic so that two routes over one table agree, which is what
         lets a check compare a cached answer against a freshly decoded one and
         mean something by the comparison.
+
+        The row is written as four blocks rather than four pixels because these
+        frames get stored, and a store worth checking encodes lossily. A marker
+        one pixel wide would be smeared by the first chunk it went through, and
+        the check that read it back would be reporting on the codec rather than
+        on the store. `MARK` square of flat tone survives quantisation
+        comfortably at the qualities this tree stores at.
         """
         arr = np.full((HEIGHT, WIDTH), row % 251, dtype=np.uint8)
-        marker = np.frombuffer(int(row).to_bytes(4, "big"), dtype=np.uint8)
-        arr[0, :4] = marker
+        for index, byte in enumerate(int(row).to_bytes(4, "big")):
+            left = index * MARK
+            arr[:MARK, left:left + MARK] = byte
         if self.form.pix == "bgr":
             return np.ascontiguousarray(np.dstack([arr, arr, arr]))
         return arr
 
     @staticmethod
     def row_in(arr: np.ndarray) -> int:
-        """Which row an array is, read back out of its own pixels."""
+        """Which row an array is, read back out of its own pixels.
+
+        Each block is read as its median, so a stray quantised pixel at a block
+        edge cannot change the answer — and if a block is so far gone that its
+        median has moved, the frame really is not the one it claims to be.
+        """
         plane = arr[..., 0] if arr.ndim == 3 else arr
-        return int.from_bytes(bytes(plane[0, :4].tolist()), "big")
+        blocks = [int(np.median(plane[:MARK, i * MARK:(i + 1) * MARK]))
+                  for i in range(4)]
+        return int.from_bytes(bytes(blocks), "big")
 
     # ── answering ────────────────────────────────────────────────────────
     def at(self, row: int) -> tuple[np.ndarray, str] | None:

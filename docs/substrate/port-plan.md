@@ -327,10 +327,16 @@ and scattered seeking are timed as ordinary harness cases and live in
 machine agrees with what the decode explorer found about where hardware
 seeks start winning, which is a cross-check rather than a new result.
 
-### P2 — tiers
+### P2 — tiers — *landed*
 
-`src/sieve/store/resident.py`, `.../chunks.py`, `.../proxy.py`,
-`.../coverage.py`
+`src/sieve/store/resident.py`, `.../spans.py`, `.../chunks.py`,
+`.../coverage.py`; checked by `experiments/substrate-checks/03-tiers.py`
+
+One deviation: reading is `spans.py`, shared, and `chunks.py` only adds the
+write side. A proxy store is a `SpanStore` over a different directory with a
+different producer, so there is no `proxy.py` here — the builder that fills
+one is P5's, and giving it a reader of its own would have been the fourth
+copy of a seek loop this phase exists to remove.
 
 Owns what is held and what is on disk, all of it keyed by `(row, form
 key)`. The resident store answers an exact get, a nearest-within-radius
@@ -350,13 +356,34 @@ May not know: which tier should be asked, or in what order anything fills.
 A store answers "have you got this, in a form that grades `EXACT` for what
 I want" and "here it is". It does not choose.
 
-*Proves it:* arrays go in and come back out, encoded and re-decoded,
-without a source file existing. Eviction is at the byte budget in LRU
-order, and a form nothing asks for any more drains rather than being wiped.
-A half-written chunk reads as absent. A store holding a native-sampling
-form over a containing rect answers an `EXACT` request for a sub-crop, and
-refuses — rather than approximating — a request for pixels it does not
-have.
+*Proved it:* seven cases, passing, none of which needs footage — what a
+tier does is decided by rows, forms and budgets. Two forms of one instant
+coexist; eviction takes the least-recent unprotected frame and leaves a
+protected one alone; a residency set larger than the budget leaves the
+store over budget rather than dropping what it was told to keep, which is
+ADR-0006's honest failure. `nearest` is checked against the linear scan it
+replaces over the same data, because agreeing with the scan is the only
+thing that makes the replacement safe.
+
+**The case worth reading is `range`, and it found a real defect that both
+explorers have.** Storing a grey frame as `yuv420p` applies the
+limited-range convention on the way in — black is written as 16, white as
+234 — while the read side takes the luma plane raw and does not undo it. So
+a frame served from a persisted chunk differs from the same frame served
+from memory by a contrast stretch, and nothing reports it: the array has
+the right shape, the picture looks right, and any value computed from it
+depends on which tier answered. That is exactly the hazard `form` states
+its exact grade to prevent, one level further down, and it is invisible to
+every instrument that measures time. Grey is now stored as `gray` and the
+round trip is an identity within quantisation. The check tests black and
+white rather than an average, because an average absorbs a squeeze.
+
+`--broken` swaps the record lookup for the directory glob the explorers
+use, and rows that were never written come back holding another chunk's
+frames while a deleted file stays in the record forever. It also caught a
+latent bug in the code under test rather than in the explorers: an
+`except av.AVError` clause that does not exist in this PyAV version, so the
+handler raised instead of handling. That path had never been reached.
 
 ### P3 — the record
 

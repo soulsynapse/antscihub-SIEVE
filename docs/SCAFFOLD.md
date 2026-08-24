@@ -361,6 +361,11 @@
           - 📄 `view.py` — The walked step as a view: the head over it, and the room its knobs will fill.
       - 📄 `metrics.py` — How round the cards are and how large the text is, for every view at once.
       - 📄 `palette.py` — The colours every view draws with, and the palettes they are drawn from.
+    - 📁 `store/` — What is held, and where. Nothing here decides what to ask for.
+      - 📄 `chunks.py` — Writing a finished span to disk, so the next visit does not re-derive it.
+      - 📄 `coverage.py` — What is on disk, written down rather than worked out.
+      - 📄 `resident.py` — Frames held in memory, keyed by the picture as well as the instant.
+      - 📄 `spans.py` — Reading frames back out of files somebody else wrote.
     - 📄 `__main__.py` — `uv run sieve`, or `uv run python -m sieve`.
     - 📄 `relaunch.py` — Start SIEVE over: the same command, in place of the process running it.
     - 📄 `settings.py` — What the user has set, kept where the next run will find it.

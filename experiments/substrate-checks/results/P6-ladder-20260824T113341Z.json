@@ -1,8 +1,8 @@
 {
  "experiment": "P6-ladder",
  "question": "Is the blocking decode on exactly the requests that are owed one, and is nothing approximate ever admissible?",
- "when": "2026-08-24T11:26:18.743126+00:00",
- "sieve_rev": "930e011",
+ "when": "2026-08-24T11:33:41.208488+00:00",
+ "sieve_rev": "9de99a0",
  "machine": {
   "platform": "Windows-11-10.0.26200-SP0",
   "processor": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",

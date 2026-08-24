@@ -1,8 +1,8 @@
 {
  "experiment": "P4-declarations-broken",
  "question": "Does a declaration schedule fetches, and is a re-fetch it predicted distinguishable from one it could not have?",
- "when": "2026-08-24T11:26:14.582917+00:00",
- "sieve_rev": "930e011",
+ "when": "2026-08-24T11:33:37.087278+00:00",
+ "sieve_rev": "9de99a0",
  "machine": {
   "platform": "Windows-11-10.0.26200-SP0",
   "processor": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",

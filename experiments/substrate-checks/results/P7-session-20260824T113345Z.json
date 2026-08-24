@@ -1,8 +1,8 @@
 {
  "experiment": "P7-session",
  "question": "Does a drag over unfilled ground decode, and does anything approximate reach a store?",
- "when": "2026-08-24T11:26:23.164192+00:00",
- "sieve_rev": "930e011",
+ "when": "2026-08-24T11:33:45.967929+00:00",
+ "sieve_rev": "9de99a0",
  "machine": {
   "platform": "Windows-11-10.0.26200-SP0",
   "processor": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
@@ -25,13 +25,15 @@
   "hunting: proxy answered row 700 and was refused admission; with the proxy gone the hunt fell to keyframe",
   "waste: 1 double decode, addressed as row 31 decoded with 0+0+64x48@64x48:gray resident and exact for 0+0+32x24@32x24:gray",
   "account: 21 serves over tiers ['decode', 'hold'], remainder 100% of a made-up interval",
+  "thread: a session built on a worker is told which thread draws, and the refusal never depended on the answer",
   "cold (a drag never decodes): 20 checked, 0 disagreed",
   "released (decodes, and keeps it): 2 checked, 0 disagreed",
   "landing (anchored, then resident): 288 checked, 0 disagreed",
   "crop (a form change, not an erasure): 4 checked, 0 disagreed",
   "hunting (shown, never kept): 2 checked, 0 disagreed",
   "waste (counted, with an address): 2 checked, 0 disagreed",
-  "account (serves and clocks recorded): 21 checked, 0 disagreed"
+  "account (serves and clocks recorded): 21 checked, 0 disagreed",
+  "thread (told, not guessed): 3 checked, 0 disagreed"
  ],
  "cases": []
 }

@@ -36,6 +36,11 @@ as waste with an address, and an ordinary first decode is not.
 **account** — the ledger's clocks close against the interval that elapsed, and
 the serves that happened are on the record.
 
+**thread** — a session built on a worker, which is how the window opens one,
+is *told* which thread draws rather than guessing from its constructor. The
+guess was wrong in exactly the arrangement the freeze rule asks for, and what
+it silently switched off was the accounting rather than the refusal.
+
 `--broken` restores the pre-finding viewer: the blocking decode is on every
 ladder and the session's guard is removed. `cold` then decodes on the drawing
 thread, once per request, and says how many times.
@@ -49,6 +54,7 @@ from __future__ import annotations
 
 import sys
 import tempfile
+import threading
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "decode-experiments"))
@@ -71,7 +77,8 @@ from sieve.session.ladder import (  # noqa: E402
     Attempt,
     admissible,
 )
-from sieve.session.ledger import DOUBLE_DECODE  # noqa: E402
+from sieve.session.ladder import Request  # noqa: E402
+from sieve.session.ledger import DOUBLE_DECODE, PLACEHOLDER  # noqa: E402
 from sieve.session.session import BlockedTheDrawingThread, Session  # noqa: E402
 from sieve.store.chunks import ChunkStore  # noqa: E402
 from sieve.store.spans import SpanStore  # noqa: E402
@@ -347,6 +354,64 @@ def case_account(run: Run, root: Path) -> tuple[str, int, list[str]]:
     return "account (serves and clocks recorded)", 21, bad
 
 
+def case_thread(run: Run, root: Path) -> tuple[str, int, list[str]]:
+    """Does the session know which thread draws, when it was built elsewhere?
+
+    It has to be told, and the reason is the freeze rule itself. Opening a
+    recording builds a frame table and races the decoders, which is seconds and
+    must not run on the thread that draws — so the window builds sessions on a
+    worker. A session that guessed the drawing thread from its own constructor
+    then held the *worker's* identity, and everything gated on the comparison
+    quietly stopped firing. The guess read as needing no caller to remember
+    anything; what it actually needed was for opening to be fast.
+    """
+    bad: list[str] = []
+    built: list = []
+
+    def build():
+        built.append(make(root / "thread", with_proxy=False))
+
+    worker = threading.Thread(target=build)
+    worker.start()
+    worker.join(timeout=30)
+    if not built:
+        bad.append("the session was not built")
+        return "thread (told, not guessed)", 0, bad
+
+    session, route = built[0]
+    here = threading.get_ident()
+    if session.drawing_thread == here:
+        bad.append("a session built on a worker already thought this thread "
+                   "drew; the case cannot show anything")
+    session.drawn_on()
+    if session.drawing_thread != here:
+        bad.append("drawn_on did not take this thread")
+
+    # the accounting that depends on it: the hunt route is a chosen discard,
+    # and it is only counted as one where the drawing thread is the one paying
+    session.window = (0, WINDOW)
+    session.serve(700, task="hunt")
+    counted = session.ledger.counts()["chosen"].get(PLACEHOLDER, 0)
+    if counted != 1:
+        bad.append(f"a keyframe served on the drawing thread counted "
+                   f"{counted} chosen discards, not one")
+
+    # and the refusal is thread-independent, which is the half that was never
+    # broken: a ladder offering a decode nobody released is wrong anywhere
+    session.drawn_on(here + 1)
+    try:
+        session._refuse_if_drawing(
+            Request(row=5, want=session.form_for(), exact=False), DECODE)
+        bad.append("an unreleased decode was permitted on a thread that does "
+                   "not draw; the refusal must not depend on which thread")
+    except BlockedTheDrawingThread:
+        pass
+    session.close()
+    run.note("thread: a session built on a worker is told which thread draws, "
+             "and the refusal never depended on the answer")
+    return "thread (told, not guessed)", 3, bad
+
+
 def main() -> None:
     broken = "--broken" in sys.argv
     if broken:
@@ -369,7 +434,8 @@ def main() -> None:
         root = Path(tmp)
         results = []
         for case in (case_cold, case_released, case_landing, case_crop,
-                     case_hunting, case_waste, case_account):
+                     case_hunting, case_waste, case_account,
+                     case_thread):
             try:
                 results.append(case(run, root))
             except BlockedTheDrawingThread as refused:

@@ -145,10 +145,26 @@ class Session:
         self._closing = threading.Event()
         self._encoder.start()
 
-        #: whichever thread built the session is taken to be the one that
-        #: draws. Recorded rather than passed, so no caller has to remember to
-        #: say which thread it is on and none can lie about it by forgetting.
+        #: Which thread draws. Defaults to whichever built the session and
+        #: is corrected by `drawn_on`, because the default turned out to be
+        #: wrong in exactly the arrangement the freeze rule asks for: a
+        #: session is built on a worker so that opening a recording does
+        #: not stop the window, which left this holding the *worker's*
+        #: identity and the comparison below never matching. Guessing from
+        #: the constructor read as needing no caller to remember anything,
+        #: and what it actually needed was for opening to be slow.
         self.drawing_thread = threading.get_ident()
+
+    def drawn_on(self, ident: int | None = None) -> None:
+        """Say which thread draws. Called *from* that thread by default.
+
+        The window calls this when a session lands, on the thread a signal
+        delivered it to, which is the one that paints. Everything that gates on
+        the drawing thread reads it, so a session built anywhere is honest
+        about where it is being looked at.
+        """
+        self.drawing_thread = ident if ident is not None \
+            else threading.get_ident()
 
     # ── what a step wants ────────────────────────────────────────────────
     def form_for(self, tool: Tool | None = None) -> Form:

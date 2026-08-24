@@ -202,25 +202,25 @@
       - 📄 `P0-identity-broken-20260824T090532Z.json`
       - 📄 `P1-routes-20260824T090814Z.json`
       - 📄 `P1-routes-broken-20260824T090741Z.json`
-      - 📄 `P2-tiers-20260824T112608Z.json`
-      - 📄 `P2-tiers-broken-20260824T112611Z.json`
-      - 📄 `P3-record-20260824T112612Z.json`
-      - 📄 `P3-record-broken-20260824T112612Z.json`
-      - 📄 `P4-declarations-20260824T112613Z.json`
-      - 📄 `P4-declarations-broken-20260824T112614Z.json`
-      - 📄 `P5-producers-20260824T112616Z.json`
-      - 📄 `P5-producers-broken-20260824T112617Z.json`
-      - 📄 `P6-ladder-20260824T112618Z.json`
-      - 📄 `P6-ladder-broken-20260824T112619Z.json`
-      - 📄 `P7-session-20260824T112623Z.json`
-      - 📄 `P7-session-broken-20260824T112626Z.json`
-      - 📄 `P8-canvas-20260824T112633Z.json`
-      - 📄 `P8-canvas-broken-20260824T112634Z.json`
+      - 📄 `P2-tiers-20260824T113331Z.json`
+      - 📄 `P2-tiers-broken-20260824T113333Z.json`
+      - 📄 `P3-record-20260824T113334Z.json`
+      - 📄 `P3-record-broken-20260824T113335Z.json`
+      - 📄 `P4-declarations-20260824T113336Z.json`
+      - 📄 `P4-declarations-broken-20260824T113337Z.json`
+      - 📄 `P5-producers-20260824T113338Z.json`
+      - 📄 `P5-producers-broken-20260824T113340Z.json`
+      - 📄 `P6-ladder-20260824T113341Z.json`
+      - 📄 `P6-ladder-broken-20260824T113341Z.json`
+      - 📄 `P7-session-20260824T113345Z.json`
+      - 📄 `P7-session-broken-20260824T113350Z.json`
+      - 📄 `P8-canvas-20260824T113356Z.json`
+      - 📄 `P8-canvas-broken-20260824T113357Z.json`
       - 📄 `parity-20260824T105711Z.json`
-      - 📄 `project-20260824T112628Z.json`
-      - 📄 `project-broken-20260824T112629Z.json`
-      - 📄 `provenance-20260824T112631Z.json`
-      - 📄 `provenance-broken-20260824T112633Z.json`
+      - 📄 `project-20260824T113351Z.json`
+      - 📄 `project-broken-20260824T113352Z.json`
+      - 📄 `provenance-20260824T113354Z.json`
+      - 📄 `provenance-broken-20260824T113356Z.json`
     - 📄 `01-identity.py` — Does a row still name the frame it named, after every trip it takes?
     - 📄 `02-routes.py` — Does every route return the same pixels, and say so when it has none?
     - 📄 `03-tiers.py` — Does a store know what it is holding, and admit what it is not?
@@ -333,6 +333,7 @@
         - 📄 `chrome.py` — What the window wears where no pane covers it.
         - 📄 `hotkeys.py` — The keys the window answers, and never what answering them does.
         - 📄 `menu.py` — The bar across the top, and what the window itself can be asked to do.
+        - 📄 `opening.py` — Opening a recording without stopping the window.
         - 📄 `overlay.py` — What stands over the panes instead of in one.
         - 📄 `panes.py` — The three panes, the sides a subpane anchors to in each, and nothing standing in either yet.
         - 📄 `swipe.py` — The run of views a pane shows one at a time, and the slide between them.

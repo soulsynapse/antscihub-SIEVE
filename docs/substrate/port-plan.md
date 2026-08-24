@@ -675,7 +675,7 @@ therefore could not report a fill time below what the sleeps add up to. The
 number it printed was a floor wearing a measurement's label, and it was the
 one number in the file this section cares most about.
 
-### P8 — the canvas — *the widget landed; not yet fed*
+### P8 — the canvas — *landed*
 
 `src/sieve/gui/view/canvas/video_canvas/`, `src/sieve/analysis/surface.py`;
 checked by `experiments/substrate-checks/12-canvas.py`
@@ -695,9 +695,21 @@ count taken before that blames the repaints for a geometry change. And a
 widget that has never been shown is not handed resize events at all, so the
 resize assertion passed for the wrong reason until the check showed it.
 
-*Still owed:* the widget is not fed. Putting a live session's frames on it
-needs a current project and a chosen source, and which source a project
-opens on is a product question rather than a wiring one.
+*And fed.* Opening a recording from the library puts a real frame from it on
+the stage. There is no source to choose — a project is a recording — so the
+question that was owed here dissolved with the model rather than being
+answered.
+
+Two things the wiring settled, both about what may run where. Opening builds
+a frame table and races the decoders, which is seconds, so it runs on a
+worker and the session arrives through a signal
+(); the window stays live and returns from the
+click in single-digit milliseconds. And **nothing lands a window on open**.
+A window is filled so a tuning loop is fast, and with no step active and no
+crop drawn there is nothing to tune — three hundred full-resolution frames
+would be decoded into a store that cannot hold ninety of them and thrown
+away, which is what ADR-0008 calls waste. The landing belongs to whatever
+draws a crop.
 
 `surfaces.py` moves as written; it already produces arrays at display size
 and imports no Qt, so the widget that blits them is the only new code.

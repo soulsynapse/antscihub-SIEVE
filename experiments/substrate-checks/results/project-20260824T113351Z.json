@@ -1,8 +1,8 @@
 {
  "experiment": "project",
  "question": "Does opening a recording cost one container open, and stay the same project when it moves?",
- "when": "2026-08-24T11:26:28.294077+00:00",
- "sieve_rev": "930e011",
+ "when": "2026-08-24T11:33:51.438465+00:00",
+ "sieve_rev": "9de99a0",
  "machine": {
   "platform": "Windows-11-10.0.26200-SP0",
   "processor": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
@@ -18,9 +18,9 @@
  "footage": [],
  "notes": [
   "footage is generated: tiny clips encoded on the spot, so this does not depend on what is in video-tests/",
-  "adopt: 'take-01' id 59374fc7, document at .sieve/take-01.json",
+  "adopt: 'take-01' id cc6a44fa, document at .sieve/take-01.json",
   "headers: '128\u00d796 \u00b7 2s \u00b7 h264'; a half-copied file was refused rather than becoming an empty project",
-  "derived: tmpnr3aqupd/cache-elsewhere and .sieve/take-02 \u2014 named for the recording, so a folder of footage cannot collide",
+  "derived: tmp82h910vu/cache-elsewhere and .sieve/take-02 \u2014 named for the recording, so a folder of footage cannot collide",
   "identity: a recording renamed on disk is one row, under the id in its own document",
   "library: 2 rows, newest first, a missing recording kept and marked, forgetting a row leaving the file alone",
   "carry: an unchanged recording costs a stat, and a re-exported one is read again rather than served at the shape it used to be",

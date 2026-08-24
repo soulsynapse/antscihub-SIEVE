@@ -336,6 +336,7 @@
           - 📄 `arrow-right.svg`
           - 📄 `folder-open.svg`
           - 📄 `pin.svg`
+          - 📄 `plus.svg`
           - 📄 `sliders-horizontal.svg`
           - 📄 `x.svg`
       - 📁 `primitives/` — The shapes a view is built out of, owned by none of them.

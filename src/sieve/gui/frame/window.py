@@ -154,6 +154,9 @@ class MainWindow(QMainWindow):
         # are the position's way out, not the pane's, so each head carries its
         # own rather than the pane keeping one above whatever is in front.
         self.projects.set_arrows(Arrows(self.swipe))
+        # The plus in the list's head asks; the window answers, because the
+        # library is the window's. Same shape as `opened` below.
+        self.projects.add_requested.connect(self.open_project)
         # Opening a project is a move inward along the same line ← and → walk,
         # so it is the swipe's step and not a second kind of navigation.
         self.projects.opened.connect(lambda _project: self.swipe_forward())

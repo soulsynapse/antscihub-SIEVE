@@ -9,7 +9,7 @@ crop rect, which forces two things that both go away here: a display frame and a
 crop frame cannot be resident at once, so the hunt tier re-decodes a proxy
 segment on every request; and changing the crop means wiping the store, because
 the frames in it are the wrong picture and nothing can say so. Keyed by
-`(form.key(), row)` neither follows. Two pictures of one instant coexist, and a
+`(row, form.key())` neither follows. Two pictures of one instant coexist, and a
 crop change simply misses.
 
 That is not a claim that a crop change becomes cheap — it does not.
@@ -50,12 +50,18 @@ NEAR_RADIUS = 12
 
 
 class ResidentStore:
-    """Budget-capped frames in memory, keyed by `(form key, row)`."""
+    """Budget-capped frames in memory, keyed by `(row, form key)`."""
 
     def __init__(self, budget_bytes: int):
         self.budget_bytes = budget_bytes
         self.used_bytes = 0
-        self._frames: OrderedDict[tuple[str, int], np.ndarray] = OrderedDict()
+        #: keyed `(row, form key)` in that order, because that is the order
+        #: `analysis.tool.residency` produces and a protected set is compared
+        #: against these keys directly. The two spelled it differently for a
+        #: phase and the mismatch was silent: every membership test missed, so
+        #: nothing was ever protected and the store looked like it was simply
+        #: under-budgeted. Nothing here may re-order them helpfully.
+        self._frames: OrderedDict[tuple[int, str], np.ndarray] = OrderedDict()
         #: rows per form, kept sorted so `nearest` is a search
         self._rows: dict[str, list[int]] = {}
         self.lock = threading.RLock()
@@ -64,7 +70,7 @@ class ResidentStore:
     # ── reading ──────────────────────────────────────────────────────────
     def get(self, form_key: str, row: int) -> np.ndarray | None:
         with self.lock:
-            key = (form_key, row)
+            key = (row, form_key)
             frame = self._frames.get(key)
             if frame is not None:
                 self._frames.move_to_end(key)
@@ -92,7 +98,7 @@ class ResidentStore:
             if best is None:
                 return None
             landed = best[1]
-            frame = self._frames.get((form_key, landed))
+            frame = self._frames.get((landed, form_key))
             return None if frame is None else (landed, frame)
 
     def covered(self, form_key: str, start: int, end: int) -> list[int]:
@@ -113,7 +119,7 @@ class ResidentStore:
 
     # ── writing ──────────────────────────────────────────────────────────
     def put(self, form_key: str, row: int, frame: np.ndarray,
-            protected: set[tuple[str, int]] | None = None) -> None:
+            protected: set[tuple[int, str]] | None = None) -> None:
         """Hold a frame, evicting unprotected ones until it fits.
 
         `protected` is a residency set — what the active declarations need over
@@ -123,7 +129,7 @@ class ResidentStore:
         when the playhead was somewhere else.
         """
         with self.lock:
-            key = (form_key, row)
+            key = (row, form_key)
             if key in self._frames:
                 self.used_bytes -= self._frames[key].nbytes
             else:
@@ -133,7 +139,7 @@ class ResidentStore:
             self.used_bytes += frame.nbytes
             self._evict(protected or set())
 
-    def _evict(self, protected: set[tuple[str, int]]) -> None:
+    def _evict(self, protected: set[tuple[int, str]]) -> None:
         """Drop least-recent unprotected frames until inside the budget.
 
         A store whose protected set alone exceeds the budget stays over it
@@ -152,13 +158,14 @@ class ResidentStore:
             frame = self._frames.pop(key)
             self.used_bytes -= frame.nbytes
             self.evicted += 1
-            rows = self._rows.get(key[0])
+            row, form_key = key
+            rows = self._rows.get(form_key)
             if rows:
-                index = bisect_left(rows, key[1])
-                if index < len(rows) and rows[index] == key[1]:
+                index = bisect_left(rows, row)
+                if index < len(rows) and rows[index] == row:
                     rows.pop(index)
                 if not rows:
-                    self._rows.pop(key[0], None)
+                    self._rows.pop(form_key, None)
 
     def drop_form(self, form_key: str) -> int:
         """Forget one picture entirely. Returns how many frames went.
@@ -167,14 +174,14 @@ class ResidentStore:
         a crop change, which is a miss and does not need anyone's help.
         """
         with self.lock:
-            keys = [k for k in self._frames if k[0] == form_key]
+            keys = [k for k in self._frames if k[1] == form_key]
             for key in keys:
                 self.used_bytes -= self._frames.pop(key).nbytes
             self._rows.pop(form_key, None)
             return len(keys)
 
     def set_budget(self, budget_bytes: int,
-                   protected: set[tuple[str, int]] | None = None) -> None:
+                   protected: set[tuple[int, str]] | None = None) -> None:
         with self.lock:
             self.budget_bytes = budget_bytes
             self._evict(protected or set())

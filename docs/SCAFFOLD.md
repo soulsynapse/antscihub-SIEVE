@@ -292,6 +292,7 @@
   - 📁 `sieve/` — SIEVE isolates ethological events from video.
     - 📁 `analysis/` — What a step produces, and the record of which positions have one.
       - 📄 `series.py` — A step's reduced output, and the explicit record of which rows have one.
+      - 📄 `tool.py` — What a step declares about itself before anything schedules or runs it.
     - 📁 `decode/` — Getting pixels out of a file, and nothing else.
       - 📄 `fake.py` — A route with no file behind it, so everything above one can be checked.
       - 📄 `hybrid.py` — Two decoders on one file, each serving what it measured fastest at.

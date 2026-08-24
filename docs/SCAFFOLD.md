@@ -202,25 +202,27 @@
       - 📄 `P0-identity-broken-20260824T090532Z.json`
       - 📄 `P1-routes-20260824T090814Z.json`
       - 📄 `P1-routes-broken-20260824T090741Z.json`
-      - 📄 `P2-tiers-20260824T113331Z.json`
-      - 📄 `P2-tiers-broken-20260824T113333Z.json`
-      - 📄 `P3-record-20260824T113334Z.json`
-      - 📄 `P3-record-broken-20260824T113335Z.json`
-      - 📄 `P4-declarations-20260824T113336Z.json`
-      - 📄 `P4-declarations-broken-20260824T113337Z.json`
-      - 📄 `P5-producers-20260824T113338Z.json`
-      - 📄 `P5-producers-broken-20260824T113340Z.json`
-      - 📄 `P6-ladder-20260824T113341Z.json`
-      - 📄 `P6-ladder-broken-20260824T113341Z.json`
-      - 📄 `P7-session-20260824T113345Z.json`
-      - 📄 `P7-session-broken-20260824T113350Z.json`
-      - 📄 `P8-canvas-20260824T113356Z.json`
-      - 📄 `P8-canvas-broken-20260824T113357Z.json`
+      - 📄 `P2-tiers-20260824T115000Z.json`
+      - 📄 `P2-tiers-broken-20260824T115003Z.json`
+      - 📄 `P3-record-20260824T115004Z.json`
+      - 📄 `P3-record-broken-20260824T115004Z.json`
+      - 📄 `P4-declarations-20260824T115005Z.json`
+      - 📄 `P4-declarations-broken-20260824T115006Z.json`
+      - 📄 `P5-producers-20260824T115008Z.json`
+      - 📄 `P5-producers-broken-20260824T115010Z.json`
+      - 📄 `P6-ladder-20260824T115010Z.json`
+      - 📄 `P6-ladder-broken-20260824T115011Z.json`
+      - 📄 `P7-session-20260824T115015Z.json`
+      - 📄 `P7-session-broken-20260824T115019Z.json`
+      - 📄 `P8-canvas-20260824T115026Z.json`
+      - 📄 `P8-canvas-broken-20260824T115027Z.json`
+      - 📄 `P8-transport-20260824T115030Z.json`
+      - 📄 `P8-transport-broken-20260824T115034Z.json`
       - 📄 `parity-20260824T105711Z.json`
-      - 📄 `project-20260824T113351Z.json`
-      - 📄 `project-broken-20260824T113352Z.json`
-      - 📄 `provenance-20260824T113354Z.json`
-      - 📄 `provenance-broken-20260824T113356Z.json`
+      - 📄 `project-20260824T115020Z.json`
+      - 📄 `project-broken-20260824T115022Z.json`
+      - 📄 `provenance-20260824T115023Z.json`
+      - 📄 `provenance-broken-20260824T115025Z.json`
     - 📄 `01-identity.py` — Does a row still name the frame it named, after every trip it takes?
     - 📄 `02-routes.py` — Does every route return the same pixels, and say so when it has none?
     - 📄 `03-tiers.py` — Does a store know what it is holding, and admit what it is not?
@@ -233,6 +235,7 @@
     - 📄 `10-parity.py` — The port, put through what the explorer was put through, on the real file.
     - 📄 `11-provenance.py` — Is every stored value the one its own key says it is?
     - 📄 `12-canvas.py` — Does the picture stay out of the layout, and cost one scale per frame?
+    - 📄 `13-transport.py` — Does the playhead follow the clock, or the machine?
     - 📄 `README.md`
   - 📁 `tool-experiments/`
     - 📁 `explorer-logs/`
@@ -396,6 +399,8 @@
           - 📄 `view.py` — The library as a column of cards: which projects there are, and which is current.
         - 📁 `step/` — The step: the one in the chain the user is standing on, and its knobs.
           - 📄 `view.py` — The walked step as a view: the head over it, and the room its knobs will fill.
+        - 📁 `transport/` — The playhead, and eventually the strip under it.
+          - 📄 `view.py` — The playhead: a clock, a loop, and a request per frame.
       - 📄 `metrics.py` — How round the cards are and how large the text is, for every view at once.
       - 📄 `palette.py` — The colours every view draws with, and the palettes they are drawn from.
     - 📁 `project/` — What a project is: one recording, and the list of them.

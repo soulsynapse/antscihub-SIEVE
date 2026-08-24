@@ -62,6 +62,54 @@ BATCH = 4
 #: nearer work, it is killed and restarted where somebody is looking.
 REDIRECT = 8
 
+#: How wide a display form is, everywhere. One figure and not two, because
+#: a form is its key: if the proxy were built at one width and the loop
+#: played at another, a finished proxy segment could never answer the thing
+#: that plays — same instant, same source pixels, two keys, two pictures.
+#:
+#: A stated number and never a measured one. It must not come from the
+#: canvas, the pane or the window: `frame.form.Form.key` says a key may name
+#: none of those because a form outlives all three, and ADR-0005 names
+#: window size among the things a recorded set may not depend on. Sizing a
+#: stored form to the geometry it happened to be drawn at would make two
+#: runs of one recording produce keys that cannot be matched.
+#:
+#: The value is the width the decode experiments ran their display-size
+#: comparisons at, and moving it is a decision about what a display form
+#: *is* — every chunk and segment already written at the old one stops
+#: answering, honestly, because it is a different picture.
+DISPLAY_WIDTH = 1328
+
+
+def display_size(width: int, height: int,
+                 target: int = DISPLAY_WIDTH) -> tuple[int, int]:
+    """What a source of `width` by `height` becomes at display sampling.
+
+    One function, and everything that needs the answer calls it. `scale=W:-2`
+    keeps the aspect and rounds the free dimension to the *nearest* even
+    number, which is not the same as truncating to an even number and differs
+    by two often enough to matter — on the source in `video-tests/` the two
+    rules give 748 and 746.
+
+    This exists because that difference has now been written twice. The first
+    time, a proxy was recorded as `1328x746` while ffmpeg had written
+    `1328x748`, and the record described frames the store did not hold. The fix
+    was to expose the launcher's own arithmetic and a comment saying to ask it
+    — which held exactly until somebody who could not reach a launcher needed
+    the same answer and worked it out again. A rule that lives in a comment is
+    a rule with as many implementations as it has readers, so it lives here.
+    """
+    # never wider than the source. A display form is a *reduction*, and a
+    # proxy built above the source it came from stores more pixels than it
+    # was given and invents none of them — the 462-wide recording in
+    # video-tests/ would have been upscaled to 1328, nearly three times
+    # larger than the thing it is a cheap copy of. The clamp lives here
+    # because it lived in one of the two callers and not the other, which
+    # is how they came to disagree.
+    target = max(2, min(target, width))
+    scaled = max(2, round(height * target / width / 2) * 2)
+    return target, scaled
+
 
 @dataclass(frozen=True)
 class Batch:
@@ -145,7 +193,7 @@ class FFmpegLauncher:
     """
 
     def __init__(self, source: Path, shape: Shape, rows: int,
-                 rows_per_segment: int, width: int = 1328):
+                 rows_per_segment: int, width: int = DISPLAY_WIDTH):
         self.source = source
         self.shape = shape
         self.rows = rows
@@ -153,21 +201,14 @@ class FFmpegLauncher:
         self.width = width
 
     def output_size(self) -> tuple[int, int]:
-        """The dimensions ffmpeg will actually write, by its own rounding rule.
+        """The dimensions ffmpeg will actually write.
 
-        `scale=W:-2` keeps the aspect and rounds the free dimension to the
-        *nearest* even number, which is not the same as truncating to an even
-        number and differs by two often enough to matter. On the source in
-        `video-tests/` the two rules give 748 and 746.
-
-        Exposed rather than left implicit because whoever builds the `Form`
-        this store is keyed by must use the same arithmetic. Getting it wrong
-        produces a record that describes frames the store does not hold — the
-        exact failure the form vocabulary exists to prevent — and nothing
-        notices until something compares the two, which is how this was found.
+        Deferred to `display_size` rather than worked out here: the same answer
+        is wanted by anything that plays a display form, and the last time this
+        arithmetic existed in two places the two disagreed by two pixels and
+        produced two keys for one picture.
         """
-        height = round(self.shape.height * self.width / self.shape.width / 2) * 2
-        return self.width, height
+        return display_size(self.shape.width, self.shape.height, self.width)
 
     def form(self) -> Form:
         """The form this launcher's output actually is.

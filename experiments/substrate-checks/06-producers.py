@@ -46,7 +46,11 @@ there is nearer work, and not otherwise. The second condition is what stops it
 thrashing between two equally distant batches.
 
 **geometry** — the form the builder records describes the pixels ffmpeg
-actually writes. Added after driving the builder against real ffmpeg found the
+actually writes, *and* the form a session plays from is the same one. The
+second half was added after the rule was written twice and disagreed with
+itself: a proxy built at one width and a loop playing at another are two
+pictures of one instant under two keys, and the tier that exists to make
+hunting fast could never answer the thing that plays. Added after driving the builder against real ffmpeg found the
 record saying `1328x746` for segments that were `1328x748`: `scale=W:-2` rounds
 the free dimension to the nearest even number, and truncating instead is off by
 two often enough to matter.
@@ -79,9 +83,11 @@ from sieve.session import frontier as frontier_mod  # noqa: E402
 from sieve.session.frontier import Frontier, fill_order  # noqa: E402
 from sieve.session.ledger import Ledger  # noqa: E402
 from sieve.frame.shape import Shape  # noqa: E402
+from sieve.session.session import Session  # noqa: E402
 from sieve.store.build import (  # noqa: E402
     Batch,
     FFmpegLauncher,
+    display_size,
     ProxyBuilder,
     missing_batches,
     next_batch,
@@ -427,6 +433,31 @@ def case_geometry(run: Run) -> tuple[str, int, list[str]]:
                        f"{truncated} where ffmpeg writes {expected}")
         if launcher.form().out != got:
             bad.append("the launcher's form disagrees with its own output size")
+        # everything that needs this answer must get the same one. The rule
+        # lived in a comment saying "ask the launcher", which held until
+        # somebody who could not reach a launcher worked it out again and got
+        # 746 where ffmpeg writes 748 — one picture, two keys, and a proxy that
+        # could never answer the thing that plays.
+        if display_size(width, height, target) != got:
+            bad.append(f"display_size says {display_size(width, height, target)} "
+                       f"where the launcher says {got}")
+
+    # and the session, which reaches the rule from the other side
+    with tempfile.TemporaryDirectory() as tmp:
+        table = fake_mod.table(240)
+        route = FakeRoute(table)
+        session = Session(Path(tmp) / "src.mp4", Path(tmp) / "derived",
+                          route=route, rows_per_chunk=CHUNK)
+        shape = Shape(codec="h264", width=route.form.rect[2],
+                      height=route.form.rect[3], pix_fmt="yuv420p",
+                      average_rate=Fraction(24000, 1001),
+                      timebase=Fraction(1, 24000))
+        launcher = FFmpegLauncher(Path("x.mp4"), shape, 240, CHUNK)
+        if session.display_form().key() != launcher.form().key():
+            bad.append(f"the session plays {session.display_form().key()} "
+                       f"while the proxy is built at {launcher.form().key()}; "
+                       "a finished segment could never answer the loop")
+        session.close()
     run.note("geometry: the launcher owns the rounding, so a caller cannot "
              "compute the form a second way and disagree silently")
     return "geometry (form matches the pixels)", len(cases), bad

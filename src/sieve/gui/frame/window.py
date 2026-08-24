@@ -99,6 +99,8 @@ from sieve.gui.view.dev import Dev
 from sieve.gui.view.pipeline import Pipeline
 from sieve.gui.view.preferences import Preferences
 from sieve.gui.view.project_list import ProjectList
+from sieve.gui.view.transport import Transport
+from sieve.session.ledger import UNPAINTED
 from sieve.session.session import WINDOW_ROWS
 from sieve.gui.view.project_list import Project as ProjectRow
 from sieve.project.footage import dialog_filter
@@ -136,6 +138,14 @@ class MainWindow(QMainWindow):
         self.left = build_left()
         self.right = build_right()
         self.bottom = build_bottom()
+        # The playhead runs full width under both, which is what the
+        # bottom pane is for (ADR-0002): one position in one recording,
+        # read by the canvas on the left and by every plot on the right,
+        # and held by neither of them.
+        self.transport = Transport()
+        self.bottom.body.addWidget(self.transport)
+        self.transport.wants.connect(self.show_row)
+        self.transport.skipped.connect(self._frames_skipped)
 
         # The canvas stands in the left pane's core, for the same reason the
         # swipe stands in the right pane's: `body` is the core's, so the pane
@@ -155,6 +165,10 @@ class MainWindow(QMainWindow):
         #: window is in for real and not only at startup.
         self.project = None
         self.session = None
+        #: the form the canvas and the loop work in. Set when a session
+        #: lands, because it is a property of the recording rather than of
+        #: the window it is looked at in.
+        self.view_form = None
         self.opener = Opener(self)
         self.opener.opened.connect(self._session_ready)
         self.opener.failed.connect(self._session_failed)
@@ -467,19 +481,27 @@ class MainWindow(QMainWindow):
         session.drawn_on()
         session.crop = (0, 0, session.source_form.rect[2],
                         session.source_form.rect[3])
+        # What the loop plays and what the window fills are one form, and
+        # it is the width the proxy is built at rather than the width of
+        # this pane. A form sized to the geometry it was drawn at would be
+        # one whose key names a window, which `frame.form.Form.key` refuses
+        # and ADR-0005 names among the things a recorded set may not depend
+        # on — and a proxy segment could never answer the thing that plays.
+        self.view_form = session.display_form()
         row = min(len(session.table) // 2, len(session.table) - 1)
-        served = session.serve(row, task="hunt")
+        served = session.serve(row, want=self.view_form, task="hunt")
         if served.image is not None:
             self.video.show_frame(served.image, row=served.row,
                                   standing_in=served.stood_in_for is not None)
-        # No landing here, and that is deliberate. A window is filled so
-        # a tuning loop is fast, and with no step active and no crop
-        # drawn there is nothing to tune: three hundred full-resolution
-        # frames would be decoded into a store that cannot hold ninety
-        # of them and thrown away again. Work whose output is discarded
-        # is what ADR-0008 calls waste, and the cheapest way not to
-        # count it is not to do it. The landing belongs to whatever
-        # draws a crop.
+        # Now there is a reason to fill: the loop replays these rows
+        # continuously, so the frames it decodes are the frames it is
+        # about to want again. At display sampling three hundred of them
+        # is hundreds of megabytes rather than gigabytes, which is the
+        # difference between a window that fits in the store and one that
+        # thrashes it.
+        low, high = session.land(row, form=self.view_form)
+        self.transport.follow(low, high, session.fps)
+        self.transport.play()
         self.statusBar().showMessage(
             f"{project.name} · {len(session.table)} frames · "
             f"{served.tier} in {served.ms:.0f} ms", 6000)
@@ -490,11 +512,49 @@ class MainWindow(QMainWindow):
 
     def close_session(self) -> None:
         """Let go of the recording that was open, if there was one."""
+        self.transport.pause()
+        self.transport.follow(0, 0, 24.0)
+        self.view_form = None
         if self.session is not None:
             self.session.close()
             self.session = None
         self.project = None
         self.video.clear()
+
+    def show_row(self, row: int) -> None:
+        """Put this row on the canvas, or leave what is up.
+
+        The transport asks and this answers, which is the same split the
+        library has. A play request is never exact, so the ladder will not
+        reach a blocking decode for it: where the fill has not arrived the
+        answer is a hold, the picture stays, and the loop keeps its rate
+        rather than the machine keeping the picture.
+        """
+        if self.session is None:
+            return
+        served = self.session.serve(row, want=self.view_form, task="play")
+        if served.image is None:
+            return                      # a hold: what is up is still honest
+        self.video.show_frame(served.image, row=served.row,
+                              standing_in=served.stood_in_for is not None)
+        if served.stood_in_for is not None:
+            # the readout follows the picture and not the clock, because a
+            # stand-in is a different instant and saying otherwise would be
+            # the interface claiming to show a frame it is not showing
+            self.transport.show_at(served.stood_in_for)
+
+    def _frames_skipped(self, count: int) -> None:
+        """Frames the clock passed while the machine was elsewhere.
+
+        A chosen discard and not waste: the alternative to skipping them is
+        not drawing them, it is running the footage slow, and counting a
+        deliberate trade as a defect would bury the number that is not
+        (ADR-0008).
+        """
+        if self.session is None:
+            return
+        for _ in range(count):
+            self.session.ledger.chosen(UNPAINTED)
 
     def open_dev(self) -> None:
         """Ctrl+D, or Help ▸ Dev view: the bench over the panes.

@@ -60,12 +60,17 @@ from sieve.session.ladder import (
     admissible,
 )
 from sieve.session.ledger import DOUBLE_DECODE, PLACEHOLDER, Ledger
+from sieve.store.build import DISPLAY_WIDTH, display_size
 from sieve.store.chunks import CHUNK_ROWS, ChunkStore
 from sieve.store.resident import NEAR_RADIUS, ResidentStore
 from sieve.store.spans import SpanStore
 
-#: The tuning window, in rows. Ten seconds of the footage this tree runs on,
-#: which is the gesture the product is built around rather than a tuning knob.
+#: The tuning window, in rows. The gesture the product is built around —
+#: land somewhere and loop it — rather than a knob, so it is a round number
+#: of frames and not a duration. What it comes to in seconds is the
+#: source's business: on the footage in `video-tests/` it is a little over
+#: twelve, and the comment this replaces said ten, which it has never been
+#: at that rate.
 WINDOW_ROWS = 300
 
 #: What the resident store may hold. A default rather than a fact: the right
@@ -186,6 +191,54 @@ class Session:
         """
         self.crop = rect
         return self.form_for()
+
+    @property
+    def fps(self) -> float:
+        """The recording's own rate, from its table rather than its headers.
+
+        The table is the thing that knows how many frames there really are and
+        when each of them is, so a rate derived from it agrees with the rows a
+        playhead walks. A rate read off the container would be the one the
+        header claims, which on this footage is a number the packet count
+        already disagrees with (ADR-0004).
+        """
+        rows = len(self.table)
+        if rows < 2:
+            return 24.0
+        span = self.table.seconds_of(rows - 1) - self.table.seconds_of(0)
+        return (rows - 1) / span if span > 0 else 24.0
+
+    def display_form(self, width: int = DISPLAY_WIDTH) -> Form:
+        """The whole frame at display sampling — what a loop plays from.
+
+        Not the same as the crop form and not a lesser version of it. A loop
+        over the uncut original is showing the *picture*, and a picture at the
+        size it will be drawn is a thousandth of the bytes of one at source
+        sampling: three hundred rows of this footage is gigabytes native and
+        hundreds of megabytes here, which is the difference between a window
+        that fits in a store and one that thrashes it.
+
+        It is admissible, and that falls out rather than being decided. The
+        rect is the whole frame and a route hands back the whole frame at
+        source sampling, so `grade` reads the derivation as exact and the
+        result may be recorded like anything else.
+
+        **The width is `DISPLAY_WIDTH` and must not come from the canvas.** It
+        is the width the proxy is built at, so a finished segment answers the
+        thing that plays instead of being a second picture of the same instant
+        under a second key. And a form sized to whatever geometry it happened
+        to be drawn at would be one whose key names a window — which
+        `frame.form.Form.key` refuses and ADR-0005 names among the things a
+        recorded set may not depend on. A caller passing its pane's width here
+        would make two runs of one recording produce keys that cannot be
+        matched, and nothing would report it.
+        """
+        source = self.source_form
+        _, _, full_width, full_height = source.rect
+        # the clamp is `display_size`'s, not repeated here: one rule, one
+        # place, which is what the two disagreeing taught.
+        out = display_size(full_width, full_height, width)
+        return Form(source.rect, out, source.pix)
 
     def set_proxy(self, store: SpanStore | None,
                   form: Form | None = None) -> None:
@@ -365,7 +418,7 @@ class Session:
                               f" resident and exact for {want.key()}")
 
     # ── landing ──────────────────────────────────────────────────────────
-    def land(self, row: int, *,
+    def land(self, row: int, *, form: Form | None = None,
              window_rows: int | None = None) -> tuple[int, int]:
         """Start a window here and fill it, anchored on where somebody clicked.
 
@@ -381,7 +434,7 @@ class Session:
 
         self.window = (start, end)
         self.anchor = row
-        form = self.form_for()
+        form = form or self.form_for()
         # read once, here, and closed over for the life of this fill. A crop
         # change stops this fill and starts another, so the set a producer is
         # working against cannot move underneath it.

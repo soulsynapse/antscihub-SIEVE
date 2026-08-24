@@ -1,8 +1,8 @@
 {
  "experiment": "provenance",
  "question": "Is every value src/sieve stores reproducible from the key it is filed under?",
- "when": "2026-08-24T11:33:54.407143+00:00",
- "sieve_rev": "9de99a0",
+ "when": "2026-08-24T11:50:23.874169+00:00",
+ "sieve_rev": "48cc405",
  "machine": {
   "platform": "Windows-11-10.0.26200-SP0",
   "processor": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",

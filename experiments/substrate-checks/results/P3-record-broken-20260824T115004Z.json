@@ -1,8 +1,8 @@
 {
  "experiment": "P3-record-broken",
  "question": "Does a series distinguish an unwritten row from a zero, and does a ledger report the time it cannot account for?",
- "when": "2026-08-24T11:33:35.534525+00:00",
- "sieve_rev": "9de99a0",
+ "when": "2026-08-24T11:50:04.917785+00:00",
+ "sieve_rev": "48cc405",
  "machine": {
   "platform": "Windows-11-10.0.26200-SP0",
   "processor": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",

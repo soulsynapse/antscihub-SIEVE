@@ -1,8 +1,8 @@
 {
  "experiment": "P8-canvas",
  "question": "Does the picture stay out of the layout, and cost one scale per frame rather than one per paint?",
- "when": "2026-08-24T11:33:56.970577+00:00",
- "sieve_rev": "9de99a0",
+ "when": "2026-08-24T11:50:26.416347+00:00",
+ "sieve_rev": "48cc405",
  "machine": {
   "platform": "Windows-11-10.0.26200-SP0",
   "processor": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",

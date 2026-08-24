@@ -225,6 +225,8 @@
       - 📄 `T0-crop-broken-20260824T125338Z.json`
       - 📄 `T1-numberbox-20260824T132024Z.json`
       - 📄 `T1-numberbox-broken-20260824T132029Z.json`
+      - 📄 `T1-overlay-20260824T132744Z.json`
+      - 📄 `T1-overlay-broken-20260824T132751Z.json`
       - 📄 `parity-20260824T130625Z.json`
       - 📄 `project-20260824T115020Z.json`
       - 📄 `project-broken-20260824T115022Z.json`
@@ -245,6 +247,7 @@
     - 📄 `13-transport.py` — Does the playhead follow the clock, or the machine?
     - 📄 `14-crop.py` — Is every crop this can produce a legal one, and does it stop moving?
     - 📄 `15-numberbox.py` — Can a number box be corrected without arguing back?
+    - 📄 `16-overlay.py` — Does a crop drawn on the stage come back as the crop that was kept?
     - 📄 `README.md`
   - 📁 `tool-experiments/`
     - 📁 `explorer-logs/`
@@ -387,6 +390,7 @@
         - 📁 `canvas/` — The canvas: what the work is looked at on, and what is drawn over it.
           - 📁 `video_canvas/` — The video canvas: footage on the stage. Nothing is built here yet.
             - 📄 `view.py` — Footage on the stage: one frame at a time, and no opinion about the layout.
+          - 📄 `overlay.py` — The crop, over the stage: the box that is set and the drag that sets one.
           - 📄 `view.py` — The canvas as a stage: content held at its own shape, and the room around it.
         - 📁 `dev/` — The dev view: the application looked at by whoever is building it.
           - 📁 `card_mockups/` — Card mock ups: the shapes a card could take, drawn beside each other.

@@ -1,0 +1,33 @@
+{
+ "experiment": "T1-overlay",
+ "question": "Does a crop drawn on the stage come back as the crop that was kept?",
+ "when": "2026-08-24T13:27:44.872076+00:00",
+ "sieve_rev": "07471e9",
+ "machine": {
+  "platform": "Windows-11-10.0.26200-SP0",
+  "processor": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
+  "logical_cpus": 32,
+  "python": "3.13.5"
+ },
+ "versions": {
+  "av": "18.1.0",
+  "cv2": "5.0.0",
+  "numpy": "2.5.2",
+  "ffmpeg": "ffmpeg version 2025-02-06-git-6da82b4485-full_build-www.gyan.dev Copyright (c) 2000-2025 the FFmpeg developers"
+ },
+ "footage": [],
+ "notes": [
+  "offscreen; a 1920x1080 source in a 900x560 pane, so the stage is letterboxed and a mapping against the widget rect is wrong by a measurable amount",
+  "stage: overlay tracks the stage through a resize and a change of aspect; last stage PySide6.QtCore.QRect(8, 117, 434, 325)",
+  "maps: PySide6.QtCore.QRect(48, 61, 261, 171) out of the overlay maps to (86, 64, 566, 372) in source pixels",
+  "roundtrip: crop (130, 108, 784, 458) drawn at PySide6.QtCore.QRect(68, 81, 361, 211), and at PySide6.QtCore.QRect(247, 34, 192, 112) once the pane was halved \u2014 a box that did not move is one being mapped against something that did not either",
+  "gesture: a click sets nothing, a drag off the picture stops at its edge, a refused one says ['drawing a crop needs the whole frame on the stage \u2014 show it, then drag the rectangle']",
+  "closes: a drag set (32, 26, 1888, 498); typing a width of 3840 came back as 1888 in one push",
+  "stage (one answer to where the picture is): 4 checked, 0 disagreed",
+  "maps (widget coordinates out): 2 checked, 0 disagreed",
+  "roundtrip (the box is the crop): 3 checked, 0 disagreed",
+  "gesture (click, overrun, refusal): 4 checked, 0 disagreed",
+  "closes (drag, numbers, clamp): 4 checked, 0 disagreed"
+ ],
+ "cases": []
+}

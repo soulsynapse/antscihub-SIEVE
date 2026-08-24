@@ -158,20 +158,33 @@ floor comes back legal; every edge of every result is even; a rect already legal
 is returned unchanged rather than nudged; the mapping round-trips through a
 placed rect whose aspect differs from the source's.
 
-### T1 — the crop, drawn
+### T1 — the crop, drawn — landed
 
-`src/sieve/gui/view/canvas/overlay.py`, `src/sieve/gui/primitives/number.py`
+`src/sieve/gui/view/canvas/overlay.py`, `src/sieve/gui/primitives/number.py`,
+checked by `15-numberbox` and `16-overlay`.
 
-Owns the box over the stage, the drag that makes it, and the four numbers that
-are its other editor. The stage rect comes from `canvas/view.py`'s `staged`
-signal, which exists so that what a crop box is drawn against is the same
-rectangle the content was placed in rather than each layer working it out and
-agreeing by luck. The full-frame rule comes with it, refused in words.
+Owns the box over the stage and the drag that makes it. The stage rect comes
+from `canvas/view.py`'s `staged` signal, which exists so that what a crop box is
+drawn against is the same rectangle the content was placed in rather than each
+layer working it out and agreeing by luck; the overlay follows its parent's
+geometry from that same signal, because a stage moves exactly when the pane
+does. The full-frame rule came with it and is refused in words rather than by
+ignoring the mouse.
 
-*Proves it:* a drag the clamp moves comes back to the boxes as the moved value;
-typing a refused number shows the accepted one; the overlay's rect in widget
-coordinates maps to the rect the boxes hold; and a number box pushed a
-correction does not emit, which is the loop that would otherwise not terminate.
+The gesture leaves in widget coordinates and the owner maps it, which is the
+explorers' rule and holds for a second reason they do not state: mapping here
+would mean clamping here, and that would make the overlay the second place a
+crop is decided. Drawing a crop that has already been decided is not the same
+act and does happen here — through `crop.to_placed`, so the two directions stay
+one implementation, which is what lets a resize redraw the box with no round
+trip through the owner.
+
+**What is still owed, and is not this phase's.** The pane that holds an overlay
+and four number boxes together does not exist; `16-overlay`'s `closes` case
+stands one up in a dozen lines to show the pieces compose, and where the real
+one goes is the tuning pane's decision. Corner handles are refused for now: a
+second gesture with its own hit-testing, when the numbers are already the other
+editor and neither explorer ever had one.
 
 ### T2 — the crop, applied
 

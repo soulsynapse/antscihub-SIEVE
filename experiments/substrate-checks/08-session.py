@@ -187,6 +187,12 @@ def case_landing(run: Run, root: Path) -> tuple[str, int, list[str]]:
     route.reset()
 
     low, high = session.land(150)
+    # the constructor was handed a window length and it must be the one
+    # used: a version of this stored it nowhere, so every caller that
+    # passed one was ignored and got the module default instead
+    if high - low != WINDOW:
+        bad.append(f"a session built with window_rows={WINDOW} landed "
+                   f"a window of {high - low}")
     if not low <= 150 < high:
         bad.append(f"landing on 150 opened a window at {low}..{high}")
     if low % CHUNK:

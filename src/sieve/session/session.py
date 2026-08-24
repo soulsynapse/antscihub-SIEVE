@@ -124,6 +124,11 @@ class Session:
         self.proxy_form: Form | None = None
 
         self.window: tuple[int, int] | None = None
+        #: How long a landing opens by default. Held, because it arrives
+        #: as a constructor argument and a version of this took it and
+        #: never stored it — so every caller that passed one was ignored,
+        #: silently, and got the module default instead.
+        self.window_rows = window_rows
         self.anchor = 0
         self.tools: list[Tool] = []
         self.crop: tuple[int, int, int, int] = (
@@ -328,7 +333,8 @@ class Session:
                               f" resident and exact for {want.key()}")
 
     # ── landing ──────────────────────────────────────────────────────────
-    def land(self, row: int, *, window_rows: int = WINDOW_ROWS) -> tuple[int, int]:
+    def land(self, row: int, *,
+             window_rows: int | None = None) -> tuple[int, int]:
         """Start a window here and fill it, anchored on where somebody clicked.
 
         The window snaps to the chunk grid so that two landings over the same
@@ -336,8 +342,9 @@ class Session:
         overlap. The anchor does not snap: it is where attention actually is,
         and the fill order is built from it.
         """
-        start = self.chunks.chunk_start(max(0, row - window_rows // 2))
-        end = min(len(self.table), start + window_rows)
+        rows = self.window_rows if window_rows is None else window_rows
+        start = self.chunks.chunk_start(max(0, row - rows // 2))
+        end = min(len(self.table), start + rows)
         self.stop_fill(wait=False)
 
         self.window = (start, end)

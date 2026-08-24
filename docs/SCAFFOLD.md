@@ -213,6 +213,8 @@
       - 📄 `P6-ladder-20260824T094730Z.json`
       - 📄 `P6-ladder-broken-20260824T094731Z.json`
       - 📄 `P7-session-20260824T094734Z.json`
+      - 📄 `P7-session-20260824T105052Z.json`
+      - 📄 `P7-session-20260824T105116Z.json`
       - 📄 `P7-session-broken-20260824T094738Z.json`
       - 📄 `project-20260824T101906Z.json`
       - 📄 `project-20260824T102243Z.json`

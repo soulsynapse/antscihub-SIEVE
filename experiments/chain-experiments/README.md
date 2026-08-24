@@ -61,7 +61,13 @@ Ordered by what can falsify the idea soonest and cheapest, not by what is most
 interesting. Each says what would count as a no, because a goal that cannot come
 out negative is a description rather than a question.
 
-### G1 — Can the proposed vocabulary express what already runs?
+### G1 — Can the proposed vocabulary express what already runs? — done
+
+`01-the-explorer-as-a-graph.md`. Passed, with one addition to the vocabulary
+(a per-recording/per-row rate axis), one constraint it produced that argument
+had not (a reduce node must be co-scheduled with its field node or fields
+become storable), and one thing it could not reach at all (masks, because
+nothing working produces one). It also moved G6 and G7, noted below.
 
 No code. Take the tool explorer, which works and has been measured, and write
 what it does as typed nodes: the table, the fetch at a form, `absdiff` over its
@@ -135,6 +141,15 @@ third and worth finding out before drawing it.
 
 ### G6 — Is a value stored under a subgraph key reproducible from that key?
 
+*Moved by G1.* The explorer already keys a two-node chain the way this rule
+says a graph must — `Rig.set_tool` folds an upstream blur's parameter into the
+downstream tool's params, and thence into the series key. So the rule is not a
+proposal to be argued for but the generalisation of something running. What G1
+also found is that the existing mechanism reads only the downstream tool's
+`offsets`, so an upstream node with a reach of its own would have it silently
+dropped from the fetch plan. The question is therefore composition, not
+correctness at depth one.
+
 The rule being tested is that a node's cache key must fold its entire upstream
 subgraph and not only its own params. `Tool.key()` folds local params today and
 deliberately excludes downstream ones, which is correct for a flat bank because
@@ -153,6 +168,12 @@ content-addressed subgraph keys, a bad cache choice wastes time and space and
 can never produce a wrong number.
 
 ### G7 — Does a region of interest propagate upstream without changing `Form`?
+
+*Moved by G1.* This already happens for one node: `Tool.form_for(crop)` is a
+tool declaring upward what form it wants, and the store is asked for that rather
+than for whole frames. So the mechanism is in production and the open part is
+narrower than it looked — whether two nodes declaring upward can be reconciled
+into one fetch, and what happens when they disagree.
 
 Crop does not transform data, it changes what gets fetched, so its parameter has
 to travel backwards to the source reader. This is region-of-interest

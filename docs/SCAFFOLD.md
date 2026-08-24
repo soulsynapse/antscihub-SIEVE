@@ -46,6 +46,7 @@
   - 📄 `vision-and-notes.md`
 - 📁 `experiments/`
   - 📁 `chain-experiments/`
+    - 📄 `01-the-explorer-as-a-graph.md`
     - 📄 `README.md`
   - 📁 `decode-experiments/`
     - 📁 `explorer-logs/`

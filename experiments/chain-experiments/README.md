@@ -97,29 +97,56 @@ does not exist; or a value SIEVE plainly must schedule turns out not to be
 expressible in the set. Adding to this set later is the expensive kind of
 change, which is why it is a goal and not an implementation detail.
 
-### G3 — Does the interactive loop survive depth?
+### G3 — What does depth cost that the same work fused would not?
 
-The product constraint is the tuning loop: drag a slider, graphs refill faster
-than the video plays. It holds today with one tool reading the store. Whether it
-holds with three nodes deep is unmeasured and is the single thing that can kill
-the whole idea.
+The overhead of generality, isolated from the work: per-edge dispatch, a copy at
+each boundary, a cache lookup per node. Measured as the same arithmetic run as
+one fused function against the same arithmetic run as three nodes, so the
+difference is the architecture and nothing else.
 
-*A no looks like:* a three-deep graph cannot hold rate on the machine this is
-built for. If that is the answer, an unopinionated substrate is unaffordable and
-SIEVE has to be opinionated — a fixed pipeline with fused operations — and the
-plugin vision goes with it. Better to hit that before a plugin API exists than
-after.
+*A no looks like:* that overhead is large relative to the node work and does not
+amortise, so being general is itself what costs. Then the substrate can only
+afford fused pipelines and an open plugin surface is unaffordable.
+
+**The first version of this goal asked whether a three-deep graph holds rate,
+and called that the single thing that could kill the idea. That was wrong on two
+counts and is corrected rather than deleted, because the wrong version is the
+more appealing one.** A graph that is slow is not an architecture that is
+unaffordable: ADR-0007 already has a COMMIT class for a step that does not fit
+the period — it shows what exists and says where none — and ADR-0008 says cost
+is a fact. A slow graph degrades through machinery that already exists. Depth is
+also not the variable: a chain containing `dis_flow` failing to hold rate says
+only that flow is expensive, which
+`docs/findings/2026.08.21-optical-flow-dominates-the-analysis.md` settled
+already, and says nothing about three cheap nodes. What can implicate the
+architecture is the cost of the joints, not the cost of the work.
 
 ### G4 — Do offsets compose, and does the residency set stay affordable?
 
-Chained offsets compose transitively: a node admitting `(-1, 0)` of a node
-admitting four lags needs the union walked down to the source. The arithmetic is
-checkable without running anything; what it costs to *hold* is not.
+**This is the one that can actually kill it, and it was ranked too low.** The
+product constraint is not that graphs are fast, it is that they refill faster
+than the video plays — which is only reachable by prefetching, which needs a
+fetch plan computable before anything runs (ADR-0006). If a general graph can
+only say what it needs once it gets there, the loop is demand-driven, prefetch
+is impossible, and no amount of speed recovers it. That is architectural in a
+way slowness is not.
 
-*A no looks like:* the residency set for a realistic graph does not fit the
-budget, so a fetch plan that is correct is one nothing can honour. `lag_mhi` is
-the load for this — it is already the only tool whose admitted set is not its
-reach, which is the property that makes composition non-trivial.
+Chained offsets should compose transitively: a node admitting `(-1, 0)` of a
+node admitting four lags needs the union walked down to the source. The
+arithmetic is checkable without running anything; what it costs to *hold* is
+not.
+
+*A no looks like:* the composed set for a realistic graph does not fit the
+budget, so a plan that is correct is one nothing can honour — or worse, a node
+exists whose needs are not expressible as offsets at all, which takes the plan
+away entirely. `lag_mhi` is the load: it is already the only tool whose admitted
+set is not its reach, which is the property that makes composition non-trivial.
+
+A consequence worth naming rather than discovering. ADR-0007 says cost is
+measured and never declared, so a scheduler deciding where to cache and what to
+prefetch has no figures for a graph it has not run. It must measure and adapt,
+and the first pass through a novel graph is always uninformed. Not fatal, and
+another reason the account is not optional.
 
 ### G5 — Does recompute-versus-store invert between the two regimes?
 

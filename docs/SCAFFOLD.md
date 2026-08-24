@@ -221,6 +221,8 @@
       - 📄 `P8-canvas-broken-20260824T115027Z.json`
       - 📄 `P8-transport-20260824T115532Z.json`
       - 📄 `P8-transport-broken-20260824T115034Z.json`
+      - 📄 `T0-crop-20260824T124201Z.json`
+      - 📄 `T0-crop-broken-20260824T124202Z.json`
       - 📄 `parity-20260824T105711Z.json`
       - 📄 `project-20260824T115020Z.json`
       - 📄 `project-broken-20260824T115022Z.json`
@@ -239,6 +241,7 @@
     - 📄 `11-provenance.py` — Is every stored value the one its own key says it is?
     - 📄 `12-canvas.py` — Does the picture stay out of the layout, and cost one scale per frame?
     - 📄 `13-transport.py` — Does the playhead follow the clock, or the machine?
+    - 📄 `14-crop.py` — Is every crop this can produce a legal one, and does it stop moving?
     - 📄 `README.md`
   - 📁 `tool-experiments/`
     - 📁 `explorer-logs/`
@@ -320,6 +323,7 @@
 - 📁 `src/`
   - 📁 `sieve/` — SIEVE isolates ethological events from video.
     - 📁 `analysis/` — What a step produces, and the record of which positions have one.
+      - 📄 `crop.py` — What a crop is, what may be done to one, and where a drawn one lands.
       - 📄 `record.py` — Computing a step's value where its inputs landed, and filing it.
       - 📄 `series.py` — A step's reduced output, and the explicit record of which rows have one.
       - 📄 `surface.py` — Drawing a step's output at display resolution, from data reduced to it.

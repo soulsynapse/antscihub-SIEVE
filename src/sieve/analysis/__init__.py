@@ -14,6 +14,7 @@ that draws — and this package is only the place the answer goes.
 
 from __future__ import annotations
 
+from sieve.analysis import crop
 from sieve.analysis.record import Recorder
 from sieve.analysis.series import Series
 from sieve.analysis.tool import (
@@ -28,6 +29,6 @@ from sieve.analysis.tool import (
 )
 
 __all__ = [
-    "BUDGETED", "COMMIT", "FREE", "FREE_RATIO", "Recorder", "Series", "Tool",
+    "BUDGETED", "COMMIT", "FREE", "FREE_RATIO", "Recorder", "Series", "Tool", "crop",
     "analysis_form", "classify", "residency",
 ]

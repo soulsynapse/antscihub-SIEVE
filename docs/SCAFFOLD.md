@@ -281,6 +281,12 @@
   - 📄 `doc_index.py` — Regenerate the generated docs — `SCAFFOLD.md` and the shelf indexes — from the index.
 - 📁 `src/`
   - 📁 `sieve/` — SIEVE isolates ethological events from video.
+    - 📁 `decode/` — Getting pixels out of a file, and nothing else.
+      - 📄 `fake.py` — A route with no file behind it, so everything above one can be checked.
+      - 📄 `hybrid.py` — Two decoders on one file, each serving what it measured fastest at.
+      - 📄 `probe.py` — What this machine measured about itself, kept so it measures it once.
+      - 📄 `pyav.py` — One container, one position, stepping or seeking to answer.
+      - 📄 `route.py` — What every route promises, and the one number that decides how it answers.
     - 📁 `frame/` — What a frame is, and what a stored frame is.
       - 📄 `form.py` — What a stored frame is, and when one on hand can answer for another.
       - 📄 `shape.py` — What a source is, before anything has been decoded out of it.

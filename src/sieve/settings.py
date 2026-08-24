@@ -83,6 +83,22 @@ def path() -> Path:
     return _directory() / _FILE
 
 
+def directory() -> Path:
+    """Where per-user SIEVE state lives, for anything kept beside the settings.
+
+    Not everything a user's directory holds is a preference. A probe verdict is
+    a *measurement of this machine* — which decoder wins a seek here — and it
+    belongs beside the settings for the same reason they do (it follows the
+    person's hardware, not the footage) while being nothing the person chose.
+
+    Derived from `path()` rather than computed again, so `SIEVE_SETTINGS`
+    redirects both: a run pointed at a temporary document must not leave a
+    probe verdict in the real directory either, and a caller that had to know
+    to redirect two things would eventually redirect one.
+    """
+    return path().parent
+
+
 def stored(key: str, default: Any = None) -> Any:
     """What is remembered under `key`, or `default` if nothing is.
 

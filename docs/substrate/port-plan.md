@@ -703,7 +703,7 @@ answered.
 Two things the wiring settled, both about what may run where. Opening builds
 a frame table and races the decoders, which is seconds, so it runs on a
 worker and the session arrives through a signal
-(); the window stays live and returns from the
+(`sieve.gui.frame.opening`); the window stays live and returns from the
 click in single-digit milliseconds. And **nothing lands a window on open**.
 A window is filled so a tuning loop is fast, and with no step active and no
 crop drawn there is nothing to tune — three hundred full-resolution frames
@@ -713,9 +713,13 @@ draws a crop.
 
 `surfaces.py` moves as written; it already produces arrays at display size
 and imports no Qt, so the widget that blits them is the only new code.
-Owns showing a frame and drawing a field, pulling rather than being pushed,
-never blocking, and — the constraint that belongs to `gui/` and not to the
-substrate — participating in no layout negotiation. Content scales or
+Owns showing a frame and drawing a field, **pushed rather than pulling** —
+this section said the opposite while it was a plan, and the folder it
+describes was left open on exactly that question. A canvas that pulled
+would be reaching for a route on the thread that draws; what is on screen
+is decided where the ladder and the transport are, and the canvas is handed
+the result. Never blocking, and — the constraint that belongs to `gui/` and
+not to the substrate — participating in no layout negotiation. Content scales or
 elides into geometry it is given. `what-froze-the-felt-loop` names a text
 label as the thing that was resizing the video; that is a `gui/` defect the
 substrate cannot prevent, so it is written where the widgets are.

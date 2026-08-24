@@ -485,9 +485,10 @@ while proving nothing. And a horizon shorter than the closest gap between
 lags leaves the union in clusters with holes, so rows are evicted between
 them and an honest declaration reads as a failing one.
 
-### P5 — producers
+### P5 — producers — *landed*
 
-`src/sieve/store/build.py`, `src/sieve/session/frontier.py`
+`src/sieve/store/build.py`, `src/sieve/session/frontier.py`;
+checked by `experiments/substrate-checks/06-producers.py`
 
 Owns the two things that run in the background, each split into a **pure
 schedule** and an **impure worker** — which is the change that makes them
@@ -503,14 +504,29 @@ decode bandwidth when a signal change asks for it.
 
 May not know: what a request is. Neither serves anybody.
 
-*Proves it:* both schedules are pure functions returning lists, so the
-assertions are on order. The fill order is **the playhead's chunk first,
-then the wrap** — that order is the whole of one finding, asserting it
-costs nothing, and losing it costs a day. The builder schedule is exercised
-with a fake launcher that touches files: no ffmpeg, no footage, assertions
-on batch order, on a redirect discarding its incomplete batch, and on a
-restart over a partial directory resuming rather than rebuilding. The
-frontier runs against the fake route.
+*Proved it:* seven cases, passing, with no ffmpeg and no footage — the
+builder takes its launcher as an argument and the check hands it one that
+writes files instantly. `--broken` anchors the fill on the window's start
+instead of the playhead's chunk, which is what the explorer did before the
+freeze finding, and both `order` and `fill` fail.
+
+The split earned itself immediately. Three bugs in `ProxyBuilder.tick`,
+none of which would have been visible without the schedule being separable:
+it polled the launcher twice per tick and branched on a different answer
+than it published against, so **the last segment of every batch was held
+back forever** — the batch never completed, and the schedule relaunched it
+for the rest of the session, republishing the same three segments on every
+tick. One poll, remembered, publishing and branching on the same answer.
+
+Two smaller ones worth keeping. A `Piece` that checked only grid alignment
+called a sixteen-row window tail *whole*, which would have written a chunk
+with a hole in it; wholeness needs the length too. And `Frontier` had only
+`stop`, so a caller wanting the window actually filled had to race it —
+`wait` is now a separate thing from asking it to give up.
+
+One more, and it is about the check rather than the code: `fill` guarded
+its anchor assertion on the mode, so `--broken` passed the case it exists
+to break. The assertion is unconditional now.
 
 *Carried deliberately, and named as workarounds rather than design:* the
 interpreter switch interval the explorer sets at import, which belongs in

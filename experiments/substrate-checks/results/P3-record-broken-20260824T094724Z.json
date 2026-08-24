@@ -1,8 +1,8 @@
 {
- "experiment": "P3-record",
+ "experiment": "P3-record-broken",
  "question": "Does a series distinguish an unwritten row from a zero, and does a ledger report the time it cannot account for?",
- "when": "2026-08-24T09:11:09.799456+00:00",
- "sieve_rev": "8539d19",
+ "when": "2026-08-24T09:47:24.581335+00:00",
+ "sieve_rev": "4098a91",
  "machine": {
   "platform": "Windows-11-10.0.26200-SP0",
   "processor": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
@@ -18,20 +18,21 @@
  "footage": [],
  "notes": [
   "no footage: both records are about bookkeeping, and neither has anything to do with pixels",
+  "RUN WITH --broken: `Series.get` ignores coverage and `Ledger.serve` drops without counting. `coverage` and `decimation` are expected to FAIL.",
   "coverage: an unwritten row is None and a written zero is 0.0 \u2014 the two the values array cannot tell apart",
   "honest: the boundary is asked for rather than derived by each producer, so two of them cannot disagree about which rows a run may vouch for",
   "snapshot: copies, so a reader cannot see values and coverage from two different instants",
   "sidecar: a form key spelled '2144+982+1024x1024@1024x1024:gray' survives a round trip through a filename that could not have held it",
   "account: closed against elapsed time, parameters ['self', 'interval_ms', 'names'] \u2014 no argument for what the interval should have been",
   "separation: the two counts cannot be reached through one another, so filing one as the other takes a decision",
-  "decimation: 800 play serves kept as 100 rows standing for 800, 700 dropped and counted",
-  "coverage (absence is not zero): 400 checked, 0 disagreed",
+  "decimation: 800 play serves kept as 100 rows standing for 100, 0 dropped and counted",
+  "coverage (absence is not zero): 400 checked, 4 disagreed; first: row 0 was never written and reads 0.0",
   "honest (warm-up boundary): 5 checked, 0 disagreed",
   "snapshot (copies, not views): 20 checked, 0 disagreed",
   "sidecar (identity is not the path): 4 checked, 0 disagreed",
   "account (closed against elapsed): 4 checked, 0 disagreed",
   "separation (waste is not a cost): 8 checked, 0 disagreed",
-  "decimation (drops, and says how many): 810 checked, 0 disagreed"
+  "decimation (drops, and says how many): 810 checked, 2 disagreed; first: seen 810 minus dropped 0 is not the 110 kept"
  ],
  "cases": []
 }

@@ -24,6 +24,11 @@ from sieve.session.ladder import (
     choose,
     coalesce,
 )
+from sieve.session.session import (
+    BlockedTheDrawingThread,
+    Served,
+    Session,
+)
 from sieve.session.ledger import (
     CHOSEN_KINDS,
     COARSE_FIELD,
@@ -44,6 +49,9 @@ from sieve.session.ledger import (
 __all__ = [
     "CHOSEN_KINDS",
     "Attempt",
+    "BlockedTheDrawingThread",
+    "Served",
+    "Session",
     "Frontier",
     "Piece",
     "Request",

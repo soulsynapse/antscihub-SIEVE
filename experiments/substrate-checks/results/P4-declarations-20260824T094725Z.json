@@ -1,8 +1,8 @@
 {
- "experiment": "P4-declarations-broken",
+ "experiment": "P4-declarations",
  "question": "Does a declaration schedule fetches, and is a re-fetch it predicted distinguishable from one it could not have?",
- "when": "2026-08-24T09:11:12.152421+00:00",
- "sieve_rev": "8539d19",
+ "when": "2026-08-24T09:47:25.379113+00:00",
+ "sieve_rev": "4098a91",
  "machine": {
   "platform": "Windows-11-10.0.26200-SP0",
   "processor": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
@@ -18,19 +18,18 @@
  "footage": [],
  "notes": [
   "no footage: a declaration is about which rows in which forms, and nothing about pixels",
-  "RUN WITH --broken: `residency` is replaced by the point set at the current position \u2014 the substitution ADR-0006 calls pathological. `refetch` is expected to FAIL.",
   "sets: the sparse step admits 4 inputs spanning 31 rows \u2014 one integer cannot be both",
   "union: 40 consecutive positions of a step with offsets (-30, -20, -10, 0) unions to a contiguous 70..139 \u2014 sparse at a point, a window over a run",
   "forms: 3 pairs over 2 rows \u2014 an input is held in a form, not merely at an instant",
   "keys: params the field uses are folded, order is not, and anything downstream of the series is deliberately absent",
   "classes: 6.0 ms of field is free beside a 120.0 ms fetch and budgeted beside a 0.05 ms one \u2014 the same arithmetic, two classes",
-  "refetch: 800 fetches over 200 positions, 570 of them re-fetches (380 of those named by the declaration in force) [point set]",
+  "refetch: 230 fetches over 200 positions, 0 of them re-fetches (0 of those named by the declaration in force) [union]",
   "sets (admitted is not spanned): 2 checked, 0 disagreed",
   "union (a run closes the gaps): 70 checked, 0 disagreed",
   "forms (pairs, not rows): 3 checked, 0 disagreed",
   "keys (folds inputs, not readouts): 4 checked, 0 disagreed",
   "classes (belongs to the pairing): 5 checked, 0 disagreed",
-  "refetch (predicted is a defect): 800 checked, 1 disagreed; first: 570 re-fetches over 800 fetches; 380 of them were rows a declaration had named"
+  "refetch (predicted is a defect): 230 checked, 0 disagreed"
  ],
  "cases": []
 }

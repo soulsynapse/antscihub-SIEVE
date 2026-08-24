@@ -202,16 +202,18 @@
       - 📄 `P0-identity-broken-20260824T090532Z.json`
       - 📄 `P1-routes-20260824T090814Z.json`
       - 📄 `P1-routes-broken-20260824T090741Z.json`
-      - 📄 `P2-tiers-20260824T091106Z.json`
-      - 📄 `P2-tiers-broken-20260824T091108Z.json`
-      - 📄 `P3-record-20260824T091109Z.json`
-      - 📄 `P3-record-broken-20260824T091110Z.json`
-      - 📄 `P4-declarations-20260824T091111Z.json`
-      - 📄 `P4-declarations-broken-20260824T091112Z.json`
-      - 📄 `P5-producers-20260824T091113Z.json`
-      - 📄 `P5-producers-broken-20260824T091115Z.json`
-      - 📄 `P6-ladder-20260824T093857Z.json`
-      - 📄 `P6-ladder-broken-20260824T093905Z.json`
+      - 📄 `P2-tiers-20260824T094720Z.json`
+      - 📄 `P2-tiers-broken-20260824T094722Z.json`
+      - 📄 `P3-record-20260824T094723Z.json`
+      - 📄 `P3-record-broken-20260824T094724Z.json`
+      - 📄 `P4-declarations-20260824T094725Z.json`
+      - 📄 `P4-declarations-broken-20260824T094726Z.json`
+      - 📄 `P5-producers-20260824T094727Z.json`
+      - 📄 `P5-producers-broken-20260824T094729Z.json`
+      - 📄 `P6-ladder-20260824T094730Z.json`
+      - 📄 `P6-ladder-broken-20260824T094731Z.json`
+      - 📄 `P7-session-20260824T094734Z.json`
+      - 📄 `P7-session-broken-20260824T094738Z.json`
     - 📄 `01-identity.py` — Does a row still name the frame it named, after every trip it takes?
     - 📄 `02-routes.py` — Does every route return the same pixels, and say so when it has none?
     - 📄 `03-tiers.py` — Does a store know what it is holding, and admit what it is not?
@@ -219,6 +221,7 @@
     - 📄 `05-declarations.py` — Is a declaration a fetch plan, or just a description of one?
     - 📄 `06-producers.py` — Do the background producers work in the order they claim to?
     - 📄 `07-ladder.py` — Does the ladder put the blocking decode where it belongs, and nowhere else?
+    - 📄 `08-session.py` — Does the whole thing hold together, and does a drag ever decode?
     - 📄 `README.md`
   - 📁 `tool-experiments/`
     - 📁 `explorer-logs/`

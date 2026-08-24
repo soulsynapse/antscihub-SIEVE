@@ -1,8 +1,8 @@
 {
  "experiment": "P5-producers-broken",
  "question": "Do the background producers work in the order they claim, and can that order be read without watching a picture?",
- "when": "2026-08-24T09:11:15.455703+00:00",
- "sieve_rev": "8539d19",
+ "when": "2026-08-24T09:47:29.473858+00:00",
+ "sieve_rev": "4098a91",
  "machine": {
   "platform": "Windows-11-10.0.26200-SP0",
   "processor": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",

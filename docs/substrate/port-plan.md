@@ -584,9 +584,10 @@ wrong. It is also the first thing written fresh against rules that were
 already settled and measured, rather than carried across from a prototype —
 which is the more likely explanation than the code being unusually good.
 
-### P7 — the session
+### P7 — the session — *landed, bar the footage comparison*
 
-`src/sieve/session/session.py`
+`src/sieve/session/session.py`;
+checked by `experiments/substrate-checks/08-session.py`
 
 Owns the running thing: source, stores, frontier, builder, series, ledger.
 Executes what the ladder chose, holds the active window and the active tool
@@ -603,7 +604,36 @@ that does not describe it. That is the invariant `05-provenance.py` exists
 to check, and passing the rect makes it structural rather than checked.
 It is why P0–P6 were written to take their inputs rather than read them.
 
-*Proves it:* new harness scripts that put `src/sieve/` through what storage
+*Proved it:* seven cases, passing, none needing footage — the route is the
+fake one and the proxy is a span store of display-form frames. A drag over
+unfilled ground serves as `hold` and asks the route for **nothing**; the same
+row released decodes, returns exact pixels and is admitted; a landing fills
+anchored on the click and the row that used to hold is a resident hit; a crop
+change misses without wiping and returning to the old crop is a hit; the proxy
+answers outside the window and is refused admission. `--broken` restores the
+pre-finding viewer — blocking decode on every ladder, guard removed — and
+`cold` reports the decodes it made on the drawing thread.
+
+The wiring is where this found things, which is what an integration case is
+for. **The guard was wrong as first written.** It refused *any* blocking
+attempt for an unreleased request, which rules out the hunt route — one decode
+at a keyframe, no roll-forward, and the only way to see anything at all before
+a proxy exists. The rule the finding actually establishes is narrower: what
+costs two to four hundred milliseconds is a *miss inside the window*, an exact
+seek and roll-forward for a frame the fill has not reached. So the guard
+refuses `DECODE` for an unreleased request — a ladder that has gone wrong —
+and lets the keyframe route through as the chosen cost it is, counting it as
+one.
+
+Two smaller ones. `session.proxy = None` leaked a store holding open file
+handles, which on Windows first shows up as a directory that will not delete;
+there is a setter now that closes what it replaces. And two of the check's own
+premises were wrong: a crop that excluded the fake route's row marker, and a
+double-decode case that set up precisely the state where the ladder correctly
+*avoids* the decode, leaving the counter it was testing nothing to count.
+
+*Still owed, and the reason this phase is not simply done:* new harness scripts
+that put `src/sieve/` through what storage
 01, 02 and 06 put the explorer through, labelled in their notes as a
 different program — because they are, and a comparison that pretends
 otherwise is worse than one that says so. Set beside the committed JSON in

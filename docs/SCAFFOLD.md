@@ -45,6 +45,8 @@
   - 📄 `VOCAB.md`
   - 📄 `vision-and-notes.md`
 - 📁 `experiments/`
+  - 📁 `chain-experiments/`
+    - 📄 `README.md`
   - 📁 `decode-experiments/`
     - 📁 `explorer-logs/`
       - 📄 `explorer-20260821T172626Z.json`

@@ -1,8 +1,8 @@
 {
  "experiment": "provenance-broken",
  "question": "Is every value src/sieve stores reproducible from the key it is filed under?",
- "when": "2026-08-24T11:03:48.970632+00:00",
- "sieve_rev": "a4da497",
+ "when": "2026-08-24T11:10:34.908678+00:00",
+ "sieve_rev": "44ea9c4",
  "machine": {
   "platform": "Windows-11-10.0.26200-SP0",
   "processor": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
@@ -21,12 +21,12 @@
   "RUN WITH --broken: the producer reads the active step again after gathering, which is how it used to be. `switching` is expected to FAIL.",
   "quiet: 287 rows recomputed from their key over 0..288, 287 written",
   "warm-up: [(1, 288)] covered of 0..288 \u2014 the first row's input was never admitted, so it has no value rather than a wrong one",
-  "switching: 170 rows recomputed while the active step was swapped throughout; series written: ['absdiff(reduce=mean)|0+0+32x24@32x24:gray', 'absdiff(reduce=peak)|0+0+32x24@32x24:gray']",
+  "switching: 120 rows recomputed while the active step was swapped throughout; series written: ['absdiff(reduce=mean)|0+0+32x24@32x24:gray', 'absdiff(reduce=peak)|0+0+32x24@32x24:gray']",
   "reading: 287 rows verified with a reader snapshotting throughout",
   "persisted: 287 rows verified after a round trip through src.mp4-absdiff-reduce-mean-0-0-32x24-32x24-gray-571a79d075ffb771.npz",
   "quiet (one writer, nothing moving): 287 checked, 0 disagreed",
   "warm-up (no value beats a guess): 288 checked, 0 disagreed",
-  "switching (the step moved underneath): 170 checked, 2 disagreed; first: absdiff(reduce=peak)|0+0+32x24@32x24:gray: no active step answers to this key",
+  "switching (the step moved underneath): 120 checked, 2 disagreed; first: absdiff(reduce=peak)|0+0+32x24@32x24:gray: no active step answers to this key",
   "reading (snapshot while written): 287 checked, 0 disagreed",
   "persisted (survives the round trip): 287 checked, 0 disagreed"
  ],

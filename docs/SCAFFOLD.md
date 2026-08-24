@@ -202,23 +202,25 @@
       - 📄 `P0-identity-broken-20260824T090532Z.json`
       - 📄 `P1-routes-20260824T090814Z.json`
       - 📄 `P1-routes-broken-20260824T090741Z.json`
-      - 📄 `P2-tiers-20260824T094720Z.json`
-      - 📄 `P2-tiers-broken-20260824T094722Z.json`
-      - 📄 `P3-record-20260824T094723Z.json`
-      - 📄 `P3-record-broken-20260824T094724Z.json`
-      - 📄 `P4-declarations-20260824T094725Z.json`
-      - 📄 `P4-declarations-broken-20260824T094726Z.json`
-      - 📄 `P5-producers-20260824T100733Z.json`
-      - 📄 `P5-producers-broken-20260824T100744Z.json`
-      - 📄 `P6-ladder-20260824T094730Z.json`
-      - 📄 `P6-ladder-broken-20260824T094731Z.json`
-      - 📄 `P7-session-20260824T105116Z.json`
-      - 📄 `P7-session-broken-20260824T094738Z.json`
+      - 📄 `P2-tiers-20260824T111010Z.json`
+      - 📄 `P2-tiers-broken-20260824T111012Z.json`
+      - 📄 `P3-record-20260824T111013Z.json`
+      - 📄 `P3-record-broken-20260824T111014Z.json`
+      - 📄 `P4-declarations-20260824T111015Z.json`
+      - 📄 `P4-declarations-broken-20260824T111016Z.json`
+      - 📄 `P5-producers-20260824T111017Z.json`
+      - 📄 `P5-producers-broken-20260824T111019Z.json`
+      - 📄 `P6-ladder-20260824T111020Z.json`
+      - 📄 `P6-ladder-broken-20260824T111020Z.json`
+      - 📄 `P7-session-20260824T111024Z.json`
+      - 📄 `P7-session-broken-20260824T111028Z.json`
+      - 📄 `P8-canvas-20260824T111035Z.json`
+      - 📄 `P8-canvas-broken-20260824T111036Z.json`
       - 📄 `parity-20260824T105711Z.json`
-      - 📄 `project-20260824T102243Z.json`
-      - 📄 `project-broken-20260824T101908Z.json`
-      - 📄 `provenance-20260824T110341Z.json`
-      - 📄 `provenance-broken-20260824T110348Z.json`
+      - 📄 `project-20260824T111029Z.json`
+      - 📄 `project-broken-20260824T111031Z.json`
+      - 📄 `provenance-20260824T111033Z.json`
+      - 📄 `provenance-broken-20260824T111034Z.json`
     - 📄 `01-identity.py` — Does a row still name the frame it named, after every trip it takes?
     - 📄 `02-routes.py` — Does every route return the same pixels, and say so when it has none?
     - 📄 `03-tiers.py` — Does a store know what it is holding, and admit what it is not?
@@ -230,6 +232,7 @@
     - 📄 `09-project.py` — Does pointing at a folder find the footage, and only the footage?
     - 📄 `10-parity.py` — The port, put through what the explorer was put through, on the real file.
     - 📄 `11-provenance.py` — Is every stored value the one its own key says it is?
+    - 📄 `12-canvas.py` — Does the picture stay out of the layout, and cost one scale per frame?
     - 📄 `README.md`
   - 📁 `tool-experiments/`
     - 📁 `explorer-logs/`
@@ -313,6 +316,7 @@
     - 📁 `analysis/` — What a step produces, and the record of which positions have one.
       - 📄 `record.py` — Computing a step's value where its inputs landed, and filing it.
       - 📄 `series.py` — A step's reduced output, and the explicit record of which rows have one.
+      - 📄 `surface.py` — Drawing a step's output at display resolution, from data reduced to it.
       - 📄 `tool.py` — What a step declares about itself before anything schedules or runs it.
     - 📁 `decode/` — Getting pixels out of a file, and nothing else.
       - 📄 `fake.py` — A route with no file behind it, so everything above one can be checked.
@@ -367,6 +371,7 @@
       - 📁 `view/` — The views: what stands in a pane, one folder each.
         - 📁 `canvas/` — The canvas: what the work is looked at on, and what is drawn over it.
           - 📁 `video_canvas/` — The video canvas: footage on the stage. Nothing is built here yet.
+            - 📄 `view.py` — Footage on the stage: one frame at a time, and no opinion about the layout.
           - 📄 `view.py` — The canvas as a stage: content held at its own shape, and the room around it.
         - 📁 `dev/` — The dev view: the application looked at by whoever is building it.
           - 📁 `card_mockups/` — Card mock ups: the shapes a card could take, drawn beside each other.

@@ -675,9 +675,29 @@ therefore could not report a fill time below what the sleeps add up to. The
 number it printed was a floor wearing a measurement's label, and it was the
 one number in the file this section cares most about.
 
-### P8 — the canvas
+### P8 — the canvas — *the widget landed; not yet fed*
 
-`src/sieve/gui/view/canvas/video_canvas/`, `src/sieve/analysis/surface.py`
+`src/sieve/gui/view/canvas/video_canvas/`, `src/sieve/analysis/surface.py`;
+checked by `experiments/substrate-checks/12-canvas.py`
+
+*Proved it:* six cases, offscreen and without footage, because what a widget
+tells a layout and how many times it scales are not about pixels. No size
+hints and `Ignored` on both axes, unmoved by a frame four times the widget;
+one scale per frame, none per repaint, exactly one per resize; the widget
+owns a copy of what it draws, so a fill thread overwriting the array behind
+it cannot tear the picture. `--broken` gives it back the hint that had the
+video deciding the width of its own pane, and `layout` fails.
+
+Two things the check had to be fixed for, both the same shape — measuring a
+widget in a state the application never has it in. An offscreen widget is
+handed its first resize event when something first paints it, so a scale
+count taken before that blames the repaints for a geometry change. And a
+widget that has never been shown is not handed resize events at all, so the
+resize assertion passed for the wrong reason until the check showed it.
+
+*Still owed:* the widget is not fed. Putting a live session's frames on it
+needs a current project and a chosen source, and which source a project
+opens on is a product question rather than a wiring one.
 
 `surfaces.py` moves as written; it already produces arrays at display size
 and imports no Qt, so the widget that blits them is the only new code.

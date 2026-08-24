@@ -223,6 +223,8 @@
       - 📄 `P8-transport-broken-20260824T115034Z.json`
       - 📄 `T0-crop-20260824T125329Z.json`
       - 📄 `T0-crop-broken-20260824T125338Z.json`
+      - 📄 `T1-numberbox-20260824T132024Z.json`
+      - 📄 `T1-numberbox-broken-20260824T132029Z.json`
       - 📄 `parity-20260824T130625Z.json`
       - 📄 `project-20260824T115020Z.json`
       - 📄 `project-broken-20260824T115022Z.json`
@@ -242,6 +244,7 @@
     - 📄 `12-canvas.py` — Does the picture stay out of the layout, and cost one scale per frame?
     - 📄 `13-transport.py` — Does the playhead follow the clock, or the machine?
     - 📄 `14-crop.py` — Is every crop this can produce a legal one, and does it stop moving?
+    - 📄 `15-numberbox.py` — Can a number box be corrected without arguing back?
     - 📄 `README.md`
   - 📁 `tool-experiments/`
     - 📁 `explorer-logs/`
@@ -370,6 +373,7 @@
         - 📄 `menu.py` — The menu: a list of verbs standing over the work, grouped, with its keys shown.
         - 📄 `meter.py` — The meter: a quantity drawn as a length, in a groove the length is read off.
         - 📄 `nav.py` — The sections down the left of a card, and which one is being read.
+        - 📄 `number.py` — The number box: a quantity in a range, typed into or stepped.
         - 📄 `pill.py` — The pill: a word saying what state a thing is in, with a dot beside it.
         - 📄 `sections.py` — A card of sections: a list down the left, one of them read on the right.
         - 📄 `segmented.py` — The segmented bar: a fixed few, side by side, exactly one of them on.

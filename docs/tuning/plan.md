@@ -119,14 +119,18 @@ stopped. There is no sweep in `src/` yet.
 One of the three overlay policies the tool folder deliberately kept without
 choosing between, on the grounds that the question is real and unanswered.
 
-## The primitive that is missing
+## The primitive that was missing
 
-**A number box** — a value with a unit, inside a range, typed into or stepped.
-`primitives/field.py`'s `LineField(numeric=True)` right-aligns a line edit and is
-not a stepper. What makes it a primitive rather than a widget is one property:
-it must accept a *corrected* value after a clamp without re-emitting, or the
-field goes on claiming a crop that was refused and a push-pull pair oscillates.
-Everything that edits a clamped quantity needs it.
+**A number box** — landed, as `primitives/number.py`, and checked by
+`15-numberbox`. A value inside a range, typed into or stepped;
+`LineField(numeric=True)` right-aligns a line edit and is not a stepper, and the
+unit stays `Field(unit=…)`'s because a unit is said about a value rather than
+part of one. What makes it a primitive rather than a widget is the one property
+the check is built on: `show_value` displays a *corrected* value without
+emitting, so an owner whose clamp is not idempotent is not asked to decide again
+about a value it has just decided. Driven against a clamp that deliberately
+moves its own approved value, the box settles in one push; with the signal
+restored it does not settle at all, which is what `--broken` records.
 
 Not proposed: the library head's `+` and the swipe's arrows are two hand-rolled
 icon buttons. Two is not three, and a primitive minted before the third caller

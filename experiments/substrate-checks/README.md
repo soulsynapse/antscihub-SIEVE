@@ -10,6 +10,8 @@ The `P0`–`P8` in the filenames and docstrings are the phases of
 this was put together and what went wrong on the way. These files are not
 archival. They are what says the tree still holds.
 
+The `T0`-onward ones are the phases of `docs/tuning/plan.md`, which is not archival yet because it is still being walked. Both prefixes number the same folder because the numbering is the order the layers were built and not a claim about which plan built them; a check outlives the plan that asked for it.
+
 Not a second kind of experiment and not a test suite. This tree already has a
 notion of evidence — a script that attaches its build, machine and probed
 footage, keeps every sample it took, discards a stated warm-up, and commits its

@@ -214,6 +214,10 @@
       - 📄 `P6-ladder-broken-20260824T094731Z.json`
       - 📄 `P7-session-20260824T094734Z.json`
       - 📄 `P7-session-broken-20260824T094738Z.json`
+      - 📄 `project-20260824T101755Z.json`
+      - 📄 `project-20260824T101852Z.json`
+      - 📄 `project-20260824T101906Z.json`
+      - 📄 `project-broken-20260824T101908Z.json`
     - 📄 `01-identity.py` — Does a row still name the frame it named, after every trip it takes?
     - 📄 `02-routes.py` — Does every route return the same pixels, and say so when it has none?
     - 📄 `03-tiers.py` — Does a store know what it is holding, and admit what it is not?
@@ -222,6 +226,7 @@
     - 📄 `06-producers.py` — Do the background producers work in the order they claim to?
     - 📄 `07-ladder.py` — Does the ladder put the blocking decode where it belongs, and nowhere else?
     - 📄 `08-session.py` — Does the whole thing hold together, and does a drag ever decode?
+    - 📄 `09-project.py` — Does pointing at a folder find the footage, and only the footage?
     - 📄 `README.md`
   - 📁 `tool-experiments/`
     - 📁 `explorer-logs/`
@@ -382,6 +387,11 @@
           - 📄 `view.py` — The walked step as a view: the head over it, and the room its knobs will fill.
       - 📄 `metrics.py` — How round the cards are and how large the text is, for every view at once.
       - 📄 `palette.py` — The colours every view draws with, and the palettes they are drawn from.
+    - 📁 `project/` — What a project is: a folder somebody pointed at, and the list of them.
+      - 📄 `document.py` — What a project knows about itself, written where the project is.
+      - 📄 `library.py` — Which projects this person has, and which they were in last.
+      - 📄 `project.py` — A folder somebody pointed at, and what SIEVE knows about it.
+      - 📄 `sources.py` — Finding the footage already in a folder somebody pointed at.
     - 📁 `session/` — The running session: what is being served, filled, computed and recorded.
       - 📄 `frontier.py` — Filling a window into memory, in the order attention actually wants it.
       - 📄 `ladder.py` — Choosing what to try, in what order, and what may be kept.

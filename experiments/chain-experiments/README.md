@@ -97,7 +97,21 @@ does not exist; or a value SIEVE plainly must schedule turns out not to be
 expressible in the set. Adding to this set later is the expensive kind of
 change, which is why it is a goal and not an implementation detail.
 
-### G3 — What does depth cost that the same work fused would not?
+### G3 — What does depth cost that the same work fused would not? — done
+
+`03-joints-and-reuse.py`. Affordable, and priced in bytes rather than in calls.
+An edge costs the *intermediate it names*, not the call that names it — the
+figure scales with the array rather than staying flat, which is the opposite of
+what dispatch overhead would do. At the analysis form a graph ten edges deep
+spends a small single-digit percentage of a frame period on joints. Generality
+is not what a graph costs; the arithmetic in it is.
+
+Two mistakes of my own are recorded in the file rather than smoothed away. The
+first version asserted that fused must beat staged and failed on a run where
+noise put staged ahead — below the noise floor is a legitimate answer, so the
+case now measures the floor and reports against it. The second read the 64x64
+per-edge figure as if it held at any size, which says joints are free and is
+true only at 64x64.
 
 The overhead of generality, isolated from the work: per-edge dispatch, a copy at
 each boundary, a cache lookup per node. Measured as the same arithmetic run as
@@ -167,7 +181,27 @@ prefetch has no figures for a graph it has not run. It must measure and adapt,
 and the first pass through a novel graph is always uninformed. Not fatal, and
 another reason the account is not optional.
 
-### G5 — Does recompute-versus-store invert between the two regimes?
+### G5 — Does recompute-versus-store invert between the two regimes? — done
+
+`03-joints-and-reuse.py`. **It inverts**, which is the third of the three
+outcomes and the expensive one: the control is necessary *and* a person cannot
+be expected to know which side of it they are on.
+
+Keeping an intermediate saves compute in proportion to the reuse a node
+declares, so a scheduler can predict the saving from a declaration. What it
+spends is frame-cache room, and an intermediate is the same size as a frame. The
+case turns that into the one figure a scheduler could act on — the fetch cost at
+which the two are equal — and this machine's decode sits above it while a chunk
+or proxy read sits below. So the same node should be kept when its inputs come
+from a derived file and recomputed when they come from a decode.
+
+The threshold is a ratio of two timings and moves between runs by more than
+either moves within one. It is an order-of-magnitude claim about which side the
+tiers sit, not a number to branch on, and the file says so.
+
+A methodological bug is recorded with it: the first version discarded five
+warm-up positions against a reach of thirty, so the keeping policy was still
+filling its cache while being timed, and keeping looked barely worth doing.
 
 For an intermediate that a downstream node consumes, is it cheaper to recompute
 it per row or to keep it? Measured in both input regimes, because
@@ -185,7 +219,14 @@ This one decides whether user-controlled caching is a real control:
 *A no looks like:* either of the first two, which is a cheaper product than the
 third and worth finding out before drawing it.
 
-### G6 — Is a value stored under a subgraph key reproducible from that key?
+### G6 — Is a value stored under a subgraph key reproducible from that key? — done
+
+`03-joints-and-reuse.py`'s `key` case. Two graphs differing only in an upstream
+parameter, with an identical sink: the subgraph key tells them apart and the
+local key does not, filing both under one name so the second reads the first's
+numbers. `--broken` is the local key, and it fails this case and no other —
+which is itself the point, since nothing about cost changes when a value is
+filed under the wrong name.
 
 *Moved by G1.* The explorer already keys a two-node chain the way this rule
 says a graph must — `Rig.set_tool` folds an upstream blur's parameter into the

@@ -432,9 +432,10 @@ should have been**, which the check asserts by inspecting its signature. A
 ledger that could be asked whether it was inside a budget would be asked
 it.
 
-### P4 — declarations
+### P4 — declarations — *landed*
 
-`src/sieve/analysis/tool.py`
+`src/sieve/analysis/tool.py`;
+checked by `experiments/substrate-checks/05-declarations.py`
 
 `tools.py`, moved. This was the phase I previously listed as deferred for
 having no counterpart, which was wrong: it is ADR-0006 implemented, and
@@ -452,11 +453,37 @@ before this.
 
 May not know: how anything is fetched, stored or drawn.
 
-*Proves it:* the sparse-offset load (`lag_mhi`) has a reach wider than its
-admitted set and both numbers come out right; `residency` over a moving
-horizon unions to a working set rather than a point set; a tool key folds
-the params its field uses and excludes params downstream of the series, so
-a display-side threshold change reuses the stored values.
+*Proved it:* six cases, passing, none needing footage, with `--broken`
+substituting the point set for the union. The last case is the first time
+P1 through P4 run together, and it is the one with a number in it: a
+playhead walking 200 positions costs **230 fetches and no re-fetches under
+the union, against 800 fetches and 570 re-fetches under the point set**.
+ADR-0006 calls that substitution pathological; that is the figure.
+
+The concrete steps do *not* come across. `absdiff`, `dis_flow` and
+`lag_mhi` stay in `experiments/tool-experiments/tools.py`, where they are
+loads rather than proposals, because that folder's standing rule is that a
+tool which does not exist may be a workload and may never be evidence.
+Shipping one into the application on the grounds that it looks plausible is
+how a design gets argued from an invented step. When something in `sieve`
+runs a step it is ported from there with the comments it earned.
+
+Two things this phase found, both mine rather than the explorers'. The
+protected set and the resident store spelled their key in opposite orders —
+`(row, form key)` against `(form key, row)` — so every membership test
+missed and **nothing had ever been protected**; the store simply looked
+under-budgeted. And the first version of the re-fetch count charged only
+re-fetches the declaration had *named*, which rewards declaring less: the
+point set names four rows, so almost nothing it loses is ever charged to
+it. The assertion is on the total.
+
+The two constants in that case were also wrong twice, and the reasons are
+worth keeping. A budget roomier than the step's rows-in-flight lets plain
+recency hold the working set by accident, protection decides nothing, and
+both residencies come out identical — the case passed under `--broken`
+while proving nothing. And a horizon shorter than the closest gap between
+lags leaves the union in clusters with holes, so rows are evicted between
+them and an honest declaration reads as a failing one.
 
 ### P5 — producers
 

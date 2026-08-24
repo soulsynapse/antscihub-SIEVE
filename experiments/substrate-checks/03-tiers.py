@@ -148,13 +148,13 @@ def case_resident(run: Run) -> tuple[str, int, list[str]]:
     if store.get(CROP.key(), 0) is None:
         bad.append("eviction took a frame that had just been read")
 
-    protected = {(CROP.key(), 2)}
+    protected = {(2, CROP.key())}
     for row in range(5, 12):
         store.put(CROP.key(), row, route.image(row), protected=protected)
     if store.get(CROP.key(), 2) is None:
         bad.append("a protected row was evicted")
 
-    over = {(CROP.key(), row) for row in range(20, 30)}
+    over = {(row, CROP.key()) for row in range(20, 30)}
     small = ResidentStore(budget_bytes=2 * FRAME_BYTES)
     for row in range(20, 30):
         small.put(CROP.key(), row, route.image(row), protected=over)

@@ -202,14 +202,17 @@
       - 📄 `P0-identity-broken-20260823T231247Z.json`
       - 📄 `P1-routes-20260824T002252Z.json`
       - 📄 `P1-routes-broken-20260824T002418Z.json`
-      - 📄 `P2-tiers-20260824T003403Z.json`
-      - 📄 `P2-tiers-broken-20260824T003405Z.json`
-      - 📄 `P3-record-20260824T073138Z.json`
-      - 📄 `P3-record-broken-20260824T073139Z.json`
+      - 📄 `P2-tiers-20260824T080448Z.json`
+      - 📄 `P2-tiers-broken-20260824T080458Z.json`
+      - 📄 `P3-record-20260824T080448Z.json`
+      - 📄 `P3-record-broken-20260824T080459Z.json`
+      - 📄 `P4-declarations-20260824T080449Z.json`
+      - 📄 `P4-declarations-broken-20260824T080450Z.json`
     - 📄 `01-identity.py` — Does a row still name the frame it named, after every trip it takes?
     - 📄 `02-routes.py` — Does every route return the same pixels, and say so when it has none?
     - 📄 `03-tiers.py` — Does a store know what it is holding, and admit what it is not?
     - 📄 `04-record.py` — Does the record say what it knows, and admit what it does not?
+    - 📄 `05-declarations.py` — Is a declaration a fetch plan, or just a description of one?
     - 📄 `README.md`
   - 📁 `tool-experiments/`
     - 📁 `explorer-logs/`

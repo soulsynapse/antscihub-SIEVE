@@ -14,6 +14,7 @@
     - 📄 `ADR-0006-a-declaration-is-a-fetch-plan.md`
     - 📄 `ADR-0007-a-cost-class-belongs-to-the-pairing.md`
     - 📄 `ADR-0008-cost-is-a-fact-waste-is-a-bug.md`
+    - 📄 `ADR-0009-a-tool-is-a-node-not-a-feature.md`
   - 📁 `archive/`
     - 📄 `2026.08-substrate-port.md`
     - 📄 `README.md`

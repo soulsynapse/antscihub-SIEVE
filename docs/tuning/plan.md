@@ -247,6 +247,15 @@ already resampled can only ever be shown.
 than the loop needs to be tunable, and it wants its own plan once one step runs
 end to end and there is something to chain.
 
+What has moved since that was written: ADR-0009 settles that an analysis is a
+node rather than a feature, and `experiments/chain-experiments/` carries what
+that cost. One thing there reaches back into these phases — the crop attaches at
+the fetch node, as the rect half of a `Form` that downstream nodes declare
+upward into, which is what `Tool.form_for` already is. So the second of the two
+questions under *Genuinely open* is answered: a crop is neither the session's
+nor a step's, it is the fetch's, and a step names the form it wants of it. What
+crop a fresh recording opens with is still open and still undecided here.
+
 **Scrubbing and landing elsewhere.** The transport loops a fixed window; moving
 the playhead outside it is what the hunt tier and the proxy are for, so it
 follows T5.

@@ -4,9 +4,16 @@ Where SIEVE finds out what happens when a tool's output is another tool's
 input. `decode-experiments` settled what a frame costs to get,
 `storage-experiments` what it costs to keep, and `tool-experiments` what one
 tool costs when it rides along on a fetch. All three measured a *single*
-consumer. This folder is the layer all three deferred, and it is still a plan:
-nothing here is settled yet, and the sections below are what it is for rather
-than what it found.
+consumer. This folder is the layer all three deferred.
+
+**What it has settled is ADR-0009**, which caps what SIEVE is: an analysis is a
+node in a graph SIEVE evaluates, and adding a way to measure something is never
+a change to SIEVE. Six of the ten goals below carry the evidence for it and are
+marked done. Read the ADR for what was decided; read here for what it cost and
+which answers could have gone the other way.
+
+The rest is still a plan, and the ADR names three of them as things it
+deliberately does not decide.
 
 ## The name is a guess and is one of the questions
 

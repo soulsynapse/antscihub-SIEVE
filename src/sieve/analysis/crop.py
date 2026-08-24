@@ -13,8 +13,10 @@ that is legal, and legality is three things at once:
 no others.
 
 **At least `MINIMUM` on a side.** A box with no area has no aspect, and every
-downstream fit divides by it. Where a frame is too small for the three rules to
-hold at once, the answer is an empty rect and `clamp` says why.
+downstream fit divides by it — and `frame.form.build` on a form with no area
+returns an empty array without complaining, so a crop that lost its area would
+be found much later as a picture that is not there. A frame with no room for
+even the smallest legal crop raises rather than returning one.
 
 **Even on every edge**, which is the one that is not obvious. 4:2:0 stores chroma
 at half resolution in each direction, so an odd offset or an odd width puts a
@@ -63,19 +65,32 @@ def clamp(rect: Rect, frame_width: int, frame_height: int,
     nudged, which is what lets an editor push its own value in without the
     result differing from what it showed.
 
-    **A frame with no legal crop gets an empty one**, and that is a stated
-    answer rather than an accident. On a frame narrower than two pixels the
-    three rules cannot all hold — even, positive area, on the frame — so there
-    is nothing to return that is not a lie about one of them. An empty rect is
-    the same bargain `gui.view.canvas.Canvas.stage` makes for a pane too small
-    to hold a stage: one obviously-nothing value that every caller reads as
-    *nothing here*, instead of each guarding against a different impossibility
-    in its own way. Anything that could act on a crop must therefore check for
-    area, which is a single test rather than three.
+    **A frame with no legal crop raises**, and the alternative was tried and
+    rejected. On a frame narrower than two pixels the three rules cannot all
+    hold — even, positive area, on the frame — so there is nothing to return
+    that is not a lie about one of them.
+
+    An earlier version returned an empty rect instead, on the precedent of
+    `gui.view.canvas.Canvas.stage`, which hands back an empty rect for a pane
+    too small to hold a stage. The precedent does not transfer. An empty
+    *stage* means draw nothing and its painters ask `isEmpty()`; an empty
+    *crop* becomes a `Form` over no pixels, and `frame.form.build` on one
+    **succeeds** and returns an empty array. No crash, no picture, no message —
+    which is the worst of the three ways this could fail. The version that
+    returned it also carried a docstring saying callers must check for area,
+    which nothing did and nothing could have checked.
+
+    A frame this small is not a recording. It is a corrupt header or a
+    programming error, and failing at the point that has the frame size beats
+    an empty picture somewhere that does not.
     """
     # up to even, not down: a floor rounded down is a floor lowered, and
     # the one number here that must not quietly get smaller is the one
     # stopping a crop having no area.
+    if _even(frame_width) < 2 or _even(frame_height) < 2:
+        raise ValueError(
+            f"a {frame_width}x{frame_height} frame admits no crop: every crop "
+            "is even on each edge and has area, and this has room for neither")
     floor = max(2, minimum + minimum % 2)
     x, y, width, height = (int(round(v)) for v in rect)
 

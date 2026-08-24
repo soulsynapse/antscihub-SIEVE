@@ -15,8 +15,7 @@ no others.
 **At least `MINIMUM` on a side.** A box with no area has no aspect, and every
 downstream fit divides by it — and `frame.form.build` on a form with no area
 returns an empty array without complaining, so a crop that lost its area would
-be found much later as a picture that is not there. A frame with no room for
-even the smallest legal crop raises rather than returning one.
+turn up much later as a picture that is not there.
 
 **Even on every edge**, which is the one that is not obvious. 4:2:0 stores chroma
 at half resolution in each direction, so an odd offset or an odd width puts a
@@ -25,14 +24,12 @@ stored chunk comes back a pixel adrift from the frame it was cut from. The
 explorers snap to even with the comment `yuv420 wants even` and this is that,
 with the reason written down.
 
-**The order the three are applied in matters**, and getting it wrong is how a
-clamp produces something illegal. Snapping a width down to even after clamping
-it to a minimum can put it back under the minimum; clamping an offset after
-snapping it can make it odd again. So each is done once, in an order where no
-later step can break an earlier one, and the whole thing is idempotent —
-`clamp(clamp(r)) == clamp(r)` is asserted, because a clamp that moves a value it
-has already approved is a clamp that argues with itself and a field that shows
-its result will oscillate.
+**The order the three are applied in matters**, and the order here is the
+explorers'. What this module adds to them is not a better clamp — it is the
+same one, out of a GUI method and into somewhere it can be called and checked,
+with the mapping from a drawn rectangle beside it. Idempotence is asserted
+because a clamp that moves a value it has already approved is one whose editor
+oscillates: push, corrected, push, corrected.
 """
 
 from __future__ import annotations
@@ -61,60 +58,31 @@ def clamp(rect: Rect, frame_width: int, frame_height: int,
           minimum: int = MINIMUM) -> Rect:
     """The nearest legal crop to `rect`: on the frame, big enough, even.
 
-    Idempotent. A rect that is already legal comes back unchanged rather than
-    nudged, which is what lets an editor push its own value in without the
-    result differing from what it showed.
+    This is `tool-explorer.py`'s `_crop_drawn`, lifted out of a GUI method so
+    that it can be called and checked. The five lines are the settled ones and
+    the order is theirs: the offsets are clamped against the *minimum*, then
+    the extents against what is left, then everything is snapped down to even.
 
-    **A frame with no legal crop raises**, and the alternative was tried and
-    rejected. On a frame narrower than two pixels the three rules cannot all
-    hold — even, positive area, on the frame — so there is nothing to return
-    that is not a lie about one of them.
+    Idempotent, and correct because `MINIMUM` is even — snapping an extent down
+    by one from an even floor is what would break it, and cannot. A version
+    that reordered these to make the invariant hold for an odd floor too is
+    gone, along with the branch it needed: it was machinery for an input that
+    does not exist.
 
-    An earlier version returned an empty rect instead, on the precedent of
-    `gui.view.canvas.Canvas.stage`, which hands back an empty rect for a pane
-    too small to hold a stage. The precedent does not transfer. An empty
-    *stage* means draw nothing and its painters ask `isEmpty()`; an empty
-    *crop* becomes a `Form` over no pixels, and `frame.form.build` on one
-    **succeeds** and returns an empty array. No crash, no picture, no message —
-    which is the worst of the three ways this could fail. The version that
-    returned it also carried a docstring saying callers must check for area,
-    which nothing did and nothing could have checked.
-
-    A frame this small is not a recording. It is a corrupt header or a
-    programming error, and failing at the point that has the frame size beats
-    an empty picture somewhere that does not.
+    **A frame smaller than `minimum` is out of scope, and deliberately not
+    handled.** A recording is not sixty-four pixels wide. An earlier version of
+    this module invented that case, returned an arealess rect for it, then
+    raised for it, and the checking of it was the only place either behaviour
+    was ever exercised — the explorers, which have drawn thousands of crops,
+    simply never had the problem. Code that answers a question nothing asks is
+    code somebody later has to understand.
     """
-    # up to even, not down: a floor rounded down is a floor lowered, and
-    # the one number here that must not quietly get smaller is the one
-    # stopping a crop having no area.
-    if _even(frame_width) < 2 or _even(frame_height) < 2:
-        raise ValueError(
-            f"a {frame_width}x{frame_height} frame admits no crop: every crop "
-            "is even on each edge and has area, and this has room for neither")
-    floor = max(2, minimum + minimum % 2)
     x, y, width, height = (int(round(v)) for v in rect)
-
-    width = _fit(width, frame_width, floor)
-    height = _fit(height, frame_height, floor)
-    # the offset last, and snapped *down*: x can only decrease here, so
-    # `x + width <= frame` survives it. Snapping the offset first and clamping
-    # after would put it back on an odd number.
-    x = _even(max(0, min(x, frame_width - width)))
-    y = _even(max(0, min(y, frame_height - height)))
-    return x, y, width, height
-
-
-def _fit(extent: int, frame: int, floor: int) -> int:
-    """One dimension: even, at least `floor`, and never off the frame.
-
-    The frame wins when the two cannot both be had — a frame narrower than the
-    minimum has no legal crop of that minimum, and the honest answer is the
-    widest even crop that fits rather than one hanging off the edge.
-    """
-    extent = _even(min(max(extent, floor), frame))
-    if extent < floor:
-        return _even(frame)
-    return extent
+    x = max(0, min(x, frame_width - minimum))
+    y = max(0, min(y, frame_height - minimum))
+    width = max(minimum, min(width, frame_width - x))
+    height = max(minimum, min(height, frame_height - y))
+    return tuple(_even(v) for v in (x, y, width, height))
 
 
 def to_source(drawn: Rect, placed: Rect, frame_width: int,

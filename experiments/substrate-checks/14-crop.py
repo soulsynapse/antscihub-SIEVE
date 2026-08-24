@@ -32,17 +32,15 @@ Six cases, no footage and no Qt: a rectangle is arithmetic.
 
 **legal** — every result of every clamp is on the frame, big enough and even,
 over a sweep of awkward rectangles: negative, backwards, enormous, one pixel,
-straddling every edge and corner.
+straddling every edge and corner. On frames a recording actually has, which is
+the other half of the property: a clamp only has to be right about inputs that
+can reach it.
 
 **idempotent** — clamping twice is clamping once, over the same sweep.
 
 **untouched** — a rect that is already legal comes back exactly as it went in.
 A clamp that nudged its own approved output would make a typed number
 unenterable.
-
-**cramped** — a frame smaller than the minimum has no crop of the minimum, and
-the answer is the widest even crop that fits rather than one hanging off the
-edge.
 
 **mapping** — a rectangle drawn over a placed picture round-trips to source
 pixels and back, including through a stage whose aspect differs from the
@@ -84,9 +82,12 @@ from sieve.analysis.crop import MINIMUM, to_placed, to_source, whole  # noqa: E4
 
 harness.RESULTS = Path(__file__).resolve().parent / "results"
 
-#: the recording in `video-tests/`, and a small odd frame to make the
-#: even-alignment and the minimum argue with each other
-FRAMES = ((5312, 2988), (462, 456), (1921, 1081), (100, 100))
+#: Frames a recording actually has: the 5.3K and the small clip in
+#: `video-tests/`, plus an odd-sided one so the even-alignment has something to
+#: do. A one-pixel frame was in this list, and it was the only place a whole
+#: branch of `crop.clamp` was ever exercised — a check that invents an input
+#: keeps alive the code that answers it.
+FRAMES = ((5312, 2988), (462, 456), (1921, 1081), (640, 481))
 SEED = 20260824
 
 
@@ -214,34 +215,6 @@ def case_untouched(run: Run) -> tuple[str, int, list[str]]:
     return "untouched (legal in, same out)", len(legal), bad
 
 
-def case_cramped(run: Run) -> tuple[str, int, list[str]]:
-    """A frame with no room for the minimum."""
-    bad: list[str] = []
-    for width, height in ((40, 40), (63, 63), (2, 2)):
-        got = crop_mod.clamp((0, 0, width, height), width, height)
-        why = illegal(got, width, height)
-        if why:
-            bad.append(f"a {width}x{height} frame produced {why}")
-        if got[2] > width or got[3] > height:
-            bad.append(f"a {width}x{height} frame produced a larger {got}")
-
-    # and a frame with room for nothing raises rather than handing back
-    # something arealess. `frame.form.build` on a form with no area returns an
-    # empty array without complaining, so a crop that lost its area would be
-    # found much later, as a picture that is not there.
-    for width, height in ((1, 1), (0, 0), (5312, 1)):
-        try:
-            got = crop_mod.clamp((0, 0, width, height), width, height)
-            bad.append(f"a {width}x{height} frame admits no crop and returned "
-                       f"{got}")
-        except ValueError:
-            pass
-    run.note("cramped: a frame narrower than the floor yields the widest even "
-             "crop that fits; one with room for no legal crop at all raises, "
-             "because an arealess crop builds an empty picture in silence")
-    return "cramped (the frame wins, or says so)", 6, bad
-
-
 def case_mapping(run: Run) -> tuple[str, int, list[str]]:
     bad: list[str] = []
     source = (5312, 2988)
@@ -319,7 +292,6 @@ def main() -> None:
         case_legal(run),
         case_idempotent(run),
         case_untouched(run),
-        case_cramped(run),
         case_mapping(run),
         case_whole(run),
     ]

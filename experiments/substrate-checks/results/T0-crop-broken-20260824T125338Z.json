@@ -1,8 +1,8 @@
 {
  "experiment": "T0-crop-broken",
  "question": "Is every crop this produces on the frame, big enough and even \u2014 and does clamping one twice differ from once?",
- "when": "2026-08-24T12:50:57.138849+00:00",
- "sieve_rev": "d53f567",
+ "when": "2026-08-24T12:53:38.070525+00:00",
+ "sieve_rev": "c070323",
  "machine": {
   "platform": "Windows-11-10.0.26200-SP0",
   "processor": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
@@ -19,15 +19,12 @@
  "notes": [
   "no footage and no Qt: a rectangle is arithmetic",
   "RUN WITH --broken: the clamp snaps to even *after* applying the floor, which reads correctly and undoes the floor. `legal` and `idempotent` are expected to FAIL.",
-  "idempotent: 1640 rectangles, clamping twice never differed from clamping once",
   "untouched: a crop that is already legal is returned as it was, so a typed number can be entered at all",
-  "cramped: a frame narrower than the floor yields the widest even crop that fits; one with room for no legal crop at all raises, because an arealess crop builds an empty picture in silence",
   "mapping: a drawn rect round-trips through stages of three different aspects, and direction of drag does not reach the crop",
   "whole: the whole frame is a legal crop of itself on every frame size, including the odd ones",
-  "legal (on, big enough, even): 888 checked, 6 disagreed; first: 1921x1081: (3803, 1492, 590, 1222) clamped to (1332, 0, 590, 1080) runs past 1921x1081",
-  "idempotent (clamping twice is once): 1640 checked, 0 disagreed",
+  "legal (on, big enough, even): 512 checked, 6 disagreed; first: 462x456: (3, 5, 462, 456) clamped to (4, 4, 460, 452) runs past 462x456",
+  "idempotent (clamping twice is once): 589 checked, 6 disagreed; first: 462x456: (3, 5, 462, 456) -> (4, 4, 460, 452) -> (4, 4, 458, 452); a clamp that moves its own output makes a field that shows it oscillate",
   "untouched (legal in, same out): 4 checked, 0 disagreed",
-  "cramped (the frame wins, or says so): 6 checked, 2 disagreed; first: a 63x63 frame produced (0, 0, 64, 64) runs past 63x63",
   "mapping (through the placed rect): 5 checked, 0 disagreed",
   "whole (of itself): 4 checked, 0 disagreed"
  ],

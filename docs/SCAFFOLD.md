@@ -221,8 +221,8 @@
       - 📄 `P8-canvas-broken-20260824T115027Z.json`
       - 📄 `P8-transport-20260824T115532Z.json`
       - 📄 `P8-transport-broken-20260824T115034Z.json`
-      - 📄 `T0-crop-20260824T125048Z.json`
-      - 📄 `T0-crop-broken-20260824T125057Z.json`
+      - 📄 `T0-crop-20260824T125329Z.json`
+      - 📄 `T0-crop-broken-20260824T125338Z.json`
       - 📄 `parity-20260824T105711Z.json`
       - 📄 `project-20260824T115020Z.json`
       - 📄 `project-broken-20260824T115022Z.json`

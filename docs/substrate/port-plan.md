@@ -385,9 +385,10 @@ latent bug in the code under test rather than in the explorers: an
 `except av.AVError` clause that does not exist in this PyAV version, so the
 handler raised instead of handling. That path had never been reached.
 
-### P3 — the record
+### P3 — the record — *landed*
 
-`src/sieve/analysis/series.py`, `src/sieve/session/ledger.py`
+`src/sieve/analysis/series.py`, `src/sieve/session/ledger.py`;
+checked by `experiments/substrate-checks/04-record.py`
 
 Two records, moved and built respectively. `series.py` carries across as
 written: values, an explicit coverage array, the pts table, the warm-up
@@ -406,10 +407,30 @@ on it, not a reason to build the waste count now.
 
 May not know: anything. Both receive records.
 
-*Proves it:* a series round-trips through save and load with its key
-recovered from the sidecar rather than the filename; an uncovered row reads
-as `None` and never as zero. Ledger records serialise and reload, and
-decimation drops rows while keeping the count honest.
+*Proved it:* seven cases, passing, none needing footage, with `--broken`
+failing the two that can see the difference — a `get` that ignores coverage
+makes every unwritten row read as zero, and a decimation that forgets what
+it dropped makes the true rate unrecoverable.
+
+`series.py` came across with one substantive change, made because the check
+found a defect it had rather than a hypothetical one. Its filename was the
+key with the offending characters substituted out, which is a many-to-one
+map: two keys differing only where it maps wrote to **one file, and the
+second destroyed the first** — leaving the sidecar honestly describing the
+survivor, so nothing afterwards was detectably wrong. Latent with today's
+keys and reachable the moment a tool parameter carries the wrong character.
+The stem is now a readable prefix plus a digest of the whole key and no part
+of it is ever parsed, which is the arrangement `sieve.store.coverage`
+already uses.
+
+The ledger takes ADR-0008 structurally rather than by convention. `waste`
+and `chosen` cannot be reached through one another, so filing a deliberate
+discard as waste takes a decision rather than a slip; `waste` refuses to
+record without an address, because a count nobody can act on is a count
+everybody ignores; and `account` has **no parameter for what the interval
+should have been**, which the check asserts by inspecting its signature. A
+ledger that could be asked whether it was inside a budget would be asked
+it.
 
 ### P4 — declarations
 

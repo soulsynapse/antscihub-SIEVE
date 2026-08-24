@@ -13,6 +13,7 @@
     - 📄 `ADR-0005-a-value-is-recorded-where-its-inputs-landed.md`
     - 📄 `ADR-0006-a-declaration-is-a-fetch-plan.md`
     - 📄 `ADR-0007-a-cost-class-belongs-to-the-pairing.md`
+    - 📄 `ADR-0008-cost-is-a-fact-waste-is-a-bug.md`
   - 📁 `decode/`
     - 📄 `ideas.md`
   - 📁 `findings/`

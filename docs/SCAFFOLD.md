@@ -287,6 +287,8 @@
   - 📄 `doc_index.py` — Regenerate the generated docs — `SCAFFOLD.md` and the shelf indexes — from the index.
 - 📁 `src/`
   - 📁 `sieve/` — SIEVE isolates ethological events from video.
+    - 📁 `analysis/` — What a step produces, and the record of which positions have one.
+      - 📄 `series.py` — A step's reduced output, and the explicit record of which rows have one.
     - 📁 `decode/` — Getting pixels out of a file, and nothing else.
       - 📄 `fake.py` — A route with no file behind it, so everything above one can be checked.
       - 📄 `hybrid.py` — Two decoders on one file, each serving what it measured fastest at.
@@ -364,6 +366,8 @@
           - 📄 `view.py` — The walked step as a view: the head over it, and the room its knobs will fill.
       - 📄 `metrics.py` — How round the cards are and how large the text is, for every view at once.
       - 📄 `palette.py` — The colours every view draws with, and the palettes they are drawn from.
+    - 📁 `session/` — The running session: what is being served, filled, computed and recorded.
+      - 📄 `ledger.py` — What the session spent, what it wasted, and what it cannot yet account for.
     - 📁 `store/` — What is held, and where. Nothing here decides what to ask for.
       - 📄 `chunks.py` — Writing a finished span to disk, so the next visit does not re-derive it.
       - 📄 `coverage.py` — What is on disk, written down rather than worked out.

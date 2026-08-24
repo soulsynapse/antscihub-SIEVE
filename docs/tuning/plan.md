@@ -80,6 +80,45 @@ that node's, and every downstream form would be about that node's output rather
 than about the source. That is a decision about what a chain is, so it belongs
 with the chain and not here.
 
+## Settled in the experiments and not yet in `src/`
+
+Found by comparing the explorers' constants and mechanisms against what the
+port carried, rather than from memory. Each was measured or argued for once and
+would otherwise be re-derived — which has already happened once, to the crop
+clamp, at the cost of three commits.
+
+**The interpreter switch interval** — carried now, into
+`sieve.responsiveness`, and the reason it is listed here anyway is that it was
+missed for the whole port despite the plan naming it. Both explorers set it at
+import; the fill and encode threads starve the drawing thread for a few hundred
+milliseconds at CPython's default. Measured while carrying it: it costs about a
+fifth of fill throughput, so every parity number taken before this was
+flattering this side by that much, and `10-parity` now applies it and says so.
+
+**`admitted_free`** — the count of crops sliced out of a keyframe decode and
+kept, because bytes that already exist are never refused. The ladder admits
+them; nothing counts them. It is one of the few numbers that says the hunt tier
+is doing what it was built to.
+
+**`SignalStrip`** — per-frame motion energy over the display proxy, computed in
+the background and drawn under the timeline. The explorer calls it "the hunt's
+real feedback channel" and "the product's premise arriving one screen early":
+on a fixed camera the frames cannot show where the behaviour is and the signal
+can. It is crop-independent — whole-frame, at proxy resolution — so it survives
+crop changes untouched, which is what makes it affordable. It belongs with the
+designed strip rather than with these phases, and it must not be lost to that.
+
+**`DEBOUNCE_MS = 300`** — how long a signal slider settles before the work
+behind it runs. No slider yet; the figure is settled and should arrive with one
+rather than be chosen again.
+
+**`SWEEP_CHUNK = 48`** — rows an ordered pass does between yields, so it can be
+stopped. There is no sweep in `src/` yet.
+
+**`coarse_draws`** — the count of fields drawn at reduced resolution under load.
+One of the three overlay policies the tool folder deliberately kept without
+choosing between, on the grounds that the question is real and unanswered.
+
 ## The primitive that is missing
 
 **A number box** — a value with a unit, inside a range, typed into or stepped.

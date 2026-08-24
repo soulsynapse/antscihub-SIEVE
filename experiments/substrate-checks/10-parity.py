@@ -61,6 +61,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "decode-experiments
 import harness  # noqa: E402
 from harness import FOOTAGE, Run, quantiles  # noqa: E402
 
+from sieve import responsiveness  # noqa: E402
 from sieve.analysis.tool import Tool, analysis_form  # noqa: E402
 from sieve.frame import FrameTable, Shape  # noqa: E402
 from sieve.session.session import Session  # noqa: E402
@@ -277,6 +278,17 @@ def main() -> None:
         run.write()
         return
     run.add_footage(BIG)
+    # like for like: the explorer sets the interpreter's switch interval and
+    # a run that leaves it at the default is the untuned case, which its own
+    # under-load result file says in as many words. Measured here: the setting
+    # costs about a fifth of fill throughput, so a comparison made without it
+    # flatters this side by that much.
+    was, now = responsiveness.apply()
+    run.note(f"switch interval {was * 1000:.0f} ms -> {now * 1000:.0f} ms, "
+             "which is the setting the explorers run under. Without it a fill "
+             "over this region measured about a fifth faster, so an untuned "
+             "comparison credits this side with a gain that is the setting "
+             "rather than the substrate.")
     run.note("a different program from the storage experiments and compared "
              "anyway: they measured strategies against each other inside one "
              "file, this measures the substrate as it runs. The explorer's "

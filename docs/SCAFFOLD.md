@@ -223,7 +223,7 @@
       - 📄 `P8-transport-broken-20260824T115034Z.json`
       - 📄 `T0-crop-20260824T125329Z.json`
       - 📄 `T0-crop-broken-20260824T125338Z.json`
-      - 📄 `parity-20260824T105711Z.json`
+      - 📄 `parity-20260824T130625Z.json`
       - 📄 `project-20260824T115020Z.json`
       - 📄 `project-broken-20260824T115022Z.json`
       - 📄 `provenance-20260824T115023Z.json`
@@ -428,6 +428,7 @@
       - 📄 `spans.py` — Reading frames back out of files somebody else wrote.
     - 📄 `__main__.py` — `uv run sieve`, or `uv run python -m sieve`.
     - 📄 `relaunch.py` — Start SIEVE over: the same command, in place of the process running it.
+    - 📄 `responsiveness.py` — One process-wide setting, and why it is not left at its default.
     - 📄 `settings.py` — What the user has set, kept where the next run will find it.
 - 📄 `.gitattributes`
 - 📄 `.gitignore`

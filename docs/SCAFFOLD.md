@@ -275,6 +275,10 @@
   - 📄 `doc_index.py` — Regenerate the generated docs — `SCAFFOLD.md` and the shelf indexes — from the index.
 - 📁 `src/`
   - 📁 `sieve/` — SIEVE isolates ethological events from video.
+    - 📁 `frame/` — What a frame is, and what a stored frame is.
+      - 📄 `form.py` — What a stored frame is, and when one on hand can answer for another.
+      - 📄 `shape.py` — What a source is, before anything has been decoded out of it.
+      - 📄 `table.py` — Every frame's timestamp, and the rows that index them.
     - 📁 `gui/` — The interactive view: the frame, and what stands in its panes.
       - 📁 `frame/` — The frame: the window, its three panes, and the chrome between them.
         - 📄 `chrome.py` — What the window wears where no pane covers it.

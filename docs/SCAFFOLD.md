@@ -374,8 +374,10 @@
       - 📄 `metrics.py` — How round the cards are and how large the text is, for every view at once.
       - 📄 `palette.py` — The colours every view draws with, and the palettes they are drawn from.
     - 📁 `session/` — The running session: what is being served, filled, computed and recorded.
+      - 📄 `frontier.py` — Filling a window into memory, in the order attention actually wants it.
       - 📄 `ledger.py` — What the session spent, what it wasted, and what it cannot yet account for.
     - 📁 `store/` — What is held, and where. Nothing here decides what to ask for.
+      - 📄 `build.py` — Building the display proxy in pieces, nearest to attention first.
       - 📄 `chunks.py` — Writing a finished span to disk, so the next visit does not re-derive it.
       - 📄 `coverage.py` — What is on disk, written down rather than worked out.
       - 📄 `resident.py` — Frames held in memory, keyed by the picture as well as the instant.

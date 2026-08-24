@@ -383,6 +383,7 @@
       - 📄 `frontier.py` — Filling a window into memory, in the order attention actually wants it.
       - 📄 `ladder.py` — Choosing what to try, in what order, and what may be kept.
       - 📄 `ledger.py` — What the session spent, what it wasted, and what it cannot yet account for.
+      - 📄 `session.py` — The running thing: what is open, what is filling, and what answered.
     - 📁 `store/` — What is held, and where. Nothing here decides what to ask for.
       - 📄 `build.py` — Building the display proxy in pieces, nearest to attention first.
       - 📄 `chunks.py` — Writing a finished span to disk, so the next visit does not re-derive it.

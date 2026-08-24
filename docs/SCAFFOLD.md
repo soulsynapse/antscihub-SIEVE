@@ -14,6 +14,9 @@
     - 📄 `ADR-0006-a-declaration-is-a-fetch-plan.md`
     - 📄 `ADR-0007-a-cost-class-belongs-to-the-pairing.md`
     - 📄 `ADR-0008-cost-is-a-fact-waste-is-a-bug.md`
+  - 📁 `archive/`
+    - 📄 `2026.08-substrate-port.md`
+    - 📄 `README.md`
   - 📁 `decode/`
     - 📄 `ideas.md`
   - 📁 `findings/`
@@ -27,8 +30,6 @@
     - 📄 `2026.08.21-software-decoders-collapse-under-contention.md`
     - 📄 `2026.08.21-uncut-seek-costs-a-gop-not-a-frame.md`
     - 📄 `2026.08.22-what-froze-the-felt-loop.md`
-  - 📁 `substrate/`
-    - 📄 `port-plan.md`
   - 📁 `vocab/`
     - 📄 `menu.md`
     - 📄 `pane.md`
@@ -211,12 +212,15 @@
       - 📄 `P5-producers-20260824T115008Z.json`
       - 📄 `P5-producers-broken-20260824T115010Z.json`
       - 📄 `P6-ladder-20260824T115010Z.json`
+      - 📄 `P6-ladder-20260824T115527Z.json`
       - 📄 `P6-ladder-broken-20260824T115011Z.json`
       - 📄 `P7-session-20260824T115015Z.json`
       - 📄 `P7-session-broken-20260824T115019Z.json`
       - 📄 `P8-canvas-20260824T115026Z.json`
+      - 📄 `P8-canvas-20260824T115528Z.json`
       - 📄 `P8-canvas-broken-20260824T115027Z.json`
       - 📄 `P8-transport-20260824T115030Z.json`
+      - 📄 `P8-transport-20260824T115532Z.json`
       - 📄 `P8-transport-broken-20260824T115034Z.json`
       - 📄 `parity-20260824T105711Z.json`
       - 📄 `project-20260824T115020Z.json`

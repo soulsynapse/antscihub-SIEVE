@@ -1,6 +1,6 @@
 """Do the background producers work in the order they claim to?
 
-P5 of `docs/substrate/port-plan.md`. Both producers are split into a pure
+P5 of `docs/archive/2026.08-substrate-port.md`. Both producers are split into a pure
 schedule and an impure worker, and the whole reason is this file: **an order is
 a list, and a list can be compared.** In the explorers the fill order is four
 lines inside a thread body and the batch order is a method on a class holding a

@@ -1,6 +1,6 @@
 """Does a store know what it is holding, and admit what it is not?
 
-P2 of `docs/substrate/port-plan.md`. Every case here runs against the fake
+P2 of `docs/archive/2026.08-substrate-port.md`. Every case here runs against the fake
 route, and none of them needs footage: what a tier does is decided by rows,
 forms and budgets, and none of that is about pixels. The one thing that does
 touch a codec is the chunk round trip, which encodes synthetic frames and reads

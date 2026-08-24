@@ -1,7 +1,14 @@
 # substrate-checks
 
-Where `src/sieve/` is checked, one file per phase of
-`docs/substrate/port-plan.md`.
+Where `src/sieve/` is checked. One file per layer, numbered in the order the
+layers were built, because a check that fails is most usefully read from the
+bottom up — an identity that has stopped round-tripping explains a store that
+has stopped answering, and never the other way round.
+
+The `P0`–`P8` in the filenames and docstrings are the phases of
+`docs/archive/2026.08-substrate-port.md`, which is archival: it records how
+this was put together and what went wrong on the way. These files are not
+archival. They are what says the tree still holds.
 
 Not a second kind of experiment and not a test suite. This tree already has a
 notion of evidence — a script that attaches its build, machine and probed

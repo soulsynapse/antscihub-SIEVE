@@ -1,6 +1,6 @@
 """Is a declaration a fetch plan, or just a description of one?
 
-P4 of `docs/substrate/port-plan.md`. ADR-0006 says a step declares the inputs
+P4 of `docs/archive/2026.08-substrate-port.md`. ADR-0006 says a step declares the inputs
 it admits as a function of the position being computed, that the justification
 is scheduling fetches rather than conserving memory, and that **a re-fetch the
 declaration predicted is a defect while a re-fetch it could not have predicted

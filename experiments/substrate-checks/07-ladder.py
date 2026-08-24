@@ -1,6 +1,6 @@
 """Does the ladder put the blocking decode where it belongs, and nowhere else?
 
-P6 of `docs/substrate/port-plan.md`. The ladder is a pure function, so this
+P6 of `docs/archive/2026.08-substrate-port.md`. The ladder is a pure function, so this
 file is a table of cases rather than a rig — which is the entire reason the
 ladder was separated from the thing that executes it. In the explorers the same
 decisions are made inside `_serve`, a method on a `QMainWindow` that reads

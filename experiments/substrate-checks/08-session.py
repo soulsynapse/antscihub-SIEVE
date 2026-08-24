@@ -1,6 +1,6 @@
 """Does the whole thing hold together, and does a drag ever decode?
 
-P7 of `docs/substrate/port-plan.md`, and the first case in this folder that
+P7 of `docs/archive/2026.08-substrate-port.md`, and the first case in this folder that
 runs the substrate as one thing rather than a layer at a time. Everything below
 has been checked alone; what has not been checked is the wiring, and the wiring
 is where every previous version of this tree went wrong.

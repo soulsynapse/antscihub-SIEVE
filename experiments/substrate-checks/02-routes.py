@@ -1,6 +1,6 @@
 """Does every route return the same pixels, and say so when it has none?
 
-P1 of `docs/substrate/port-plan.md`. Two properties, and the second is the one
+P1 of `docs/archive/2026.08-substrate-port.md`. Two properties, and the second is the one
 this tree's footage exists to break.
 
 **Parity.** Every live route returns identical pixels for the same row of the

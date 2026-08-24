@@ -1,6 +1,6 @@
 """Does the picture stay out of the layout, and cost one scale per frame?
 
-P8 of `docs/substrate/port-plan.md`. The canvas is the first thing in the port
+P8 of `docs/archive/2026.08-substrate-port.md`. The canvas is the first thing in the port
 somebody can look at, and it is also the piece the freeze finding is most
 specific about — because the thing that made the video visibly resize every few
 seconds was not the decoder. It was the picture having an opinion about how big

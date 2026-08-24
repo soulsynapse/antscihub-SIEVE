@@ -1,6 +1,6 @@
 """Does a row still name the frame it named, after every trip it takes?
 
-P0 of `docs/substrate/port-plan.md`. One property, in one sentence: **a row and
+P0 of `docs/archive/2026.08-substrate-port.md`. One property, in one sentence: **a row and
 a presentation timestamp convert to each other without loss, and nothing else
 may claim to do that conversion.**
 

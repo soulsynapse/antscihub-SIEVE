@@ -2,7 +2,7 @@
 
 The project machinery: one recording, the document SIEVE writes beside it, and
 the per-user list of which have been opened. Not a phase of
-`docs/substrate/port-plan.md` — it sits above the substrate rather than in it —
+`docs/archive/2026.08-substrate-port.md` — it sits above the substrate rather than in it —
 but it is checked the same way and for the same reason.
 
 **A project is a recording.** An earlier version made it a folder, and this file

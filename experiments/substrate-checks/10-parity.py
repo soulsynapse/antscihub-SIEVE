@@ -1,6 +1,6 @@
 """The port, put through what the explorer was put through, on the real file.
 
-The gate `docs/substrate/port-plan.md` owed for P7, and the only one that can
+The gate `docs/archive/2026.08-substrate-port.md` owed for P7, and the only one that can
 catch a regression the fake route structurally cannot see. Everything else in
 this folder checks a property against synthetic frames; this drives
 `src/sieve/` over the 5.3K source and sets the numbers beside the ones the

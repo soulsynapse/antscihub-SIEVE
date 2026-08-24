@@ -1,6 +1,6 @@
 """Does the record say what it knows, and admit what it does not?
 
-P3 of `docs/substrate/port-plan.md`. Two records, one property each, and the
+P3 of `docs/archive/2026.08-substrate-port.md`. Two records, one property each, and the
 property is the same shape both times: **absence is a state, not a value.**
 
 For a series, the failure is a row that was never written reading as a

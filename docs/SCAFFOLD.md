@@ -214,9 +214,8 @@
       - 📄 `P6-ladder-broken-20260824T094731Z.json`
       - 📄 `P7-session-20260824T094734Z.json`
       - 📄 `P7-session-broken-20260824T094738Z.json`
-      - 📄 `project-20260824T101755Z.json`
-      - 📄 `project-20260824T101852Z.json`
       - 📄 `project-20260824T101906Z.json`
+      - 📄 `project-20260824T102243Z.json`
       - 📄 `project-broken-20260824T101908Z.json`
     - 📄 `01-identity.py` — Does a row still name the frame it named, after every trip it takes?
     - 📄 `02-routes.py` — Does every route return the same pixels, and say so when it has none?

@@ -64,8 +64,16 @@ _BAR: tuple[Drop | Button, ...] = (
     Drop(
         "&File",
         (
+            #: New and Open are one act and only one of them is bound. A
+            #: project is a folder somebody points at, the directory
+            #: dialog makes new folders itself, and adding a folder the
+            #: library already knows is the same project reopened rather
+            #: than a duplicate — so two entries would be two names for
+            #: one verb, and a chance to pick the wrong one.
             ("&New project…", None, "Ctrl+N"),
-            ("&Open project…", None, "Ctrl+O"),
+            ("&Open project…", "open_project", "Ctrl+O"),
+            #: Nothing to save: the document is written when it changes,
+            #: so a Save that did nothing would be worse than one absent.
             ("&Save project", None, "Ctrl+S"),
             None,
             ("Open &video…", None, "Ctrl+Shift+O"),

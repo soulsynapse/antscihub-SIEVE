@@ -67,8 +67,16 @@ from, and it is centred instead.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QMainWindow, QSplitter, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QFileDialog,
+    QMainWindow,
+    QSplitter,
+    QVBoxLayout,
+    QWidget,
+)
 
 from sieve.gui import palette
 from sieve.gui.frame.chrome import dress_title_bar, stylesheet
@@ -88,6 +96,8 @@ from sieve.gui.view.dev import Dev
 from sieve.gui.view.pipeline import Pipeline
 from sieve.gui.view.preferences import Preferences
 from sieve.gui.view.project_list import ProjectList
+from sieve.gui.view.project_list import Project as ProjectRow
+from sieve.project.library import Library
 from sieve.gui.view.step import Step
 
 #: What the window restores down *to*. Kept even though it opens maximized:
@@ -129,8 +139,14 @@ class MainWindow(QMainWindow):
         # like a pane is, and a track that knew which view belonged at index 0
         # would be the file where "the project list is the right pane's" had
         # been decided — which ADR-0001 says is nowhere.
+        # The library is the window's rather than the list's, because the
+        # list lists and never mints (`project_list/__init__.py`): a view
+        # that owned the library would be the second place the verb that
+        # makes a project lived, and the bar already has the first.
+        self.library = Library()
         self.projects = ProjectList()
         self.swipe.position(POSITIONS.index("project")).body.addWidget(self.projects)
+        self.show_library()
         # The arrows go in the head of the view standing on the track, and the
         # window is what puts them there for the same reason it houses the view:
         # the track is the frame's and a view that hung its own pair would be
@@ -311,6 +327,50 @@ class MainWindow(QMainWindow):
             self.close_overlay()
             return
         self._raise(self.preferences, preferences_anchor(self.bar))
+
+    # -- the library ----------------------------------------------------
+    def show_library(self) -> None:
+        """Hand the list what the library currently says.
+
+        The rows are built here and not in the view, which is what
+        `project_list/project.py` asks for: a card is handed finished lines so
+        that what a project *holds* stays decided where projects are
+        understood. A folder that is not mounted keeps its row and says so in
+        the line, because an external drive being unplugged is ordinary and a
+        library that forgot the project would be one nobody could rely on.
+        """
+        rows = []
+        for entry in self.library.entries:
+            holds = entry.summary or "not scanned yet"
+            if not entry.available:
+                holds = f"{holds} · not connected"
+            rows.append(ProjectRow(name=entry.name, holds=holds,
+                                   opened=entry.opened_ago(),
+                                   folder=entry.folder))
+        self.projects.show_projects(rows)
+
+    def open_project(self) -> None:
+        """Point at a folder, and stand on it.
+
+        Opening and adding are one verb. A folder already in the library is not
+        a duplicate and not an error — it is the same project, opened again —
+        so there is no second entry on the bar for the case where SIEVE has
+        seen the folder before, and no way to pick the wrong one of two.
+
+        The dialog offers a directory rather than a file because a project is
+        the folder, and its own New Folder button is what makes a new project
+        without a second verb here.
+        """
+        chosen = QFileDialog.getExistingDirectory(
+            self, "Open project folder", "",
+            QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks)
+        if not chosen:
+            return
+        project = self.library.add(Path(chosen))
+        self.show_library()
+        entry = self.library.find(project.document.project_id)
+        if entry is not None:
+            self.projects.select(self.library.entries.index(entry))
 
     def open_dev(self) -> None:
         """Ctrl+D, or Help ▸ Dev view: the bench over the panes.

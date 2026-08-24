@@ -200,7 +200,10 @@
     - 📁 `results/`
       - 📄 `P0-identity-20260823T231234Z.json`
       - 📄 `P0-identity-broken-20260823T231247Z.json`
+      - 📄 `P1-routes-20260824T002252Z.json`
+      - 📄 `P1-routes-broken-20260824T002418Z.json`
     - 📄 `01-identity.py` — Does a row still name the frame it named, after every trip it takes?
+    - 📄 `02-routes.py` — Does every route return the same pixels, and say so when it has none?
     - 📄 `README.md`
   - 📁 `tool-experiments/`
     - 📁 `explorer-logs/`

@@ -279,10 +279,15 @@ previously took it for — `forms.build` and `forms.derive` are defined in
 terms of specific interpolations, and reimplementing them would produce a
 second answer to a question the module exists to have one answer to.
 
-### P1 — routes
+### P1 — routes — *landed*
 
-`src/sieve/decode/route.py`, `.../software.py`, `.../hardware.py`,
-`.../hybrid.py`, `.../probe.py`
+`src/sieve/decode/route.py`, `.../pyav.py`, `.../hybrid.py`, `.../probe.py`,
+`.../fake.py`; checked by `experiments/substrate-checks/02-routes.py`
+
+One deviation from what this section first listed: software and hardware are
+one class and two constructors in `pyav.py`, not two files. They differ in a
+single open option, and two files would have been a copy of a seek loop —
+which is the thing this phase exists to stop there being four of.
 
 Owns getting pixels out of one file: an exact row, the keyframe at or
 before a row, where it is parked, and stepping rather than seeking inside
@@ -301,13 +306,26 @@ lets one decoded frame answer for several forms.
 May not know: what a crop is, what a store is, what a window is, that
 anything runs in the background.
 
-*Proves it:* route parity — every live route returns identical pixels for
-the same pts on the same file. A row whose packet decodes to no image
-reports absent rather than returning the next image along, which is
-ADR-0004's three-different-counts refutation in its concrete form. The
-probe runs from an empty cache, writes a verdict, and is not re-run on the
-next open. A machine with no hardware decoder degrades to software without
-raising.
+*Proved it:* six cases, passing, with `--broken` failing the one that can
+see the difference. Software, hardware and hybrid return byte-identical
+pixels for the same rows. Rows 0–19 of the source report absent, and row 20
+is not what any of them hands back for row 0. `keyframe_at` lands on a real
+keyframe at or before the request everywhere except the head, where the
+keyframe before decodes to nothing and it correctly lands *after* — the
+case a caller assuming otherwise gets wrong. The probe races from an empty
+cache, writes a verdict, and a second open reads it instead of re-racing.
+
+`--broken` restores the half-frame tolerance every predecessor carried, and
+the result is worth stating plainly: **every one of rows 0–19 comes back
+holding row 20's image**, and parity still passes, because both sides are
+equally wrong. Parity alone was never enough, and this is the run that
+shows it.
+
+Cost is recorded rather than asserted, per ADR-0008: sequential stepping
+and scattered seeking are timed as ordinary harness cases and live in
+`experiments/substrate-checks/results/`. The probe's own verdict on this
+machine agrees with what the decode explorer found about where hardware
+seeks start winning, which is a cross-check rather than a new result.
 
 ### P2 — tiers
 

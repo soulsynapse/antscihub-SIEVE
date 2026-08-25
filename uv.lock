@@ -477,27 +477,27 @@ name = "sieve"
 version = "0.4.0"
 source = { editable = "." }
 dependencies = [
-    { name = "av" },
-    { name = "numpy" },
-    { name = "opencv-python-headless" },
     { name = "pyside6" },
 ]
 
 [package.dev-dependencies]
 experiments = [
+    { name = "av" },
     { name = "matplotlib" },
+    { name = "numpy" },
+    { name = "opencv-python-headless" },
 ]
 
 [package.metadata]
-requires-dist = [
-    { name = "av", specifier = ">=13" },
-    { name = "numpy", specifier = ">=2" },
-    { name = "opencv-python-headless", specifier = ">=4.10" },
-    { name = "pyside6", specifier = ">=6.8" },
-]
+requires-dist = [{ name = "pyside6", specifier = ">=6.8" }]
 
 [package.metadata.requires-dev]
-experiments = [{ name = "matplotlib", specifier = ">=3.9" }]
+experiments = [
+    { name = "av", specifier = ">=13" },
+    { name = "matplotlib", specifier = ">=3.9" },
+    { name = "numpy", specifier = ">=2" },
+    { name = "opencv-python-headless", specifier = ">=4.10" },
+]
 
 [[package]]
 name = "six"

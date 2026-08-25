@@ -17,18 +17,10 @@ the window and this dresses a view inside a pane — a view that reached into th
 frame's chrome would be a view that could not be put in a second pane.
 
 What the head holds is a title, room in the band for whatever the view counts,
-and a quiet line at the far end. What it does not hold is a *row* of verbs: a
-head's verbs act on the whole pane, there are only ever a couple of them, and
-which two depends on what the pane is about — a fixed set minted here would be
+and a quiet line at the far end. What it does not hold is verbs yet: a head's
+verbs act on the whole pane, there are only ever a couple of them, and which two
+depends on what the pane is about — an empty row of them minted here would be
 this file deciding that for every view at once.
-
-What it does settle, since a view turned out to want one, is where a verb
-stands: `add_verb` puts it immediately after the title, before the figures. The
-same bargain as the arrows — the position is this file's because two views that
-each chose their own would be two answers to where the verb is, and what the
-verb *does* is the view's because only it knows what its pane is about. Beside
-the name and not at the far end, because a verb that acts on what the title
-names reads as part of the name; the far end is where a way *out* goes.
 
 What it does settle is where a pair of arrows stands, for a view that is one of
 several the pane moves between: `set_arrows` takes the pair and puts it at the
@@ -201,21 +193,6 @@ class View(QWidget):
         self._arrows = arrows
         if arrows is not None:
             self._head.addWidget(arrows)
-
-    def add_verb(self, verb: QWidget) -> None:
-        """A verb of this view's own, standing beside the title.
-
-        Before the figures, so the order in the band reads name, what you can
-        do to it, what it counts — and a view that gains a figure later does
-        not push its verb away from the name it acts on.
-
-        What the verb is and what pressing it means are the caller's. This file
-        knows only that it goes here, for the reason the whole band exists: two
-        views that each placed their own would be two answers to where the verb
-        is, and the user would have to find it again on arriving.
-        """
-        self._head.insertWidget(1, verb)
-        self._figures += 1
 
     def add_figure(self, figure: QWidget) -> None:
         """One more of the view's own figures, beside the title.

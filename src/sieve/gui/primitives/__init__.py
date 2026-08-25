@@ -83,27 +83,6 @@ bar does *not* borrow is the accent wash the mockup lights its current segment
 with — the tree's answer to which of a visible few is current is already the
 nav's edge, and a wash would be both a ninth role and a second answer.
 
-`number.py` is the seventh control and the first thing here settled on what it
-*does not say* rather than on how it looks. Every file above it is an answer to a
-drawing — what emphasis costs, where the keyboard is, what a set state looks
-like — and this one takes `field.py`'s fill, edge and corner wholesale, because a
-box holding a number and a box holding a word are the same box with different
-things in it. What it adds is a signal that a person's edit reaches and a
-correction does not, and that is the whole of why it is a primitive: everything
-it edits is *clamped* — a crop corner on the frame, a budget above zero — so the
-shape of every one of its owners is push, decide, and show what was actually
-allowed. A box that announced the correction would ask its owner to decide again
-about a value it had just decided, and the pair would trade it back and forth for
-as long as two decisions disagreed. Blocking that signal takes the class of loop
-off the table instead of asking every clamp anybody writes to terminate.
-
-Settling it turned no constant public — it takes `field.RADIUS`, which
-`select.py` already made public for its own reason, along with the two edge steps
-`check.py` spent — and refused one thing the mockup draws, which is the unit
-inside the box. A unit is a thing said *about* a value and not a part of one, so
-it stays `Field(unit=…)`'s and this stands bare inside one, which is what keeps a
-number box in a row or a cell as readily as in a form.
-
 `view.py` is the fourth shape and is under the other two rather than beside them:
 the head a pane wears was the stack's band until a view that is not a column of
 cards wanted the same line at its top, and it moved here so that a head is one
@@ -311,7 +290,6 @@ from sieve.gui.primitives.field import Field, LineField
 from sieve.gui.primitives.menu import Menu
 from sieve.gui.primitives.meter import Meter
 from sieve.gui.primitives.nav import SectionNav
-from sieve.gui.primitives.number import NumberBox
 from sieve.gui.primitives.pill import IDLE, LIVE, OFF, Pill
 from sieve.gui.primitives.sections import Section, SectionCard
 from sieve.gui.primitives.segmented import Segmented
@@ -347,7 +325,6 @@ __all__ = [
     "LineField",
     "Menu",
     "Meter",
-    "NumberBox",
     "Pill",
     "Section",
     "SectionCard",

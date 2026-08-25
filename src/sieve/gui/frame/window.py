@@ -67,16 +67,8 @@ from, and it is centred instead.
 
 from __future__ import annotations
 
-from pathlib import Path
-
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import (
-    QFileDialog,
-    QMainWindow,
-    QSplitter,
-    QVBoxLayout,
-    QWidget,
-)
+from PySide6.QtWidgets import QMainWindow, QSplitter, QVBoxLayout, QWidget
 
 from sieve.gui import palette
 from sieve.gui.frame.chrome import dress_title_bar, stylesheet
@@ -91,35 +83,12 @@ from sieve.gui.frame.panes import (
 )
 from sieve.gui.frame.swipe import POSITIONS, Arrows, build_swipe
 from sieve.relaunch import relaunch
-from sieve.gui.frame.opening import Opener
 from sieve.gui.view.canvas import Canvas
-from sieve.gui.view.canvas.view import DEFAULT_ASPECT
-from sieve.gui.view.canvas.video_canvas import VideoCanvas
 from sieve.gui.view.dev import Dev
 from sieve.gui.view.pipeline import Pipeline
 from sieve.gui.view.preferences import Preferences
 from sieve.gui.view.project_list import ProjectList
-from sieve.gui.view.transport import Transport
-from sieve.session.ledger import UNPAINTED
-from sieve.session.session import WINDOW_ROWS
-from sieve.gui.view.project_list import Project as ProjectRow
-from sieve.project.footage import dialog_filter
-from sieve.project.library import Library
 from sieve.gui.view.step import Step
-
-def _aspect_of(project) -> float:
-    """The recording's own shape, for the stage to hold before a frame lands.
-
-    From the headers the project already read rather than from the first
-    frame: the stage has to be the right shape *before* there is a picture, or
-    the canvas resizes under the first frame and the pane it stands in gets a
-    reflow at exactly the moment somebody is looking at it.
-    """
-    held = project.footage
-    if held is None or not held.height:
-        return DEFAULT_ASPECT
-    return held.width / held.height
-
 
 #: What the window restores down *to*. Kept even though it opens maximized:
 #: without it the restored size — and with it whether the title bar can be
@@ -138,14 +107,6 @@ class MainWindow(QMainWindow):
         self.left = build_left()
         self.right = build_right()
         self.bottom = build_bottom()
-        # The playhead runs full width under both, which is what the
-        # bottom pane is for (ADR-0002): one position in one recording,
-        # read by the canvas on the left and by every plot on the right,
-        # and held by neither of them.
-        self.transport = Transport()
-        self.bottom.body.addWidget(self.transport)
-        self.transport.wants.connect(self.show_row)
-        self.transport.skipped.connect(self._frames_skipped)
 
         # The canvas stands in the left pane's core, for the same reason the
         # swipe stands in the right pane's: `body` is the core's, so the pane
@@ -154,24 +115,6 @@ class MainWindow(QMainWindow):
         # shows one thing and the choice of which is not the user's to walk.
         self.canvas = Canvas()
         self.left.body.addWidget(self.canvas)
-        # The picture stands on the stage from the start, empty. A canvas
-        # that grew its content when a recording opened would change what
-        # is in the pane at the moment somebody is looking at it, and the
-        # empty state is a thing to see rather than a gap to fill.
-        self.video = VideoCanvas()
-        self.canvas.show_content(self.video)
-        #: the recording being worked on, and the substrate open over it.
-        #: Both `None` until something is opened, which is a state the
-        #: window is in for real and not only at startup.
-        self.project = None
-        self.session = None
-        #: the form the canvas and the loop work in. Set when a session
-        #: lands, because it is a property of the recording rather than of
-        #: the window it is looked at in.
-        self.view_form = None
-        self.opener = Opener(self)
-        self.opener.opened.connect(self._session_ready)
-        self.opener.failed.connect(self._session_failed)
 
         # The swipe goes in the core's layout, which is what `body` is, so the
         # right pane can still take a subpane on either side without the track
@@ -186,14 +129,8 @@ class MainWindow(QMainWindow):
         # like a pane is, and a track that knew which view belonged at index 0
         # would be the file where "the project list is the right pane's" had
         # been decided — which ADR-0001 says is nowhere.
-        # The library is the window's rather than the list's, because the
-        # list lists and never mints (`project_list/__init__.py`): a view
-        # that owned the library would be the second place the verb that
-        # makes a project lived, and the bar already has the first.
-        self.library = Library()
         self.projects = ProjectList()
         self.swipe.position(POSITIONS.index("project")).body.addWidget(self.projects)
-        self.show_library()
         # The arrows go in the head of the view standing on the track, and the
         # window is what puts them there for the same reason it houses the view:
         # the track is the frame's and a view that hung its own pair would be
@@ -201,12 +138,9 @@ class MainWindow(QMainWindow):
         # are the position's way out, not the pane's, so each head carries its
         # own rather than the pane keeping one above whatever is in front.
         self.projects.set_arrows(Arrows(self.swipe))
-        # The plus in the list's head asks; the window answers, because the
-        # library is the window's. Same shape as `opened` below.
-        self.projects.add_requested.connect(self.open_project)
         # Opening a project is a move inward along the same line ← and → walk,
         # so it is the swipe's step and not a second kind of navigation.
-        self.projects.opened.connect(self.open_recording)
+        self.projects.opened.connect(lambda _project: self.swipe_forward())
 
         # The other two positions, housed the same way and each given its own
         # pair: a pair is the position's way out and not the pane's, so a head
@@ -377,184 +311,6 @@ class MainWindow(QMainWindow):
             self.close_overlay()
             return
         self._raise(self.preferences, preferences_anchor(self.bar))
-
-    # -- the library ----------------------------------------------------
-    def show_library(self) -> None:
-        """Hand the list what the library currently says.
-
-        The rows are built here and not in the view, which is what
-        `project_list/project.py` asks for: a card is handed finished lines so
-        that what a project *holds* stays decided where projects are
-        understood. A recording that is not mounted keeps its row and says so in
-        the line, because an external drive being unplugged is ordinary and a
-        library that forgot the project would be one nobody could rely on.
-        """
-        rows = []
-        for entry in self.library.entries:
-            holds = entry.summary or "not scanned yet"
-            if not entry.available:
-                holds = f"{holds} · not connected"
-            rows.append(ProjectRow(name=entry.name, holds=holds,
-                                   opened=entry.opened_ago(),
-                                   folder=entry.folder))
-        self.projects.show_projects(rows)
-
-    def open_project(self) -> None:
-        """Point at one or more recordings, and stand on the first.
-
-        A project is a recording, so the dialog offers files. Several at once,
-        because a person with a season of footage should not add fifty
-        projects fifty times, and because the common case of one recording is
-        the same gesture with one file selected.
-
-        Opening and adding are one verb. A recording already in the library is
-        not a duplicate and not an error — it is the same project, opened again
-        — so there is no second entry on the bar for the case where SIEVE has
-        seen the file before, and no way to pick the wrong one of two.
-        """
-        chosen, _ = QFileDialog.getOpenFileNames(
-            self, "Open recording", "", dialog_filter())
-        if not chosen:
-            return
-        opened, refused = self.library.add_all(Path(name) for name in chosen)
-        self.show_library()
-        if refused:
-            # said rather than swallowed: somebody picked these on purpose, and
-            # a file that silently does not appear reads as SIEVE being broken
-            names = ", ".join(path.name for path in refused[:3])
-            more = f" and {len(refused) - 3} more" if len(refused) > 3 else ""
-            self.statusBar().showMessage(
-                f"Could not read {names}{more}", 8000)
-        if not opened:
-            return
-        entry = self.library.find(opened[0].document.project_id)
-        if entry is not None:
-            self.projects.select(self.library.entries.index(entry))
-
-    # -- the recording being worked on ------------------------------------
-    def open_recording(self, row) -> None:
-        """Open what the library is standing on, and put a frame up.
-
-        The row the list emits is a card's worth of lines, not a project, so
-        the library is asked which entry it was and the project is opened from
-        that. The view holding strings rather than documents is what keeps it
-        able to be handed rows by anything.
-
-        Nothing waits here. Building a frame table is seconds on this footage
-        and it happens on a worker; what this does is say so and slide.
-        """
-        entry = next((e for e in self.library.entries
-                      if e.name == row.name and e.folder == row.folder), None)
-        if entry is None:
-            return
-        project = self.library.add(Path(entry.video))
-        if project is None:
-            self.statusBar().showMessage(
-                f"Could not read {Path(entry.video).name}", 8000)
-            return
-        self.close_session()
-        self.project = project
-        self.canvas.set_aspect(_aspect_of(project))
-        self.statusBar().showMessage(f"Opening {project.name}…")
-        self.opener.open(project, window_rows=WINDOW_ROWS)
-        # Opening a project is a move inward along the same line the arrows
-        # walk, so it is the swipe's step and not a second kind of navigation.
-        self.swipe_forward()
-
-    def _session_ready(self, project, session) -> None:
-        """A session landed. Put its first frame up and start filling behind it.
-
-        On the drawing thread, which is where a signal delivers it, and that is
-        the point: everything from here is the ordinary path the ladder
-        governs. The first frame is an exact request — somebody asked for this
-        recording — so it may pay a decode, and the hunt route is what that
-        costs before any derived file exists.
-        """
-        if self.project is None or \
-                project.document.project_id != self.project.document.project_id:
-            session.close()          # superseded while it was opening
-            return
-        self.session = session
-        # this thread is the one that paints, whatever thread built the
-        # session. Told rather than guessed, because the guess is made in
-        # a constructor that now runs on a worker.
-        session.drawn_on()
-        session.crop = (0, 0, session.source_form.rect[2],
-                        session.source_form.rect[3])
-        # What the loop plays and what the window fills are one form, and
-        # it is the width the proxy is built at rather than the width of
-        # this pane. A form sized to the geometry it was drawn at would be
-        # one whose key names a window, which `frame.form.Form.key` refuses
-        # and ADR-0005 names among the things a recorded set may not depend
-        # on — and a proxy segment could never answer the thing that plays.
-        self.view_form = session.display_form()
-        row = min(len(session.table) // 2, len(session.table) - 1)
-        served = session.serve(row, want=self.view_form, task="hunt")
-        if served.image is not None:
-            self.video.show_frame(served.image, row=served.row,
-                                  standing_in=served.stood_in_for is not None)
-        # Now there is a reason to fill: the loop replays these rows
-        # continuously, so the frames it decodes are the frames it is
-        # about to want again. At display sampling three hundred of them
-        # is hundreds of megabytes rather than gigabytes, which is the
-        # difference between a window that fits in the store and one that
-        # thrashes it.
-        low, high = session.land(row, form=self.view_form)
-        self.transport.follow(low, high, session.fps)
-        self.transport.play()
-        self.statusBar().showMessage(
-            f"{project.name} · {len(session.table)} frames · "
-            f"{served.tier} in {served.ms:.0f} ms", 6000)
-
-    def _session_failed(self, project, reason: str) -> None:
-        self.statusBar().showMessage(f"Could not open {project.name}: {reason}",
-                                     10000)
-
-    def close_session(self) -> None:
-        """Let go of the recording that was open, if there was one."""
-        self.transport.pause()
-        self.transport.follow(0, 0, 24.0)
-        self.view_form = None
-        if self.session is not None:
-            self.session.close()
-            self.session = None
-        self.project = None
-        self.video.clear()
-
-    def show_row(self, row: int) -> None:
-        """Put this row on the canvas, or leave what is up.
-
-        The transport asks and this answers, which is the same split the
-        library has. A play request is never exact, so the ladder will not
-        reach a blocking decode for it: where the fill has not arrived the
-        answer is a hold, the picture stays, and the loop keeps its rate
-        rather than the machine keeping the picture.
-        """
-        if self.session is None:
-            return
-        served = self.session.serve(row, want=self.view_form, task="play")
-        if served.image is None:
-            return                      # a hold: what is up is still honest
-        self.video.show_frame(served.image, row=served.row,
-                              standing_in=served.stood_in_for is not None)
-        if served.stood_in_for is not None:
-            # the readout follows the picture and not the clock, because a
-            # stand-in is a different instant and saying otherwise would be
-            # the interface claiming to show a frame it is not showing
-            self.transport.show_at(served.stood_in_for)
-
-    def _frames_skipped(self, count: int) -> None:
-        """Frames the clock passed while the machine was elsewhere.
-
-        A chosen discard and not waste: the alternative to skipping them is
-        not drawing them, it is running the footage slow, and counting a
-        deliberate trade as a defect would bury the number that is not
-        (ADR-0008).
-        """
-        if self.session is None:
-            return
-        for _ in range(count):
-            self.session.ledger.chosen(UNPAINTED)
 
     def open_dev(self) -> None:
         """Ctrl+D, or Help ▸ Dev view: the bench over the panes.

@@ -3,26 +3,19 @@ name = "sieve"
 version = "0.4.0"
 description = "SIEVE isolates ethological events from video."
 requires-python = ">=3.13"
-# The comparison these were held out of is over and has a winner, recorded in
-# `docs/findings/2026.08.21-decode-stack-best-combinations.md`, so they are
-# runtime dependencies now. `av` decodes and encodes; `numpy` is what a frame
-# is once decoded; `cv2` is here because `sieve.frame.form` defines the
-# canonical construction in terms of specific interpolations, and a second
-# implementation of those would be a second answer to the question that module
-# exists to have one answer to. Headless because SIEVE draws through Qt — the
-# windowed build carries its own Qt and fights PySide6 for it.
 dependencies = [
     "PySide6>=6.8",
-    "av>=13",
-    "numpy>=2",
-    "opencv-python-headless>=4.10",
 ]
 
 [dependency-groups]
-# What only the experiments need. Plotting stays here: a result file is the
-# artifact and reading it is a separate act, so nothing the application ships
-# should be able to draw one.
+# Decode libraries are not SIEVE runtime dependencies and must not become them:
+# `experiments/decode-experiments/` compares them against each other, and a
+# comparison whose contestants are installed by default is one the application
+# has already picked a winner for.
 experiments = [
+    "av>=13",
+    "numpy>=2",
+    "opencv-python-headless>=4.10",
     "matplotlib>=3.9",
 ]
 

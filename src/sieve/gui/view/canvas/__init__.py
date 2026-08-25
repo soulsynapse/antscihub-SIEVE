@@ -16,19 +16,10 @@ overlay pinned to it would be wrong by the same amount.
 what a canvas is stays the same whether frames or a still or a rendered
 composite is under the overlays — which is why the medium sits in a folder
 inside and not in this one.
-
-`overlay.py` is the first of the things drawn over it, and it is a file here
-rather than something the canvas or the video does for a reason each of those
-would have got wrong. A canvas that made one would be a canvas that knows what
-a crop is, and the thing it is a stage for is not always footage; a video canvas
-that drew one would be copying a full frame every tick to paint four lines, into
-an array a store may have admitted. So it is a sibling of the content, handed
-the same stage rect, and `over()` is the wiring in one place.
 """
 
 from __future__ import annotations
 
-from sieve.gui.view.canvas.overlay import CropOverlay, over
 from sieve.gui.view.canvas.view import Canvas
 
-__all__ = ["Canvas", "CropOverlay", "over"]
+__all__ = ["Canvas"]

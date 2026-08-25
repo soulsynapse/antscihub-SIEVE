@@ -31,10 +31,9 @@ from __future__ import annotations
 
 from typing import Iterable, Sequence
 
-from PySide6.QtCore import QSize, Qt, Signal
-from PySide6.QtWidgets import QToolButton, QWidget
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtWidgets import QWidget
 
-from sieve.gui import icons, palette
 from sieve.gui.primitives import CardStack, Empty
 from sieve.gui.view.project_list.card import ProjectCard
 from sieve.gui.view.project_list.project import Project
@@ -46,13 +45,6 @@ from sieve.gui.view.project_list.project import Project
 _GAP = 6
 
 
-#: The glyph on the head's verb. Named rather than written at the call
-#: site for the reason the swipe names its two: a vendored icon that is
-#: only ever a string inside a method is one nothing can find when the set
-#: of them is being looked over.
-_ADD = "plus"
-
-
 class ProjectList(CardStack):
     """Every project the library remembers, one card each, one of them current.
 
@@ -62,11 +54,6 @@ class ProjectList(CardStack):
     redraws whole on `show_projects`, because the column is small and a diff
     against the cards on screen is a second description of the same list.
     """
-
-    #: The plus in the head was pressed. A request and not an act: what making
-    #: a project means is the window's, which owns the library, and a view that
-    #: did it itself would be the second place that verb lived.
-    add_requested = Signal()
 
     #: Which project the user is standing on. Emitted on every move, including
     #: the pointer's, so anything drawn about the current project follows the
@@ -90,43 +77,7 @@ class ProjectList(CardStack):
         self._nothing: Empty | None = None
         self._current = -1
 
-        self.add_verb(self._plus())
         self.show_projects(projects)
-
-    def _plus(self) -> QToolButton:
-        """The + beside the title: point at a folder and keep it.
-
-        A `QToolButton` and not a `Button`, for the reason the swipe's arrows
-        are: what belongs in a head is a glyph at the icon size, and the
-        labelled primitive is a thing with text in it that would set the band's
-        height from its own padding.
-
-        It emits and does not act. Which folder, and what happens to it, is the
-        window's — it owns the library — and this view stays something that can
-        be handed rows by anything.
-        """
-        self._add = QToolButton()
-        self._add.setIcon(icons.icon(_ADD))
-        self._add.setIconSize(QSize(icons.SIZE, icons.SIZE))
-        self._add.setAutoRaise(True)
-        self._add.setToolTip("Open a recording (Ctrl+O)")
-        self._add.setCursor(Qt.CursorShape.PointingHandCursor)
-        # Scoped to this widget's subtree, like the arrows' own rule: the head's
-        # sheet dresses what the head builds, and this is the view's.
-        self._add.setStyleSheet(
-            "QToolButton { border: 0; padding: 0 2px; background: transparent; }"
-        )
-        self._add.clicked.connect(self.add_requested)
-        # A bound method and never a lambda, for the reason `primitives/view.py`
-        # gives: PySide6 holds a receiver's bound method weakly and drops the
-        # connection when the widget goes, where a lambda would keep a dead view
-        # subscribed to the palette for the life of the run.
-        palette.CHANGED.connect(self._redraw_verb)
-        return self._add
-
-    def _redraw_verb(self) -> None:
-        """Re-ink the plus when the palette moves under it."""
-        self._add.setIcon(icons.icon(_ADD))
 
     # -- what is on the surface ------------------------------------------
 
@@ -183,16 +134,15 @@ class ProjectList(CardStack):
         settled once. What it adds is the second line, and the second line is the
         half this copy never had: *no projects yet* is the fact, and naming the
         move that ends it is what makes an empty library different from a broken
-        one. The move is named *and* now offered, though not from here: the
-        plus in the head is where it is offered, and this line points at it
-        rather than growing a second button. Two ways to do one thing in one
-        view is how a person learns neither.
+        one. The move is named and not offered, because the verb that makes a
+        project is not this view's — see the module docstring on where opening
+        goes — and a button here would be a second place it lived.
         """
         if self._projects:
             return
         self._nothing = Empty(
             "No projects yet",
-            "Open a recording with the + above, and it is remembered here.",
+            "Make one to start, and it is remembered here.",
         )
         self.add_card(self._nothing)
 

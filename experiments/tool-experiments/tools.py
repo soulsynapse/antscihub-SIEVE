@@ -2,7 +2,8 @@
 
 A step, here, is a form it wants its inputs in, a set of offsets naming which
 inputs it admits, a flag saying whether it can be evaluated anywhere or only
-in sequence, the parameters its answer depends on, and two functions: one
+in sequence, the parameters its answer depends on, a version saying which
+definition of the step those parameters were fed to, and two functions: one
 producing a field and one reducing that field to the number a series stores.
 
 **The form.** Not a fixed one — the crop is drawn by the user, so a step says
@@ -115,6 +116,8 @@ class Tool:
     sequential: bool = False
     #: what the field's answer depends on, and nothing downstream of it
     params: dict | None = None
+    #: bumped where `field` or `reduce` changes what it answers — see `key`
+    version: int = 1
 
     def needs(self, row: int) -> tuple[int, ...]:
         """The rows that must be resident to evaluate `row`.
@@ -144,11 +147,28 @@ class Tool:
         smoothing applied at display — are deliberately absent: folding them
         would invalidate work whose own inputs never changed, which is the
         cache-key failure `docs/decode/ideas.md` records.
+
+        `version` is folded because `params` cannot see the code. Two runs
+        either side of an edit to `field` are different answers under one
+        name, and a series the first wrote is handed to the second with
+        nothing anywhere in a position to notice — the same silent reuse the
+        downstream-parameter rule refuses, arrived at from the other side.
+        So it is folded unconditionally, including for a step declaring no
+        parameters at all, and bumping it is the author's act at the moment
+        the answer changes rather than anything derived: a hash over the
+        function's bytecode would invalidate a rename and still miss the
+        case below.
+
+        It spells this tree's code and not what that code calls. A step
+        whose answer comes out of a third-party solver depends on that
+        solver's identity too, and the field for that is `params` — which
+        is what the answer depends on, and not only what a user set.
         """
+        stem = f"{self.name}@{self.version}"
         if not self.params:
-            return self.name
+            return stem
         bits = ",".join(f"{k}={self.params[k]}" for k in sorted(self.params))
-        return f"{self.name}({bits})"
+        return f"{stem}({bits})"
 
 
 def analysis_form(pix: str = "gray") -> Callable[[tuple[int, int, int, int]], Form]:
@@ -200,7 +220,7 @@ def _dis_flow_factory(preset: int):
 
 def absdiff() -> Tool:
     return Tool(name="absdiff", form_for=analysis_form("gray"),
-                offsets=(-1, 0), field=_absdiff)
+                offsets=(-1, 0), field=_absdiff, version=1)
 
 
 def dis_flow(preset: int = cv2.DISOPTICAL_FLOW_PRESET_ULTRAFAST) -> Tool:
@@ -208,7 +228,7 @@ def dis_flow(preset: int = cv2.DISOPTICAL_FLOW_PRESET_ULTRAFAST) -> Tool:
              cv2.DISOPTICAL_FLOW_PRESET_FAST: "fast",
              cv2.DISOPTICAL_FLOW_PRESET_MEDIUM: "medium"}
     return Tool(name="dis", form_for=analysis_form("gray"), offsets=(-1, 0),
-                field=_dis_flow_factory(preset),
+                field=_dis_flow_factory(preset), version=1,
                 params={"preset": names.get(preset, str(preset))})
 
 
@@ -237,7 +257,7 @@ def lag_mhi(lags: tuple[int, ...] = (30, 20, 10)) -> Tool:
         return out
 
     return Tool(name="mhi-lag", form_for=analysis_form("gray"),
-                offsets=offsets, field=field,
+                offsets=offsets, field=field, version=1,
                 params={"lags": "-".join(str(lag) for lag in sorted(lags))})
 
 

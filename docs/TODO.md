@@ -5,5 +5,4 @@ task tracker; a thing survives here until it becomes an issue, an experiment,
 or code.
 
 - The ability to load various annotated footage formats.
-- Automatically detect what files are already in the project folder SIEVE was
-  pointed to.
+- Automatically detect project state based on present SIEVE config files.

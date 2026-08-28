@@ -166,6 +166,7 @@
       - 📄 `session-explorer-20260822T173750Z.json`
       - 📄 `session-explorer-20260822T174039Z.json`
       - 📄 `session-explorer-20260822T174053Z.json`
+      - 📄 `session-explorer-20260823T102317Z.json`
       - 📄 `storage-explorer-20260821T214201Z.json`
       - 📄 `storage-explorer-20260821T214253Z.json`
       - 📄 `storage-explorer-20260821T214818Z.json`
@@ -232,6 +233,7 @@
       - 📄 `tool-explorer-20260823T193543Z.json`
       - 📄 `tool-explorer-20260823T193703Z.json`
       - 📄 `tool-explorer-20260823T194613Z.json`
+      - 📄 `tool-explorer-20260823T194918Z.json`
     - 📁 `results/`
       - 📄 `01-paint-cost-20260823T114821Z.json`
       - 📄 `01-paint-cost-20260823T194128Z.json`

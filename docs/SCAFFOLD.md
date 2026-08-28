@@ -256,6 +256,7 @@
       - 📄 `05-provenance-20260823T194437Z.json`
       - 📄 `05-provenance-20260823T194515Z.json`
       - 📄 `05-provenance-20260823T194532Z.json`
+      - 📄 `05-provenance-20260828T222859Z.json`
     - 📄 `01-paint-cost.py` — What drawing a step's output costs, before anything is concluded about the store.
     - 📄 `02-form-derivation.py` — Does a held frame answer a wanted form more cheaply than a decode?
     - 📄 `03-free-while-hot.py` — What riding along on a fetch that was happening anyway actually costs.

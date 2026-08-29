@@ -103,11 +103,31 @@ class Frames:
             while len(self._held) > self.budget:
                 self._held.popitem(last=False)
 
+    def covered(self, positions: tuple[int, ...], form: Form) -> tuple[int, ...]:
+        """Which of *positions* are held at *form*, in the order given.
+
+        One pass under the lock rather than a `get` apiece, because the
+        callers are a fill reporting what it landed and a drag looking for
+        something near: both ask about a window at once, and asking six
+        hundred times is six hundred acquisitions of a lock the fill thread
+        wants back. It answers with positions and not frames deliberately —
+        a caller that wanted the arrays would be holding a window's worth
+        outside the budget that caps them.
+        """
+        key = form.key()
+        with self._lock:
+            return tuple(p for p in positions if (p, key) in self._held)
+
     def set_budget(self, budget: int) -> None:
         with self._lock:
             self.budget = max(1, budget)
             while len(self._held) > self.budget:
                 self._held.popitem(last=False)
+
+    def wipe(self) -> None:
+        """Drop everything. What a form change calls before the rect moves."""
+        with self._lock:
+            self._held.clear()
 
     def __len__(self) -> int:
         with self._lock:

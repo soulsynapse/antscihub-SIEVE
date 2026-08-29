@@ -6,9 +6,16 @@ requires-python = ">=3.13"
 # numpy is here because the canonical construction is the substrate's
 # (`sieve/contract/forms.py`): two producers of one form must agree in the low
 # bits, so the shaping cannot live in each tool. It is not a decode library.
+#
+# av is here for `sieve/chunks.py` and for nothing else: SIEVE's own cut, of
+# frames it already held, in a form it named. It never opens a source — which
+# container a recording is in stays the tool's opinion, which is the boundary
+# ADR-0009 draws. The line to watch is a source suffix or a demux appearing in
+# `sieve/`; that is the prohibition, and the dependency is not.
 dependencies = [
     "PySide6>=6.8",
     "numpy>=2",
+    "av>=13",
 ]
 
 [dependency-groups]
@@ -21,10 +28,13 @@ dev = [
 tools = [
     "av>=13",
 ]
-# Decode libraries are not SIEVE runtime dependencies and must not become them:
-# `experiments/decode-experiments/` compares them against each other, and a
-# comparison whose contestants are installed by default is one the application
-# has already picked a winner for.
+# What the experiments compare, which is not what SIEVE runs on. The point
+# stands even though `av` is now a runtime dependency: SIEVE picked a codec for
+# its own cut, measured
+# (`docs/findings/2026.08.21-lossy-intra-beats-lossless-for-the-cut.md`), and
+# picked no winner for reading anybody's recording. A contestant installed by
+# default would be one the application had chosen to *decode sources* with, and
+# it has not — `sieve/` names no container and demuxes nothing.
 experiments = [
     "av>=13",
     "numpy>=2",

@@ -166,7 +166,16 @@ class Output:
 
 @dataclass(frozen=True)
 class Opened:
-    """A source that is open. One per address per session; not thread-safe."""
+    """A source that is open. Not thread-safe: a second reader opens its own.
+
+    It said "one per address per session" and `store.py` said a fill tier
+    brings its own opened source, which cannot both be true — and the second
+    is the one that is. A source holds a decode cursor, so two threads sharing
+    one is either a corrupted cursor or the drawing thread queued behind a
+    frontier's decode. Two opened on one address, read at once, cost nothing
+    measurable: 7.6 ms mean in the foreground while a fill ran at 87 fps on
+    the footage in `video-tests/`.
+    """
 
     address: str
     outputs: Mapping[str, Output]

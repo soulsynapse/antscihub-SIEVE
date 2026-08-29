@@ -368,6 +368,8 @@
       - 📄 `footage.py` — What can be said about a recording without opening it.
       - 📄 `library.py` — Which recordings this person has opened, and when they last did.
     - 📄 `__main__.py` — `uv run sieve`, or `uv run python -m sieve`.
+    - 📄 `chunks.py` — Write-behind persistence: a window that was filled once refills at cut speed.
+    - 📄 `fill.py` — The landing sequence: fill a window into RAM so a seek inside it is free.
     - 📄 `registry.py` — Which tools this SIEVE found, and which it could not load.
     - 📄 `relaunch.py` — Replace the running process with a fresh run of the same command.
     - 📄 `settings.py` — Flat JSON preferences at ``path()``, read once per run.

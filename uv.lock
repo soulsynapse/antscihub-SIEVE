@@ -607,6 +607,7 @@ name = "sieve"
 version = "0.4.0"
 source = { editable = "." }
 dependencies = [
+    { name = "av" },
     { name = "numpy" },
     { name = "pyside6" },
 ]
@@ -627,6 +628,7 @@ tools = [
 
 [package.metadata]
 requires-dist = [
+    { name = "av", specifier = ">=13" },
     { name = "numpy", specifier = ">=2" },
     { name = "pyside6", specifier = ">=6.8" },
 ]

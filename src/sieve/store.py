@@ -13,19 +13,35 @@ source that answers `extent()` has already paid for the whole file. `open`
 therefore blocks for as long as the file takes and must not be called on a
 thread anything draws from; `opened` is the callable a worker runs.
 
-**Keyed by pts, because there is no array here.** ADR-0004 admits an ordinal
-only as a per-store coordinate — row *i* of an array, with a table saying
-what row *i* means. A dict has no rows, so it keeps the identity that is
-already durable and skips the table. The tier that does hold arrays is where
-that coordinate comes back.
+**Keyed by pts and form, because there is no array here.** ADR-0004 admits an
+ordinal only as a per-store coordinate — row *i* of an array, with a table
+saying what row *i* means. A dict has no rows, so it keeps the identity that
+is already durable and skips the table. The tier that does hold arrays is
+where that coordinate comes back.
 
-**Listed and delivered are recorded apart.** `read` returning `None` is the
-source admitting it cannot supply something its own extent listed, which the
-mid-GOP footage in `video-tests/` produces on the first frames of the file.
-`missing` is that fact kept rather than inferred from an absence, for the
-reason `experiments/tool-experiments/series.py` states about coverage: a
-value nobody wrote and a value that is genuinely nothing are the same picture
-once the record is thrown away.
+The form is half the key for the reason `experiments/tool-experiments/tools.py`
+gives about `residency`: what is held is an input *in a form*, two consumers at
+different forms need different arrays of one instant, and a store keyed by
+position alone would think one satisfied the other. Keyed by position alone,
+this held the whole 5.3K picture and re-decoded the crop somebody actually
+wanted on every ask.
+
+**Listed and delivered are recorded apart, and only one refusal is a hole.**
+`missing` keeps what a source said it could not deliver, rather than inferring
+it from an absence — the reason `experiments/tool-experiments/series.py` gives
+about coverage: a value nobody wrote and a value that is genuinely nothing are
+the same picture once the record is thrown away. Only `Refusal.GONE` goes in
+it. `LATER` is a moment, and filing it would answer the same way forever on
+the strength of one instant; `FORM` is about the shape asked for and says
+nothing about the position at all.
+
+**The extent is asked, never stored.** `Extent` is documented as a query
+rather than a constant and this held it as a constant, which made a folder
+that grew from twelve stills to thirteen invisible to everything above here
+(`docs/findings/2026.08.29-what-two-more-sources-found-the-contract-cannot-say.md`).
+The tiers this ports from had the discipline already: `SignalStrip` takes its
+coverage as an injected callable and `SegmentProxy.refresh` re-scans rather
+than caching what it found.
 
 Nothing here imports Qt. Threads are the caller's to own, and the rule they
 owe this module is below.
@@ -40,7 +56,7 @@ from typing import Any
 from sieve.contract import Tool
 from sieve.contract.edges import FRAME
 from sieve.contract.forms import Form
-from sieve.contract.nodes import Opened, Output, read_form
+from sieve.contract.nodes import Answer, Opened, Output, Refusal, read_form
 
 #: Frames held decoded, at the source's own form. One 5312x2988 BGR frame is
 #: 47.6 MB, so this is a handful and not a window: what the storage plan holds
@@ -57,7 +73,7 @@ WALK_LIMIT = 240
 
 
 class Frames:
-    """Budget-capped LRU of decoded frames, keyed by pts.
+    """Budget-capped LRU of decoded frames, keyed by pts and form.
 
     Ported from the storage explorer's `Store`, whose rule holds here: the
     lock exists for the fill thread, and every operation under it is a dict
@@ -68,20 +84,22 @@ class Frames:
 
     def __init__(self, budget: int = DEFAULT_BUDGET) -> None:
         self.budget = max(1, budget)
-        self._held: OrderedDict[int, Any] = OrderedDict()
+        self._held: OrderedDict[tuple[int, str], Any] = OrderedDict()
         self._lock = threading.Lock()
 
-    def get(self, position: int) -> Any | None:
+    def get(self, position: int, form: Form) -> Any | None:
+        key = (position, form.key())
         with self._lock:
-            if position not in self._held:
+            if key not in self._held:
                 return None
-            self._held.move_to_end(position)
-            return self._held[position]
+            self._held.move_to_end(key)
+            return self._held[key]
 
-    def put(self, position: int, frame: Any) -> None:
+    def put(self, position: int, form: Form, frame: Any) -> None:
+        key = (position, form.key())
         with self._lock:
-            self._held[position] = frame
-            self._held.move_to_end(position)
+            self._held[key] = frame
+            self._held.move_to_end(key)
             while len(self._held) > self.budget:
                 self._held.popitem(last=False)
 
@@ -113,13 +131,23 @@ class Store:
         self.opened = opened
         self.output = output
         self.frames = Frames()
-        #: listed by the source; ascending, and closed for a file
-        self.positions: tuple[int, ...] = ()
-        #: listed but not deliverable — recorded, never inferred
+        #: positions the source will never deliver — recorded, never inferred,
+        #: and only ever `Refusal.GONE`
         self.missing: set[int] = set()
-        extent = output.extent() if output.extent is not None else None
-        if extent is not None:
-            self.positions = extent.listed
+
+    @property
+    def positions(self) -> tuple[int, ...]:
+        """What the source lists, asked now.
+
+        A property and not a field: an open extent moves, and a caller holding
+        a tuple from open time is holding a number that was true then. Costs a
+        `listdir` on a directory source and a tuple hand-back on a container,
+        which is cheap enough that caching it would trade correctness for
+        nothing.
+        """
+        if self.output.extent is None:
+            return ()
+        return self.output.extent().listed
 
     @property
     def address(self) -> str:
@@ -135,31 +163,43 @@ class Store:
         width, height = self.form.out
         return width / height if height else 0.0
 
-    def frame(self, position: int, want: Form | None = None) -> Any | None:
-        """A frame at *position*, from the held ones if it is there.
+    def answer(self, position: int, want: Form | None = None) -> Answer:
+        """A frame at *position* in *want*, from the held ones if it is there.
 
-        `None` means the source could not deliver a position it listed, and
-        is remembered in `missing` so a second ask does not re-pay the decode
-        to be told the same thing. Anything other than the source's own form
-        goes through `read_form`, which is the one path that makes two
-        producers of one form agree in the low bits.
+        `GONE` is remembered, so a second ask does not re-pay a seek to be
+        told the same thing. `LATER` and `FORM` are not: the first is a moment
+        and the second is about the shape, and caching either turns one
+        refusal into a permanent answer. That distinction is the whole of why
+        `Refusal` exists — before it, a forward-only source that refused once
+        was filed as a hole and never asked again.
+
+        Everything goes through `read_form`, which asks the source for the
+        wanted form first and falls back to the canonical construction only
+        where it will not serve one.
         """
+        wanted = self.form if want is None else want
         if position in self.missing:
-            return None
-        if want is None or want == self.form:
-            held = self.frames.get(position)
-            if held is not None:
-                return held
-            frame = self.output.read(position)
-            if frame is None:
-                self.missing.add(position)
-                return None
-            self.frames.put(position, frame)
-            return frame
-        frame = read_form(self.output, position, want)
-        if frame is None:
+            return Answer(refusal=Refusal.GONE)
+        held = self.frames.get(position, wanted)
+        if held is not None:
+            return Answer(held)
+        answered = read_form(self.output, position, wanted)
+        if answered.refusal is Refusal.GONE:
             self.missing.add(position)
-        return frame
+        elif answered.delivered:
+            self.frames.put(position, wanted, answered.frame)
+        return answered
+
+    def frame(self, position: int, want: Form | None = None) -> Any | None:
+        """The array, or None however it was refused. For a caller that draws.
+
+        Kept beside `answer` because whatever puts pixels on a screen has one
+        branch: there is something to draw or there is not. A caller that
+        schedules, records coverage, or decides whether to ask again wants
+        `answer` — and this is the shorter name, so the shorter name is the
+        one that loses information.
+        """
+        return self.answer(position, want).frame
 
     def first_deliverable(self, limit: int = WALK_LIMIT) -> int | None:
         """The first listed position that actually reads back. Expensive.
@@ -175,8 +215,9 @@ class Store:
         before anything else exists. Until that tier exists, this runs on
         whatever thread opened the source and never on one that draws.
         """
-        for position in self.positions[: limit or len(self.positions)]:
-            if self.frame(position) is not None:
+        listed = self.positions
+        for position in listed[: limit or len(listed)]:
+            if self.answer(position).delivered:
                 return position
         return None
 

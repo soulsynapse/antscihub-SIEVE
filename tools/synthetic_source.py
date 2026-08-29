@@ -24,9 +24,13 @@ camera does and what a container never does.
 `extent()` call, up to `frames`. A caller that asks twice gets two answers, and
 one that asked once at open is holding a number that was true then.
 
-**It can refuse deliberately.** `drop=k` makes every k-th position list and read
-back `None` — the mid-GOP prefix's shape, on demand, at any position rather than
-only at the head, and with no seek to pay to discover it.
+**It can refuse deliberately, in each of the three kinds.** `drop=k` makes every
+k-th position refuse `GONE` — the mid-GOP prefix's shape, on demand, at any
+position rather than only at the head and with no seek to pay to discover it.
+A form it did not declare refuses `FORM`. A forward-only source asked behind its
+head refuses `LATER`, which is the kind that had nowhere to go before: this tool
+raised instead, because answering `None` would have filed a live source's entire
+past as permanent holes.
 
 Nothing here is random. `latency` sleeps a fixed time so a probe measures a
 number it chose, and the frame content is a pure function of the position, so a
@@ -52,8 +56,16 @@ from sieve.contract.edges import (
     Positioning,
     Timebase,
 )
-from sieve.contract.forms import source_form
-from sieve.contract.nodes import Fingerprint, Opened, Output, Source
+from sieve.contract import forms
+from sieve.contract.forms import Form, source_form
+from sieve.contract.nodes import (
+    Answer,
+    Fingerprint,
+    Opened,
+    Output,
+    Refusal,
+    Source,
+)
 
 #: What an address must start with for this tool to claim it.
 SCHEME = "synthetic:"
@@ -124,7 +136,7 @@ class _Generator:
         listed = tuple(i * self.tick for i in range(revealed))
         return Extent(listed, closed=self.grow <= 0)
 
-    def read(self, position: int | None) -> Any | None:
+    def read(self, position: int | None, want: Form) -> Answer:
         if position is None:
             raise ValueError("a frame edge is positioned; pass a tick")
         if position % self.tick:
@@ -132,25 +144,28 @@ class _Generator:
         index = position // self.tick
         if not 0 <= index < self.frames:
             raise ValueError(f"{position} is not a frame this source listed")
+        source = source_form(self.width, self.height, "bgr")
+        if want.pix != "bgr" or not want.native or forms.grade(source, want) is None:
+            return Answer(refusal=Refusal.FORM)
         if self.forward:
             with self._lock:
                 if self._cursor is not None and index <= self._cursor:
                     # What a live source does, and what `Access.FORWARD` means:
-                    # "the head only, once each". Raising rather than answering
-                    # None, because None means listed-and-undeliverable and this
-                    # position is perfectly deliverable — to somebody who had
-                    # asked in time.
-                    raise ValueError(
-                        f"{position} is behind the head; this source is forward-only"
-                    )
+                    # "the head only, once each". This is `LATER` read from the
+                    # wrong side of the head — the position is deliverable and
+                    # was, to somebody who asked in time — and before `Refusal`
+                    # existed this tool had to raise, because answering `None`
+                    # would have filed a live source's whole past as holes.
+                    return Answer(refusal=Refusal.LATER)
                 self._cursor = index
         if self.latency:
             time.sleep(self.latency)
         with self._lock:
             self.served.append(position)
         if self.drop and index % self.drop == 0:
-            return None
-        return self.frame_at(index)
+            return Answer(refusal=Refusal.GONE)
+        frame = self.frame_at(index)
+        return Answer(frame if want == source else forms.build(frame, want))
 
     def frame_at(self, index: int) -> Any:
         """A pure function of the index, so a test can assert exact pixels.

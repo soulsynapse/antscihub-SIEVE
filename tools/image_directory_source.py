@@ -27,9 +27,10 @@ here, and is written up as one.
 
 **One form for the whole folder, decided by the first image.** `Edge.spec.form`
 is fixed at open, so a directory whose images differ in size cannot be described
-at all. This tool reports the first image's dimensions and refuses nothing;
-mismatched images read back as `None` — listed and not deliverable, which the
-contract does have a way to say.
+at all. This tool reports the first image's dimensions, and an image of another
+size refuses with `Refusal.FORM` — the position is fine and the shape is not the
+one declared, which is a distinction the contract only gained by this folder
+being the thing that needed it.
 """
 
 from __future__ import annotations
@@ -52,8 +53,16 @@ from sieve.contract.edges import (
     Positioning,
     Timebase,
 )
-from sieve.contract.forms import source_form
-from sieve.contract.nodes import Fingerprint, Opened, Output, Source
+from sieve.contract import forms
+from sieve.contract.forms import Form, source_form
+from sieve.contract.nodes import (
+    Answer,
+    Fingerprint,
+    Opened,
+    Output,
+    Refusal,
+    Source,
+)
 
 #: What this tool will read. libav decodes all of these with no Python imaging
 #: library involved, which keeps the tool's dependency the same one the video
@@ -126,20 +135,27 @@ class _Folder:
         self.stills = _stills(self.folder)
         return Extent(tuple(range(len(self.stills))), closed=False)
 
-    def read(self, position: int | None) -> Any | None:
+    def read(self, position: int | None, want: Form) -> Answer:
         if position is None:
             raise ValueError("a frame edge is positioned; pass an index")
         if not 0 <= position < len(self.stills):
             raise ValueError(f"{position} is not a frame this source listed")
+        source = source_form(self.width, self.height, "bgr")
+        if want.pix != "bgr" or not want.native or forms.grade(source, want) is None:
+            return Answer(refusal=Refusal.FORM)
         frame = _decode(self.stills[position], self._reformatter)
         if frame is None:
-            return None
+            # The file is there and libav will not read it. GONE rather than
+            # LATER: a still that does not decode now does not decode later,
+            # unless somebody replaces it, and replacing it is a new extent.
+            return Answer(refusal=Refusal.GONE)
         if frame.shape[:2] != (self.height, self.width):
-            # Listed and not deliverable, for a reason a container never has:
-            # the folder holds an image of another size, and one form was
-            # fixed for all of them at open.
-            return None
-        return frame
+            # A perfectly good image, in a form this source could not declare:
+            # `Edge.spec.form` was fixed from the first still and a folder may
+            # hold several sizes. FORM and not GONE, because nothing is wrong
+            # with the position — the answer is about the shape asked for.
+            return Answer(refusal=Refusal.FORM)
+        return Answer(frame if want == source else forms.build(frame, want))
 
     def fingerprint(self) -> Fingerprint | None:
         """Names and sizes, hashed. Cheap, and it moves when the folder does.

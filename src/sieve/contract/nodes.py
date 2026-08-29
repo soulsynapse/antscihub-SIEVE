@@ -15,12 +15,32 @@ port that the user left unset gets satisfied — the binding names an address
 and an edge name, which is the document-and-a-key-within-it that
 `docs/architecture-leads.md` holds the argument for.
 
-**Listed and deliverable are different facts.** `read` returning `None` is
-the producer admitting it cannot supply something its extent listed — a
-coverage fact travelling to whoever records coverage, not an error. The
-footage in `video-tests/` is why: cut mid-GOP, it answers "how many frames"
-three ways, and a contract that cannot say so launders twenty missing frames
-into twenty zeroes.
+**Listed and deliverable are different facts, and a refusal names its own
+kind.** `read` handing back a refusal is the producer saying it cannot supply
+something its extent listed — a coverage fact travelling to whoever records
+coverage, not an error. The footage in `video-tests/` is why: cut mid-GOP, it
+answers "how many frames" three ways, and a contract that cannot say so
+launders twenty missing frames into twenty zeroes.
+
+A bare `None` could not carry it. Three sources produce three different
+refusals, measured in
+`docs/findings/2026.08.29-what-two-more-sources-found-the-contract-cannot-say.md`:
+a mid-GOP prefix cannot be decoded by anyone ever, an image of the wrong size
+is a fine frame in the wrong form, and a position behind a forward-only
+source's head is deliverable to somebody who asked in time. They want opposite
+handling — remember it, ask differently, ask again — and one return value
+collapsed them into a permanent hole. The session explorer never made that
+mistake because every serve carried a *route* beside its payload and the tiers
+branched on it; the route is what the port dropped and `Refusal` is it.
+
+**A read names the form it wants.** The step side already had this: a tool's
+`form_for` is a function of the crop, so the consumer names the form per
+request. Fixing it on the edge instead made every read the whole frame at
+source sampling — 47.6 MB on the footage in `video-tests/`, where the tier
+stack this ports from never held anything but a 1 MB crop. A source may serve
+`want` itself when it can do so cheaply, and must refuse with `FORM` rather
+than approximate; `read_form` then falls back to the canonical construction,
+which stays the one authority on what a form's bytes are.
 
 **Cost is not declared.** ADR-0007 holds that a cost class belongs to the
 pairing and is measured where it runs. Access says what is *possible*, which
@@ -37,11 +57,55 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from enum import Enum
 from typing import Any
 
 from sieve.contract import forms
 from sieve.contract.edges import SPECS, Edge, Extent
 from sieve.contract.forms import Form
+
+
+class Refusal(str, Enum):
+    """Why a listed position did not come back. Closed, and SIEVE's to extend.
+
+    Closed for the reason `edges.py` is: a producer minting its own refusal
+    kinds is every consumer growing a branch it cannot have anticipated. A
+    source with a reason not on this list has found a defect in the list.
+    """
+
+    #: cannot be decoded, ever, by anyone — a real hole in the coverage record.
+    #: Remember it; asking again buys the same answer at the same price.
+    GONE = "gone"
+    #: the position is here and is not in the form that was asked for. Ask
+    #: differently — this says nothing about the position's availability.
+    FORM = "form"
+    #: deliverable, and not to you, now. A forward-only source asked for
+    #: something behind its head, a tier still being written. Ask again; a
+    #: consumer that files this as a hole never asks again and is wrong
+    #: permanently on the strength of one moment.
+    LATER = "later"
+
+
+@dataclass(frozen=True)
+class Answer:
+    """What a read hands back: a frame, or a refusal that says which kind.
+
+    A record rather than `ndarray | Refusal`, because the old shape returned
+    `None` and every caller spelled its check `is None`. Against a bare union
+    that check silently becomes False and the refusal is used as an array; a
+    record turns the same mistake into an attribute error at the first use.
+    """
+
+    frame: Any | None = None
+    refusal: Refusal | None = None
+
+    def __post_init__(self) -> None:
+        if (self.frame is None) == (self.refusal is None):
+            raise ValueError("an answer is a frame or a refusal, never both or neither")
+
+    @property
+    def delivered(self) -> bool:
+        return self.refusal is None
 
 
 @dataclass(frozen=True)
@@ -63,11 +127,14 @@ class Output:
     """One edge a source offers, with the functions that serve it.
 
     `extent` is None exactly when the edge is unpositioned. `read` takes the
-    position, or None for an edge that ignores it.
+    position — or None for an edge that ignores it — and the form wanted, and
+    answers with one or refuses. A source that will not serve that form says
+    so with `Refusal.FORM` *before* decoding, which is what makes the fallback
+    in `read_form` cost nothing when it is taken.
     """
 
     edge: Edge
-    read: Callable[[int | None], Any | None]
+    read: Callable[[int | None, Form], Answer]
     extent: Callable[[], Extent] | None = None
 
 
@@ -124,19 +191,26 @@ class Source:
                 raise ValueError(f"{kind!r} is not an edge kind")
 
 
-def read_form(output: Output, position: int | None, want: Form) -> Any | None:
-    """Read a frame edge and shape it — the one path to a form.
+def read_form(output: Output, position: int | None, want: Form) -> Answer:
+    """Read a frame edge at *want* — the one path to a form.
 
-    Everything but a producer's own form goes through here, which is what
-    makes two sources agree in the low bits. `None` passes straight through:
-    a frame that could not be delivered has no form.
+    The source is asked first, because only it can be cheap: it holds the
+    decoded picture and may crop before anything is copied. If it will not
+    serve that form it says so without decoding, and the canonical
+    construction runs here instead. `forms` stays the authority on what a
+    form's bytes are either way, which is what makes two sources of one form
+    agree in the low bits.
+
+    Every other refusal passes straight through. `GONE` and `LATER` are facts
+    about the position, and no change of form repairs either.
     """
+    answer = output.read(position, want)
+    if answer.refusal is not Refusal.FORM:
+        return answer
     have = output.edge.spec.form
-    frame = output.read(position)
-    if frame is None:
-        return None
-    if want == have:
-        return frame
     if forms.grade(have, want) is None:
         raise ValueError(f"{have.key()} cannot answer for {want.key()}")
-    return forms.build(frame, want)
+    answer = output.read(position, have)
+    if not answer.delivered:
+        return answer
+    return Answer(forms.build(answer.frame, want))

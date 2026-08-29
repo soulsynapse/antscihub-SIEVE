@@ -52,8 +52,16 @@ from sieve.contract.edges import (
     Positioning,
     Timebase,
 )
-from sieve.contract.forms import source_form
-from sieve.contract.nodes import Fingerprint, Opened, Output, Source
+from sieve.contract import forms
+from sieve.contract.forms import Form, source_form
+from sieve.contract.nodes import (
+    Answer,
+    Fingerprint,
+    Opened,
+    Output,
+    Refusal,
+    Source,
+)
 
 #: What this tool will try. SIEVE holds no such list on purpose — a list of
 #: containers is a decoder's opinion, and one in the substrate is ADR-0009's
@@ -89,11 +97,30 @@ class _VideoFile:
     def extent(self) -> Extent:
         return Extent(self.listed, closed=True)
 
-    def read(self, position: int | None) -> Any | None:
+    def read(self, position: int | None, want: Form) -> Answer:
+        """A frame at *position*, cropped here when the caller wants less.
+
+        The crop is the cheap half and it is taken: returning the whole 5.3K
+        picture when a 1024-square region was asked for is 47.6 MB held where
+        1 MB was wanted, and the tier stack this feeds never held more.
+
+        The conversion is *not* done here, and that is deliberate rather than
+        unfinished. This decoder's luma plane and `forms.build`'s gray are
+        different quantities — one is Y' as the encoder stored it, the other
+        is BT.601 over the decoded BGR — so serving gray from plane 0 would be
+        two producers of one form disagreeing in the low bits, which is the
+        thing `forms.py` exists to prevent. Refusing sends it to the one
+        authority. Which of the two `gray` should mean is a real question and
+        not this tool's to settle.
+        """
         if position is None:
             raise ValueError("a frame edge is positioned; pass a pts")
         if position not in self._present:
             raise ValueError(f"{position} is not a frame this source listed")
+        source = source_form(self._stream.codec_context.width,
+                             self._stream.codec_context.height, "bgr")
+        if want.pix != "bgr" or not want.native or forms.grade(source, want) is None:
+            return Answer(refusal=Refusal.FORM)
         if (
             self._frames is None
             or self._cursor is None
@@ -108,18 +135,21 @@ class _VideoFile:
                 frame = next(self._frames)
             except (StopIteration, av.FFmpegError):
                 self._frames, self._cursor = None, None
-                return None
+                return Answer(refusal=Refusal.GONE)
             if frame.pts is None:
                 continue
             self._cursor = frame.pts
             if frame.pts == position:
-                return self._reformatter.reformat(
+                whole = self._reformatter.reformat(
                     frame, format="bgr24"
                 ).to_ndarray()
+                return Answer(whole if want == source else forms.build(whole, want))
             if frame.pts > position:
                 # The decoder went past it — what a packet that decodes to
-                # nothing looks like from out here.
-                return None
+                # nothing looks like from out here. GONE and not LATER: this
+                # file is finished, so the packet will never decode, and a
+                # caller that keeps asking pays a seek each time to be told.
+                return Answer(refusal=Refusal.GONE)
 
     def fingerprint(self) -> Fingerprint | None:
         """Size with a checksum of the first and last block.

@@ -59,14 +59,26 @@ class Registry:
     def sources(self) -> tuple[Tool, ...]:
         return tuple(t for t in self.tools if isinstance(t.role, Source))
 
-    def source_for(self, address: str) -> Tool | None:
+    def offering(self, kind: str) -> tuple[Tool, ...]:
+        """The sources that serve *kind*, in search-path order.
+
+        Asked before an address is in hand, which is the point: what a caller
+        wants a file *for* narrows the tools long before it narrows the files.
+        """
+        return tuple(t for t in self.sources if kind in t.role.offers)
+
+    def source_for(self, address: str, kind: str | None = None) -> Tool | None:
         """The first source tool willing to try *address*.
 
         First rather than best: ranking tools against each other is an opinion
         SIEVE would have to hold about tools, and the order of the search path
         is already the user's to set.
+
+        `kind` narrows to sources that offer that edge kind, so a caller that
+        needs frames is not handed the tool that reads parameter documents.
+        Omitted, the question is the old one — anything that will open it.
         """
-        for tool in self.sources:
+        for tool in (self.sources if kind is None else self.offering(kind)):
             try:
                 if tool.role.handles(address):
                     return tool
@@ -74,14 +86,19 @@ class Registry:
                 continue
         return None
 
-    def dialog_filter(self) -> str:
+    def dialog_filter(self, kind: str | None = None) -> str:
         """The filter a file chooser offers, built from the loaded sources.
 
         A hint, never the gate — `source_for` decides. All files is always
         offered last, so a pattern too narrow costs a click rather than making
         a file SIEVE would happily have taken unreachable.
+
+        Narrowed by `kind` alongside the gate that follows it, or the two come
+        apart: a chooser offering patterns the gate then refuses is a dialog
+        that hands somebody a file and takes it back.
         """
-        patterns = sorted({p for tool in self.sources for p in tool.role.patterns})
+        pool = self.sources if kind is None else self.offering(kind)
+        patterns = sorted({p for tool in pool for p in tool.role.patterns})
         if not patterns:
             return "All files (*)"
         return f"Sources ({' '.join(patterns)});;All files (*)"

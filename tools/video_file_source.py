@@ -239,6 +239,10 @@ TOOLS = (
         role=Source(
             handles=_handles,
             open=_open,
+            #: A container decodes to pixels and to nothing else. Declared, not
+            #: a version-bearing fact: this says what kind of thing comes out,
+            #: never what the bytes are, so ADR-0010's key does not fold it.
+            offers=(FRAME,),
             patterns=tuple(f"*{suffix}" for suffix in sorted(SUFFIXES)),
         ),
     ),

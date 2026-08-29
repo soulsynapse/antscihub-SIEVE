@@ -86,6 +86,8 @@ class Entry:
     added: str = field(default_factory=now)
     #: empty until it has been opened once, which is not the same as added
     opened: str = ""
+    #: which source tool answered for this recording when the row was made
+    source: str = ""
 
     @property
     def folder(self) -> str:
@@ -157,20 +159,32 @@ class Library:
 
     # -- writing -----------------------------------------------------------
 
-    def add(self, video: Path | str) -> Entry:
+    def add(self, video: Path | str, source: str = "") -> Entry:
         """Point at a recording and remember it.
 
         Adding one already in the library is not an error and does not duplicate
         it — that is what re-adding is, and the only thing it changes is that the
         row rises to the top.
+
+        `source` is the name of the tool that answered for the file, written
+        down because which tool answers is not a property of the file: the
+        search path is the user's to order and `source_for` takes the first
+        willing tool, so the same recording is served by a different producer
+        the moment a directory is added or reordered. The name only — a tool's
+        version belongs to the key over its output (ADR-0010), where a bump
+        invalidates what was cached under it; on this row it would orphan the
+        project every time a tool was upgraded. Empty on a row written before
+        this was recorded, and on one whose tool has since gone: both mean ask
+        again, which is what happened every time before.
         """
         entry = self.find(video)
         if entry is None:
             resolved = _key(video)
-            entry = Entry(video=resolved, name=Path(resolved).stem)
+            entry = Entry(video=resolved, name=Path(resolved).stem, source=source)
             self.entries.append(entry)
         else:
             entry.added = now()
+            entry.source = source or entry.source
         self._sort()
         self.save()
         return entry

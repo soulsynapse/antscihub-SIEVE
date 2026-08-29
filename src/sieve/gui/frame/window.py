@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from sieve.contract.edges import FRAME
 from sieve.gui import palette
 from sieve.gui.frame.chrome import dress_title_bar, stylesheet
 from sieve.gui.frame.hotkeys import answer_key, bind_hotkeys, suspend_hotkeys
@@ -160,26 +161,33 @@ class MainWindow(QMainWindow):
 
         A cancelled picker moves nothing, which is what makes the mint free to
         try: the selection stays where the user left it.
+
+        Frames and not merely a source, at both the filter and the gate. A
+        source is how *any* file enters — a crop document and a parameter
+        document are sources too, and both are things a port gets bound to
+        rather than things a project is about. Asking for the kind keeps this
+        button meaning what it says once the second source tool lands.
         """
         chosen, _filter = QFileDialog.getOpenFileName(
             self,
             "Add a project — the recording it is about",
             "",
-            self.tools.dialog_filter(),
+            self.tools.dialog_filter(FRAME),
         )
         if not chosen:
             return
-        if self.tools.source_for(chosen) is None:
+        tool = self.tools.source_for(chosen, FRAME)
+        if tool is None:
             # The filter is a hint and this is the gate, so a file picked
             # through "All files" is refused here rather than becoming a row
             # nothing can open.
             QMessageBox.warning(
                 self,
                 "No source tool takes that file",
-                f"Nothing loaded can open {Path(chosen).name}.",
+                f"Nothing loaded reads frames out of {Path(chosen).name}.",
             )
             return
-        entry = self.library.add(Path(chosen))
+        entry = self.library.add(Path(chosen), source=tool.name)
         self.show_library(standing=entry.video)
 
     def open_project(self, project: Project) -> None:

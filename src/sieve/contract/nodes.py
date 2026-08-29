@@ -40,7 +40,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from sieve.contract import forms
-from sieve.contract.edges import Edge, Extent
+from sieve.contract.edges import SPECS, Edge, Extent
 from sieve.contract.forms import Form
 
 
@@ -89,6 +89,22 @@ class Source:
     containers is a decoder's opinion, and one living in the substrate is
     ADR-0009's accretion arriving one format request at a time.
 
+    `offers` is which edge kinds this tool serves, and it is the one question
+    about a source that can be asked for free. `handles` says whether an
+    address is this tool's, `open` says what is actually on offer and costs
+    whatever the file costs; neither answers *what kind of thing enters here*,
+    which is what a caller needs before it opens anything. A recording, a crop
+    document and a parameter document are all sources, and only the first can
+    be what a project is about — that distinction is `edges.py`'s frame/value
+    line, read one step earlier.
+
+    Per tool rather than per address, because it is a fact about what the tool
+    does: a container decoder offers frames whatever file it is pointed at. A
+    floor and not a hint — the tool may open with more edges than it declared,
+    but a declared kind that never arrives is a bug in the tool, caught when
+    `open` returns without it. That is the difference from `patterns` below,
+    which is why there is one fact here and not two that can disagree.
+
     `patterns` are glob hints for a file chooser and are never the gate —
     `handles` decides. Two facts that can disagree is normally the shape to
     avoid, and it is tolerable only because the disagreement cannot hide
@@ -99,7 +115,13 @@ class Source:
 
     handles: Callable[[str], bool]
     open: Callable[[str], Opened]
+    offers: tuple[str, ...]
     patterns: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        for kind in self.offers:
+            if kind not in SPECS:
+                raise ValueError(f"{kind!r} is not an edge kind")
 
 
 def read_form(output: Output, position: int | None, want: Form) -> Any | None:

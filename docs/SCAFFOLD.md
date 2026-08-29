@@ -33,6 +33,7 @@
     - 📄 `2026.08.21-uncut-seek-costs-a-gop-not-a-frame.md`
     - 📄 `2026.08.22-what-froze-the-felt-loop.md`
     - 📄 `2026.08.28-the-v3-suite-outweighed-its-program.md`
+    - 📄 `2026.08.29-what-two-more-sources-found-the-contract-cannot-say.md`
   - 📁 `vocab/`
     - 📄 `menu.md`
     - 📄 `pane.md`
@@ -366,6 +367,8 @@
     - 📄 `settings.py` — Flat JSON preferences at ``path()``, read once per run.
     - 📄 `store.py` — What SIEVE has on hand from one open recording.
 - 📁 `tools/`
+  - 📄 `image_directory_source.py` — The image directory source: frames as separate files in a folder, in name order.
+  - 📄 `synthetic_source.py` — The synthetic source: frames from arithmetic, shaped by whatever is being tested.
   - 📄 `video_file_source.py` — The video file source: frames off a container on disk, decoded with PyAV.
 - 📄 `.gitattributes`
 - 📄 `.gitignore`

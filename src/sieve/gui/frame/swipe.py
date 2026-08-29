@@ -1,31 +1,8 @@
 """The run of views a pane shows one at a time, and the slide between them.
 
-The right pane holds three things that are never read against each other — the
-projects, the chain, the walked step's form — and one that is read against the
-footage on the left at all times. Standing all three at once would take the room
-from the fourth, and stacking them with no motion would leave the user to work
-out which of three lookalike screens they are now on. So they sit side by side
-on a track wider than the pane, and moving between them slides the track: the
-direction of travel is the only thing that says where you now are relative to
-where you were, and it is free, because the pane never changes size.
-
-A position is a view (ADR-0001) and never a pane: the pane is the space, one
-space, and what the swipe changes is its occupant. That is why the three are
-positions on a track rather than three panes shown and hidden — the frame's
-panes are countable and fixed, and a construct that grew two more of them every
-time a screen was added would make "which pane" unanswerable.
-
-The track is moved rather than the positions: one animated property, and every
-position keeps the geometry it was given, so a plot mid-refill in the position
-being left does not also get resized on its way off screen.
-
-`Arrows` is the same two moves where the pointer can reach them. The keys are
-the frame's and fire wherever focus is (`hotkeys.py`), which is what makes them
-the track's own; a user working with the mouse has no such thing, and a screen
-whose only way onward is a key is a screen that reads as having no way onward.
-They live here rather than in the head they stand in because which way the track
-can still go is the swipe's fact and nobody else's — an arrow that stayed lit at
-the end of the line would be offering the move `step` already refuses.
+Positions sit on a track wider than the pane; the track slides so direction of
+travel communicates position. The track moves, not the positions — so a view
+mid-refill keeps its geometry during the slide.
 """
 
 from __future__ import annotations
@@ -46,39 +23,16 @@ from PySide6.QtWidgets import QHBoxLayout, QSizePolicy, QToolButton, QWidget
 from sieve.gui import icons, palette
 from sieve.gui.frame.panes import Blank
 
-#: How long the slide takes. Long enough to be read as travel and not a cut,
-#: short enough that holding an arrow key walks the track rather than queueing
-#: up a wait — the interactive loop is the product, and a transition the user
-#: waits out is the loop's cost paid on every move.
 SLIDE_MS = 260
-
-#: The positions the right pane swipes between, in the order they sit on the
-#: track. The order is the reading order of the work: the project you opened,
-#: the chain in it, the step you are standing on in that chain — so ← and →
-#: mean out and in, and nothing has to say which way is which.
 POSITIONS = ("project", "pipeline", "step")
-
-#: Which lucide icon each direction wears. The same arrow the card's *open* verb
-#: wears, because it means the same thing one level up — onward into what you are
-#: standing on — and a second glyph for one direction of one line would be the
-#: track claiming to be a different kind of motion than the work it walks.
 _BACK = "arrow-left"
 _FORWARD = "arrow-right"
 
 
 class Swipe(QWidget):
-    """A track of positions inside one pane, one of them in front at a time.
+    """A track of positions inside one pane, one visible at a time."""
 
-    The widget is the window onto the track: it is the size of the pane, the
-    track is that width times the number of positions, and `offset` is how many
-    pane-widths along the track has been pulled. Positions are the swipe's
-    children only through the track, so nothing outside sees them move.
-    """
-
-    #: Which position is now in front. Emitted when the slide starts rather than
-    #: when it lands, for the reason `current()` reports from the start: what is
-    #: drawn about where the user is standing has to be true of where the next
-    #: keystroke will act, not of where the track has got to this frame.
+    #: Emitted at slide start (not end) — UI must reflect where the next keystroke acts.
     moved = Signal(int)
 
     def __init__(
@@ -110,21 +64,12 @@ class Swipe(QWidget):
         self._offset = float(value)
         self._track.move(-round(self._offset * self.width()), 0)
 
-    #: How far along the track the pane is looking, in pane-widths. Written by
-    #: the animation and by every resize, which is why it is a property and not
-    #: an argument to `go`.
     offset = Property(float, _get_offset, _set_offset)
 
     # -- where the swipe is standing -------------------------------------
 
     def current(self) -> int:
-        """Which position is in front — the one asked for, not the one drawn.
-
-        Reported from the start of the slide rather than its end: what the
-        window is standing on is what the keys will act on next, and a caller
-        that had to wait out the animation to be told would be answering the
-        user's second keystroke against their first position.
-        """
+        """The target position (updated at slide start, not end)."""
         return self._current
 
     def position(self, index: int) -> QWidget:
@@ -137,13 +82,7 @@ class Swipe(QWidget):
     # -- moving ----------------------------------------------------------
 
     def go(self, index: int) -> None:
-        """Slide until `index` is in front. Asking for where you are is nothing.
-
-        Unless a slide is already running, in which case it is a re-aim: the
-        arrows are held down and each keystroke restarts the animation from
-        wherever the track has got to, so the track never jumps back to a
-        position it was already leaving.
-        """
+        """Slide to `index`. No-op if already there; re-aims a running slide."""
         if not 0 <= index < len(self._positions):
             raise ValueError(
                 f"a swipe of {len(self._positions)} has no position {index}"
@@ -159,13 +98,7 @@ class Swipe(QWidget):
         self.moved.emit(index)
 
     def step(self, delta: int) -> None:
-        """Move `delta` positions, stopping at the ends rather than wrapping.
-
-        Clamped and not wrapped because the track is a line and reads as one:
-        the ends are where a held arrow key comes to rest, and a wrap would put
-        the user at the far end of the work with the slide saying they had
-        walked one step further into it.
-        """
+        """Move `delta` positions, clamped to the ends."""
         self.go(max(0, min(len(self._positions) - 1, self._current + delta)))
 
     # -- geometry --------------------------------------------------------
@@ -175,12 +108,7 @@ class Swipe(QWidget):
         self._relayout()
 
     def _relayout(self) -> None:
-        """Re-cut the track to the pane's size and put it back where it was.
-
-        The offset is in pane-widths, so it survives the resize untouched and
-        the position in front stays in front; it is re-applied here because the
-        pixels it works out to have just changed.
-        """
+        """Resize track and positions; re-apply offset (pane-widths survive resize)."""
         width, height = self.width(), self.height()
         self._track.resize(width * len(self._positions), height)
         for index, position in enumerate(self._positions):
@@ -189,19 +117,7 @@ class Swipe(QWidget):
 
 
 class Arrows(QWidget):
-    """← and → for one swipe, as two buttons a head can stand.
-
-    Held against the swipe rather than handed two callables: what the pair has to
-    say is not only *move* but *whether there is anywhere to move to*, and only
-    the swipe knows where its ends are. So it walks with `step` — the same clamp
-    the keys get, so neither route can take the track somewhere the other cannot
-    — and re-faces itself on `moved`, whichever of the two moved it.
-
-    An end is a disabled button and not a hidden one. The pair is the same two
-    presses in the same two places on every position, and a way back that
-    vanished at the first position would move the other arrow sideways at exactly
-    the moment the user is looking for where they came from.
-    """
+    """← and → buttons for a swipe; disabled at the ends, never hidden."""
 
     def __init__(self, swipe: Swipe, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -214,16 +130,11 @@ class Arrows(QWidget):
         row.setSpacing(2)
         row.addWidget(self._back)
         row.addWidget(self._forward)
-        # The head's sheet dresses what the head builds, and these are the
-        # caller's; the rule is scoped to this widget's own subtree, which a
-        # sheet set here is, so it reaches the two buttons and nothing else.
         self.setStyleSheet(
             "QToolButton { border: 0; padding: 0 2px; background: transparent; }"
         )
 
         swipe.moved.connect(self._reface)
-        # Bound methods and never lambdas, for the reason `view.py` gives: a
-        # lambda closing over `self` keeps a dead pair subscribed to the palette.
         palette.CHANGED.connect(self._redraw)
         self._reface(swipe.current())
 
@@ -234,11 +145,7 @@ class Arrows(QWidget):
         button.setAutoRaise(True)
         button.setToolTip(tip)
         button.setCursor(Qt.CursorShape.PointingHandCursor)
-        # Never focus. The position in front owns ↑ and ↓ and answers them from
-        # whatever holds focus inside it; an arrow that took focus on the click
-        # would leave the user having moved the track and lost the list.
         button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        # `*_` swallows `clicked`'s checked flag, which these are not.
         button.clicked.connect(lambda *_: self._swipe.step(delta))
         return button
 
@@ -248,22 +155,10 @@ class Arrows(QWidget):
         self._forward.setEnabled(index < self._swipe.count() - 1)
 
     def _redraw(self) -> None:
-        """The glyphs again in the palette now in use.
-
-        An icon is a pixmap drawn at the colours the palette held when the button
-        was built, which is the half no stylesheet reaches — `card.py` on why the
-        same slot exists there.
-        """
+        """Re-render icons for the current palette (pixmaps bake in their colours)."""
         self._back.setIcon(icons.icon(_BACK))
         self._forward.setIcon(icons.icon(_FORWARD))
 
 
 def build_swipe(pane: str = "right", names: Iterable[str] = POSITIONS) -> Swipe:
-    """The swipe as the right pane has it: one blank per position, in order.
-
-    Blank for the reason the panes are — what stands here is the frame's claim
-    about how many positions there are and which way they run, and that claim
-    is checkable only while nothing inside it is contributing a size hint or a
-    scroll of its own.
-    """
     return Swipe([Blank(f"{pane} {name}") for name in names])

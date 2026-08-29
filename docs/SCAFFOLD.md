@@ -4,6 +4,9 @@
 
 - 📁 `.githooks/`
   - 📄 `pre-commit`
+- 📁 `checks/` — One structural check per ADR, each registered under the ADR's number.
+  - 📄 `adr0010-baseline.json`
+  - 📄 `adr0010.py` — ADR-0010 tripwire: hash per top-level def, static on purpose — the tools
 - 📁 `docs/`
   - 📁 `adr/`
     - 📄 `ADR-0001-panes-house-any-view.md`
@@ -14,6 +17,8 @@
     - 📄 `ADR-0006-a-declaration-is-a-fetch-plan.md`
     - 📄 `ADR-0007-a-cost-class-belongs-to-the-pairing.md`
     - 📄 `ADR-0008-cost-is-a-fact-waste-is-a-bug.md`
+    - 📄 `ADR-0009-sieve-is-not-its-tools.md`
+    - 📄 `ADR-0010-a-key-carries-a-version.md`
   - 📁 `decode/`
     - 📄 `ideas.md`
   - 📁 `findings/`
@@ -36,6 +41,7 @@
     - 📄 `window.md`
   - 📄 `ADR.md`
   - 📄 `SCAFFOLD.md`
+  - 📄 `SIEVE-CAPABILITIES.md`
   - 📄 `TODO.md`
   - 📄 `VOCAB.md`
   - 📄 `vision-and-notes.md`
@@ -166,6 +172,7 @@
       - 📄 `session-explorer-20260822T173750Z.json`
       - 📄 `session-explorer-20260822T174039Z.json`
       - 📄 `session-explorer-20260822T174053Z.json`
+      - 📄 `session-explorer-20260823T102317Z.json`
       - 📄 `storage-explorer-20260821T214201Z.json`
       - 📄 `storage-explorer-20260821T214253Z.json`
       - 📄 `storage-explorer-20260821T214818Z.json`
@@ -232,6 +239,7 @@
       - 📄 `tool-explorer-20260823T193543Z.json`
       - 📄 `tool-explorer-20260823T193703Z.json`
       - 📄 `tool-explorer-20260823T194613Z.json`
+      - 📄 `tool-explorer-20260823T194918Z.json`
     - 📁 `results/`
       - 📄 `01-paint-cost-20260823T114821Z.json`
       - 📄 `01-paint-cost-20260823T194128Z.json`
@@ -254,6 +262,7 @@
       - 📄 `05-provenance-20260823T194437Z.json`
       - 📄 `05-provenance-20260823T194515Z.json`
       - 📄 `05-provenance-20260823T194532Z.json`
+      - 📄 `05-provenance-20260828T222859Z.json`
     - 📄 `01-paint-cost.py` — What drawing a step's output costs, before anything is concluded about the store.
     - 📄 `02-form-derivation.py` — Does a held frame answer a wanted form more cheaply than a decode?
     - 📄 `03-free-while-hot.py` — What riding along on a fetch that was happening anyway actually costs.
@@ -275,14 +284,14 @@
   - 📁 `sieve/` — SIEVE isolates ethological events from video.
     - 📁 `gui/` — The interactive view: the frame, and what stands in its panes.
       - 📁 `frame/` — The frame: the window, its three panes, and the chrome between them.
-        - 📄 `chrome.py` — What the window wears where no pane covers it.
-        - 📄 `hotkeys.py` — The keys the window answers, and never what answering them does.
+        - 📄 `chrome.py` — Stylesheet and title-bar dressing for the window chrome.
+        - 📄 `hotkeys.py` — Frame-level key bindings: eager shortcuts and yielded keys.
         - 📄 `menu.py` — The bar across the top, and what the window itself can be asked to do.
         - 📄 `overlay.py` — What stands over the panes instead of in one.
         - 📄 `panes.py` — The three panes, the sides a subpane anchors to in each, and nothing standing in either yet.
         - 📄 `swipe.py` — The run of views a pane shows one at a time, and the slide between them.
         - 📄 `window.py` — The window: a menu bar, three panes, and the boundaries between them.
-      - 📁 `icons/` — Lucide's line icons, tinted to the palette and handed out as `QIcon`s.
+      - 📁 `icons/` — Lucide line icons, tinted to the palette and returned as QPixmaps/QIcons.
         - 📁 `lucide/`
           - 📄 `LICENSE`
           - 📄 `arrow-left.svg`
@@ -292,57 +301,57 @@
           - 📄 `pin.svg`
           - 📄 `sliders-horizontal.svg`
           - 📄 `x.svg`
-      - 📁 `primitives/` — The shapes a view is built out of, owned by none of them.
-        - 📄 `banner.py` — The banner: what the application has to say about something it just did.
-        - 📄 `button.py` — The text button, in the four weights of emphasis a screen is allowed.
-        - 📄 `card.py` — The card: a titled panel with the four verbs that act on what it holds.
-        - 📄 `check.py` — The checkbox and the radio: one box, ticked or not, with its label beside it.
-        - 📄 `empty.py` — The empty state: a room with nothing in it, saying what would put something there.
-        - 📄 `facts.py` — The fact list: what is known about one thing, each name beside its answer.
-        - 📄 `field.py` — The text field, and the labelled frame with the focus ring around it.
-        - 📄 `menu.py` — The menu: a list of verbs standing over the work, grouped, with its keys shown.
-        - 📄 `meter.py` — The meter: a quantity drawn as a length, in a groove the length is read off.
-        - 📄 `nav.py` — The sections down the left of a card, and which one is being read.
-        - 📄 `pill.py` — The pill: a word saying what state a thing is in, with a dot beside it.
-        - 📄 `sections.py` — A card of sections: a list down the left, one of them read on the right.
-        - 📄 `segmented.py` — The segmented bar: a fixed few, side by side, exactly one of them on.
-        - 📄 `select.py` — The select: one of many, from a list that is not standing open.
-        - 📄 `slider.py` — The horizontal slider — the control the interactive loop exists for.
-        - 📄 `stack.py` — The ground a column of cards lives on, under the head every view wears.
-        - 📄 `table.py` — The ruled table: many rows of the same facts, with one of them picked out.
-        - 📄 `tabs.py` — The tab row: a few sections across the top, and which one the room shows.
-        - 📄 `view.py` — The head a pane wears, and the room under it: the chassis every view stands in.
+      - 📁 `primitives/` — Shared surfaces, controls, and marks that views compose but do not own.
+        - 📄 `banner.py` — Full-width status block: mark, stripe, title, and optional body.
+        - 📄 `button.py` — Text button in four emphasis weights: PRIMARY, DEFAULT, SUBTLE, GHOST.
+        - 📄 `card.py` — Titled panel with four verb icons; emits signals but does not act.
+        - 📄 `check.py` — Painted checkbox and radio — one class, distinguished by corner shape.
+        - 📄 `empty.py` — Dashed-outline empty state: a title saying what is missing, a body naming the next move.
+        - 📄 `facts.py` — Two-column grid of named facts about one thing, aligned on the widest name.
+        - 📄 `field.py` — Text field with labelled frame and focus ring.
+        - 📄 `menu.py` — Styled popup menu with grouped verbs, captions, and shortcut columns.
+        - 📄 `meter.py` — Bar drawn as a filled fraction of a groove; shared by card feet and table cells.
+        - 📄 `nav.py` — Section list with accent-edge selection; takes strings, reports an index.
+        - 📄 `pill.py` — Dot-and-word state indicator, painted inside a rounded outline.
+        - 📄 `sections.py` — A card of sections: nav list on the left, one section's body on the right.
+        - 📄 `segmented.py` — Segmented bar: a fixed few side by side, exactly one lit.
+        - 📄 `select.py` — Drop-down select: one of many, from a list that is not standing open.
+        - 📄 `slider.py` — Horizontal slider that lets the wheel past it.
+        - 📄 `stack.py` — Scrolling column of cards on a ground, under a View head.
+        - 📄 `table.py` — Ruled table with a single-row selection mark.
+        - 📄 `tabs.py` — Horizontal tab row: section names across the top, one open at a time.
+        - 📄 `view.py` — Titled head band and content area — the chassis every pane view stands in.
       - 📁 `view/` — The views: what stands in a pane, one folder each.
-        - 📁 `canvas/` — The canvas: what the work is looked at on, and what is drawn over it.
+        - 📁 `canvas/` — Aspect-locked surface with overlays drawn on top of its content.
           - 📁 `video_canvas/` — The video canvas: footage on the stage. Nothing is built here yet.
-          - 📄 `view.py` — The canvas as a stage: content held at its own shape, and the room around it.
+          - 📄 `view.py` — Aspect-preserving stage: centres content in the pane, letterboxes the rest.
         - 📁 `dev/` — The dev view: the application looked at by whoever is building it.
-          - 📁 `card_mockups/` — Card mock ups: the shapes a card could take, drawn beside each other.
-            - 📄 `look.py` — One way a card could look, and the handful of ways being considered.
-            - 📄 `view.py` — The looks laid out one under another, each shown selected and not.
+          - 📁 `card_mockups/` — Card mockups: the shapes a card could take, drawn side by side.
+            - 📄 `look.py` — Card-look candidates: dress × arrangement pairs for the gallery bench.
+            - 📄 `view.py` — Card-look gallery: each look drawn at rest and selected, side by side.
           - 📁 `icon_sheet/` — Icons: every vendored lucide glyph, in each ink a widget draws it in.
-            - 📄 `sheet.py` — What is vendored, what each glyph was vendored to say, and the inks it wears.
-            - 📄 `view.py` — The glyphs as a table: one row per icon, one column per way it is drawn.
-          - 📄 `gallery.py` — A scrolling column of alternatives, each under its name and its argument.
-          - 📄 `icon_grid.py` — All icons: every vendored glyph laid out to be looked through, nothing else.
-          - 📄 `view.py` — The dev bench as a card: the sections there are, and what each is for.
+            - 📄 `sheet.py` — Vendored glyphs grouped by role, with the inks each is drawn in.
+            - 📄 `view.py` — Icon table: one row per glyph, one column per ink it must survive.
+          - 📄 `gallery.py` — Scrolling column of named alternatives, each with a gloss and a drawing.
+          - 📄 `icon_grid.py` — Reflowing grid of every vendored glyph, for browsing by shape.
+          - 📄 `view.py` — Dev bench: section catalogue for internal tools.
         - 📁 `pipeline/` — The pipeline: the chain of steps in the open project.
-          - 📄 `view.py` — The chain as a view: the head over it, and the room its steps will stand in.
-        - 📁 `preferences/` — Preferences: what the application is set to, as against what a project holds.
-          - 📄 `minor_visuals.py` — How round the cards are and how large each kind of text is, on five sliders.
-          - 📄 `palettes.py` — The palettes on offer, light then dark, with the one in use marked.
-          - 📄 `view.py` — Preferences as a card: the sections there will be, and what each is for.
+          - 📄 `view.py` — Pipeline view: head and the room its steps will stand in.
+        - 📁 `preferences/` — Preferences: application-level settings, as against what a project holds.
+          - 📄 `minor_visuals.py` — Corner-radius and text-size sliders, live-previewed on the card they sit in.
+          - 📄 `palettes.py` — Palette chooser: every palette as a row, grouped light then dark.
+          - 📄 `view.py` — Preferences card: which sections exist and what each is for.
         - 📁 `project_list/` — The library: every project remembered, and which one the work is standing in.
-          - 📄 `card.py` — One project, as a card the pointer and the keyboard reach the same way.
-          - 📄 `project.py` — One project as the list reads it: a name and three lines already written.
-          - 📄 `view.py` — The library as a column of cards: which projects there are, and which is current.
-        - 📁 `step/` — The step: the one in the chain the user is standing on, and its knobs.
-          - 📄 `view.py` — The walked step as a view: the head over it, and the room its knobs will fill.
-      - 📄 `metrics.py` — How round the cards are and how large the text is, for every view at once.
-      - 📄 `palette.py` — The colours every view draws with, and the palettes they are drawn from.
+          - 📄 `card.py` — Project card: select, open, or reveal on disk.
+          - 📄 `project.py` — One project as the list reads it: a name and three display-ready lines.
+          - 📄 `view.py` — Project library: a column of cards with single selection and open/select verbs.
+        - 📁 `step/` — The selected step in the chain and its knobs.
+          - 📄 `view.py` — Single-step view: header and the room its knobs will fill.
+      - 📄 `metrics.py` — Corner radius and text sizes for every view — the shape counterpart to palette.
+      - 📄 `palette.py` — Eight colour roles, mutated in place so every holder sees the swap.
     - 📄 `__main__.py` — `uv run sieve`, or `uv run python -m sieve`.
-    - 📄 `relaunch.py` — Start SIEVE over: the same command, in place of the process running it.
-    - 📄 `settings.py` — What the user has set, kept where the next run will find it.
+    - 📄 `relaunch.py` — Replace the running process with a fresh run of the same command.
+    - 📄 `settings.py` — Flat JSON preferences at ``path()``, read once per run.
 - 📄 `.gitattributes`
 - 📄 `.gitignore`
 - 📄 `.python-version`

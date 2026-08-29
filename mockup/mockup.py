@@ -412,9 +412,9 @@ def notify_band_changed() -> None:
         widget.update()
 
 
-# The crops, each normalized to the source frame as (x, y, w, h). A rect param,
-# and the ADR's worked example: the box on the canvas and the spin boxes on the
-# card are two editors of one value, so neither can be the place it lives.
+# The crops, each normalized to the source frame as (x, y, w, h). A rect param
+# with two editors — the box on the canvas and the spin boxes on the card — so
+# neither of them is the place the value lives.
 #
 # A list rather than one rect because one step cuts every region the user wants
 # scored separately — replicate dishes in one recording, a treatment arena and
@@ -2403,7 +2403,7 @@ def _percent_box(value: float, tip: str) -> QDoubleSpinBox:
 
 
 def _crop_pair(first: int, second: int) -> QWidget:
-    """Two of the crop's four numbers, typed — ADR 12's other editor of the box.
+    """Two of the crop's four numbers, typed — the box's other editor.
 
     Typing goes through `set_crop`, the same clamp the drag does, and then pulls
     every editor including this one: a number the clamp moved has to come back

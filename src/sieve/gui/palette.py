@@ -1,45 +1,4 @@
-"""The colours every view draws with, and the palettes they are drawn from.
-
-Held above `frame` because the frame is not the only thing that reads them: the
-panes' contents paint cards, plots and footage against the same values,
-and a palette owned by the frame would be imported back up out of it by
-everything the frame contains.
-
-There are eight colours and they are *roles*, not preferences — a card asks for
-the panel fill and never for a particular grey, so a view is written once and a
-palette is what it comes out looking like. `Palette` is one full set of the
-eight, `PALETTES` is every set on offer, and the module constants are whichever
-set is currently in use.
-
-Those constants are mutated in place rather than rebound, and that is the whole
-of how a change reaches the tree. Every consumer writes `from sieve.gui.palette
-import PANEL`, which binds the object at import; rebinding the name here would
-change nothing anywhere else, and the alternative — rewriting every call site to
-go through the module — would put a dotted lookup in the paint path of the one
-loop this project promises not to stall. A `QColor` is mutable, so the object a
-view is already holding becomes the new colour and a `paintEvent` needs nothing
-said to it at all.
-
-What that does not reach is a stylesheet, which is a string built once from the
-values as they were. So `CHANGED` is emitted after the swap, and a widget that
-dressed itself with one re-runs its own sheet function on hearing it. The icons
-are the third case: a pixmap is drawn at a colour and cached on that colour's
-`rgba`, so a mutated colour is a cache miss rather than a stale hit — but a
-`QIcon` already handed to a button is a drawing that has to be made again, which
-is the holder's to do in the same slot.
-
-`current()` is what a chooser reads to mark the palette in use; nothing else
-should need it, since asking *which* palette is on is a different question from
-asking what colour to draw with, and only one of the two is a view's business.
-
-The choice outlives the process, and it is `use()` that writes it down rather
-than whatever called `use()`. A chooser that saved its own click would be right
-only while it was the only way to change one — the same argument the palette
-section makes for marking its rows off `CHANGED` instead of off the click — and
-a second caller, a hotkey or a system-theme follower, would silently not stick.
-Passing through here is what makes a palette change persistent, so there is one
-place that has to be reached and no way to change the palette that skips it.
-"""
+"""Eight colour roles, mutated in place so every holder sees the swap."""
 
 from __future__ import annotations
 
@@ -52,68 +11,34 @@ from sieve import settings
 
 
 class Palette(NamedTuple):
-    """One complete set of the eight roles, under a name and its argument.
+    """A named set of the eight colour roles.
 
-    Every field is a role rather than a colour: what changes between palettes is
-    the eight values, never which eight there are. A palette that left one out
-    would be one the tree draws with a hole in it, and a ninth added here is a
-    role every palette below has to answer.
-
-    `gloss` is what the choice is actually between. A list of names is a list of
-    moods; the line under each says what it is *for* — long sessions, projected
-    footage, a figure being screenshotted into a paper, an accent that survives
-    a colour-vision deficiency — and that is the half worth reading.
-
-    `dark` is not derivable from the values without picking a threshold, and a
-    threshold is a decision better made once by whoever chose the colours than
-    inferred at every call site. It is what sorts the list into the two groups
-    the user is really choosing between first.
+    Constraints on a new palette: a light one is not a dark one inverted — it
+    wants a smaller `panel`/`stack_bg` step, and `panel_hot` steps *darker*,
+    away from the panel. `scrim` stays dark and translucent even in light
+    palettes (a light scrim raises nothing and reads as fog), with lower alpha
+    there. `line` must be legible on `panel`. `accent` is the only hue any
+    palette commits to.
     """
 
     name: str
     gloss: str
     dark: bool
 
-    #: The ground the panes leave uncovered — the menu bar's strip, splitter
-    #: seams. Never a panel: it is what a panel is seen *against*.
     stack_bg: QColor
-
-    #: A pane's own fill, and the lighter one a control wears against it. In a
-    #: light palette `panel_hot` is the darker of the two, since the move that
-    #: means "the pointer is here" is a step away from the panel and not
-    #: unconditionally upward.
     panel: QColor
     panel_hot: QColor
-
-    #: Hairlines and dividers. Legible on `panel`; against `stack_bg` it is what
-    #: a seam is made of rather than a line drawn on one.
     line: QColor
-
-    #: What a view standing over the panes lays over them. Dark and translucent
-    #: in every palette, light ones included: the work is not being replaced,
-    #: only stood in front of, and dimming is what says so. A light scrim over
-    #: light panes would raise nothing and read as fog. Alpha is lower in the
-    #: light palettes because the same veil over a bright ground hides more.
     scrim: QColor
-
     text: QColor
     dim: QColor
-
-    #: The one colour that means *this is what you are acting on*: a hovered
-    #: seam, a selected crop, a detected block. It is the only hue any palette
-    #: here commits to, which is why they differ by it more than by their greys.
     accent: QColor
 
 
 def _c(*rgba: int) -> QColor:
-    """A colour from its channels. Written out rather than as a hex string so an
-    alpha is a fourth number instead of a convention about digit count."""
     return QColor(*rgba)
 
 
-#: The dark palettes. Dark is the default and the longer list because the work is
-#: footage: a bright surround around a video pane is what the eye adapts to, and
-#: everything shown in the frame is then judged against the wrong white.
 _DARK: tuple[Palette, ...] = (
     Palette(
         "slate",
@@ -180,27 +105,11 @@ _DARK: tuple[Palette, ...] = (
         dim=_c(130, 152, 159),
         accent=_c(92, 196, 214),
     ),
-    # The colour-vision-safe pair, and what that can and cannot mean here. The
-    # accents are Okabe & Ito's set (Okabe and Ito, *Color Universal Design*,
-    # 2008) — eight hues chosen to stay mutually distinct under protanopia,
-    # deuteranopia and tritanopia, and the set most reproducible work in the
-    # figure-drawing literature has settled on.
-    #
-    # But that set solves a problem this module does not have. Okabe–Ito is
-    # designed for *categorical* colour, where a reader must tell series apart
-    # by hue; a palette here commits to exactly one hue, against greys. So what
-    # makes these two safe is not the hue at all — it is that the greys carry no
-    # hue to be confused with the accent, and that the accent clears 4.5:1
-    # against `panel` on luminance alone, so a user who sees none of its colour
-    # still sees the selection. Borrowing the hue is what makes them *also* the
-    # right pair to sample a plot's series colours out of when the plotting
-    # views land, which is the reason to take the accents from a categorical set
-    # rather than tune two more one-offs.
-    #
-    # Two darks and not one because Okabe–Ito's blue and its warm end fail for
-    # different people: the blues are the axis tritanopia degrades, the warm end
-    # is the one protanopes see least brightly. Neither is a fallback for the
-    # other, so both are on offer and the gloss says which is which.
+    # Accents from Okabe & Ito (2008); neutral greys so the accent
+    # clears 4.5:1 on luminance alone regardless of colour vision.
+    # Two darks because the failures differ: blue is the axis tritanopia
+    # degrades, the warm end is what protanopes see least brightly —
+    # neither is a fallback for the other.
     Palette(
         "okabe-ito",
         "colour-vision safe: neutral grey, Okabe–Ito sky blue",
@@ -229,12 +138,6 @@ _DARK: tuple[Palette, ...] = (
     ),
 )
 
-#: The light palettes. Not a dark one inverted: a light surface wants a smaller
-#: step between `panel` and `stack_bg` than a dark one does, because the same
-#: difference in luminance reads as a bigger difference the brighter the ground.
-#: They exist for the two cases dark does not serve — a screen under room lights
-#: or daylight, and a pane about to be screenshotted into a figure whose journal
-#: prints on white.
 _LIGHT: tuple[Palette, ...] = (
     Palette(
         "paper",
@@ -288,11 +191,6 @@ _LIGHT: tuple[Palette, ...] = (
         dim=_c(100, 111, 128),
         accent=_c(62, 78, 168),
     ),
-    # The light half of the pair above, and the accent is Okabe–Ito's blue
-    # rather than its sky blue: the sky blue is what clears 4.5:1 against a dark
-    # panel, and the same hue against a near-white one is a step of almost
-    # nothing. Which end of a hue reads as the accent depends on which ground it
-    # is on, which is the reason this list is not the dark list inverted.
     Palette(
         "okabe-ito light",
         "colour-vision safe on white — for a figure or a bright room",
@@ -308,43 +206,19 @@ _LIGHT: tuple[Palette, ...] = (
     ),
 )
 
-#: Every palette on offer, dark first. One sequence rather than two exported
-#: lists, so a caller that wants the split makes it from `dark` and a caller that
-#: only wants "all of them, in order" does not have to concatenate anything.
 PALETTES: tuple[Palette, ...] = _DARK + _LIGHT
-
-#: What the application comes up in when nothing has been chosen. `slate`
-#: because it is the palette the tree was drawn against, so the default is the
-#: one every screenshot and every docstring's colour claim already describes.
 DEFAULT = _DARK[0]
-
-#: What the choice is called in the settings document. The *name* is stored and
-#: not the eight colours: a palette is a set of decisions this module is allowed
-#: to revise — a grey lifted, an accent retuned — and a document holding the
-#: values would pin a user to whichever version of `slate` they first launched.
-#: A name that no longer matches anything resolves to the default, which is the
-#: behaviour a renamed or retired palette should have.
 _KEY = "palette"
 
 
 class _Notifier(QObject):
-    """Carrier for the one signal. A `Signal` has to live on a `QObject`, and a
-    module is not one."""
-
     changed = Signal()
 
 
-#: Held so it is not collected out from under the signal — a bound `Signal`
-#: does not keep its owner alive.
+# prevent GC: a bound Signal does not prevent its owner's collection
 _notifier = _Notifier()
-
-#: The palette in use has been swapped. Whoever built a stylesheet out of these
-#: values, or handed a `QIcon` to a button, has to make it again; whoever paints
-#: in a `paintEvent` is already holding the new colours and needs only a repaint.
 CHANGED = _notifier.changed
 
-# The live colours. Empty here and filled by the `use()` at the bottom of the
-# module: two places stating slate's greys is one place for them to disagree.
 STACK_BG = QColor()
 PANEL = QColor()
 PANEL_HOT = QColor()
@@ -354,9 +228,6 @@ TEXT = QColor()
 DIM = QColor()
 ACCENT = QColor()
 
-#: `None` only during this module's own import, between the colours being
-#: declared and the `use()` at the foot filling them. Nothing outside can
-#: observe it: an importer holds the module only after that line has run.
 _current: Palette | None = None
 
 
@@ -367,20 +238,12 @@ def current() -> Palette:
 
 
 def use(palette: Palette) -> None:
-    """Draw everything in `palette` from here on, and in it again next run.
+    """Swap to palette; mutates live QColors in place so holders see the change.
 
-    Each live colour is assigned into rather than replaced, because that object
-    is what every view is already holding — see the module docstring. Asking for
-    the palette already in use redraws nothing rather than emitting: `CHANGED`
-    costs a stylesheet rebuild and an icon redraw everywhere in the tree, and a
-    chooser that re-picks the current row on every arrow key would pay it each
-    time.
-
-    It is still written down in that case, above the early return and not below
-    it. What the document holds and what the process is drawing in can differ —
-    an unreadable settings file leaves the run at the default with nothing
-    stored — and asking for the palette already on screen is exactly the gesture
-    a user makes to insist on it.
+    Written down *above* the no-change return, deliberately: the document and
+    the screen can disagree (an unreadable settings file leaves the run at the
+    default with nothing stored), and re-picking the palette on screen is the
+    user insisting on it.
     """
     global _current
     settings.remember(_KEY, palette.name)
@@ -402,17 +265,7 @@ def use(palette: Palette) -> None:
 
 
 def reset() -> None:
-    """Draw everything in the default palette again, and remember no choice.
-
-    Applied first and forgotten second, which is the only order that works:
-    `use()` writes down the palette it is handed, so a key cleared before the
-    call would be written straight back by it. What is left is the state a first
-    run is in, and that is the reason for forgetting rather than storing
-    `DEFAULT.name` — which palette is the default is a decision this module is
-    allowed to revise, on the same grounds `_KEY` gives for storing a name
-    rather than eight colours, and a document naming today's answer is a user
-    pinned to it for every run after.
-    """
+    """Revert to default and forget the stored choice."""
     use(DEFAULT)
     settings.forget(_KEY)
 
@@ -423,20 +276,7 @@ def rgb(color: QColor) -> str:
 
 
 def mix(start: QColor, end: QColor, fraction: float) -> QColor:
-    """A colour a fraction of the way from one role to another.
-
-    Here rather than in whichever widget wanted it first, because more than one
-    does and the states they want it for are the same state: a hovered card's
-    edge and a hovered button's fill are both *a step off the role it rests at,
-    toward the ink*. Taken as a step between two roles rather than as a ninth
-    and tenth colour, so every palette keeps answering eight questions and a
-    hover is not a decision each of them has to make again.
-
-    Whoever calls it calls it at the moment of drawing or of building a sheet,
-    and never keeps what comes back. The roles are mutated in place when the
-    palette changes, and a colour mixed off them and held would be the one thing
-    on screen still wearing the old greys.
-    """
+    """Lerp between two roles; do not cache — roles mutate on palette swap."""
     return QColor(
         round(start.red() + (end.red() - start.red()) * fraction),
         round(start.green() + (end.green() - start.green()) * fraction),
@@ -445,14 +285,7 @@ def mix(start: QColor, end: QColor, fraction: float) -> QColor:
 
 
 def _remembered() -> Palette:
-    """The palette last chosen, if it is still one of the palettes on offer.
-
-    Matched by name against `PALETTES` rather than trusted: the document is
-    written by a version of this module that may not be the one reading it, and
-    is a file a user is invited to edit. Anything that does not name a palette
-    here — a retired one, a typo, a number — comes up as the default, which is
-    what a first run does and needs no other handling.
-    """
+    """Stored palette by name, falling back to DEFAULT on mismatch."""
     name = settings.stored(_KEY)
     for palette in PALETTES:
         if palette.name == name:
@@ -460,9 +293,4 @@ def _remembered() -> Palette:
     return DEFAULT
 
 
-# At import, because the colours are what everything below this module is built
-# out of: a window that came up in the default and was re-dressed once the
-# settings were read would show the wrong palette for as long as it took, which
-# is a flash of the wrong application on every launch. Reading the document here
-# is the one disk touch on the way up, and it is a few hundred bytes.
 use(_remembered())

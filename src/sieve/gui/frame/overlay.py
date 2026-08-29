@@ -1,43 +1,8 @@
 """What stands over the panes instead of in one.
 
-Everything else the frame shows is a view in a pane (ADR-0001), or a position
-on a track inside one (ADR-0003), and both are the same claim: the window is
-divided, and what a thing is doing on screen is answered by which region it was
-handed. An overlay is the one arrangement that is not that — it takes no room
-from the panes, divides nothing, and covers all three at once.
-
-Which is what suits a view that is about the application rather than about the
-work. Preferences are read *instead of* the footage and the chain, not against
-them, so housing them in a pane would mean taking the canvas away for as long
-as they are up and then having to decide what to give back; and housing them in
-a swipe position would put them on the track ← and → walk, where they are not a
-step in the work at all.
-
-It covers the panes and not the menu bar. The bar is where this was asked for
-and is the one thing on screen that acts on the window rather than on the
-project; leaving it uncovered keeps what opened the overlay visible while it is
-open, and keeps the frame's top boundary where it sits at rest.
-
-Which is also what a view can be anchored *to*. A view may stand centred on the
-scrim or hang from a given x at the top of it, and the second is for one opened
-from a title still visible above it: dropped under that title, the card is read
-as belonging to what was clicked, where a centred one is read as belonging to
-the window. The caller names the x, because the overlay knows the surface and
-not what is drawn over it.
-
-More than one view may live on the scrim, and exactly one stands on it at a
-time. They are held together rather than the overlay being built per view,
-because there is one scrim, one Escape and one way back to the panes, and a
-second overlay would be a second answer to all three that could be up at the
-same time as the first. Which one is standing is the frame's to say, since the
-frame is what knows the user asked for preferences rather than for the bench.
-
-The scrim is what says *this is not a pane*: the work stays where it was and
-stays legible under it, and no boundary has moved, so nothing has to be put
-back when the overlay goes. Clicking it is the way out that needs nothing
-found, and Escape the one that needs no pointer — answered here rather than
-bound in `hotkeys.py`, because it means "close what is on top" and only the
-thing on top knows whether there is one.
+A scrim covers the panes (not the menu bar) and holds one view at a time —
+centred, or anchored to a given x for a card opened from a bar title. Multiple
+views live on the scrim; exactly one is visible. Escape and scrim-click dismiss.
 """
 
 from __future__ import annotations
@@ -48,71 +13,31 @@ from PySide6.QtWidgets import QVBoxLayout, QWidget
 
 from sieve.gui.palette import SCRIM
 
-#: How far the scrim shows around whatever is standing on it. Enough that the
-#: view over the panes is read as being over them and not as a pane that just
-#: arrived, at every window size the frame opens at.
 _MARGIN = 40
-
-#: The scrim left above a view that was anchored instead of centred. Short
-#: where `_MARGIN` is generous, and deliberately: the anchored view is standing
-#: under the thing that opened it, and a full margin there would put a band of
-#: scrim between the two wide enough to read as a gap rather than as an
-#: attachment. Not zero — the view is still on the scrim and not on the bar.
-_GAP = 6
+_GAP = 6  # top margin for an anchored view — reads as attached to the bar title
 
 
 def _wide(view: QWidget) -> int:
-    """How wide the layout will draw `view`, before it has drawn it once.
-
-    Its hint held to its own bounds, and not the hint alone: a view that fixed
-    its width did so past a hint that still reports what its contents asked
-    for, and reading the hint would under-measure a card by however much it
-    widened itself — which is exactly the case an anchor has to fit.
-    """
+    """Effective width: sizeHint clamped to min/max (hint alone under-measures fixed-width views)."""
     return min(max(view.sizeHint().width(), view.minimumWidth()), view.maximumWidth())
 
 
 class Overlay(QWidget):
-    """A surface the size of what it covers, with one view standing on it.
+    """A scrim parented to the pane host, sized by event filter (not layout — that would steal pane room)."""
 
-    Parented to the widget it covers rather than to the window, so what "all of
-    it" means is that widget's rectangle and nothing here has to know the menu
-    bar's height. It follows the host's resizes by watching it: the host lays
-    out panes, and an overlay added to that layout would be a fourth thing in
-    the column taking room from them.
-    """
-
-    #: The cover has gone, however it was asked to. Two of the three ways out
-    #: are the overlay's own — the scrim and Escape — so a frame that had to be
-    #: told about the third would learn about a closed overlay only when it was
-    #: the one that closed it.
-    dismissed = Signal()
+    dismissed = Signal()  # scrim-click or Escape closed the overlay
 
     def __init__(self, host: QWidget) -> None:
         super().__init__(host)
-        #: Where the view stands. Margined rather than filling, so the scrim is
-        #: visible around it wherever `_place` puts it.
         self.body = QVBoxLayout(self)
         self.body.setSpacing(0)
-        #: Where the last raise asked the view's left edge to sit, or `None` for
-        #: centred. Kept because a resize has to place the view again and the
-        #: caller is not there to be asked a second time.
-        self._left: int | None = None
-        # It answers Escape, so it has to be able to hold focus; nothing behind
-        # it is reachable while it is up, which is the point of covering them.
-        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self._left: int | None = None  # anchor x, or None for centred; kept for resize
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)  # must hold focus for Escape
         host.installEventFilter(self)
         self.hide()
 
     def stand(self, view: QWidget) -> None:
-        """Make `view` the one on the scrim, and hide whatever was.
-
-        Separate from `raise_over` because they answer different questions —
-        which view, and where it sits — and only one of them changes when the
-        window is resized. Called before raising rather than as part of it, so
-        an overlay that is already up can be turned to another view without
-        going down and coming back.
-        """
+        """Show `view`, hide the rest. Can switch views without dismissing."""
         for index in range(self.body.count()):
             standing = self.body.itemAt(index).widget()
             if standing is not None:
@@ -120,19 +45,7 @@ class Overlay(QWidget):
         self._place()
 
     def raise_over(self, left: int | None = None) -> None:
-        """Cover the host, in front of whatever it is showing, and take focus.
-
-        The geometry is set here as well as on resize: the overlay is built
-        before the window is first shown, so the host's rectangle at the time
-        this was constructed is not the one it is being asked to cover.
-
-        `left` is where the view's left edge goes, in the host's own x, for one
-        that reads as hanging off whatever opened it; `None` centres it, which
-        is what suits a view with nothing on screen to hang from. Taken per
-        raise rather than held: what a view hangs from is the caller's, and a
-        bar's titles are only as wide as the platform drew them, so the number
-        is worth re-reading each time it is asked for.
-        """
+        """Cover the host and take focus. `left` anchors; None centres."""
         host = self.parentWidget()
         if host is not None:
             self.setGeometry(host.rect())
@@ -143,16 +56,7 @@ class Overlay(QWidget):
         self.setFocus(Qt.FocusReason.OtherFocusReason)
 
     def _place(self) -> None:
-        """Put the view where the last raise asked for, at the size the overlay
-        is now. Both are needed: the anchor is what the caller wants, and how
-        much of it can be honoured depends on a width that changes under it.
-
-        The alignment is set on the view and not on the layout: a layout is
-        aligned within the item that holds it, and this one is the widget's
-        own, so the flag would have nothing to be aligned against. Nothing to
-        place before the frame has stood a view here — the overlay is built
-        first and handed its view after, and the host can resize in between.
-        """
+        """Position the standing view — centred or anchored at `_left`."""
         view = self._view()
         if view is None:
             return
@@ -166,26 +70,11 @@ class Overlay(QWidget):
         self.body.setContentsMargins(self._inset(view), _GAP, _MARGIN, _MARGIN)
 
     def showing(self, view: QWidget) -> bool:
-        """Is `view` the one currently standing, and is the scrim up at all?
-
-        Asked by whoever can be pressed twice: the second press means "put this
-        away" only when the thing it opens is what is already there, and the
-        same press while another view is standing is a request to turn the
-        overlay to this one.
-        """
+        """True if the scrim is up and `view` is the one standing."""
         return self.isVisible() and self._view() is view
 
     def _view(self) -> QWidget | None:
-        """Whichever view is standing on the scrim, or nothing yet.
-
-        The visible one and not the first: a layout ignores a hidden widget, so
-        the others take no room, but `itemAt(0)` would still hand back the view
-        that happens to have been added first — and the anchor and the inset
-        would then be measured against a card the user cannot see.
-
-        Nothing standing is a real answer and not an error. The overlay is built
-        before the frame hands it any view, and the host can resize in between.
-        """
+        """The visible view, not just itemAt(0) — hidden views are still in the layout."""
         for index in range(self.body.count()):
             view = self.body.itemAt(index).widget()
             if view is not None and not view.isHidden():
@@ -193,23 +82,12 @@ class Overlay(QWidget):
         return None
 
     def _inset(self, view: QWidget) -> int:
-        """The asked-for anchor, unless the view would hang off the right edge.
-
-        A view standing on the scrim is fixed-size, so nothing shrinks it back
-        into view: the anchor is what gives, sliding the card left until the
-        scrim shows down its right side again. Narrow enough and it lands flush
-        at 0, which is the point past which the window is too small to both
-        honour the anchor and stay inside itself.
-        """
+        """Left margin: the anchor clamped so the view stays inside the scrim."""
         room = self.width() - _wide(view) - _MARGIN
         return max(0, min(self._left or 0, room))
 
     def dismiss(self) -> None:
-        """Uncover the panes. Nothing to put back — nothing was taken.
-
-        Dismissing what is already down is nothing, so the window may call this
-        without first asking whether the user got there before it.
-        """
+        """Hide the scrim. Idempotent."""
         if not self.isVisible():
             return
         self.hide()
@@ -228,26 +106,12 @@ class Overlay(QWidget):
         painter.end()
 
     def mousePressEvent(self, event) -> None:
-        """A click on the scrim is a click outside, and closes.
-
-        Where the pointer landed is asked of the geometry and not inferred from
-        having been reached: a press on a widget that does not want it is
-        *ignored* rather than consumed, and Qt walks it up to the parent — so a
-        view whose card is a plain surface, and not only its buttons, hands the
-        overlay every click on its own background. Read that as a click outside
-        and preferences close under the finger of whoever was reaching for a
-        control. `childAt` separates the two cases the arrival of the event
-        cannot: nothing under the pointer is the scrim, and anything under it is
-        the view, whether or not the view had a use for the press.
-        """
+        # childAt distinguishes scrim from view — ignored presses on a view's
+        # background bubble up here, so position alone is ambiguous.
         if self.childAt(event.position().toPoint()) is None:
             if event.button() == Qt.MouseButton.LeftButton:
                 self.dismiss()
-        # Accepted either way, landed on or not. What is behind the scrim is out
-        # of reach while it is up, and a press left ignored here is one Qt hands
-        # on to the host — the panes, which would then act on a click the user
-        # aimed at what is covering them.
-        event.accept()
+        event.accept()  # never leak to the panes underneath
 
     def keyPressEvent(self, event) -> None:
         if event.key() == Qt.Key.Key_Escape:

@@ -78,7 +78,11 @@ class ProjectCard(QFrame):
         self._verbs = {
             "arrow-right": self._verb("arrow-right", "Open this project", self.opened),
             "folder-open": self._verb(
-                "folder-open", f"Show {self.project.folder} on disk", self._reveal
+                "folder-open",
+                f"Show {self.project.folder} on disk" if self.project.folder
+                else "This recording is not on this filesystem",
+                self._reveal,
+                enabled=bool(self.project.folder),
             ),
             "x": self._verb(
                 "x", "Remove from the library — the recording on disk stays", self.removed
@@ -97,12 +101,21 @@ class ProjectCard(QFrame):
     def _remeasure(self) -> None:
         self.setStyleSheet(_sheet(self._selected))
 
-    def _verb(self, glyph: str, tip: str, act) -> QToolButton:
+    def _verb(self, glyph: str, tip: str, act, *, enabled: bool = True) -> QToolButton:
         button = _button(glyph, tip)
         button.clicked.connect(act)
+        button.setEnabled(enabled)
         return button
 
     def _reveal(self) -> None:
+        """Open the containing folder. Nothing to open is not an error.
+
+        A source whose address is a scheme has no folder, and the button is
+        already disabled; the guard is here as well because a disabled button
+        is a fact about one widget and this is a fact about the address.
+        """
+        if not self.project.folder:
+            return
         QDesktopServices.openUrl(QUrl.fromLocalFile(self.project.folder))
 
     def set_selected(self, selected: bool) -> None:

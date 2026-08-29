@@ -1,8 +1,19 @@
 """What can be said about a recording without opening it.
 
-Suffix and size, which cost a stat. The headers — codec, dimensions, frame
+Kind and size, which cost a stat. The headers — codec, dimensions, frame
 rate, duration — are what a card should really say, and they belong to
 whichever source tool can open the file rather than here.
+
+**An address is not a path**, and this assumed one until three sources
+disagreed
+(`docs/findings/2026.08.29-what-two-more-sources-found-the-contract-cannot-say.md`).
+`Source.handles` takes a `str` and the contract never says file: a folder of
+stills, a camera and a generator all have addresses. `kind` returned an empty
+string for a directory and `size` stated the directory entry — **4 KB for
+twelve images**, wrong rather than absent, which is worse. Both now ask what
+kind of address they were handed before saying anything about it, and both
+answer nothing at all for one that is not on this filesystem. Nothing here
+opens anything to find out; that is still a source tool's job.
 
 **Which files SIEVE will take is not decided here, and was.** A list of
 containers is a decoder's opinion, and one sitting in the substrate is
@@ -32,15 +43,52 @@ _UNITS = ("bytes", "KB", "MB", "GB", "TB")
 _STEP = 1024
 
 
-def kind(path: Path) -> str:
-    """The recording's container as the card says it: MP4, MKV, MOV."""
+def on_disk(address: str) -> bool:
+    """Is this address something this filesystem has?
+
+    A scheme is not, and the checks below would otherwise answer about a path
+    that was never meant: `Path("synthetic:frames=40").stat()` asks about a
+    file in the working directory whose name happens to contain a colon.
+    """
+    try:
+        return Path(address).exists()
+    except OSError:
+        return False
+
+
+def kind(address: str) -> str:
+    """What the card calls it: MP4, MKV, MOV — or FOLDER, or the scheme.
+
+    A suffix is a filesystem fact and a card has to print something. It names
+    what the address is called, never what SIEVE can do with it.
+    """
+    scheme, sep, _ = address.partition(":")
+    if sep and len(scheme) > 1 and not Path(address).exists():
+        # A drive letter is one character, so `C:\...` is not a scheme.
+        return scheme.upper()
+    path = Path(address)
+    if path.is_dir():
+        return "FOLDER"
     return path.suffix.lstrip(".").upper()
 
 
-def size(path: Path) -> str:
-    """How big the file is, or an empty string if it cannot be asked."""
+def size(address: str) -> str:
+    """How big it is, or an empty string where that cannot be said.
+
+    A directory is summed over the files directly in it, because the entry's
+    own size is an artefact of the filesystem rather than a fact about the
+    recording. Not recursive: a source that reads a tree can say so itself,
+    and walking somebody's whole archive to draw one card is the cost
+    `docs/findings/2026.08.21-keyframe-index-is-cheap-and-the-gop-is-fixed.md`
+    refuses at the moment somebody has only just pointed at something.
+    """
+    path = Path(address)
     try:
-        count = float(path.stat().st_size)
+        if path.is_dir():
+            count = float(sum(entry.stat().st_size
+                              for entry in path.iterdir() if entry.is_file()))
+        else:
+            count = float(path.stat().st_size)
     except OSError:
         return ""
     for unit in _UNITS:

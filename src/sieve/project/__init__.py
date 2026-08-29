@@ -17,7 +17,7 @@ tool's job.
 
 from __future__ import annotations
 
-from sieve.project.footage import kind, size
+from sieve.project.footage import kind, on_disk, size
 from sieve.project.library import Entry, Library, ago
 
 __all__ = [
@@ -25,5 +25,6 @@ __all__ = [
     "Library",
     "ago",
     "kind",
+    "on_disk",
     "size",
 ]

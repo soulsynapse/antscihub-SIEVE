@@ -47,6 +47,7 @@
   - 📄 `TODO.md`
   - 📄 `VOCAB.md`
   - 📄 `architecture-leads.md`
+  - 📄 `kendricks-understanding.md`
   - 📄 `vision-and-notes.md`
 - 📁 `experiments/`
   - 📁 `decode-experiments/`

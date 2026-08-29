@@ -9,7 +9,6 @@ hands back when somebody asks for a row to be opened or removed.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
 
 from sieve.project import footage
 from sieve.project.library import Entry, ago
@@ -44,11 +43,17 @@ def _holds(entry: Entry) -> str:
     A missing recording says so on the line that would have described it: the
     drive is unplugged or the file has moved, and that is the one fact somebody
     scanning the list needs before they act on the row.
+
+    `footage` takes the address as written. Wrapping it in a `Path` first is
+    what made a folder of stills read as having no kind and a size of 4 KB —
+    the address is a string in the contract and the assumption that it names a
+    file belonged to nothing but this line and the two it called.
     """
-    video = Path(entry.video)
     if not entry.available:
         return "not where it was"
-    return " · ".join(part for part in (footage.kind(video), footage.size(video)) if part)
+    return " · ".join(
+        part for part in (footage.kind(entry.video), footage.size(entry.video)) if part
+    )
 
 
 def _when(entry: Entry) -> str:

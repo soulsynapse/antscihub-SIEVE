@@ -5,8 +5,8 @@ about somebody's working life rather than about any recording: two people
 opening the same file each have their own list, and a recording handed to a
 colleague does not arrive already in theirs.
 
-**Keyed by the recording's resolved path, which is location and not
-identity.** The key answers which row a file on this machine belongs to, and
+**Keyed by the recording's address — resolved when that address is a path,
+which is location and not identity.** The key answers which row a file on this machine belongs to, and
 nothing beyond that: the same recording is one path on a desktop and another
 on a cluster, and one renamed in place becomes a new row with the old one
 left pointing at nothing. That is the right trade for a list that never
@@ -18,6 +18,14 @@ substitution too. Nothing writes one yet. When something does, it is the
 identity and this stays the location; a durable record that named a
 recording by this key would be naming where it was on one machine on one
 day.
+
+An address is not always a path. `Source.handles` takes a `str` and the
+contract never says file, so a folder of stills and a generator are addresses
+too, and resolving one of those against the working directory invented a path
+nobody meant — measured in
+`docs/findings/2026.08.29-what-two-more-sources-found-the-contract-cannot-say.md`,
+where `synthetic:frames=40` became a row under this repository's own
+directory. What is not on this filesystem is kept verbatim and is its own key.
 
 **A recording that has gone is kept and marked, never dropped.** An external
 drive that is not plugged in is the ordinary case, and a library that forgot a
@@ -47,6 +55,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from sieve import settings
+from sieve.project import footage
 
 _FILE = "library.json"
 
@@ -91,13 +100,34 @@ class Entry:
 
     @property
     def folder(self) -> str:
-        """Where the recording sits. For a card offering to show it on disk."""
-        return str(Path(self.video).parent)
+        """Where the recording sits, or empty where that is not a place.
+
+        A folder of stills is its own folder; a file's is its parent; an
+        address this filesystem does not have has none, and saying so is what
+        lets a card decline to offer a verb rather than opening this
+        repository's directory because a scheme resolved into it.
+        """
+        if not footage.on_disk(self.video):
+            return ""
+        here = Path(self.video)
+        return str(here if here.is_dir() else here.parent)
 
     @property
     def available(self) -> bool:
-        """Is the recording there right now?"""
-        return Path(self.video).is_file()
+        """Is the recording there right now, as far as this can tell?
+
+        A path is asked of the filesystem — either a file or a directory of
+        stills, since both are ordinary recordings and `is_file` alone
+        reported a present folder as gone. An address that is not on this
+        filesystem answers `True`, which is not a claim that it is reachable:
+        it is this document declining to say. Only a source tool can answer
+        for a camera or a generator, and the library holds no registry on
+        purpose — a per-user list that had to load every tool to draw itself
+        is one that fails differently on every machine.
+        """
+        if footage.on_disk(self.video):
+            return True
+        return not Path(self.video).is_absolute()
 
     @property
     def last(self) -> str:
@@ -273,12 +303,20 @@ def ago(stamp: str, at: datetime | None = None) -> str:
 
 
 def _key(video: Path | str) -> str:
-    """One spelling per recording, so the same file is not two rows.
+    """One spelling per recording, so the same address is not two rows.
 
     This list's own key, and local to this machine. Nothing durable names a
     recording by it — see the module docstring for what would.
+
+    Resolved only where resolving means something. `Path.resolve` on an
+    address this filesystem does not have answers with the working directory
+    joined to it, which is a path that never existed and a row that can never
+    match again from another directory.
     """
-    return str(Path(video).resolve())
+    address = str(video)
+    if not footage.on_disk(address):
+        return address
+    return str(Path(address).resolve())
 
 
 def _complain(trouble: str) -> None:

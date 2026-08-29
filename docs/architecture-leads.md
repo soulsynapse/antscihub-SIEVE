@@ -155,3 +155,48 @@ cached prefix. Keeping that layer outside is ADR-0009 applied to
 experiments; the alternative is the framework that grows a loop over
 videos, then a configuration matrix, then plotting, until the core cannot
 change without breaking someone's figure script.
+
+## A parameter is a port
+
+A threshold gated on an upstream computation and a step consuming a previous
+step's output are the same edge; what differs is that one is tied to a frame
+and a time and the other is not. That makes position-indexing a property of
+the edge rather than a category of thing on either end, and the parameter/input
+distinction thinner than it looks — a constant is a value whose declaration
+ignores position, which is ADR-0006's declaration in its degenerate case rather
+than a second mechanism beside it. The lead: parameters are ports on that one
+graph, and a port nothing satisfies is a pipeline that refuses to run rather
+than one that runs on a default.
+
+What stays a real distinction is not parameter-versus-input but provenance —
+when the value is known and who supplies it. Authored before the run, produced
+during it, or read from a document, which is the mode
+[ADR-0011](adr/ADR-0011-a-pipeline-is-not-a-property-of-a-recording.md) mints
+parameter documents for: a value an optimiser or a script produced has to be
+addressable, or its generator ends up rewriting a document SIEVE also authors.
+A port declares what it needs and never where to get it — naming a location
+inside the document that travels is the failure that ADR records against
+DeepLabCut's `project_path`.
+
+Trigger: minted with the pipeline's persistent format, alongside the lead
+below and the two above it — they constrain each other and want deciding
+together.
+
+## A fan-out names its axis
+
+A crop that is four replicate boxes fans the graph out to four branches, and
+the same is wanted for a threshold varied deliberately or proposed by an
+optimiser. Where it gets decided is two ports fanning out at once: three crops
+and four thresholds is twelve branches or an error, and every system that has
+faced this makes the author say which — Nextflow separates `combine` from
+`join`, Snakemake's `expand` is cartesian unless passed `zip`, GNU parallel
+spells the difference `:::` against `:::+`. The lead is that the choice is
+offered at the join, and that the axis carries a name with labelled
+coordinates, because the names buy what the choice does not: replicate 3 in one
+recording is the same replicate in another, so pooling aligns by name rather
+than by the order somebody's hand moved when they drew the boxes. Each branch
+keys independently, which is ADR-0005 and ADR-0010 already — a coordinate is
+something consumed — and that is what lets a fifth box re-run one branch and
+reuse four, which is the interactive loop surviving the edit it will see most.
+
+Trigger: as above.

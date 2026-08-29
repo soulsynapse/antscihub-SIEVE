@@ -13,6 +13,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QFileDialog,
     QMainWindow,
+    QMessageBox,
     QSplitter,
     QVBoxLayout,
     QWidget,
@@ -30,7 +31,8 @@ from sieve.gui.frame.panes import (
     build_seam,
 )
 from sieve.gui.frame.swipe import POSITIONS, Arrows, build_swipe
-from sieve.project import Library, dialog_filter
+from sieve.project import Library
+from sieve.registry import load as load_tools
 from sieve.relaunch import relaunch
 from sieve.gui.view.canvas import Canvas
 from sieve.gui.view.dev import Dev
@@ -62,6 +64,9 @@ class MainWindow(QMainWindow):
         self.right.body.addWidget(self.swipe)
 
         self.library = Library()
+        # Loaded once: which files can be opened is a question for the source
+        # tools that are present, and SIEVE holds no list of its own.
+        self.tools = load_tools()
         self.projects = ProjectList()
         self.swipe.position(POSITIONS.index("project")).body.addWidget(self.projects)
         self.projects.set_arrows(Arrows(self.swipe))
@@ -157,9 +162,22 @@ class MainWindow(QMainWindow):
         try: the selection stays where the user left it.
         """
         chosen, _filter = QFileDialog.getOpenFileName(
-            self, "Add a project — the recording it is about", "", dialog_filter()
+            self,
+            "Add a project — the recording it is about",
+            "",
+            self.tools.dialog_filter(),
         )
         if not chosen:
+            return
+        if self.tools.source_for(chosen) is None:
+            # The filter is a hint and this is the gate, so a file picked
+            # through "All files" is refused here rather than becoming a row
+            # nothing can open.
+            QMessageBox.warning(
+                self,
+                "No source tool takes that file",
+                f"Nothing loaded can open {Path(chosen).name}.",
+            )
             return
         entry = self.library.add(Path(chosen))
         self.show_library(standing=entry.video)

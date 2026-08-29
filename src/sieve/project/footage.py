@@ -1,16 +1,25 @@
 """What can be said about a recording without opening it.
 
-Suffix and size, which cost a stat. The headers — codec, dimensions, frame rate,
-duration — cost one container open and are what a card should really say; they
-land here when a decoder is a runtime dependency of the application rather than
-of the experiments, and until then the library is honest about knowing only what
-the filesystem knows.
+Suffix and size, which cost a stat. The headers — codec, dimensions, frame
+rate, duration — are what a card should really say, and they belong to
+whichever source tool can open the file rather than here.
+
+**Which files SIEVE will take is not decided here, and was.** A list of
+containers is a decoder's opinion, and one sitting in the substrate is
+ADR-0009's accretion arriving one reasonable format request at a time: every
+lab with a camera writing something ffmpeg does not read is an edit to that
+frozenset. The question is now asked of the loaded source tools, through
+`sieve.registry` — `source_for` decides, and a tool's `patterns` only hint to
+a file chooser.
+
+`kind` survives because a suffix is a filesystem fact and a card has to print
+something. It names what the file is called, not what SIEVE can do with it.
 
 What this must not grow is a frame table. Demuxing every packet is seconds per
 file on the footage this tree runs on
-(`docs/findings/2026.08.21-keyframe-index-is-cheap-and-the-gop-is-fixed.md`), and
-paying it when somebody has only just pointed at a file would make adding a
-recording feel like importing one.
+(`docs/findings/2026.08.21-keyframe-index-is-cheap-and-the-gop-is-fixed.md`),
+and paying it when somebody has only just pointed at a file would make adding
+a recording feel like importing one.
 
 Nothing here imports Qt.
 """
@@ -19,29 +28,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-#: What SIEVE will offer to open. A first filter and not a claim — the file
-#: still has to open, which nothing here can yet ask it to do.
-VIDEO_SUFFIXES = frozenset(
-    {".mp4", ".mkv", ".mov", ".avi", ".m4v", ".mts", ".mpg", ".mpeg", ".webm"}
-)
-
 _UNITS = ("bytes", "KB", "MB", "GB", "TB")
 _STEP = 1024
-
-
-def looks_like_footage(path: Path) -> bool:
-    return path.suffix.lower() in VIDEO_SUFFIXES
-
-
-def dialog_filter() -> str:
-    """The filter a file dialog offers, built from the suffixes above.
-
-    Built rather than written out beside them, because a pair that can disagree
-    is one that eventually does — and the way that failure shows up is somebody
-    unable to see a file SIEVE would happily have taken.
-    """
-    patterns = " ".join(f"*{suffix}" for suffix in sorted(VIDEO_SUFFIXES))
-    return f"Video ({patterns});;All files (*)"
 
 
 def kind(path: Path) -> str:

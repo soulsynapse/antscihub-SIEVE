@@ -44,6 +44,7 @@
   - 📄 `SIEVE-CAPABILITIES.md`
   - 📄 `TODO.md`
   - 📄 `VOCAB.md`
+  - 📄 `architecture-leads.md`
   - 📄 `vision-and-notes.md`
 - 📁 `experiments/`
   - 📁 `decode-experiments/`

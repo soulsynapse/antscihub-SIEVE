@@ -322,31 +322,31 @@
         - 📄 `tabs.py` — Horizontal tab row: section names across the top, one open at a time.
         - 📄 `view.py` — Titled head band and content area — the chassis every pane view stands in.
       - 📁 `view/` — The views: what stands in a pane, one folder each.
-        - 📁 `canvas/` — The canvas: what the work is looked at on, and what is drawn over it.
+        - 📁 `canvas/` — Aspect-locked surface with overlays drawn on top of its content.
           - 📁 `video_canvas/` — The video canvas: footage on the stage. Nothing is built here yet.
-          - 📄 `view.py` — The canvas as a stage: content held at its own shape, and the room around it.
+          - 📄 `view.py` — Aspect-preserving stage: centres content in the pane, letterboxes the rest.
         - 📁 `dev/` — The dev view: the application looked at by whoever is building it.
-          - 📁 `card_mockups/` — Card mock ups: the shapes a card could take, drawn beside each other.
-            - 📄 `look.py` — One way a card could look, and the handful of ways being considered.
-            - 📄 `view.py` — The looks laid out one under another, each shown selected and not.
+          - 📁 `card_mockups/` — Card mockups: the shapes a card could take, drawn side by side.
+            - 📄 `look.py` — Card-look candidates: dress × arrangement pairs for the gallery bench.
+            - 📄 `view.py` — Card-look gallery: each look drawn at rest and selected, side by side.
           - 📁 `icon_sheet/` — Icons: every vendored lucide glyph, in each ink a widget draws it in.
-            - 📄 `sheet.py` — What is vendored, what each glyph was vendored to say, and the inks it wears.
-            - 📄 `view.py` — The glyphs as a table: one row per icon, one column per way it is drawn.
-          - 📄 `gallery.py` — A scrolling column of alternatives, each under its name and its argument.
-          - 📄 `icon_grid.py` — All icons: every vendored glyph laid out to be looked through, nothing else.
-          - 📄 `view.py` — The dev bench as a card: the sections there are, and what each is for.
+            - 📄 `sheet.py` — Vendored glyphs grouped by role, with the inks each is drawn in.
+            - 📄 `view.py` — Icon table: one row per glyph, one column per ink it must survive.
+          - 📄 `gallery.py` — Scrolling column of named alternatives, each with a gloss and a drawing.
+          - 📄 `icon_grid.py` — Reflowing grid of every vendored glyph, for browsing by shape.
+          - 📄 `view.py` — Dev bench: section catalogue for internal tools.
         - 📁 `pipeline/` — The pipeline: the chain of steps in the open project.
-          - 📄 `view.py` — The chain as a view: the head over it, and the room its steps will stand in.
-        - 📁 `preferences/` — Preferences: what the application is set to, as against what a project holds.
-          - 📄 `minor_visuals.py` — How round the cards are and how large each kind of text is, on five sliders.
-          - 📄 `palettes.py` — The palettes on offer, light then dark, with the one in use marked.
-          - 📄 `view.py` — Preferences as a card: the sections there will be, and what each is for.
+          - 📄 `view.py` — Pipeline view: head and the room its steps will stand in.
+        - 📁 `preferences/` — Preferences: application-level settings, as against what a project holds.
+          - 📄 `minor_visuals.py` — Corner-radius and text-size sliders, live-previewed on the card they sit in.
+          - 📄 `palettes.py` — Palette chooser: every palette as a row, grouped light then dark.
+          - 📄 `view.py` — Preferences card: which sections exist and what each is for.
         - 📁 `project_list/` — The library: every project remembered, and which one the work is standing in.
-          - 📄 `card.py` — One project, as a card the pointer and the keyboard reach the same way.
-          - 📄 `project.py` — One project as the list reads it: a name and three lines already written.
-          - 📄 `view.py` — The library as a column of cards: which projects there are, and which is current.
-        - 📁 `step/` — The step: the one in the chain the user is standing on, and its knobs.
-          - 📄 `view.py` — The walked step as a view: the head over it, and the room its knobs will fill.
+          - 📄 `card.py` — Project card: select, open, or reveal on disk.
+          - 📄 `project.py` — One project as the list reads it: a name and three display-ready lines.
+          - 📄 `view.py` — Project library: a column of cards with single selection and open/select verbs.
+        - 📁 `step/` — The selected step in the chain and its knobs.
+          - 📄 `view.py` — Single-step view: header and the room its knobs will fill.
       - 📄 `metrics.py` — Corner radius and text sizes for every view — the shape counterpart to palette.
       - 📄 `palette.py` — Eight colour roles, mutated in place so every holder sees the swap.
     - 📄 `__main__.py` — `uv run sieve`, or `uv run python -m sieve`.

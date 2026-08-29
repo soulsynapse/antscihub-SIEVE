@@ -1,16 +1,4 @@
-"""The dev bench as a card: the sections there are, and what each is for.
-
-Which sections exist and in what order is the whole of this file. Each one's
-contents are its own folder's, so a section is added here by naming it and
-importing the surface beside it, and a section is worked on without this file
-being opened.
-
-The order is how often a thing is reached for, not how finished it is: the
-bench is opened with a key, and a key means the first section is where the user
-lands. Sections with nothing under them yet are listed anyway, for the reason
-preferences lists its four — a bench that grew an entry the day the tool behind
-it worked would never say what there is to look at.
-"""
+"""Dev bench: section catalogue for internal tools."""
 
 from __future__ import annotations
 
@@ -21,23 +9,11 @@ from sieve.gui.view.dev.card_mockups import CardMockups
 from sieve.gui.view.dev.icon_grid import IconGrid
 from sieve.gui.view.dev.icon_sheet import IconSheet
 
-#: How wide and tall the bench stands. Bigger than preferences, which holds rows
-#: of a label and a control: the bench holds surfaces drawn at the size they
-#: will really be seen at.
 _WIDTH = 940
 _HEIGHT = 560
 
 def _sections() -> tuple[Section, ...]:
-    """The sections, each a name, the one line saying what falls under it, and
-    the surface it opens — or nothing, for one that is a place rather than a
-    thing.
-
-    A function and not a module-level tuple, because a section with a body has
-    to build a widget and a widget cannot exist before the `QApplication` does.
-    Written as a constant it would run at import, and `import sieve.gui.view.dev`
-    would abort the process rather than raise — which is the one failure mode a
-    reader cannot debug from a traceback, since there is not one.
-    """
+    # Function, not module constant — widgets can't exist before QApplication.
     return (
         Section(
             "card mock ups",
@@ -64,7 +40,7 @@ def _sections() -> tuple[Section, ...]:
 
 
 class Dev(SectionCard):
-    """The bench: what there is to look at while building, one section at a time."""
+    """Dev bench shown as a sectioned card."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(

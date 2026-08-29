@@ -1,5 +1,7 @@
-"""The video canvas: footage on the stage. Nothing is built here yet."""
+"""The video canvas: footage on the stage."""
 
 from __future__ import annotations
 
-__all__: list[str] = []
+from sieve.gui.view.canvas.video_canvas.frame_view import FrameView
+
+__all__ = ["FrameView"]

@@ -7,9 +7,10 @@ positions. Preferences and dev bench share one overlay over the panes.
 
 from __future__ import annotations
 
+import threading
 from pathlib import Path
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QFileDialog,
     QMainWindow,
@@ -35,7 +36,9 @@ from sieve.gui.frame.swipe import POSITIONS, Arrows, build_swipe
 from sieve.project import Library
 from sieve.registry import load as load_tools
 from sieve.relaunch import relaunch
+from sieve.store import Store, opened
 from sieve.gui.view.canvas import Canvas
+from sieve.gui.view.canvas.video_canvas import FrameView
 from sieve.gui.view.dev import Dev
 from sieve.gui.view.pipeline import Pipeline
 from sieve.gui.view.preferences import Preferences
@@ -48,6 +51,12 @@ _WINDOW_HEIGHT = 540
 
 
 class MainWindow(QMainWindow):
+    #: An open runs on a worker and reports back through these. A widget
+    #: touched from a worker thread is the crash, not a style point, so
+    #: nothing crosses back except through a queued signal.
+    source_opened = Signal(object)
+    source_failed = Signal(str, str)
+
     def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle("SIEVE")
@@ -60,6 +69,13 @@ class MainWindow(QMainWindow):
 
         self.canvas = Canvas()
         self.left.body.addWidget(self.canvas)
+        self.frames = FrameView()
+        self.canvas.show_content(self.frames)
+        #: the recording that is open, if one is — closed before the next
+        self.store: Store | None = None
+        self._opening: str | None = None
+        self.source_opened.connect(self._source_landed)
+        self.source_failed.connect(self._source_broke)
 
         self.swipe = build_swipe("right")
         self.right.body.addWidget(self.swipe)
@@ -191,13 +207,103 @@ class MainWindow(QMainWindow):
         self.show_library(standing=entry.video)
 
     def open_project(self, project: Project) -> None:
-        """A project's open: record that it was, and slide to its chain."""
+        """A project's open: record that it was, slide to its chain, open it.
+
+        The open itself is on a worker because it is not cheap and cannot be
+        made cheap: ADR-0004 has the frame table built by demuxing the source
+        at open, so a file's whole packet stream is read before it can say
+        what it lists. Seconds of it, on the thread that draws, at the moment
+        somebody clicked — which is the freeze the storage shelf exists to
+        keep out of this loop.
+
+        Which tool opens it is asked again rather than trusted from the row.
+        The name recorded there says which one answered when the project was
+        made; the search path may have changed since, and a tool that is no
+        longer loaded has to fall back to whatever is.
+        """
         self.library.touch(project.video)
         self.show_library(standing=project.video)
         self.swipe_forward()
+        self._open_source(project.video)
+
+    # -- the open recording ------------------------------------------------
+
+    def _open_source(self, address: str) -> None:
+        """Resolve a source for *address* and open it off the GUI thread."""
+        if self.store is not None and self.store.address == address:
+            return
+        tool = self._source_for(address)
+        if tool is None:
+            self._source_broke(address, "nothing loaded reads frames out of it")
+            return
+        self._close_source()
+        self._opening = address
+        self.frames.show_frame(None)
+
+        def work() -> None:
+            # The walk to a first picture happens here too, not on the other
+            # side of the signal: a file cut mid-GOP answers None for its
+            # opening positions and charges a seek for each refusal, which is
+            # seconds on the footage in `video-tests/`. Everything expensive
+            # is on this side and the GUI thread is handed a frame.
+            try:
+                store = opened(tool, address)
+                position = store.first_deliverable()
+                frame = None if position is None else store.frame(position)
+            except Exception as trouble:  # noqa: BLE001 — a tool's failure is a fact
+                self.source_failed.emit(address, str(trouble))
+                return
+            self.source_opened.emit((store, frame))
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def _source_for(self, address: str):
+        """The tool the library row named, or whatever answers now.
+
+        Preferring the recorded name keeps a project on the producer it was
+        made with when both are loaded — which is what a key over its output
+        will have been folded under (ADR-0010).
+        """
+        entry = self.library.find(address)
+        named = entry.source if entry is not None else ""
+        if named:
+            for tool in self.tools.offering(FRAME):
+                if tool.name == named and tool.role.handles(address):
+                    return tool
+        return self.tools.source_for(address, FRAME)
+
+    def _source_landed(self, landed: tuple) -> None:
+        """An opened source and its first frame, back on the GUI thread."""
+        store, frame = landed
+        if store.address != self._opening:
+            store.close()   # the user moved on while it was opening
+            return
+        self._opening = None
+        self.store = store
+        self.canvas.set_aspect(store.aspect)
+        self.frames.show_frame(frame)
+
+    def _source_broke(self, address: str, trouble: str) -> None:
+        if address != self._opening and self._opening is not None:
+            return
+        self._opening = None
+        self.frames.show_frame(None)
+        QMessageBox.warning(
+            self,
+            "That recording could not be opened",
+            f"{Path(address).name}: {trouble}",
+        )
+
+    def _close_source(self) -> None:
+        if self.store is not None:
+            self.store.close()
+            self.store = None
 
     def remove_project(self, project: Project) -> None:
         """A project's ✕: out of the library. The recording is not touched."""
+        if self.store is not None and self.store.address == project.video:
+            self._close_source()
+            self.frames.show_frame(None)
         self.library.forget(project.video)
         self.show_library()
 

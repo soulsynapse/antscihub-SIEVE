@@ -330,7 +330,8 @@
         - 📄 `view.py` — Titled head band and content area — the chassis every pane view stands in.
       - 📁 `view/` — The views: what stands in a pane, one folder each.
         - 📁 `canvas/` — Aspect-locked surface with overlays drawn on top of its content.
-          - 📁 `video_canvas/` — The video canvas: footage on the stage. Nothing is built here yet.
+          - 📁 `video_canvas/` — The video canvas: footage on the stage.
+            - 📄 `frame_view.py` — One decoded frame on the stage, scaled to whatever room the canvas gave it.
           - 📄 `view.py` — Aspect-preserving stage: centres content in the pane, letterboxes the rest.
         - 📁 `dev/` — The dev view: the application looked at by whoever is building it.
           - 📁 `card_mockups/` — Card mockups: the shapes a card could take, drawn side by side.
@@ -363,6 +364,7 @@
     - 📄 `registry.py` — Which tools this SIEVE found, and which it could not load.
     - 📄 `relaunch.py` — Replace the running process with a fresh run of the same command.
     - 📄 `settings.py` — Flat JSON preferences at ``path()``, read once per run.
+    - 📄 `store.py` — What SIEVE has on hand from one open recording.
 - 📁 `tools/`
   - 📄 `video_file_source.py` — The video file source: frames off a container on disk, decoded with PyAV.
 - 📄 `.gitattributes`

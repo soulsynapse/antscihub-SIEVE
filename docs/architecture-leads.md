@@ -65,12 +65,28 @@ real byte does. The cost is one field now; the retrofit is orphaning every
 artifact in existence, silently. Not a standalone ADR — one clause in
 whatever ADR mints the artifact.
 
+## The pipeline document is the cluster handoff
+
+HPC batch is an aspiration, and it constrains the present: a pipeline's
+persistent form must be findable and executable by a process with no GUI
+attached, because a cluster job is exactly that process. One document, two
+consumers — the GUI edits what the headless runner executes — or the GUI's
+private reading becomes the only complete definition and the aspiration is
+foreclosed without anyone deciding to. v3 already held this shape; its
+pyproject names the saved project "the cluster handoff" and reasons about
+headless installs.
+
+Trigger: minted with the pipeline's persistent format — whose first-class
+reader is the headless runner, the GUI a client of the same reading.
+
 ## Correctness as relations, not examples
 
 Most of what SIEVE computes has no oracle — nothing says what a flow field
 should be — so a test written by running the code can only encode what the
-code did. v3 is the measurement: its `tests/` outgrew its `src/` in lines,
-example-based throughout, and none of it survived into this tree. The lead
+code did. v3 is the measurement
+(`docs/findings/2026.08.28-the-v3-suite-outweighed-its-program.md`): a
+suite larger than its program, example-based throughout, of which nothing
+survived into this tree. The lead
 is correctness stated as implementation-free relations instead: invariants
 over generated inputs, and relations between runs where neither output is
 checkable alone — a step downstream of a crop agrees with cropping its

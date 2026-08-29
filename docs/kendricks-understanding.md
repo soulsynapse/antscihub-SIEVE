@@ -40,10 +40,18 @@ Contracts exist so that whatever the SIEVE module is, adjusting how it works int
 
 Seams are in the Parnas sense: they hold a secret other things don't know about.
 
+
+
 Fuzzy understanding: SIEVE makes hard seams at folders and soft seams at files between folders. I think I want stuff in folders to follow some kind of contract so it can be standardized to the MCP but I'm not sure yet. This is definitely true of tools. If this is true of the GUI or Experiments, I am less clear.
 
 ### Stuff to build / hasn't been built yet
 
 - Automatic agentic MCP reference. Would be really valuable.
 - Organ design.
+
+### Food for thought
+
+Need to figure out the distinct seams. How is cache eviction handled/allocated so that it is responsive to the machine? How are machine specs given to whatever orchestrates that? What about timing and waste monitors/reporting?
+
+Do contracts need some sort of compute/resource arbitration handling?
 

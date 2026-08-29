@@ -345,7 +345,7 @@
           - 📄 `palettes.py` — Palette chooser: every palette as a row, grouped light then dark.
           - 📄 `view.py` — Preferences card: which sections exist and what each is for.
         - 📁 `project_list/` — The library: every project remembered, and which one the work is standing in.
-          - 📄 `card.py` — Project card: select, open, or reveal on disk.
+          - 📄 `card.py` — Project card: select, open, reveal on disk, or remove from the library.
           - 📄 `project.py` — One project as the list reads it: a name and two display-ready lines.
           - 📄 `view.py` — Project library: a column of cards, a + that adds one, and per-card verbs.
         - 📁 `step/` — The selected step in the chain and its knobs.

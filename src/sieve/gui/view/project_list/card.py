@@ -1,4 +1,4 @@
-"""Project card: select, open, or reveal on disk."""
+"""Project card: select, open, reveal on disk, or remove from the library."""
 
 from __future__ import annotations
 
@@ -51,7 +51,7 @@ def _button(glyph: str, tip: str) -> QToolButton:
 
 
 class ProjectCard(QFrame):
-    """A project on the surface: select it, open it, or go to it on disk."""
+    """A project on the surface: select it, open it, go to it, or drop it."""
 
     selected = Signal()
     opened = Signal()

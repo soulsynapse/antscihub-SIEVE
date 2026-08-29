@@ -1,19 +1,6 @@
-"""ADR-0010's tripwire: the tools' code moved and no author said so.
+"""ADR-0010 tripwire: hash per top-level def, static (no solver import).
 
-The ADR settles that a key folds a version its author bumps, and accepts
-that nothing decides a bump for them — what it refuses is the hash as
-arbiter, not as tripwire. This is the tripwire: a baseline records a hash
-per top-level definition in the tools module, and the contract fails when
-the code no longer matches it. The author answers by bumping the version
-where the answer moved, and in either case re-records the baseline
-(`uv run python -m checks.adr0010`) — both explicit acts, which is the
-point. The hash decides nothing and never reaches a key.
-
-Static on purpose: the tools module imports its solvers, and a check that
-had to import them could not run where the solvers are not installed.
-Hashes are taken per top-level def and class over text with carriage
-returns stripped, so a checkout that changed only line endings does not
-trip anything (the autocrlf note in CLAUDE.md, biting a third way).
+Hashes are CR-stripped so autocrlf-only checkouts don't trip.
 """
 
 from __future__ import annotations
@@ -30,12 +17,7 @@ RECORD_HINT = "uv run python -m checks.adr0010"
 
 
 def snapshot(tools_file: Path) -> dict:
-    """Per-definition hashes and the declared tool versions, from source.
-
-    `functions` maps each top-level def or class to a hash of its text;
-    `versions` maps each `Tool(name=..., version=...)` literal to its
-    version, read so a failure can say whether a bump already happened.
-    """
+    """Return {functions: {name: hash}, versions: {tool: version}} from source."""
     source = tools_file.read_bytes().decode("utf-8")
     tree = ast.parse(source)
     functions = {}

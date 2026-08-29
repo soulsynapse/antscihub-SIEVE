@@ -4,10 +4,21 @@ A form is which source pixels, at what sampling, in what pixel format. The
 rect is in the source's own coordinates so it survives every downstream
 resampling.
 
-**The construction lives here, not in any tool.** A form vocabulary exists so
-that two producers of one form agree byte for byte; a canonical construction
-copied into each tool is exactly two producers that will not. The tool
-decodes, the contract shapes.
+**The tool decodes, the contract shapes — and the split is exactly there.**
+Which source pixels and at what sampling is this module's, because a rect
+copied into each tool is two tools that will crop differently. What a pixel
+*is* belongs to whoever produced it: a decoder that already holds luma hands
+over luma, and this crops it.
+
+That is narrower than what this file used to claim, and the narrowing is the
+one correction experiment forced. The gray construction below was written
+from argument and never run; the session explorer took the decoder's plane
+and every measured number on the storage shelf came out of frames that did.
+Serving the plane instead of reconstructing gray from BGR is the difference
+between a crop and a whole-frame colour conversion — 8 ms against 18.7 on the
+footage in `video-tests/`. Where two producers of one form disagree in the low
+bits, they disagree because they are different instruments, and a construction
+here that overrode both would only hide it.
 
 **Domination has two grades and only one may be admitted.** A form on hand
 answers a request exactly when it is at source sampling over a rect
@@ -17,8 +28,9 @@ Anything already resampled resamples twice: showable, never storable.
 `build` refuses to resample, deliberately. Which resampler is canonical is a
 real decision — INTER_AREA, swscale and a decoder's own scaler give three
 different arrays — and it belongs with whoever builds the store and the proxy
-tier. Gray is BT.601 in OpenCV's fixed point, so this and `cv2.cvtColor`
-agree; the agreement is a convenience, and this function is the authority.
+tier. The gray branch is BT.601 in OpenCV's fixed point, which is what a
+producer that holds only colour pixels falls back to; a producer that holds
+luma serves it and passes through the crop alone.
 """
 
 from __future__ import annotations

@@ -40,6 +40,7 @@ from typing import Any
 
 import av
 import av.video.reformatter
+import numpy as np
 
 from sieve.contract import Tool
 from sieve.contract.edges import (
@@ -121,14 +122,16 @@ class _VideoFile:
         picture when a 1024-square region was asked for is 47.6 MB held where
         1 MB was wanted, and the tier stack this feeds never held more.
 
-        The conversion is *not* done here, and that is deliberate rather than
-        unfinished. This decoder's luma plane and `forms.build`'s gray are
-        different quantities — one is Y' as the encoder stored it, the other
-        is BT.601 over the decoded BGR — so serving gray from plane 0 would be
-        two producers of one form disagreeing in the low bits, which is the
-        thing `forms.py` exists to prevent. Refusing sends it to the one
-        authority. Which of the two `gray` should mean is a real question and
-        not this tool's to settle.
+        **Gray is served from plane 0, and that is the settled answer.** This
+        decoder's luma and BT.601 over the decoded BGR are different
+        quantities, and the one that is backed by measurement is the plane:
+        the session explorer took it, and every number on the storage shelf —
+        the ~120 fps sequential fill, the cut, the tuning loop — was measured
+        on frames that came out that way. The BT.601 construction was written
+        from argument and never run. Refusing gray here to send it to that
+        construction cost the whole 5.3K BGR reformat before a 1024-square
+        crop: 18.7 ms a frame against the plane's ~8, on a path where the
+        crop was supposed to be the cheap half.
         """
         if position is None:
             raise ValueError("a frame edge is positioned; pass a pts")
@@ -136,7 +139,7 @@ class _VideoFile:
             raise ValueError(f"{position} is not a frame this source listed")
         source = source_form(self._stream.codec_context.width,
                              self._stream.codec_context.height, "bgr")
-        if want.pix != "bgr" or not want.native or forms.grade(source, want) is None:
+        if not want.native or forms.grade(source, want) is None:
             return Answer(refusal=Refusal.FORM)
         ahead = (
             None
@@ -166,6 +169,13 @@ class _VideoFile:
                 continue
             self._cursor = frame.pts
             if frame.pts == position:
+                if want.pix == "gray":
+                    # No reformatter on this path at all: the plane is already
+                    # the wanted format, so a crop is a slice of it and the
+                    # 47.6 MB colour conversion never happens. `forms.build`
+                    # still does the cropping — the rect and the sampling stay
+                    # the contract's, only the pixels are the decoder's.
+                    return Answer(forms.build(_plane(frame), want))
                 whole = self._reformatter.reformat(
                     frame, format="bgr24"
                 ).to_ndarray()
@@ -214,6 +224,18 @@ class _VideoFile:
         )
         self._frames = self._container.decode(self._stream)
         self._cursor = None
+
+
+def _plane(frame) -> Any:
+    """Plane 0 as a height-by-width view, with the decoder's padding dropped.
+
+    A plane's rows are `line_size` wide and the picture is the left `width` of
+    each — slicing that off is what makes the result an array of the shape the
+    form names rather than one with a stride nobody downstream asked about.
+    """
+    plane = frame.planes[0]
+    flat = np.frombuffer(plane, dtype=np.uint8)[: frame.height * plane.line_size]
+    return flat.reshape(frame.height, plane.line_size)[:, : frame.width]
 
 
 def _handles(address: str) -> bool:
@@ -290,8 +312,10 @@ TOOLS = (
     Tool(
         name="video file source",
         #: Bumped when a change here would produce different bytes for one
-        #: position — a key over decoded pixels folds it (ADR-0010).
-        version=1,
+        #: position — a key over decoded pixels folds it (ADR-0010). 2: gray
+        #: is the decoder's luma plane, where it was BT.601 over the decoded
+        #: BGR. Every gray array this tool has ever produced is superseded.
+        version=2,
         role=Source(
             handles=_handles,
             open=_open,

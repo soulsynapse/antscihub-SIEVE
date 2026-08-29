@@ -302,25 +302,25 @@
           - 📄 `sliders-horizontal.svg`
           - 📄 `x.svg`
       - 📁 `primitives/` — Shared surfaces, controls, and marks that views compose but do not own.
-        - 📄 `banner.py` — The banner: what the application has to say about something it just did.
-        - 📄 `button.py` — The text button, in the four weights of emphasis a screen is allowed.
-        - 📄 `card.py` — The card: a titled panel with the four verbs that act on what it holds.
-        - 📄 `check.py` — The checkbox and the radio: one box, ticked or not, with its label beside it.
-        - 📄 `empty.py` — The empty state: a room with nothing in it, saying what would put something there.
-        - 📄 `facts.py` — The fact list: what is known about one thing, each name beside its answer.
-        - 📄 `field.py` — The text field, and the labelled frame with the focus ring around it.
-        - 📄 `menu.py` — The menu: a list of verbs standing over the work, grouped, with its keys shown.
-        - 📄 `meter.py` — The meter: a quantity drawn as a length, in a groove the length is read off.
-        - 📄 `nav.py` — The sections down the left of a card, and which one is being read.
-        - 📄 `pill.py` — The pill: a word saying what state a thing is in, with a dot beside it.
-        - 📄 `sections.py` — A card of sections: a list down the left, one of them read on the right.
-        - 📄 `segmented.py` — The segmented bar: a fixed few, side by side, exactly one of them on.
-        - 📄 `select.py` — The select: one of many, from a list that is not standing open.
-        - 📄 `slider.py` — The horizontal slider — the control the interactive loop exists for.
-        - 📄 `stack.py` — The ground a column of cards lives on, under the head every view wears.
-        - 📄 `table.py` — The ruled table: many rows of the same facts, with one of them picked out.
-        - 📄 `tabs.py` — The tab row: a few sections across the top, and which one the room shows.
-        - 📄 `view.py` — The head a pane wears, and the room under it: the chassis every view stands in.
+        - 📄 `banner.py` — Full-width status block: mark, stripe, title, and optional body.
+        - 📄 `button.py` — Text button in four emphasis weights: PRIMARY, DEFAULT, SUBTLE, GHOST.
+        - 📄 `card.py` — Titled panel with four verb icons; emits signals but does not act.
+        - 📄 `check.py` — Painted checkbox and radio — one class, distinguished by corner shape.
+        - 📄 `empty.py` — Dashed-outline empty state: a title saying what is missing, a body naming the next move.
+        - 📄 `facts.py` — Two-column grid of named facts about one thing, aligned on the widest name.
+        - 📄 `field.py` — Text field with labelled frame and focus ring.
+        - 📄 `menu.py` — Styled popup menu with grouped verbs, captions, and shortcut columns.
+        - 📄 `meter.py` — Bar drawn as a filled fraction of a groove; shared by card feet and table cells.
+        - 📄 `nav.py` — Section list with accent-edge selection; takes strings, reports an index.
+        - 📄 `pill.py` — Dot-and-word state indicator, painted inside a rounded outline.
+        - 📄 `sections.py` — A card of sections: nav list on the left, one section's body on the right.
+        - 📄 `segmented.py` — Segmented bar: a fixed few side by side, exactly one lit.
+        - 📄 `select.py` — Drop-down select: one of many, from a list that is not standing open.
+        - 📄 `slider.py` — Horizontal slider that lets the wheel past it.
+        - 📄 `stack.py` — Scrolling column of cards on a ground, under a View head.
+        - 📄 `table.py` — Ruled table with a single-row selection mark.
+        - 📄 `tabs.py` — Horizontal tab row: section names across the top, one open at a time.
+        - 📄 `view.py` — Titled head band and content area — the chassis every pane view stands in.
       - 📁 `view/` — The views: what stands in a pane, one folder each.
         - 📁 `canvas/` — The canvas: what the work is looked at on, and what is drawn over it.
           - 📁 `video_canvas/` — The video canvas: footage on the stage. Nothing is built here yet.

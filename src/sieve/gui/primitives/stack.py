@@ -1,32 +1,4 @@
-"""The ground a column of cards lives on, under the head every view wears.
-
-The other half of the card mock up. `card.py` took the card out of
-`mockup/paper_cards.py`; this takes what the card was standing in — the scrolling
-ground the cards are seen against, under the band across the top saying what the
-whole column comes to. A card is only ever seen in one of these, and the two were
-settled together: the card's fill is `PANEL` because the ground under it is
-`STACK_BG`, and either one moved without the other is a card that has stopped
-being a card on a ground.
-
-The band is `view.py`'s and was this file's, which is why this is a `View` and
-not a widget holding one. It moved the day a second pane wanted the same head: a
-head is what a *pane* wears, a column of cards is one thing a pane can hold, and
-a stack that kept its own band would be the second place that shape is decided.
-What is left here is everything about cards.
-
-What this adds to the head is a scrolling ground and the column on it. What it
-still does not hold is a selection: which card the user is standing on is the
-view's, for the reason `project_list/view.py` gives — exactly one row being
-current is a fact about the whole column, and a stack that owned it would be
-answering a question its caller has to answer anyway when the keyboard moves. So
-there is no `current()` here, and `ensure_visible` is the one thing the view asks
-of the scroll.
-
-The cards are `QWidget`, not `Card`. This is the ground and not the shape on it:
-the library's rows are a card of their own making (`project_list/card.py`), the
-empty-library sentence stands in the same column, and a stack that took only
-`Card` would have both of those reaching past it into the layout.
-"""
+"""Scrolling column of cards on a ground, under a View head."""
 
 from __future__ import annotations
 
@@ -44,42 +16,16 @@ from sieve.gui.palette import LINE, PANEL_HOT, STACK_BG, rgb
 from sieve.gui.primitives.view import PAD_X, View
 from sieve.gui.primitives.view import sheet as head_sheet
 
-#: The gap between cards, and deliberately not the margin around them. The
-#: mockup's 26 is room for something to be drawn *between* two cards — the
-#: chain's edges descend through it — and the ends, with nothing to carry, pay
-#: `_MARGIN` instead. The rows inside a card make the opposite bargain, one
-#: number for both (`sections.py`), because a gap there carries nothing.
-#:
-#: A view with nothing between its cards passes its own smaller `gap`, which is
-#: what the library does: at 26px two three-line rows read as two lists.
-#:
-#: The margin is the head's own left inset, read off it rather than written
-#: again, so the title stands on the same x as the cards below it and the whole
-#: view is read down one line.
+# Margin reuses the head's left inset so cards align with the title.
 _GAP = 26
 _MARGIN = PAD_X
 
-#: The scrollbar. Narrow, no arrows, and a handle in `LINE` that lifts to
-#: `PANEL_HOT` under the pointer: the bar says where in the column the view is,
-#: and the cards are what the eye finds first.
 _BAR_W = 8
 _BAR_MIN = 24
 
 
 def sheet() -> str:
-    """The stack's rules — the head's, and the ground's — for a caller that sets
-    a sheet of its own.
-
-    Handed out for the reason `gallery.sheet()` is: a second stylesheet set on a
-    widget inside this one replaces nothing, but a sheet set on an *ancestor*
-    reaches here and a view that dresses itself has to include these back. The
-    head's come along, because what such a caller has to put back is everything
-    a stack draws and not the half this file happens to still own.
-
-    Every rule is scoped to an object name, never to a bare class, because the
-    ground holds whatever the view put on it and a `QLabel` rule would reach into
-    all of it.
-    """
+    """Rules for callers that set an ancestor sheet (which would override these)."""
     return head_sheet() + f"""
         #stackscroll {{ background: {rgb(STACK_BG)}; border: 0; }}
         #stackground {{ background: {rgb(STACK_BG)}; }}
@@ -99,18 +45,7 @@ def sheet() -> str:
 
 
 class CardStack(View):
-    """A view whose room holds a scrolling column of cards on the ground.
-
-    Handed its title and its cards rather than knowing either: what a stack is a
-    stack *of* is the view's, and a stack that reached for a project or a step
-    would be the one file where two views' contents met — the same bargain
-    `card.py` makes one level down.
-
-    It scrolls unconditionally. Any column of these outgrows the pane before the
-    work does, and a stack that scrolled only when it had to would change its own
-    width at the moment a card was added — walking every card's right edge, and
-    with it every rule measured off a title.
-    """
+    """View holding a scrolling column of cards on a coloured ground."""
 
     def __init__(
         self,
@@ -126,9 +61,7 @@ class CardStack(View):
         self._column = QVBoxLayout(self._ground)
         self._column.setContentsMargins(_MARGIN, _MARGIN, _MARGIN, _MARGIN)
         self._column.setSpacing(gap)
-        # Last for good, so a short column sits under the band: cards go in
-        # before it, and the stretch is the one item this layout is guaranteed
-        # to still end with.
+        # Stretch stays last; cards insert before it.
         self._column.addStretch(1)
 
         self._scroll = QScrollArea()
@@ -136,8 +69,6 @@ class CardStack(View):
         self._scroll.setWidget(self._ground)
         self._scroll.setWidgetResizable(True)
         self._scroll.setFrameShape(QFrame.Shape.NoFrame)
-        # Never sideways. The cards take the column's width, and a card scrolled
-        # half out of the pane would hide the verbs at its right end.
         self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
 
         self.body().addWidget(self._scroll, 1)
@@ -145,11 +76,7 @@ class CardStack(View):
         for card in cards:
             self.add_card(card)
 
-        # Again, because the sheet is set on a widget whose children have to
-        # exist for the rules naming them to land on anything, and the head set
-        # it before this file's children were built. The subscription to the
-        # palette and to the sizes is the head's and is not made twice — see
-        # `view.py`.
+        # Re-set after children exist so object-name rules land.
         self._restyle()
 
     # -- the ground --------------------------------------------------------
@@ -159,47 +86,23 @@ class CardStack(View):
         self.insert_card(len(self.cards()), card)
 
     def insert_card(self, index: int, card: QWidget) -> None:
-        """A card at a position in the column. Out of range is clamped to the
-        ends, so a caller may hand this the result of an arithmetic."""
+        """Insert a card at *index*, clamped to bounds."""
         self._column.insertWidget(max(0, min(len(self.cards()), index)), card)
 
     def cards(self) -> tuple[QWidget, ...]:
-        """The cards in the column, in the order they stand in.
-
-        Read off the layout rather than kept in a list beside it. The layout is
-        already the answer to *what is in this column and in what order*, and a
-        second list saying the same is a second thing a subclass has to keep true
-        — the more so because a view over this keeps a list of its own rows, and
-        two attributes of one name on one object is exactly the collision a
-        primitive should not be able to cause.
-
-        Every item but the last, which is the stretch: see `__init__`.
-        """
+        """Cards in column order (excludes the trailing stretch)."""
         return tuple(
             self._column.itemAt(i).widget() for i in range(self._column.count() - 1)
         )
 
     def clear(self) -> None:
-        """Drop every card. Deleted and not merely taken out of the layout: a
-        card removed from the column is still a child of the ground, and a child
-        with no layout to place it keeps painting itself at whatever geometry it
-        last had."""
+        # deleteLater, not just removeWidget — an unplaced child still paints.
         for card in self.cards():
             self._column.removeWidget(card)
             card.deleteLater()
 
     def ensure_visible(self, card: QWidget) -> None:
-        """Scroll until this card is in the pane. The one thing the view asks of
-        the scroll, because the view is what moved the selection."""
         self._scroll.ensureWidgetVisible(card)
 
     def _sheet(self) -> str:
-        """The head's rules and the ground's, which is what a stack draws.
-
-        The hook and not the slot: *when* a sheet is re-set is the head's, and a
-        stack that overrode `_restyle` would be saying the same thing again in a
-        second place. The cards are still not touched either way — each is
-        subscribed to `CHANGED` itself, which is what lets a stack rebuild its
-        column without redressing anything.
-        """
         return sheet()

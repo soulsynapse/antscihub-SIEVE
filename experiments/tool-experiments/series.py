@@ -43,9 +43,11 @@ change upstream of the series names a different series and a change
 downstream of it — a threshold read off the numbers, a smoothing applied at
 display — names the same one and correctly reuses it. The half of that a
 key cannot derive is the step's own code, which is why `tools.Tool.key`
-folds a version its author bumps. Nothing here checks that it was bumped:
-a `field` edited without one names the series it just stopped agreeing
-with, and this file will hand back the old numbers as covered.
+folds a version its author bumps (ADR-0010). Nothing at run time checks it
+was bumped — the ADR's contract in `checks/` trips on the unaffirmed edit
+before it lands — so a `field` edited past that still names the series it
+just stopped agreeing with, and this file will hand back the old numbers
+as covered.
 
 **What is missing, stated so nobody assumes otherwise.** `get` answers for
 one row and nothing answers for a *span*: a consumer asking whether a

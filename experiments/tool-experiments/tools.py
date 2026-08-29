@@ -116,7 +116,7 @@ class Tool:
     sequential: bool = False
     #: what the field's answer depends on, and nothing downstream of it
     params: dict | None = None
-    #: bumped where `field` or `reduce` changes what it answers — see `key`
+    #: bumped where `field` or `reduce` changes what it answers (ADR-0010)
     version: int = 1
 
     def needs(self, row: int) -> tuple[int, ...]:
@@ -148,21 +148,13 @@ class Tool:
         would invalidate work whose own inputs never changed, which is the
         cache-key failure `docs/decode/ideas.md` records.
 
-        `version` is folded because `params` cannot see the code. Two runs
-        either side of an edit to `field` are different answers under one
-        name, and a series the first wrote is handed to the second with
-        nothing anywhere in a position to notice — the same silent reuse the
-        downstream-parameter rule refuses, arrived at from the other side.
-        So it is folded unconditionally, including for a step declaring no
-        parameters at all, and bumping it is the author's act at the moment
-        the answer changes rather than anything derived: a hash over the
-        function's bytecode would invalidate a rename and still miss the
-        case below.
-
-        It spells this tree's code and not what that code calls. A step
-        whose answer comes out of a third-party solver depends on that
-        solver's identity too, and the field for that is `params` — which
-        is what the answer depends on, and not only what a user set.
+        `version` is folded unconditionally — including for a step
+        declaring no parameters at all — because `params` cannot see the
+        code: two runs either side of an edit to `field` are different
+        answers under one name. Bumping it is the author's act at the
+        moment the answer changes, it spells this tree's code and not what
+        that code calls, and the reasoning, with the derived alternatives
+        it refuses, is ADR-0010 rather than repeated here.
         """
         stem = f"{self.name}@{self.version}"
         if not self.params:
@@ -229,7 +221,13 @@ def dis_flow(preset: int = cv2.DISOPTICAL_FLOW_PRESET_ULTRAFAST) -> Tool:
              cv2.DISOPTICAL_FLOW_PRESET_MEDIUM: "medium"}
     return Tool(name="dis", form_for=analysis_form("gray"), offsets=(-1, 0),
                 field=_dis_flow_factory(preset), version=1,
-                params={"preset": names.get(preset, str(preset))})
+                # the DIS solver's answer is opencv's to change between
+                # releases, so its identity is part of what the answer
+                # depends on (ADR-0010). absdiff and the convert/max
+                # arithmetic elsewhere in this file are pinned by their
+                # spec and carry no such line.
+                params={"preset": names.get(preset, str(preset)),
+                        "cv2": cv2.__version__})
 
 
 def lag_mhi(lags: tuple[int, ...] = (30, 20, 10)) -> Tool:

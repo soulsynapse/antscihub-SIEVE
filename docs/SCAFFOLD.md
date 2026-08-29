@@ -282,7 +282,7 @@
   - 📄 `doc_index.py` — Regenerate the generated docs — `SCAFFOLD.md` and the shelf indexes — from the index.
 - 📁 `src/`
   - 📁 `sieve/` — SIEVE isolates ethological events from video.
-    - 📁 `gui/`
+    - 📁 `gui/` — The interactive view: the frame, and what stands in its panes.
       - 📁 `frame/` — The frame: the window, its three panes, and the chrome between them.
         - 📄 `chrome.py` — What the window wears where no pane covers it.
         - 📄 `hotkeys.py` — The keys the window answers, and never what answering them does.
@@ -347,7 +347,6 @@
           - 📄 `view.py` — The library as a column of cards: which projects there are, and which is current.
         - 📁 `step/` — The step: the one in the chain the user is standing on, and its knobs.
           - 📄 `view.py` — The walked step as a view: the head over it, and the room its knobs will fill.
-      - 📄 `__init__.py`
       - 📄 `metrics.py` — Corner radius and text sizes for every view — the shape counterpart to palette.
       - 📄 `palette.py` — Eight colour roles, mutated in place so every holder sees the swap.
     - 📄 `__main__.py` — `uv run sieve`, or `uv run python -m sieve`.

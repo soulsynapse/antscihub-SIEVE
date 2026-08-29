@@ -25,12 +25,14 @@ TEXTS: tuple[Text, ...] = (
 )
 
 RADIUS_MIN = 0
-RADIUS_MAX = 16
+RADIUS_MAX = 16  # past this a stack of cards reads as a stack of buttons
 RADIUS_DEFAULT = 6
 
-SIZE_MIN = 7
-SIZE_MAX = 20
+SIZE_MIN = 7  # where hinting stops resolving on a 1x display
+SIZE_MAX = 20  # where the fixed-height cards stop fitting their rows
 
+# Asymmetric on purpose: headings are what gets enlarged, and a gloss more
+# than three under the base would fall below the base's own floor.
 TRIM_MIN = -3
 TRIM_MAX = 8
 
@@ -145,7 +147,12 @@ def _clamp(value: object, low: int, high: int) -> int:
 
 
 def _set(key: str, value: int, announce: bool = True) -> bool:
-    """Write to settings and return whether the clamped value changed."""
+    """Write to settings and return whether the clamped value changed.
+
+    Written before the comparison, not after — `palette.use()`'s bargain:
+    re-picking the value already on screen is the user insisting on it, and
+    the document may not hold it.
+    """
     changed = _current(key) != value
     settings.remember(key, value)
     if changed and announce:

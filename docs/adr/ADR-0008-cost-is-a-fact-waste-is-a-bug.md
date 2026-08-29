@@ -24,7 +24,9 @@ not the budget just refused. The source's frame period is the unit cost
 classes are measured in, not a target anything is held to. A step that fits
 the period is budgeted; one that does not is a commit step. Falling outside
 the period produces a *class*, not a defect report — the deliberate fallback
-ADR-0007 buys.
+ADR-0007 buys. Of the four things that break a fixed figure, three move the
+class, which is what a class is for; longer footage never reaches it at all,
+because a refill is over a window and a window does not grow with the file.
 
 The distinction is between a price and a mistake. Dense optical flow costs
 what it costs and the number is information. But a frame decoded twice, a

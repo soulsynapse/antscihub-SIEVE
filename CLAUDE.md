@@ -13,7 +13,9 @@ plays.
   docstring line). Hooks live in `.githooks/`; a fresh clone enables them with
   `git config core.hooksPath .githooks`. `SIEVE_SKIP_SCAFFOLD=1` skips the
   hook.
-- ADRs and findings: suggest, never mint unprompted.
+- ADRs and findings: suggest, never mint unprompted. A finding records a
+  measurement — what, on what, and when — so a later one supersedes it rather
+  than argues with it; anything a reader must re-check first is not one.
 
 ## Environment
 
@@ -23,13 +25,15 @@ plays.
   running.
 - `uv run`, never bare `python`. No type checker installed; don't spawn one.
 - Write commit messages to a file and `git commit -F <file>` — here-strings
-  in either shell corrupt the message.
+  in either shell corrupt the message and exit 0.
 - `core.autocrlf` is on. A file's own bytes are authoritative on its endings;
   match and restore content through bytes, not `write_text`, and don't
   normalize a file you only meant to edit.
 - Don't redirect stderr (`2>&1`) on native commands in PowerShell 5.1.
-- Bash tool cwd does not persist between calls; use absolute paths. Write
-  source files longer than a screen with Write/Edit, not heredocs.
+- Bash tool cwd does not *reliably* persist between calls — sometimes it does,
+  so a stale `cd` can silently break later relative paths. Use absolute paths
+  and never gate a write on `cd &&`. Write source files longer than a screen
+  with Write/Edit, not heredocs.
 - Inline Python patches: read bytes, decode utf-8, match as str with the
   file's own line endings. No bytes literals containing non-ASCII.
 - When `uv add` fails (running app holds `.venv` files), edit pyproject by

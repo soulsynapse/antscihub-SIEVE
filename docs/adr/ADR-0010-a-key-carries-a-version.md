@@ -39,4 +39,7 @@ The accepted cost is that nothing checks a bump happened. What is refused is
 the hash as *arbiter*, not as *tripwire*: a check in `checks/` notices when
 a step's text moves against a recorded baseline, and the author says whether
 the answer moved — by bumping or by re-recording, both explicit acts. The
-hash decides nothing and never reaches a key.
+hash decides nothing and never reaches a key. The bet behind the cost is
+that a change to a step's answer is a rare, authored, reviewed event in this
+tree's own commits — where a missing bump can at least be seen, which a
+wrong hash never is.

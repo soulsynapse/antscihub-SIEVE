@@ -16,13 +16,16 @@ from typing import Any
 _NAME = "SIEVE"
 _FILE = "settings.json"
 
+# Set by a run that must not touch the person's own settings — a check that
+# launches SIEVE and clicks a palette would otherwise silently rewrite theirs.
 _OVERRIDE = "SIEVE_SETTINGS"
 
 _document: dict[str, Any] | None = None
 
 
 def path() -> Path:
-    """The settings file.  ``SIEVE_SETTINGS`` overrides the per-user path."""
+    """The settings file.  ``SIEVE_SETTINGS`` overrides the per-user path —
+    a full path to a file, not a directory to put one in."""
     override = os.environ.get(_OVERRIDE)
     if override:
         return Path(override)
@@ -91,13 +94,19 @@ def _read() -> dict[str, Any]:
 
 
 def _write(document: dict[str, Any]) -> None:
-    """Atomic whole-file replace via temp + ``os.replace``."""
+    """Atomic whole-file replace via temp + ``os.replace``.
+
+    The temp file must be in the destination's own directory — ``os.replace``
+    is only atomic within a filesystem, and the system temp is routinely on
+    another one.
+    """
     destination = path()
     try:
         destination.parent.mkdir(parents=True, exist_ok=True)
         handle, temporary = tempfile.mkstemp(
             dir=destination.parent, prefix=f"{_FILE}.", suffix=".tmp"
         )
+        # newline="" — text mode on Windows would translate the "\n"s.
         with os.fdopen(handle, "w", encoding="utf-8", newline="") as file:
             json.dump(document, file, indent=2, sort_keys=True)
             file.write("\n")

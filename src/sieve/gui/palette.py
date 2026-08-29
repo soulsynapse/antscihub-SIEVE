@@ -11,7 +11,15 @@ from sieve import settings
 
 
 class Palette(NamedTuple):
-    """A named set of the eight colour roles."""
+    """A named set of the eight colour roles.
+
+    Constraints on a new palette: a light one is not a dark one inverted — it
+    wants a smaller `panel`/`stack_bg` step, and `panel_hot` steps *darker*,
+    away from the panel. `scrim` stays dark and translucent even in light
+    palettes (a light scrim raises nothing and reads as fog), with lower alpha
+    there. `line` must be legible on `panel`. `accent` is the only hue any
+    palette commits to.
+    """
 
     name: str
     gloss: str
@@ -99,6 +107,9 @@ _DARK: tuple[Palette, ...] = (
     ),
     # Accents from Okabe & Ito (2008); neutral greys so the accent
     # clears 4.5:1 on luminance alone regardless of colour vision.
+    # Two darks because the failures differ: blue is the axis tritanopia
+    # degrades, the warm end is what protanopes see least brightly —
+    # neither is a fallback for the other.
     Palette(
         "okabe-ito",
         "colour-vision safe: neutral grey, Okabe–Ito sky blue",
@@ -227,7 +238,13 @@ def current() -> Palette:
 
 
 def use(palette: Palette) -> None:
-    """Swap to palette; mutates live QColors in place so holders see the change."""
+    """Swap to palette; mutates live QColors in place so holders see the change.
+
+    Written down *above* the no-change return, deliberately: the document and
+    the screen can disagree (an unreadable settings file leaves the run at the
+    default with nothing stored), and re-picking the palette on screen is the
+    user insisting on it.
+    """
     global _current
     settings.remember(_KEY, palette.name)
     if palette is _current:

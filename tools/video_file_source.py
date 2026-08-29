@@ -179,7 +179,18 @@ class _VideoFile:
                 whole = self._reformatter.reformat(
                     frame, format="bgr24"
                 ).to_ndarray()
-                return Answer(whole if want == source else forms.build(whole, want))
+                if want != source:
+                    return Answer(forms.build(whole, want))
+                # Contiguous, even on the path that shapes nothing. A decoder
+                # pads its rows to its own alignment, so `to_ndarray` on a
+                # width whose bytes are not a multiple of it hands back a
+                # strided view: 462 px is 1386 bytes of picture in a 1392-byte
+                # row on `video-tests/rep3_intermittent_crop.MP4`. Every
+                # consumer of a frame wants one buffer — Qt refuses to wrap a
+                # strided array and an encoder refuses to take one — and
+                # `forms.build` already normalises, so this is the one exit
+                # that did not. A no-op where the width happens to align.
+                return Answer(np.ascontiguousarray(whole))
             if frame.pts > position:
                 # The decoder went past it — what a packet that decodes to
                 # nothing looks like from out here. GONE and not LATER: this

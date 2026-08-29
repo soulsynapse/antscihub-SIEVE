@@ -41,6 +41,7 @@ from typing import Any
 
 import av
 import av.video.reformatter
+import numpy as np
 
 from sieve.contract import Tool
 from sieve.contract.edges import (
@@ -95,12 +96,22 @@ def _stills(folder: Path) -> tuple[Path, ...]:
 
 
 def _decode(path: Path, reformatter: Any) -> Any | None:
-    """One image as a BGR array, or None if libav will not read it."""
+    """One image as a contiguous BGR array, or None if libav will not read it.
+
+    Contiguous here rather than at the read exit, because the shape this
+    reads off the first still is the form the whole folder is declared in:
+    a decoder pads its rows to its own alignment, so a width whose bytes are
+    not a multiple of it comes back a strided view. `forms.build` normalises
+    on every path that shapes something; the whole-frame path shapes nothing
+    and would hand the stride straight out, and Qt will not wrap one.
+    """
     try:
         with av.open(str(path)) as container:
             stream = container.streams.video[0]
             for frame in container.decode(stream):
-                return reformatter.reformat(frame, format="bgr24").to_ndarray()
+                return np.ascontiguousarray(
+                    reformatter.reformat(frame, format="bgr24").to_ndarray()
+                )
     except (av.FFmpegError, IndexError, OSError):
         return None
     return None

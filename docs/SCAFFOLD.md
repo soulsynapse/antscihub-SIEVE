@@ -350,8 +350,8 @@
       - 📄 `metrics.py` — How round the cards are and how large the text is, for every view at once.
       - 📄 `palette.py` — The colours every view draws with, and the palettes they are drawn from.
     - 📄 `__main__.py` — `uv run sieve`, or `uv run python -m sieve`.
-    - 📄 `relaunch.py` — Start SIEVE over: the same command, in place of the process running it.
-    - 📄 `settings.py` — What the user has set, kept where the next run will find it.
+    - 📄 `relaunch.py` — Replace the running process with a fresh run of the same command.
+    - 📄 `settings.py` — Flat JSON preferences at ``path()``, read once per run.
 - 📄 `.gitattributes`
 - 📄 `.gitignore`
 - 📄 `.python-version`

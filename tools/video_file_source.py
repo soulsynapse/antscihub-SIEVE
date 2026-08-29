@@ -84,6 +84,11 @@ class _VideoFile:
     def __init__(self, path: Path) -> None:
         self.path = path
         self.listed, self.keyframes = _table(path)
+        #: pts to its place in the listing. The seek decision is a distance in
+        #: *frames* and a pts difference is not one: at 90 kHz over 23.976 fps
+        #: one frame is 3753.75 ticks, and comparing that against a GOP length
+        #: of 24 makes every step look like a jump of forty GOPs.
+        self._rank = {pts: index for index, pts in enumerate(self.listed)}
         self._present = frozenset(self.listed)
         self._gop = _gop_length(self.listed, self.keyframes)
 
@@ -133,13 +138,22 @@ class _VideoFile:
                              self._stream.codec_context.height, "bgr")
         if want.pix != "bgr" or not want.native or forms.grade(source, want) is None:
             return Answer(refusal=Refusal.FORM)
+        ahead = (
+            None
+            if self._cursor is None
+            else self._rank.get(position, -1) - self._rank.get(self._cursor, -1)
+        )
         if (
             self._frames is None
-            or self._cursor is None
+            or ahead is None
             # At the cursor as well as behind it: the cursor names the frame
             # already handed out, so asking for it again needs a seek too.
-            or position <= self._cursor
-            or position - self._cursor > self._gop
+            or ahead <= 0
+            # In frames, which is what a GOP is measured in. Comparing the pts
+            # difference here made every sequential step read as a jump and
+            # seek, at ~289 ms a frame where decoding on costs about five
+            # (`docs/findings/2026.08.21-uncut-seek-costs-a-gop-not-a-frame.md`).
+            or ahead > self._gop
         ):
             self._seek(position)
         while True:

@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from sieve.contract.edges import FRAME
+from sieve.contract.edges import FRAME, Access
 from sieve.gui import palette
 from sieve.gui.frame.chrome import dress_title_bar, stylesheet
 from sieve.gui.frame.hotkeys import answer_key, bind_hotkeys, suspend_hotkeys
@@ -36,6 +36,7 @@ from sieve.gui.frame.swipe import POSITIONS, Arrows, build_swipe
 from sieve.project import Library
 from sieve.registry import load as load_tools
 from sieve.relaunch import relaunch
+from sieve.contract.nodes import Refusal
 from sieve.store import Store, opened
 from sieve.gui.view.canvas import Canvas
 from sieve.gui.view.canvas.video_canvas import FrameView
@@ -44,6 +45,7 @@ from sieve.gui.view.pipeline import Pipeline
 from sieve.gui.view.preferences import Preferences
 from sieve.gui.view.project_list import Project, ProjectList
 from sieve.gui.view.step import Step
+from sieve.gui.view.transport import Transport
 
 #: Restore-down size (window opens maximized but needs a grabable restored state).
 _WINDOW_WIDTH = 960
@@ -71,6 +73,11 @@ class MainWindow(QMainWindow):
         self.left.body.addWidget(self.canvas)
         self.frames = FrameView()
         self.canvas.show_content(self.frames)
+        self.transport = Transport()
+        self.bottom.body.addWidget(self.transport)
+        self.transport.dragged.connect(self.guess_at)
+        self.transport.released.connect(self.commit_at)
+        self.transport.stepped.connect(self.commit_at)
         #: the recording that is open, if one is — closed before the next
         self.store: Store | None = None
         self._opening: str | None = None
@@ -253,7 +260,7 @@ class MainWindow(QMainWindow):
             except Exception as trouble:  # noqa: BLE001 — a tool's failure is a fact
                 self.source_failed.emit(address, str(trouble))
                 return
-            self.source_opened.emit((store, frame))
+            self.source_opened.emit((store, frame, position))
 
         threading.Thread(target=work, daemon=True).start()
 
@@ -274,7 +281,7 @@ class MainWindow(QMainWindow):
 
     def _source_landed(self, landed: tuple) -> None:
         """An opened source and its first frame, back on the GUI thread."""
-        store, frame = landed
+        store, frame, position = landed
         if store.address != self._opening:
             store.close()   # the user moved on while it was opening
             return
@@ -282,6 +289,61 @@ class MainWindow(QMainWindow):
         self.store = store
         self.canvas.set_aspect(store.aspect)
         self.frames.show_frame(frame)
+        self.transport.show_source(
+            store.positions, store.starts(), store.output.edge.at.access
+        )
+        if position is not None:
+            self.transport.show_playhead(position)
+
+    # -- where the work is standing ----------------------------------------
+
+    def guess_at(self, position: int) -> None:
+        """A drag. Serve it from what is held, or leave the picture alone.
+
+        The one rule the freeze hunt left with teeth: the GUI thread may block
+        only for an exact request the user just released. Everything else
+        serves a placeholder from a cheaper tier — and with one tier built, the
+        cheapest thing available is the frame already on screen. A stale
+        picture with a moving position under the cursor is the honest version
+        of that; a 350 ms decode per drag step is the version that reads as
+        frozen.
+        """
+        if self.store is None:
+            return
+        held = self.store.frames.get(position, self.store.form)
+        if held is not None:
+            self.frames.show_frame(held)
+
+    def commit_at(self, position: int) -> None:
+        """A release or a playback step. This one is paid for.
+
+        Both go through here because both are exact — a step names the position
+        it wants as squarely as a release does. What separates them is that a
+        step is on a timer and will be along again, so a slow one delays the
+        next rather than skipping it; nothing here computes anything, so
+        nothing is lost by the picture arriving late.
+
+        Only `GONE` blanks the canvas, and that is what `Refusal` is for. A
+        forward-only source asked behind its head refuses `LATER` — the frame
+        exists and this consumer cannot have it — and clearing the picture
+        there would report a live source's whole past as empty. Stepping back
+        with `,` on one is exactly that case, and it is reachable: the strip
+        declines the gesture, the key does not.
+        """
+        if self.store is None:
+            return
+        answered = self.store.answer(position)
+        if answered.delivered or answered.refusal is Refusal.GONE:
+            self.frames.show_frame(answered.frame)
+
+    def play_pause(self) -> None:
+        self.transport.toggle_play()
+
+    def step_back(self) -> None:
+        self.transport.step(-1)
+
+    def step_forward(self) -> None:
+        self.transport.step(+1)
 
     def _source_broke(self, address: str, trouble: str) -> None:
         if address != self._opening and self._opening is not None:
@@ -298,6 +360,7 @@ class MainWindow(QMainWindow):
         if self.store is not None:
             self.store.close()
             self.store = None
+        self.transport.show_source((), (), Access.RANDOM)
 
     def remove_project(self, project: Project) -> None:
         """A project's ✕: out of the library. The recording is not touched."""

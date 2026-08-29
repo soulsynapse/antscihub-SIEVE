@@ -357,6 +357,10 @@
           - 📄 `view.py` — Project library: a column of cards, a + that adds one, and per-card verbs.
         - 📁 `step/` — The selected step in the chain and its knobs.
           - 📄 `view.py` — Single-step view: header and the room its knobs will fill.
+        - 📁 `transport/` — The transport: where in a recording the work is standing, and moving it.
+          - 📄 `bar.py` — The strip: the whole recording as one band, with a playhead on it.
+          - 📄 `geometry.py` — Where a position lands on a strip, and which position a pixel names.
+          - 📄 `view.py` — The transport: a control row over the strip, in the bottom pane.
       - 📄 `metrics.py` — Corner radius and text sizes for every view — the shape counterpart to palette.
       - 📄 `palette.py` — Eight colour roles, mutated in place so every holder sees the swap.
     - 📁 `project/` — What a project is: one recording, and the list of them.

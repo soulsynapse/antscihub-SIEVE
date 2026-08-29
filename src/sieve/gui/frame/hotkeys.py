@@ -19,9 +19,17 @@ if TYPE_CHECKING:  # importing it for real would close the loop back to `window`
 _KEYS: tuple[tuple[str, str], ...] = (("Ctrl+R", "reload"),)
 
 #: Answered only if nothing nearer the user wanted the key.
+#:
+#: The transport is on Space and the comma/period pair because ADR-0003 spent
+#: the arrows: ← and → walk the swipe track, and ↑/↓ belong to whatever
+#: selection the position in view owns. Yielded rather than eager, so a text
+#: field still gets its own space bar.
 _YIELDED_KEYS: tuple[tuple[str, str], ...] = (
     ("Left", "swipe_back"),
     ("Right", "swipe_forward"),
+    ("Space", "play_pause"),
+    (",", "step_back"),
+    (".", "step_forward"),
 )
 
 

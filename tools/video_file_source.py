@@ -83,9 +83,9 @@ class _VideoFile:
 
     def __init__(self, path: Path) -> None:
         self.path = path
-        self.listed, keyframes = _table(path)
+        self.listed, self.keyframes = _table(path)
         self._present = frozenset(self.listed)
-        self._gop = _gop_length(self.listed, keyframes)
+        self._gop = _gop_length(self.listed, self.keyframes)
 
         self._container = av.open(str(path))
         self._stream = self._container.streams.video[0]
@@ -96,6 +96,18 @@ class _VideoFile:
 
     def extent(self) -> Extent:
         return Extent(self.listed, closed=True)
+
+    def starts(self) -> tuple[int, ...]:
+        """The keyframes, which the same demux pass already collected.
+
+        A caller landing on one of these decodes a single packet; landing
+        between them decodes forward from the last one, and landing *before*
+        the first decodes nothing at all, which is what the cut-away GOP at
+        the head of `video-tests/GX010047c2_02_17_26.MP4` is. Handing the list
+        over is how somebody finds that out without paying a seek per frame to
+        be refused.
+        """
+        return self.keyframes
 
     def read(self, position: int | None, want: Form) -> Answer:
         """A frame at *position*, cropped here when the caller wants less.
@@ -220,7 +232,7 @@ def _open(address: str) -> Opened:
     return Opened(
         address=address,
         outputs={edge.name: Output(edge=edge, read=state.read,
-                                   extent=state.extent)},
+                                   extent=state.extent, starts=state.starts)},
         close=state.close,
         fingerprint=state.fingerprint,
     )

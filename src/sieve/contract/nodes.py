@@ -33,6 +33,13 @@ collapsed them into a permanent hole. The session explorer never made that
 mistake because every serve carried a *route* beside its payload and the tiers
 branched on it; the route is what the port dropped and `Refusal` is it.
 
+**Where a read may begin is the source's to state.** Walking an extent from
+its head to find something deliverable costs a seek per refusal — 7.9 s on the
+footage in `video-tests/`, whose first twenty listed positions are the tail of
+a GOP that was cut away. The tool knew: it collected the file's keyframes at
+open and used them to measure a GOP. `starts` is that fact reaching the caller
+instead of being discovered by paying for it.
+
 **A read names the form it wants.** The step side already had this: a tool's
 `form_for` is a function of the crop, so the consumer names the form per
 request. Fixing it on the edge instead made every read the whole frame at
@@ -131,11 +138,30 @@ class Output:
     answers with one or refuses. A source that will not serve that form says
     so with `Refusal.FORM` *before* decoding, which is what makes the fallback
     in `read_form` cost nothing when it is taken.
+
+    **`starts` is structure and not cost**, which is the line ADR-0007 draws
+    and this class stays on the right side of. It says which positions stand
+    on their own — a keyframe decodes without reference to another frame, a
+    still in a folder has nothing to reference — and says nothing whatever
+    about what any of them costs, which is measured at the pairing where it
+    runs. Two of the three sources in this tree answer with their whole
+    extent and one answers with a subset, which is what keeps the clause from
+    being the word "keyframe" wearing an interface's clothes.
+
+    `None` means the source draws no such distinction and every listed
+    position is alike; it is not "unknown". A source that does not know which
+    of its positions stand alone does not have this fact to give, and the
+    caller's fallback is to treat them all as starts, which is what `None`
+    already says.
     """
 
     edge: Edge
     read: Callable[[int | None, Form], Answer]
     extent: Callable[[], Extent] | None = None
+    #: positions a read can start from without decoding through another —
+    #: keyframes in a container, every position in a folder of stills. See
+    #: the note in this class's docstring for why it is not a cost claim.
+    starts: Callable[[], tuple[int, ...]] | None = None
 
 
 @dataclass(frozen=True)

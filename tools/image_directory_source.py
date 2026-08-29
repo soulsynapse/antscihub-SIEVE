@@ -135,6 +135,15 @@ class _Folder:
         self.stills = _stills(self.folder)
         return Extent(tuple(range(len(self.stills))), closed=False)
 
+    def starts(self) -> tuple[int, ...]:
+        """All of them. A still references nothing and neither does its file.
+
+        Answering the whole extent rather than `None` because this source does
+        draw the distinction — it draws it everywhere. `None` would say the
+        question does not apply here, and it does; the answer is just total.
+        """
+        return tuple(range(len(self.stills)))
+
     def read(self, position: int | None, want: Form) -> Answer:
         if position is None:
             raise ValueError("a frame edge is positioned; pass an index")
@@ -222,7 +231,7 @@ def _open(address: str) -> Opened:
     return Opened(
         address=address,
         outputs={edge.name: Output(edge=edge, read=state.read,
-                                   extent=state.extent)},
+                                   extent=state.extent, starts=state.starts)},
         close=state.close,
         fingerprint=state.fingerprint,
     )

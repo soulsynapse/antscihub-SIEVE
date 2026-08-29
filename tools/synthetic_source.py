@@ -136,6 +136,22 @@ class _Generator:
         listed = tuple(i * self.tick for i in range(revealed))
         return Extent(listed, closed=self.grow <= 0)
 
+    def starts(self) -> tuple[int, ...]:
+        """Every listed position, except on a forward-only source.
+
+        A forward-only source can begin only where its head is, and once the
+        head has moved that position is not a start any more — which makes
+        this the one place in the tree where `starts` is a moving answer, and
+        the reason it is a callable rather than a field.
+        """
+        with self._lock:
+            cursor = self._cursor
+            revealed = self._revealed
+        if not self.forward:
+            return tuple(i * self.tick for i in range(revealed))
+        head = 0 if cursor is None else cursor + 1
+        return (head * self.tick,) if head < revealed else ()
+
     def read(self, position: int | None, want: Form) -> Answer:
         if position is None:
             raise ValueError("a frame edge is positioned; pass a tick")
@@ -224,7 +240,7 @@ def _open(address: str) -> Opened:
     return Opened(
         address=address,
         outputs={edge.name: Output(edge=edge, read=state.read,
-                                   extent=state.extent)},
+                                   extent=state.extent, starts=state.starts)},
         close=state.close,
         fingerprint=state.fingerprint,
     )

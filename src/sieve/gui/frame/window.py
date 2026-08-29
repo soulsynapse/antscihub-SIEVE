@@ -248,7 +248,7 @@ class MainWindow(QMainWindow):
             # is on this side and the GUI thread is handed a frame.
             try:
                 store = opened(tool, address)
-                position = store.first_deliverable()
+                position = store.first_start()
                 frame = None if position is None else store.frame(position)
             except Exception as trouble:  # noqa: BLE001 — a tool's failure is a fact
                 self.source_failed.emit(address, str(trouble))

@@ -65,10 +65,10 @@ from sieve.contract.nodes import Answer, Opened, Output, Refusal, read_form
 #: there is a form worth holding, rather than a number tuned against a file.
 DEFAULT_BUDGET = 4
 
-#: How far `first_deliverable` will walk before giving up. A leading run of
-#: undeliverable positions is a cut prefix — packets referencing a keyframe
-#: the file does not contain — and is bounded by one GOP, so a file still
-#: answering None past this is missing for a reason walking will not fix.
+#: How far `first_start` will walk before giving up. It walks starts
+#: now rather than every position, so this is generous: a source whose
+#: declared starts refuse this many times is wrong about its own structure,
+#: which no amount of further walking repairs.
 WALK_LIMIT = 240
 
 
@@ -201,22 +201,40 @@ class Store:
         """
         return self.answer(position, want).frame
 
-    def first_deliverable(self, limit: int = WALK_LIMIT) -> int | None:
-        """The first listed position that actually reads back. Expensive.
+    def starts(self) -> tuple[int, ...]:
+        """Where a read may begin, as the source says. Every position if not.
 
-        A file cut mid-GOP lists frames whose packets reference a keyframe it
-        does not contain, and each one costs a full seek to be told so: on
-        `video-tests/GX010047c2_02_17_26.MP4` the extent opens at pts -20020
-        and the first twenty positions read back None at ~300 ms apiece, so
-        this walk is seconds before a first picture. That is the honest price
-        of the contract's split between listed and deliverable, and the tier
-        that stops anyone paying it in front of a user is the keyframe strip
-        the storage plan puts first — downscaled keyframes for orientation
-        before anything else exists. Until that tier exists, this runs on
-        whatever thread opened the source and never on one that draws.
+        `None` from a source means it draws no such distinction, and treating
+        every listed position as a start is what that says.
         """
-        listed = self.positions
-        for position in listed[: limit or len(listed)]:
+        if self.output.starts is None:
+            return self.positions
+        return self.output.starts()
+
+    def first_start(self, limit: int = WALK_LIMIT) -> int | None:
+        """The first position a read may begin at that actually reads back.
+
+        Not the first deliverable position, and the difference is the point.
+        Walking the extent from its head is how this used to find one, and on
+        `video-tests/GX010047c2_02_17_26.MP4` that was twenty refusals at
+        ~300 ms apiece — 7.9 s before a first picture, spent learning what the
+        tool already knew. Asking `starts` skips the cut-away prefix entirely
+        and lands in 436 ms.
+
+        What it gives up is exactness at the head: that file's pts 0 does read
+        back, by decoding forward from a keyframe, and this returns pts 4004
+        instead because pts 0 is not a start. Finding the earlier one costs the
+        walk this exists to avoid, and nothing yet asks for the earliest frame
+        rather than a frame — when something does, it asks for a position and
+        gets it.
+
+        Still a walk, and still bounded, because a start is a structural claim
+        and not a promise: a truncated file lists a keyframe whose packets are
+        not all there, and one of this file's does. `limit` caps it so a source
+        wrong throughout gives up rather than reading itself entirely.
+        """
+        candidates = self.starts() or self.positions
+        for position in candidates[: limit or len(candidates)]:
             if self.answer(position).delivered:
                 return position
         return None

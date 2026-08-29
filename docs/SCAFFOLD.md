@@ -19,6 +19,7 @@
     - 📄 `ADR-0008-cost-is-a-fact-waste-is-a-bug.md`
     - 📄 `ADR-0009-sieve-is-not-its-tools.md`
     - 📄 `ADR-0010-a-key-carries-a-version.md`
+    - 📄 `ADR-0011-a-pipeline-is-not-a-property-of-a-recording.md`
   - 📁 `decode/`
     - 📄 `ideas.md`
   - 📁 `findings/`

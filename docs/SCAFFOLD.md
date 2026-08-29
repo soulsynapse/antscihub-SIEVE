@@ -301,6 +301,7 @@
           - 📄 `arrow-right.svg`
           - 📄 `folder-open.svg`
           - 📄 `pin.svg`
+          - 📄 `plus.svg`
           - 📄 `sliders-horizontal.svg`
           - 📄 `x.svg`
       - 📁 `primitives/` — Shared surfaces, controls, and marks that views compose but do not own.
@@ -345,12 +346,15 @@
           - 📄 `view.py` — Preferences card: which sections exist and what each is for.
         - 📁 `project_list/` — The library: every project remembered, and which one the work is standing in.
           - 📄 `card.py` — Project card: select, open, or reveal on disk.
-          - 📄 `project.py` — One project as the list reads it: a name and three display-ready lines.
-          - 📄 `view.py` — Project library: a column of cards with single selection and open/select verbs.
+          - 📄 `project.py` — One project as the list reads it: a name and two display-ready lines.
+          - 📄 `view.py` — Project library: a column of cards, a + that adds one, and per-card verbs.
         - 📁 `step/` — The selected step in the chain and its knobs.
           - 📄 `view.py` — Single-step view: header and the room its knobs will fill.
       - 📄 `metrics.py` — Corner radius and text sizes for every view — the shape counterpart to palette.
       - 📄 `palette.py` — Eight colour roles, mutated in place so every holder sees the swap.
+    - 📁 `project/` — What a project is: one recording, and the list of them.
+      - 📄 `footage.py` — What can be said about a recording without opening it.
+      - 📄 `library.py` — Which recordings this person has opened, and when they last did.
     - 📄 `__main__.py` — `uv run sieve`, or `uv run python -m sieve`.
     - 📄 `relaunch.py` — Replace the running process with a fresh run of the same command.
     - 📄 `settings.py` — Flat JSON preferences at ``path()``, read once per run.

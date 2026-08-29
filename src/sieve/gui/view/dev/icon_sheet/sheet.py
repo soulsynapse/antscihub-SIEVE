@@ -54,6 +54,13 @@ _ROLES: tuple[Group, ...] = (
         ("arrow-right-left", "pin", "x"),
     ),
     Group(
+        "acting on a list",
+        "the verb a view's head carries. `plus` acts on the list under the "
+        "head rather than on any card in it, which is why it stands beside the "
+        "view's title and not in a card's own row of verbs",
+        ("plus",),
+    ),
+    Group(
         "saying what a thing is",
         "glyphs that name rather than act — a kind ahead of a step's title, a "
         "project's folder. Nothing happens when they are pressed, so they are "

@@ -55,6 +55,7 @@ class ProjectCard(QFrame):
 
     selected = Signal()
     opened = Signal()
+    removed = Signal()
 
     def __init__(self, project: Project, parent=None) -> None:
         super().__init__(parent)
@@ -74,10 +75,17 @@ class ProjectCard(QFrame):
         head.setSpacing(4)
         head.addWidget(_Line(project.name, "name"), 1)
         # Icons are pixmaps baked at current palette; must be rebuilt on change.
-        self._open = self._open_button()
-        self._reveal = self._reveal_button()
-        head.addWidget(self._open)
-        head.addWidget(self._reveal)
+        self._verbs = {
+            "arrow-right": self._verb("arrow-right", "Open this project", self.opened),
+            "folder-open": self._verb(
+                "folder-open", f"Show {self.project.folder} on disk", self._reveal
+            ),
+            "x": self._verb(
+                "x", "Remove from the library — the recording on disk stays", self.removed
+            ),
+        }
+        for button in self._verbs.values():
+            head.addWidget(button)
         column.addLayout(head)
 
         column.addWidget(_Line(project.holds, "line"))
@@ -89,14 +97,9 @@ class ProjectCard(QFrame):
     def _remeasure(self) -> None:
         self.setStyleSheet(_sheet(self._selected))
 
-    def _open_button(self) -> QToolButton:
-        button = _button("arrow-right", "Open this project")
-        button.clicked.connect(self.opened)
-        return button
-
-    def _reveal_button(self) -> QToolButton:
-        button = _button("folder-open", f"Show {self.project.folder} on disk")
-        button.clicked.connect(self._reveal)
+    def _verb(self, glyph: str, tip: str, act) -> QToolButton:
+        button = _button(glyph, tip)
+        button.clicked.connect(act)
         return button
 
     def _reveal(self) -> None:
@@ -108,8 +111,8 @@ class ProjectCard(QFrame):
 
     def _restyle(self) -> None:
         self.setStyleSheet(_sheet(self._selected))
-        self._open.setIcon(icons.icon("arrow-right"))
-        self._reveal.setIcon(icons.icon("folder-open"))
+        for glyph, button in self._verbs.items():
+            button.setIcon(icons.icon(glyph))
 
     def mousePressEvent(self, event) -> None:
         if event.button() == Qt.MouseButton.LeftButton:

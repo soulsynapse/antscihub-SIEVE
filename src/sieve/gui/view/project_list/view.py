@@ -1,30 +1,61 @@
-"""Project library: a column of cards with single selection and open/select verbs."""
+"""Project library: a column of cards, a + that adds one, and per-card verbs."""
 
 from __future__ import annotations
 
 from typing import Iterable, Sequence
 
-from PySide6.QtCore import Qt, Signal
-from PySide6.QtWidgets import QWidget
+from PySide6.QtCore import QSize, Qt, Signal
+from PySide6.QtWidgets import QToolButton, QWidget
 
+from sieve.gui import icons, palette
 from sieve.gui.primitives import CardStack, Empty
+from sieve.gui.primitives.stack import sheet as stack_sheet
 from sieve.gui.view.project_list.card import ProjectCard
 from sieve.gui.view.project_list.project import Project
 
 _GAP = 6
 
 
+def _plus_button() -> QToolButton:
+    """The head's +. Sized to the title it stands beside, not to a card's row."""
+    button = QToolButton()
+    button.setObjectName("plus")
+    button.setIcon(icons.icon("plus"))
+    button.setIconSize(QSize(icons.SIZE, icons.SIZE))
+    button.setAutoRaise(True)
+    button.setCursor(Qt.CursorShape.PointingHandCursor)
+    button.setToolTip("Add a project — point at the recording it is about")
+    return button
+
+
 class ProjectList(CardStack):
-    """One card per project, single selection, select and open verbs."""
+    """One card per project, single selection, and the verbs that act on one.
+
+    Nothing here reads or writes the library. The view says what was asked for
+    — add one, open this, remove this — and is redrawn from whatever the
+    library holds afterwards, so a refused add or a failed write cannot leave a
+    card standing for a project that is not remembered.
+    """
 
     selected = Signal(Project)
     opened = Signal(Project)
+    #: the head's +: a recording is wanted, and whoever owns the library asks
+    #: for one. The view does not open a file dialog and does not store a row.
+    new = Signal()
+    removed = Signal(Project)
 
     def __init__(
         self, projects: Iterable[Project] = (), parent: QWidget | None = None
     ) -> None:
         super().__init__("Projects", gap=_GAP, parent=parent)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+
+        self._plus = _plus_button()
+        self._plus.clicked.connect(self.new)
+        self.add_figure(self._plus)
+        # The glyph is a pixmap baked at the current palette, so it is redrawn
+        # rather than restyled. Bound method: PySide6 drops it with the widget.
+        palette.CHANGED.connect(self._reink)
 
         self._projects: list[Project] = []
         self._cards: list[ProjectCard] = []
@@ -64,6 +95,7 @@ class ProjectList(CardStack):
             card = ProjectCard(project)
             card.selected.connect(lambda index=index: self.select(index))
             card.opened.connect(lambda index=index: self.open(index))
+            card.removed.connect(lambda index=index: self.remove(index))
             self.add_card(card)
             self._cards.append(card)
 
@@ -75,7 +107,7 @@ class ProjectList(CardStack):
             return
         self._nothing = Empty(
             "No projects yet",
-            "Make one to start, and it is remembered here.",
+            "Use + to point at a recording; it is remembered here.",
         )
         self.add_card(self._nothing)
 
@@ -105,6 +137,25 @@ class ProjectList(CardStack):
             return
         self.select(index)
         self.opened.emit(self._projects[index])
+
+    def remove(self, index: int) -> None:
+        """Ask for a row to go. The list does not drop it — the library does,
+        and the list is redrawn from what the library then holds."""
+        if not 0 <= index < len(self._projects):
+            return
+        self.removed.emit(self._projects[index])
+
+    # -- what it wears ----------------------------------------------------
+
+    def _reink(self) -> None:
+        self._plus.setIcon(icons.icon("plus"))
+
+    def _sheet(self) -> str:
+        # No hover fill: the glyph's own Active ink is what a verb answers with
+        # everywhere else in this view, and the head is not a card.
+        return stack_sheet() + """
+            #plus { border: 0; padding: 2px; background: transparent; }
+        """
 
     def keyPressEvent(self, event) -> None:
         key = event.key()

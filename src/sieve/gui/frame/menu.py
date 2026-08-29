@@ -41,7 +41,7 @@ _BAR: tuple[Drop | Button, ...] = (
     Drop(
         "&File",
         (
-            ("&New project…", None, "Ctrl+N"),
+            ("&New project…", "new_project", "Ctrl+N"),
             ("&Open project…", None, "Ctrl+O"),
             ("&Save project", None, "Ctrl+S"),
             None,

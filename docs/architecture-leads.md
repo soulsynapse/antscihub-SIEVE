@@ -164,7 +164,7 @@ above and below it.
 A path is where a recording is, not what it is, so anything durable beside one
 needs an identity that survives a rename. The source owns producing it,
 because only the source knows what its address is made of, and the field names
-its algorithm rather than implying one — `tools/file_source.py` spells a
+its algorithm rather than implying one — `tools/video_file_source.py` spells a
 sparse byte fingerprint, and a content-level one has to be able to coexist
 with it rather than orphan what was written under it. A source with no durable
 identity at all, a camera, returns none.

@@ -364,7 +364,7 @@
     - 📄 `relaunch.py` — Replace the running process with a fresh run of the same command.
     - 📄 `settings.py` — Flat JSON preferences at ``path()``, read once per run.
 - 📁 `tools/`
-  - 📄 `file_source.py` — A source over a video file on disk, decoded with PyAV.
+  - 📄 `video_file_source.py` — The video file source: frames off a container on disk, decoded with PyAV.
 - 📄 `.gitattributes`
 - 📄 `.gitignore`
 - 📄 `.python-version`

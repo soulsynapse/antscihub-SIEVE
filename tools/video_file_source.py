@@ -1,4 +1,4 @@
-"""A source over a video file on disk, decoded with PyAV.
+"""The video file source: frames off a container on disk, decoded with PyAV.
 
 The first tool, and the one that proves the boundary: SIEVE holds no list of
 containers, no decoder, and no opinion about how frames come out of a file.
@@ -70,7 +70,7 @@ _BLOCK = 64 * 1024
 _GOP_FALLBACK = 30
 
 
-class _File:
+class _VideoFile:
     """One opened file. Private to this tool; SIEVE never sees this type."""
 
     def __init__(self, path: Path) -> None:
@@ -169,7 +169,7 @@ def _open(address: str) -> Opened:
     path = Path(address)
     if not path.is_file():
         raise FileNotFoundError(f"no file at {address}")
-    state = _File(path)
+    state = _VideoFile(path)
     stream = state._stream
     base = stream.time_base
     edge = Edge(
@@ -232,7 +232,7 @@ def _gop_length(listed: tuple[int, ...], keyframes: tuple[int, ...]) -> int:
 
 TOOLS = (
     Tool(
-        name="file",
+        name="video file source",
         #: Bumped when a change here would produce different bytes for one
         #: position — a key over decoded pixels folds it (ADR-0010).
         version=1,

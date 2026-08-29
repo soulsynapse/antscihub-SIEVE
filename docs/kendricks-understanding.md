@@ -26,6 +26,7 @@ It works through two mechanisms:
 
 Contracts are built by construction. For example, a tool family contract needs to provide a GUI component. How that GUI component is included in the tool is provided by the GUI primitives MCP. The GUI primitives MCP is possible because of the GUI contracts.
 
+- Pipeline contract.
 - Tool contracts. Different tool families get one contract apiece.
 - Edge contracts. I have to talk about this because I'm still fuzzy on it.
 - GUI contracts. This includes: 

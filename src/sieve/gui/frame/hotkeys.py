@@ -1,12 +1,4 @@
-"""The keys the window answers, and never what answering them does.
-
-Two tables. `_KEYS` are QShortcuts — fire before the focused widget, so only
-keys nothing else wants belong here. `_YIELDED_KEYS` are handled in
-keyPressEvent after the focus chain declines — so ←/→ defer to a tab row or
-segmented bar that is closer to the user. No autorepeat on either table: the
-swipe re-aims a running slide, so a held arrow would walk at the keyboard's
-repeat rate.
-"""
+"""Frame-level key bindings: eager shortcuts and yielded keys."""
 
 from __future__ import annotations
 
@@ -48,11 +40,7 @@ def bind_hotkeys(window: MainWindow) -> Hotkeys:
 
 
 def answer_key(hotkeys: Hotkeys, event: QKeyEvent) -> bool:
-    """Try the yielded-key table; True if the frame acted.
-
-    Autorepeats are declined (not swallowed) so the focused widget can still
-    claim them.
-    """
+    """Try the yielded-key table; True if the frame acted."""
     if hotkeys.suspended or event.isAutoRepeat():
         return False
     pressed = QKeySequence(event.keyCombination())
@@ -64,11 +52,7 @@ def answer_key(hotkeys: Hotkeys, event: QKeyEvent) -> bool:
 
 
 def suspend_hotkeys(hotkeys: Hotkeys, suspended: bool) -> None:
-    """Disable both tables while a cover stands over the panes.
-
-    Covers both shortcuts and yielded keys — an unhandled key walks up the
-    parent chain, so without the flag `answer_key` would still reach the track.
-    """
+    """Disable both tables while a cover stands over the panes."""
     hotkeys.suspended = suspended
     for shortcut in hotkeys.shortcuts:
         shortcut.setEnabled(not suspended)

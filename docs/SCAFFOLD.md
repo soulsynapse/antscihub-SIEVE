@@ -284,14 +284,14 @@
   - 📁 `sieve/` — SIEVE isolates ethological events from video.
     - 📁 `gui/` — The interactive view: the frame, and what stands in its panes.
       - 📁 `frame/` — The frame: the window, its three panes, and the chrome between them.
-        - 📄 `chrome.py` — What the window wears where no pane covers it.
-        - 📄 `hotkeys.py` — The keys the window answers, and never what answering them does.
+        - 📄 `chrome.py` — Stylesheet and title-bar dressing for the window chrome.
+        - 📄 `hotkeys.py` — Frame-level key bindings: eager shortcuts and yielded keys.
         - 📄 `menu.py` — The bar across the top, and what the window itself can be asked to do.
         - 📄 `overlay.py` — What stands over the panes instead of in one.
         - 📄 `panes.py` — The three panes, the sides a subpane anchors to in each, and nothing standing in either yet.
         - 📄 `swipe.py` — The run of views a pane shows one at a time, and the slide between them.
         - 📄 `window.py` — The window: a menu bar, three panes, and the boundaries between them.
-      - 📁 `icons/` — Lucide line icons, tinted to the palette and returned as QIcons.
+      - 📁 `icons/` — Lucide line icons, tinted to the palette and returned as QPixmaps/QIcons.
         - 📁 `lucide/`
           - 📄 `LICENSE`
           - 📄 `arrow-left.svg`

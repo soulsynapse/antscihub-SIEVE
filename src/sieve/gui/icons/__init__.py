@@ -1,9 +1,4 @@
-"""Lucide line icons, tinted to the palette and returned as QIcons.
-
-Icons are pixmaps, not text: they must be drawn at their final colour, and each
-state (normal, hover, disabled) is a separate drawing. SVGs are vendored under
-``lucide/`` so the tuning loop never discovers an icon went missing at import.
-"""
+"""Lucide line icons, tinted to the palette and returned as QPixmaps/QIcons."""
 
 from __future__ import annotations
 
@@ -26,13 +21,12 @@ _STROKE = 2.25
 
 
 def names() -> tuple[str, ...]:
-    """Available glyph names, read from the folder each call so it can't disagree."""
+    """Available glyph names, read fresh from the folder each call."""
     return tuple(sorted(path.stem for path in _SVG.glob("*.svg")))
 
 
 @lru_cache(maxsize=None)
 def _source(name: str) -> str:
-    """Read and cache the vendored SVG source."""
     path = _SVG / f"{name}.svg"
     if not path.is_file():
         raise KeyError(f"no vendored lucide icon named {name!r} (looked in {_SVG})")
@@ -40,11 +34,8 @@ def _source(name: str) -> str:
 
 
 def _dressed(name: str, colour: QColor, filled: bool) -> bytes:
-    """Resolve ``currentColor`` and apply stroke width and optional fill.
+    # rgb() not QColor.name() — Qt writes #AARRGGBB, SVG expects #RRGGBBAA.
 
-    Uses ``rgb()`` not ``QColor.name()`` — Qt writes alpha as ``#AARRGGBB``,
-    SVG expects ``#RRGGBBAA``, so ``name()`` silently produces an invisible stroke.
-    """
     ink = rgb(colour)
     svg = _source(name).replace('stroke="currentColor"', f'stroke="{ink}"')
     svg = svg.replace('stroke-width="2"', f'stroke-width="{_STROKE}"')
@@ -54,18 +45,14 @@ def _dressed(name: str, colour: QColor, filled: bool) -> bytes:
 
 
 def _ratio() -> float:
-    """Primary screen's ratio; Qt scales down better than it invents detail up."""
     app = QGuiApplication.instance()
     screen = app.primaryScreen() if app is not None else None
     return max(1.0, screen.devicePixelRatio() if screen is not None else 1.0)
 
 
 def pixmap(name: str, colour: QColor, size: int = SIZE, filled: bool = False) -> QPixmap:
-    """One icon at ``size`` logical pixels, drawn sharp at the screen's ratio.
+    # Cache key is colour.rgba(), not the QColor — QColor is mutable.
 
-    Caches on ``colour.rgba()`` — QColor is mutable, so caching the object
-    itself gives the LRU a key that can change under it.
-    """
     return _cached(name, colour.rgba(), size, filled, _ratio())
 
 
@@ -92,7 +79,7 @@ def icon(
     size: int = SIZE,
     filled: bool = False,
 ) -> QIcon:
-    """A lucide icon in Normal / Active (hover) / Disabled colours."""
+    """Build a QIcon with Normal / Active / Disabled pixmaps."""
     out = QIcon()
     out.addPixmap(pixmap(name, normal, size, filled), QIcon.Mode.Normal)
     out.addPixmap(pixmap(name, active, size, filled), QIcon.Mode.Active)

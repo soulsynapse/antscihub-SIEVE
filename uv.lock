@@ -607,6 +607,7 @@ name = "sieve"
 version = "0.4.0"
 source = { editable = "." }
 dependencies = [
+    { name = "numpy" },
     { name = "pyside6" },
 ]
 
@@ -620,9 +621,15 @@ experiments = [
     { name = "numpy" },
     { name = "opencv-python-headless" },
 ]
+tools = [
+    { name = "av" },
+]
 
 [package.metadata]
-requires-dist = [{ name = "pyside6", specifier = ">=6.8" }]
+requires-dist = [
+    { name = "numpy", specifier = ">=2" },
+    { name = "pyside6", specifier = ">=6.8" },
+]
 
 [package.metadata.requires-dev]
 dev = [{ name = "import-linter", specifier = ">=2.1" }]
@@ -632,6 +639,7 @@ experiments = [
     { name = "numpy", specifier = ">=2" },
     { name = "opencv-python-headless", specifier = ">=4.10" },
 ]
+tools = [{ name = "av", specifier = ">=13" }]
 
 [[package]]
 name = "six"

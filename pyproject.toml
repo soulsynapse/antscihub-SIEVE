@@ -3,13 +3,23 @@ name = "sieve"
 version = "0.4.0"
 description = "SIEVE isolates ethological events from video."
 requires-python = ">=3.13"
+# numpy is here because the canonical construction is the substrate's
+# (`sieve/contract/forms.py`): two producers of one form must agree in the low
+# bits, so the shaping cannot live in each tool. It is not a decode library.
 dependencies = [
     "PySide6>=6.8",
+    "numpy>=2",
 ]
 
 [dependency-groups]
 dev = [
     "import-linter>=2.1",
+]
+# What the bundled tools need and SIEVE does not. A source tool's decoder is
+# the tool's dependency, which is what keeps the note below true while a file
+# still opens.
+tools = [
+    "av>=13",
 ]
 # Decode libraries are not SIEVE runtime dependencies and must not become them:
 # `experiments/decode-experiments/` compares them against each other, and a
@@ -34,8 +44,30 @@ package = true
 
 # One contract per ADR, named for it — the convention is checks/__init__.py.
 [tool.importlinter]
-root_packages = ["sieve", "checks"]
+root_packages = ["sieve", "checks", "tools"]
 contract_types = ["adr0010_key_version: checks.adr0010.KeyVersionContract"]
+
+# ADR-0009's two prohibitions, which fail differently. The first is the one
+# nobody violates by accident; the second is the one that happens because the
+# internal was right there, and it is the one that freezes the substrate.
+[[tool.importlinter.contracts]]
+name = "ADR-0009: SIEVE never names a tool"
+type = "forbidden"
+source_modules = ["sieve"]
+forbidden_modules = ["tools"]
+
+[[tool.importlinter.contracts]]
+name = "ADR-0009: a tool never reaches past the contract"
+type = "forbidden"
+source_modules = ["tools"]
+forbidden_modules = [
+    "sieve.gui",
+    "sieve.project",
+    "sieve.settings",
+    "sieve.relaunch",
+    "sieve.registry",
+    "sieve.__main__",
+]
 
 [[tool.importlinter.contracts]]
 name = "ADR-0010: a key carries a version"

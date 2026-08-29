@@ -285,6 +285,10 @@
   - 📄 `doc_index.py` — Regenerate the generated docs — `SCAFFOLD.md` and the shelf indexes — from the index.
 - 📁 `src/`
   - 📁 `sieve/` — SIEVE isolates ethological events from video.
+    - 📁 `contract/` — Toolhood: what a tool is, whatever it does.
+      - 📄 `edges.py` — What may travel between nodes. Closed, and SIEVE's alone to extend.
+      - 📄 `forms.py` — What a frame is, and who shapes one.
+      - 📄 `nodes.py` — Node contracts. One per tool type; a source is the first.
     - 📁 `gui/` — The interactive view: the frame, and what stands in its panes.
       - 📁 `frame/` — The frame: the window, its three panes, and the chrome between them.
         - 📄 `chrome.py` — Stylesheet and title-bar dressing for the window chrome.
@@ -357,8 +361,11 @@
       - 📄 `footage.py` — What can be said about a recording without opening it.
       - 📄 `library.py` — Which recordings this person has opened, and when they last did.
     - 📄 `__main__.py` — `uv run sieve`, or `uv run python -m sieve`.
+    - 📄 `registry.py` — Which tools this SIEVE found, and which it could not load.
     - 📄 `relaunch.py` — Replace the running process with a fresh run of the same command.
     - 📄 `settings.py` — Flat JSON preferences at ``path()``, read once per run.
+- 📁 `tools/`
+  - 📄 `file_source.py` — A source over a video file on disk, decoded with PyAV.
 - 📄 `.gitattributes`
 - 📄 `.gitignore`
 - 📄 `.python-version`

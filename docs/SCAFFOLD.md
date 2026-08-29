@@ -291,7 +291,7 @@
         - 📄 `panes.py` — The three panes, the sides a subpane anchors to in each, and nothing standing in either yet.
         - 📄 `swipe.py` — The run of views a pane shows one at a time, and the slide between them.
         - 📄 `window.py` — The window: a menu bar, three panes, and the boundaries between them.
-      - 📁 `icons/` — Lucide's line icons, tinted to the palette and handed out as `QIcon`s.
+      - 📁 `icons/` — Lucide line icons, tinted to the palette and returned as QIcons.
         - 📁 `lucide/`
           - 📄 `LICENSE`
           - 📄 `arrow-left.svg`
@@ -301,7 +301,7 @@
           - 📄 `pin.svg`
           - 📄 `sliders-horizontal.svg`
           - 📄 `x.svg`
-      - 📁 `primitives/` — The shapes a view is built out of, owned by none of them.
+      - 📁 `primitives/` — Shared surfaces, controls, and marks that views compose but do not own.
         - 📄 `banner.py` — The banner: what the application has to say about something it just did.
         - 📄 `button.py` — The text button, in the four weights of emphasis a screen is allowed.
         - 📄 `card.py` — The card: a titled panel with the four verbs that act on what it holds.

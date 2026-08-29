@@ -5,11 +5,19 @@ about somebody's working life rather than about any recording: two people
 opening the same file each have their own list, and a recording handed to a
 colleague does not arrive already in theirs.
 
-**Keyed by the recording's resolved path.** A project is a video file, so the
-file is the identity there is. An identity that survives the file being renamed
-has to be written somewhere the rename carries — a document beside the recording
-— and nothing writes one yet; until something does, a renamed recording is a new
-row and the old one is a row whose file has gone.
+**Keyed by the recording's resolved path, which is location and not
+identity.** The key answers which row a file on this machine belongs to, and
+nothing beyond that: the same recording is one path on a desktop and another
+on a cluster, and one renamed in place becomes a new row with the old one
+left pointing at nothing. That is the right trade for a list that never
+leaves the machine it was written on, and the wrong one for anything that
+travels. Identity has to be written where a rename and a move carry it — a
+document beside the recording, holding whatever also tells a re-export from
+the file it replaced, since a name that survives a rename survives a
+substitution too. Nothing writes one yet. When something does, it is the
+identity and this stays the location; a durable record that named a
+recording by this key would be naming where it was on one machine on one
+day.
 
 **A recording that has gone is kept and marked, never dropped.** An external
 drive that is not plugged in is the ordinary case, and a library that forgot a
@@ -251,7 +259,11 @@ def ago(stamp: str, at: datetime | None = None) -> str:
 
 
 def _key(video: Path | str) -> str:
-    """One spelling per recording, so the same file is not two rows."""
+    """One spelling per recording, so the same file is not two rows.
+
+    This list's own key, and local to this machine. Nothing durable names a
+    recording by it — see the module docstring for what would.
+    """
     return str(Path(video).resolve())
 
 

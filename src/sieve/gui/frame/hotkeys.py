@@ -30,6 +30,11 @@ _YIELDED_KEYS: tuple[tuple[str, str], ...] = (
     ("Space", "play_pause"),
     (",", "step_back"),
     (".", "step_forward"),
+    # The whole frame under the crop, which is where a crop gets drawn. A key
+    # and not a button because there is nowhere to put a button: the bottom
+    # pane is the transport's and this is about the canvas, and a 96-pixel
+    # subpane over the left pane for one toggle would be the wrong trade.
+    ("F", "show_whole_frame"),
 )
 
 

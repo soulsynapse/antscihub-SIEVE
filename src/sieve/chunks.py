@@ -105,9 +105,15 @@ class ChunkStore:
     One form at a time, because a form change wipes: a stored small frame
     cannot become a different one, and a chunk that outlived the form it was
     written in would answer a read with the wrong pixels rather than with
-    nothing. `wipe` is what a form change calls, and it is why the file names
-    carry an ordinal and not a form key — after a wipe there is nothing left
-    to be confused with.
+    nothing.
+
+    **A wipe changes the generation rather than trusting the unlink.** The
+    explorer deleted the files and tolerated an `OSError` on the one an
+    encoder still held — which leaves a chunk of the *old* form on disk, where
+    `persisted` lists it and the next fill refills the new form out of it.
+    Nothing goes wrong until somebody reads those pixels. Naming the
+    generation in the file means a survivor is simply not seen: it is
+    unreachable the moment the counter moves, and swept when the session ends.
     """
 
     def __init__(self, directory: Path | None = None) -> None:
@@ -115,6 +121,9 @@ class ChunkStore:
             f"sieve-chunks-{os.getpid()}"
         )
         self.directory.mkdir(parents=True, exist_ok=True)
+        #: bumped by `wipe`; what is written and read carries it, so a file the
+        #: previous form left behind cannot be found by the current one
+        self._generation = 0
         #: open readers, most recently used last. The lock covers this dict
         #: and nothing else — see `fetch`.
         self._open: OrderedDict[int, Any] = OrderedDict()
@@ -123,23 +132,37 @@ class ChunkStore:
 
     # -- what is on disk ---------------------------------------------------
 
-    def _path(self, start: int) -> Path:
-        return self.directory / f"chunk-{start:08d}.mp4"
+    def _path(self, start: int, generation: int | None = None) -> Path:
+        gen = self._generation if generation is None else generation
+        return self.directory / f"chunk-{gen:04d}-{start:08d}.mp4"
 
     def persisted(self) -> set[int]:
-        """Chunk starts that exist, asked now rather than remembered.
+        """Chunk starts of *this* generation, asked now rather than remembered.
 
         The same reason `Store.positions` is a property: a chunk lands while
         somebody is reading, and a set captured at open would hide it.
         """
         return {
-            int(path.stem.split("-")[1])
-            for path in self.directory.glob("chunk-*.mp4")
+            int(path.stem.split("-")[2])
+            for path in self.directory.glob(f"chunk-{self._generation:04d}-*.mp4")
         }
 
     # -- writing -----------------------------------------------------------
 
-    def encode(self, start: int, frames: list[np.ndarray], form: Form) -> None:
+    @property
+    def generation(self) -> int:
+        """Which form-lifetime is current. A fill captures this when it queues
+        a chunk, so an encode still running when the form changed writes into
+        the generation it was filled for and is never read back."""
+        return self._generation
+
+    def encode(
+        self,
+        start: int,
+        frames: list[np.ndarray],
+        form: Form,
+        generation: int,
+    ) -> None:
         """Write one complete chunk. Runs on the write-behind thread only.
 
         The per-frame yield is not decoration. Encoding is a C loop holding
@@ -153,7 +176,7 @@ class ChunkStore:
                 f"a chunk is written from gray; {form.key()} is {form.pix}"
             )
         width, height = form.out
-        with av.open(str(self._path(start)), "w") as out:
+        with av.open(str(self._path(start, generation)), "w") as out:
             stream = out.add_stream(_CODEC, rate=_RATE)
             stream.width, stream.height = width, height
             stream.pix_fmt = "yuv420p"
@@ -216,8 +239,13 @@ class ChunkStore:
         A form change is the one moment a fill may not be left to die on its
         own: the frames still landing are the old form, and they must stop
         arriving before what they were written into is thrown away.
+
+        The generation moves first and the unlink is best-effort second, which
+        is the order that matters. A file an encoder still holds survives the
+        delete and is invisible anyway.
         """
         with self._lock:
+            self._generation += 1
             for container in self._open.values():
                 container.close()
             self._open.clear()

@@ -48,6 +48,7 @@ from typing import Any, Callable
 from sieve.chunks import CHUNK_FRAMES, ChunkStore
 from sieve.contract import Tool
 from sieve.contract.forms import Form
+from sieve.contract.nodes import Refusal
 from sieve.store import Frames, Store, opened
 
 #: Opened sources kept for lending. Two, because only a dying fill and the
@@ -115,9 +116,9 @@ class WriteBehind:
 
     def _run(self) -> None:
         while True:
-            start, frames, form = self.queue.get()
+            start, frames, form, generation = self.queue.get()
             try:
-                self.chunks.encode(start, frames, form)
+                self.chunks.encode(start, frames, form, generation)
             except Exception:   # noqa: BLE001 — a failed chunk re-derives
                 pass
 
@@ -159,6 +160,7 @@ class WindowFill:
         writer: WriteBehind,
         readers: Readers,
         on_covered: Callable[..., None] | None = None,
+        holes: set[int] | None = None,
     ) -> None:
         self.positions = positions
         self.start, self.end = start, end
@@ -169,6 +171,13 @@ class WindowFill:
         self.writer = writer
         self.readers = readers
         self.on_covered = on_covered
+        #: the coverage record to write holes into — the *store's*, not this
+        #: reader's. A hole is a fact about the recording and not about who
+        #: found it, and a fill walking a cut-away prefix is usually who finds
+        #: it first: twenty positions at ~273 ms apiece on the footage in
+        #: `video-tests/`, which the drawing thread would otherwise re-pay one
+        #: at a time. A set of ints is safe to share — `add` is one bytecode.
+        self.holes = holes
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
         #: how far it has got, for whoever draws a progress line
@@ -230,19 +239,30 @@ not-a-frame.md`).
         for ordinal in range(cstart, cend):
             if self._stop.is_set():
                 break
-            answered = reader.answer(self.positions[ordinal], self.form)
+            position = self.positions[ordinal]
+            answered = reader.answer(position, self.form)
             if not answered.delivered:
                 refused += 1
+                if answered.refusal is Refusal.GONE and self.holes is not None:
+                    # Only GONE. `LATER` is a moment and `FORM` is about the
+                    # shape asked for; filing either would answer the same way
+                    # forever on the strength of one instant — `store.py` keeps
+                    # the same line and for the same reason.
+                    self.holes.add(position)
                 continue    # a hole, or not to us now; either way not a chunk
-            self.cache.put(self.positions[ordinal], self.form, answered.frame)
+            self.cache.put(position, self.form, answered.frame)
             buffer.append(answered.frame)
             self.at = ordinal
             delivered += 1
         if len(buffer) == cend - cstart and self.form.pix == "gray":
             # complete chunks only: a short one on disk answers for positions
             # it never held. Gray only, because that is what a chunk is
-            # written from — see `ChunkStore.encode`.
-            self.writer.queue.put((cstart, buffer, self.form))
+            # written from — see `ChunkStore.encode`. The generation is taken
+            # now and not at encode time: if the form changes while this sits
+            # in the queue, it must land where the new form will not find it.
+            self.writer.queue.put(
+                (cstart, buffer, self.form, self.chunks.generation)
+            )
         return delivered, refused
 
     def _run(self) -> None:

@@ -53,13 +53,12 @@ class Button(NamedTuple):
 
 #: The preferences verb, named apart from the bar it sits on because the frame
 #: has to find it again: what it opens is stood under it, so where it is drawn
-#: is a number someone asks for and not only a label the builder consumes.
+#: is a number someone asks for.
 _PREFERENCES = Button("&Preferences", "toggle_preferences", "Ctrl+,")
 
 #: The bar, left to right. Preferences sits between the window's own views and
-#: the help, where a File menu would otherwise have buried it: it is about the
-#: application rather than about a project, and the bar is the only place that
-#: distinction is already drawn.
+#: the help: it is about the application rather than about a project, and the
+#: bar is the only place that distinction is already drawn.
 _BAR: tuple[Drop | Button, ...] = (
     Drop(
         "&File",
@@ -81,15 +80,11 @@ _BAR: tuple[Drop | Button, ...] = (
         ),
     ),
     _PREFERENCES,
-    #: The dev bench is under Help and nowhere else. It is not a View entry —
-    #: those change how the window is divided, and the bench is a thing standing
-    #: over the division rather than a shape of it — and it is not a title of its
-    #: own beside Preferences, because the bar is a picture of what the
-    #: application is *for*, and the bench is not part of that. Help is where the
-    #: things about the program rather than about the work already sit.
+    #: The dev bench is under Help, where the things about the program rather
+    #: than about the work already sit.
     #:
-    #: Ctrl+D is carried here rather than in `hotkeys.py`. A shortcut on a
-    #: `QAction` is the action's, the same way Ctrl+, is preferences'; `_KEYS`
+    #: Ctrl+D is carried here rather than in `hotkeys.py`: a shortcut on a
+    #: `QAction` is the action's, the same way Ctrl+, is preferences'. `_KEYS`
     #: is for keys with nothing on the bar to hang from, and a binding in both
     #: places is one Qt reports as ambiguous and then answers with neither.
     Drop(
@@ -107,9 +102,9 @@ def build_menu_bar(window: MainWindow) -> QMenuBar:
     """The bar, with every action bound to the window that will carry it."""
     bar = QMenuBar(window)
     bar.setObjectName("menubar")
-    # The bar is the window's own, never the platform's shared one: on a native
-    # menu bar the entries leave the window they act on, and the dark chrome
-    # below would then stop at a system-coloured strip.
+    # The bar is the window's own: on a native menu bar the entries leave the
+    # window they act on, and the dark chrome below stops at a system-coloured
+    # strip.
     bar.setNativeMenuBar(False)
     for item in _BAR:
         if isinstance(item, Button):

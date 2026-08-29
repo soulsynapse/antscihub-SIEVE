@@ -51,11 +51,10 @@ _GUTTER = 8
 #: sideways as the selection arrives (`primitives/nav.py` makes the same point).
 _EDGE = 3
 
-#: One swatch, and the six roles a strip shows. Not all eight: `scrim` is
-#: translucent and would draw as whatever is behind it, and `dim` sits between
-#: `text` and `line` closely enough that a 14px block cannot tell the three
-#: apart. What is left is the run a palette is actually recognised by — its two
-#: grounds, the panel a card is, the hairline, the ink, and the accent.
+#: One swatch, and the six roles a strip shows: the two grounds, the panel a
+#: card is, the hairline, the ink, and the accent — the run a palette is actually
+#: recognised by. `scrim` is translucent and draws as whatever is behind it, and
+#: `dim` sits between `text` and `line` inside what a 14px block can resolve.
 _SWATCH = 14
 _ROLES = ("stack_bg", "panel", "panel_hot", "line", "text", "accent")
 
@@ -127,13 +126,10 @@ class Palettes(QWidget):
         stack = QVBoxLayout(column)
         stack.setContentsMargins(_GUTTER, _GUTTER, _GUTTER, _GUTTER)
         stack.setSpacing(_GUTTER)
-        # Light first, and this is the section's order rather than
-        # `palette.PALETTES`'. That sequence is dark-first because dark is the
-        # default and the longer list; a chooser is answering a different
-        # question, and the group a user is most often coming here to *find* is
-        # the one that is not already on. Reached by filtering the one sequence
-        # twice rather than by concatenating two, so the order within a group
-        # stays the palette module's to decide.
+        # Light first: `palette.PALETTES` is dark-first because dark is the
+        # default, and a chooser leads with the group a user is most often here
+        # to find. Filtering the one sequence twice keeps the order within a
+        # group the palette module's to decide.
         for dark, heading in ((False, "light"), (True, "dark")):
             label = QLabel(heading)
             label.setObjectName("pgroup")
@@ -145,14 +141,11 @@ class Palettes(QWidget):
                 row.chosen.connect(palette.use)
                 stack.addWidget(row)
                 self._rows.append(row)
-        # No stretch under the last row, unlike every other column here. A
-        # stretch is what keeps a short list at the top of its panel, and this
-        # list is not short — it is taller than the card, so the stretch would
-        # never be holding anything up. What it would do instead is take the
-        # slack between what the rows ask for and what the scroll gives them and
-        # pool it into one block of empty ground under the last palette, which
-        # reads as the end of the list arriving early. Spread across the rows it
-        # is a few pixels each and reads as the rows being roomy.
+        # No stretch under the last row, unlike every other column here: a
+        # stretch keeps a short list at the top of its panel, and this list is
+        # taller than the card. The slack between what the rows ask for and what
+        # the scroll gives them spreads across the rows as a few pixels each,
+        # which reads as the rows being roomy.
 
         scroll = QScrollArea()
         scroll.setObjectName("pscroll")
@@ -169,8 +162,8 @@ class Palettes(QWidget):
         self._restyle()
         palette.CHANGED.connect(self._restyle)
         # The rows carry the two text sizes, so a size change is this sheet
-        # again. The swatches are untouched by either signal — they are drawn
-        # from literals and never restyled, which is the whole point of them.
+        # again. The swatches are drawn from literals and never restyled, which
+        # is the point of them.
         metrics.CHANGED.connect(self._restyle)
 
     def _restyle(self) -> None:
@@ -209,10 +202,8 @@ class _Row(QFrame):
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         # The height a row wants depends on the width it is given, because the
-        # gloss wraps. Said out loud, or the column asks each row how tall it is
-        # without saying how wide it will be — every gloss answers as if it had
-        # wrapped to two lines, and the scroll ends up with a screen of nothing
-        # under the last palette.
+        # gloss wraps. Said out loud, so the column asks how tall each row is
+        # with a width in hand.
         policy = QSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Minimum)
         policy.setHeightForWidth(True)
         self.setSizePolicy(policy)
@@ -293,8 +284,8 @@ class _Gloss(QLabel):
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
         # Only on a change of width, which is the only thing the answer depends
-        # on: an unconditional `updateGeometry` is a relayout on every resize,
-        # and a relayout that can resize this label again is a loop.
+        # on: an unconditional `updateGeometry` relayouts on every resize, and a
+        # relayout that can resize this label again is a loop.
         if event.size().width() != event.oldSize().width():
             self.updateGeometry()
 

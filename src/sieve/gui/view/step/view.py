@@ -39,8 +39,8 @@ class Step(View):
         super().__init__("Step", parent)
 
         # A stretch either side, and the head's own inset for the margin — see
-        # `view/pipeline/view.py`, which is the same room saying the same kind of
-        # thing, and the two heads are read down the same x.
+        # `view/pipeline/view.py`, the same room saying the same kind of thing;
+        # the two heads are read down the same x.
         room = self.body()
         room.setContentsMargins(PAD_X, PAD_X, PAD_X, PAD_X)
         room.addStretch(1)

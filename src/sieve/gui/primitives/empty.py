@@ -85,24 +85,20 @@ from sieve.gui import metrics, palette
 from sieve.gui.palette import DIM, LINE, TEXT, rgb
 
 #: The air inside the box, and it is generous on purpose. A card's inset is
-#: measured against a rule and a row of verbs; this is measured against nothing at
-#: all, and the room is what makes an empty box read as room rather than as a
-#: sentence that has been boxed. The mockup's 22 is a single number for both axes
-#: and stays one here: a box wider inside than it is tall would put its two
-#: centred lines off-centre in the only direction anyone would notice.
+#: measured against a rule and a row of verbs; this is measured against a
+#: sentence, and the room is what makes an empty box read as room. The mockup's
+#: 22 is a single number for both axes and stays one here, which keeps the two
+#: centred lines centred on both.
 _PAD = 22
 
 #: Between the fact and the move. The same tight lead `banner.py` sets between a
-#: title and its body, and for that file's reason: the two are one message, and a
-#: gap wide enough to separate them would make the second line read as a second
-#: thing that happens to be nearby.
+#: title and its body, and for that file's reason: the two are one message.
 _LEAD = 2
 
 #: The broken edge: pixels drawn, then pixels skipped, in units of the pen's own
-#: width — which is Qt's arithmetic for a dash pattern and the reason these are
-#: not simply pixels. Even, so the line reads as a rhythm rather than as a solid
-#: one with bites taken out, and long enough that a corner at the tree's largest
-#: radius still gets a dash on it rather than a row of dots.
+#: width, which is Qt's arithmetic for a dash pattern. Even, so the line reads as
+#: a rhythm, and long enough that a corner at the tree's largest radius still
+#: carries a dash.
 _DASH = (4.0, 4.0)
 
 
@@ -159,10 +155,9 @@ class Empty(QWidget):
         self._title = QLabel(title)
         self._title.setObjectName("emptytitle")
         self._title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        # Wrapped, unlike a banner's title. A banner's stands in a row beside a
-        # mark and would walk the drawing if it wrapped; there is no mark here and
-        # nothing beside the words, so a long fact in a narrow column should fold
-        # rather than be clipped by the box drawn around it.
+        # Wrapped, unlike a banner's title, which stands in a row beside a mark.
+        # Nothing stands beside these words, so a long fact in a narrow column
+        # folds inside the box drawn around it.
         self._title.setWordWrap(True)
 
         self._body = QLabel(body)
@@ -177,18 +172,18 @@ class Empty(QWidget):
         column.addWidget(self._title)
         column.addWidget(self._body)
 
-        # As wide as it is given and no taller than its words: the height it wants
-        # at a given width is the wrapped body's, which is what `heightForWidth`
-        # answers and what the policy has to be told to ask for.
+        # As wide as it is given and no taller than its words: the height it
+        # wants at a given width is the wrapped body's, which `heightForWidth`
+        # answers and which the policy has to be told to ask for.
         policy = QSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
         policy.setHeightForWidth(True)
         self.setSizePolicy(policy)
 
         self._resize()
         self.setStyleSheet(sheet())
-        # Bound methods, never lambdas: PySide6 drops a connection to a bound
-        # method when the receiver goes, where a lambda closing over `self` would
-        # keep a dead widget subscribed for the life of the run.
+        # Bound methods: PySide6 drops a connection to a bound method when the
+        # receiver goes, where a lambda closing over `self` keeps a dead
+        # widget subscribed for the life of the run.
         palette.CHANGED.connect(self._restyle)
         metrics.CHANGED.connect(self._resize)
 

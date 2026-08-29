@@ -177,28 +177,25 @@ class SectionCard(QWidget):
         self._restyle()
         # A stylesheet is a string built from the palette's values as they were,
         # so it is remade when they change. The same pair appears on every widget
-        # here that dresses itself with one, and it is always a bound method and
-        # never a lambda: PySide6 holds a receiver's bound method weakly and
-        # drops the connection when the widget goes, where a lambda closing over
-        # `self` would keep a dead card subscribed and call into it.
+        # here that dresses itself with one, always as a bound method: PySide6
+        # holds a receiver's bound method weakly and drops the connection when
+        # the widget goes, where a lambda closing over `self` keeps a dead card
+        # subscribed and calls into it.
         palette.CHANGED.connect(self._restyle)
-        # And the close icon, which the sheet no longer reaches: it is a pixmap
+        # And the close icon, which the sheet does not reach: it is a pixmap
         # drawn at the colours in force when it was made, so a palette change has
         # to draw it again. Its own slot and not `_restyle`, for `card.py`'s
-        # reason — a size change does not touch a pixmap, and answering both
-        # signals in one slot would redraw the icon every time a slider moved.
+        # reason: a size change does not touch a pixmap.
         palette.CHANGED.connect(self._redress)
         # The same sheet carries the corner and the three text sizes, so the
-        # answer to both signals is the one string built again. Two connections
-        # and not one signal, for the reason `metrics.py` gives: what they are
-        # telling this card is different, even where what it does about them is
-        # not.
+        # answer to both signals is the one string built again. Two connections,
+        # for the reason `metrics.py` gives: what they are telling this card is
+        # different, even where what it does about them is the same.
         metrics.CHANGED.connect(self._restyle)
         self.setFixedWidth(width)
         self.setFixedHeight(height)
-        # Its own size and no more: the overlay centres it, so a card that asked
-        # for the whole column would be a pane again in everything but name,
-        # with the scrim reduced to a border.
+        # Its own size and no more: the overlay centres it, and the scrim around
+        # it is what says the card is standing over the panes.
         self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
 
         self._sections = tuple(sections)
@@ -219,23 +216,19 @@ class SectionCard(QWidget):
         done.clicked.connect(self.closed)
 
         #: The one reset button, renamed as the nav moves, or `None` on a card
-        #: no section of which can be put back — the dev bench is one, and a
-        #: button that was dead in every section would be the card offering a
-        #: gesture it has no answer to anywhere.
+        #: no section of which can be put back — the dev bench is one.
         self._reset: Button | None = None
         if any(section.reset is not None for section in self._sections):
-            # Ghost and small: the loudest thing in this head is the heading,
-            # and a bordered button beside it would be the card's own most
-            # emphatic element pointing at the one verb that undoes work.
+            # Ghost and small, so the heading stays the loudest thing in this
+            # head and the verb that undoes work is not what draws the eye.
             self._reset = Button("", GHOST, small=True)
             self._reset.clicked.connect(self._put_back)
 
         head = QHBoxLayout()
         head.setSpacing(GUTTER)
         head.addWidget(title, 1)
-        # Left of the close, because it is the quieter of the two verbs and the
-        # one the user is less often reaching for, and because the close has been
-        # in the corner since before there was anything beside it.
+        # Left of the close, which holds the corner: this is the quieter of the
+        # two verbs and the one the user is less often reaching for.
         if self._reset is not None:
             head.addWidget(self._reset)
         head.addWidget(done)
@@ -245,9 +238,8 @@ class SectionCard(QWidget):
         subtitle.setWordWrap(True)
 
         #: The one frame every bodiless section is shown in, retold as the nav
-        #: moves. Built whether or not any section needs it, because the stack
-        #: needs something to show while a caller's list is empty and a card
-        #: with no page at all is a card with a hole in its right side.
+        #: moves. Built whether or not any section needs it, so the stack has
+        #: something to show while a caller's list is empty.
         self._placeholder = _Placeholder()
 
         self._pages = QStackedWidget()
@@ -365,9 +357,8 @@ class _Placeholder(QFrame):
         column.addWidget(self._gloss)
         column.addSpacing(GUTTER)
         column.addWidget(nothing)
-        # Last, so a section with little to say sits at the top of the panel
-        # rather than spread down it, and the name stays where the eye left it
-        # as the nav is walked.
+        # Last, so a section with little to say sits at the top of the panel and
+        # its name stays where the eye left it as the nav is walked.
         column.addStretch(1)
 
     def retell(self, name: str, gloss: str) -> None:

@@ -68,28 +68,25 @@ from sieve.gui.palette import ACCENT, DIM, LINE, TEXT
 #: run", OFF)` reads as the sentence it is, and the constants exist so the
 #: spelling is checked somewhere.
 #:
-#: `LIVE` is the accent, which is the tree's one answer to *this is the one you
-#: are acting on* and is already the nav's mark and the checked box's fill;
-#: `IDLE` is the ink, a plain fact about the thing; `OFF` is `DIM`, the absence
-#: of one. Three and not four — see the module docstring on why there is no
-#: failed.
+#: `LIVE` is the accent, the tree's one answer to *this is the one you are acting
+#: on* and already the nav's mark and the checked box's fill; `IDLE` is the ink, a
+#: plain fact about the thing; `OFF` is `DIM`, the absence of one. Three — see the
+#: module docstring on where a failure is said instead.
 LIVE = "live"
 IDLE = "idle"
 OFF = "off"
 
-#: The dot, and the room between it and the word. The dot is a fixed radius and
-#: not a fraction of the type size for `check.py`'s reason: it is a mark rather
-#: than a letter, and one that grew with the text would put a different amount
-#: of air around itself at every size. The gap is narrower than a check's,
-#: because a dot is smaller than a box and the pair still has to read as one
-#: thing inside its own outline.
+#: The dot, and the room between it and the word. A fixed radius rather than a
+#: fraction of the type size, for `check.py`'s reason: it is a mark rather than a
+#: letter, so the air around it is the same at every size. The gap is narrower
+#: than a check's, because a dot is smaller than a box and the pair has to read
+#: as one thing inside its own outline.
 _DOT = 3.0
 _GAP = 6
 
-#: The air inside the outline. `_PAD_Y` is what sets the height and so the
-#: corner; `_PAD_X` is wider than it because the ends are round and a word
-#: sitting the same distance from a curve as from a straight edge reads as
-#: closer to it.
+#: The air inside the outline. `_PAD_Y` sets the height and so the corner;
+#: `_PAD_X` is wider, because the ends are round and a word reads as closer to a
+#: curve than to a straight edge at the same distance.
 _PAD_X = 9
 _PAD_Y = 3
 
@@ -116,14 +113,13 @@ class Pill(QWidget):
         self._text = text
         self._kind = kind
         self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        # As wide as its word and no taller than its own line: a pill stands at
-        # the end of a row beside a name, and one that stretched would become the
-        # box the round ends exist to say it is not.
+        # As wide as its word and no taller than its own line, so a pill at the
+        # end of a row keeps the shape its round ends give it.
         self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         self._resize()
-        # Bound methods, never lambdas: PySide6 drops a connection to a bound
-        # method when the receiver goes, where a lambda closing over `self` would
-        # keep a dead pill subscribed for the life of the run.
+        # Bound methods: PySide6 drops a connection to a bound method when the
+        # receiver goes, where a lambda closing over `self` keeps a dead
+        # pill subscribed for the life of the run.
         palette.CHANGED.connect(self.update)
         metrics.CHANGED.connect(self._resize)
 
@@ -190,8 +186,8 @@ class Pill(QWidget):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
 
         # Half a pixel in on every side, for `card.py`'s reason: a 1px pen
-        # straddles the path it is given, so an edge drawn on the widget's own
-        # rect loses its outer half and comes back looking like half a line.
+        # straddles the path it is given, so the widget's own rect would lose the
+        # pen's outer half.
         box = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
         corner = box.height() / 2
         painter.setPen(QPen(LINE, 1))

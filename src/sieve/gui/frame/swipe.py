@@ -46,22 +46,18 @@ from PySide6.QtWidgets import QHBoxLayout, QSizePolicy, QToolButton, QWidget
 from sieve.gui import icons, palette
 from sieve.gui.frame.panes import Blank
 
-#: How long the slide takes. Long enough to be read as travel and not a cut,
-#: short enough that holding an arrow key walks the track rather than queueing
-#: up a wait — the interactive loop is the product, and a transition the user
-#: waits out is the loop's cost paid on every move.
+#: How long the slide takes. Long enough to read as travel, short enough that
+#: holding an arrow key walks the track.
 SLIDE_MS = 260
 
 #: The positions the right pane swipes between, in the order they sit on the
-#: track. The order is the reading order of the work: the project you opened,
-#: the chain in it, the step you are standing on in that chain — so ← and →
-#: mean out and in, and nothing has to say which way is which.
+#: track (ADR-0003): the project you opened, the chain in it, the step you are
+#: standing on in that chain. ← and → mean out and in.
 POSITIONS = ("project", "pipeline", "step")
 
-#: Which lucide icon each direction wears. The same arrow the card's *open* verb
-#: wears, because it means the same thing one level up — onward into what you are
-#: standing on — and a second glyph for one direction of one line would be the
-#: track claiming to be a different kind of motion than the work it walks.
+#: Which lucide icon each direction wears — the same arrow the card's *open*
+#: verb wears, because it means the same thing one level up: onward into what
+#: you are standing on.
 _BACK = "arrow-left"
 _FORWARD = "arrow-right"
 
@@ -214,16 +210,15 @@ class Arrows(QWidget):
         row.setSpacing(2)
         row.addWidget(self._back)
         row.addWidget(self._forward)
-        # The head's sheet dresses what the head builds, and these are the
-        # caller's; the rule is scoped to this widget's own subtree, which a
-        # sheet set here is, so it reaches the two buttons and nothing else.
+        # Scoped to this widget's own subtree, so it reaches the two buttons
+        # and not what the head builds.
         self.setStyleSheet(
             "QToolButton { border: 0; padding: 0 2px; background: transparent; }"
         )
 
         swipe.moved.connect(self._reface)
-        # Bound methods and never lambdas, for the reason `view.py` gives: a
-        # lambda closing over `self` keeps a dead pair subscribed to the palette.
+        # A bound method, for the reason `view.py` gives: a lambda closing over
+        # `self` keeps a dead pair subscribed to the palette.
         palette.CHANGED.connect(self._redraw)
         self._reface(swipe.current())
 
@@ -234,11 +229,9 @@ class Arrows(QWidget):
         button.setAutoRaise(True)
         button.setToolTip(tip)
         button.setCursor(Qt.CursorShape.PointingHandCursor)
-        # Never focus. The position in front owns ↑ and ↓ and answers them from
-        # whatever holds focus inside it; an arrow that took focus on the click
-        # would leave the user having moved the track and lost the list.
+        # The position in front owns ↑ and ↓ and answers them from whatever
+        # holds focus inside it.
         button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        # `*_` swallows `clicked`'s checked flag, which these are not.
         button.clicked.connect(lambda *_: self._swipe.step(delta))
         return button
 

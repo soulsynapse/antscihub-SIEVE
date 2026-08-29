@@ -33,13 +33,11 @@ from sieve.gui.palette import DIM, LINE, PANEL, STACK_BG
 
 #: What shape the stage takes with nothing standing on it. A canvas has to draw
 #: some rectangle before it has content, and 16:9 is the shape most footage
-#: arrives in — a square would read as a deliberate claim about the medium that
-#: the empty canvas has no way to make.
+#: arrives in.
 DEFAULT_ASPECT = 16 / 9
 
 #: How far the stage sits off the pane's edge. Enough to read as a thing placed
-#: in the pane rather than as the pane itself repainted, which is the difference
-#: between a canvas that is full and one that has not loaded.
+#: in the pane rather than as the pane itself repainted.
 _MARGIN = 8
 
 
@@ -54,8 +52,8 @@ class Canvas(QWidget):
 
     #: Where the content actually landed, in this widget's coordinates. Emitted
     #: on every resize and on every change of aspect, so an overlay follows the
-    #: stage without recomputing it — and so there is one answer to *where is
-    #: the picture* rather than one per layer.
+    #: stage without recomputing it, and every layer reads one answer to *where
+    #: is the picture*.
     staged = Signal(QRect)
 
     def __init__(
@@ -132,9 +130,8 @@ class Canvas(QWidget):
         del event
         painter = QPainter(self)
         # Ground under the whole pane and panel only under the stage, so the
-        # letterbox reads as room the picture does not reach rather than as part
-        # of it. The content covers the stage fill when there is content; the
-        # fill is what an empty canvas is.
+        # letterbox reads as room the picture does not reach. Content covers the
+        # stage fill; the fill is what an empty canvas is.
         painter.fillRect(self.rect(), STACK_BG)
         rect = self.stage()
         if not rect.isEmpty():

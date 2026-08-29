@@ -81,9 +81,8 @@ class Slider(QSlider):
         self.setObjectName("slider")
         self.setRange(low, high)
         # One per arrow and one per page, which are the same step: the ranges
-        # these are used over are small enough that a page of ten would jump from
-        # one end to the other, and a click on the groove that overshot the value
-        # it was aimed at is worse than one that takes two clicks.
+        # these are used over are small enough that a click on the groove lands
+        # on the value it was aimed at.
         self.setSingleStep(1)
         self.setPageStep(1)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
@@ -93,7 +92,7 @@ class Slider(QSlider):
         self._dress()
         # A bound method and never a lambda, for the reason `button.py` gives:
         # PySide6 drops a connection to a bound method when the receiver goes,
-        # where a lambda closing over `self` would keep a dead slider subscribed.
+        # where a lambda closing over `self` keeps a dead slider subscribed.
         palette.CHANGED.connect(self._dress)
 
     def show_value(self, value: int) -> None:

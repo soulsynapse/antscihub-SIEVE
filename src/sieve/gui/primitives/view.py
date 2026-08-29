@@ -58,10 +58,10 @@ from PySide6.QtWidgets import (
 from sieve.gui import metrics, palette
 from sieve.gui.palette import DIM, LINE, PANEL, STACK_BG, TEXT, rgb
 
-#: Where the band holds its own contents off the pane's edges. The left inset is
-#: what whatever stands under the head takes as its own margin, so the title
-#: stands on the same x as the contents below it and the whole view is read down
-#: one line — which is why it is exported rather than kept private.
+#: Where the band holds its own contents off the pane's edges. Exported, because
+#: the left inset is what whatever stands under the head takes as its own margin:
+#: the title stands on the same x as the contents below it, and the whole view is
+#: read down one line.
 PAD_X = 16
 PAD_Y = 13
 
@@ -114,11 +114,9 @@ class View(QWidget):
 
         self._band = QWidget()
         self._band.setObjectName("viewhead")
-        # The band is exactly as tall as what it holds, whatever is under it. Said
-        # here and not left to the stretch below, because a view whose room is
-        # still empty — one built before its contents, which is every view for the
-        # length of its own `__init__` — would otherwise be a head spread down
-        # half the pane.
+        # The band is exactly as tall as what it holds, whatever is under it.
+        # Said here and not left to the stretch below, because a view's room is
+        # empty for the length of its own `__init__`.
         self._band.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         self._head = QHBoxLayout(self._band)
         self._head.setContentsMargins(PAD_X, PAD_Y, PAD_X, PAD_Y)
@@ -126,19 +124,16 @@ class View(QWidget):
         self._head.addWidget(self._title)
         # The stretch is what the caller's own figures land before — see
         # `add_figure`, which counts them rather than reading an index off the
-        # layout: what is past the stretch is no longer only the note, so an
-        # arithmetic on `count()` would put the next figure at whichever end the
-        # last thing added happened to leave nearer.
+        # layout, since what is past the stretch is no longer only the note.
         self._head.addStretch(1)
         self._figures = 0
         self._head.addWidget(self._note)
 
-        # The room is a widget and not a bare layout, so that it is something with
-        # a size policy: an empty layout given the column's stretch cannot take
-        # the space it was given, and a `QBoxLayout` with nothing able to expand
-        # centres what it holds — which is a head floating in the middle of a
-        # pane until something is put under it. It paints nothing itself, so the
-        # view's ground is what shows through wherever the contents do not reach.
+        # The room is a widget and not a bare layout, so that it has a size
+        # policy: an empty layout cannot take the column's stretch, and a
+        # `QBoxLayout` with nothing able to expand centres what it holds. It
+        # paints nothing itself, so the view's ground shows through wherever the
+        # contents do not reach.
         self._room = QWidget()
         self._room.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self._body = QVBoxLayout(self._room)
@@ -155,11 +150,10 @@ class View(QWidget):
         # for the rules naming them to land on anything. A subclass that builds
         # more calls this again at the foot of its own `__init__`.
         self._restyle()
-        # A bound method and never a lambda: PySide6 holds a receiver's bound
-        # method weakly and drops the connection when the widget goes, where a
-        # lambda closing over `self` would keep a dead view subscribed. Bound
-        # once here and never again in a subclass — the method it resolves to is
-        # the override, and a second connection would restyle twice per change.
+        # A bound method: PySide6 holds a receiver's bound method weakly and
+        # drops the connection when the widget goes, where a lambda closing over
+        # `self` keeps a dead view subscribed. Bound once here and never again in
+        # a subclass, since the method it resolves to is already the override.
         palette.CHANGED.connect(self._restyle)
         metrics.CHANGED.connect(self._restyle)
 

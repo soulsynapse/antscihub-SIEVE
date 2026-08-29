@@ -36,11 +36,9 @@ from sieve.gui.view.dev.card_mockups.look import (
     line,
 )
 
-#: How wide a mock card is drawn. Fixed rather than sharing the row's width,
-#: because how a title elides and how four icons crowd a head are the things
-#: being compared and both are answers to a width — two cards of different
-#: widths in one row would be comparing looks and widths at once. Near what the
-#: right pane gives a card at an even split, which is where these will be seen.
+#: How wide a mock card is drawn. Fixed, so the row compares looks at one
+#: width: how a title elides and how four icons crowd a head are both answers
+#: to a width. Near what the right pane gives a card at an even split.
 _CARD = 300
 
 

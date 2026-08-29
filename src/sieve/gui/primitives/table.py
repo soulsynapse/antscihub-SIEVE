@@ -83,19 +83,18 @@ from sieve.gui.palette import ACCENT, DIM, LINE, PANEL, PANEL_HOT, TEXT, mix, rg
 from sieve.gui.primitives.nav import MARK_W
 
 #: How tall a row is, and the header above them. Fixed rather than grown from
-#: the text, which is `metrics.py`'s own bargain: `SIZE_MAX` is set where the
-#: fixed-height shapes in this tree stop fitting their rows, and it is a ceiling
-#: and not a scaling rule because a list that resized itself to its type would
-#: move under the user arrowing down it. The header is the shorter of the two —
-#: it is a caption over the list rather than a member of it.
+#: the text, which is `metrics.py`'s own bargain: `SIZE_MAX` is a ceiling set
+#: where the fixed-height shapes in this tree stop fitting their rows, so a list
+#: stands still under a user arrowing down it. The header is the shorter of the
+#: two — a caption over the list rather than a member of it.
 _ROW_H = 38
 _HEAD_H = 34
 
-#: The margin at each end of a row. The leading mark is drawn inside it, so a
-#: selected row's first cell stands where an unselected one's does without the
-#: mark needing room reserved for it — which is the one place `nav.py`'s reason
-#: for marking every entry does not apply, since a painted mark takes no space
-#: from a layout the way a border in a stylesheet does.
+#: The margin at each end of a row. The leading mark is painted inside it, so a
+#: selected row's first cell stands where an unselected one's does with no room
+#: reserved for the mark — which is why `nav.py` marks every entry and this does
+#: not: a border in a stylesheet takes space from a layout where a painted mark
+#: does not.
 _PAD = 14
 
 #: Between one column's text and the next column's. Part of the cell's own width
@@ -105,8 +104,8 @@ _PAD = 14
 _GAP = 12
 
 #: How far the rule between two rows steps off `LINE` toward the panel behind
-#: it. The header's rule keeps `LINE` whole: it divides two kinds of thing, and
-#: these divide two of the same.
+#: it. The header's rule keeps `LINE` whole, since it divides two kinds of thing
+#: where these divide two of the same.
 _RULE = 0.55
 
 
@@ -144,7 +143,7 @@ class Table(QWidget):
 
     #: Which row is current. Emitted on every move, the pointer's and the
     #: keyboard's alike, so whatever draws the row's contents elsewhere follows
-    #: both without either knowing about the other.
+    #: both.
     chosen = Signal(int)
 
     def __init__(self, columns: Sequence[Column], parent: QWidget | None = None) -> None:
@@ -152,9 +151,9 @@ class Table(QWidget):
         self._columns = tuple(columns)
         self._current = -1
         self._rows: list[_Row] = []
-        # It answers ↑/↓, so it has to be reachable by tabbing as well as by
-        # clicking — the same floor `nav.py` puts under a surface that moves
-        # under the keyboard.
+        # It answers ↑/↓, so the keyboard has to be able to reach it by tabbing
+        # — the same floor `nav.py` puts under a surface that moves under the
+        # keyboard.
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
 
@@ -164,9 +163,9 @@ class Table(QWidget):
         self._column.addWidget(_Row(self._columns, [c.name for c in columns], header=True))
 
         self._dress()
-        # Bound methods and never lambdas, for `button.py`'s reason: PySide6
-        # drops a connection to a bound method when the receiver goes, where a
-        # lambda closing over `self` would keep a dead table subscribed.
+        # Bound methods, for `button.py`'s reason: PySide6 drops a connection to
+        # a bound method when the receiver goes, where a lambda closing over
+        # `self` keeps a dead table subscribed.
         palette.CHANGED.connect(self._dress)
         metrics.CHANGED.connect(self._dress)
 
@@ -227,8 +226,8 @@ class Table(QWidget):
             self.step(-1 if key == Qt.Key.Key_Up else +1)
             event.accept()
             return
-        # Escape among them: it is the overlay's, and an accepted key here is
-        # one the thing on top never sees.
+        # Escape among them: it is the overlay's, which sees only what this
+        # table leaves unaccepted.
         super().keyPressEvent(event)
 
     def _dress(self) -> None:
@@ -271,9 +270,8 @@ class _Row(QWidget):
         self._selected = False
         self._hovered = False
         self.setFixedHeight(_HEAD_H if header else _ROW_H)
-        # Asked for explicitly, as `card.py` and `check.py` do: hover is
-        # something this widget paints, so it has to be something this widget is
-        # told about.
+        # Asked for explicitly, as `card.py` and `check.py` do: this widget
+        # paints the hover, so it has to be told about it.
         self.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
         if not header:
             self.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -283,8 +281,7 @@ class _Row(QWidget):
         row.setSpacing(0)
         for column, cell in zip(columns, list(cells) + [None] * len(columns)):
             row.addWidget(self._holder(column, cell))
-        # Last, and what keeps the declared columns at their declared widths
-        # instead of spread across whatever width the row ends up with.
+        # Last, and what keeps the declared columns at their declared widths.
         row.addStretch(1)
 
     def _holder(self, column: Column, cell: object) -> QWidget:
@@ -338,8 +335,8 @@ class _Row(QWidget):
             painter.fillRect(box, PANEL_HOT)
 
         # Half a pixel up, for `card.py`'s reason: a 1px pen straddles the line
-        # it is given, so a rule on the row's own bottom edge loses half of
-        # itself past the widget and comes back looking like half a line.
+        # it is given, so the row's own bottom edge would lose the pen's outer
+        # half past the widget.
         floor = box.bottom() - 0.5
         painter.setPen(QPen(LINE if self._header else mix(LINE, PANEL, _RULE), 1))
         painter.drawLine(QPointF(box.left(), floor), QPointF(box.right(), floor))

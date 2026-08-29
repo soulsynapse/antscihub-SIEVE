@@ -48,19 +48,15 @@ _FILE = "settings.json"
 
 #: Names a document to use instead of the per-user one. Set by a run that must
 #: not touch the person at the keyboard — a check that launches SIEVE, clicks a
-#: palette and closes it would otherwise leave their palette changed, and the
-#: change is silent because it is exactly what the application is supposed to do
-#: when someone clicks a palette. An environment variable rather than an
-#: argument because the writers are `palette` and `metrics`, reached through
-#: `stored`/`remember` from wherever a view happens to be built, and threading a
-#: path to them would put a test's concern in every constructor between here and
-#: there.
+#: palette and closes it writes that palette exactly as a real click would. An
+#: environment variable rather than an argument, because the writers are
+#: `palette` and `metrics`, reached through `stored`/`remember` from wherever a
+#: view happens to be built.
 _OVERRIDE = "SIEVE_SETTINGS"
 
 #: The document as last read or written, or `None` before it has been read.
-#: Held so that reading a preference is not a file open — `stored()` is called
-#: during startup and could be called from a view being built, and neither is a
-#: place to be paying for disk.
+#: Held so that reading a preference is not a file open: `stored()` is called
+#: during startup and can be called from a view being built.
 _document: dict[str, Any] | None = None
 
 

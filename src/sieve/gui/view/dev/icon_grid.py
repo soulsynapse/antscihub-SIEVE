@@ -41,24 +41,21 @@ from sieve.gui import icons, palette
 from sieve.gui.palette import DIM, TEXT, rgb
 from sieve.gui.view.dev.gallery import GUTTER, sheet
 
-#: How big a glyph is drawn here. Not `icons.SIZE`: at 16 a line icon is a mark
-#: you recognise once you know what it is, and this is the surface for the case
-#: where you do not. 32 is the size the sheet's last column already draws, so the
-#: two sections agree about what large means.
+#: How big a glyph is drawn here. Larger than `icons.SIZE`, because at 16 a line
+#: icon is a mark you recognise once you know it and this is the surface for the
+#: case where you do not. 32 is what the sheet's last column already draws, so
+#: the two sections agree about what large means.
 _GLYPH = 32
 
 #: How wide a tile is, and therefore how many fit. Wide enough for the longest
-#: name vendored so far to sit on one line, with a longer one wrapping rather
-#: than being cut — a browse grid whose labels elide is one where the names have
-#: to be guessed from the pictures, the failure `icon_sheet` leads each row with
-#: a name to avoid. Every tile is held to it, so the columns are the same width
-#: whatever is in them: a grid whose columns are sized by their longest name puts
-#: the glyphs at irregular intervals, and the eye scanning for a shape is then
-#: also tracking where the next one starts.
+#: name vendored so far to sit on one line, with a longer one wrapping so the
+#: name stays readable — the same reason `icon_sheet` leads each row with one.
+#: Every tile is held to it, so the columns are the same width whatever is in
+#: them and the glyphs fall at regular intervals as the eye scans.
 _TILE = 112
 
-#: The gap between tiles. Smaller than the gallery's gutter on purpose: these are
-#: one set being scanned, and tiles spaced like blocks read as separate things.
+#: The gap between tiles. Smaller than the gallery's gutter on purpose: these
+#: are one set being scanned, and read as one at this spacing.
 _GAP = 6
 
 
@@ -75,10 +72,9 @@ class IconGrid(QWidget):
         self.setObjectName("gallery")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
 
-        #: How many tiles a row currently holds. Held so a resize that does not
-        #: change it costs nothing — a resize is continuous while a window edge
-        #: is dragged, and rebuilding a grid of pixmaps per pixel is the one way
-        #: this surface could be slow.
+        #: How many tiles a row holds. Held so a resize that does not change it
+        #: costs nothing: a drag resizes continuously, and rebuilding a grid of
+        #: pixmaps per pixel is the one way this surface could be slow.
         self._columns = 0
 
         self._grid = QGridLayout()
@@ -131,10 +127,8 @@ class IconGrid(QWidget):
         if columns == self._columns:
             return
         # The stretch is taken off the column it was put on before the count
-        # moves. A `QGridLayout` keeps a stretch factor per index whether or not
-        # anything stands there, so a widening left alone would have the old
-        # trailing column — now a column of tiles — absorbing the slack and
-        # spacing that one tile away from its row.
+        # moves: a `QGridLayout` keeps a stretch factor per index whether or not
+        # anything stands there, and after a widening that index holds tiles.
         if self._columns:
             self._grid.setColumnStretch(self._columns, 0)
         self._columns = columns
@@ -160,8 +154,7 @@ class IconGrid(QWidget):
                 Qt.AlignmentFlag.AlignTop,
             )
         # An empty column past the last tile takes the remainder, so a row that
-        # does not divide evenly stays a grid instead of spreading its tiles to
-        # the width of the pane.
+        # does not divide evenly still lands its tiles on the grid.
         self._grid.setColumnStretch(self._columns, 1)
 
     def _redraw(self) -> None:

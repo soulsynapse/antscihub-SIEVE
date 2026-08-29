@@ -72,21 +72,19 @@ from PySide6.QtWidgets import QGridLayout, QLabel, QSizePolicy, QWidget
 from sieve.gui import metrics, palette
 from sieve.gui.palette import DIM, TEXT, rgb
 
-#: What stands in for a value that is not there. An em dash and not a hyphen or
-#: the word "none": it is the width of the type rather than of a minus sign, so a
-#: column of them is a column, and it is not a word a caller could also have
-#: meant literally.
+#: What stands in for a value that is not there. An em dash: it is the width of
+#: the type rather than of a minus sign, so a column of them is a column, and it
+#: is not a word a caller could also have meant literally.
 ABSENT = "—"
 
 #: Between one fact and the next. Tighter than the air between two cards, because
-#: these are lines of one paragraph and not things standing near each other — the
-#: same reading `empty.py` takes of the gap between its two lines, at the size a
-#: run of them rather than a pair of them needs.
+#: these are lines of one paragraph — the same reading `empty.py` takes of the gap
+#: between its two lines, at the size a run of them needs.
 _LEAD = 5
 
 #: Between a name and its value. Wide enough that the two columns are two, narrow
-#: enough that the eye crosses without losing the line — this is the only thing
-#: keeping the pair together, since there is no rule and no fill to do it.
+#: enough that the eye crosses without losing the line: with no rule and no fill,
+#: this gap is what keeps the pair together.
 _GAP = 18
 
 
@@ -156,11 +154,9 @@ class Facts(QWidget):
     ) -> None:
         super().__init__(parent)
         self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        # Expanding and not `Preferred`, which is `Empty`'s policy and the one
-        # the class docstring's claim actually needs: the values are `Ignored`
+        # Expanding rather than `Empty`'s `Preferred`: the values are `Ignored`
         # horizontally, so this widget's own width hint is barely wider than the
-        # names, and a `Preferred` list in a card would be handed that hint and
-        # elide every value to nothing beside whatever else was in the row.
+        # names, and a `Preferred` list in a card is handed that hint.
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 
         self._facts: tuple[Fact, ...] = ()
@@ -168,16 +164,16 @@ class Facts(QWidget):
         self._grid.setContentsMargins(0, 0, 0, 0)
         self._grid.setHorizontalSpacing(_GAP)
         self._grid.setVerticalSpacing(_LEAD)
-        # The names take what they need and the values take the rest. Column 0 is
-        # left unstretched rather than fixed at a number, which is the whole of
-        # this file's difference from `table.py` — see the module docstring.
+        # The names take what they need and the values take the rest. Column 0
+        # is left unstretched, which is this file's difference from `table.py` —
+        # see the module docstring.
         self._grid.setColumnStretch(1, 1)
 
         self.set_facts(facts)
         self.setStyleSheet(sheet())
-        # Bound methods, never lambdas: PySide6 drops a connection to a bound
-        # method when the receiver goes, where a lambda closing over `self` would
-        # keep a dead widget subscribed for the life of the run.
+        # Bound methods: PySide6 drops a connection to a bound method when the
+        # receiver goes, where a lambda closing over `self` keeps a dead
+        # widget subscribed for the life of the run.
         palette.CHANGED.connect(self._restyle)
         metrics.CHANGED.connect(self._resize)
 
@@ -208,8 +204,7 @@ class Facts(QWidget):
             name = QLabel(fact.name)
             name.setObjectName("factname")
             # Top-aligned rather than centred: the two labels are one line of
-            # text, and a name centred against a value that Qt has given a
-            # taller box would sit a pixel low for no reason a reader could name.
+            # text, and Qt can give the value the taller box.
             self._grid.addWidget(name, row, 0, Qt.AlignmentFlag.AlignTop)
             self._grid.addWidget(_Value(fact.value), row, 1)
 
@@ -260,15 +255,14 @@ class _Value(QLabel):
         super().__init__()
         self._full = text
         # The dash is a stand-in and not the value, so it is told apart by object
-        # name rather than by being written into `_full`: a caller reading back
-        # `facts()` gets what it handed in, and a widened pane still has nothing
-        # to un-elide.
+        # name rather than written into `_full`: a caller reading back `facts()`
+        # gets what it handed in, and a widened pane has nothing to un-elide.
         self.setObjectName("factvalue" if text else "factabsent")
         self.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
-        # Ignored, so the grid hands this whatever is left after the names rather
-        # than widening the whole list to fit one long value — which is the same
-        # arrangement `table._Cell` stands in, with the stretched column playing
-        # the part the declared width plays there.
+        # Ignored, so the grid hands this whatever is left after the names and
+        # one long value leaves the list's width alone — the arrangement
+        # `table._Cell` stands in, with the stretched column playing the part the
+        # declared width plays there.
         self.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         self._elide()
 

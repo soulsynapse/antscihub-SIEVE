@@ -91,8 +91,7 @@ class Palette(NamedTuple):
 
     #: What a view standing over the panes lays over them. Dark and translucent
     #: in every palette, light ones included: the work is not being replaced,
-    #: only stood in front of, and dimming is what says so. A light scrim over
-    #: light panes would raise nothing and read as fog. Alpha is lower in the
+    #: only stood in front of, and dimming is what says so. Alpha is lower in the
     #: light palettes because the same veil over a bright ground hides more.
     scrim: QColor
 
@@ -112,8 +111,7 @@ def _c(*rgba: int) -> QColor:
 
 
 #: The dark palettes. Dark is the default and the longer list because the work is
-#: footage: a bright surround around a video pane is what the eye adapts to, and
-#: everything shown in the frame is then judged against the wrong white.
+#: footage, and the eye judges what is in the frame against what surrounds it.
 _DARK: tuple[Palette, ...] = (
     Palette(
         "slate",
@@ -229,11 +227,11 @@ _DARK: tuple[Palette, ...] = (
     ),
 )
 
-#: The light palettes. Not a dark one inverted: a light surface wants a smaller
-#: step between `panel` and `stack_bg` than a dark one does, because the same
+#: The light palettes, each drawn rather than inverted from a dark one: a light
+#: surface wants a smaller step between `panel` and `stack_bg`, because the same
 #: difference in luminance reads as a bigger difference the brighter the ground.
-#: They exist for the two cases dark does not serve — a screen under room lights
-#: or daylight, and a pane about to be screenshotted into a figure whose journal
+#: They serve the two cases dark does not — a screen under room lights or
+#: daylight, and a pane about to be screenshotted into a figure whose journal
 #: prints on white.
 _LIGHT: tuple[Palette, ...] = (
     Palette(
@@ -309,8 +307,8 @@ _LIGHT: tuple[Palette, ...] = (
 )
 
 #: Every palette on offer, dark first. One sequence rather than two exported
-#: lists, so a caller that wants the split makes it from `dark` and a caller that
-#: only wants "all of them, in order" does not have to concatenate anything.
+#: lists: a caller that wants the split makes it from `dark`, and a caller that
+#: wants "all of them, in order" has it here.
 PALETTES: tuple[Palette, ...] = _DARK + _LIGHT
 
 #: What the application comes up in when nothing has been chosen. `slate`
@@ -319,11 +317,10 @@ PALETTES: tuple[Palette, ...] = _DARK + _LIGHT
 DEFAULT = _DARK[0]
 
 #: What the choice is called in the settings document. The *name* is stored and
-#: not the eight colours: a palette is a set of decisions this module is allowed
-#: to revise — a grey lifted, an accent retuned — and a document holding the
-#: values would pin a user to whichever version of `slate` they first launched.
-#: A name that no longer matches anything resolves to the default, which is the
-#: behaviour a renamed or retired palette should have.
+#: not the eight colours, so a palette stays a set of decisions this module may
+#: revise — a grey lifted, an accent retuned — and a user tracks the current
+#: version of it. A name that no longer matches anything resolves to the
+#: default, which is what a renamed or retired palette should do.
 _KEY = "palette"
 
 
@@ -344,7 +341,7 @@ _notifier = _Notifier()
 CHANGED = _notifier.changed
 
 # The live colours. Empty here and filled by the `use()` at the bottom of the
-# module: two places stating slate's greys is one place for them to disagree.
+# module, so slate's greys are stated once.
 STACK_BG = QColor()
 PANEL = QColor()
 PANEL_HOT = QColor()
@@ -461,8 +458,7 @@ def _remembered() -> Palette:
 
 
 # At import, because the colours are what everything below this module is built
-# out of: a window that came up in the default and was re-dressed once the
-# settings were read would show the wrong palette for as long as it took, which
-# is a flash of the wrong application on every launch. Reading the document here
-# is the one disk touch on the way up, and it is a few hundred bytes.
+# out of, so the first window is dressed in the palette that was chosen. Reading
+# the document here is the one disk touch on the way up, and it is a few hundred
+# bytes.
 use(_remembered())

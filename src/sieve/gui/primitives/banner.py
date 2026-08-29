@@ -90,51 +90,45 @@ from PySide6.QtWidgets import QLabel, QSizePolicy, QVBoxLayout, QWidget
 from sieve.gui import metrics, palette
 from sieve.gui.palette import ACCENT, DIM, LINE, PANEL_HOT, TEXT, rgb
 
-#: The kinds, and there are four because the mockup found four things to say and
-#: no fifth. Strings and not an enum, for `button.py`'s and `pill.py`'s reason:
-#: they are what a caller writes, `Banner("Nothing to write", ..., FAIL)` reads
-#: as the sentence it is, and the constants exist so the spelling is checked
-#: somewhere.
+#: The kinds, four because the mockup found four things to say. Strings and not
+#: an enum, for `button.py`'s and `pill.py`'s reason: they are what a caller
+#: writes, `Banner("Nothing to write", ..., FAIL)` reads as the sentence it is,
+#: and the constants exist so the spelling is checked somewhere.
 #:
-#: The split that matters is not four ways but two: `WARN` and `FAIL` want the
-#: user, `NOTE` and `DONE` do not. That is the only distinction the tree has a
-#: colour for — see the module docstring — and the mark is what carries the rest.
+#: The split that matters is two ways: `WARN` and `FAIL` want the user, `NOTE`
+#: and `DONE` do not. That is the distinction the tree has a colour for — see the
+#: module docstring — and the mark carries the rest.
 NOTE = "note"
 WARN = "warn"
 FAIL = "fail"
 DONE = "done"
 
-#: The stripe down the leading edge. Three pixels, which is `nav.MARK_W` plus
-#: one and deliberately not that constant: the nav's mark says *this is the one
-#: you are on* and is a selection, where this says *there is something here* and
-#: is never one of a set. Borrowing the number would tie two marks together that
-#: would want to move for unrelated reasons.
+#: The stripe down the leading edge. Three pixels, and its own constant rather
+#: than `nav.MARK_W`: the nav's mark is a selection, saying *this is the one you
+#: are on*, where this says *there is something here*. The two move for
+#: unrelated reasons.
 _STRIPE = 3
 
-#: The air inside the block. Wider than a card's `_INSET`, because a card's inset
-#: is measured against a rule and a row of verbs and this is measured against
-#: nothing — a paragraph with a card's margins reads as text that overran its
-#: box.
+#: The air inside the block. Wider than a card's `_INSET`, which is measured
+#: against a rule and a row of verbs where this is measured against a paragraph.
 _PAD_X = 12
 _PAD_Y = 10
 
 #: The mark, and the room between it and the words. Fourteen is `check.py`'s box
-#: and is the same number for the same reason rather than by coincidence: it is
-#: the size at which a drawn glyph is three segments and not a smudge. Fixed and
-#: not a multiple of the type size, since a mark that grew with the text would
-#: put a different amount of air around itself at every size.
+#: for the same reason: it is the size at which a drawn glyph is three segments
+#: and not a smudge. Fixed rather than a multiple of the type size, so the air
+#: around the mark is the same at every size.
 _MARK = 14
 _MARK_GAP = 10
 
 #: How thick the mark is stroked, and how far its two-line kinds are inset from
-#: the box. Rounded at the ends and the joins, so a tick is one stroke and not a
-#: bent wire — which at 14px is what the eye actually sees.
+#: the box. Rounded at the ends and the joins, so at 14px a tick reads as one
+#: stroke.
 _STROKE = 1.6
 _INSET = 0.26
 
-#: Between the title and the body. Tight, because the two are one message: the
-#: gap that separates a banner from what is under it is the layout's, and one
-#: this wide inside would make the body read as a second thing.
+#: Between the title and the body. Tight, because the two are one message; the
+#: gap that separates a banner from what is under it is the layout's.
 _LEAD = 2
 
 
@@ -194,10 +188,10 @@ class Banner(QWidget):
 
         self._title = QLabel(title)
         self._title.setObjectName("bannertitle")
-        # Not wrapped, unlike the body. A title is the one line that has to be
-        # readable at a glance from across the pane, and one that wrapped would
-        # walk the mark beside it — which is centred on the title's own line, so
-        # that a long body does not drag the drawing down the block.
+        # Not wrapped, unlike the body: a title is the one line that has to read
+        # at a glance from across the pane, and it holds the mark beside it on
+        # one line — the mark is centred on the title, so a long body leaves the
+        # drawing where it is.
         self._title.setWordWrap(False)
 
         self._body = QLabel(body)
@@ -216,19 +210,18 @@ class Banner(QWidget):
         column.addWidget(self._title)
         column.addWidget(self._body)
 
-        # As wide as it is given and no taller than its words: a banner is put in
-        # a column and takes that column's width, and the height it wants at that
-        # width is the wrapped body's — which is what `heightForWidth` is for and
-        # what the policy has to be told to ask for.
+        # As wide as it is given and no taller than its words: a banner takes its
+        # column's width, and the height it wants at that width is the wrapped
+        # body's, which the policy has to be told to ask `heightForWidth` for.
         policy = QSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
         policy.setHeightForWidth(True)
         self.setSizePolicy(policy)
 
         self._resize()
         self.setStyleSheet(sheet())
-        # Bound methods, never lambdas: PySide6 drops a connection to a bound
-        # method when the receiver goes, where a lambda closing over `self` would
-        # keep a dead banner subscribed for the life of the run.
+        # Bound methods: PySide6 drops a connection to a bound method when the
+        # receiver goes, where a lambda closing over `self` keeps a dead banner
+        # subscribed for the life of the run.
         palette.CHANGED.connect(self._restyle)
         metrics.CHANGED.connect(self._resize)
 
@@ -316,8 +309,8 @@ class Banner(QWidget):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
 
         # Half a pixel in on every side, for `card.py`'s reason: a 1px pen
-        # straddles the path it is given, so an edge drawn on the widget's own
-        # rect loses its outer half and comes back looking like half a line.
+        # straddles the path it is given, so the widget's own rect would lose the
+        # pen's outer half.
         box = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
         corner = metrics.radius()
         shape = QPainterPath()
@@ -327,8 +320,7 @@ class Banner(QWidget):
 
         # Clipped by the block's own shape, because the stripe runs into two
         # rounded corners — the meter's problem at the card's foot, with the same
-        # answer: the bar carries no radius of its own and the corner stays the
-        # block's.
+        # answer: the corner stays the block's and the bar carries no radius.
         painter.save()
         painter.setClipPath(shape)
         painter.fillRect(
@@ -390,8 +382,7 @@ class Banner(QWidget):
             )
         elif self._kind == WARN:
             # Inside a triangle rather than a circle, so the bar is dropped and
-            # shortened: the room under a triangle's apex is not the room inside
-            # a circle, and a stroke sized for the one overruns the other.
+            # shortened to the room under the apex.
             painter.drawLine(
                 QPointF(box.center().x(), box.top() + side * 0.42),
                 QPointF(box.center().x(), box.top() + side * 0.66),

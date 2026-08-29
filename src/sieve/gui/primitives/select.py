@@ -59,25 +59,24 @@ from sieve.gui.palette import ACCENT, DIM, LINE, PANEL, PANEL_HOT, TEXT, mix, rg
 from sieve.gui.primitives.field import EDGE, EDGE_HOVER, RADIUS
 
 #: The box around the current item. `_PAD_RIGHT` is the room the chevron is drawn
-#: in as well as the air beside it, which is why it is not `_PAD_X`: the text
-#: would otherwise run under the mark that says this is a list.
+#: in as well as the air beside it, which is why it is wider than `_PAD_X`: the
+#: text stops clear of the mark that says this is a list.
 _PAD_X = 8
 _PAD_Y = 4
 _PAD_RIGHT = 24
 
 #: The chevron: how wide, how far it falls, how thick, and how far its right
 #: point sits in from the box's edge. Rounded at the ends and the join, so the
-#: two segments are one stroke and not a bent wire — the same treatment the tick
-#: in `check.py` gets, and for the same reason at the same size.
+#: two segments read as one stroke — the treatment the tick in `check.py` gets,
+#: for the same reason at the same size.
 _MARK_W = 8.0
 _MARK_H = 3.5
 _MARK_PEN = 1.4
 _MARK_INSET = 9.0
 
 #: How much of the popup's own height one row takes, and the air it keeps from
-#: the list's edge. Stated here rather than left to Qt: a sheet that dresses the
-#: view at all takes over its metrics, and a row with no padding under a sheet is
-#: text jammed against a hairline.
+#: the list's edge. Stated here rather than left to Qt, because a sheet that
+#: dresses the view at all takes over its metrics.
 _ITEM_PAD_X = 10
 _ITEM_PAD_Y = 5
 
@@ -104,14 +103,13 @@ class Select(QComboBox):
         if options:
             self.addItems(options)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        # Asked for explicitly, as `card.py` and `check.py` do: the chevron's
-        # colour is something this widget paints, so the hover state has to be
-        # something this widget is told about rather than left to the sheet.
+        # Asked for explicitly, as `card.py` and `check.py` do: this widget
+        # paints the chevron's colour, so it has to be told about the hover
+        # state rather than leaving it to the sheet.
         self.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
-        # As wide as its longest option and no wider. A fixed width is the
-        # mockup's, where every select holds the same three words; here the
-        # options are a view's and a box that elided them would hide the half of
-        # the choice that differs.
+        # As wide as its longest option and no wider. The mockup's fixed width
+        # suits a select holding the same three words everywhere; here the
+        # options are a view's, and every one of them stays readable.
         self.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
         # Qt's own combo delegate draws its rows without consulting the
         # stylesheet, so `::item` rules reach nothing until the plain styled
@@ -121,7 +119,7 @@ class Select(QComboBox):
         self._dress()
         # Bound methods and never lambdas, for the reason `button.py` gives:
         # PySide6 drops a connection to a bound method when the receiver goes,
-        # where a lambda closing over `self` would keep a dead select subscribed.
+        # where a lambda closing over `self` keeps a dead select subscribed.
         palette.CHANGED.connect(self._dress)
         metrics.CHANGED.connect(self._dress)
 
@@ -211,9 +209,9 @@ class Select(QComboBox):
         mark = QPainterPath(QPointF(right - _MARK_W, middle - _MARK_H / 2))
         mark.lineTo(right - _MARK_W / 2, middle + _MARK_H / 2)
         mark.lineTo(right, middle - _MARK_H / 2)
-        # `DIM` at rest and the ink under the pointer, which is the quieter half
-        # of what the hover already says: the border has moved as well, and a
-        # chevron that jumped to the accent would be claiming the selection.
+        # `DIM` at rest and the ink under the pointer, the quieter half of what
+        # the hover says — the border has moved too, and the accent is reserved
+        # for the selection.
         if not self.isEnabled():
             ink = DIM
         else:

@@ -66,25 +66,23 @@ from sieve.gui.palette import ACCENT, DIM, LINE, PANEL, PANEL_HOT, TEXT, mix, rg
 #: under `card.py`'s hover step on purpose, so the darker edge of a field and the
 #: answer a card gives the pointer are never the same colour.
 #:
-#: Public, because "editable" is not this widget's look — it is the one step that
-#: tells a control the user may change from the panel it stands on, and the
-#: checkbox in `check.py` has to be made of the same step or the tree would have
-#: two answers to it. Named here rather than in a module both import, because
-#: this is where the claim is argued and a constant is best read beside its
-#: argument.
+#: Public, because "editable" is not this widget's look: it is the one step that
+#: tells a control the user may change from the panel it stands on, and
+#: `check.py`'s box is made of the same step. Named here rather than in a module
+#: both import, because this is where the claim is argued and a constant is best
+#: read beside its argument.
 EDGE = 0.14
 EDGE_HOVER = 0.30
 
 #: The ring: how wide, how far outside the control, and how much of the accent it
-#: keeps. It is a glow and not a line — at full strength it would be a second
-#: border around the first, which is the thickening this exists instead of. The
-#: alpha is high enough to read on `panel` in a dark palette, where a fraction
-#: tuned on white disappears.
+#: keeps. A glow rather than a line, so focus reads without thickening the
+#: border. The alpha is high enough to read on `panel` in a dark palette, where a
+#: fraction tuned on white disappears.
 #:
 #: Public for the reason `EDGE` is, and more so: focus is the one thing on screen
-#: the keyboard is pointing at, so a second glow tuned somewhere else would be a
-#: second answer to *where am I*. A widget that paints its own ring — `check.py`
-#: does, having no wrapper — draws this one at this width.
+#: the keyboard is pointing at, and the tree gives it one answer. A widget that
+#: paints its own ring — `check.py` does, having no wrapper — draws this one at
+#: this width.
 RING_W = 3
 RING_GAP = 3
 _RING_ALPHA = 64
@@ -94,10 +92,9 @@ _RING_ALPHA = 64
 #: corners*, and a user squaring off their cards did not ask for square fields.
 #:
 #: It is public because it is not this control's corner but the *ring's*:
-#: `Field.paintEvent` draws the glow at whatever it holds plus the inset, so a
-#: control that named a corner of its own would be a control the ring no longer
-#: follows. Anything meant to stand inside a `Field` — `select.py` does — takes
-#: this one rather than restating a 4 free to drift from it.
+#: `Field.paintEvent` draws the glow at whatever it holds plus the inset, so the
+#: ring follows whatever takes this number. Anything meant to stand inside a
+#: `Field` — `select.py` does — takes this one rather than restating a 4.
 _PAD_X = 8
 _PAD_Y = 4
 RADIUS = 4
@@ -128,14 +125,14 @@ class LineField(QLineEdit):
         self.setObjectName("field")
         self._joined = False
         if numeric:
-            # Right, because a number is read from its low digits and a column of
-            # them lines up on those. See the module docstring on why this is the
-            # whole of the numeric treatment for now.
+            # Right, because a number is read from its low digits and a column
+            # of them lines up on those. See the module docstring on the extent
+            # of the numeric treatment.
             self.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         self._dress()
         # Bound methods and never lambdas, for the reason `button.py` gives:
         # PySide6 drops a connection to a bound method when the receiver goes,
-        # where a lambda closing over `self` would keep a dead field subscribed.
+        # where a lambda closing over `self` keeps a dead field subscribed.
         palette.CHANGED.connect(self._dress)
         metrics.CHANGED.connect(self._dress)
 
@@ -219,18 +216,16 @@ class Field(QWidget):
         self._hint.setWordWrap(True)
 
         column = QVBoxLayout(self)
-        # The inset on every side is the room the ring is drawn in — a wrapper
-        # with no margins would clip it against its own edge, and a ring that is
-        # three sides of a rectangle is a rendering fault rather than a state.
+        # The inset on every side is the room the ring is drawn in, so the
+        # wrapper's own edge falls outside all four sides of it.
         column.setContentsMargins(RING_GAP, RING_GAP, RING_GAP, RING_GAP)
         column.setSpacing(_SPACING)
         if label:
             column.addWidget(self._label)
         column.addWidget(self._control)
-        # Added whether or not there is one to say, and hidden when there is
-        # not — a hidden widget is skipped by the layout and costs no height, so
-        # what this buys is that `set_hint` is a field with a hint rather than a
-        # field that grew a widget, and a caller need not know which it built.
+        # Added whether or not there is one to say, and hidden when there is not:
+        # a hidden widget is skipped by the layout and costs no height, so
+        # `set_hint` is a field with a hint and not a field that grew a widget.
         column.addWidget(self._hint)
         self._hint.setVisible(bool(hint))
 
@@ -291,8 +286,8 @@ class Field(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         # Half the pen outside the control's edge and half in, so the ring abuts
-        # the border rather than overlapping it — the control paints after this
-        # and would take back whatever fell inside.
+        # the border: the control paints after this and takes back whatever fell
+        # inside.
         inset = RING_W / 2
         box = QRectF(self._control.geometry()).adjusted(-inset, -inset, inset, inset)
         painter.setPen(QPen(ring(), RING_W))

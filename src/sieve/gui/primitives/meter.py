@@ -74,14 +74,13 @@ from sieve.gui import palette
 from sieve.gui.palette import ACCENT, DIM, LINE
 
 #: How thick a bar is, wherever it is drawn — see the module docstring on why the
-#: number lives here and not in the card that used to own it.
+#: number lives here.
 HEIGHT = 4
 
 #: How long a free-standing one is when nothing has told it otherwise, and the
-#: shortest it will agree to be. The default is the mockup's, which is the width
-#: at which a row of them can be compared at a glance; the floor is where a
-#: length stops being one and becomes a dash, and a cell narrower than that
-#: should be carrying the number instead.
+#: shortest it will agree to be. The default is the mockup's, the width at which
+#: a row of them can be compared at a glance; the floor is where a length still
+#: reads as one, and a narrower cell should carry the number instead.
 WIDTH = 84
 _MIN_W = 24
 
@@ -120,9 +119,8 @@ def draw(
         corner = box.height() / 2
         painter.setBrush(LINE)
         painter.drawRoundedRect(box, corner, corner)
-        # Intersected and not set: a caller may already be clipping — the card's
-        # foot is drawn inside the clip the card set to its own corner — and a
-        # plain `setClipRect` would replace that and let the bar out past it.
+        # Intersected and not set, so a caller's own clip survives: the card's
+        # foot is drawn inside the clip the card set to its own corner.
         painter.setClipRect(
             QRectF(box.left(), box.top(), box.width() * full, box.height()),
             Qt.ClipOperation.IntersectClip,
@@ -168,14 +166,14 @@ class Meter(QWidget):
         self._current = current
         self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         # As long as it is given and no thicker than a bar: a meter goes in a
-        # cell of a declared width or in a row beside a number, and the length is
-        # the holder's to set where the thickness is never anyone's.
+        # cell of a declared width or in a row beside a number, so the length is
+        # the holder's to set and the thickness is this file's.
         self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
 
-        # Bound methods, never lambdas: PySide6 drops a connection to a bound
-        # method when the receiver goes, where a lambda closing over `self` would
-        # keep a dead meter subscribed for the life of the run. No
-        # `metrics.CHANGED` — nothing here is measured in points.
+        # Bound methods: PySide6 drops a connection to a bound method when the
+        # receiver goes, where a lambda closing over `self` keeps a dead meter
+        # subscribed for the life of the run. No `metrics.CHANGED` — nothing
+        # here is measured in points.
         palette.CHANGED.connect(self.update)
 
     def full(self) -> float:
@@ -216,10 +214,9 @@ class Meter(QWidget):
         del event
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-        # Half a pixel in top and bottom: the groove is a filled shape rather
-        # than a stroked one, so the inset is not `card.py`'s pen problem but
-        # antialiasing — a 4px rounded rect on the widget's own rect has its
-        # curves cut off by the edge it is drawn against.
+        # Half a pixel in top and bottom, for antialiasing rather than
+        # `card.py`'s pen problem: the groove is a filled shape, and a 4px
+        # rounded rect on the widget's own rect has its curves cut by the edge.
         box = QRectF(self.rect()).adjusted(0, 0.5, 0, -0.5)
         draw(painter, box, self._full, current=self._current)
         painter.end()

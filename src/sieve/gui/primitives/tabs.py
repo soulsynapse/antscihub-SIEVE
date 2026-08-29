@@ -79,13 +79,13 @@ from sieve.gui.primitives.nav import MARK_W
 #: rather than the bar's: a segment's padding is measured so the *widest* label
 #: has room and every other is padded out to match, where tabs are each their own
 #: width and the number is only the gap between one word and the next. The height
-#: is what keeps the row a head rather than a line of text with a rule under it.
+#: is what makes the row read as a head.
 _PAD_X = 12
 _PAD_Y = 8
 
 #: The gap between two tabs' spans, on top of their padding. Small, because the
-#: spans do not draw themselves — the only thing separating two tabs is white,
-#: and a gap wide enough to be noticed would read as two rows of one word.
+#: spans do not draw themselves: white is all that separates two tabs, and at
+#: this width the row still reads as one.
 _GAP = 2
 
 
@@ -99,10 +99,9 @@ class Tabs(QWidget):
     """
 
     #: Which section is open. Emitted on every move, the pointer's and the
-    #: keyboard's alike, so the side that swaps the room below follows both
-    #: without either knowing about the other. Named as `nav.py` and
-    #: `segmented.py` name theirs, since it is the same question of a third
-    #: shape.
+    #: keyboard's alike, so the side that swaps the room below follows both.
+    #: Named as `nav.py` and `segmented.py` name theirs, since it is the same
+    #: question of a third shape.
     chosen = Signal(int)
 
     def __init__(
@@ -114,16 +113,14 @@ class Tabs(QWidget):
     ) -> None:
         super().__init__(parent)
         self.setObjectName("tabs")
-        # It answers ← and →, so it has to be reachable by tabbing as well as by
-        # clicking — a surface the pointer alone can focus is one the keyboard
-        # cannot get back to once anything else has had it.
+        # It answers ← and →, so the keyboard has to be able to reach it by
+        # tabbing and not only by clicking.
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
         self.setMouseTracking(True)
         # As wide as it is given and no taller than the row: the floor is the
-        # top edge of what stands below, and one that stopped after the last word
-        # would leave the room under it open at the side. See the docstring on
-        # why this is the opposite of the bar's.
+        # top edge of what stands below, and it runs the full width to meet it.
+        # See the docstring on why this is the opposite of the bar's.
         self.setSizePolicy(QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.Fixed)
 
         self._names = list(names)
@@ -131,9 +128,9 @@ class Tabs(QWidget):
         self._hover = -1
 
         self._refont()
-        # Bound methods and never lambdas, for the reason `button.py` gives:
-        # PySide6 drops a connection to a bound method when the receiver goes,
-        # where a lambda closing over `self` would keep a dead row subscribed.
+        # Bound methods, for the reason `button.py` gives: PySide6 drops a
+        # connection to a bound method when the receiver goes, where a lambda
+        # closing over `self` keeps a dead row subscribed.
         palette.CHANGED.connect(self.update)
         metrics.CHANGED.connect(self._refont)
 
@@ -176,8 +173,8 @@ class Tabs(QWidget):
             event.accept()
             return
         # Everything else goes up, Escape among them: it means "close what is on
-        # top" and is the overlay's, and an accepted key here is one the thing on
-        # top never sees.
+        # top" and is the overlay's, which sees only what this row leaves
+        # unaccepted.
         super().keyPressEvent(event)
 
     def mouseMoveEvent(self, event) -> None:

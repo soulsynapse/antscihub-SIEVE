@@ -25,12 +25,12 @@ from sieve.gui.view.dev.gallery import Gallery, Variant
 from sieve.gui.view.dev.icon_sheet.sheet import INKS, Group, Ink, groups
 
 #: How much of a row the names take. Wide enough for the longest name vendored
-#: so far with room for a longer one, since a name that wraps would make its row
-#: taller than the rows around it and the eye reads a wrapped row as a heading.
+#: so far with room for a longer one, so every row keeps the height of the rows
+#: around it.
 _NAME = 150
 
 #: How wide a drawing's column is: the largest glyph on the sheet plus enough
-#: air that neighbouring cells are separate things rather than a strip.
+#: air that neighbouring cells read as separate things.
 _CELL = 48
 
 
@@ -67,9 +67,8 @@ class _Table(QWidget):
         self._grid.setVerticalSpacing(4)
         self._grid.setColumnMinimumWidth(0, _NAME)
         # An empty column after the last cell takes whatever width is left, so
-        # the drawings stay in a block at the left instead of spreading to
-        # whatever width the bench happens to have — a row whose cells are a
-        # pane's width apart is not a comparison.
+        # the drawings stay in a block at the left and the row stays readable as
+        # a comparison at any bench width.
         self._grid.setColumnStretch(len(INKS) + 2, 1)
         self._fill()
 

@@ -32,27 +32,24 @@ from PySide6.QtWidgets import (
 
 from sieve.gui.palette import DIM, LINE, PANEL
 
-#: The bottom pane's height: the timeline band plus one control row. Not the
-#: user's to trade against the other panes, which is why it is a number here and
-#: not a splitter — the working window is read against the whole asset at a size
-#: the layout does not get a say in.
+#: The bottom pane's height: the timeline band plus one control row. A number
+#: rather than a splitter, because the working window is read against the whole
+#: asset at a size the layout does not get a say in.
 BOTTOM_HEIGHT = 128
 
 #: How deep a subpane is along the axis it anchors on, across the boundary it
 #: adds. A number rather than a splitter for the same reason the bottom pane's
-#: height is one: a strip the user could drag until it swallowed the core would
-#: stop being the smaller pane anchored to a side, which is the whole of what a
-#: subpane is.
+#: height is one: a subpane is the smaller pane anchored to a side, and stays
+#: smaller than the core.
 SUBPANE_EXTENT = 96
 
-#: How many subpanes a side will stack. Two, because a side that took any number
-#: would let the strips eat a pane whose extent is fixed against them; the cap
-#: is what keeps the core the largest thing in its own pane. Slot 0 sits at the
-#: pane's edge and each next one inward, between it and the core.
+#: How many subpanes a side will stack. Two, which keeps the core the largest
+#: thing in its own pane. Slot 0 sits at the pane's edge and each next one
+#: inward, between it and the core.
 SUBPANES_PER_SIDE = 2
 
-#: Neither pane may be dragged shut. A pane the user cannot see is one
-#: they cannot get back except by finding a seam with no width.
+#: Neither pane may be dragged shut: a pane with no width is one the user can
+#: only get back by finding a seam that has none either.
 _MIN_PANE = 160
 
 

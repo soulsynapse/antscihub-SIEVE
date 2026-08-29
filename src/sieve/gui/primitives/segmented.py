@@ -82,8 +82,7 @@ from sieve.gui.primitives.nav import MARK_W
 #: The box around one segment's label. Its own numbers and not `button.py`'s,
 #: because a segment's width is not its label's: the padding here is the air the
 #: *widest* label gets, and every other segment is padded out past it to match.
-#: The height is a button's, so a bar standing beside one does not set a taller
-#: row than the verb next to it.
+#: The height is a button's, so a bar stands the same row a verb does.
 _PAD_X = 10
 _PAD_Y = 6
 
@@ -97,9 +96,9 @@ class Segmented(QWidget):
     """
 
     #: Which option is on. Emitted on every move, the pointer's and the
-    #: keyboard's alike, so the side that draws it follows both without either
-    #: knowing about the other — `nav.py` names its own the same, since it is the
-    #: same question asked of a different shape.
+    #: keyboard's alike, so the side that draws it follows both. `nav.py` names
+    #: its own the same, since it is the same question asked of a different
+    #: shape.
     chosen = Signal(int)
 
     def __init__(
@@ -111,46 +110,42 @@ class Segmented(QWidget):
     ) -> None:
         super().__init__(parent)
         self.setObjectName("segmented")
-        # It answers ← and →, so it has to be reachable by tabbing as well as by
-        # clicking — a control the pointer alone can focus is one the keyboard
-        # cannot get back to once anything else has had it.
+        # It answers ← and →, so the keyboard has to be able to reach it by
+        # tabbing and not only by clicking.
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-        # One row and no taller: a bar stands in a column of settings, and one
-        # that stretched would put its labels somewhere other than where the
-        # control above it put its own.
+        # One row and no taller, so a column of settings keeps every control's
+        # labels on one line.
         self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
 
         self._current = -1
         self._segments: list[QPushButton] = []
 
         row = QHBoxLayout(self)
-        # The room the ring is drawn in, on every side. A ring painted on a
-        # widget with no margins would clip against its own edge, and a ring that
-        # is three sides of a rectangle is a rendering fault rather than a state.
+        # The room the ring is drawn in, on every side, so the widget's own edge
+        # falls outside all four sides of it.
         row.setContentsMargins(RING_GAP, RING_GAP, RING_GAP, RING_GAP)
         # Butted, not spaced: the divider between two segments is the left one's
-        # own border, and a gap would make this a row of small buttons.
+        # own border, which is what makes the row one bar.
         row.setSpacing(0)
         for index, text in enumerate(options):
             segment = QPushButton(text)
             segment.setObjectName("segment")
             segment.setCursor(Qt.CursorShape.PointingHandCursor)
-            # The tab stop is the bar's — see the module docstring. A segment
-            # that took focus would also draw the platform's own focus rect
-            # inside a box this file has already decided the look of.
+            # The tab stop is the bar's — see the module docstring — and the
+            # box's look is this file's, not the platform's focus rect.
             segment.setFocusPolicy(Qt.FocusPolicy.NoFocus)
             segment.clicked.connect(lambda _=False, index=index: self.select(index))
             row.addWidget(segment)
             self._segments.append(segment)
 
-        # Set rather than passed through `select`, which would refuse an index it
-        # is already at and emit for one it is not: what a bar comes up on is not
-        # a move, and nothing is connected yet to hear it called one.
+        # Set rather than passed through `select`: what a bar comes up on is a
+        # starting state and not a move, and nothing is connected yet to hear
+        # one.
         self._current = max(0, min(len(self._segments) - 1, current)) if self._segments else -1
         self._resize()
         # Bound methods and never lambdas, for the reason `button.py` gives:
         # PySide6 drops a connection to a bound method when the receiver goes,
-        # where a lambda closing over `self` would keep a dead bar subscribed.
+        # where a lambda closing over `self` keeps a dead bar subscribed.
         palette.CHANGED.connect(self._dress)
         metrics.CHANGED.connect(self._resize)
 
@@ -182,8 +177,8 @@ class Segmented(QWidget):
             event.accept()
             return
         # Everything else goes up, Escape among them: it means "close what is on
-        # top" and is the overlay's, and an accepted key here is one the thing on
-        # top never sees.
+        # top" and is the overlay's, which sees only what this bar leaves
+        # unaccepted.
         super().keyPressEvent(event)
 
     def _resize(self) -> None:

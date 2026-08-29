@@ -21,11 +21,9 @@ from sieve.gui.view.dev.card_mockups import CardMockups
 from sieve.gui.view.dev.icon_grid import IconGrid
 from sieve.gui.view.dev.icon_sheet import IconSheet
 
-#: How wide and tall the bench stands. Bigger than preferences and for the
-#: opposite reason: preferences holds rows of a label and a control, where extra
-#: width is distance between the pair, and the bench holds surfaces drawn at the
-#: size they will really be seen at — a gallery of cards squeezed into a settings
-#: card would be a gallery of the wrong cards.
+#: How wide and tall the bench stands. Bigger than preferences, which holds rows
+#: of a label and a control: the bench holds surfaces drawn at the size they
+#: will really be seen at.
 _WIDTH = 940
 _HEIGHT = 560
 

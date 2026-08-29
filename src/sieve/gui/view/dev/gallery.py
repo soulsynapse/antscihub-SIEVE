@@ -119,8 +119,7 @@ class Gallery(QWidget):
         stack.setSpacing(GUTTER)
         for variant in variants:
             stack.addWidget(_block(variant))
-        # Last, so a short list sits at the top of the panel rather than spread
-        # down whatever height the bench ends up with.
+        # Last, so a short list sits at the top of the panel.
         stack.addStretch(1)
 
         #: Held so a restyle can wake it — see `_restyle`.

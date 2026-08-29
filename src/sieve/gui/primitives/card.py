@@ -62,13 +62,11 @@ from sieve.gui import icons, metrics, palette
 from sieve.gui.palette import ACCENT, DIM, LINE, PANEL, TEXT, rgb
 from sieve.gui.primitives import meter
 
-#: The card's corner is `metrics.radius()` and no longer a number here. The
-#: argument for the 6 it defaults to is still the card's — small enough to read
-#: as a cut corner rather than as a pill, which is what keeps a column of twenty
-#: of them looking like a stack of cards and not a stack of buttons — but it is
-#: an argument for a default rather than for the only value allowed, and it is
-#: made in `metrics.py` beside the range it bounds. Read in `paintEvent` and
-#: never held: see that module on why a size is asked for and a colour is not.
+#: The card's corner is `metrics.radius()`. The argument for its default is the
+#: card's — small enough to read as a cut corner, which keeps a column of twenty
+#: reading as a stack of cards — and is made in `metrics.py`, beside the range it
+#: bounds. Read in `paintEvent` and never held: see that module on why a size is
+#: asked for and a colour is not.
 
 #: Where the head and the body hold their contents off the card's edge, and so
 #: also where the rule under the head starts: the rule, the title and every knob
@@ -76,29 +74,25 @@ from sieve.gui.primitives import meter
 _INSET = 8
 
 #: How far the rule runs past the end of the title, and how much air is left
-#: between the two. The rule is the title's underline and not the head's
-#: divider — it ends with the name rather than at the card's far edge, so a card
-#: whose name is short is visibly a card whose name is short.
+#: between the two. The rule is the title's underline: it ends with the name, so
+#: a card whose name is short is visibly a card whose name is short.
 _RULE_PAST = 26
 _RULE_H = 1
 _RULE_PAD = 2
 
-#: How tall the meter across the foot is, and how it is drawn — both now
-#: `meter.py`'s, which is where the argument for the four pixels moved when the
-#: table turned out to want the same bar in a cell. What is left here is whether
-#: there is a foot at all, which is the card's.
+#: How tall the meter across the foot is, and how it is drawn, are `meter.py`'s,
+#: since a table cell wants the same bar. Whether there is a foot at all is the
+#: card's.
 
 #: How far the hovered edge moves off `LINE` toward the ink, through
-#: `palette.mix` — see there for why a hover is a step between two roles rather
-#: than a ninth colour. The fraction is the one the mockup's two greys sit at,
-#: which is small on purpose: the pointer's real answer is the four icons
-#: appearing, and the edge is only confirming it.
+#: `palette.mix` — see there for why a hover is a step between two roles. The
+#: fraction is the one the mockup's two greys sit at, small on purpose: the
+#: pointer's real answer is the four icons appearing, and the edge confirms it.
 _HOVER_EDGE = 0.22
 
-#: Which lucide icon each verb wears, pinned to the names the card knows them by
-#: rather than spelled at each use. `pin` appears once and not twice: pinned is
-#: the same shape with its inside filled, so the two states cannot drift apart
-#: into two drawings of one thing.
+#: Which lucide icon each verb wears, pinned to the names the card knows them
+#: by. `pin` appears once: pinned is the same shape with its inside filled, so
+#: the two states stay one drawing.
 _OPEN = "arrow-right"
 _SWAP = "arrow-right-left"
 _PIN = "pin"
@@ -115,7 +109,7 @@ class Card(QFrame):
 
     #: The card was chosen — clicked, or arrowed onto. Selection belongs to
     #: whatever holds the cards, since only that knows there is exactly one, so
-    #: the card asks rather than marking itself.
+    #: the card asks.
     selected = Signal()
 
     #: Take the selection forward into this card's settings: the → , or the
@@ -127,8 +121,8 @@ class Card(QFrame):
     swapped = Signal()
 
     #: Pin this card's output below the canvas. Emitted only when it is not
-    #: already pinned — the pinned card's ◆ is disabled, so the signal always
-    #: means a change.
+    #: already pinned — the pinned card's ◆ is disabled — so it always means a
+    #: change.
     pinned = Signal()
 
     #: Drop what this card holds. Emitted only when the card is removable.
@@ -138,18 +132,17 @@ class Card(QFrame):
         super().__init__(parent)
         self.setObjectName("card")
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        # Asked for explicitly rather than left to the `:hover` rule that used to
-        # imply it: the hover state is now something this widget paints, so it
-        # has to be something this widget is told about.
+        # Asked for explicitly: this widget paints the hover state, so it has to
+        # be told about it rather than leaving it to a `:hover` rule.
         self.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
         self._pinned = False
         self._selected = False
         self._hovered = False
         self._meter: float | None = None
 
-        #: The chassis takes no margins of its own — the head and the body each
-        #: give themselves back the inset they want, which is what lets the rule
-        #: and the meter run to the card's edges while the text does not.
+        #: The chassis takes no margins of its own: the head and the body each
+        #: give themselves back the inset they want, so the rule and the meter
+        #: run to the card's edges while the text stands inside them.
         column = QVBoxLayout(self)
         column.setContentsMargins(0, 0, 0, 0)
         column.setSpacing(0)
@@ -162,9 +155,8 @@ class Card(QFrame):
         self._title.setObjectName("title")
         head.addWidget(self._title)
         # A stretch after the title rather than the title taking the row's
-        # remainder: the rule is measured off the title's right edge, and a label
-        # stretched to the head's width would draw it to the card's far side on
-        # every card, which is the divider this rule is not.
+        # remainder: the rule is measured off the title's right edge, and a
+        # stretched label would put that edge at the card's far side.
         head.addStretch(1)
 
         self._open = self._button(_OPEN, "open", "Open this card's settings", self.opened)
@@ -377,10 +369,9 @@ class Card(QFrame):
 
         if self._meter is not None:
             # Clipped by the shape, because the foot runs into two rounded
-            # corners and a rectangle drawn there would put square ends outside
-            # the card it is the foot of. Which is also why the ends are square:
-            # this bar has no corner of its own, and the one it wears is the
-            # card's — `meter.py` on which shape says which thing.
+            # corners. Which is also why the ends are square: this bar has no
+            # corner of its own and wears the card's — `meter.py` on which
+            # shape says which thing.
             painter.save()
             painter.setClipPath(shape)
             meter.draw(
@@ -398,8 +389,8 @@ class Card(QFrame):
             painter.restore()
 
         # The rule: from the card's inset to `_RULE_PAST` past the title, and
-        # never past the inset on the far side — a card narrow enough for those
-        # two to cross would otherwise draw a rule running out of its own edge.
+        # held inside the inset on the far side, which is where the two cross on
+        # a narrow card.
         y = self._head.geometry().bottom() + 0.5
         end = self._title.mapTo(self, self._title.rect().topRight()).x() + _RULE_PAST
         painter.setPen(QPen(LINE, _RULE_H))

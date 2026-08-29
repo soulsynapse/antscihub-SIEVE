@@ -44,27 +44,24 @@ from sieve.gui.palette import LINE, PANEL_HOT, STACK_BG, rgb
 from sieve.gui.primitives.view import PAD_X, View
 from sieve.gui.primitives.view import sheet as head_sheet
 
-#: The gap between cards, and it is deliberately not the margin around them. The
-#: mockup's 26 is room for something to be drawn *between* two cards — the chain's
-#: edges descend through it — and there is nothing to draw beyond the first and
-#: the last, so the ends pay `_MARGIN` instead. That is the opposite bargain from
-#: the one-number-for-both the rows inside a card make (`sections.py`), and the
-#: difference is exactly that a gap here carries content and a gap there does not.
+#: The gap between cards, and deliberately not the margin around them. The
+#: mockup's 26 is room for something to be drawn *between* two cards — the
+#: chain's edges descend through it — and the ends, with nothing to carry, pay
+#: `_MARGIN` instead. The rows inside a card make the opposite bargain, one
+#: number for both (`sections.py`), because a gap there carries nothing.
 #:
 #: A view with nothing between its cards passes its own smaller `gap`, which is
-#: what the library does: 26px of ground between two three-line rows reads as two
-#: lists rather than one.
+#: what the library does: at 26px two three-line rows read as two lists.
 #:
-#: The margin is the head's own left inset and is read off it rather than
-#: written again: the title stands on the same x as the cards below it, and the
-#: whole view is read down one line — a second 16 here would be that alignment
-#: held by two numbers agreeing.
+#: The margin is the head's own left inset, read off it rather than written
+#: again, so the title stands on the same x as the cards below it and the whole
+#: view is read down one line.
 _GAP = 26
 _MARGIN = PAD_X
 
 #: The scrollbar. Narrow, no arrows, and a handle in `LINE` that lifts to
-#: `PANEL_HOT` under the pointer: the bar says where in the column the view is
-#: and is not a control the eye should find before the cards.
+#: `PANEL_HOT` under the pointer: the bar says where in the column the view is,
+#: and the cards are what the eye finds first.
 _BAR_W = 8
 _BAR_MIN = 24
 
@@ -129,9 +126,9 @@ class CardStack(View):
         self._column = QVBoxLayout(self._ground)
         self._column.setContentsMargins(_MARGIN, _MARGIN, _MARGIN, _MARGIN)
         self._column.setSpacing(gap)
-        # Last for good, so a short column sits under the band rather than spread
-        # down the pane: cards go in before it, and the stretch is the one item
-        # this layout is guaranteed to still end with.
+        # Last for good, so a short column sits under the band: cards go in
+        # before it, and the stretch is the one item this layout is guaranteed
+        # to still end with.
         self._column.addStretch(1)
 
         self._scroll = QScrollArea()
@@ -139,10 +136,8 @@ class CardStack(View):
         self._scroll.setWidget(self._ground)
         self._scroll.setWidgetResizable(True)
         self._scroll.setFrameShape(QFrame.Shape.NoFrame)
-        # Never sideways. The cards take the column's width, so a horizontal bar
-        # could only ever appear because something inside one refused to be
-        # narrowed — and scrolling a card half out of the pane hides the verbs at
-        # its right end, which is the half the pointer came for.
+        # Never sideways. The cards take the column's width, and a card scrolled
+        # half out of the pane would hide the verbs at its right end.
         self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
 
         self.body().addWidget(self._scroll, 1)

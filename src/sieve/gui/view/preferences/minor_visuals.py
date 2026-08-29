@@ -60,10 +60,10 @@ from sieve.gui.primitives import Slider
 #: panel's edge by the distance it sits off its neighbour.
 _GUTTER = 8
 
-#: The widest reading a value can take — a sign, two digits, a space, a unit —
-#: measured rather than guessed at a pixel count, because the readouts are drawn
-#: in a size this section can be used to change. Held as the string it is so the
-#: measurement is made in whatever font is current when it is asked for.
+#: The widest reading a value can take — a sign, two digits, a space, a unit.
+#: Measured rather than fixed at a pixel count, because the readouts are drawn in
+#: a size this section can change; held as a string so the measurement is made in
+#: whatever font is current when it is asked for.
 _WIDEST = "+00 px"
 
 
@@ -158,10 +158,9 @@ class MinorVisuals(QWidget):
 
         stack.addSpacing(_GUTTER)
         stack.addWidget(_heading("text size"))
-        # The base first and the roles under it, because that is the order the
-        # controls are reached in: a user who finds everything too small moves
-        # one slider and is done, and the three below it are the trim they only
-        # need if the sizes are wrong *relative to each other*.
+        # The base first and the roles under it, which is the order the controls
+        # are reached in: one slider answers everything being too small, and the
+        # three below it trim the sizes *relative to each other*.
         base = _Row(
             "everything",
             "the size the application is set in, and what the three below are off",
@@ -175,10 +174,8 @@ class MinorVisuals(QWidget):
         self._rows.append(base)
 
         for text in metrics.TEXTS:
-            # The slider moves in trim and the readout says points, which is why
-            # the two are separate arguments rather than one value: see the
-            # module docstring on why the number kept and the number shown are
-            # different numbers.
+            # The slider moves in trim and the readout says points, so the two
+            # are separate arguments — see the module docstring.
             row = _Row(
                 text.label,
                 text.gloss,
@@ -192,11 +189,9 @@ class MinorVisuals(QWidget):
             stack.addWidget(row)
             self._rows.append(row)
 
-        # A stretch under the last row, unlike the palette list's column: this
-        # one is shorter than the panel at any size a slider here can reach, so
-        # the slack is real and has to go somewhere. Pooled at the foot it reads
-        # as the list ending; spread across five rows it would read as five rows
-        # that do not know how tall they are.
+        # A stretch under the last row: this column is shorter than the panel at
+        # any size a slider here can reach, and the slack pooled at the foot
+        # reads as the list ending.
         stack.addStretch(1)
 
         scroll = QScrollArea()
@@ -213,11 +208,9 @@ class MinorVisuals(QWidget):
 
         self._restyle()
         palette.CHANGED.connect(self._restyle)
-        # This section's own rows are what emit `CHANGED`, and they are told
-        # about it here rather than each keeping the value it just set. The base
-        # is why: moving it changes what all three trim rows read out without
-        # any of their sliders moving, and a row that trusted its own last
-        # gesture would be the one row on screen still saying the old size.
+        # This section's own rows are what emit `CHANGED`, and every row is told
+        # here rather than keeping the value it just set. Moving the base changes
+        # what all three trim rows read out with none of their sliders moving.
         metrics.CHANGED.connect(self._refresh)
 
     def _restyle(self) -> None:
@@ -342,6 +335,5 @@ class _Row(QFrame):
         self._value.setText(f"{shown} {self._unit}")
         # Measured now rather than fixed at a pixel count, because the font this
         # is drawn in is one of the things these rows set: the widest reading is
-        # a different width at 7pt and at 20, and a box sized for one clips or
-        # gapes at the other.
+        # a different width at 7pt and at 20.
         self._value.setFixedWidth(self._value.fontMetrics().horizontalAdvance(_WIDEST))

@@ -34,9 +34,8 @@ from sieve.gui.palette import ACCENT, DIM, LINE, rgb
 _SVG = Path(__file__).parent / "lucide"
 
 #: How big an icon is where nothing says otherwise. Sized against the text it
-#: sits in a row with rather than against the 24px the SVGs are drawn at — the
-#: card's head is one line of a label and four buttons, and an icon taller than
-#: the label would set the row's height.
+#: sits in a row with rather than against the 24px the SVGs are drawn at, so the
+#: label sets the height of a row like the card's head.
 SIZE = 16
 
 #: Lucide draws its strokes 2 units wide in a 24-unit box, which lands near one

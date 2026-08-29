@@ -44,11 +44,9 @@ class Pipeline(View):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__("Pipeline", parent)
 
-        # Centred in the room by a stretch either side, which is what `Empty` asks
-        # of a caller that wants it centred in a pane: the box is as tall as its
-        # words, so a room with nothing else in it would otherwise hold it against
-        # the head. The margin is the head's own inset, read off it rather than
-        # written again, so the box stands on the same x the title does.
+        # Centred in the room by a stretch either side, which is what `Empty`
+        # asks of a caller that wants it centred in a pane. The margin is the
+        # head's own inset, read off it, so the box stands on the title's x.
         room = self.body()
         room.setContentsMargins(PAD_X, PAD_X, PAD_X, PAD_X)
         room.addStretch(1)

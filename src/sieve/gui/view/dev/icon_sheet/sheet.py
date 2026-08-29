@@ -59,20 +59,17 @@ class Ink(NamedTuple):
 #: The four ways a glyph is ever drawn, plus the same drawing at double size.
 #:
 #: The first three are `icon()`'s own defaults, in its own order, drawn as three
-#: cells rather than as one hoverable button: a button shows one mode at a time
-#: and the question the sheet answers — is the disabled ink still a shape, is the
-#: hover a change or a flicker — is a comparison. The live button is drawn beside
-#: them anyway, since a static swatch cannot show that the modes actually switch.
+#: cells so the sheet's question is a comparison: is the disabled ink still a
+#: shape, is the hover a change or a flicker. The live button is drawn beside
+#: them to show the modes actually switching.
 #:
-#: `filled` is fourth because it is a real state and not a variation: the pinned
-#: card draws its ◆ that way. It is shown for every glyph and not only for the
-#: one that uses it, because what it does to a two-path outline is the thing
-#: worth seeing before a second glyph is drawn that way.
+#: `filled` is fourth because it is a real state: the pinned card draws its ◆
+#: that way. Shown for every glyph, so what it does to a two-path outline is
+#: visible before a second glyph is drawn that way.
 #:
-#: The last is the same rest ink at 32, and it is on the sheet because the stroke
-#: width is calibrated for `icons.SIZE` and nothing else. A glyph that reads at
-#: 16 can be a fat scribble at 32, and this is the column that says so before a
-#: pane draws one large.
+#: The last is the same rest ink at 32, on the sheet because the stroke width is
+#: calibrated for `icons.SIZE`. A glyph that reads at 16 can be a fat scribble at
+#: 32, and this is the column that says so before a pane draws one large.
 INKS: tuple[Ink, ...] = (
     Ink("rest", DIM),
     Ink("hover", ACCENT),
@@ -112,9 +109,9 @@ _ROLES: tuple[Group, ...] = (
     ),
 )
 
-#: Where a vendored glyph with no role above lands. Not an error and not a
-#: silence: a glyph is usually vendored a commit before the thing that draws it,
-#: and this group is what the sheet says in between.
+#: Where a vendored glyph with no role above lands. A glyph is usually vendored
+#: a commit before the thing that draws it, and this group is what the sheet says
+#: in between.
 _LOOSE = Group(
     "not spoken for yet",
     "vendored, and nothing in the tree has said what for. Either the thing that "

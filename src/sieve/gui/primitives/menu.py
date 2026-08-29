@@ -76,35 +76,33 @@ from sieve.gui import metrics, palette
 from sieve.gui.palette import ACCENT, DIM, LINE, PANEL, PANEL_HOT, TEXT, rgb
 
 #: The room inside a row. `_ITEM_RIGHT` is where the shortcut column lives as
-#: well as the air past it, which is why it is not `_ITEM_LEFT`: a key drawn at
-#: the same inset as the verb would sit against the hairline, and a menu with no
-#: shortcuts still keeps the column so that adding one to a single entry does not
-#: move every other row's text.
+#: well as the air past it, which is why it is wider than `_ITEM_LEFT`: the key
+#: stands off the hairline. A menu with no shortcuts keeps the column, so adding
+#: one to a single entry leaves every other row's text where it is.
 _ITEM_LEFT = 20
 _ITEM_RIGHT = 28
 _ITEM_Y = 5
 
-#: The air the list keeps at its own top and bottom. None at the sides: a
-#: highlighted row runs edge to edge inside the hairline, which is what makes the
-#: highlight read as *this row* rather than as a block floating in the list.
+#: The air the list keeps at its own top and bottom. None at the sides, so a
+#: highlighted row runs edge to edge inside the hairline and reads as *this
+#: row*.
 _PAD_Y = 4
 
 #: The separator's hairline and the air around it, and how far it is held off
-#: each end. Inset rather than full width, so a rule between two groups is
-#: visibly a divider inside the list and not the list's own bottom edge.
+#: each end. Inset rather than full width, so a rule between two groups reads as
+#: a divider inside the list.
 _RULE_Y = 4
 _RULE_X = 8
 
 #: Where a group's caption sits. Deeper at the top than at the bottom, because a
-#: caption belongs to what is under it: equal air would leave it floating between
-#: the group above and its own.
+#: caption belongs to what is under it.
 _CAPTION_TOP = 8
 _CAPTION_BOTTOM = 3
 
 #: How far the caption's letters are spread. A word set in `gloss` and `DIM` is
-#: quiet enough to miss in a column of verbs; tracking is what makes it read as a
-#: heading without spending a weight or a size that would make it compete with
-#: them. Not uppercased, for `table.py`'s reason — that edits the caller's word.
+#: quiet enough to miss in a column of verbs; tracking makes it read as a heading
+#: at the same weight and size. Not uppercased, for `table.py`'s reason — that
+#: edits the caller's word.
 _CAPTION_TRACK = 1.2
 
 
@@ -170,7 +168,7 @@ class Menu(QMenu):
         self._dress()
         # A bound method and never a lambda, for the reason `button.py` gives:
         # PySide6 drops a connection to a bound method when the receiver goes,
-        # where a lambda closing over `self` would keep a dead menu subscribed.
+        # where a lambda closing over `self` keeps a dead menu subscribed.
         palette.CHANGED.connect(self._dress)
         metrics.CHANGED.connect(self._dress)
 

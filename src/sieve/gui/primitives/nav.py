@@ -37,14 +37,12 @@ from PySide6.QtWidgets import (
 from sieve.gui import metrics, palette
 from sieve.gui.palette import ACCENT, LINE, PANEL, PANEL_HOT, TEXT, rgb
 
-#: How wide the entry's leading edge is. On every entry and not the current one
-#: alone — only its colour changes, so the label does not step sideways as the
-#: selection arrives.
+#: How wide the entry's leading edge is. On every entry, with only its colour
+#: changing, so the label stands still as the selection arrives.
 #:
 #: Public, because it is not this list's look: it is how wide the mark that says
 #: *this is the current one* is drawn, and `segmented.py` wears the same mark
-#: along the foot of a bar rather than down the side of a row. A second 3 written
-#: there would be a second answer, free to drift from the nav in the next card.
+#: along the foot of a bar rather than down the side of a row.
 MARK_W = 3
 
 #: The gap between entries and the margin around them, one number for both, so
@@ -52,9 +50,9 @@ MARK_W = 3
 #: its neighbour.
 _GUTTER = 4
 
-#: How wide the column is. The names are short and fixed, and a nav that took a
-#: share of the card's width would move the boundary between the list and what
-#: it is listing every time the card was resized.
+#: How wide the column is. The names are short and fixed, and a fixed column
+#: holds the boundary between the list and what it is listing still across a
+#: resize.
 _WIDTH = 150
 
 
@@ -83,9 +81,8 @@ class SectionNav(QWidget):
         super().__init__(parent)
         self.setObjectName("nav")
         self.setFixedWidth(_WIDTH)
-        # It answers ↑/↓, so it has to be reachable by tabbing as well as by
-        # clicking — a surface the pointer alone can focus is one the keyboard
-        # cannot get back to once anything else has had it.
+        # It answers ↑/↓, so the keyboard has to be able to reach it by tabbing
+        # and not only by clicking.
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
         self._current = -1
@@ -99,8 +96,7 @@ class SectionNav(QWidget):
             entry.chosen.connect(lambda index=index: self.select(index))
             column.addWidget(entry)
             self._entries.append(entry)
-        # Last, and what keeps a short list at the top of the column instead of
-        # spread down whatever height the card ends up with.
+        # Last, and what keeps a short list at the top of the column.
         column.addStretch(1)
 
         self.select(0)
@@ -134,8 +130,8 @@ class SectionNav(QWidget):
             self.step(-1 if key == Qt.Key.Key_Up else +1)
             event.accept()
             return
-        # Escape among them: it is the overlay's, and an accepted key here is one
-        # the thing on top never sees.
+        # Escape among them: it is the overlay's, and the thing on top sees only
+        # what this list leaves unaccepted.
         super().keyPressEvent(event)
 
 

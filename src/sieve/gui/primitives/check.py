@@ -62,11 +62,9 @@ from sieve.gui.primitives.field import EDGE, EDGE_HOVER, RING_W, ring
 
 #: The box, its corner, and the dot a radio wears instead of a tick. Fourteen is
 #: the size at which the tick inside is three segments rather than a smudge, and
-#: it is a fixed number and not a multiple of the text size: a box that grew with
-#: the type would put a different amount of air around the same tick at every
-#: size, and this is a mark rather than a letter. The corner is this file's, for
-#: `button.py`'s reason — `metrics.radius()` is *card corners*, and a user
-#: squaring off their cards did not ask for square checkboxes.
+#: it is fixed rather than a multiple of the text size: this is a mark rather
+#: than a letter, so the air around it is the same at every size. The corner is
+#: this file's, for `button.py`'s reason: `metrics.radius()` is *card corners*.
 _BOX = 14
 _RADIUS = 3
 _DOT = 3.0
@@ -76,14 +74,12 @@ _DOT = 3.0
 #: here it is part of this widget's own rect, since there is no wrapper.
 _ROOM = RING_W
 
-#: Between the box and the label. Wide enough that the two are a box and its
-#: name rather than a box with a word jammed against it, and narrow enough that
-#: a column of them still reads as one column.
+#: Between the box and the label. Wide enough that the two read as a box and its
+#: name, and narrow enough that a column of them reads as one column.
 _GAP = 8
 
-#: How thick the tick is drawn. Rounded at its ends and its join, so the three
-#: segments are one stroke and not a bent wire — at 14px the join is what the eye
-#: actually sees.
+#: How thick the tick is drawn. Rounded at its ends and its join, so at 14px —
+#: where the join is what the eye sees — the three segments read as one stroke.
 _TICK_W = 1.8
 
 
@@ -119,14 +115,13 @@ class Check(QAbstractButton):
         # Asked for explicitly, as `card.py` does: hover is something this widget
         # paints, so it has to be something this widget is told about.
         self.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
-        # As wide as its label and no taller than its own row: a check stands in
-        # a column of them, and one that stretched would put its box somewhere
-        # other than where the box above it is.
+        # As wide as its label and no taller than its own row, so a column of
+        # them keeps every box on one x.
         self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         self._resize()
         # A bound method and never a lambda, for the reason `button.py` gives:
         # PySide6 drops a connection to a bound method when the receiver goes,
-        # where a lambda closing over `self` would keep a dead check subscribed.
+        # where a lambda closing over `self` keeps a dead check subscribed.
         palette.CHANGED.connect(self.update)
         metrics.CHANGED.connect(self._resize)
 
@@ -191,8 +186,8 @@ class Check(QAbstractButton):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
 
         # Half a pixel in on every side, for `card.py`'s reason: a 1px pen
-        # straddles the path it is given, so an edge drawn on the box's own rect
-        # loses its outer half and comes back looking like half a line.
+        # straddles the path it is given, so the box's own rect would lose the
+        # pen's outer half.
         top = (self.height() - _BOX) / 2
         box = QRectF(_ROOM, top, _BOX, _BOX).adjusted(0.5, 0.5, -0.5, -0.5)
         corner = _BOX if self._radio else _RADIUS

@@ -70,8 +70,8 @@ from sieve.gui import icons, palette
 from sieve.gui.palette import ACCENT, DIM, LINE, PANEL, PANEL_HOT, STACK_BG, TEXT, rgb
 
 #: The four verbs, in the order `primitives/card.py` fixes them in and with the
-#: names it knows them by. Every look draws all four wherever it puts them: a
-#: look that dropped one would be a comparison of two different cards.
+#: names it knows them by. Every look draws all four wherever it puts them, so
+#: the looks differ only in arrangement.
 _VERBS: tuple[tuple[str, str], ...] = (
     ("arrow-right", "Open this card's settings"),
     ("arrow-right-left", "Swap for another tool"),
@@ -83,23 +83,20 @@ _VERBS: tuple[tuple[str, str], ...] = (
 #: the only difference on screen is the look. A chain step with two knobs, which
 #: is the shortest card the chain will really contain.
 #:
-#: Public, and split into name and value rather than kept as the two finished
-#: strings the card as built shows: half the arrangements below put the names in
-#: one column and the values in another, which no pre-joined line can be cut
-#: back into. `view.py` fills the real card from these too, through `line()`, so
-#: the baseline and the mocks cannot come to be holding different steps.
+#: Public, and split into name and value: half the arrangements below put the
+#: names in one column and the values in another. `view.py` fills the real card
+#: from these too, through `line()`, so the baseline and the mocks hold one
+#: step between them.
 TITLE = "threshold"
 KNOBS: tuple[tuple[str, str], ...] = (("sensitivity", "0.42"), ("min area", "120 px"))
 
-#: What the step is drawn as where a look puts a glyph beside the name. A knobbed
-#: step is a slider bank, which is the one thing every card in the chain has and
-#: the one thing that differs between them by kind rather than by name.
+#: What the step is drawn as where a look puts a glyph beside the name. A
+#: knobbed step is a slider bank, which every card in the chain has and which
+#: differs between them by kind.
 GLYPH = "sliders-horizontal"
 
-#: How full the meter is drawn. A fraction and not a percentage string: a meter
-#: is a width, and the moment it is a string somebody draws it by parsing one.
-#: Neither end, so the mock shows both the fill and the groove it runs in — a
-#: meter mocked at 0 or 1 is a meter with half of itself untested by the eye.
+#: How full the meter is drawn. A fraction, because a meter is a width. Away
+#: from either end, so the mock shows both the fill and the groove it runs in.
 FULL = 0.62
 
 
@@ -139,10 +136,8 @@ class Look(NamedTuple):
 
 # -- the dresses -----------------------------------------------------------
 #
-# Each writes every rule its own arrangement needs and no others. A dress
-# carrying rules for object names its shape never builds would be a dress being
-# kept ready for a shape it is not paired with, which is the grid this file
-# refuses to be.
+# Each writes every rule its own arrangement needs and no others: a dress is
+# paired with one shape.
 
 
 def _as_built(selected: bool) -> str:
@@ -589,15 +584,12 @@ def _bar_hover(selected: bool) -> str:
 
 # -- the chassis -----------------------------------------------------------
 #
-# What every header bar draws identically, held here rather than in each shape
-# for the reason the module docstring gives: these are the frame the looks are
-# argued inside, not the thing being argued about.
+# What every header bar draws identically, held here for the reason the module
+# docstring gives: these are the frame the looks are argued inside.
 
-#: How tall the strip is. Fixed rather than left to its contents, so a look that
-#: hides the verbs does not get a shorter lid than one that shows them — the
-#: gallery is read down a column and a header that changed height between looks
-#: would be a difference nobody asked for. Tall enough for a `QToolButton`
-#: holding a 16px icon, which is the tallest thing in the row.
+#: How tall the strip is. Fixed, so a look that hides the verbs gets the same
+#: lid as one that shows them and the gallery reads down one column. Tall enough
+#: for a `QToolButton` holding a 16px icon, the tallest thing in the row.
 _STRIP = 28
 
 #: The body's margins: level with the strip's leading inset, so a knob name and
@@ -605,11 +597,9 @@ _STRIP = 28
 _BODY = (8, 7, 8, 8)
 
 #: How tall the meter is where a look does not say otherwise, and the number the
-#: committed look was drawn with. Four pixels is the smallest bar that still
-#: reads as a length rather than as a hairline that happens to be two colours,
-#: and it is small enough that a card carrying one is not a card carrying a
-#: progress widget. `meter as the divider` and `inset meter` are the two looks
-#: arguing with that number, from either side of it.
+#: committed look was drawn with. Four pixels is the smallest bar that reads as
+#: a length, and small enough to stay a meter rather than a progress widget.
+#: `meter as the divider` and `inset meter` argue with it from either side.
 _METER = 4
 
 
@@ -848,11 +838,10 @@ def _shape_bar_accent(card: MockCard) -> None:
 
 
 #: The looks on the bench, in the order they are argued about. `as built` is
-#: first and is the only one that is not a header bar — the real card stands
-#: above it in the gallery and the two together are what makes drift visible.
-#: Then the header bar as it stands, then the looks that vary its body, then its
-#: strip, then its meter: a reader who has not seen the chassis whole cannot
-#: judge a variation on one third of it.
+#: first and is the only one that is not a header bar: the real card stands above
+#: it in the gallery, and the pair is what makes drift visible. Then the header
+#: bar as it stands, then the looks that vary its body, then its strip, then its
+#: meter — the chassis whole before a variation on a third of it.
 LOOKS: tuple[Look, ...] = (
     Look(
         "as built, redrawn",
@@ -1015,9 +1004,8 @@ class MockCard(QFrame):
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setStyleSheet(look.dress(selected))
-        #: Kept so the card can be drawn again in a palette it has not seen. The
-        #: bench is where a palette gets judged, so a mock still wearing the old
-        #: greys would be the one card on screen lying about what was picked.
+        #: Kept so the card can be drawn again in a palette it has not seen.
+        #: The bench is where a palette gets judged.
         self._look = look
 
         #: Read by the arrangements. `selected` because a shape is allowed to
@@ -1035,10 +1023,10 @@ class MockCard(QFrame):
         self.column.setSpacing(4)
         look.shape(self)
 
-        #: Hidden rather than left out. On the un-headered baseline this is what
-        #: keeps the card the height it would be with the row showing; on a
-        #: header bar the strip's fixed height already guarantees that, which is
-        #: half of what `verbs on hover` is claiming.
+        #: Hidden rather than left out. On the un-headered baseline it holds the
+        #: card at the height the showing row gives it; on a header bar the
+        #: strip's fixed height already does, which is half of what `verbs on
+        #: hover` claims.
         self._fades = look.fade
         if self._fades:
             self.verbs.setVisible(False)
@@ -1166,9 +1154,9 @@ def _verb_row(normal: QColor = DIM, active: QColor = ACCENT) -> QWidget:
     row = QWidget()
     layout = QHBoxLayout(row)
     layout.setContentsMargins(0, 0, 0, 0)
-    # The real card's head spaces its four buttons by 4 and this row must too:
-    # the mock sitting directly under the baseline is only worth having while
-    # any difference between them is a difference the look asked for.
+    # The real card's head spaces its four buttons by 4 and this row must too,
+    # so every difference from the baseline directly above it is one the look
+    # asked for.
     layout.setSpacing(4)
     for glyph, tip in _VERBS:
         button = QToolButton()

@@ -49,15 +49,13 @@ from PySide6.QtWidgets import QVBoxLayout, QWidget
 from sieve.gui.palette import SCRIM
 
 #: How far the scrim shows around whatever is standing on it. Enough that the
-#: view over the panes is read as being over them and not as a pane that just
-#: arrived, at every window size the frame opens at.
+#: view reads as being over the panes, at every window size the frame opens at.
 _MARGIN = 40
 
 #: The scrim left above a view that was anchored instead of centred. Short
-#: where `_MARGIN` is generous, and deliberately: the anchored view is standing
-#: under the thing that opened it, and a full margin there would put a band of
-#: scrim between the two wide enough to read as a gap rather than as an
-#: attachment. Not zero — the view is still on the scrim and not on the bar.
+#: where `_MARGIN` is generous: the anchored view stands under the thing that
+#: opened it, and the narrow band reads as an attachment to it rather than as
+#: a gap. Still a band, because the view is on the scrim and not on the bar.
 _GAP = 6
 
 
@@ -83,9 +81,8 @@ class Overlay(QWidget):
     """
 
     #: The cover has gone, however it was asked to. Two of the three ways out
-    #: are the overlay's own — the scrim and Escape — so a frame that had to be
-    #: told about the third would learn about a closed overlay only when it was
-    #: the one that closed it.
+    #: are the overlay's own — the scrim and Escape — so the frame hears about
+    #: a close it did not ask for.
     dismissed = Signal()
 
     def __init__(self, host: QWidget) -> None:
@@ -98,8 +95,7 @@ class Overlay(QWidget):
         #: centred. Kept because a resize has to place the view again and the
         #: caller is not there to be asked a second time.
         self._left: int | None = None
-        # It answers Escape, so it has to be able to hold focus; nothing behind
-        # it is reachable while it is up, which is the point of covering them.
+        # It answers Escape, so it has to be able to hold focus.
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         host.installEventFilter(self)
         self.hide()
@@ -243,10 +239,9 @@ class Overlay(QWidget):
         if self.childAt(event.position().toPoint()) is None:
             if event.button() == Qt.MouseButton.LeftButton:
                 self.dismiss()
-        # Accepted either way, landed on or not. What is behind the scrim is out
-        # of reach while it is up, and a press left ignored here is one Qt hands
-        # on to the host — the panes, which would then act on a click the user
-        # aimed at what is covering them.
+        # Accepted either way, landed on or not: a press left ignored here is
+        # one Qt hands on to the host, and the panes are out of reach while the
+        # scrim is up.
         event.accept()
 
     def keyPressEvent(self, event) -> None:

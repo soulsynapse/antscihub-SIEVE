@@ -39,9 +39,8 @@ from sieve.gui.view.project_list.card import ProjectCard
 from sieve.gui.view.project_list.project import Project
 
 #: The gap between rows, in place of the stack's own. The mockup's 26 is room for
-#: the chain's edges to descend through and there are none here, so the number is
-#: the one that keeps a three-line card reading as a row of one list rather than
-#: as a list of its own.
+#: the chain's edges to descend through, which this list has none of; this number
+#: is what keeps a three-line card reading as a row of one list.
 _GAP = 6
 
 
@@ -67,9 +66,8 @@ class ProjectList(CardStack):
         self, projects: Iterable[Project] = (), parent: QWidget | None = None
     ) -> None:
         super().__init__("Projects", gap=_GAP, parent=parent)
-        # The list answers ↑/↓, so it has to be reachable by tabbing as well as
-        # by clicking — a surface that only takes focus from the pointer is one
-        # the keyboard cannot get back to after any other widget has had it.
+        # The list answers ↑/↓, so the keyboard has to be able to reach it by
+        # tabbing and not only by clicking.
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
         self._projects: list[Project] = []
@@ -105,9 +103,8 @@ class ProjectList(CardStack):
 
     def _rebuild(self) -> None:
         # The stack drops the empty-library sentence along with the cards, since
-        # it stands in the same column, so `_nothing` is cleared here rather than
-        # in `_empty_state` — a label left named after `clear()` deleted it is a
-        # handle to a widget that is going away.
+        # it stands in the same column, so `_nothing` is cleared here: after
+        # `clear()` the name would be a handle to a deleted widget.
         self.clear()
         self._cards = []
         self._nothing = None
@@ -188,6 +185,6 @@ class ProjectList(CardStack):
             self.open(self._current)
             event.accept()
             return
-        # ← and → among them: they are the frame's, and an accepted key here is
-        # one the window's shortcut never sees.
+        # ← and → among them: they are the frame's, and the window's shortcut
+        # sees only what this list leaves unaccepted.
         super().keyPressEvent(event)

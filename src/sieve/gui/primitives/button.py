@@ -58,14 +58,13 @@ SUBTLE = "subtle"
 GHOST = "ghost"
 
 #: How far a hovered fill moves toward the ink, and how far a pressed one moves
-#: past that. Two steps of the same move rather than two colours: press has to be
-#: visibly more than hover, since a pointer that is already over the button is
-#: holding the hover state while it clicks.
+#: past that. Two steps of one move, so press reads as more than hover — the
+#: pointer is already holding the hover state when it clicks.
 #:
 #: `HOVER` is public and `_PRESS` is not, which is the difference between a
-#: filled *thing* and a button: anything in this tree that is filled with a role
-#: answers the pointer by this much — the accent-filled checkbox in `check.py`
-#: does — while being pressed and held is something only a button is.
+#: filled *thing* and a button: anything filled with a role answers the pointer
+#: by this much, as `check.py`'s accent-filled box does, while being pressed and
+#: held is something only a button is.
 HOVER = 0.14
 _PRESS = 0.26
 
@@ -74,13 +73,13 @@ _PRESS = 0.26
 _HOVER_EDGE = 0.22
 
 #: How far a disabled ghost's ink is washed back into the panel. The other kinds
-#: say *off* with a flat fill and `DIM` text; a ghost has no fill to flatten, so
-#: its ink is what carries it, and `DIM` alone is the colour it already rests at.
+#: say *off* with a flat fill and `DIM` text; a ghost carries it in the ink
+#: alone, since `DIM` is the colour it already rests at.
 _OFF_INK = 0.45
 
-#: The box around the label, normal and small, and the corner on it. Small is for
-#: a button that sits inside something already dense — a table's foot, a row's
-#: own verb — where the normal one would set the height of the thing it is in.
+#: The box around the label, normal and small, and the corner on it. Small is
+#: for a button inside something already dense — a table's foot, a row's own
+#: verb — where the height of the button would otherwise set the row's.
 _PAD_X = 12
 _PAD_Y = 6
 _PAD_X_SMALL = 8
@@ -109,9 +108,9 @@ class Button(QPushButton):
         self._small = small
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self._dress()
-        # Bound methods, never lambdas: PySide6 drops a connection to a bound
-        # method when the receiver goes, where a lambda closing over `self` would
-        # keep a dead button subscribed to both signals for the life of the run.
+        # Bound methods: PySide6 drops a connection to a bound method when the
+        # receiver goes, where a lambda closing over `self` keeps a dead button
+        # subscribed to both signals for the life of the run.
         palette.CHANGED.connect(self._dress)
         metrics.CHANGED.connect(self._dress)
 
@@ -171,10 +170,8 @@ class Button(QPushButton):
         """)
 
 
-#: What a fill of `transparent` is in a sheet — the one value here that is a word
-#: rather than a colour, because a ghost's ground is whatever it is standing on
-#: and naming a role for it would paint the panel onto a button sitting on the
-#: stack's ground.
+#: What a fill of `transparent` is in a sheet — a word rather than a colour,
+#: because a ghost's ground is whatever it is standing on.
 _NONE = "transparent"
 
 
@@ -185,9 +182,8 @@ def _rest(kind: str) -> tuple[str, QColor, str]:
     if kind == PRIMARY:
         return rgb(ACCENT), PANEL, rgb(ACCENT)
     if kind == SUBTLE:
-        # Its own edge in its own fill: a subtle button is a shape and not an
-        # outline, and a bordered one at this weight reads as a `DEFAULT` that
-        # came out wrong.
+        # Its own edge in its own fill: a subtle button is a shape, and at this
+        # weight an outline would read as a `DEFAULT`.
         return rgb(PANEL_HOT), TEXT, rgb(PANEL_HOT)
     if kind == GHOST:
         return _NONE, DIM, _NONE
@@ -236,7 +232,6 @@ def _off_ink(kind: str) -> QColor:
 def _off_edge(kind: str) -> str:
     if kind == GHOST:
         return _NONE
-    # `LINE` and not the fill: a disabled button keeps its outline, so the thing
-    # that cannot be pressed is still visibly a button and its tooltip is still
-    # somewhere to put the pointer.
+    # `LINE` and not the fill: a disabled button keeps its outline, so it still
+    # reads as a button and its tooltip still has somewhere to put the pointer.
     return rgb(LINE)

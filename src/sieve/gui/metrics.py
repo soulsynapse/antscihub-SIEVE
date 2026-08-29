@@ -63,43 +63,40 @@ class Text(NamedTuple):
     gloss: str
 
 
-#: The text the tree actually distinguishes, which is three things and not more.
-#: A fourth role invented here would be a control with nothing behind it — the
-#: sheets in `primitives/` and `view/` name exactly these, and a role no sheet
-#: asks for is a slider that does nothing.
+#: The text the tree actually distinguishes, which is three things. The sheets in
+#: `primitives/` and `view/` name exactly these, so every role here has a control
+#: behind it.
 TEXTS: tuple[Text, ...] = (
     Text("heading", "headings", "the line naming a whole card or pane"),
     Text("name", "names", "the bold name on a card, a row, or a section"),
     Text("gloss", "glosses", "the quiet line under a name, saying what it is for"),
 )
 
-#: What a corner may be set to. Zero is a square card and is offered rather than
-#: floored at one: a user who wants no rounding at all wants none, and the
-#: smallest non-zero radius is not that. The top is where a column of cards stops
-#: reading as a stack of cards and starts reading as a stack of buttons, which is
-#: the argument `card.py` made for its 6 in the first place — past this the shape
-#: is the pill that argument was against.
+#: What a corner may be set to. Zero is a square card and is offered, since a
+#: user who wants no rounding at all wants none. The top is where a column of
+#: cards stops reading as a stack of cards and starts reading as a stack of
+#: buttons, which is the argument `card.py` makes for its own default.
 RADIUS_MIN = 0
 RADIUS_MAX = 16
 RADIUS_DEFAULT = 6
 
 #: What the base may be set to, in points. The floor is where the hinting on a
-#: normal-weight face stops resolving on a 1x display; the ceiling is a size at
-#: which the fixed-height cards in this tree stop fitting their own rows, and it
-#: is a ceiling and not a scaling rule because a card that resized itself to its
-#: text would move the list the user is arrowing down (`sections.py`).
+#: normal-weight face stops resolving on a 1x display; the ceiling is the size at
+#: which the fixed-height cards in this tree stop fitting their own rows. A
+#: ceiling and not a scaling rule, so a list stands still under a user arrowing
+#: down it (`sections.py`).
 SIZE_MIN = 7
 SIZE_MAX = 20
 
 #: How far a role may be trimmed off the base. Asymmetric on purpose: a heading
-#: is the role anyone reaches for room to enlarge, and a gloss dropped more than
-#: three points under the base is smaller than the floor the base itself has.
+#: is the role anyone reaches for room to enlarge, and three points under the
+#: base is where a gloss meets the floor the base itself has.
 TRIM_MIN = -3
 TRIM_MAX = 8
 
-#: What the settings document calls these. Dotted rather than nested, because the
-#: document is one flat object by decision (`settings.py`) and a dot is how a key
-#: says which group it belongs to without the file growing a tree.
+#: What the settings document calls these. Dotted rather than nested, because
+#: the document is one flat object by decision (`settings.py`) and a dot is how a
+#: key says which group it belongs to.
 _RADIUS_KEY = "visuals.radius"
 _SIZE_KEY = "text.size"
 
@@ -121,10 +118,9 @@ _notifier = _Notifier()
 #: A size or a radius has moved. Whoever built a stylesheet out of one has to
 #: build it again, and whoever paints with one needs only a repaint — the same
 #: two obligations `palette.CHANGED` carries, and connected in the same slots.
-#: They are two signals and not one because they are two questions: a view that
-#: only paints its corner has nothing to redo when a colour changes, and vice
-#: versa, and a single "redress" signal would make every widget in the tree pay
-#: for both every time either moved.
+#: Two signals and not one, because they are two questions: a view that only
+#: paints its corner has nothing to redo when a colour changes, and a widget
+#: answers whichever of the two reaches it.
 CHANGED = _notifier.changed
 
 #: The platform's own interface size, or `None` until something has asked for it
@@ -229,12 +225,10 @@ def install() -> None:
     right either way; what is lost is the size of the text no sheet names, which
     stays at the platform's until the user next moves the control.
     """
-    # The platform's size is read here rather than left to whoever first needs
-    # it, and this is the only moment it can be: the line below writes the
-    # remembered size onto the application's own font, and every reading after
-    # that is this module's answer coming back (`_system_size()`). The reader
-    # that would otherwise be first is `reset()`, which runs after a whole
-    # session of the font carrying something else.
+    # The platform's size is read here, which is the only moment it can be: the
+    # line below writes the remembered size onto the application's own font, and
+    # every reading after that is this module's answer coming back
+    # (`_system_size()`).
     _system_size()
     _install()
 

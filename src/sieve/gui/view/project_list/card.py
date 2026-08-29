@@ -30,8 +30,8 @@ from sieve.gui.palette import ACCENT, DIM, LINE, PANEL, PANEL_HOT, TEXT, rgb
 from sieve.gui.view.project_list.project import Project
 
 #: How wide the selected card's leading edge is. Wide enough to read from the
-#: far side of the pane without the card's contents moving when it appears —
-#: which is why the edge is on every card and only its colour changes.
+#: far side of the pane; the edge is on every card and only its colour changes,
+#: so the contents stand still as the selection moves.
 _EDGE = 3
 
 
@@ -75,8 +75,8 @@ class ProjectCard(QFrame):
     #: to hold, so the card asks rather than marking itself.
     selected = Signal()
 
-    #: Open this project: double click, or the arrow. Same verb from both, and
-    #: neither says what opening does — that is the frame's.
+    #: Open this project: double click, or the arrow. Same verb from both; what
+    #: opening does is the frame's.
     opened = Signal()
 
     def __init__(self, project: Project, parent=None) -> None:
@@ -97,9 +97,9 @@ class ProjectCard(QFrame):
 
         head = QHBoxLayout()
         head.setSpacing(4)
-        # The name takes the row's remainder rather than a stretch sitting after
-        # it: the label reports no width of its own, so a stretch would be the
-        # only thing in the row asking for room and would get all of it.
+        # The name takes the row's remainder: the label reports no width of its
+        # own, so a stretch after it would be the only thing in the row asking
+        # for room.
         head.addWidget(_Line(project.name, "name"), 1)
         #: Held so the icons can be drawn again when the palette changes — a
         #: `QIcon` is pixmaps at the colours in force when it was made, and a
@@ -186,9 +186,8 @@ class _Line(QLabel):
         self._full = text
         self.setObjectName(name)
         self.setToolTip(text)
-        # Ignored, not Preferred: the label's own idea of its width is exactly
-        # what must not reach the layout, since that is the thing widening the
-        # card. It takes what the row has and reports nothing back.
+        # Ignored, not Preferred: the label takes what the row has and reports
+        # nothing back, so its own idea of its width never widens the card.
         self.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
 
     def resizeEvent(self, event) -> None:

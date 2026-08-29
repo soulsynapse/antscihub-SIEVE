@@ -108,44 +108,19 @@ class MainWindow(QMainWindow):
         self.right = build_right()
         self.bottom = build_bottom()
 
-        # The canvas stands in the left pane's core, for the same reason the
-        # swipe stands in the right pane's: `body` is the core's, so the pane
-        # can still anchor a strip top or bottom without the canvas being what
-        # gets cut. It goes in whole rather than on a track — the left pane
-        # shows one thing and the choice of which is not the user's to walk.
         self.canvas = Canvas()
         self.left.body.addWidget(self.canvas)
 
-        # The swipe goes in the core's layout, which is what `body` is, so the
-        # right pane can still take a subpane on either side without the track
-        # being what gets cut — a strip is anchored to the pane and the swipe
-        # is standing in it, and the two never trade room.
         self.swipe = build_swipe("right")
         self.right.body.addWidget(self.swipe)
 
-        # The library stands in the first position, which is where the swipe's
-        # order already put it. Housed by adding it to that position's own
-        # layout rather than by the swipe building it: a position is a space
-        # like a pane is, and a track that knew which view belonged at index 0
-        # would be the file where "the project list is the right pane's" had
-        # been decided — which ADR-0001 says is nowhere.
+        # The window houses each view in its position, and hangs that position's
+        # own pair of arrows in its head (ADR-0001).
         self.projects = ProjectList()
         self.swipe.position(POSITIONS.index("project")).body.addWidget(self.projects)
-        # The arrows go in the head of the view standing on the track, and the
-        # window is what puts them there for the same reason it houses the view:
-        # the track is the frame's and a view that hung its own pair would be
-        # claiming to know it was one of several. One pair per position — they
-        # are the position's way out, not the pane's, so each head carries its
-        # own rather than the pane keeping one above whatever is in front.
         self.projects.set_arrows(Arrows(self.swipe))
-        # Opening a project is a move inward along the same line ← and → walk,
-        # so it is the swipe's step and not a second kind of navigation.
         self.projects.opened.connect(lambda _project: self.swipe_forward())
 
-        # The other two positions, housed the same way and each given its own
-        # pair: a pair is the position's way out and not the pane's, so a head
-        # that had to borrow one from whatever was in front would be a view that
-        # knew what it was standing beside.
         self.pipeline = Pipeline()
         self.swipe.position(POSITIONS.index("pipeline")).body.addWidget(self.pipeline)
         self.pipeline.set_arrows(Arrows(self.swipe))
@@ -154,17 +129,10 @@ class MainWindow(QMainWindow):
         self.swipe.position(POSITIONS.index("step")).body.addWidget(self.step)
         self.step.set_arrows(Arrows(self.swipe))
 
-        # No subpane is opened on the way up. Which sides each pane offers and
-        # how many each stacks is still the pane's claim and still checkable by
-        # asking it, but a strip standing blank in every slot costs room in all
-        # three panes and shows boundaries where the resting frame has none.
-        # They are attached where a view asks for one — the resting frame is
-        # three panes, not fifteen.
+        # Subpanes are attached where a view asks for one; the resting frame
+        # is three panes.
 
-        # Even stretch, and an even split to start: neither view is the
-        # window's main one. The chain is tuned by reading a plot against the
-        # footage, so a frame that gave either the remainder of a resize would
-        # be answering a question the user answers by dragging.
+        # Neither view is the window's main one.
         self.split = QSplitter(Qt.Orientation.Horizontal)
         self.split.addWidget(self.left)
         self.split.addWidget(self.right)
@@ -181,23 +149,16 @@ class MainWindow(QMainWindow):
         column.addWidget(build_seam())
         column.addWidget(self.bottom)
         self.setCentralWidget(stacked)
-        #: Held rather than reached for through `menuBar()`, because the frame
-        #: asks it where its preferences title was drawn every time it stands
-        #: them up.
+        #: The frame asks the bar where its preferences title was drawn every
+        #: time it stands the overlay up.
         self.bar = build_menu_bar(self)
         self.setMenuBar(self.bar)
-        #: Held rather than dropped so the bindings are reachable by name, not
-        #: only by walking the window's children, and because the keys the frame
-        #: takes last are read off it rather than bound to anything.
+        #: Held so the bindings are reachable by name, and so the keys the frame
+        #: takes last can be read off it.
         self.hotkeys = bind_hotkeys(self)
 
-        # Preferences and the dev bench stand over the panes rather than in one,
-        # and the overlay covers what the central widget covers — the three
-        # panes and the two boundaries between them, and not the bar the user
-        # asked from. Both built here and hidden: neither takes room, so the
-        # resting frame is still three panes, and there is nothing to construct
-        # on the way to showing either. One overlay for the two of them, since
-        # there is one scrim and one way back to the work.
+        # One overlay over the central widget for both views, each built here
+        # and hidden.
         self.overlay = Overlay(stacked)
         self.preferences = Preferences()
         self.dev = Dev()
@@ -243,9 +204,8 @@ class MainWindow(QMainWindow):
         for child in self.findChildren(QWidget):
             child.update()
         self.update()
-        # The title bar is the OS's and outside every one of those, which is why
-        # it is asked for separately and by the only widget that has a native
-        # handle to name.
+        # The title bar is the OS's, outside the traversal above, and reachable
+        # only from the widget holding the native handle.
         dress_title_bar(self)
 
     def even_split(self) -> None:

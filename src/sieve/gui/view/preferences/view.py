@@ -40,24 +40,17 @@ from sieve.gui.view.preferences.minor_visuals import MinorVisuals
 from sieve.gui.view.preferences.palettes import Palettes
 
 #: How wide the card is allowed to get. A settings row is a label and a control
-#: on one line, and a card that took the window's width would put a full screen
-#: of space between the two — the overlay has room to spare, and spending all of
-#: it makes the pair harder to read, not easier. Wider than the reading side
-#: alone wants, by about what the nav takes: the list is beside the section, not
-#: carved out of it. The nav is a fixed column, so every width added past that
-#: lands on the reading side, where a row's label and its control are what have
-#: to fit on one line.
+#: on one line, and the pair reads best with the space between them bounded.
+#: Wider than the reading side alone wants by about what the nav takes, since the
+#: list stands beside the section: the nav is a fixed column, so every width
+#: added past that lands on the reading side.
 _WIDTH = 820
 
 #: How tall the card stands, whichever section is open. Sized to the tallest
-#: section and not to the current one — why it is fixed at all is the card's,
-#: and stated there. That was the longest gloss while every section was empty,
-#: then `palette`, which is a list and wanted enough of it to read as one rather
-#: than as a row with a scrollbar beside it. It is now `minor visuals`, which is
-#: a countable five rows rather than a catalogue: the number is what stands all
-#: five at the default text size, so the section that sets the sizes is not the
-#: one section a user has to scroll to finish reading. It scrolls anyway at the
-#: sizes it can be set to, which is the point of it scrolling.
+#: section; why it is fixed at all is the card's, and stated there. The tallest
+#: is currently `minor visuals`, and the number is what stands all five of its
+#: rows at the default text size, so the section that sets the sizes reads whole
+#: before it scrolls. It scrolls at the sizes it can be set to.
 _HEIGHT = 545
 
 def _sections() -> tuple[Section, ...]:
@@ -83,19 +76,14 @@ def _sections() -> tuple[Section, ...]:
             Palettes(),
             palette.reset,
         ),
-        # `text` was the section this one is now, and it is folded in rather
-        # than left standing beside it. It was split off `palette` to keep a
-        # promise the card had made about text size, and this section keeps that
-        # promise with controls under it — an empty `text` left below would be
-        # the card offering the same setting twice, once where it works and once
-        # where it says nothing is here yet, which is worse than either.
+        # `text` is folded into this section. It was split off `palette` to keep
+        # a promise the card had made about text size, and this section keeps
+        # that promise with controls under it.
         #
         # The name is the user's word and not the tree's. What falls under it is
         # a corner radius and four point sizes: small, unrelated to each other,
-        # and none of them a decision about what the application *does*. There
-        # is no module these are the settings of — they reach `primitives/` and
-        # every view at once through `gui/metrics.py` — so naming the section
-        # for one would name it after the wrong half.
+        # and none of them a decision about what the application *does*. They
+        # reach `primitives/` and every view at once through `gui/metrics.py`.
         Section(
             "minor visuals",
             "how round the cards are, and how large each kind of text is",

@@ -52,25 +52,18 @@ if TYPE_CHECKING:  # importing it for real would close the loop back to `window`
 #: Each key sequence the frame answers wherever focus is, and the method name on
 #: the window that answers it.
 #:
-#: Ctrl+R is on no menu, and is the reason this table is not the bar's leftovers:
-#: reloading is not part of the picture the bar draws of what the application is
-#: — it acts on the run rather than on the window or on a project, which is the
-#: line `menu.py` keeps — but it is still something the frame can do, and a key
-#: is where a thing the user does between edits belongs.
+#: Ctrl+R is on no menu: reloading acts on the run rather than on the window or
+#: on a project, which is the line `menu.py` keeps, and a key is where a thing
+#: the user does between edits belongs.
 _KEYS: tuple[tuple[str, str], ...] = (("Ctrl+R", "reload"),)
 
 #: Each key sequence the frame answers only where nothing nearer the user has,
 #: and the method name on the window that answers it.
 #:
-#: ← and → are the swipe's, and are spent on it: the track is the one thing in
-#: the frame that runs on a line, so the two keys that mean *along a line* say
-#: exactly one thing wherever the user is standing — unless what they are
-#: standing on runs on a line of its own. A segmented bar and a tab row both
-#: walk their own options on this axis, and both are a thing the user has
-#: deliberately put the keyboard on. Yielding to them costs the track nothing
-#: the user can feel, since the widget that took the key is the one they were
-#: looking at, and it keeps one motion spelled one way rather than putting the
-#: track behind a modifier for the sake of two widgets.
+#: ← and → are the swipe's (ADR-0003), and yield to whatever the user has put
+#: the keyboard on that runs on a line of its own — a segmented bar, a tab row.
+#: The widget that takes the key is the one they were looking at, which keeps
+#: one motion spelled one way.
 _YIELDED_KEYS: tuple[tuple[str, str], ...] = (
     ("Left", "swipe_back"),
     ("Right", "swipe_forward"),

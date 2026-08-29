@@ -43,6 +43,16 @@
   - 📄 `VOCAB.md`
   - 📄 `vision-and-notes.md`
 - 📁 `experiments/`
+  - 📁 `chain-experiments/`
+    - 📁 `results/`
+      - 📄 `G3G5G6-joints-and-reuse-20260824T175756Z.json`
+      - 📄 `G3G5G6-joints-and-reuse-broken-20260824T175716Z.json`
+      - 📄 `G4-offsets-compose-20260824T174634Z.json`
+      - 📄 `G4-offsets-compose-broken-20260824T174641Z.json`
+    - 📄 `01-the-explorer-as-a-graph.md`
+    - 📄 `02-offsets-compose.py` — G4. Does a graph still have a fetch plan, and can anything hold it?
+    - 📄 `03-joints-and-reuse.py` — G3, G5 and G6. What the joints cost, what reuse is worth, and what keys it.
+    - 📄 `README.md`
   - 📁 `decode-experiments/`
     - 📁 `explorer-logs/`
       - 📄 `explorer-20260821T172626Z.json`

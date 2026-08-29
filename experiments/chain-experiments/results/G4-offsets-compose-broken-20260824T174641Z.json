@@ -1,0 +1,35 @@
+{
+ "experiment": "G4-offsets-compose-broken",
+ "question": "Does a graph still have a fetch plan, and can anything hold it?",
+ "when": "2026-08-24T17:46:41.445445+00:00",
+ "sieve_rev": "52ca86f",
+ "machine": {
+  "platform": "Windows-11-10.0.26200-SP0",
+  "processor": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
+  "logical_cpus": 32,
+  "python": "3.13.5"
+ },
+ "versions": {
+  "av": "18.1.0",
+  "cv2": "5.0.0",
+  "numpy": "2.5.2",
+  "ffmpeg": "ffmpeg version 2025-02-06-git-6da82b4485-full_build-www.gyan.dev Copyright (c) 2000-2025 the FFmpeg developers"
+ },
+ "footage": [],
+ "notes": [
+  "arithmetic, no footage: composition either works on paper or it does not",
+  "offsets taken off the tools themselves: {'absdiff': (-1, 0), 'dis': (-1, 0), 'mhi': (-30, -20, -10, 0)}",
+  "RUN WITH --broken: the plan is computed from the sink's own offsets alone, which is what `Rig.set_tool` does today when it chains a blur. `line`, `diamond` and `residency` are expected to FAIL.",
+  "line: two- and three-deep chains, plan against walk, 4 positions",
+  "diamond: two paths to one sink plan 1 rows, sharing 1 offsets",
+  "sparse: three-deep, a set plan wants 2 rows and a span plan 33 \u2014 31 fetched and unused, which ADR-0008 calls a bug rather than a price",
+  "residency: over a 300-row horizon the point set goes [4, 2, 2] and the working set goes [330, 301, 301], spanning [330, 301, 301]",
+  "bytes: 301 rows at 0+0+1920x1080@1920x1080:gray is 0.624 GB, 42% of the session budget",
+  "line (plan == what it asks for): 4 checked, 4 disagreed; first: two-deep at 500: the plan named 2 rows and the walk asked for 8; missed [469, 470, 479, 480, 489, 490], over-fetched []",
+  "diamond (paths union, not sum): 2 checked, 1 disagreed; first: diamond: planned 1 rows, walked 5",
+  "sparse (set beats span, measurably): 2 checked, 0 disagreed",
+  "residency (depth adds reach, not multiples): 4 checked, 2 disagreed; first: the point set did not grow with depth, so this graph is not exercising composition",
+  "bytes (the working set fits): 1 checked, 0 disagreed"
+ ],
+ "cases": []
+}

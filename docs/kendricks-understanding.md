@@ -33,7 +33,7 @@ Contracts are built by construction. For example, a tool family contract needs t
   - Primitives: How primitives talk to tools.
   - Cards: How cards get populated and where? I guess?
   - The seeker bar: how it talks to the source or anything else that needs the timeline.
-- Other features that might need contracts? Resource pressure and availability reporting/rebalancing? Storage, which isn't really different? Parameter ports?
+- Other features that might need contracts? Resource pressure and availability reporting/rebalancing? Storage, which isn't really different? Parameter ports? Waste reporting?
 
 ## Seams
 

@@ -1,4 +1,4 @@
-# SIEVE Architecture Iseas
+# SIEVE Architecture Ideas
 
 This document states potential architectural principles underlying SIEVE and the reasoning behind each: why the principle matters, the argument for it, the historical precedent it rests on, and why it applies to this system. It is a rationale document, not an execution plan. The organizing idea throughout is Parnas's (1972) formulation of information hiding: a system survives change when its modules hide the decisions likely to change, and its interfaces encode the decisions that must not. The seventeen principles below are the arguments in the second category — the ones whose reversal would propagate through everything.
 

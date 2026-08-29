@@ -40,10 +40,6 @@ Contracts exist so that whatever the SIEVE module is, adjusting how it works int
 
 Seams are in the Parnas sense: they hold a secret other things don't know about.
 
-This means that something like a source node has distinct outputs, so all the FFMPEG filtergraphs can live within a video file source tool as subtools because that is how it is going to get grouped anyway. That part is needed for efficiency: all the things needed there that nothing else needs to know about is in service of what it is doing, and it removes all the complexity needed of splitting how that happens across a dozen tools by keeping them under the shared lowering. The video file source tool outputs frames for all the other tools but what shape those frames are in is decided by the video file source tool.
-
-Tools can live externally, but for convenience, a number live next to the SIEVE src. Source tools tend to share functions, so there can be some kind of common functions folder for source tools. This should probably be true of the other tool families too.
-
 Fuzzy understanding: SIEVE makes hard seams at folders and soft seams at files between folders. I think I want stuff in folders to follow some kind of contract so it can be standardized to the MCP but I'm not sure yet. This is definitely true of tools. If this is true of the GUI or Experiments, I am less clear.
 
 ### Stuff to build / hasn't been built yet

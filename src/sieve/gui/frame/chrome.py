@@ -1,9 +1,7 @@
 """What the window wears where no pane covers it.
 
-Every rule is anchored to the splitter or to a named object, never to a bare
-widget class: a plain `QLabel` or `QWidget` selector set on the window reaches
-down into whatever the panes come to hold — views that paint
-themselves — and the two stylesheets would then fight over every card.
+Selectors are anchored to the splitter or to named objects, never to bare widget
+classes — those reach into the panes and fight the views' own stylesheets.
 """
 
 from __future__ import annotations
@@ -28,8 +26,7 @@ def stylesheet() -> str:
         #bottom {{ background: {rgb(STACK_BG)}; }}
         #bottom QLabel {{ color: {rgb(TEXT)}; }}
 
-        /* The bar sits on the window's ground and closes with the same line a
-           seam is made of, so the top boundary reads like the other two. */
+        /* Menu bar: closes with the same hairline the seams use. */
         #menubar {{
             background: {rgb(STACK_BG)};
             color: {rgb(TEXT)};
@@ -40,34 +37,20 @@ def stylesheet() -> str:
         #menubar::item:selected {{ background: {rgb(PANEL_HOT)}; }}
         #menubar::item:pressed {{ background: {rgb(PANEL)}; }}
 
-        /* Dropped menus are panes, not ground: a panel fill inside a hairline,
-           the same pairing every card in the panes will use. The rules are
-           `primitives/menu.py`'s and not written out here — the argument was
-           this file's and the drawing is now shared with every menu a view
-           opens, which is not something the window's chrome should be the only
-           copy of. */
+        /* Drop-down menu rules live in primitives/menu.py. */
         {menu.sheet()}
 
-        /* Anchored to the class and reaching only into its own label: a dialog
-           the frame raises is not a pane, and nothing inside one is. */
+        /* Dialogs are not panes — scope to the class. */
         QMessageBox {{ background: {rgb(PANEL)}; }}
         QMessageBox QLabel {{ color: {rgb(TEXT)}; }}
     """
 
 
 def dress_title_bar(window: QWidget) -> None:
-    """Ask DWM for the frame that matches the palette, since Qt does not carry
-    one there.
+    """Set DWM dark-mode title bar to match the palette.
 
-    The title bar is the OS's, not Qt's: without this the window wears the
-    system frame whatever the stylesheet says, which under the dark palettes is
-    a light bar over a dark application. Attribute 20 is
-    `DWMWA_USE_IMMERSIVE_DARK_MODE`; on anything that is not a recent Windows
-    the call simply fails and the frame stays the platform's.
-
-    Asked for on every palette change and not once at startup, because the
-    answer is not a constant: half the palettes want the light bar back, and a
-    window that only ever darkened it would put a dark frame over `paper`.
+    Re-called on every palette change — some palettes want the light bar back.
+    Attr 20 is DWMWA_USE_IMMERSIVE_DARK_MODE; fails silently on older Windows.
     """
     if sys.platform != "win32":
         return

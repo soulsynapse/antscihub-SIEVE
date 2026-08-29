@@ -1,68 +1,8 @@
 """The window: a menu bar, three panes, and the boundaries between them.
 
-The panes are named for where they sit, not for what they will hold; the reason
-is `panes.py`'s, and the same word doing both jobs is why this file says "the
-left pane" and "the left side" and never just "left".
-
-Two of the three boundaries are different in kind and the frame is where that
-difference is stated. Left against right is a splitter — how much room the
-footage gets against the chain is the user's, and it is the trade they make
-most often. The bottom against both is a seam: the strip is a fixed height,
-because what it will draw is the whole asset at a size the layout does not get
-a say in. The menu bar sits above all three and is a boundary of neither kind —
-it acts on the window, not on what any pane holds.
-
-A subpane adds a boundary of the seam's kind one level in, and on the axis its
-pane's outer boundary left alone — the top and bottom sides in the left and
-right panes, the left and right sides in the bottom one, each side stacking two
-strips on that one axis. Which sides those are and how deep they stack is the
-pane's own and stated there; the window opens none of them, and the resting
-frame is the three panes and the two boundaries between them.
-
-Two of the three panes stand something at rest, and they stand it differently.
-The left pane holds one view, the canvas — the footage and what is drawn over
-it — put in whole, because there is nothing to choose between there. The right
-pane holds a swipe, which is the three screens that pane houses laid side by
-side on a track it slides along. A swipe is a view in a pane like any other and
-not a fourth pane — what it changes is the right pane's occupant, never how many
-panes there are. Which keys walk it is `hotkeys.py`'s; the verbs they call are
-here, because the swipe is the window's to hold and the keyboard is not the
-frame's to interpret twice. The same two moves are in the head of the view
-standing on the track, as the pair of arrows `swipe.py` builds — put there from
-here, since knowing there is a track to walk is the frame's and not the view's.
-All three positions carry a pair, because all three now stand a view with a
-head: the library, the chain in the project it opens, and the step walked into
-from that chain. The two behind the library are their chassis and nothing more
-— a head, and a room saying what is not standing in it yet — which is all the
-pair needed to be reachable there by the pointer as well as by the keys.
-
-Neither view names the pane it is in. The canvas is a view (ADR-0001) and would
-house on the right or on the swipe unchanged; the left pane holding it is this
-file's answer, and moving it is an edit here and nowhere else.
-
-The first of those positions houses the project list, which is the first view to
-land. The window is what puts it there and hands it what to show — the view
-names no pane and no position, so where it stands is the frame's answer and
-changing it is an edit here. The other two house the pipeline and the step on
-the same terms, and in the same order the track already ran in: out to the
-library, in to the chain, in again to the step being tuned.
-
-Two views stand in neither a pane nor a position. Preferences are about the
-application rather than about the project, and the dev bench is about the tree
-rather than about either, so both are put on an overlay over the panes
-(`overlay.py`) — which takes no room from them, and is why the count of panes is
-unchanged by there being things the window can show that are not in one. They
-share the one overlay and the window says which is standing, because which one
-the user asked for is the only part of it the views cannot know. The frame's
-keys are held while either is up: they are the window's and fire wherever focus
-is, which is what makes them frame-wide and exactly what must not walk a track
-the user cannot currently see.
-
-Where each is dropped differs, and the difference is what opened it. Preferences
-hang off their own title on the bar, which stays visible above them. The bench
-is reached from inside the Help drop or from Ctrl+D — the drop closes on the
-click and the key never opened one, so there is nothing left on screen to hang
-from, and it is centred instead.
+Left/right boundary is a splitter (user-adjustable); bottom boundary is a seam
+(fixed height). The left pane holds the canvas; the right holds a swipe of three
+positions. Preferences and dev bench share one overlay over the panes.
 """
 
 from __future__ import annotations
@@ -90,9 +30,7 @@ from sieve.gui.view.preferences import Preferences
 from sieve.gui.view.project_list import ProjectList
 from sieve.gui.view.step import Step
 
-#: What the window restores down *to*. Kept even though it opens maximized:
-#: without it the restored size — and with it whether the title bar can be
-#: grabbed at all — is whatever Qt picks from the layout's size hint.
+#: Restore-down size (window opens maximized but needs a grabable restored state).
 _WINDOW_WIDTH = 960
 _WINDOW_HEIGHT = 540
 
@@ -114,8 +52,6 @@ class MainWindow(QMainWindow):
         self.swipe = build_swipe("right")
         self.right.body.addWidget(self.swipe)
 
-        # The window houses each view in its position, and hangs that position's
-        # own pair of arrows in its head (ADR-0001).
         self.projects = ProjectList()
         self.swipe.position(POSITIONS.index("project")).body.addWidget(self.projects)
         self.projects.set_arrows(Arrows(self.swipe))
@@ -129,10 +65,6 @@ class MainWindow(QMainWindow):
         self.swipe.position(POSITIONS.index("step")).body.addWidget(self.step)
         self.step.set_arrows(Arrows(self.swipe))
 
-        # Subpanes are attached where a view asks for one; the resting frame
-        # is three panes.
-
-        # Neither view is the window's main one.
         self.split = QSplitter(Qt.Orientation.Horizontal)
         self.split.addWidget(self.left)
         self.split.addWidget(self.right)
@@ -149,16 +81,10 @@ class MainWindow(QMainWindow):
         column.addWidget(build_seam())
         column.addWidget(self.bottom)
         self.setCentralWidget(stacked)
-        #: The frame asks the bar where its preferences title was drawn every
-        #: time it stands the overlay up.
         self.bar = build_menu_bar(self)
         self.setMenuBar(self.bar)
-        #: Held so the bindings are reachable by name, and so the keys the frame
-        #: takes last can be read off it.
         self.hotkeys = bind_hotkeys(self)
 
-        # One overlay over the central widget for both views, each built here
-        # and hidden.
         self.overlay = Overlay(stacked)
         self.preferences = Preferences()
         self.dev = Dev()
@@ -171,138 +97,59 @@ class MainWindow(QMainWindow):
         self.setWindowState(self.windowState() | Qt.WindowState.WindowMaximized)
 
     def keyPressEvent(self, event) -> None:
-        """Answer a key nothing in front of the window wanted.
-
-        The end of the walk, and the reason `hotkeys.py` leaves ← and → unbound:
-        a `QShortcut` is offered a key before the focused widget, so a segmented
-        bar or a tab row standing in a pane could never take the axis it runs on.
-        An unhandled key arrives here instead, after everything nearer the user
-        has declined it, which is the order the frame wants.
-        """
         if answer_key(self.hotkeys, event):
             event.accept()
             return
         super().keyPressEvent(event)
 
     def _restyle(self) -> None:
-        """Wear the palette now in use — the chrome's own sheet, and a repaint
-        of everything under it.
-
-        The sheet is the window's half. The other half is every widget that
-        paints itself in a `paintEvent` — the panes' placeholders, the canvas,
-        the overlay's scrim — which is already holding the new colours, because
-        the palette mutates them in place, and needs only to be told to draw
-        again. Walked rather than left to Qt: re-setting a stylesheet repolishes
-        the tree but does not promise a repaint of a widget whose appearance
-        came from a painter and not from a rule.
-
-        Done here and not in each of them because it is one traversal on a
-        change the user makes by hand, against a `paintEvent` per widget per
-        frame in the loop this project exists to keep fast.
-        """
+        """Reapply stylesheet and repaint all children (paintEvent widgets need an explicit update)."""
         self.setStyleSheet(stylesheet())
         for child in self.findChildren(QWidget):
             child.update()
         self.update()
-        # The title bar is the OS's, outside the traversal above, and reachable
-        # only from the widget holding the native handle.
         dress_title_bar(self)
 
     def even_split(self) -> None:
-        """Hand the panes the same width, whatever the window is now.
-
-        Halving the splitter's own width rather than the window's: by the time
-        a user asks for this the window has been resized and the two numbers
-        have parted, and the sizes are read back against the splitter.
-        """
         half = max(self.split.width(), _WINDOW_WIDTH) // 2
         self.split.setSizes([half, half])
 
     def swipe_back(self) -> None:
-        """←: one position out along the right pane's track."""
         self.swipe.step(-1)
 
     def swipe_forward(self) -> None:
-        """→: one position in."""
         self.swipe.step(+1)
 
     def reload(self) -> None:
-        """Ctrl+R: start the application over on the code as it is now.
-
-        The window is closed first so what the user sees go away is the old run
-        and not a frame that stopped answering: the process is replaced without
-        unwinding, so nothing after the call runs and Qt is never asked to shut
-        down. What replacing it means is `relaunch.py`'s.
-        """
+        """Close and relaunch — process is replaced, nothing after this runs."""
         self.close()
         relaunch()
 
     def toggle_full_screen(self) -> None:
-        """Full screen and back, without deciding what 'back' is.
-
-        `showNormal` would restore *down*, losing a maximized window's state;
-        the frame opens maximized, so leaving full screen has to put back the
-        state the window was actually in.
-        """
+        """Toggle fullscreen via flags (showNormal would lose the maximized state)."""
         if self.isFullScreen():
             self.setWindowState(self.windowState() & ~Qt.WindowState.WindowFullScreen)
         else:
             self.setWindowState(self.windowState() | Qt.WindowState.WindowFullScreen)
 
     def toggle_preferences(self) -> None:
-        """The preferences over the panes, or away again if they are already up.
-
-        The title stays visible and clickable above what it opened, which is
-        the whole point of hanging the card off it — so the press that is
-        obviously available while the card is up has to be the one that puts it
-        back, and a re-raise there would be a click that does nothing. Ctrl+,
-        is the same request from the keyboard and toggles with it.
-
-        Asking while the bench is standing turns the overlay to preferences
-        rather than closing it: the press means "put *this* away" only when
-        this is what is there.
-
-        Dropped from under the bar's own title rather than centred, so what is
-        on screen is read as having come from what was clicked — the title
-        stays visible above it, and Ctrl+, arrives at the same place, which is
-        what keeps the keyboard's route and the pointer's showing one thing.
-        """
+        """Toggle preferences overlay, anchored under the bar title."""
         if self.overlay.showing(self.preferences):
             self.close_overlay()
             return
         self._raise(self.preferences, preferences_anchor(self.bar))
 
     def open_dev(self) -> None:
-        """Ctrl+D, or Help ▸ Dev view: the bench over the panes.
-
-        Centred rather than anchored, and that is not a smaller version of the
-        preferences decision but the other side of it: a view is dropped under
-        the thing that opened it so it reads as having come from there, and the
-        bench is opened from an entry inside a drop that closes on the click, or
-        from a key that opened no drop at all. Hung off the Help title it would
-        be hanging off something the user was not looking at.
-
-        Asking again while it is already up is a re-raise and not a second card,
-        and asking for it while preferences are up turns the overlay to it
-        rather than stacking one over the other.
-        """
+        """Show the dev bench centred (no bar title to anchor to)."""
         self._raise(self.dev, None)
 
     def _raise(self, view: QWidget, left: int | None) -> None:
-        """Stand a view on the scrim and hold the frame's keys while it is up.
-
-        The one place the two overlay views are raised from, so what covering
-        the panes costs is stated once: a second verb that raised its own view
-        and forgot the keys would leave ← and → walking a track nobody can see.
-        """
+        """Suspend hotkeys and raise `view` on the overlay."""
         suspend_hotkeys(self.hotkeys, True)
         self.overlay.stand(view)
         self.overlay.raise_over(left)
 
     def close_overlay(self) -> None:
-        """Uncover the panes, whichever view was standing. The keys come back
-        with the overlay's own signal, so the two ways the user closes this and
-        the one the frame does all restore them in the same place."""
         self.overlay.dismiss()
 
     def about(self) -> None:

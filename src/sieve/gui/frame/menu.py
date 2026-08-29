@@ -1,23 +1,8 @@
 """The bar across the top, and what the window itself can be asked to do.
 
-The menu is the frame's, not a pane's: everything on it acts on the
-window or on the project the window is showing, and nothing on it belongs to
-the footage, the chain or the timeline — those are acted on where they are
-drawn. That line is what keeps the bar from becoming the place every view
-hangs its overflow.
-
-Not every title on the bar drops. One whose whole content is a single verb —
-preferences is the first — is a plain action sitting on the bar: it is drawn by
-the same rule as the titles beside it, so the bar reads as one row of the same
-kind of thing, and clicking it does the verb instead of opening a list of one.
-A one-entry menu would cost a second click to say nothing, and would claim more
-is under it than ever will be.
-
-Entries whose target does not exist yet are built and disabled rather than
-left out. A bar that grows an item per commit tells the reader nothing about
-what the application is; one that shows its shape from the start, greyed where
-the wiring has not landed, is the same checkable claim the empty panes
-make.
+A title whose whole content is a single verb (Preferences) is a plain action on
+the bar rather than a one-entry drop. Entries whose wiring has not landed are
+built disabled, not left out.
 """
 
 from __future__ import annotations
@@ -30,9 +15,7 @@ from PySide6.QtWidgets import QMenuBar, QMessageBox
 if TYPE_CHECKING:  # importing it for real would close the loop back to `window`
     from sieve.gui.frame.window import MainWindow
 
-#: A line inside a drop: a label, the method name on the window that answers it,
-#: and a shortcut — or `None` in place of the method for something the frame
-#: cannot do yet. A separator is a bare `None` where an entry would be.
+#: (label, method-or-None, shortcut). A bare None in a drop's entries is a separator.
 Entry = tuple[str, str | None, str]
 
 
@@ -51,14 +34,9 @@ class Button(NamedTuple):
     shortcut: str
 
 
-#: The preferences verb, named apart from the bar it sits on because the frame
-#: has to find it again: what it opens is stood under it, so where it is drawn
-#: is a number someone asks for.
+#: Named apart so `preferences_anchor` can find its geometry.
 _PREFERENCES = Button("&Preferences", "toggle_preferences", "Ctrl+,")
 
-#: The bar, left to right. Preferences sits between the window's own views and
-#: the help: it is about the application rather than about a project, and the
-#: bar is the only place that distinction is already drawn.
 _BAR: tuple[Drop | Button, ...] = (
     Drop(
         "&File",
@@ -80,13 +58,7 @@ _BAR: tuple[Drop | Button, ...] = (
         ),
     ),
     _PREFERENCES,
-    #: The dev bench is under Help, where the things about the program rather
-    #: than about the work already sit.
-    #:
-    #: Ctrl+D is carried here rather than in `hotkeys.py`: a shortcut on a
-    #: `QAction` is the action's, the same way Ctrl+, is preferences'. `_KEYS`
-    #: is for keys with nothing on the bar to hang from, and a binding in both
-    #: places is one Qt reports as ambiguous and then answers with neither.
+    #: Ctrl+D lives on the QAction, not in hotkeys.py — duplicating it is ambiguous.
     Drop(
         "&Help",
         (
@@ -102,10 +74,7 @@ def build_menu_bar(window: MainWindow) -> QMenuBar:
     """The bar, with every action bound to the window that will carry it."""
     bar = QMenuBar(window)
     bar.setObjectName("menubar")
-    # The bar is the window's own: on a native menu bar the entries leave the
-    # window they act on, and the dark chrome below stops at a system-coloured
-    # strip.
-    bar.setNativeMenuBar(False)
+    bar.setNativeMenuBar(False)  # native bar leaves the window's chrome
     for item in _BAR:
         if isinstance(item, Button):
             bar.addAction(_action(window, item.label, item.method, item.shortcut))
@@ -122,13 +91,7 @@ def build_menu_bar(window: MainWindow) -> QMenuBar:
 def _action(
     window: MainWindow, label: str, method: str | None, shortcut: str
 ) -> QAction:
-    """One thing the bar offers, wherever on the bar it is offered.
-
-    The same builder for a line in a drop and for a title that is one: what
-    differs between them is where they are added, and nothing about what they
-    are — which is what keeps a button on the bar from being a second kind of
-    entry with its own rules for shortcuts and for being greyed out.
-    """
+    """Build one action — same shape for drops and bar-level buttons."""
     action = QAction(label, window)
     if shortcut:
         action.setShortcut(shortcut)
@@ -140,17 +103,7 @@ def _action(
 
 
 def preferences_anchor(bar: QMenuBar) -> int:
-    """Where the preferences title starts, in the bar's own x.
-
-    Asked by whoever stands the preferences up, so the card can hang off the
-    thing that was clicked rather than off the middle of the window. The bar
-    and the panes share the window's left edge, so the number needs no
-    translating on the way to the surface the card lands on.
-
-    Read from the laid-out bar and not from a width added up here: the titles
-    are as wide as the platform's font drew them, and a builder that guessed
-    would be right on exactly one machine.
-    """
+    """X offset of the Preferences title, read from the laid-out bar."""
     for action in bar.actions():
         if action.text() == _PREFERENCES.label:
             return bar.actionGeometry(action).left()
@@ -158,7 +111,6 @@ def preferences_anchor(bar: QMenuBar) -> int:
 
 
 def show_about(window: MainWindow) -> None:
-    """What the application is, for a user who has to name it in a method."""
     QMessageBox.about(
         window,
         "About SIEVE",

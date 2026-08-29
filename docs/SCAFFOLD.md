@@ -32,6 +32,7 @@
     - 📄 `2026.08.21-software-decoders-collapse-under-contention.md`
     - 📄 `2026.08.21-uncut-seek-costs-a-gop-not-a-frame.md`
     - 📄 `2026.08.22-what-froze-the-felt-loop.md`
+    - 📄 `2026.08.28-the-v3-suite-outweighed-its-program.md`
   - 📁 `vocab/`
     - 📄 `menu.md`
     - 📄 `pane.md`

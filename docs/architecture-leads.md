@@ -65,6 +65,52 @@ real byte does. The cost is one field now; the retrofit is orphaning every
 artifact in existence, silently. Not a standalone ADR — one clause in
 whatever ADR mints the artifact.
 
+## A document has one writer
+
+Two writers on one file is where a durable format goes wrong, and it is not
+the same question as whether the file is committed: `Cargo.lock` is
+machine-written, checked in, and quiet, because cargo is its only author.
+What breaks is the file a person edits by hand and a program also rewrites —
+the rewrite reformats what they wrote, the hand edit is a conflict the
+program cannot merge, and the file stops being readable as a statement of
+intent because half of it is a report. The lead: a durable document names
+its writer, and a fact with a different writer goes in a different document
+rather than a different section of the same one. What a project is *for* is
+authored; what a run resolved, produced or cached is reported; the two ship
+together and are still two files.
+
+Trigger: the first document with a plausible second writer — a project or
+pipeline file the application would also like to update as it runs.
+
+## Portable and machine-local are different documents
+
+Whether a fact travels is a second axis, orthogonal to who writes it, and
+the two together give four kinds of document rather than two: authored and
+portable (intent), authored and local (this machine's scratch path, its
+queue account), reported and portable (what a run resolved), reported and
+local (what a probe measured here, which projects this person has opened). A
+scratch path or a machine-dependent measurement written into a document
+meant to travel is wrong on the machine that receives it with nothing red —
+the durable-instruction failure, in a file instead of a comment. The lead: a
+durable document says which of the four it is, and the split is by file, the
+way DVC separates `config` from `config.local` and git separates a repo's
+config from the user's, rather than by a section a reader has to remember
+not to trust.
+
+The corollary is on paths. A document that travels names its neighbours
+relative to itself, because its own location is the only fixed point it has;
+one that never leaves this machine names them absolutely, because finding
+them here is its whole job. Neither rule survives being applied to the other
+kind of file.
+
+Two of the four are already placed, and each states its own terms where it
+lives: ADR-0007 holds that a cost class is measured where it runs, so it was
+never portable, and `src/sieve/project/library.py` is a per-user document
+held out of every project.
+
+Trigger: the first document a second machine reads — the pipeline's
+persistent form, per the lead below.
+
 ## The pipeline document is the cluster handoff
 
 HPC batch is an aspiration, and it constrains the present: a pipeline's

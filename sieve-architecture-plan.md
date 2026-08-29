@@ -1,6 +1,6 @@
-# SIEVE v4 Architecture Plan — Index ADR
+# SIEVE v4 Architecture Plan
 
-> Status: living index. Renumber into the ADR sequence on commit.
+> Status: living index.
 > This document is the tracking system. It must not grow tooling, dashboards, or status taxonomies.
 
 ## Purpose and economics

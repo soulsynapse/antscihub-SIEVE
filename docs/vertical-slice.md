@@ -53,27 +53,47 @@ repeating.
   the first line of `SIEVE-CAPABILITIES.md`. Ported from `mockup/mockup.py`
   into `gui/view/transport/`, mapping positions to columns by ordinal so an
   invented timebase is never drawn as if it were time.
+- **`gray` is the decoder's luma plane.** Settled against the oracle rather
+  than against the argument: `forms.py` claimed the construction for every
+  format and was never run, the session explorer took plane 0 and every
+  measured number on the storage shelf came out of frames that did. `forms.py`
+  keeps which source pixels at what sampling; what a pixel *is* belongs to
+  whoever produced it. Refusing gray had made a crop cost more than the whole
+  frame it was cut from. The video source is version 2 for it (ADR-0010).
+- **Window fill and write-behind chunks.** `sieve/fill.py` and
+  `sieve/chunks.py`, ported from the session explorer with its ordering, its
+  complete-chunks-only rule and its two stop speeds. A fill reads through its
+  own opened source, borrowed from a pool, because an open here is ADR-0004's
+  whole demux pass and not a container. `av` became a SIEVE dependency for
+  SIEVE's own cut and nothing else — `sieve/` names no container and demuxes
+  nothing, which is the line ADR-0009 actually draws.
+- **A drawn crop, and the invalidation a form change needs.** The crop is what
+  makes a window holdable at all, and drawing one is what gives the
+  invalidation path a caller. Landing, the four serve tiers and the crop are in
+  `gui/frame/window.py`.
+
+  What each of those cost is in the commit messages that landed them, which is
+  the wrong shelf for it — a finding is owed here and none has been minted.
 
 ## Next, in order
 
-**1. Window fill and write-behind chunks.** Ports `WindowFill` and
-`ChunkStore` from `experiments/storage-experiments/session-explorer.py`. This
-is what stops a read blocking the thread that draws, which playback currently
-does. Carry attention-first ordering (fill from the playhead's chunk and wrap
-after — the same decode work in a different order is the difference between a
-frozen landing and a seamless one), complete-chunks-only persistence, the
-per-frame encode yield, and `stop(wait=False)` on a landing against a blocking
-stop on a form change. Do **not** carry `ChunkStore.fetch`'s lock, which is
-held across an open, a seek and a decode; `store.py` forbids that in as many
-words and gives the reason.
+**1. The display proxy and the route table.** Ports `_serve`'s selection.
+This is what a scrub *outside* the filled window costs, and it is now the only
+place a seek is still paid on the thread that draws: inside a window every
+route is a few milliseconds, and one position beyond it the picture holds
+still because the tier that would serve it does not exist. `Frames.covered`
+landed with the fill; `nearest` is currently the window's own, in
+`gui/frame/window.py`, and belongs down there once a second caller wants it.
+Keep the two-threshold subtlety: a very near cached frame beats the proxy, a
+merely near one loses to it, because a right-time low-resolution frame beats a
+wrong-time sharp one.
 
-**2. The display proxy and the route table.** Ports `_serve`'s selection.
-`Frames` still lacks `nearest`, `covered` and a batched snapshot accessor, and
-all three are needed here. Keep the two-threshold subtlety: a very near cached
-frame beats the proxy, a merely near one loses to it, because a right-time
-low-resolution frame beats a wrong-time sharp one.
+The proxy is also what makes a *crop* drawable anywhere: the crop gesture
+needs the whole frame, and the whole frame is a source-form decode per
+position. Drawing one today means scrubbing at ~200 ms a step to find the
+place to draw it.
 
-**3. The step contract.** `contract/nodes.py` says one contract per tool type
+**2. The step contract.** `contract/nodes.py` says one contract per tool type
 and a source is the first. `experiments/tool-experiments/tools.py` is the
 shape: a form that is a function of the crop, the offsets a step admits, its
 reach, its key. Cost class stays computed and never declared (ADR-0007). Not
@@ -85,14 +105,6 @@ urgent: `Output.starts` removed the reason. A filmstrip is now a transport
 concern and folds into 1 and 2 rather than standing before them.
 
 ## Waiting on a decision that is not the code's
-
-**What `gray` means.** `forms.py` is the authority and says BT.601 over the
-decoded BGR. A decoder's luma plane is a different quantity, so the video
-source refuses `gray` and lets the canonical construction run after a
-full-size decode. Serving the plane directly is the difference between a
-whole-frame decode and a crop, and it cannot be a tool's decision: two
-producers of one form must agree in the low bits. Changing it means changing
-`forms.py`'s definition, which is a decision about what a form *is*.
 
 **How a source that is not a file gets picked.** `Source.patterns` are file
 globs, so neither a folder of stills nor an address with a scheme can be
@@ -108,7 +120,11 @@ lead-shaped and belongs in `architecture-leads.md` if it is not settled soon.
 - **A batch read** — one request carrying a set of positions, sorted by
   keyframe. `ideas.md` names it as one of three things a single-backend
   protocol cannot express, and `tool-experiments` lists it untried. Its
-  trigger is a fill tier, which is the next piece of work.
+  trigger has arrived and has not fired: the fill asks position by position,
+  and the video source's own cursor rule already turns an ascending run into
+  forward decoding, so a batch read would save the seek at a chunk boundary
+  and nothing else. It fires when a tier asks for positions that are *not*
+  ascending — the display proxy's fill, or a step reaching across offsets.
 
 ## Untested cases, named so they are not discovered by a user
 
@@ -118,7 +134,18 @@ lead-shaped and belongs in `architecture-leads.md` if it is not settled soon.
 - **An extent growing while somebody watches.** `Store.positions` re-asks, so
   growth is visible to anything that looks — and nothing re-polls, so a folder
   being written into does not lengthen its own strip.
-- **A form change.** Nothing changes a crop yet, so the invalidation the
-  session explorer performs on one — stop the fill, drain the encode queue,
-  rebuild the store, wipe the chunks, and only then move the rect — has no
-  counterpart here and will be needed by the first piece of work above.
+- **A landing while a chunk of the same window is still encoding.** The
+  explorer priced both halves of that seam solo and the overlap not at all,
+  and nothing here has driven it either. The writer's queue is the seam.
+- **A second recording opened over a filled one.** `_close_source` stops the
+  fill, closes the readers and destroys the chunks in that order; the order is
+  argued and has not been driven with a fill actually running.
+- **An extent growing while somebody watches.** `Store.positions` re-asks, so
+  growth is visible to anything that looks — and the window now snapshots the
+  listing at open to have an ordinal table at all, so a folder being written
+  into does not lengthen its own strip *or* its own grid. The snapshot is the
+  new half of this.
+
+Struck from this list: a form change had no counterpart and now has one, in
+`_apply_crop` — stop the fill and wait for it, drain the writer, wipe the
+frames, move the chunk generation, then move the rect. It is driven.

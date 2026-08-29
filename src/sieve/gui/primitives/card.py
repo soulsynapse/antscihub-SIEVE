@@ -78,6 +78,8 @@ class Card(QFrame):
             row.addWidget(button)
         head.addWidget(self._verbs)
 
+        # Opacity, not setVisible: hiding would collapse the head's height and
+        # walk the title's rule sideways every time the pointer left.
         self._fade = QGraphicsOpacityEffect(self._verbs)
         self._fade.setOpacity(0.0)
         self._verbs.setGraphicsEffect(self._fade)
@@ -241,6 +243,8 @@ class Card(QFrame):
         super().enterEvent(event)
 
     def leaveEvent(self, event) -> None:
+        # Moving onto one of the card's own buttons is not a leave: Qt sends
+        # Leave only up to the common ancestor, which for a verb is this card.
         self._hovered = False
         self._fade.setOpacity(1.0 if self._selected else 0.0)
         self.update()

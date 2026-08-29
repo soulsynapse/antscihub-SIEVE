@@ -6,7 +6,7 @@
   - 📄 `pre-commit`
 - 📁 `checks/` — One structural check per ADR, each registered under the ADR's number.
   - 📄 `adr0010-baseline.json`
-  - 📄 `adr0010.py` — ADR-0010 tripwire: hash per top-level def, static (no solver import).
+  - 📄 `adr0010.py` — ADR-0010 tripwire: hash per top-level def, static on purpose — the tools
 - 📁 `docs/`
   - 📁 `adr/`
     - 📄 `ADR-0001-panes-house-any-view.md`

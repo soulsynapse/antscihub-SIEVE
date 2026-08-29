@@ -75,8 +75,12 @@ class View(QWidget):
         column.addWidget(self._band)
         column.addWidget(self._room, 1)
 
+        # Last — object-name rules need the children to exist. A subclass that
+        # builds more calls this again at the foot of its own __init__.
         self._restyle()
         # Bound methods so PySide6 drops the connection when the receiver dies.
+        # Bound once here, never again in a subclass — the method it resolves
+        # to is already the override.
         palette.CHANGED.connect(self._restyle)
         metrics.CHANGED.connect(self._restyle)
 

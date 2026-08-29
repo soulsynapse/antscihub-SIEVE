@@ -1,4 +1,10 @@
-"""Frame-level key bindings: eager shortcuts and yielded keys."""
+"""Frame-level key bindings: eager shortcuts and yielded keys.
+
+`_KEYS` are QShortcuts and fire before the focused widget — only keys nothing
+else wants belong there. `_YIELDED_KEYS` are handled in keyPressEvent after
+the focus chain declines. No autorepeat on either table: the swipe re-aims a
+running slide, so a held arrow would walk at the keyboard's repeat rate.
+"""
 
 from __future__ import annotations
 
@@ -52,7 +58,11 @@ def answer_key(hotkeys: Hotkeys, event: QKeyEvent) -> bool:
 
 
 def suspend_hotkeys(hotkeys: Hotkeys, suspended: bool) -> None:
-    """Disable both tables while a cover stands over the panes."""
+    """Disable both tables while a cover stands over the panes.
+
+    The flag covers yielded keys too: an unhandled key walks up the parent
+    chain, so disabling the shortcuts alone would still let `answer_key` act.
+    """
     hotkeys.suspended = suspended
     for shortcut in hotkeys.shortcuts:
         shortcut.setEnabled(not suspended)

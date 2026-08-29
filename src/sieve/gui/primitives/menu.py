@@ -1,4 +1,9 @@
-"""Styled popup menu with grouped verbs, captions, and shortcut columns."""
+"""Styled popup menu with grouped verbs, captions, and shortcut columns.
+
+A checked row is lit by its word going to the accent, never by a tick:
+`QMenu::indicator` takes its whole appearance from an `image:` the moment a
+sheet touches it, and a bitmap cannot follow a palette changed mid-run.
+"""
 
 from __future__ import annotations
 
@@ -26,7 +31,13 @@ _CAPTION_TRACK = 1.2
 
 
 def sheet() -> str:
-    """Stylesheet rules for all dropped menus; callers with their own sheet must include these."""
+    """Stylesheet rules for all dropped menus; callers with their own sheet must include these.
+
+    Anchored to `QMenu` by class — the one departure from this package's
+    object-name rule. A menu is a popup window, not a widget in a pane, so the
+    bare selector cannot reach into the panes; naming each menu would give a
+    view that forgot the name the platform's list beside the tree's.
+    """
     return f"""
         QMenu {{
             background: {rgb(PANEL)};

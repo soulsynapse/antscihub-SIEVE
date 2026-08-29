@@ -1,4 +1,10 @@
-"""Horizontal slider that lets the wheel past it."""
+"""Horizontal slider that lets the wheel past it.
+
+The wheel is refused because a `QSlider` takes it without focus: scrolling a
+settings column would silently edit every slider passed on the way down.
+Horizontal only — every sub-control rule below is written `:horizontal`, so a
+vertical one would come out undressed rather than visibly wrong.
+"""
 
 from __future__ import annotations
 

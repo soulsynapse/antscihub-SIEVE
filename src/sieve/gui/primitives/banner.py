@@ -140,6 +140,8 @@ class Banner(QWidget):
 
         painter.fillPath(shape, PANEL_HOT)
 
+        # Stripe before the edge, so the hairline closes the block on all four
+        # sides and the stripe sits inside it.
         painter.save()
         painter.setClipPath(shape)
         painter.fillRect(

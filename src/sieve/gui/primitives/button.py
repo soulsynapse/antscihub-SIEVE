@@ -26,7 +26,7 @@ _PAD_X = 12
 _PAD_Y = 6
 _PAD_X_SMALL = 8
 _PAD_Y_SMALL = 3
-_RADIUS = 4
+_RADIUS = 4  # own corner, not metrics.radius() — that slider is card corners
 
 
 class Button(QPushButton):

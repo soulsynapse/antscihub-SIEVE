@@ -1,4 +1,6 @@
-"""ADR-0010 tripwire: hash per top-level def, static (no solver import).
+"""ADR-0010 tripwire: hash per top-level def, static on purpose — the tools
+module imports its solvers, and a check that imported it could not run where
+the solvers are not installed.
 
 Hashes are CR-stripped so autocrlf-only checkouts don't trip.
 """

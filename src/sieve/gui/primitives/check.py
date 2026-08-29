@@ -1,4 +1,9 @@
-"""Painted checkbox and radio — one class, distinguished by corner shape."""
+"""Painted checkbox and radio — one class, distinguished by corner shape.
+
+Painted, not styled: `QCheckBox::indicator` takes its whole appearance from an
+`image:` the moment a sheet touches it, and a bitmap cannot follow a palette
+changed mid-run. A painted tick reads the live roles at draw time.
+"""
 
 from __future__ import annotations
 

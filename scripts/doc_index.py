@@ -48,6 +48,12 @@ class Shelf(NamedTuple):
     title: str
     preamble: str
     tally: str  # takes the number of notes that made it onto the shelf
+    #: A shelf that names a second section splits `status: unsettled` notes
+    #: into it, under its own heading and tally. A shelf that leaves these
+    #: empty renders one list and ignores `status` entirely.
+    pending_title: str = ""
+    pending_preamble: str = ""
+    pending_tally: str = ""
 
 
 SHELVES = [
@@ -70,8 +76,18 @@ its group leaves this index while keeping its number and its file.""",
 Derived: each line is its term's first paragraph, so that file is the home and
 this index cannot drift from it. The shelf a term sits on is `group` and its
 order along that shelf is `position`, both placement only — a term that drops
-its group leaves this index while keeping its file.""",
+its group leaves this index while keeping its file. A term the tree has not
+agreed on is listed apart, below.""",
         tally="*{count} defined.*",
+        pending_title="## Unsettled",
+        pending_preamble="""\
+A term is here because the tree does not agree on it yet: several live senses
+at once, or a definition the code has walked away from. Listed rather than
+left out, because the disagreement is what is being raised and a word nobody
+wrote down is a word nobody argues with. `status: unsettled` in the
+frontmatter is what puts a term here; deleting that line is what settles
+it.""",
+        pending_tally="*{count} contested.*",
     ),
 ]
 
@@ -224,8 +240,14 @@ def render_shelf(shelf: Shelf, paths: list[str], blobs: dict[str, bytes]) -> str
     the one way off an index, and it leaves the file itself untouched.
     `position` orders a group from the front, and one that omits it sits after
     everything that named a place, in filename order.
+
+    A shelf that names a second section reads `status` as well: `unsettled`
+    sends a note to that section, everything else to the first. The two are
+    rendered the same way and tallied apart, so a term can be recorded before
+    the tree agrees on it without being read as agreed.
     """
     groups: dict[str, list[tuple[list, bool, str, str, str, str]]] = {}
+    pending: dict[str, list[tuple[list, bool, str, str, str, str]]] = {}
     for path in sorted(paths):
         name = path[len(shelf.directory) :]
         if (
@@ -239,26 +261,39 @@ def render_shelf(shelf: Shelf, paths: list[str], blobs: dict[str, bytes]) -> str
             continue
         position = fields.get("position", "")
         link = f"{shelf.directory[len(DOCS):]}{name}"
-        groups.setdefault(fields["group"], []).append(
+        unsettled = (
+            bool(shelf.pending_title)
+            and fields.get("status", "") == "unsettled"
+        )
+        shelved = pending if unsettled else groups
+        shelved.setdefault(fields["group"], []).append(
             (natural(position), not position, name, fields.get("title", name),
              link, paragraph)
         )
 
-    lines = []
-    for group in sorted(groups, key=natural):
-        lines.append(f"- {FOLDER} `{group}`")
-        for _, _, _, title, link, paragraph in sorted(
-            groups[group], key=lambda entry: (entry[1], entry[0], entry[2])
-        ):
-            line = f"  - {FILE} [{title}]({link})"
-            if paragraph:
-                line += f" — {paragraph}"
-            lines.append(line)
+    def section(
+        shelved: dict[str, list[tuple[list, bool, str, str, str, str]]],
+        tally: str,
+    ) -> list[str]:
+        lines = []
+        for group in sorted(shelved, key=natural):
+            lines.append(f"- {FOLDER} `{group}`")
+            for _, _, _, title, link, paragraph in sorted(
+                shelved[group], key=lambda entry: (entry[1], entry[0], entry[2])
+            ):
+                line = f"  - {FILE} [{title}]({link})"
+                if paragraph:
+                    line += f" — {paragraph}"
+                lines.append(line)
+        count = sum(len(group) for group in shelved.values())
+        return [*lines, "", tally.format(count=count)]
 
-    count = sum(len(group) for group in groups.values())
-    tally = shelf.tally.format(count=count)
+    body = section(groups, shelf.tally)
+    if pending:
+        body += ["", shelf.pending_title, "", shelf.pending_preamble, ""]
+        body += section(pending, shelf.pending_tally)
     return "\n".join(
-        [HEADER, "", shelf.title, "", shelf.preamble, "", *lines, "", tally, ""]
+        [HEADER, "", shelf.title, "", shelf.preamble, "", *body, ""]
     )
 
 

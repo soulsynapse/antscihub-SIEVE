@@ -5,7 +5,8 @@
 Derived: each line is its term's first paragraph, so that file is the home and
 this index cannot drift from it. The shelf a term sits on is `group` and its
 order along that shelf is `position`, both placement only — a term that drops
-its group leaves this index while keeping its file.
+its group leaves this index while keeping its file. A term the tree has not
+agreed on is listed apart, below.
 
 - 📁 `Layer 1`
   - 📄 [window](vocab/window.md) — The application. Houses panes.
@@ -17,5 +18,20 @@ its group leaves this index while keeping its file.
 - 📁 `Substrate`
   - 📄 [tier](vocab/tier.md) — A place a frame can be answered from: one of an ordered stack, cheapest first, over one open recording. Tiers are ranked by what an answer costs and not by what it is worth, because they are all answering the same question — this position, in this form — and differ only in what they give up to answer it sooner. The store's budget of decoded frames is the ground floor; the chunk store, the display proxy and the source itself are the rest.
   - 📄 [form](vocab/form.md) — What a frame is, apart from which instant it is: which source pixels, at what sampling, in what format. All three at once, never one of them — a form is not a resolution and not a pixel format, because two consumers wanting one instant at the same size in different formats want two arrays, and so do two wanting one format at two crops. Position and form are the two halves of every key the substrate holds a frame under, and `Form` is frozen so it can be that half.
+  - 📄 [position](vocab/position.md) — Which instant a frame is, apart from what it is: the source's own presentation timestamp, integer ticks in the stream's timebase. A position is a name and never a count, which is what lets it cross a file, a session or a tool boundary and still mean one frame — the other half of every key the substrate holds a frame under, form being the half that says what. Its partner *ordinal* is the row that position lands on inside one listing, and it is only ever valid beside the table that produced it.
 
-*8 defined.*
+*9 defined.*
+
+## Unsettled
+
+A term is here because the tree does not agree on it yet: several live senses
+at once, or a definition the code has walked away from. Listed rather than
+left out, because the disagreement is what is being raised and a word nobody
+wrote down is a word nobody argues with. `status: unsettled` in the
+frontmatter is what puts a term here; deleting that line is what settles
+it.
+
+- 📁 `Layer 1`
+  - 📄 [surface](vocab/surface.md) — Four live senses, and a fifth the vocabulary says is retired. The entry for "view" records the word being dropped for doing double duty — a thing a pane houses, and a thing paint lands on — and the tree kept using it for both anyway, plus two more. Nothing here is wrong on its own; what is wrong is that "surface" in a docstring does not tell a reader which of them is meant.
+
+*1 contested.*

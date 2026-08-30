@@ -20,3 +20,6 @@ Scheduling and storage
 - JAX
 - Dask
 - Ray
+- ARC
+- 2Q
+- GreedyDual-Size

@@ -29,14 +29,50 @@ named for a pane's middle is a homonym nobody asked for. `request_frame` and
 `getFrameFilter` lose the word `frame` for the reason the next section gives:
 in this tree the thing requested is often not one.
 
-**Two roles, and the split is not a tuning choice.** One thread fetches and
-only fetches; `fetch.Fetcher` is one open container with one cursor and is
-not thread-safe by construction, and the seek/step rule is a statement about
-a cursor's history. N threads run activations and never decode. If a decode
-ran on a recorder thread the cursor would be shared, and if arithmetic ran on
-the fetch thread then a step costing tens of milliseconds would stall the
-decode that the whole pressure queue is about — which is the freeze the
-session explorer exists to avoid, re-introduced at the other end.
+**Two roles.** Fetch threads decode and only decode; recorder threads run
+activations and never decode. If arithmetic ran on a fetch thread, a step
+costing tens of milliseconds would stall the decode the whole pressure queue
+is about — the freeze the session explorer exists to avoid, re-introduced at
+the other end.
+
+**How many fetch threads is a measurement, and this file's first answer was
+wrong.** It argued for exactly one, on the grounds that `Fetcher` is one open
+container with one cursor and is not thread-safe. The premise is true and the
+conclusion does not follow: what a cursor needs is one thread *per Fetcher*,
+not one Fetcher. Two findings dated 2026.08.30 price the difference.
+`a-second-cursor-makes-preemption-free` shows the seek pair a preemption
+costs was one cursor being taken from the sweep rather than the price of
+serving a person — given its own cursor, the alternations still happen,
+`fill:seek` falls to 1 per window, and a live playhead costs what a parked
+one costs. `the-remaining-wall-is-decode-and-a-reader-that-does-not-overlap`
+then shows the wall is `fill + gui` and not `max(fill, gui)`, because one
+dispatcher thread blocks inside `exact()` whichever container it holds. That
+is about a third of a filled window and the largest single item on the sheet.
+
+So `readers` is a parameter. Each fetch thread owns its own `Fetcher` and so
+its own cursor, and above one the bands **partition**: reader 0 takes only
+what nobody is waiting on, readers 1 and above take only INTERACTIVE picks.
+A single reader takes everything, which is V1.
+
+The partition is the whole mechanism and an overlapping split undoes it. A
+reader 0 that may serve an interactive pick when it happens to be free is a
+reader 0 that seeks away from the sweep's frontier and pays to rejoin it —
+the seek pair `a-second-cursor-makes-preemption-free` attributes the cost to,
+reintroduced by the arrangement meant to remove it. The cost of partitioning
+is that reader 0 sits idle when only interactive work is pending, and idling
+is precisely what preserves its cursor. It defaults to 1, so a run here stays
+comparable to V1's until an experiment says otherwise, and a result names it:
+a wall from one reader and a wall from two are different facts about the same
+code.
+
+**Two software readers is the shape that already failed once.**
+`2026.08.21-software-decoders-collapse-under-contention` measured four
+software workers with aggregate throughput below one worker alone. The
+arrangement that survived there is asymmetric — software for the sequential
+sweep, hardware for the interactive cursor — and this class does not
+implement that. What it does is make the count a knob so the question can be
+asked, and preserve the property that the extra reader is idle unless
+something interactive is pending.
 
 **Nothing has an interval.** The fetch thread blocks on a condition the graph
 notifies when a declaration arrives; the recorder threads block on a
@@ -305,12 +341,14 @@ class Dispatcher:
 
     def __init__(self, graph: Graph, pool: Pool, form_key: str,
                  fetcher_factory: Callable[[], Any],
-                 recorders: int = 2, t0: float = 0.0) -> None:
+                 recorders: int = 2, readers: int = 1,
+                 t0: float = 0.0) -> None:
         self.graph = graph
         self.pool = pool
         self.form_key = form_key
         self._fetcher_factory = fetcher_factory
         self._recorder_count = max(1, recorders)
+        self._reader_count = max(1, readers)
         self._t0 = t0
 
         self._lock = threading.Lock()
@@ -336,6 +374,12 @@ class Dispatcher:
         self._modes: dict[str, Mode] = {}
         self._current: dict[str, Request] = {}
         self._seq = 0
+        #: keys a fetch thread has taken and not yet put. Without it two
+        #: readers pick the same unserved row — `pool.has` is still false
+        #: while the first is inside `exact()` — and the second decode is
+        #: waste no counter would call waste, because both were correct picks
+        #: at the moment each was made.
+        self._claimed: set[tuple[int, str]] = set()
 
         # ── fetch counters, the same ones V1's Dispatcher kept ───────────
         self.served = 0
@@ -375,8 +419,9 @@ class Dispatcher:
     def start(self) -> None:
         self._stop.clear()
         self._threads = [
-            threading.Thread(target=self._fetch_loop, name="fetch",
-                             daemon=True)]
+            threading.Thread(target=self._fetch_loop, args=(index,),
+                             name=f"fetch{index}", daemon=True)
+            for index in range(self._reader_count)]
         self._threads += [
             threading.Thread(target=self._record_loop, name=f"record{i}",
                              daemon=True)
@@ -502,6 +547,10 @@ class Dispatcher:
             if woke:
                 self._runnable.notify(woke)
 
+    def _unclaim(self, row: int, form_key: str) -> None:
+        with self._lock:
+            self._claimed.discard((row, form_key))
+
     def _graph_changed(self) -> None:
         """A declaration arrived or was released. Only the fetch thread cares."""
         with self._lock:
@@ -509,25 +558,37 @@ class Dispatcher:
 
     # ── the fetch thread ─────────────────────────────────────────────────
 
-    def _pick(self) -> tuple[Need, int] | None:
-        """The highest-pressure declared row that is not on hand.
+    def _pick(self, interactive_only: bool | None) -> tuple[Need, int] | None:
+        """The highest-pressure declared row not on hand and not claimed.
 
-        Unchanged from V1, including that the ranking is
-        `graph.pressure_queue`'s to derive and not a consumer's to state.
+        The ranking is `graph.pressure_queue`'s to derive and never a
+        consumer's to state, unchanged from V1. New here are `_claimed`,
+        which is what makes a second reader safe, and the band filter, which
+        is what keeps it off the sweep's cursor.
+
+        Called under `_lock` so taking a pick and claiming it are one step.
         """
         for need in self.graph.pressure_queue():
             if need.form_key != self.form_key:
                 continue
-            unserved = need.unserved(self.pool.has)
-            if unserved:
-                return need, unserved[0]
+            #: None means this reader is the only one and takes every band.
+            if (interactive_only is not None
+                    and interactive_only != (need.urgency
+                                             is Urgency.INTERACTIVE)):
+                continue
+            for row in need.unserved(self.pool.has):
+                if (row, need.form_key) not in self._claimed:
+                    return need, row
         return None
 
-    def _await_pick(self) -> tuple[Need, int] | None:
+    def _await_pick(self,
+                    interactive_only: bool | None) -> tuple[Need, int] | None:
         with self._pickable:
             while not self._stop.is_set():
-                pick = self._pick()
+                pick = self._pick(interactive_only)
                 if pick is not None:
+                    need, row = pick
+                    self._claimed.add((row, need.form_key))
                     return pick
                 self.blocked += 1
                 self.last = "blocked"
@@ -536,11 +597,17 @@ class Dispatcher:
                 self.blocked_s += time.perf_counter() - before
             return None
 
-    def _fetch_loop(self) -> None:
+    def _fetch_loop(self, index: int = 0) -> None:
+        #: one reader takes everything, which is V1. Above one the bands
+        #: partition: reader 0 never touches an interactive pick, so its
+        #: cursor stays where the sweep left it.
+        interactive_only = index > 0
+        if self._reader_count == 1:
+            interactive_only = None
         fetcher = self._fetcher_factory()
         try:
             while not self._stop.is_set():
-                pick = self._await_pick()
+                pick = self._await_pick(interactive_only)
                 if pick is None:
                     return
                 need, row = pick
@@ -558,11 +625,13 @@ class Dispatcher:
                     #: decode would otherwise be picked forever
                     self.pool.put(row, need.form_key,
                                   np.zeros((1, 1), np.uint8), by=need.node_id)
+                    self._unclaim(row, need.form_key)
                     continue
                 env.route = how
                 env.close()
                 self.graph.record(env)
                 self.pool.put(row, need.form_key, arr, by=need.node_id)
+                self._unclaim(row, need.form_key)
                 self.served += 1
                 if how == "seek":
                     self.seeks += 1
@@ -692,7 +761,8 @@ class Dispatcher:
             ready = len(self._ready)
         waits = sorted(self.wait_ms)
         return {
-            "threads": {"fetch": 1, "recorders": self._recorder_count},
+            "threads": {"fetch": self._reader_count,
+                        "recorders": self._recorder_count},
             "served": self.served, "seeks": self.seeks, "steps": self.steps,
             "failures": self.failures, "stale": self.stale,
             #: what `idle_polls` was, in the units the mechanism actually

@@ -62,6 +62,7 @@
     - 📁 `results/`
       - 📄 `01-reentry-20260830T224008Z.json`
       - 📄 `01-reentry-20260830T224333Z.json`
+      - 📄 `01-reentry-20260830T224923Z.json`
     - 📄 `01-reentry.py` — Does re-entry beat polling, on a window fill with one step riding along?
     - 📄 `README.md`
     - 📄 `dispatcher.py` — The dispatcher, re-entrant: it calls consumers back instead of being polled.

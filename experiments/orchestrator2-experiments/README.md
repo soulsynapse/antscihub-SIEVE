@@ -30,12 +30,16 @@ and *re-enters the same call* with `arAllFramesReady` once they are resident.
 A filter never waits on anything, because a filter is never running while
 it would have to.
 
-V1's explorer stays runnable and is not edited. Two published findings cite
-its logs by filename and one gives `explorer.py --walk` as its how-to-
-recreate; V1 retires when V2's walk reproduces its numbers leg for leg, and
-not before. The same rule `fetch.py` already states about the duplicated
-decode leaf applies to the whole of V1: it is a driven session with
-committed logs and is not being edited underneath them.
+V1's explorer stays runnable, and **this folder does not edit it** — which
+is not the same as it being frozen. Other sessions are still working in it:
+it has since grown three preemption policies behind flags, and the two
+findings that came out of those (`a-second-cursor-makes-preemption-free`,
+`the-remaining-wall-is-decode-and-a-reader-that-does-not-overlap`) both bear
+on V2 and one of them corrected it. So a comparison against V1 names the log
+it compares to, not "V1" — the numbers move under both of us. V1 retires when
+V2's walk reproduces its numbers leg for leg, and not before; four published
+findings cite its logs by filename and two give `explorer.py --walk` as their
+how-to-recreate.
 
 ## The apparatus
 
@@ -145,7 +149,19 @@ in V1, the difference is a defect in this folder.
 - **`pressure_queue`'s three keys**, subsumption especially: a DEFERRED need
   whose rows sit inside a wider declaration yields to it, because the wider
   one is a producer that will arrive there sequentially and jumping the queue
-  buys by seek what was already coming by read.
+  buys by seek what was already coming by read. Its cost is settled and is
+  not a thing to optimise: `the-remaining-wall-is-decode-and-a-reader-that-
+  does-not-overlap` measured the dispatcher's whole per-decode bookkeeping at
+  a fraction of a millisecond, having named it as the hypothesis for a gap it
+  turned out to be two orders of magnitude too small to explain.
+- **A reader per band, above one reader.** `a-second-cursor-makes-preemption-
+  free` shows a preemption's cost is one cursor being taken from the sweep
+  rather than the price of serving a person, and that the extra reader is
+  free because it is idle unless something interactive is pending. V2 makes
+  the count a parameter and partitions the bands so reader 0's cursor is
+  never moved by a person; what V1 could not do, and what that finding's
+  companion prices at about a third of a filled window, is let the two
+  overlap.
 - **Refcounted holds keyed by `(row, form_key)`**, and a `Need.row` is an
   ordinal against one listing snapshot while only the fetch converts to a pts
   (ADR-0004).
@@ -170,7 +186,9 @@ against.
    Fingerprint: `duration_bars` keys begin `dispatch:`.
 2. **The stale count after `still_wants`.** A decode that landed after its
    asker moved on is the price of per-frame preemption, and only the count
-   says how often the trade was bad.
+   says how often the trade was bad. V2 adds `superseded`, which counts the
+   same waste before it is paid for rather than after; both are kept, because
+   they are different halves and a scrub produces both.
 3. **The `refetched` / `predicted` pair.** `refetched` alone is not an
    accusation — coming back to a window is a fetch. `predicted` is the number
    ADR-0008 targets at zero.

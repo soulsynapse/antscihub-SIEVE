@@ -15,6 +15,12 @@ If you're being asked to build something for the main products, there is almost 
   docstring line). Hooks live in `.githooks/`; a fresh clone enables them with
   `git config core.hooksPath .githooks`. `SIEVE_SKIP_SCAFFOLD=1` skips the
   hook. `docs/solutions/INDEX.md` is generated the same way.
+- A vocab entry gives a part of SIEVE a name; it is not an argument that the
+  name was the right one. Copy `docs/vocab/_TEMPLATE.md`, which carries the
+  convention: a capped `gloss` that VOCAB.md quotes, a definition that names no
+  code, and one `## Where it lives` section that does. `uv run python -m
+  checks.vocab` enforces it and the pre-commit hook runs it, so a rename fails
+  there rather than leaving a definition quietly false.
 - Before building a mechanism, scan `docs/solutions/INDEX.md` — if the want
   is listed, the repo already has an answer. A solution enters when something
   was reinvented; editing the source file in `docs/solutions/` regenerates

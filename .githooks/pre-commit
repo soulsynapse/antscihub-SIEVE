@@ -11,6 +11,13 @@ if [ "$SIEVE_SKIP_SCAFFOLD" = "1" ]; then
 fi
 
 root=$(git rev-parse --show-toplevel)
+
+# The vocab convention, checked before the index is rebuilt from it: a gloss
+# that is over its cap or a citation that no longer resolves is a failed
+# commit, because the alternative is an entry that quietly stops being true
+# while only the code moved.
+uv run --quiet python -m checks.vocab
+
 uv run --quiet python "$root/scripts/doc_index.py" --quiet
 git add -- "$root/docs/SCAFFOLD.md" "$root/docs/ADR.md" \
 	"$root/docs/VOCAB.md" "$root/docs/solutions/INDEX.md"

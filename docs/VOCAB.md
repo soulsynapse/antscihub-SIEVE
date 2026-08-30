@@ -16,5 +16,6 @@ its group leaves this index while keeping its file.
   - 📄 [swipe](vocab/swipe.md) — A run of views laid side by side inside one pane, one of them in front at a time, reached by sliding the run rather than by replacing what the pane holds. A swipe is itself a view: it occupies one pane and never adds one, so a screen reached by swiping is a position on the track and not a pane of its own.
 - 📁 `Substrate`
   - 📄 [tier](vocab/tier.md) — A place a frame can be answered from: one of an ordered stack, cheapest first, over one open recording. Tiers are ranked by what an answer costs and not by what it is worth, because they are all answering the same question — this position, in this form — and differ only in what they give up to answer it sooner. The store's budget of decoded frames is the ground floor; the chunk store, the display proxy and the source itself are the rest.
+  - 📄 [form](vocab/form.md) — What a frame is, apart from which instant it is: which source pixels, at what sampling, in what format. All three at once, never one of them — a form is not a resolution and not a pixel format, because two consumers wanting one instant at the same size in different formats want two arrays, and so do two wanting one format at two crops. Position and form are the two halves of every key the substrate holds a frame under, and `Form` is frozen so it can be that half.
 
-*7 defined.*
+*8 defined.*

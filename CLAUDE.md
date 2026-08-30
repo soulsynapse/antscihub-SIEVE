@@ -4,6 +4,8 @@ SIEVE isolates ethological events from video. The product constraint: the
 interactive tuning loop — drag a slider, graphs refill faster than the video
 plays.
 
+If you're being asked to build something for the main products, there is almost certainly an experiment folder you can lean on for how to implement it.
+
 ## Conventions
 
 - Conventional commits. Push after each commit unless the tree is

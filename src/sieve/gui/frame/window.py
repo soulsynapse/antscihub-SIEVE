@@ -293,11 +293,12 @@ class MainWindow(QMainWindow):
 
     def _source_landed(self, landed: tuple) -> None:
         """An opened source and its first frame, back on the GUI thread."""
-        store, frame, position = landed
+        store, frame, position, identity = landed
         if store.address != self._opening:
             store.close()
             return
         self._opening = None
+        self._remember_identity(store.address, identity)
         tool = self._source_for(store.address)
         self.session.attach(store, tool, store.address)
         self.frames.drawable = True
@@ -321,6 +322,38 @@ class MainWindow(QMainWindow):
             self.session.at = position
             self.transport.show_playhead(position)
         self.session.start_proxy(position)
+
+    def _remember_identity(self, address: str, identity) -> None:
+        """Record what the source says this recording is, and offer a relink.
+
+        The offer is the whole of the repair. A byte-identical copy beside the
+        original is an ordinary folder, so a match is genuinely ambiguous and
+        only the person who has both can settle it — SIEVE recognises the
+        recording it was handed and asks. It never goes looking, and it says
+        nothing when more than one row matches, because an ambiguous question
+        is worse than none.
+        """
+        if identity is None:
+            return
+        self.library.identify(address, identity.algorithm, identity.token)
+        elsewhere = [entry for entry
+                     in self.library.same_as(identity.algorithm, identity.token,
+                                             besides=address)
+                     if not entry.available]
+        if len(elsewhere) != 1:
+            return
+        gone = elsewhere[0]
+        answer = QMessageBox.question(
+            self, "The same recording",
+            f"This is the recording remembered as '{gone.name}', which is "
+            f"not where it was:\n\n{gone.video}\n\n"
+            f"Point that project at this file instead of keeping two?",
+        )
+        if answer is not QMessageBox.StandardButton.Yes:
+            return
+        self.library.forget(address)
+        self.library.relink(gone, address)
+        self.show_library(standing=gone.video)
 
     # -- where the work is standing ----------------------------------------
 

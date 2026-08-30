@@ -139,15 +139,21 @@ class Session:
     # -- source lifecycle --------------------------------------------------
 
     @staticmethod
-    def open_source(tool: Tool, address: str) -> tuple[Store, Any | None, int | None]:
+    def open_source(tool: Tool, address: str) -> tuple:
         """Open *address* with *tool*.  Blocks — call from a worker thread.
 
-        Returns (store, first_frame, first_position).
+        Returns (store, first_frame, first_position, fingerprint).
+
+        The fingerprint is asked here rather than by whoever draws, for the
+        same reason the open is: it is the source's own work — two seeks and a
+        stat for a file, a hash of names and sizes for a folder of stills —
+        and its cost is the tool's to have, not the frame period's. `None`
+        from a source with no durable identity, which is a camera.
         """
         store = opened(tool, address)
         position = store.first_start()
         frame = None if position is None else store.frame(position)
-        return store, frame, position
+        return store, frame, position, store.opened.fingerprint()
 
     def attach(self, store: Store, tool: Tool | None, address: str) -> None:
         """Wire tiers for a newly opened *store*.  Call from the GUI thread."""

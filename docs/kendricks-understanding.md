@@ -26,7 +26,6 @@ It works through two mechanisms:
 
 Contracts exist so that whatever the SIEVE module is, adjusting how it works internally doesn't change how the other modules operate. For example, a tool family contract needs to provide a GUI component. How the tool hands that to the GUI is part of the contract, etc. **Therefore, if a module needs to provide something to another module, that needs to make it into the contract.**
 
-- Pipeline contract.
 - Tool contracts. Different tool families get one contract apiece.
 - Edge contracts. I have to talk about this because I'm still fuzzy on it.
 - GUI contracts. This includes: 
@@ -35,6 +34,7 @@ Contracts exist so that whatever the SIEVE module is, adjusting how it works int
   - Cards: How cards get populated and where? I guess?
   - The seeker bar: how it talks to the source or anything else that needs the timeline.
 - Other features that might need contracts? Resource pressure and availability reporting/rebalancing? Storage, which isn't really different? Parameter ports? Waste reporting?
+- Pipeline contract. This is data, not really an organ I guess.
 
 ## Seams
 

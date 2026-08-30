@@ -38,5 +38,6 @@ the collision without anybody having to settle it. The shelf a term sits on is
   - 📄 [chain](vocab/chain.md) — The user's pipeline as a document — which nodes exist and which node's output feeds which node's want. Structure only; whether a feed is legal needs the producer open. Names tools, never a recording.
   - 📄 [recording](vocab/recording.md) — The footage the work is about — a video file, a folder of stills, a camera, whatever a source can open. Named by an address, which is not always a path. The material itself, never the tool that reads it.
   - 📄 [store](vocab/store.md) — What SIEVE holds from one open recording, and the thing a need for a frame is put to. Addressed by which instant and which form together, never by either alone. Held material, never the source that decoded it.
+  - 📄 [need](vocab/need.md) — What a node says it wants right now — which instant, the offsets around it, in what form, and whether anyone is waiting. What it wants, never where that ranks; the rank is derived from everything else in flight.
 
-*27 defined.*
+*28 defined.*

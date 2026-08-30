@@ -40,11 +40,12 @@ the collision without anybody having to settle it. The shelf a term sits on is
   - 📄 [field (step)](vocab/field-step.md) — A step's image-sized result — one number per pixel, float32, computed where it is drawn and discarded there.
   - 📄 [chain](vocab/chain.md) — The user's pipeline as a document — which nodes exist and which node's output feeds which node's want. Structure only; whether a feed is legal needs the producer open. Names tools, never a recording.
   - 📄 [recording](vocab/recording.md) — The footage the work is about — a video file, a folder of stills, a camera, whatever a source can open. Named by an address, which is not always a path. The material itself, never the tool that reads it.
-  - 📄 [store](vocab/store.md) — What SIEVE holds from one open recording, and the thing a need for a frame is put to. Addressed by which instant and which form together, never by either alone. Held material, never the source that decoded it.
+  - 📄 [store (frames)](vocab/store-frames.md) — What SIEVE holds from one open recording, and the thing a need for a frame is put to. Addressed by which instant and which form together, never by either alone. Held material, never the source that decoded it.
+  - 📄 [store (series)](vocab/store-series.md) — Where one node's scalars are kept as it computes them, one value per listed position. Which rows have a value is recorded, never inferred from the numbers. Addressed by row, and what a row means is an instant.
   - 📄 [need](vocab/need.md) — What a node says it wants right now — which instant, the offsets around it, in what form, and whether anyone is waiting. What it wants, never where that ranks; the rank is derived from everything else in flight.
   - 📄 [proxy](vocab/proxy.md) — A whole recording held at one coarse form, built in the background and complete across its extent — the tier a scrub falls to when the nearer ones hold nothing. Its pixels are for looking at, never admitted as recorded.
   - 📄 [extent](vocab/extent.md) — Which positions a producer says exist, asked as of now rather than fixed, and whether that set can still grow. A claim about what is offered, never a promise any of it will be delivered.
   - 📄 [timebase](vocab/timebase.md) — The rate a source's positions are counted in — ticks per second as an exact fraction, recorded once beside them. Every source declares one, so it is real elapsed time only where the recording carried time to begin with.
   - 📄 [address](vocab/address.md) — The name a source is handed to open a recording — claimed and parsed by that source alone, sometimes a path and sometimes not. Where a recording is, never what it is; durable identity is a separate claim.
 
-*35 defined.*
+*36 defined.*

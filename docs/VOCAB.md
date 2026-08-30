@@ -36,5 +36,6 @@ the collision without anybody having to settle it. The shelf a term sits on is
   - 📄 [step](vocab/step.md) — The role a tool fills to process frames: an arithmetic over listed positions, run once per position, producing an image-sized field and the scalar it reduces to.
   - 📄 [field (step)](vocab/field-step.md) — A step's image-sized result — one number per pixel, float32, computed where it is drawn and discarded there.
   - 📄 [chain](vocab/chain.md) — The user's pipeline as a document — which nodes exist and which node's output feeds which node's want. Structure only; whether a feed is legal needs the producer open. Names tools, never a recording.
+  - 📄 [recording](vocab/recording.md) — The footage the work is about — a video file, a folder of stills, a camera, whatever a source can open. Named by an address, which is not always a path. The material itself, never the tool that reads it.
 
-*25 defined.*
+*26 defined.*

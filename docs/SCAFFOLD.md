@@ -7,13 +7,14 @@
 - 📁 `checks/` — One structural check per ADR, each registered under the ADR's number.
   - 📄 `adr0010-baseline.json`
   - 📄 `adr0010.py` — ADR-0010 tripwire: hash per top-level def, static on purpose — a tool
+  - 📄 `vocab.py` — Vocab convention check: an entry is its frontmatter, and nothing else.
 - 📁 `docs/`
   - 📁 `adr/` (10 files)
   - 📁 `decode/`
     - 📄 `ideas.md`
   - 📁 `findings/` (15 files)
   - 📁 `solutions/` (12 files)
-  - 📁 `vocab/` (10 files)
+  - 📁 `vocab/` (37 files)
   - 📄 `ADR.md`
   - 📄 `SCAFFOLD.md`
   - 📄 `VOCAB.md`

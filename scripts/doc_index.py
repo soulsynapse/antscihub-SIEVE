@@ -73,21 +73,13 @@ its group leaves this index while keeping its number and its file.""",
         doc_path="docs/VOCAB.md",
         title="# VOCAB — what the words mean",
         preamble="""\
-Derived: each line is its term's first paragraph, so that file is the home and
-this index cannot drift from it. The shelf a term sits on is `group` and its
-order along that shelf is `position`, both placement only — a term that drops
-its group leaves this index while keeping its file. A term the tree has not
-agreed on is listed apart, below.""",
+Derived: each line is its term's `gloss`, which is the whole entry — the file
+is its frontmatter, so this page is the vocabulary and not a summary of one.
+Definitions only: where a word lives is what grep is for. A word the tree uses
+two ways is two entries, qualified like a dictionary's homonyms, which records
+the collision without anybody having to settle it. The shelf a term sits on is
+`group` and its order along that shelf is `position`, both placement only.""",
         tally="*{count} defined.*",
-        pending_title="## Unsettled",
-        pending_preamble="""\
-A term is here because the tree does not agree on it yet: several live senses
-at once, or a definition the code has walked away from. Listed rather than
-left out, because the disagreement is what is being raised and a word nobody
-wrote down is a word nobody argues with. `status: unsettled` in the
-frontmatter is what puts a term here; deleting that line is what settles
-it.""",
-        pending_tally="*{count} contested.*",
     ),
 ]
 
@@ -259,6 +251,10 @@ def render_shelf(shelf: Shelf, paths: list[str], blobs: dict[str, bytes]) -> str
         fields, paragraph = front_matter(blobs.get(path, b""))
         if not fields.get("group"):
             continue
+        # A shelf whose notes carry a `gloss` speaks with it; one whose notes
+        # do not falls back to the paragraph. The gloss is a line written to be
+        # quoted here, and it is capped where the paragraph is not.
+        paragraph = fields.get("gloss") or paragraph
         position = fields.get("position", "")
         link = f"{shelf.directory[len(DOCS):]}{name}"
         unsettled = (

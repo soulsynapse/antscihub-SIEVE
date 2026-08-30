@@ -2,36 +2,50 @@
 
 # VOCAB — what the words mean
 
-Derived: each line is its term's first paragraph, so that file is the home and
-this index cannot drift from it. The shelf a term sits on is `group` and its
-order along that shelf is `position`, both placement only — a term that drops
-its group leaves this index while keeping its file. A term the tree has not
-agreed on is listed apart, below.
+Derived: each line is its term's `gloss`, which is the whole entry — the file
+is its frontmatter, so this page is the vocabulary and not a summary of one.
+Definitions only: where a word lives is what grep is for. A word the tree uses
+two ways is two entries, qualified like a dictionary's homonyms, which records
+the collision without anybody having to settle it. The shelf a term sits on is
+`group` and its order along that shelf is `position`, both placement only.
 
 - 📁 `Layer 1`
-  - 📄 [window](vocab/window.md) — The application. Houses panes.
-  - 📄 [pane](vocab/pane.md) — A compartment the window divides into: a region with a boundary, a size policy, and a name, holding whatever is put in it. A pane is the space, never its occupant — it stays a pane while empty, and swapping what stands in it does not make it a different pane.
+  - 📄 [window](vocab/window.md) — The application — the one top-level frame, holding a menu bar, the panes, and the boundaries between them.
+  - 📄 [pane](vocab/pane.md) — A compartment the window divides into: a region with a boundary, a size policy and a name. The space, never its occupant.
   - 📄 [subpane](vocab/subpane.md) — A smaller pane anchored to a side inside a main pane.
-  - 📄 [view](vocab/view.md) — Anything a pane can house — the occupant, not the space. "Surface" used to mean this and was dropped for doing double duty: a thing a pane houses, and a thing paint lands on. A view names only the first.
-  - 📄 [menu](vocab/menu.md) — The drop menu at the top of the window.
-  - 📄 [swipe](vocab/swipe.md) — A run of views laid side by side inside one pane, one of them in front at a time, reached by sliding the run rather than by replacing what the pane holds. A swipe is itself a view: it occupies one pane and never adds one, so a screen reached by swiping is a position on the track and not a pane of its own.
+  - 📄 [view](vocab/view.md) — Anything a pane can house — the occupant, not the space. One folder each.
+  - 📄 [menu](vocab/menu.md) — The bar across the top of the window, and what the window itself can be asked to do.
+  - 📄 [swipe](vocab/swipe.md) — A run of views laid side by side in one pane, one in front at a time, reached by sliding the run rather than by replacing what the pane holds.
+  - 📄 [surface (rendering)](vocab/surface-rendering.md) — A rendering path — painter primitives against a rasteriser. The live surface and the report surface are different code.
+  - 📄 [surface (fill)](vocab/surface-fill.md) — The filled region a colour applies to: the design-token sense every widget kit has.
+  - 📄 [surface (occupant)](vocab/surface-occupant.md) — A pane's occupant. Retired — view is the word — and still in use.
+  - 📄 [edge (border)](vocab/edge-border.md) — A rectangle's side, or the colour drawn along it. Also the long edge a proxy form is bounded to.
+  - 📄 [edge (pipeline)](vocab/edge-pipeline.md) — An arrow drawn between chain cards, from their order in the list rather than from any binding.
+  - 📄 [node (pipeline)](vocab/node-pipeline.md) — A slot in a chain with a durable id, keeping its identity when the tool standing in it is swapped.
+  - 📄 [field (widget)](vocab/field-widget.md) — A text box.
 - 📁 `Substrate`
-  - 📄 [tier](vocab/tier.md) — A place a frame can be answered from: one of an ordered stack, cheapest first, over one open recording. Tiers are ranked by what an answer costs and not by what it is worth, because they are all answering the same question — this position, in this form — and differ only in what they give up to answer it sooner. The store's budget of decoded frames is the ground floor; the chunk store, the display proxy and the source itself are the rest.
-  - 📄 [form](vocab/form.md) — What a frame is, apart from which instant it is: which source pixels, at what sampling, in what format. All three at once, never one of them — a form is not a resolution and not a pixel format, because two consumers wanting one instant at the same size in different formats want two arrays, and so do two wanting one format at two crops. Position and form are the two halves of every key the substrate holds a frame under, and `Form` is frozen so it can be that half.
-  - 📄 [position](vocab/position.md) — Which instant a frame is, apart from what it is: the source's own presentation timestamp, integer ticks in the stream's timebase. A position is a name and never a count, which is what lets it cross a file, a session or a tool boundary and still mean one frame — the other half of every key the substrate holds a frame under, form being the half that says what. Its partner *ordinal* is the row that position lands on inside one listing, and it is only ever valid beside the table that produced it.
+  - 📄 [frame](vocab/frame.md) — One instant of a recording, as pixels — the unit a source reads, a store holds, and a step runs over. Its form is what it is, its position is which instant, and the position is its identity.
+  - 📄 [tier](vocab/tier.md) — A place a frame can be answered from — one of an ordered stack, cheapest first, over one open recording. Ranked by what an answer costs, not by what it is worth.
+  - 📄 [form](vocab/form.md) — What a frame is, apart from which instant it is — which source pixels, at what sampling, in what format, all three at once. Pixels only: a value edge declares a dtype instead.
+  - 📄 [position](vocab/position.md) — Which instant a frame is, apart from what it is — the source's own presentation timestamp, integer ticks in the stream's timebase. A name, never a count.
+  - 📄 [ordinal](vocab/ordinal.md) — What row a listed position is, inside one snapshot of one listing. A coordinate, valid only beside the table that produced it.
+  - 📄 [refusal](vocab/refusal.md) — A no with a kind on it — gone, wrong form, or not now — from a closed set of three. Only gone is a hole.
+  - 📄 [tool](vocab/tool.md) — The work an author supplies that SIEVE never names — a measurement an ethologist wants, done entirely through what the substrate provides. It fills a node's role; the set of them is open, and the substrate's capabilities are not.
+  - 📄 [edge (contract)](vocab/edge-contract.md) — A named thing a node offers or wants, of a closed kind: a frame, a mask, or a value. SIEVE's alone to extend.
+  - 📄 [node (contract)](vocab/node-contract.md) — A role a tool fills, and you are one because you offer an edge: a source has no inputs, a step has frame inputs.
+  - 📄 [node (orchestrator)](vocab/node-orchestrator.md) — Anything that declares a need on the store — a tool, the series writer, the proxy builder, the GUI — which is a wider net than the contract's.
+  - 📄 [binding](vocab/binding.md) — The join between an edge one node wants and an edge another offers, made by name. Where the facts a producer cannot state about itself — timebase, extent, access — are derived.
+  - 📄 [source](vocab/source.md) — The role a tool fills to bring a recording in: a node with no inputs, which opens an address, declares the kinds of edge it offers, and answers a read for one instant in one form.
+  - 📄 [step](vocab/step.md) — The role a tool fills to process frames: an arithmetic over listed positions, run once per position, producing an image-sized field and the scalar it reduces to.
+  - 📄 [field (step)](vocab/field-step.md) — A step's image-sized result — one number per pixel, float32, computed where it is drawn and discarded there.
+  - 📄 [chain](vocab/chain.md) — The user's pipeline as a document — which nodes exist and which node's output feeds which node's want. Structure only; whether a feed is legal needs the producer open. Names tools, never a recording.
+  - 📄 [recording](vocab/recording.md) — The footage the work is about — a video file, a folder of stills, a camera, whatever a source can open. Named by an address, which is not always a path. The material itself, never the tool that reads it.
+  - 📄 [store (frames)](vocab/store-frames.md) — What SIEVE holds from one open recording, and the thing a need for a frame is put to. Addressed by which instant and which form together, never by either alone. Held material, never the source that decoded it.
+  - 📄 [store (series)](vocab/store-series.md) — Where one node's scalars are kept as it computes them, one value per listed position. Which rows have a value is recorded, never inferred from the numbers. Addressed by row, and what a row means is an instant.
+  - 📄 [need](vocab/need.md) — What a node says it wants right now — which instant, the offsets around it, in what form, and whether anyone is waiting. What it wants, never where that ranks; the rank is derived from everything else in flight.
+  - 📄 [proxy](vocab/proxy.md) — A whole recording held at one coarse form, built in the background and complete across its extent — the tier a scrub falls to when the nearer ones hold nothing. Its pixels are for looking at, never admitted as recorded.
+  - 📄 [extent](vocab/extent.md) — Which positions a producer says exist, asked as of now rather than fixed, and whether that set can still grow. A claim about what is offered, never a promise any of it will be delivered.
+  - 📄 [timebase](vocab/timebase.md) — The rate a source's positions are counted in — ticks per second as an exact fraction, recorded once beside them. Every source declares one, so it is real elapsed time only where the recording carried time to begin with.
+  - 📄 [address](vocab/address.md) — The name a source is handed to open a recording — claimed and parsed by that source alone, sometimes a path and sometimes not. Where a recording is, never what it is; durable identity is a separate claim.
 
-*9 defined.*
-
-## Unsettled
-
-A term is here because the tree does not agree on it yet: several live senses
-at once, or a definition the code has walked away from. Listed rather than
-left out, because the disagreement is what is being raised and a word nobody
-wrote down is a word nobody argues with. `status: unsettled` in the
-frontmatter is what puts a term here; deleting that line is what settles
-it.
-
-- 📁 `Layer 1`
-  - 📄 [surface](vocab/surface.md) — Four live senses, and a fifth the vocabulary says is retired. The entry for "view" records the word being dropped for doing double duty — a thing a pane houses, and a thing paint lands on — and the tree kept using it for both anyway, plus two more. Nothing here is wrong on its own; what is wrong is that "surface" in a docstring does not tell a reader which of them is meant.
-
-*1 contested.*
+*36 defined.*

@@ -458,6 +458,28 @@ better ranking: it is that items are not independent, so the unit being
 ranked should be a run of contiguous rows rather than a row. That is a
 different algorithm and it is not being written on speculation.
 
+**Answered, and it is fragmentation.**
+`docs/findings/2026.08.30-retention-pays-only-when-what-survives-is-contiguous`.
+Retention halves the return leg — but only when the survivors form one band.
+GreedyDual-Size keeps the same sixty rows scattered over thirty runs and takes
+the same wall as having kept nothing, so a fragmented remnant is worth zero
+rather than worth less. The ranking proposed here is refused, and the cost
+turned out to bill as wasted stepping rather than as seeks, because
+`STEP_WITHIN` is wider than the gaps: `runs_on_arrival` predicts the wall and
+the seek count does not.
+
+The larger result is that **the lever is not the ranking at all.** On the
+realistic return — offset by half a window, which is what a person does —
+every implementable policy is at or below break-even against dropping
+everything, and only the oracle wins, by knowing which rows the next landing
+wants. That is a gap in information rather than in algorithm: the next landing
+has not been declared when the eviction happens. Whatever closes it is a
+prediction about a person, which the application has and a replacement policy
+does not.
+
+The default stays `DropAll`, because nothing beat it across both shapes and
+changing it would be choosing one workload over the other on no evidence.
+
 **What this deliberately does not do.** No scan resistance. The sweep is a
 sequential scan that would flush an interactive consumer's frames under a
 naive policy, which is the problem ARC (Megiddo & Modha 2003) and 2Q (Johnson

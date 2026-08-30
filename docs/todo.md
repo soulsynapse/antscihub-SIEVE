@@ -6,4 +6,5 @@ For any given todo, see if the tree already answers how to implement it, and rai
 
 The todo item leaves the file when it is done.
 
-- Keyed store for tools to use and orchestrator to reference.
+- Keyed store for tools to use and orchestrator to reference?
+- A tool that accepts a field as an input

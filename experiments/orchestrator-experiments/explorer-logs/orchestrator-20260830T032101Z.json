@@ -1,0 +1,371 @@
+{
+ "tool": "orchestrator-explorer",
+ "when": "2026-08-30T03:21:12.493171+00:00",
+ "sieve_rev": "0bf8152",
+ "machine": {
+  "platform": "Windows-11-10.0.26200-SP0",
+  "processor": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
+  "logical_cpus": 32,
+  "python": "3.13.5"
+ },
+ "versions": {
+  "av": "18.1.0",
+  "cv2": "5.0.0",
+  "numpy": "2.5.2",
+  "ffmpeg": "ffmpeg version 2025-02-06-git-6da82b4485-full_build-www.gyan.dev Copyright (c) 2000-2025 the FFmpeg developers"
+ },
+ "topology": {
+  "nodes": [
+   "gui",
+   "fill (sweep)",
+   "tool"
+  ],
+  "edges": "source -> pool -> {gui, tool}",
+  "form": "0+0+5312x2988@5312x2988:gray",
+  "policy": "single dispatcher, pressure-ranked, preempt granularity one decode",
+  "walk": "full",
+  "window_is_full_size": false,
+  "playhead": "parked"
+ },
+ "total_frames": 11304,
+ "fps": 23.976023976023978,
+ "window_seconds": 3.0,
+ "window_frames": 72,
+ "tool_crop": [
+  2144,
+  982,
+  1024,
+  1024
+ ],
+ "active_tool": "absdiff",
+ "pool": {
+  "frames": 33,
+  "bytes": 523784448,
+  "gb": 0.488,
+  "decodes": 105,
+  "shared": 88,
+  "shared_pairs": {
+   "gui>tool": 18,
+   "tool>gui": 14,
+   "fill>tool": 50,
+   "fill>gui": 6
+  },
+  "evicted": 72,
+  "forced_evictions": 0
+ },
+ "dispatcher": {
+  "served": 105,
+  "seeks": 20,
+  "steps": 85,
+  "failures": 0,
+  "stale": 20,
+  "idle_polls": 10,
+  "by_pressure": {
+   "INTERACTIVE": 36,
+   "BATCH": 11,
+   "NEAR": 7,
+   "BACKGROUND": 51
+  }
+ },
+ "graph_holds": 72,
+ "duration_bars": {
+  "dispatch:fill": 0.04495222127915476,
+  "dispatch:gui": 0.38288342127068503,
+  "dispatch:tool": 0.5682584505425288,
+  "tool-absdiff-2080384362576": 0.003905906907631399
+ },
+ "timing_by_node": {
+  "dispatch:fill": {
+   "n": 1,
+   "min": 260.2768000215292,
+   "p50": 260.2768000215292,
+   "p95": 260.2768000215292,
+   "max": 260.2768000215292,
+   "mean": 260.2768000215292
+  },
+  "dispatch:gui": {
+   "n": 21,
+   "min": 4.0065000066533685,
+   "p50": 45.940699987113476,
+   "p95": 355.43829994276166,
+   "max": 476.15869995206594,
+   "mean": 105.56782378504674
+  },
+  "dispatch:tool": {
+   "n": 10,
+   "min": 291.4569000713527,
+   "p50": 327.3874999722466,
+   "p95": 381.0702000046149,
+   "max": 381.0702000046149,
+   "mean": 329.0259900037199
+  },
+  "tool-absdiff-2080384362576": {
+   "n": 14,
+   "min": 1.1358000338077545,
+   "p50": 1.664399984292686,
+   "p95": 2.2396999411284924,
+   "max": 2.2396999411284924,
+   "mean": 1.6153928424630846
+  }
+ },
+ "runs": [
+  {
+   "label": "hunt",
+   "started": "2026-08-30T03:21:01.989618+00:00",
+   "by_task": {
+    "open": {
+     "n": 1,
+     "min": 256.6,
+     "p50": 256.6,
+     "p95": 256.6,
+     "max": 256.6,
+     "mean": 256.6
+    }
+   },
+   "routes": {
+    "dispatch": 1
+   },
+   "walls": [],
+   "suppressed_play_hits": 0,
+   "events_capped": false,
+   "events": [
+    {
+     "t": 0.2596,
+     "task": "open",
+     "frame": 0,
+     "route": "dispatch 257ms",
+     "ms": 256.603
+    }
+   ]
+  },
+  {
+   "label": "window@3000 w=72 tool=absdiff",
+   "started": "2026-08-30T03:21:02.336481+00:00",
+   "by_task": {
+    "play": {
+     "n": 11,
+     "min": 0.02,
+     "p50": 0.02,
+     "p95": 0.04,
+     "max": 0.04,
+     "mean": 0.02
+    }
+   },
+   "routes": {
+    "near": 8,
+    "held": 3
+   },
+   "walls": [],
+   "suppressed_play_hits": 77,
+   "events_capped": false,
+   "events": [
+    {
+     "t": 0.6896,
+     "task": "play",
+     "frame": 3008,
+     "route": "near d3",
+     "ms": 0.018
+    },
+    {
+     "t": 1.0472,
+     "task": "play",
+     "frame": 3016,
+     "route": "near d2",
+     "ms": 0.016
+    },
+    {
+     "t": 1.4283,
+     "task": "play",
+     "frame": 3024,
+     "route": "near d10",
+     "ms": 0.018
+    },
+    {
+     "t": 1.8131,
+     "task": "play",
+     "frame": 3032,
+     "route": "near d8",
+     "ms": 0.017
+    },
+    {
+     "t": 2.1731,
+     "task": "play",
+     "frame": 3040,
+     "route": "near d5",
+     "ms": 0.026
+    },
+    {
+     "t": 2.5613,
+     "task": "play",
+     "frame": 3048,
+     "route": "near d4",
+     "ms": 0.02
+    },
+    {
+     "t": 2.9212,
+     "task": "play",
+     "frame": 3056,
+     "route": "near d12",
+     "ms": 0.037
+    },
+    {
+     "t": 3.3141,
+     "task": "play",
+     "frame": 3064,
+     "route": "near d6",
+     "ms": 0.023
+    },
+    {
+     "t": 3.6864,
+     "task": "play",
+     "frame": 3000,
+     "route": "held",
+     "ms": 0.019
+    },
+    {
+     "t": 4.0458,
+     "task": "play",
+     "frame": 3008,
+     "route": "held",
+     "ms": 0.028
+    },
+    {
+     "t": 4.4293,
+     "task": "play",
+     "frame": 3016,
+     "route": "held",
+     "ms": 0.035
+    }
+   ]
+  },
+  {
+   "label": "window@3036 w=72 tool=absdiff",
+   "started": "2026-08-30T03:21:06.537823+00:00",
+   "by_task": {
+    "play": {
+     "n": 15,
+     "min": 0.02,
+     "p50": 0.02,
+     "p95": 0.04,
+     "max": 0.04,
+     "mean": 0.02
+    }
+   },
+   "routes": {
+    "near": 13,
+    "wait": 1,
+    "held": 1
+   },
+   "walls": [],
+   "suppressed_play_hits": 108,
+   "events_capped": false,
+   "events": [
+    {
+     "t": 4.8713,
+     "task": "play",
+     "frame": 3044,
+     "route": "near d3",
+     "ms": 0.02
+    },
+    {
+     "t": 5.2435,
+     "task": "play",
+     "frame": 3052,
+     "route": "near d2",
+     "ms": 0.028
+    },
+    {
+     "t": 5.8204,
+     "task": "play",
+     "frame": 3060,
+     "route": "near d4",
+     "ms": 0.024
+    },
+    {
+     "t": 6.2207,
+     "task": "play",
+     "frame": 3068,
+     "route": "near d2",
+     "ms": 0.028
+    },
+    {
+     "t": 6.5964,
+     "task": "play",
+     "frame": 3076,
+     "route": "near d10",
+     "ms": 0.021
+    },
+    {
+     "t": 6.9579,
+     "task": "play",
+     "frame": 3084,
+     "route": "near d5",
+     "ms": 0.023
+    },
+    {
+     "t": 7.3356,
+     "task": "play",
+     "frame": 3092,
+     "route": "wait",
+     "ms": 0.022
+    },
+    {
+     "t": 7.7167,
+     "task": "play",
+     "frame": 3100,
+     "route": "near d5",
+     "ms": 0.019
+    },
+    {
+     "t": 8.0963,
+     "task": "play",
+     "frame": 3036,
+     "route": "held",
+     "ms": 0.031
+    },
+    {
+     "t": 8.4564,
+     "task": "play",
+     "frame": 3044,
+     "route": "near d1",
+     "ms": 0.016
+    },
+    {
+     "t": 8.855,
+     "task": "play",
+     "frame": 3052,
+     "route": "near d-1",
+     "ms": 0.035
+    },
+    {
+     "t": 9.2154,
+     "task": "play",
+     "frame": 3060,
+     "route": "near d-2",
+     "ms": 0.022
+    },
+    {
+     "t": 9.5954,
+     "task": "play",
+     "frame": 3068,
+     "route": "near d2",
+     "ms": 0.021
+    },
+    {
+     "t": 9.9762,
+     "task": "play",
+     "frame": 3076,
+     "route": "near d-2",
+     "ms": 0.024
+    },
+    {
+     "t": 10.3579,
+     "task": "play",
+     "frame": 3084,
+     "route": "near d-2",
+     "ms": 0.027
+    }
+   ]
+  }
+ ]
+}

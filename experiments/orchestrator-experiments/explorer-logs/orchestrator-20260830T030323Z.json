@@ -1,0 +1,194 @@
+{
+ "tool": "orchestrator-explorer",
+ "when": "2026-08-30T03:03:24.720566+00:00",
+ "sieve_rev": "0bf8152",
+ "machine": {
+  "platform": "Windows-11-10.0.26200-SP0",
+  "processor": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
+  "logical_cpus": 32,
+  "python": "3.13.5"
+ },
+ "versions": {
+  "av": "18.1.0",
+  "cv2": "5.0.0",
+  "numpy": "2.5.2",
+  "ffmpeg": "ffmpeg version 2025-02-06-git-6da82b4485-full_build-www.gyan.dev Copyright (c) 2000-2025 the FFmpeg developers"
+ },
+ "topology": {
+  "nodes": [
+   "gui",
+   "fill (sweep)",
+   "tool"
+  ],
+  "edges": "source -> pool -> {gui, tool}",
+  "form": "0+0+5312x2988@5312x2988:gray",
+  "policy": "single dispatcher, pressure-ranked, preempt granularity one decode",
+  "walk": "full"
+ },
+ "total_frames": 11304,
+ "fps": 23.976023976023978,
+ "window_seconds": 20.0,
+ "window_frames": 480,
+ "tool_crop": [
+  2144,
+  982,
+  1024,
+  1024
+ ],
+ "active_tool": "absdiff",
+ "pool": {
+  "frames": 93,
+  "bytes": 1476119808,
+  "gb": 1.375,
+  "decodes": 94,
+  "shared": 99,
+  "shared_pairs": {
+   "fill>tool": 91,
+   "fill>gui": 7,
+   "tool>gui": 1
+  },
+  "evicted": 1,
+  "forced_evictions": 0
+ },
+ "dispatcher": {
+  "served": 94,
+  "seeks": 3,
+  "steps": 91,
+  "failures": 0,
+  "stale": 0,
+  "idle_polls": 10,
+  "by_pressure": {
+   "INTERACTIVE": 2,
+   "BACKGROUND": 91,
+   "BATCH": 1
+  }
+ },
+ "graph_holds": 480,
+ "duration_bars": {
+  "fill-500": 0.8614251507581148,
+  "tool-absdiff-2018702183792": 0.13857484924188526
+ },
+ "timing_by_node": {
+  "fill-500": {
+   "n": 59,
+   "min": 3.7216999335214496,
+   "p50": 4.932100069709122,
+   "p95": 24.021399905905128,
+   "max": 230.89489992707968,
+   "mean": 10.557983046934261
+  },
+  "tool-absdiff-2018702183792": {
+   "n": 60,
+   "min": 1.0028000688180327,
+   "p50": 1.5110999811440706,
+   "p95": 2.0220999140292406,
+   "max": 3.8765999488532543,
+   "mean": 1.4813883230090141
+  }
+ },
+ "runs": [
+  {
+   "label": "hunt",
+   "started": "2026-08-30T03:03:23.628765+00:00",
+   "by_task": {
+    "hunt": {
+     "n": 1,
+     "min": 151.26,
+     "p50": 151.26,
+     "p95": 151.26,
+     "max": 151.26,
+     "mean": 151.26
+    },
+    "open": {
+     "n": 1,
+     "min": 258.1,
+     "p50": 258.1,
+     "p95": 258.1,
+     "max": 258.1,
+     "mean": 258.1
+    }
+   },
+   "routes": {
+    "dispatch": 2
+   },
+   "walls": [],
+   "suppressed_play_hits": 0,
+   "events_capped": false,
+   "events": [
+    {
+     "t": 0.2605,
+     "task": "open",
+     "frame": 0,
+     "route": "dispatch 258ms",
+     "ms": 258.101
+    },
+    {
+     "t": 0.4411,
+     "task": "hunt",
+     "frame": 100,
+     "route": "dispatch 151ms",
+     "ms": 151.265
+    }
+   ]
+  },
+  {
+   "label": "window@500 w=480 tool=absdiff",
+   "started": "2026-08-30T03:03:24.126080+00:00",
+   "by_task": {
+    "scrub": {
+     "n": 1,
+     "min": 0.02,
+     "p50": 0.02,
+     "p95": 0.02,
+     "max": 0.02,
+     "mean": 0.02
+    },
+    "play": {
+     "n": 3,
+     "min": 0.02,
+     "p50": 0.02,
+     "p95": 0.02,
+     "max": 0.02,
+     "mean": 0.02
+    }
+   },
+   "routes": {
+    "wait": 3,
+    "held": 1
+   },
+   "walls": [],
+   "suppressed_play_hits": 7,
+   "events_capped": false,
+   "events": [
+    {
+     "t": 0.4997,
+     "task": "play",
+     "frame": 500,
+     "route": "wait",
+     "ms": 0.019
+    },
+    {
+     "t": 0.6007,
+     "task": "play",
+     "frame": 500,
+     "route": "wait",
+     "ms": 0.02
+    },
+    {
+     "t": 0.6513,
+     "task": "play",
+     "frame": 500,
+     "route": "wait",
+     "ms": 0.018
+    },
+    {
+     "t": 1.0908,
+     "task": "scrub",
+     "frame": 510,
+     "route": "held",
+     "ms": 0.018
+    }
+   ]
+  }
+ ]
+}

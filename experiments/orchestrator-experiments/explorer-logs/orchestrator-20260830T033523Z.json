@@ -1,0 +1,122 @@
+{
+ "tool": "orchestrator-explorer",
+ "when": "2026-08-30T03:35:29.082707+00:00",
+ "sieve_rev": "0bf8152",
+ "machine": {
+  "platform": "Windows-11-10.0.26200-SP0",
+  "processor": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
+  "logical_cpus": 32,
+  "python": "3.13.5"
+ },
+ "versions": {
+  "av": "18.1.0",
+  "cv2": "5.0.0",
+  "numpy": "2.5.2",
+  "ffmpeg": "ffmpeg version 2025-02-06-git-6da82b4485-full_build-www.gyan.dev Copyright (c) 2000-2025 the FFmpeg developers"
+ },
+ "topology": {
+  "nodes": [
+   "gui",
+   "fill (sweep)",
+   "tool"
+  ],
+  "edges": "source -> pool -> {gui, tool}",
+  "form": "0+0+5312x2988@5312x2988:gray",
+  "policy": "single dispatcher, pressure-ranked, preempt granularity one decode",
+  "walk": "full",
+  "window_is_full_size": true,
+  "playhead": "parked"
+ },
+ "total_frames": 11304,
+ "fps": 23.976023976023978,
+ "window_seconds": 20.0,
+ "window_frames": 480,
+ "tool_crop": [
+  2144,
+  982,
+  1024,
+  1024
+ ],
+ "active_tool": "dis",
+ "pool": {
+  "frames": 481,
+  "bytes": 7634555136,
+  "gb": 7.11,
+  "decodes": 481,
+  "shared": 632,
+  "shared_pairs": {
+   "fill>tool": 630,
+   "tool>tool": 2
+  },
+  "evicted": 0,
+  "forced_evictions": 0,
+  "refetched": 0,
+  "refetched_under_1s": 0,
+  "refetch_gap_ms_p50": null
+ },
+ "dispatcher": {
+  "served": 481,
+  "seeks": 2,
+  "steps": 479,
+  "failures": 0,
+  "stale": 0,
+  "idle_polls": 348,
+  "by_pressure": {
+   "INTERACTIVE": 1,
+   "BATCH": 2,
+   "BACKGROUND": 478
+  }
+ },
+ "graph_holds": 481,
+ "duration_bars": {
+  "tool-dis-1899215660496": 1.0
+ },
+ "timing_by_node": {
+  "tool-dis-1899215660496": {
+   "n": 132,
+   "min": 6.894199992530048,
+   "p50": 9.515299927443266,
+   "p95": 13.93300003837794,
+   "max": 23.342099972069263,
+   "mean": 9.997475753841696
+  }
+ },
+ "runs": [
+  {
+   "label": "hunt",
+   "started": "2026-08-30T03:35:23.784301+00:00",
+   "by_task": {
+    "open": {
+     "n": 1,
+     "min": 256.01,
+     "p50": 256.01,
+     "p95": 256.01,
+     "max": 256.01,
+     "mean": 256.01
+    }
+   },
+   "routes": {
+    "dispatch": 1
+   },
+   "walls": [
+    {
+     "t": 4.0053,
+     "what": "window covered",
+     "wall_s": 3.714,
+     "detail": "480 frames @3768, 2 seeks / 479 steps / 0 stale"
+    }
+   ],
+   "suppressed_play_hits": 0,
+   "events_capped": false,
+   "events": [
+    {
+     "t": 0.2589,
+     "task": "open",
+     "frame": 0,
+     "route": "dispatch 256ms",
+     "ms": 256.01
+    }
+   ]
+  }
+ ]
+}

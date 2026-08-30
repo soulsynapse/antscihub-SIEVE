@@ -105,6 +105,50 @@
     - 📄 `README.md`
     - 📄 `explorer.py` — Feel the decode approaches by hand: scrub, play, step and sweep each backend.
     - 📄 `harness.py` — What every decode experiment needs and none of them should decide twice.
+  - 📁 `orchestrator-experiments/`
+    - 📁 `explorer-logs/`
+      - 📄 `README.md`
+      - 📄 `orchestrator-20260830T022307Z.json`
+      - 📄 `orchestrator-20260830T022436Z.json`
+      - 📄 `orchestrator-20260830T022446Z.json`
+      - 📄 `orchestrator-20260830T022633Z.json`
+      - 📄 `orchestrator-20260830T022827Z.json`
+      - 📄 `orchestrator-20260830T030213Z.json`
+      - 📄 `orchestrator-20260830T030323Z.json`
+      - 📄 `orchestrator-20260830T030544Z.json`
+      - 📄 `orchestrator-20260830T030654Z.json`
+      - 📄 `orchestrator-20260830T031047Z.json`
+      - 📄 `orchestrator-20260830T031258Z.json`
+      - 📄 `orchestrator-20260830T031458Z.json`
+      - 📄 `orchestrator-20260830T032101Z.json`
+      - 📄 `orchestrator-20260830T032139Z.json`
+      - 📄 `orchestrator-20260830T032205Z.json`
+      - 📄 `orchestrator-20260830T032346Z.json`
+      - 📄 `orchestrator-20260830T032505Z.json`
+      - 📄 `orchestrator-20260830T033236Z.json`
+      - 📄 `orchestrator-20260830T033308Z.json`
+      - 📄 `orchestrator-20260830T033523Z.json`
+      - 📄 `orchestrator-20260830T034022Z.json`
+      - 📄 `orchestrator-20260830T034245Z.json`
+      - 📄 `orchestrator-20260830T035833Z.json`
+      - 📄 `orchestrator-20260830T040127Z.json`
+    - 📁 `results/`
+      - 📄 `01-unified-declaration-20260830T021528Z.json`
+      - 📄 `01-unified-declaration-20260830T035747Z.json`
+      - 📄 `01-unified-declaration-20260830T035801Z.json`
+      - 📄 `02-derived-eviction-20260830T021536Z.json`
+      - 📄 `02-derived-eviction-20260830T035714Z.json`
+      - 📄 `03-non-frame-nodes-20260830T021541Z.json`
+      - 📄 `03-non-frame-nodes-20260830T035714Z.json`
+      - 📄 `04-instrumentation-20260830T021546Z.json`
+      - 📄 `04-instrumentation-20260830T035715Z.json`
+    - 📄 `01-unified-declaration.py` — Can one declaration contract schedule the GUI, two tools and a series writer?
+    - 📄 `02-derived-eviction.py` — Does eviction derived from declarations hold fewer frames than a fixed window?
+    - 📄 `03-non-frame-nodes.py` — Can a series writer release frames the graph tracks, without leaking?
+    - 📄 `04-instrumentation.py` — Is the timing envelope cheap enough to leave on in the interactive loop?
+    - 📄 `explorer.py` — Feel the orchestrator: one dispatcher, ranked by pressure, sharing every decode.
+    - 📄 `graph.py` — The declaration graph: what every consumer of frames says it needs.
+    - 📄 `pool.py` — The graph-managed frame pool: hold, reserve, release, evict, and say who shared.
   - 📁 `storage-experiments/`
     - 📁 `explorer-logs/`
       - 📄 `session-explorer-20260822T100122Z.json`

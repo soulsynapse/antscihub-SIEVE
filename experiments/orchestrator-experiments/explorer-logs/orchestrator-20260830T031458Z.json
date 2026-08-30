@@ -1,0 +1,1023 @@
+{
+ "tool": "orchestrator-explorer",
+ "when": "2026-08-30T03:15:38.933820+00:00",
+ "sieve_rev": "0bf8152",
+ "machine": {
+  "platform": "Windows-11-10.0.26200-SP0",
+  "processor": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
+  "logical_cpus": 32,
+  "python": "3.13.5"
+ },
+ "versions": {
+  "av": "18.1.0",
+  "cv2": "5.0.0",
+  "numpy": "2.5.2",
+  "ffmpeg": "ffmpeg version 2025-02-06-git-6da82b4485-full_build-www.gyan.dev Copyright (c) 2000-2025 the FFmpeg developers"
+ },
+ "topology": {
+  "nodes": [
+   "gui",
+   "fill (sweep)",
+   "tool"
+  ],
+  "edges": "source -> pool -> {gui, tool}",
+  "form": "0+0+5312x2988@5312x2988:gray",
+  "policy": "single dispatcher, pressure-ranked, preempt granularity one decode",
+  "walk": "full",
+  "playhead": "parked"
+ },
+ "total_frames": 11304,
+ "fps": 23.976023976023978,
+ "window_seconds": 20.0,
+ "window_frames": 480,
+ "tool_crop": [
+  2144,
+  982,
+  1024,
+  1024
+ ],
+ "active_tool": "dis",
+ "pool": {
+  "frames": 480,
+  "bytes": 7618682880,
+  "gb": 7.095,
+  "decodes": 2401,
+  "shared": 3434,
+  "shared_pairs": {
+   "gui>tool": 6,
+   "fill>tool": 2720,
+   "tool>gui": 2,
+   "fill>gui": 706
+  },
+  "evicted": 1921,
+  "forced_evictions": 0
+ },
+ "dispatcher": {
+  "served": 2401,
+  "seeks": 6,
+  "steps": 2395,
+  "failures": 0,
+  "stale": 0,
+  "idle_polls": 4377,
+  "by_pressure": {
+   "INTERACTIVE": 6,
+   "NEAR": 2,
+   "BACKGROUND": 2393
+  }
+ },
+ "graph_holds": 1,
+ "duration_bars": {
+  "dispatch:tool": 0.0003533870728308187,
+  "dispatch:fill": 0.4735321813623555,
+  "tool-dis-2197159223536": 0.5261144315648137
+ },
+ "timing_by_node": {
+  "dispatch:tool": {
+   "n": 1,
+   "min": 2.8519999468699098,
+   "p50": 2.8519999468699098,
+   "p95": 2.8519999468699098,
+   "max": 2.8519999468699098,
+   "mean": 2.8519999468699098
+  },
+  "dispatch:fill": {
+   "n": 478,
+   "min": 2.7956999838352203,
+   "p50": 6.429000059142709,
+   "p95": 18.936200067400932,
+   "max": 52.79390001669526,
+   "mean": 7.995036613316934
+  },
+  "tool-dis-2197159223536": {
+   "n": 479,
+   "min": 5.348700098693371,
+   "p50": 8.483299985527992,
+   "p95": 12.706500012427568,
+   "max": 16.49920002091676,
+   "mean": 8.864281837836234
+  }
+ },
+ "runs": [
+  {
+   "label": "hunt",
+   "started": "2026-08-30T03:14:58.452548+00:00",
+   "by_task": {
+    "drag": {
+     "n": 5,
+     "min": 0.02,
+     "p50": 0.02,
+     "p95": 0.03,
+     "max": 0.03,
+     "mean": 0.02
+    },
+    "scrub": {
+     "n": 10,
+     "min": 0.01,
+     "p50": 0.03,
+     "p95": 0.08,
+     "max": 0.08,
+     "mean": 0.04
+    },
+    "open": {
+     "n": 1,
+     "min": 282.76,
+     "p50": 282.76,
+     "p95": 282.76,
+     "max": 282.76,
+     "mean": 282.76
+    }
+   },
+   "routes": {
+    "dispatch": 1,
+    "wait": 10,
+    "held": 5
+   },
+   "walls": [],
+   "suppressed_play_hits": 0,
+   "events_capped": false,
+   "events": [
+    {
+     "t": 0.2854,
+     "task": "open",
+     "frame": 0,
+     "route": "dispatch 283ms",
+     "ms": 282.765
+    },
+    {
+     "t": 3.6402,
+     "task": "scrub",
+     "frame": 3411,
+     "route": "wait",
+     "ms": 0.022
+    },
+    {
+     "t": 3.6402,
+     "task": "scrub",
+     "frame": 3393,
+     "route": "wait",
+     "ms": 0.007
+    },
+    {
+     "t": 3.8285,
+     "task": "drag",
+     "frame": 3393,
+     "route": "held",
+     "ms": 0.018
+    },
+    {
+     "t": 9.7753,
+     "task": "scrub",
+     "frame": 5496,
+     "route": "wait",
+     "ms": 0.048
+    },
+    {
+     "t": 9.7754,
+     "task": "scrub",
+     "frame": 5503,
+     "route": "wait",
+     "ms": 0.025
+    },
+    {
+     "t": 9.9704,
+     "task": "drag",
+     "frame": 5503,
+     "route": "held",
+     "ms": 0.016
+    },
+    {
+     "t": 19.8172,
+     "task": "scrub",
+     "frame": 3231,
+     "route": "wait",
+     "ms": 0.079
+    },
+    {
+     "t": 19.8173,
+     "task": "scrub",
+     "frame": 3211,
+     "route": "wait",
+     "ms": 0.026
+    },
+    {
+     "t": 20.0352,
+     "task": "drag",
+     "frame": 3211,
+     "route": "held",
+     "ms": 0.029
+    },
+    {
+     "t": 28.3309,
+     "task": "scrub",
+     "frame": 3909,
+     "route": "wait",
+     "ms": 0.046
+    },
+    {
+     "t": 28.3309,
+     "task": "scrub",
+     "frame": 3897,
+     "route": "wait",
+     "ms": 0.026
+    },
+    {
+     "t": 28.5315,
+     "task": "drag",
+     "frame": 3897,
+     "route": "held",
+     "ms": 0.022
+    },
+    {
+     "t": 35.0961,
+     "task": "scrub",
+     "frame": 7312,
+     "route": "wait",
+     "ms": 0.054
+    },
+    {
+     "t": 35.0961,
+     "task": "scrub",
+     "frame": 7340,
+     "route": "wait",
+     "ms": 0.025
+    },
+    {
+     "t": 35.2978,
+     "task": "drag",
+     "frame": 7340,
+     "route": "held",
+     "ms": 0.018
+    }
+   ]
+  },
+  {
+   "label": "window@3393 w=480 tool=absdiff",
+   "started": "2026-08-30T03:15:02.331888+00:00",
+   "by_task": {
+    "play": {
+     "n": 15,
+     "min": 0.01,
+     "p50": 0.02,
+     "p95": 0.04,
+     "max": 0.04,
+     "mean": 0.02
+    }
+   },
+   "routes": {
+    "held": 15
+   },
+   "walls": [
+    {
+     "t": 7.4971,
+     "what": "window covered",
+     "wall_s": 3.663,
+     "detail": "480 frames @3393, 2 seeks / 479 steps / 0 stale"
+    }
+   ],
+   "suppressed_play_hits": 105,
+   "events_capped": false,
+   "events": [
+    {
+     "t": 4.2085,
+     "task": "play",
+     "frame": 3401,
+     "route": "held",
+     "ms": 0.019
+    },
+    {
+     "t": 4.5854,
+     "task": "play",
+     "frame": 3409,
+     "route": "held",
+     "ms": 0.04
+    },
+    {
+     "t": 4.9583,
+     "task": "play",
+     "frame": 3417,
+     "route": "held",
+     "ms": 0.016
+    },
+    {
+     "t": 5.6091,
+     "task": "play",
+     "frame": 3425,
+     "route": "held",
+     "ms": 0.02
+    },
+    {
+     "t": 5.9866,
+     "task": "play",
+     "frame": 3433,
+     "route": "held",
+     "ms": 0.032
+    },
+    {
+     "t": 6.3599,
+     "task": "play",
+     "frame": 3441,
+     "route": "held",
+     "ms": 0.032
+    },
+    {
+     "t": 6.7356,
+     "task": "play",
+     "frame": 3449,
+     "route": "held",
+     "ms": 0.022
+    },
+    {
+     "t": 7.1076,
+     "task": "play",
+     "frame": 3457,
+     "route": "held",
+     "ms": 0.025
+    },
+    {
+     "t": 7.4811,
+     "task": "play",
+     "frame": 3465,
+     "route": "held",
+     "ms": 0.021
+    },
+    {
+     "t": 7.8568,
+     "task": "play",
+     "frame": 3473,
+     "route": "held",
+     "ms": 0.034
+    },
+    {
+     "t": 8.2615,
+     "task": "play",
+     "frame": 3481,
+     "route": "held",
+     "ms": 0.026
+    },
+    {
+     "t": 8.6336,
+     "task": "play",
+     "frame": 3489,
+     "route": "held",
+     "ms": 0.02
+    },
+    {
+     "t": 9.0091,
+     "task": "play",
+     "frame": 3497,
+     "route": "held",
+     "ms": 0.015
+    },
+    {
+     "t": 9.3835,
+     "task": "play",
+     "frame": 3505,
+     "route": "held",
+     "ms": 0.025
+    },
+    {
+     "t": 9.7515,
+     "task": "play",
+     "frame": 3513,
+     "route": "held",
+     "ms": 0.021
+    }
+   ]
+  },
+  {
+   "label": "window@5503 w=480 tool=absdiff",
+   "started": "2026-08-30T03:15:08.651894+00:00",
+   "by_task": {
+    "play": {
+     "n": 19,
+     "min": 0.02,
+     "p50": 0.02,
+     "p95": 0.04,
+     "max": 0.04,
+     "mean": 0.02
+    }
+   },
+   "routes": {
+    "held": 19
+   },
+   "walls": [
+    {
+     "t": 14.0113,
+     "what": "window covered",
+     "wall_s": 3.86,
+     "detail": "480 frames @5503, 3 seeks / 958 steps / 0 stale"
+    }
+   ],
+   "suppressed_play_hits": 140,
+   "events_capped": false,
+   "events": [
+    {
+     "t": 10.5346,
+     "task": "play",
+     "frame": 5511,
+     "route": "held",
+     "ms": 0.029
+    },
+    {
+     "t": 11.0465,
+     "task": "play",
+     "frame": 5519,
+     "route": "held",
+     "ms": 0.019
+    },
+    {
+     "t": 11.4207,
+     "task": "play",
+     "frame": 5527,
+     "route": "held",
+     "ms": 0.023
+    },
+    {
+     "t": 11.795,
+     "task": "play",
+     "frame": 5535,
+     "route": "held",
+     "ms": 0.018
+    },
+    {
+     "t": 12.1692,
+     "task": "play",
+     "frame": 5543,
+     "route": "held",
+     "ms": 0.026
+    },
+    {
+     "t": 12.549,
+     "task": "play",
+     "frame": 5551,
+     "route": "held",
+     "ms": 0.026
+    },
+    {
+     "t": 12.9312,
+     "task": "play",
+     "frame": 5559,
+     "route": "held",
+     "ms": 0.033
+    },
+    {
+     "t": 13.2941,
+     "task": "play",
+     "frame": 5567,
+     "route": "held",
+     "ms": 0.039
+    },
+    {
+     "t": 13.681,
+     "task": "play",
+     "frame": 5575,
+     "route": "held",
+     "ms": 0.022
+    },
+    {
+     "t": 14.0559,
+     "task": "play",
+     "frame": 5583,
+     "route": "held",
+     "ms": 0.022
+    },
+    {
+     "t": 14.4175,
+     "task": "play",
+     "frame": 5591,
+     "route": "held",
+     "ms": 0.023
+    },
+    {
+     "t": 14.8002,
+     "task": "play",
+     "frame": 5599,
+     "route": "held",
+     "ms": 0.022
+    },
+    {
+     "t": 15.1824,
+     "task": "play",
+     "frame": 5607,
+     "route": "held",
+     "ms": 0.023
+    },
+    {
+     "t": 15.5556,
+     "task": "play",
+     "frame": 5615,
+     "route": "held",
+     "ms": 0.023
+    },
+    {
+     "t": 16.0239,
+     "task": "play",
+     "frame": 5623,
+     "route": "held",
+     "ms": 0.022
+    },
+    {
+     "t": 16.3981,
+     "task": "play",
+     "frame": 5631,
+     "route": "held",
+     "ms": 0.022
+    },
+    {
+     "t": 16.772,
+     "task": "play",
+     "frame": 5639,
+     "route": "held",
+     "ms": 0.026
+    },
+    {
+     "t": 17.148,
+     "task": "play",
+     "frame": 5647,
+     "route": "held",
+     "ms": 0.023
+    },
+    {
+     "t": 17.5214,
+     "task": "play",
+     "frame": 5655,
+     "route": "held",
+     "ms": 0.021
+    }
+   ]
+  },
+  {
+   "label": "window@5503 w=480 tool=dis",
+   "started": "2026-08-30T03:15:16.343561+00:00",
+   "by_task": {
+    "play": {
+     "n": 5,
+     "min": 0.01,
+     "p50": 0.02,
+     "p95": 0.02,
+     "max": 0.02,
+     "mean": 0.02
+    }
+   },
+   "routes": {
+    "held": 5
+   },
+   "walls": [],
+   "suppressed_play_hits": 36,
+   "events_capped": false,
+   "events": [
+    {
+     "t": 18.2192,
+     "task": "play",
+     "frame": 5670,
+     "route": "held",
+     "ms": 0.022
+    },
+    {
+     "t": 18.5977,
+     "task": "play",
+     "frame": 5678,
+     "route": "held",
+     "ms": 0.019
+    },
+    {
+     "t": 18.9704,
+     "task": "play",
+     "frame": 5686,
+     "route": "held",
+     "ms": 0.022
+    },
+    {
+     "t": 19.3406,
+     "task": "play",
+     "frame": 5694,
+     "route": "held",
+     "ms": 0.013
+    },
+    {
+     "t": 19.7238,
+     "task": "play",
+     "frame": 5702,
+     "route": "held",
+     "ms": 0.022
+    }
+   ]
+  },
+  {
+   "label": "window@3211 w=480 tool=dis",
+   "started": "2026-08-30T03:15:18.748543+00:00",
+   "by_task": {
+    "play": {
+     "n": 20,
+     "min": 0.02,
+     "p50": 0.03,
+     "p95": 0.08,
+     "max": 0.08,
+     "mean": 0.03
+    }
+   },
+   "routes": {
+    "held": 20
+   },
+   "walls": [
+    {
+     "t": 24.5018,
+     "what": "window covered",
+     "wall_s": 4.244,
+     "detail": "480 frames @3211, 4 seeks / 1437 steps / 0 stale"
+    }
+   ],
+   "suppressed_play_hits": 144,
+   "events_capped": false,
+   "events": [
+    {
+     "t": 20.6221,
+     "task": "play",
+     "frame": 3219,
+     "route": "held",
+     "ms": 0.028
+    },
+    {
+     "t": 21.2336,
+     "task": "play",
+     "frame": 3227,
+     "route": "held",
+     "ms": 0.026
+    },
+    {
+     "t": 21.6096,
+     "task": "play",
+     "frame": 3235,
+     "route": "held",
+     "ms": 0.031
+    },
+    {
+     "t": 21.9811,
+     "task": "play",
+     "frame": 3243,
+     "route": "held",
+     "ms": 0.046
+    },
+    {
+     "t": 22.3699,
+     "task": "play",
+     "frame": 3251,
+     "route": "held",
+     "ms": 0.079
+    },
+    {
+     "t": 22.7447,
+     "task": "play",
+     "frame": 3259,
+     "route": "held",
+     "ms": 0.037
+    },
+    {
+     "t": 23.116,
+     "task": "play",
+     "frame": 3267,
+     "route": "held",
+     "ms": 0.034
+    },
+    {
+     "t": 23.5376,
+     "task": "play",
+     "frame": 3275,
+     "route": "held",
+     "ms": 0.024
+    },
+    {
+     "t": 23.9121,
+     "task": "play",
+     "frame": 3283,
+     "route": "held",
+     "ms": 0.032
+    },
+    {
+     "t": 24.2854,
+     "task": "play",
+     "frame": 3291,
+     "route": "held",
+     "ms": 0.018
+    },
+    {
+     "t": 24.6584,
+     "task": "play",
+     "frame": 3299,
+     "route": "held",
+     "ms": 0.021
+    },
+    {
+     "t": 25.0331,
+     "task": "play",
+     "frame": 3307,
+     "route": "held",
+     "ms": 0.02
+    },
+    {
+     "t": 25.4066,
+     "task": "play",
+     "frame": 3315,
+     "route": "held",
+     "ms": 0.022
+    },
+    {
+     "t": 25.7808,
+     "task": "play",
+     "frame": 3323,
+     "route": "held",
+     "ms": 0.026
+    },
+    {
+     "t": 26.1691,
+     "task": "play",
+     "frame": 3331,
+     "route": "held",
+     "ms": 0.024
+    },
+    {
+     "t": 26.6075,
+     "task": "play",
+     "frame": 3339,
+     "route": "held",
+     "ms": 0.026
+    },
+    {
+     "t": 26.9825,
+     "task": "play",
+     "frame": 3347,
+     "route": "held",
+     "ms": 0.02
+    },
+    {
+     "t": 27.3728,
+     "task": "play",
+     "frame": 3355,
+     "route": "held",
+     "ms": 0.02
+    },
+    {
+     "t": 27.7479,
+     "task": "play",
+     "frame": 3363,
+     "route": "held",
+     "ms": 0.021
+    },
+    {
+     "t": 28.1335,
+     "task": "play",
+     "frame": 3371,
+     "route": "held",
+     "ms": 0.021
+    }
+   ]
+  },
+  {
+   "label": "window@3897 w=480 tool=dis",
+   "started": "2026-08-30T03:15:27.216433+00:00",
+   "by_task": {
+    "play": {
+     "n": 16,
+     "min": 0.01,
+     "p50": 0.03,
+     "p95": 0.05,
+     "max": 0.05,
+     "mean": 0.03
+    }
+   },
+   "routes": {
+    "held": 16
+   },
+   "walls": [
+    {
+     "t": 33.0122,
+     "what": "window covered",
+     "wall_s": 4.296,
+     "detail": "480 frames @3897, 5 seeks / 1916 steps / 0 stale"
+    }
+   ],
+   "suppressed_play_hits": 113,
+   "events_capped": false,
+   "events": [
+    {
+     "t": 29.0995,
+     "task": "play",
+     "frame": 3905,
+     "route": "held",
+     "ms": 0.053
+    },
+    {
+     "t": 29.4741,
+     "task": "play",
+     "frame": 3913,
+     "route": "held",
+     "ms": 0.032
+    },
+    {
+     "t": 29.8491,
+     "task": "play",
+     "frame": 3921,
+     "route": "held",
+     "ms": 0.029
+    },
+    {
+     "t": 30.217,
+     "task": "play",
+     "frame": 3929,
+     "route": "held",
+     "ms": 0.045
+    },
+    {
+     "t": 30.5943,
+     "task": "play",
+     "frame": 3937,
+     "route": "held",
+     "ms": 0.028
+    },
+    {
+     "t": 30.9703,
+     "task": "play",
+     "frame": 3945,
+     "route": "held",
+     "ms": 0.047
+    },
+    {
+     "t": 31.5744,
+     "task": "play",
+     "frame": 3953,
+     "route": "held",
+     "ms": 0.027
+    },
+    {
+     "t": 31.9628,
+     "task": "play",
+     "frame": 3961,
+     "route": "held",
+     "ms": 0.039
+    },
+    {
+     "t": 32.3714,
+     "task": "play",
+     "frame": 3969,
+     "route": "held",
+     "ms": 0.032
+    },
+    {
+     "t": 32.7586,
+     "task": "play",
+     "frame": 3977,
+     "route": "held",
+     "ms": 0.041
+    },
+    {
+     "t": 33.1318,
+     "task": "play",
+     "frame": 3985,
+     "route": "held",
+     "ms": 0.02
+    },
+    {
+     "t": 33.5066,
+     "task": "play",
+     "frame": 3993,
+     "route": "held",
+     "ms": 0.015
+    },
+    {
+     "t": 33.8808,
+     "task": "play",
+     "frame": 4001,
+     "route": "held",
+     "ms": 0.023
+    },
+    {
+     "t": 34.2493,
+     "task": "play",
+     "frame": 4009,
+     "route": "held",
+     "ms": 0.02
+    },
+    {
+     "t": 34.6211,
+     "task": "play",
+     "frame": 4017,
+     "route": "held",
+     "ms": 0.02
+    },
+    {
+     "t": 34.9991,
+     "task": "play",
+     "frame": 4025,
+     "route": "held",
+     "ms": 0.013
+    }
+   ]
+  },
+  {
+   "label": "window@7340 w=480 tool=dis",
+   "started": "2026-08-30T03:15:34.001580+00:00",
+   "by_task": {
+    "play": {
+     "n": 11,
+     "min": 0.02,
+     "p50": 0.03,
+     "p95": 0.05,
+     "max": 0.05,
+     "mean": 0.03
+    }
+   },
+   "routes": {
+    "held": 11
+   },
+   "walls": [
+    {
+     "t": 39.5005,
+     "what": "window covered",
+     "wall_s": 3.995,
+     "detail": "480 frames @7340, 6 seeks / 2395 steps / 0 stale"
+    }
+   ],
+   "suppressed_play_hits": 84,
+   "events_capped": false,
+   "events": [
+    {
+     "t": 35.8774,
+     "task": "play",
+     "frame": 7348,
+     "route": "held",
+     "ms": 0.049
+    },
+    {
+     "t": 36.2482,
+     "task": "play",
+     "frame": 7356,
+     "route": "held",
+     "ms": 0.027
+    },
+    {
+     "t": 36.8563,
+     "task": "play",
+     "frame": 7364,
+     "route": "held",
+     "ms": 0.042
+    },
+    {
+     "t": 37.2345,
+     "task": "play",
+     "frame": 7372,
+     "route": "held",
+     "ms": 0.027
+    },
+    {
+     "t": 37.607,
+     "task": "play",
+     "frame": 7380,
+     "route": "held",
+     "ms": 0.03
+    },
+    {
+     "t": 37.999,
+     "task": "play",
+     "frame": 7388,
+     "route": "held",
+     "ms": 0.027
+    },
+    {
+     "t": 38.3727,
+     "task": "play",
+     "frame": 7396,
+     "route": "held",
+     "ms": 0.054
+    },
+    {
+     "t": 38.7787,
+     "task": "play",
+     "frame": 7404,
+     "route": "held",
+     "ms": 0.032
+    },
+    {
+     "t": 39.153,
+     "task": "play",
+     "frame": 7412,
+     "route": "held",
+     "ms": 0.029
+    },
+    {
+     "t": 39.5343,
+     "task": "play",
+     "frame": 7420,
+     "route": "held",
+     "ms": 0.022
+    },
+    {
+     "t": 39.916,
+     "task": "play",
+     "frame": 7428,
+     "route": "held",
+     "ms": 0.023
+    }
+   ]
+  }
+ ]
+}

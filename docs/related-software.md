@@ -25,4 +25,3 @@ Scheduling and storage
 - GreedyDual-Size
 - libavfilter's activate callback
 - Excel's restarting scheduler
-- Python has continuations.. synthesised async def wrapper around a tool would delete _waiting, outstanding, _ready, _next_runnable etc

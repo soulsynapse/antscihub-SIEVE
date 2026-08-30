@@ -2,20 +2,20 @@
 
 One contract for everything that wants data from the orchestrator — the GUI,
 a tool, the series writer, the proxy builder. Each is a node that declares:
-what form it wants, which positions relative to its own it needs held, and a
+what form it wants, which rows relative to its own it needs held, and a
 pressure saying how urgently it needs them.
 
 The graph resolves those declarations into two answers the rest of the
 orchestrator reads:
 
 1. **What to hold.** Given the set of active nodes and their current
-   positions, which (position, form) pairs may not be evicted? This is the
-   union of every node's declared needs at its current position — the
+   rows, which (row, form) pairs may not be evicted? This is the
+   union of every node's declared needs at its current row — the
    `residency` that `tool-experiments/tools.py` computes for steps,
    generalised to every consumer.
 
 2. **What to fill next.** Given the pressure each node declared and the
-   positions it has not yet been served, which request goes first? This is
+   rows it has not yet been served, which request goes first? This is
    the priority queue the current fill and proxy do not share.
 
 The graph is deliberately not a scheduler. It answers "what is needed" and
@@ -38,11 +38,11 @@ from typing import Any, Callable
 
 
 class Urgency(IntEnum):
-    """The only scheduling fact a consumer is in a position to state.
+    """The only scheduling fact a consumer is placed to state.
 
     Whether a person is presently waiting on this frame is knowable from
     inside a consumer. Where it should rank against everything else in
-    flight is not: that depends on what else declared the same position,
+    flight is not: that depends on what else declared the same row,
     which the declarer cannot see. Ranking was a declared field until the
     measurement in `docs/findings/` (2026.08.30, the dispatcher) — a tool
     declaring itself above a sweep bought frames by seek that the sweep was
@@ -59,14 +59,23 @@ class Urgency(IntEnum):
 class Need:
     """One node's declaration of what it needs right now.
 
-    `position` is where the node considers itself — the playhead for the
+    `row` is where the node considers itself — the playhead for the
     GUI, the frontier for a fill, the row being computed for a step.
-    `offsets` are relative to that position, same as `Tool.offsets`.
+    `offsets` are relative to that row, same as `Tool.offsets`.
+
+    **A row, not a position.** This counts entries of a listing from zero;
+    the contract's `position` is the source's own presentation timestamp
+    (ADR-0004), and the two differ by the tick rate — at 90 kHz over 23.976
+    fps, by 3753.75. Adding `offsets` to a pts is the arithmetic that reads
+    every ordinary step as a jump, and it stays unavailable here by this
+    field never holding one. `fetch.py` converts at the seek, which is the
+    only place in this folder that needs a pts, and anything crossing into
+    `sieve/` converts too.
     `form_key` names the form, same as `Form.key()`. `urgency` says only
     whether someone is waiting — the rank is the graph's to derive.
     """
     node_id: str
-    position: int
+    row: int
     offsets: tuple[int, ...]
     form_key: str
     urgency: Urgency = Urgency.DEFERRED
@@ -78,11 +87,11 @@ class Need:
         one that declared two offsets is not."""
         return max(self.offsets) - min(self.offsets) + 1
 
-    def needed_positions(self) -> tuple[int, ...]:
-        return tuple(self.position + off for off in self.offsets)
+    def needed_rows(self) -> tuple[int, ...]:
+        return tuple(self.row + off for off in self.offsets)
 
     def unserved(self, have: Callable[[int, str], bool]) -> tuple[int, ...]:
-        """Needed positions `have` says are not on hand, in declared order.
+        """Needed rows `have` says are not on hand, in declared order.
 
         The order is the node's, not the graph's: `offsets` is a sequence,
         and a sweep that wants its window attention-first spells that by
@@ -91,7 +100,7 @@ class Need:
         in the one declaration, which is what lets the dispatcher rank
         across nodes without knowing what any of them is.
         """
-        return tuple(p for p in self.needed_positions()
+        return tuple(p for p in self.needed_rows()
                      if not have(p, self.form_key))
 
 
@@ -105,7 +114,7 @@ class Envelope:
     the duration bars are a read of its own bookkeeping.
     """
     node_id: str
-    position: int
+    row: int
     form_key: str
     route: str
     t_start: float = 0.0
@@ -126,7 +135,7 @@ class Envelope:
 
 @dataclass
 class Ref:
-    """A reference count on a (position, form_key) pair.
+    """A reference count on a (row, form_key) pair.
 
     Tracks which nodes still need this frame. When the set empties, the
     frame is eligible for eviction.
@@ -168,20 +177,20 @@ class Graph:
         self._last_release: dict[tuple[int, str], tuple[str, int]] = {}
 
     def declare(self, need: Need) -> set[tuple[int, str]]:
-        """A node says what it needs now. Returns the new (position, form_key)
+        """A node says what it needs now. Returns the new (row, form_key)
         pairs that were not previously held — what the caller must fetch.
 
         Calling `declare` again for the same `node_id` replaces the previous
-        declaration and releases any positions the old one held that the new
+        declaration and releases any rows the old one held that the new
         one does not.
         """
         with self._lock:
             old = self._needs.get(need.node_id)
             old_set: set[tuple[int, str]] = set()
             if old is not None:
-                old_set = {(p, old.form_key) for p in old.needed_positions()}
+                old_set = {(p, old.form_key) for p in old.needed_rows()}
 
-            new_set = {(p, need.form_key) for p in need.needed_positions()}
+            new_set = {(p, need.form_key) for p in need.needed_rows()}
 
             released = old_set - new_set
             for key in released:
@@ -208,7 +217,7 @@ class Graph:
             old = self._needs.pop(node_id, None)
             if old is None:
                 return
-            for pos in old.needed_positions():
+            for pos in old.needed_rows():
                 key = (pos, old.form_key)
                 ref = self._refs.get(key)
                 if ref is not None:
@@ -218,15 +227,15 @@ class Graph:
                         self._last_release[key] = (
                             node_id, self._gen.get(node_id, 0))
 
-    def release_position(self, node_id: str, position: int, form_key: str) -> bool:
-        """A node says it is done with one specific position.
+    def release_row(self, node_id: str, row: int, form_key: str) -> bool:
+        """A node says it is done with one specific row.
 
         Returns True if the frame is now eligible for eviction (no holders).
         This is for non-frame nodes (series writers) that consume a frame
-        and release it before moving their own position forward.
+        and release it before moving their own row forward.
         """
         with self._lock:
-            key = (position, form_key)
+            key = (row, form_key)
             ref = self._refs.get(key)
             if ref is None:
                 return True
@@ -237,11 +246,11 @@ class Graph:
                 return True
             return False
 
-    def still_wants(self, node_id: str, position: int, form_key: str) -> bool:
+    def still_wants(self, node_id: str, row: int, form_key: str) -> bool:
         """Does this node's *current* declaration still ask for this?
 
         For the dispatcher to ask after a decode it has just finished. A
-        scrubbing GUI declares a position, the dispatcher preempts a
+        scrubbing GUI declares a row, the dispatcher preempts a
         sequential run to serve it, and by the time the seek lands the
         playhead is forty frames away — the decode was correct policy and
         wasted work, and only the count of them says how often that trade
@@ -251,7 +260,7 @@ class Graph:
             need = self._needs.get(node_id)
             if need is None or need.form_key != form_key:
                 return False
-            return position in need.needed_positions()
+            return row in need.needed_rows()
 
     def dropped_under(self, key: tuple[int, str]) -> tuple[str, int] | None:
         """Who last stopped needing this, and at which generation of their
@@ -271,7 +280,7 @@ class Graph:
             return self._gen.get(node_id, 0) != generation
 
     def held(self) -> set[tuple[int, str]]:
-        """Every (position, form_key) pair that at least one node still needs."""
+        """Every (row, form_key) pair that at least one node still needs."""
         with self._lock:
             return set(self._refs.keys())
 
@@ -287,9 +296,9 @@ class Graph:
 
         1. **Urgency.** Someone is waiting, or nobody is. A consumer knows
            this about itself and nothing else about its rank.
-        2. **Not subsumed.** A need whose position is already inside a
+        2. **Not subsumed.** A need whose row is already inside a
            wider declaration yields to it. The wider one is a producer that
-           will reach the position in its own order; jumping the queue for
+           will reach the row in its own order; jumping the queue for
            it buys by seek what was arriving by sequential read, and stalls
            the producer that was about to hand it over. An INTERACTIVE need
            is never subsumed — a person waiting is the case preemption is
@@ -300,7 +309,7 @@ class Graph:
         """
         with self._lock:
             needs = list(self._needs.values())
-            spans = [(n, {(p, n.form_key) for p in n.needed_positions()})
+            spans = [(n, {(p, n.form_key) for p in n.needed_rows()})
                      for n in needs]
 
             def subsumed(need: Need, own: set) -> bool:
@@ -316,7 +325,7 @@ class Graph:
                 key=lambda n: (
                     -int(n.urgency),
                     int(subsumed(n, {(p, n.form_key)
-                                     for p in n.needed_positions()})),
+                                     for p in n.needed_rows()})),
                     -n.span,
                 ))
 

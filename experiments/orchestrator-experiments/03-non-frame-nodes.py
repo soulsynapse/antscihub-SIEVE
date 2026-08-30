@@ -3,7 +3,7 @@
 The failure mode this exists to catch: a non-frame node (series writer,
 threshold reader, geometry producer) that holds a reference the graph cannot
 see, leaking frames the declaration said were free. The graph's eviction is
-only as good as every consumer calling `release_position` when it is done,
+only as good as every consumer calling `release_row` when it is done,
 and a node that forgets — or that holds a numpy view of a frame it declared
 released — is a leak with the graph's blessing.
 
@@ -13,14 +13,14 @@ Two consumers on one source, plus a series writer downstream of one:
   series_w    offset (0,), consumes absdiff's field, writes a scalar,
               releases its upstream frame on write
 
-The interesting position is the one where absdiff and series_w both need
+The interesting row is the one where absdiff and series_w both need
 the same frame. absdiff declares (-1, 0); series_w declares (0,). At
-position N, frame N is held by both. When series_w releases N, absdiff
+row N, frame N is held by both. When series_w releases N, absdiff
 still holds it. When absdiff advances to N+1 and declares (-1, 0) = (N, N+1),
 frame N is still held. When absdiff advances to N+2 and declares (N+1, N+2),
 frame N should finally be evictable.
 
-The experiment sweeps 300 positions and at every step verifies:
+The experiment sweeps 300 rows and at every step verifies:
 - the hold count matches the expected set exactly
 - a released frame that is still declared by another node is not evictable
 - a released frame that no node declares is evictable
@@ -55,7 +55,7 @@ def main() -> None:
         experiment="03-non-frame-nodes",
         question=(
             "Does a series writer release frames the graph tracks, and does "
-            "eviction work when frame and non-frame consumers share positions?"
+            "eviction work when frame and non-frame consumers share rows?"
         ),
     )
 
@@ -79,7 +79,7 @@ def main() -> None:
     for pos in range(1, SWEEP + 1):
         # absdiff declares (-1, 0)
         g.declare(Need("absdiff", pos, tool_a.offsets, fk, Urgency.DEFERRED))
-        # series_w declares (0,) — it wants just the current position
+        # series_w declares (0,) — it wants just the current row
         g.declare(Need("series_w", pos, (0,), fk, Urgency.DEFERRED))
 
         # simulate fetching
@@ -93,7 +93,7 @@ def main() -> None:
         view_pool[pos] = frame_pool[pos][10:20, 10:20]  # a view, not a copy
         scalar = float(np.mean(view_pool[pos]))
         # release the frame from the series writer's hold
-        g.release_position("series_w", pos, fk)
+        g.release_row("series_w", pos, fk)
 
         # check: is pos still held by absdiff?
         held = g.held()

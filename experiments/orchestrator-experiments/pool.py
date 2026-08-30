@@ -24,9 +24,14 @@ touch and never a decode. A lock a decode runs inside is the dispatcher
 stalling whoever is drawing, which is the freeze the session explorer
 exists to avoid and the orchestrator must not re-introduce.
 
-**Keyed by (position, form_key).** Two consumers at different forms need
-different arrays of one instant, and a pool keyed by position alone would
+**Keyed by (row, form_key).** Two consumers at different forms need
+different arrays of one instant, and a pool keyed by row alone would
 think one satisfied the other — the same lesson `store.py` already learned.
+
+The row is an ordinal against the caller's listing and not the contract's
+`position`, which is a pts. `store.py` is keyed by the same shape in the
+other coordinate, so the two keys are not interchangeable however alike
+they read — see `graph.Need`.
 """
 
 from __future__ import annotations
@@ -76,16 +81,16 @@ class Pool:
 
     # ── read ─────────────────────────────────────────────────────────────
 
-    def has(self, position: int, form_key: str) -> bool:
+    def has(self, row: int, form_key: str) -> bool:
         """Is this on hand? A probe, not a serve — the dispatcher asks this
         thousands of times a second and none of it is sharing."""
-        return (position, form_key) in self._frames
+        return (row, form_key) in self._frames
 
-    def get(self, position: int, form_key: str,
+    def get(self, row: int, form_key: str,
             by: str | None = None) -> Any | None:
         """Serve a frame. `by` names the node reading, so a serve to
         someone other than the node whose decode produced it is counted."""
-        key = (position, form_key)
+        key = (row, form_key)
         with self._lock:
             frame = self._frames.get(key)
             if frame is None or by is None:
@@ -102,9 +107,9 @@ class Pool:
 
     # ── write ────────────────────────────────────────────────────────────
 
-    def put(self, position: int, form_key: str, frame: Any,
+    def put(self, row: int, form_key: str, frame: Any,
             by: str = "?") -> None:
-        key = (position, form_key)
+        key = (row, form_key)
         with self._lock:
             if key in self._frames:
                 return
@@ -152,7 +157,7 @@ class Pool:
 
     # ── query ────────────────────────────────────────────────────────────
 
-    def nearest(self, position: int, form_key: str,
+    def nearest(self, row: int, form_key: str,
                 radius: int) -> tuple[int, Any] | None:
         """The closest held frame within `radius`, at this form."""
         with self._lock:
@@ -162,7 +167,7 @@ class Pool:
             for (p, fk), frame in self._frames.items():
                 if fk != form_key:
                     continue
-                d = abs(p - position)
+                d = abs(p - row)
                 if d < best_dist:
                     best_dist = d
                     best_pos = p
@@ -172,7 +177,7 @@ class Pool:
         return None
 
     def covered(self, start: int, end: int, form_key: str) -> list[int]:
-        """Positions held in [start, end) at this form, sorted."""
+        """Rows held in [start, end) at this form, sorted."""
         with self._lock:
             return sorted(p for (p, fk) in self._frames
                           if fk == form_key and start <= p < end)

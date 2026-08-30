@@ -5,7 +5,7 @@ Forked from `storage-experiments/session-explorer.py` and
 except the dispatcher, and everything that wants a frame — the GUI's drag,
 the window sweep, the tool's ordered pass — says so by declaring a `Need`
 through the graph. The dispatcher reads `graph.pressure_queue()` and serves
-the highest-pressure position that is not on hand. That is the whole
+the highest-pressure row that is not on hand. That is the whole
 scheduling policy, and this explorer exists to find out what it feels like.
 
 What changed from the first version of this explorer, and why:
@@ -183,7 +183,7 @@ class Fetcher:
     """One open container, absolute frame indices, sequential cursor.
 
     Reports how it got there. A dispatcher ranked by pressure rather than by
-    position pays for every reorder in seeks, and the seek/step split is the
+    row pays for every reorder in seeks, and the seek/step split is the
     price of the policy — the number that says whether priority scheduling
     is worth what locality it gave up.
     """
@@ -225,7 +225,7 @@ class Dispatcher:
     """The only thing in this explorer that decodes.
 
     Reads the graph's pressure queue, takes the highest-pressure need with
-    an unserved position, decodes that one position, puts it in the pool,
+    an unserved row, decodes that one row, puts it in the pool,
     and re-consults. Re-consulting after every single frame is what makes
     preemption granularity one decode rather than one window; it is also
     what lets a node's declared *order* (attention-first, for a sweep) win
@@ -251,11 +251,11 @@ class Dispatcher:
         self.idle_polls = 0
         self.failures = 0
         #: decodes that landed after the node asking had already moved on.
-        #: The price of preempting per-frame for a consumer whose position
+        #: The price of preempting per-frame for a consumer whose row
         #: changes faster than a seek — a scrub declares dozens of these.
         self.stale = 0
         self.by_pressure: dict[str, int] = {}
-        #: every choice in order — role, position, how, cost, and how much
+        #: every choice in order — role, row, how, cost, and how much
         #: of the window was covered when it was made. The counts say what
         #: the policy cost; only the sequence says why, because the cost of
         #: a decode is a function of the one before it.
@@ -309,7 +309,7 @@ class Dispatcher:
                     arr, how = fetcher.exact(idx)
                 except Exception:
                     self.failures += 1
-                    #: a position nothing can decode would otherwise be
+                    #: a row nothing can decode would otherwise be
                     #: picked forever — park a None so `has` says yes
                     self.pool.put(idx, need.form_key, np.zeros((1, 1), np.uint8),
                                   by=need.node_id)
@@ -346,10 +346,10 @@ class Dispatcher:
 class Sweep:
     """A node that wants a whole window, in attention-first order.
 
-    Not a thread. It declares once — every position in the window, as
+    Not a thread. It declares once — every row in the window, as
     offsets rotated so the anchor comes first — and the dispatcher works
     through that order at BACKGROUND pressure whenever nothing outranks it.
-    The declaration is also the hold: 480 positions in the graph's refs is
+    The declaration is also the hold: 480 rows in the graph's refs is
     what keeps the pool from sweeping the window out from under the tool.
 
     Replacing a fill thread with a declaration is the point. The old fill
@@ -391,15 +391,15 @@ class Sweep:
 class ToolRunner:
     """A tool's ordered pass over the window, riding on the sweep's decodes.
 
-    Declares source-form positions through the graph — the same form the
+    Declares source-form rows through the graph — the same form the
     GUI and the sweep declare — and derives its crop itself. The derivation
     is inside the envelope on purpose: it is the tool's cost, not the
     dispatcher's, and a graph that hid it would report a step as free that
-    is paying 1 MB of memcpy a position.
+    is paying 1 MB of memcpy a row.
 
     It declares DEFERRED and says nothing about where it ranks. It used to
     raise itself toward the playhead, which read as reasonable and was the
-    measured defect: its positions sit inside the sweep's declared window,
+    measured defect: its rows sit inside the sweep's declared window,
     so outranking the sweep bought by seek what was already arriving by
     sequential read, and stalled the producer while doing it. The graph
     subsumes it now (ADR-0006, ADR-0007).
@@ -418,7 +418,7 @@ class ToolRunner:
         self.values: dict[int, float] = {}
         self.pos: int | None = None
         self.computed = 0
-        self.starved = 0     #: positions abandoned waiting on the dispatcher
+        self.starved = 0     #: rows abandoned waiting on the dispatcher
         self.derive_ms = 0.0
 
     def running(self) -> bool:
@@ -493,7 +493,7 @@ class ToolRunner:
                 self.computed += 1
 
                 for n in needed:
-                    self.graph.release_position(self.node_id, n, fk)
+                    self.graph.release_row(self.node_id, n, fk)
         finally:
             self.graph.release(self.node_id)
 

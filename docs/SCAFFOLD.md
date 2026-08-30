@@ -48,7 +48,7 @@
     - 📄 `harness.py` — What every decode experiment needs and none of them should decide twice.
   - 📁 `orchestrator-experiments/`
     - 📁 `explorer-logs/` (25 files)
-    - 📁 `results/` (10 files)
+    - 📁 `results/` (14 files)
     - 📄 `01-unified-declaration.py` — Can one declaration contract schedule the GUI, two tools and a series writer?
     - 📄 `02-derived-eviction.py` — Does eviction derived from declarations hold fewer frames than a fixed window?
     - 📄 `03-non-frame-nodes.py` — Can a series writer release frames the graph tracks, without leaking?

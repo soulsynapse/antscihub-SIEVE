@@ -1,0 +1,664 @@
+{
+ "experiment": "04-victim-cache",
+ "question": "Does retaining unpinned keys beat dropping them, and does any ranking beat any other?",
+ "when": "2026-08-30T23:45:57.179812+00:00",
+ "sieve_rev": "6d8d88e",
+ "machine": {
+  "platform": "Windows-11-10.0.26200-SP0",
+  "processor": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
+  "logical_cpus": 32,
+  "python": "3.13.5"
+ },
+ "versions": {
+  "av": "18.1.0",
+  "cv2": "5.0.0",
+  "numpy": "2.5.2",
+  "ffmpeg": "ffmpeg version 2025-02-06-git-6da82b4485-full_build-www.gyan.dev Copyright (c) 2000-2025 the FFmpeg developers"
+ },
+ "footage": [
+  {
+   "path": "C:\\Users\\khnakam1\\Documents\\Code\\antscihub-SIEVE-v4\\video-tests\\GX010047c2_02_17_26.MP4",
+   "name": "GX010047c2_02_17_26.MP4",
+   "bytes": 3546062144,
+   "mtime": "2026-07-14T18:50:16.126370+00:00",
+   "codec_name": "hevc",
+   "profile": "Main",
+   "width": 5312,
+   "height": 2988,
+   "pix_fmt": "yuvj420p",
+   "r_frame_rate": "24000/1001",
+   "nb_frames": "11328",
+   "duration": "471.651625",
+   "size": "3546062144",
+   "bit_rate": "60147141"
+  }
+ ],
+ "notes": [
+  "topology: source -> pool -> one sweep declaring a 120-frame window attention-first from its midpoint. Three landings per shape; the third is the metric. Ceiling 1.5 windows = 2.66 GB at 15.1 MB a frame, so half a window of victims is the most any policy can keep.",
+  "core shape: 1 fetch thread, 1 reader, 2 recorders, no step and no interactive consumer \u2014 this measures retention, and a second consumer would make the decode counts a statement about scheduling as well.",
+  "`drop-all` calls drop_unreferenced at each landing, which is V1's explorer. Every other arm lets the byte ceiling decide, which is what makes it a victim cache; the ceiling never fired in any V1 run, per the derived-eviction finding.",
+  "seeks are reported beside decodes because a scattered remnant must be seeked through: fewer decodes at more seeks is the pre-registered way a per-item ranking fails here, since GreedyDual-Size treats items as independent and a frame's cost depends on whether its neighbour is resident.",
+  "exact-return / drop-all: return leg decoded 120 of 120 rows in 1.544 s with 2 seeks; 0 rows were already resident on arrival, in 0 contiguous run(s), and 0 serves came from unpinned keys.",
+  "exact-return / lru: return leg decoded 60 of 120 rows in 0.748 s with 1 seeks; 60 rows were already resident on arrival, in 1 contiguous run(s), and 0 serves came from unpinned keys.",
+  "exact-return / gdsize: return leg decoded 60 of 120 rows in 1.539 s with 2 seeks; 60 rows were already resident on arrival, in 37 contiguous run(s), and 0 serves came from unpinned keys.",
+  "exact-return / contiguous: return leg decoded 60 of 120 rows in 0.757 s with 1 seeks; 60 rows were already resident on arrival, in 1 contiguous run(s), and 0 serves came from unpinned keys.",
+  "exact-return / belady: return leg decoded 60 of 120 rows in 1.561 s with 2 seeks; 60 rows were already resident on arrival, in 29 contiguous run(s), and 0 serves came from unpinned keys.",
+  "offset-return / drop-all: return leg decoded 120 of 120 rows in 1.503 s with 2 seeks; 0 rows were already resident on arrival, in 0 contiguous run(s), and 0 serves came from unpinned keys.",
+  "offset-return / lru: return leg decoded 120 of 120 rows in 1.559 s with 2 seeks; 0 rows were already resident on arrival, in 0 contiguous run(s), and 0 serves came from unpinned keys.",
+  "offset-return / gdsize: return leg decoded 90 of 120 rows in 1.563 s with 2 seeks; 30 rows were already resident on arrival, in 17 contiguous run(s), and 0 serves came from unpinned keys.",
+  "offset-return / contiguous: return leg decoded 120 of 120 rows in 1.581 s with 2 seeks; 0 rows were already resident on arrival, in 0 contiguous run(s), and 0 serves came from unpinned keys.",
+  "offset-return / belady: return leg decoded 60 of 120 rows in 0.906 s with 1 seeks; 60 rows were already resident on arrival, in 1 contiguous run(s), and 0 serves came from unpinned keys."
+ ],
+ "cases": [
+  {
+   "name": "exact-return-drop-all",
+   "params": {
+    "shape": "exact-return",
+    "policy": "drop-all",
+    "legs": [
+     {
+      "leg": 0,
+      "window": [
+       3768,
+       3888
+      ],
+      "covered": true,
+      "wall_s": 1.317,
+      "decodes": 120,
+      "seeks": 2,
+      "victim_hits": 0,
+      "resident_on_arrival": 0,
+      "runs_on_arrival": 0,
+      "pool_gb": 1.774
+     },
+     {
+      "leg": 1,
+      "window": [
+       4008,
+       4128
+      ],
+      "covered": true,
+      "wall_s": 1.336,
+      "decodes": 120,
+      "seeks": 2,
+      "victim_hits": 0,
+      "resident_on_arrival": 0,
+      "runs_on_arrival": 0,
+      "pool_gb": 1.774
+     },
+     {
+      "leg": 2,
+      "window": [
+       3768,
+       3888
+      ],
+      "covered": true,
+      "wall_s": 1.544,
+      "decodes": 120,
+      "seeks": 2,
+      "victim_hits": 0,
+      "resident_on_arrival": 0,
+      "runs_on_arrival": 0,
+      "pool_gb": 1.774
+     }
+    ],
+    "window": 120,
+    "ceiling_bytes": 2857006080
+   },
+   "unit": "see params",
+   "note": "the third leg is the result; the first two set it up",
+   "truncated": false,
+   "n": 0,
+   "samples_ms": []
+  },
+  {
+   "name": "exact-return-lru",
+   "params": {
+    "shape": "exact-return",
+    "policy": "lru",
+    "legs": [
+     {
+      "leg": 0,
+      "window": [
+       3768,
+       3888
+      ],
+      "covered": true,
+      "wall_s": 1.484,
+      "decodes": 120,
+      "seeks": 2,
+      "victim_hits": 0,
+      "resident_on_arrival": 0,
+      "runs_on_arrival": 0,
+      "pool_gb": 1.774
+     },
+     {
+      "leg": 1,
+      "window": [
+       4008,
+       4128
+      ],
+      "covered": true,
+      "wall_s": 1.582,
+      "decodes": 120,
+      "seeks": 2,
+      "victim_hits": 0,
+      "resident_on_arrival": 0,
+      "runs_on_arrival": 0,
+      "pool_gb": 2.661
+     },
+     {
+      "leg": 2,
+      "window": [
+       3768,
+       3888
+      ],
+      "covered": true,
+      "wall_s": 0.748,
+      "decodes": 60,
+      "seeks": 1,
+      "victim_hits": 0,
+      "resident_on_arrival": 60,
+      "runs_on_arrival": 1,
+      "pool_gb": 2.661
+     }
+    ],
+    "window": 120,
+    "ceiling_bytes": 2857006080
+   },
+   "unit": "see params",
+   "note": "the third leg is the result; the first two set it up",
+   "truncated": false,
+   "n": 0,
+   "samples_ms": []
+  },
+  {
+   "name": "exact-return-gdsize",
+   "params": {
+    "shape": "exact-return",
+    "policy": "gdsize",
+    "legs": [
+     {
+      "leg": 0,
+      "window": [
+       3768,
+       3888
+      ],
+      "covered": true,
+      "wall_s": 1.635,
+      "decodes": 120,
+      "seeks": 2,
+      "victim_hits": 0,
+      "resident_on_arrival": 0,
+      "runs_on_arrival": 0,
+      "pool_gb": 1.774
+     },
+     {
+      "leg": 1,
+      "window": [
+       4008,
+       4128
+      ],
+      "covered": true,
+      "wall_s": 1.558,
+      "decodes": 120,
+      "seeks": 2,
+      "victim_hits": 0,
+      "resident_on_arrival": 0,
+      "runs_on_arrival": 0,
+      "pool_gb": 2.661
+     },
+     {
+      "leg": 2,
+      "window": [
+       3768,
+       3888
+      ],
+      "covered": true,
+      "wall_s": 1.539,
+      "decodes": 60,
+      "seeks": 2,
+      "victim_hits": 0,
+      "resident_on_arrival": 60,
+      "runs_on_arrival": 37,
+      "pool_gb": 2.661
+     }
+    ],
+    "window": 120,
+    "ceiling_bytes": 2857006080
+   },
+   "unit": "see params",
+   "note": "the third leg is the result; the first two set it up",
+   "truncated": false,
+   "n": 0,
+   "samples_ms": []
+  },
+  {
+   "name": "exact-return-contiguous",
+   "params": {
+    "shape": "exact-return",
+    "policy": "contiguous",
+    "legs": [
+     {
+      "leg": 0,
+      "window": [
+       3768,
+       3888
+      ],
+      "covered": true,
+      "wall_s": 1.49,
+      "decodes": 120,
+      "seeks": 2,
+      "victim_hits": 0,
+      "resident_on_arrival": 0,
+      "runs_on_arrival": 0,
+      "pool_gb": 1.774
+     },
+     {
+      "leg": 1,
+      "window": [
+       4008,
+       4128
+      ],
+      "covered": true,
+      "wall_s": 1.557,
+      "decodes": 120,
+      "seeks": 2,
+      "victim_hits": 0,
+      "resident_on_arrival": 0,
+      "runs_on_arrival": 0,
+      "pool_gb": 2.661
+     },
+     {
+      "leg": 2,
+      "window": [
+       3768,
+       3888
+      ],
+      "covered": true,
+      "wall_s": 0.757,
+      "decodes": 60,
+      "seeks": 1,
+      "victim_hits": 0,
+      "resident_on_arrival": 60,
+      "runs_on_arrival": 1,
+      "pool_gb": 2.661
+     }
+    ],
+    "window": 120,
+    "ceiling_bytes": 2857006080
+   },
+   "unit": "see params",
+   "note": "the third leg is the result; the first two set it up",
+   "truncated": false,
+   "n": 0,
+   "samples_ms": []
+  },
+  {
+   "name": "exact-return-belady",
+   "params": {
+    "shape": "exact-return",
+    "policy": "belady",
+    "legs": [
+     {
+      "leg": 0,
+      "window": [
+       3768,
+       3888
+      ],
+      "covered": true,
+      "wall_s": 1.512,
+      "decodes": 120,
+      "seeks": 2,
+      "victim_hits": 0,
+      "resident_on_arrival": 0,
+      "runs_on_arrival": 0,
+      "pool_gb": 1.774
+     },
+     {
+      "leg": 1,
+      "window": [
+       4008,
+       4128
+      ],
+      "covered": true,
+      "wall_s": 1.621,
+      "decodes": 120,
+      "seeks": 2,
+      "victim_hits": 0,
+      "resident_on_arrival": 0,
+      "runs_on_arrival": 0,
+      "pool_gb": 2.661
+     },
+     {
+      "leg": 2,
+      "window": [
+       3768,
+       3888
+      ],
+      "covered": true,
+      "wall_s": 1.561,
+      "decodes": 60,
+      "seeks": 2,
+      "victim_hits": 0,
+      "resident_on_arrival": 60,
+      "runs_on_arrival": 29,
+      "pool_gb": 2.661
+     }
+    ],
+    "window": 120,
+    "ceiling_bytes": 2857006080
+   },
+   "unit": "see params",
+   "note": "the third leg is the result; the first two set it up",
+   "truncated": false,
+   "n": 0,
+   "samples_ms": []
+  },
+  {
+   "name": "offset-return-drop-all",
+   "params": {
+    "shape": "offset-return",
+    "policy": "drop-all",
+    "legs": [
+     {
+      "leg": 0,
+      "window": [
+       3768,
+       3888
+      ],
+      "covered": true,
+      "wall_s": 1.478,
+      "decodes": 120,
+      "seeks": 2,
+      "victim_hits": 0,
+      "resident_on_arrival": 0,
+      "runs_on_arrival": 0,
+      "pool_gb": 1.774
+     },
+     {
+      "leg": 1,
+      "window": [
+       4008,
+       4128
+      ],
+      "covered": true,
+      "wall_s": 1.524,
+      "decodes": 120,
+      "seeks": 2,
+      "victim_hits": 0,
+      "resident_on_arrival": 0,
+      "runs_on_arrival": 0,
+      "pool_gb": 1.774
+     },
+     {
+      "leg": 2,
+      "window": [
+       3828,
+       3948
+      ],
+      "covered": true,
+      "wall_s": 1.503,
+      "decodes": 120,
+      "seeks": 2,
+      "victim_hits": 0,
+      "resident_on_arrival": 0,
+      "runs_on_arrival": 0,
+      "pool_gb": 1.774
+     }
+    ],
+    "window": 120,
+    "ceiling_bytes": 2857006080
+   },
+   "unit": "see params",
+   "note": "the third leg is the result; the first two set it up",
+   "truncated": false,
+   "n": 0,
+   "samples_ms": []
+  },
+  {
+   "name": "offset-return-lru",
+   "params": {
+    "shape": "offset-return",
+    "policy": "lru",
+    "legs": [
+     {
+      "leg": 0,
+      "window": [
+       3768,
+       3888
+      ],
+      "covered": true,
+      "wall_s": 1.562,
+      "decodes": 120,
+      "seeks": 2,
+      "victim_hits": 0,
+      "resident_on_arrival": 0,
+      "runs_on_arrival": 0,
+      "pool_gb": 1.774
+     },
+     {
+      "leg": 1,
+      "window": [
+       4008,
+       4128
+      ],
+      "covered": true,
+      "wall_s": 1.58,
+      "decodes": 120,
+      "seeks": 2,
+      "victim_hits": 0,
+      "resident_on_arrival": 0,
+      "runs_on_arrival": 0,
+      "pool_gb": 2.661
+     },
+     {
+      "leg": 2,
+      "window": [
+       3828,
+       3948
+      ],
+      "covered": true,
+      "wall_s": 1.559,
+      "decodes": 120,
+      "seeks": 2,
+      "victim_hits": 0,
+      "resident_on_arrival": 0,
+      "runs_on_arrival": 0,
+      "pool_gb": 2.661
+     }
+    ],
+    "window": 120,
+    "ceiling_bytes": 2857006080
+   },
+   "unit": "see params",
+   "note": "the third leg is the result; the first two set it up",
+   "truncated": false,
+   "n": 0,
+   "samples_ms": []
+  },
+  {
+   "name": "offset-return-gdsize",
+   "params": {
+    "shape": "offset-return",
+    "policy": "gdsize",
+    "legs": [
+     {
+      "leg": 0,
+      "window": [
+       3768,
+       3888
+      ],
+      "covered": true,
+      "wall_s": 1.493,
+      "decodes": 120,
+      "seeks": 2,
+      "victim_hits": 0,
+      "resident_on_arrival": 0,
+      "runs_on_arrival": 0,
+      "pool_gb": 1.774
+     },
+     {
+      "leg": 1,
+      "window": [
+       4008,
+       4128
+      ],
+      "covered": true,
+      "wall_s": 1.59,
+      "decodes": 120,
+      "seeks": 2,
+      "victim_hits": 0,
+      "resident_on_arrival": 0,
+      "runs_on_arrival": 0,
+      "pool_gb": 2.661
+     },
+     {
+      "leg": 2,
+      "window": [
+       3828,
+       3948
+      ],
+      "covered": true,
+      "wall_s": 1.563,
+      "decodes": 90,
+      "seeks": 2,
+      "victim_hits": 0,
+      "resident_on_arrival": 30,
+      "runs_on_arrival": 17,
+      "pool_gb": 2.661
+     }
+    ],
+    "window": 120,
+    "ceiling_bytes": 2857006080
+   },
+   "unit": "see params",
+   "note": "the third leg is the result; the first two set it up",
+   "truncated": false,
+   "n": 0,
+   "samples_ms": []
+  },
+  {
+   "name": "offset-return-contiguous",
+   "params": {
+    "shape": "offset-return",
+    "policy": "contiguous",
+    "legs": [
+     {
+      "leg": 0,
+      "window": [
+       3768,
+       3888
+      ],
+      "covered": true,
+      "wall_s": 1.492,
+      "decodes": 120,
+      "seeks": 2,
+      "victim_hits": 0,
+      "resident_on_arrival": 0,
+      "runs_on_arrival": 0,
+      "pool_gb": 1.774
+     },
+     {
+      "leg": 1,
+      "window": [
+       4008,
+       4128
+      ],
+      "covered": true,
+      "wall_s": 1.587,
+      "decodes": 120,
+      "seeks": 2,
+      "victim_hits": 0,
+      "resident_on_arrival": 0,
+      "runs_on_arrival": 0,
+      "pool_gb": 2.661
+     },
+     {
+      "leg": 2,
+      "window": [
+       3828,
+       3948
+      ],
+      "covered": true,
+      "wall_s": 1.581,
+      "decodes": 120,
+      "seeks": 2,
+      "victim_hits": 0,
+      "resident_on_arrival": 0,
+      "runs_on_arrival": 0,
+      "pool_gb": 2.661
+     }
+    ],
+    "window": 120,
+    "ceiling_bytes": 2857006080
+   },
+   "unit": "see params",
+   "note": "the third leg is the result; the first two set it up",
+   "truncated": false,
+   "n": 0,
+   "samples_ms": []
+  },
+  {
+   "name": "offset-return-belady",
+   "params": {
+    "shape": "offset-return",
+    "policy": "belady",
+    "legs": [
+     {
+      "leg": 0,
+      "window": [
+       3768,
+       3888
+      ],
+      "covered": true,
+      "wall_s": 1.493,
+      "decodes": 120,
+      "seeks": 2,
+      "victim_hits": 0,
+      "resident_on_arrival": 0,
+      "runs_on_arrival": 0,
+      "pool_gb": 1.774
+     },
+     {
+      "leg": 1,
+      "window": [
+       4008,
+       4128
+      ],
+      "covered": true,
+      "wall_s": 1.653,
+      "decodes": 120,
+      "seeks": 2,
+      "victim_hits": 0,
+      "resident_on_arrival": 0,
+      "runs_on_arrival": 0,
+      "pool_gb": 2.661
+     },
+     {
+      "leg": 2,
+      "window": [
+       3828,
+       3948
+      ],
+      "covered": true,
+      "wall_s": 0.906,
+      "decodes": 60,
+      "seeks": 1,
+      "victim_hits": 0,
+      "resident_on_arrival": 60,
+      "runs_on_arrival": 1,
+      "pool_gb": 2.661
+     }
+    ],
+    "window": 120,
+    "ceiling_bytes": 2857006080
+   },
+   "unit": "see params",
+   "note": "the third leg is the result; the first two set it up",
+   "truncated": false,
+   "n": 0,
+   "samples_ms": []
+  }
+ ]
+}

@@ -79,19 +79,20 @@ key unconditionally, so unreferenced meant deleted, and a 16 MB frame that
 cost a 300 ms seek and was about to be scrubbed back onto went on the same
 terms as one that cost a 10 ms step and would never be asked for again.
 
-Unreferenced entries are now a **victim cache** (prior art: Jouppi 1990)
-ranked by **GreedyDual-Size** (prior art: Cao & Irani 1997), which is the
-policy for items differing in *both* cost and size — the case SIEVE is in and
-the case LRU is not built for, since LRU ranks by recency alone and would
-treat a seek and a step as equals. Each key carries
+Unreferenced entries are now a **victim cache** (prior art: Jouppi 1990), and
+**which of them to drop is a policy this file does not choose.**
+`replacement.py` holds the rules and says why the obvious one is not obviously
+right: GreedyDual-Size is the textbook answer for items differing in cost and
+size, and SIEVE violates its independence assumption (a frame costs a step if
+its neighbour is resident and a seek if not), its online assumption (ADR-0006
+says a declaration is a fetch plan, so the future is partly known), and its
+random-access assumption (a scrub over a window slightly larger than the pool
+is sequential flooding). So the pool takes a `Replacement`, five are written,
+and an oracle among them says how much is available to win before any of the
+implementable ones is argued about.
 
-    H = L + cost / size
-
-Eviction takes the minimum `H` and raises the aging clock `L` to the `H` it
-just evicted, so age falls out of the arithmetic and no timestamps are needed;
-a hit re-computes `H` against the current `L`, which is what lifts a
-frequently-served key away from the floor. Both inputs already existed and
-were being thrown away: `Envelope` records what a decode cost and by which
+What this file supplies is the two inputs every policy needs and V1 was
+throwing away: `Envelope` records what a key cost to produce and by which
 route, and `_bytes` already tracks size.
 
 **The ceiling becomes load-bearing.** `2026.08.30-derived-eviction-reproduces-
@@ -99,12 +100,6 @@ the-fixed-window` records that the byte ceiling never fired in any V1 run,
 because everything unreferenced was already gone before the budget could
 matter. Retaining victims is what puts the pool against its ceiling, so the
 number stops being a backstop and starts being the size of the victim cache.
-
-**A scalar is never evicted, and that is the arithmetic rather than a rule.**
-`_nbytes` answers 0 for a payload that is not an ndarray, so `cost/size`
-against a size floor of one byte is enormous and a value sits at the top of
-the order forever. It costs nothing to keep and something to recompute, which
-is the answer GreedyDual-Size gives without being told.
 
 **No scan resistance, deliberately.** The sweep is a sequential scan over a
 whole window, which under a naive policy would flush an interactive
@@ -124,15 +119,21 @@ from typing import Any
 import numpy as np
 
 from graph import Graph
+from replacement import DropAll, Replacement
 
 
 class Pool:
     """Graph-managed frame storage. Frames live until the graph says
     nobody needs them, or until the byte ceiling forces a sweep."""
 
-    def __init__(self, graph: Graph, budget_bytes: int = 10 << 30) -> None:
+    def __init__(self, graph: Graph, budget_bytes: int = 10 << 30,
+                 policy: "Replacement | None" = None) -> None:
         self.graph = graph
         self.budget_bytes = budget_bytes
+        #: how victims are chosen among the unpinned. `DropAll` is V1's
+        #: behaviour and is the default only because it is the one every
+        #: number in this folder was taken against; an experiment picks.
+        self.policy = policy if policy is not None else DropAll()
         self._frames: dict[tuple[int, str], Any] = {}
         #: which node's decode put each frame here — the other half of a
         #: shared serve, and the only reason the pool knows what to count
@@ -162,15 +163,6 @@ class Pool:
         self.predicted = 0          #: ...under a plan that never changed
         self.refetch_gaps_ms: list[float] = []
 
-        # ── replacement policy: GreedyDual-Size over unpinned keys ──────
-        #: what each key cost to produce, in ms. The numerator of `H`.
-        self._cost: dict[tuple[int, str], float] = {}
-        #: each key's current `H`. Recomputed on a serve, which is the hit.
-        self._h: dict[tuple[int, str], float] = {}
-        #: the aging clock. Monotone non-decreasing: set to the `H` of every
-        #: key evicted, so a key admitted later starts above everything the
-        #: pool has already discarded and age needs no timestamp.
-        self._l = 0.0
         #: serves from a key nothing had declared — a refetch that did not
         #: happen. The direct measure of what the victim cache buys, and more
         #: immediate than watching `refetched_predicted` fail to rise.
@@ -206,7 +198,7 @@ class Pool:
             frame = self._frames.get(key)
             if frame is None:
                 return None
-            self._refresh_h(key)
+            self.policy.hit(key)
             pinned = self.graph.is_held(key)
             if not pinned:
                 #: nothing declares this and it was served anyway — under V1's
@@ -267,9 +259,7 @@ class Pool:
                     self.predicted += 1
             self._frames[key] = frame
             self._by[key] = by
-            self._cost[key] = (DEFAULT_COST_MS if cost_ms is None
-                               else float(cost_ms))
-            self._refresh_h(key)
+            self.policy.admit(key, cost_ms, _nbytes(frame))
             self._bytes += _nbytes(frame)
             self.puts += 1
             if self._bytes > self.budget_bytes:
@@ -278,24 +268,12 @@ class Pool:
 
     # ── evict ────────────────────────────────────────────────────────────
 
-    def _refresh_h(self, key: tuple[int, str]) -> None:
-        """`H = L + cost/size`. Called on admission and on every serve.
-
-        The size floor of one byte is what keeps a scalar — `_nbytes` says 0 —
-        from dividing by zero, and incidentally gives it an `H` nothing will
-        ever undercut. That is the right answer for a payload that costs
-        something to make and nothing to keep.
-        """
-        size = max(1, _nbytes(self._frames.get(key)))
-        self._h[key] = self._l + self._cost.get(key, DEFAULT_COST_MS) / size
-
     def _forget_locked(self, key: tuple[int, str], now: float) -> None:
         frame = self._frames.pop(key, None)
         if frame is not None:
             self._bytes -= _nbytes(frame)
         self._by.pop(key, None)
-        self._cost.pop(key, None)
-        self._h.pop(key, None)
+        self.policy.forget(key)
         who = self.graph.dropped_under(key)
         if who is not None:
             self._dropped[key] = (now, who[0], who[1])
@@ -307,13 +285,10 @@ class Pool:
         Pinned keys are never candidates, whatever their `H`: the refcount is
         correctness and this is policy, and policy does not get to overrule it.
 
-        A linear scan of the candidates per eviction, not a heap. `H` changes
-        on every serve, so a heap needs lazy invalidation, and the bugs that
-        arrangement produces are silent ones about which key was really the
-        minimum. This runs only when the pool is over its ceiling, over a
-        candidate set numbering hundreds; if it ever shows up in a profile the
-        heap is the fix and this comment is the reason it was not the first
-        one.
+        A policy is asked for one victim at a time rather than for an order.
+        Every rule here except LRU depends on what is still resident — the
+        contiguity one explicitly, GreedyDual-Size through its aging clock —
+        so an order computed once would be stale by its second entry.
         """
         candidates = self.graph.evictable(set(self._frames.keys()))
         now = time.perf_counter()
@@ -325,12 +300,10 @@ class Pool:
         else:
             remaining = set(candidates)
             while remaining and self._bytes > self.budget_bytes:
-                victim = min(remaining, key=lambda k: self._h.get(k, 0.0))
+                victim = self.policy.victim(remaining, self._frames.keys())
+                if victim is None:
+                    break
                 remaining.discard(victim)
-                #: L rises to what was evicted, so nothing admitted later
-                #: starts below the floor the pool has already cleared. This
-                #: is what makes the policy age without timestamps.
-                self._l = max(self._l, self._h.get(victim, self._l))
                 self._forget_locked(victim, now)
                 dropped += 1
         if dropped:
@@ -412,7 +385,7 @@ class Pool:
                 #: serves from a key nothing had declared: refetches that did
                 #: not happen, which is what the replacement policy buys
                 "victim_hits": self.victim_hits,
-                "aging_clock_L": round(self._l, 6),
+                "policy": self.policy.name,
                 "refetched": self.refetched,
                 #: the number ADR-0006 calls the one that makes the
                 #: arrangement falsifiable. Target zero. `refetched` alone
@@ -433,9 +406,6 @@ class Pool:
             self._by.clear()
             self._counted.clear()
             self._dropped.clear()
-            self._cost.clear()
-            self._h.clear()
-            self._l = 0.0
             self._bytes = 0
 
 

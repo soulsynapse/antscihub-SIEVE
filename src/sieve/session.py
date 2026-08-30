@@ -10,8 +10,6 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-import numpy as np
-
 from sieve.chunks import ChunkStore
 from sieve.contract import Tool
 from sieve.contract.edges import Access
@@ -20,7 +18,7 @@ from sieve.fill import Readers, WindowFill, WriteBehind, window_for
 from sieve.ordinals import Ordinals
 from sieve.pipeline import Binding, Bound, Chain, Node, bind
 from sieve.proxy import Proxy, proxy_form
-from sieve.series import Series
+from sieve.series import Series, Sinks
 from sieve.serve import Route, Served, Serving
 from sieve.store import Store, opened
 
@@ -60,6 +58,10 @@ class Session:
         self.at: int | None = None
         self.steps: tuple[Tool, ...] = ()
         self.bound: Bound | None = None
+        #: every series written this session, under its own key. Outlives
+        #: the binding on purpose: a knob moved and moved back names the
+        #: key it named before, and finds the rows it already covered.
+        self.sinks = Sinks()
         #: which node's field the canvas is drawing. One at a time; the chain
         #: binds every step whether or not anything is looking at it.
         self.showing: str | None = None
@@ -216,6 +218,7 @@ class Session:
         self.showing = None
         self.unbound = ()
         self.ceiling = 0.0
+        self.sinks.wipe()
         if self.store is not None:
             self.store.close()
             self.store = None
@@ -363,6 +366,10 @@ class Session:
         self.bound = None
         self.showing = None
         self.unbound = ()
+        # The binding that held these is gone. They stay under their keys:
+        # what is being rebuilt is usually the same chain at a new knob,
+        # and the old knob is a place this comes back to.
+        self.sinks.release()
         if self.store is None or not self.steps:
             return
         head = self.store.output
@@ -412,17 +419,21 @@ class Session:
 
     def _sink_for(self, node: str, key: str, form: Form,
                   listed: tuple[int, ...], timebase: str) -> Series:
-        """Where one node's values are kept. Empty until something writes.
+        """Where one node's values are kept, whoever wrote them.
 
-        Nothing does yet: a value is recorded where its inputs landed
+        Out of the session's collection and not built here, so a node
+        rebound under a key it has had before is handed the rows it
+        already covered rather than an empty array.
+
+        Nothing writes yet: a value is recorded where its inputs landed
         (ADR-0005) and the fill does not run steps, so every row reads back
         `LATER` and the overlay keeps computing its field on the way past
         without recording anything. That is the honest state, not an
         oversight — the recorder is its own piece of work.
         """
-        return Series(source=self.address or "", step_key=key,
-                      form_key=form.key(), timebase=timebase,
-                      pts=np.asarray(listed, dtype=np.int64))
+        return self.sinks.series(source=self.address or "", step_key=key,
+                                 form_key=form.key(), listed=listed,
+                                 timebase=timebase)
 
     def set_ceiling(self, value: float) -> None:
         """Move the overlay's scale top deliberately. 0 re-takes it."""

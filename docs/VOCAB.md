@@ -2,46 +2,38 @@
 
 # VOCAB — what the words mean
 
-Derived: each line is its term's `gloss`, so that file is the home and this
-index cannot drift from it. A gloss is capped and names no code, which keeps
-this page scannable and keeps a rename out of it; `checks/vocab.py` holds it
-there. The shelf a term sits on is `group` and its order along that shelf is
-`position`, both placement only — a term that drops its group leaves this index
-while keeping its file. A term the tree has not agreed on is listed apart,
-below.
+Derived: each line is its term's `gloss`, which is the whole entry — the file
+is its frontmatter, so this page is the vocabulary and not a summary of one.
+Definitions only: where a word lives is what grep is for. A word the tree uses
+two ways is two entries, qualified like a dictionary's homonyms, which records
+the collision without anybody having to settle it. The shelf a term sits on is
+`group` and its order along that shelf is `position`, both placement only.
 
 - 📁 `Layer 1`
-  - 📄 [window](vocab/window.md) — The application — the one top-level frame, holding a menu bar, the panes, and the boundaries between them. There is exactly one, and nothing else divides into panes.
-  - 📄 [pane](vocab/pane.md) — A compartment the window divides into — a region with a boundary, a size policy and a name, holding whatever is put in it. The space, never its occupant.
-  - 📄 [subpane](vocab/subpane.md) — A smaller pane anchored to a side inside a main pane. A pane in every other respect — it is the anchoring, not a different kind of space, that the word records.
+  - 📄 [window](vocab/window.md) — The application — the one top-level frame, holding a menu bar, the panes, and the boundaries between them.
+  - 📄 [pane](vocab/pane.md) — A compartment the window divides into: a region with a boundary, a size policy and a name. The space, never its occupant.
+  - 📄 [subpane](vocab/subpane.md) — A smaller pane anchored to a side inside a main pane.
   - 📄 [view](vocab/view.md) — Anything a pane can house — the occupant, not the space. One folder each.
-  - 📄 [menu](vocab/menu.md) — The drop menu at the top of the window — the bar, and what the window itself can be asked to do.
-  - 📄 [swipe](vocab/swipe.md) — A run of views laid side by side in one pane, one in front at a time, reached by sliding the run rather than by replacing what the pane holds. A swipe is itself a view.
+  - 📄 [menu](vocab/menu.md) — The bar across the top of the window, and what the window itself can be asked to do.
+  - 📄 [swipe](vocab/swipe.md) — A run of views laid side by side in one pane, one in front at a time, reached by sliding the run rather than by replacing what the pane holds.
+  - 📄 [surface (rendering)](vocab/surface-rendering.md) — A rendering path — painter primitives against a rasteriser. The live surface and the report surface are different code.
+  - 📄 [surface (fill)](vocab/surface-fill.md) — The filled region a colour applies to: the design-token sense every widget kit has.
+  - 📄 [surface (occupant)](vocab/surface-occupant.md) — A pane's occupant. Retired — view is the word — and still in use.
+  - 📄 [edge (border)](vocab/edge-border.md) — A rectangle's side, or the colour drawn along it. Also the long edge a proxy form is bounded to.
+  - 📄 [edge (pipeline)](vocab/edge-pipeline.md) — An arrow drawn between chain cards, from their order in the list rather than from any binding.
+  - 📄 [node (pipeline)](vocab/node-pipeline.md) — A slot in a chain with a durable id, keeping its identity when the tool standing in it is swapped.
+  - 📄 [field (widget)](vocab/field-widget.md) — A text box.
 - 📁 `Substrate`
-  - 📄 [tier](vocab/tier.md) — A place a frame can be answered from — one of an ordered stack, cheapest first, over one open recording. Ranked by what an answer costs, never by what it is worth.
-  - 📄 [form](vocab/form.md) — What a frame is, apart from which instant it is — which source pixels, at what sampling, in what format. All three at once, never one of them.
+  - 📄 [tier](vocab/tier.md) — A place a frame can be answered from — one of an ordered stack, cheapest first, over one open recording. Ranked by what an answer costs, not by what it is worth.
+  - 📄 [form](vocab/form.md) — What a frame is, apart from which instant it is — which source pixels, at what sampling, in what format, all three at once. Pixels only: a value edge declares a dtype instead.
   - 📄 [position](vocab/position.md) — Which instant a frame is, apart from what it is — the source's own presentation timestamp, integer ticks in the stream's timebase. A name, never a count.
-  - 📄 [ordinal](vocab/ordinal.md) — What row a listed position is, inside one store's snapshot of one listing. A coordinate, valid only beside the table that produced it, and never a frame's identity.
-  - 📄 [refusal](vocab/refusal.md) — A no with a kind on it — what a producer answers with instead of a frame, drawn from a closed set of three: permanently gone, wrong shape, or not to this caller now.
-  - 📄 [binding](vocab/binding.md) — The join between an edge one node wants and an edge another offers, made by name and not by wire — and where every fact a producer could not honestly state about itself gets worked out.
-  - 📄 [step](vocab/step.md) — The role a tool fills to process frames — an arithmetic over a fixed set of listed positions, run once per position, producing an image-sized field and the scalar it reduces to.
+  - 📄 [ordinal](vocab/ordinal.md) — What row a listed position is, inside one snapshot of one listing. A coordinate, valid only beside the table that produced it.
+  - 📄 [refusal](vocab/refusal.md) — A no with a kind on it — gone, wrong form, or not now — from a closed set of three. Only gone is a hole.
+  - 📄 [edge (contract)](vocab/edge-contract.md) — A named thing a node offers or wants, of a closed kind: a frame, a mask, or a value. SIEVE's alone to extend.
+  - 📄 [node (contract)](vocab/node-contract.md) — A role a tool fills, and you are one because you offer an edge: a source has no inputs, a step has frame inputs.
+  - 📄 [node (orchestrator)](vocab/node-orchestrator.md) — Anything that declares a need on the store — a tool, the series writer, the proxy builder, the GUI — which is a wider net than the contract's.
+  - 📄 [binding](vocab/binding.md) — The join between an edge one node wants and an edge another offers, made by name. Where the facts a producer cannot state about itself — timebase, extent, access — are derived.
+  - 📄 [step](vocab/step.md) — The role a tool fills to process frames: an arithmetic over listed positions, run once per position, producing an image-sized field and the scalar it reduces to.
+  - 📄 [field (step)](vocab/field-step.md) — A step's image-sized result — one number per pixel, float32, computed where it is drawn and discarded there.
 
-*13 defined.*
-
-## Unsettled
-
-A term is here because the tree does not agree on it yet: several live senses
-at once, or a definition the code has walked away from. Listed rather than
-left out, because the disagreement is what is being raised and a word nobody
-wrote down is a word nobody argues with. `status: unsettled` in the
-frontmatter is what puts a term here; deleting that line is what settles
-it.
-
-- 📁 `Layer 1`
-  - 📄 [surface](vocab/surface.md) — Four live senses, and a fifth the vocabulary says is retired. A rendering path, a pane's occupant, whatever is on screen now, and a filled region a colour applies to.
-- 📁 `Substrate`
-  - 📄 [edge](vocab/edge.md) — Three live senses. A named thing a node offers or wants, of a closed kind; an arrow the pipeline view draws between cards from list order; and the border of a rectangle.
-  - 📄 [node](vocab/node.md) — Two live senses about the same running system that disagree about who counts — a role a tool fills because it offers an edge, and anything that declares a need on the store.
-  - 📄 [field](vocab/field.md) — Three live senses, two of them in one directory. A step's image-sized result, one number per pixel; a text box; and a record's attribute, which is Python's own word.
-
-*4 contested.*
+*24 defined.*

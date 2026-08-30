@@ -15,11 +15,10 @@ If you're being asked to build something for the main products, there is almost 
   docstring line). Hooks live in `.githooks/`; a fresh clone enables them with
   `git config core.hooksPath .githooks`. `SIEVE_SKIP_SCAFFOLD=1` skips the
   hook. `docs/solutions/INDEX.md` is generated the same way.
-- A vocab entry names a part of SIEVE; it does not argue for the name. Copy
-  `docs/vocab/_TEMPLATE.md`: a capped `gloss` that VOCAB.md quotes, a
-  definition that names no code, one `## Where it lives` that does.
-  `checks/vocab.py` enforces it from the pre-commit hook, so a rename fails
-  there instead of leaving a definition quietly false.
+- A vocab entry is its frontmatter: a `gloss` of 40 words or fewer that
+  VOCAB.md quotes, naming no code. Definitions, never arguments — one sense per
+  entry, a homonym qualified like `node (contract)`. Copy
+  `docs/vocab/_TEMPLATE.md`; `checks/vocab.py` runs from the pre-commit hook.
 - Before building a mechanism, scan `docs/solutions/INDEX.md` — if the want
   is listed, the repo already has an answer. A solution enters when something
   was reinvented; editing the source file in `docs/solutions/` regenerates

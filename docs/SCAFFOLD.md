@@ -20,6 +20,8 @@
   - 📄 `VOCAB.md`
   - 📄 `architecture-leads.md`
   - 📄 `kendricks-understanding.md`
+  - 📄 `related-software.md`
+  - 📄 `todo.md`
   - 📄 `vision-and-notes.md`
 - 📁 `experiments/`
   - 📁 `chain-experiments/`

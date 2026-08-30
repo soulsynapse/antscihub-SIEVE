@@ -12,7 +12,7 @@
   - 📁 `adr/` (10 files)
   - 📁 `decode/`
     - 📄 `ideas.md`
-  - 📁 `findings/` (17 files)
+  - 📁 `findings/` (19 files)
   - 📁 `solutions/` (14 files)
   - 📁 `vocab/` (38 files)
   - 📄 `ADR.md`
@@ -45,13 +45,14 @@
     - 📄 `explorer.py` — Feel the decode approaches by hand: scrub, play, step and sweep each backend.
     - 📄 `harness.py` — What every decode experiment needs and none of them should decide twice.
   - 📁 `orchestrator-experiments/`
-    - 📁 `explorer-logs/` (25 files)
-    - 📁 `results/` (14 files)
+    - 📁 `explorer-logs/` (48 files)
+    - 📁 `results/` (15 files)
     - 📄 `01-unified-declaration.py` — Can one declaration contract schedule the GUI, two tools and a series writer?
     - 📄 `02-derived-eviction.py` — Does eviction derived from declarations hold fewer frames than a fixed window?
     - 📄 `03-non-frame-nodes.py` — Can a series writer release frames the graph tracks, without leaking?
     - 📄 `04-instrumentation.py` — Is the timing envelope cheap enough to leave on in the interactive loop?
     - 📄 `07-form-negotiation.py` — Two steps want two forms of one instant. Does the graph decode once?
+    - 📄 `08-decode-budget.py` — What a filled window's wall is made of, term by term.
     - 📄 `README.md`
     - 📄 `explorer.py` — Feel the orchestrator: one dispatcher, ranked by pressure, sharing every decode.
     - 📄 `fetch.py` — One open container, absolute frame indices, and how it got there.

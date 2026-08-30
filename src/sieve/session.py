@@ -338,10 +338,15 @@ class Session:
             if needed_ord < 0 or needed_ord >= len(listed):
                 return None
             needed_pos = listed[needed_ord]
-            held = self.store.frames.get(needed_pos, want)
-            if held is None:
+            # Through the tiers, not into the cache. The fill holds the whole
+            # frame in colour at source sampling and a step wants gray, so an
+            # exact key lookup misses every time and `dominator` will not
+            # cross a pixel format — whole-frame the answer is the proxy,
+            # which is already gray at this very form.
+            served = self.serving.exact(needed_pos, want)
+            if served.frame is None:
                 return None
-            frames[needed_ord] = held
+            frames[needed_ord] = served.frame
         # Not guarded. A step that raises is a broken tool, and swallowing it
         # here makes it indistinguishable from a frame that is not cached yet
         # — the overlay simply never appears and nothing says why.

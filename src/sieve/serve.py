@@ -183,7 +183,31 @@ class Serving:
         #: it is the only tier there is.
         self.proxy: Proxy | None = None
 
-    # -- the two callers ---------------------------------------------------
+    # -- the three callers -------------------------------------------------
+
+    def exact(self, position: int, form: Form) -> Served:
+        """This position or nothing. Never blocks, never reaches the source.
+
+        `guess`'s tiers minus the nearest one. A drag may show a neighbour
+        because a picture that is one frame stale still tracks the hand; a
+        step may not, because it is told which positions it needs and a
+        neighbour substituted for one of them is a different measurement
+        reported under the asked-for position's name. Silent, and wrong in
+        the direction that looks like a working overlay.
+
+        The chunk tier is out for the other reason: it reads and decodes,
+        and this is called from the thread that draws.
+        """
+        held = self.store.frames.get(position, form)
+        if held is not None:
+            return Served(held, Route.HELD)
+        made = self._derived(position, form)
+        if made is not None:
+            return Served(made, Route.DERIVED)
+        low = self._lo(position, form)
+        if low is not None:
+            return Served(low, Route.LO)
+        return Served(None, Route.HOLD)
 
     def guess(self, position: int, form: Form) -> Served:
         """A drag. Never blocks, and never reaches the source.

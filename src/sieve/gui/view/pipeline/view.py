@@ -71,6 +71,9 @@ class Pipeline(CardStack):
             facts = Facts([
                 Fact("offsets", " ".join(str(o) for o in role.offsets)),
                 Fact("reach", str(role.reach)),
+                # what the next card in the chain would be binding to
+                Fact("offers", ", ".join(
+                    f"{p.name} ({p.kind})" for p in role.produces)),
             ])
             card.add_row(facts)
             card.set_meter(0.0)

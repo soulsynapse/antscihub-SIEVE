@@ -27,6 +27,7 @@ dev = [
 # still opens.
 tools = [
     "av>=13",
+    "opencv-python-headless>=4.10",
 ]
 # What the experiments compare, which is not what SIEVE runs on. The point
 # stands even though `av` is now a runtime dependency: SIEVE picked a codec for

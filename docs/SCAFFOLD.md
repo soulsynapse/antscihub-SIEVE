@@ -166,6 +166,7 @@
     - 📄 `surfaces.py` — Drawing a step's output at display resolution.
 - 📁 `tools/`
   - 📄 `image_directory_source.py` — The image directory source: frames as separate files in a folder, in name order.
+  - 📄 `lk_flow.py` — Lucas-Kanade optical flow: sparse feature tracking between consecutive frames.
   - 📄 `synthetic_source.py` — The synthetic source: frames from arithmetic, shaped by whatever is being tested.
   - 📄 `video_file_source.py` — The video file source: frames off a container on disk, decoded with PyAV.
 - 📄 `.gitattributes`

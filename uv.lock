@@ -624,6 +624,7 @@ experiments = [
 ]
 tools = [
     { name = "av" },
+    { name = "opencv-python-headless" },
 ]
 
 [package.metadata]
@@ -641,7 +642,10 @@ experiments = [
     { name = "numpy", specifier = ">=2" },
     { name = "opencv-python-headless", specifier = ">=4.10" },
 ]
-tools = [{ name = "av", specifier = ">=13" }]
+tools = [
+    { name = "av", specifier = ">=13" },
+    { name = "opencv-python-headless", specifier = ">=4.10" },
+]
 
 [[package]]
 name = "six"

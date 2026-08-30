@@ -84,6 +84,7 @@ from collections import deque
 from datetime import datetime, timezone
 from fractions import Fraction
 from pathlib import Path
+from typing import Callable
 
 import av
 import cv2
@@ -151,6 +152,35 @@ POOL_BUDGET = 12 << 30   #: 12 GB — a 480-frame full-frame window is ~7.6 GB
 #: INTERACTIVE while the window fills.
 LIVE_PLAYHEAD = "--live-playhead" in sys.argv
 
+#: Three preemption policies, all off by default so a run with no flag
+#: reproduces the logs the 2026.08.30 dispatcher finding was read off.
+#: That finding fitted `wall = 480 sequential reads + 0.31 s x seeks` and
+#: named two rules it did not implement; these are those two and a third
+#: the trace implies. Each is independent, and they compose.
+#:
+#: `--abandon-within N`: an INTERACTIVE need the running sequential producer
+#: will reach within N positions does not get preempted for. The finding's
+#: first rule. N <= STEP_WITHIN is a no-op by construction, because inside
+#: that distance the fetcher steps rather than seeks and the pick was never
+#: a seek to refuse; the sweep is over values above it.
+ABANDON_WITHIN = int(_argf("--abandon-within", 0))
+
+#: `--gui-cursor`: INTERACTIVE picks are served from a second open
+#: container, so the sequential run's cursor is never moved by an
+#: interruption. The finding's fallback rule -- "a cursor the interruption
+#: does not destroy" -- and README question 5's rewritten form, since it is
+#: the graph assigning a second reader from what the nodes declared.
+#: Priced against `07-contention`: a second decoder is not free.
+GUI_CURSOR = "--gui-cursor" in sys.argv
+
+#: `--keep-passed`: every frame the fetcher decodes while stepping toward a
+#: target is put in the pool instead of discarded. Not named by the
+#: finding, which read the return seek as the price of moving the cursor;
+#: it is also the price of throwing away what moving it decoded. A step of
+#: 40 to serve the GUI passes 39 positions the sweep had declared and then
+#: seeks back for them.
+KEEP_PASSED = "--keep-passed" in sys.argv
+
 TASK_MARKERS = ("hunt", "drag", "scrub", "play", "step", "hop", "open")
 
 
@@ -196,13 +226,36 @@ class Fetcher:
         self._pos: int | None = None
         self._decoded = None
 
-    def exact(self, idx: int) -> tuple[np.ndarray, str]:
+    @property
+    def cursor(self) -> int | None:
+        """Where the sequential run has got to, or None if there is no run.
+
+        Read by the dispatcher, which owns the only policy that can decline
+        to move it. The fetcher itself has no opinion about whether being
+        moved is a good idea -- it reports the route and lets the caller be
+        billed for it.
+        """
+        return self._pos if self._decoded is not None else None
+
+    def exact(self, idx: int,
+              deposit: Callable[[int, np.ndarray], None] | None = None
+              ) -> tuple[np.ndarray, str]:
+        """Decode `idx`, stepping if it is close enough ahead.
+
+        `deposit` is offered every position passed on the way. Discarding
+        them is the default because it is what the committed logs were
+        taken under, not because it is right: a step of 40 decodes 40
+        frames and returns one, and the 39 are exactly the positions the
+        run being interrupted had declared.
+        """
         if self._decoded is not None and self._pos is not None:
             ahead = idx - self._pos
             if 0 < ahead <= STEP_WITHIN:
                 try:
-                    for _ in range(ahead):
+                    for k in range(ahead):
                         frame = next(self._decoded)
+                        if deposit is not None and k < ahead - 1:
+                            deposit(self._pos + k + 1, _luma(frame))
                     self._pos = idx
                     return _luma(frame), "step"
                 except StopIteration:
@@ -254,6 +307,16 @@ class Dispatcher:
         #: The price of preempting per-frame for a consumer whose position
         #: changes faster than a seek — a scrub declares dozens of these.
         self.stale = 0
+        #: positions decoded on the way to somewhere else and kept
+        #: (`--keep-passed`). Counted apart from `served` because they are
+        #: not a serve to anyone: nothing asked the dispatcher for them at
+        #: the moment they were produced, and folding them into the decode
+        #: count would flatter the shared-serve ratio the pool reports.
+        self.passed_kept = 0
+        #: picks the run was not abandoned for (`--abandon-within`). The
+        #: seek pair that did not happen, counted where it was refused
+        #: rather than inferred from the seeks that remain.
+        self.refused = 0
         self.by_pressure: dict[str, int] = {}
         #: every choice in order — role, position, how, cost, and how much
         #: of the window was covered when it was made. The counts say what
@@ -277,20 +340,95 @@ class Dispatcher:
     def running(self) -> bool:
         return self._thread is not None and self._thread.is_alive()
 
-    def _pick(self) -> tuple[Need, int] | None:
-        for need in self.graph.pressure_queue():
-            if need.form_key != self.form_key:
-                continue
+    def _deposit(self, position: int, arr: np.ndarray) -> None:
+        """Keep a position the fetcher passed on its way somewhere else.
+
+        Attributed to the run that was interrupted, not to the node the
+        step was for: the sweep is who declared these and who would
+        otherwise pay a seek to come back for them. Billing them to the
+        GUI would make the pool report the GUI as a producer for the
+        window, which is the attribution error the dispatch envelope
+        comment already warns about one level up.
+        """
+        if self.pool.has(position, self.form_key):
+            return
+        self.pool.put(position, self.form_key, arr, by="fill")
+        self.passed_kept += 1
+
+    def _pick(self, cursor: int | None = None) -> tuple[Need, int] | None:
+        """The highest-pressure need with an unserved position.
+
+        `cursor` is where the sequential run has got to. Under
+        `ABANDON_WITHIN` it is what lets a pick be refused: `pressure_queue`
+        derives rank from declarations alone and cannot see it, and the
+        thing being traded away -- the locality of a run in progress -- is
+        not a property of any declaration. That is why this check is here
+        and not in the graph.
+        """
+        queue = [n for n in self.graph.pressure_queue()
+                 if n.form_key == self.form_key]
+        if ABANDON_WITHIN and cursor is not None:
+            wider = self._reachable_soon(queue, cursor)
+            if wider:
+                kept = [n for n in queue
+                        if not self._yields_to_run(n, cursor, wider)]
+                if kept and len(kept) < len(queue):
+                    self.refused += len(queue) - len(kept)
+                queue = kept or queue
+        for need in queue:
             unserved = need.unserved(self.pool.has)
             if unserved:
                 return need, unserved[0]
         return None
 
+    def _reachable_soon(self, queue: list[Need], cursor: int) -> set[int]:
+        """Positions the running sequential producer will reach within
+        `ABANDON_WITHIN`, if it is left alone.
+
+        The producer is whichever declaration the cursor is currently
+        inside -- derived, the way the rank is, rather than declared. A
+        node saying "I am the sweep" would be the falsified move again.
+        """
+        soon: set[int] = set()
+        for need in queue:
+            positions = need.needed_positions()
+            if not positions:
+                continue
+            lo, hi = min(positions), max(positions)
+            if not lo <= cursor <= hi:
+                continue
+            if need.span <= 1:
+                continue
+            soon |= {p for p in positions
+                     if cursor < p <= cursor + ABANDON_WITHIN}
+        return soon
+
+    def _yields_to_run(self, need: Need, cursor: int,
+                       soon: set[int]) -> bool:
+        """Is every position this need still wants one the run is about to
+        hand it anyway? Only then is refusing it free of starvation: a need
+        with one unserved position outside `soon` is not deferred, it is
+        served, because nothing else was going to produce that position.
+        """
+        unserved = need.unserved(self.pool.has)
+        if not unserved:
+            return False
+        if need.span > 1:
+            return False
+        return all(p in soon for p in unserved)
+
     def _run(self) -> None:
         fetcher = Fetcher()
+        #: a second open container for INTERACTIVE picks. Two readers on
+        #: one address cost nothing measurable (`nodes.py`, `fill.py`), and
+        #: what it buys is that the sweep's cursor is never moved by an
+        #: interruption -- the return seek stops existing rather than being
+        #: avoided. What it costs is decoder contention, which
+        #: `07-contention` says is real.
+        gui_fetcher = Fetcher() if GUI_CURSOR else None
         try:
             while not self._stop.is_set():
-                pick = self._pick()
+                pick = self._pick(fetcher.cursor)
                 if pick is None:
                     self.idle_polls += 1
                     self.last = "idle"
@@ -305,8 +443,14 @@ class Dispatcher:
                 #: work done for it, or they are not the five clocks.
                 env = Envelope(f"dispatch:{_role(need.node_id)}", idx,
                                need.form_key, "dispatch").open()
+                interactive = need.urgency is Urgency.INTERACTIVE
+                reader = (gui_fetcher if gui_fetcher is not None and interactive
+                          else fetcher)
+                deposit = None
+                if KEEP_PASSED and reader is fetcher:
+                    deposit = self._deposit
                 try:
-                    arr, how = fetcher.exact(idx)
+                    arr, how = reader.exact(idx, deposit)
                 except Exception:
                     self.failures += 1
                     #: a position nothing can decode would otherwise be
@@ -335,11 +479,14 @@ class Dispatcher:
                 self.last = f"{_role(need.node_id)}/{band} @{idx} {how}"
         finally:
             fetcher.close()
+            if gui_fetcher is not None:
+                gui_fetcher.close()
 
     def stats(self) -> dict:
         return {"served": self.served, "seeks": self.seeks,
                 "steps": self.steps, "failures": self.failures,
                 "stale": self.stale, "idle_polls": self.idle_polls,
+                "passed_kept": self.passed_kept, "refused": self.refused,
                 "by_pressure": dict(self.by_pressure)}
 
 
@@ -1248,6 +1395,13 @@ class OrchestratorExplorer(QMainWindow):
                 "form": self.form_key,
                 "policy": "single dispatcher, pressure-ranked, "
                           "preempt granularity one decode",
+                #: the arm. A log with all three off is the control and
+                #: must reproduce the walls the 2026.08.30 finding fitted;
+                #: one that does not is a fact about this edit before it is
+                #: a fact about any policy.
+                "preemption": {"abandon_within": ABANDON_WITHIN,
+                               "gui_cursor": GUI_CURSOR,
+                               "keep_passed": KEEP_PASSED},
                 "walk": "quick" if "--quick" in sys.argv else "full",
                 "window_is_full_size": WINDOW_SECONDS >= 20.0,
                 "playhead": "live" if LIVE_PLAYHEAD else "parked",

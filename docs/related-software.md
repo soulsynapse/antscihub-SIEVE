@@ -23,3 +23,4 @@ Scheduling and storage
 - ARC
 - 2Q
 - GreedyDual-Size
+- libavfilter's activate callback

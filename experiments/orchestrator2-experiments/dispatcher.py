@@ -189,6 +189,31 @@ from graph import Envelope, Graph, Need, Urgency
 from pool import Pool
 
 
+#: How long a node may go unserved before it outranks the ranking (prior art:
+#: the Linux deadline I/O scheduler and the deadline family generally). The
+#: pressure queue ranks for locality and urgency, which is exactly the axis
+#: that starves whoever ranks last; a deadline scheduler keeps its sorted
+#: queue and adds an expiry queue beside it, servicing what has expired
+#: regardless of where the ranking put it.
+#:
+#: **Measured against last service, not against declaration.** The first
+#: version aged a declaration from when it arrived, which is wrong for a
+#: standing declaration covering a window: a sweep declares once and is then
+#: permanently older than any deadline, so it wins every pick and the expiry
+#: queue replaces the ranking instead of rescuing it. Measured that way it
+#: took 976 of 1071 picks. A deadline in Linux belongs to a *request* and
+#: leaves the queue when that request is served; the equivalent for a
+#: standing declaration is the time since this node was last served.
+DEADLINE_S = 2.0
+
+#: How many rows an expired node is served before the ranking resumes (prior
+#: art: `fifo_batch`). One pick per deadline is an anti-starvation floor so
+#: low it is indistinguishable from starvation over a window; draining a
+#: batch is what makes the floor mean progress. It is deliberately not a fair
+#: share — a deadline scheduler guarantees service, never a rate.
+EXPIRY_BATCH = 16
+
+
 class Reason(IntEnum):
     """Why a node is being called. VapourSynth's `activationReason`.
 
@@ -222,6 +247,18 @@ class Mode(Enum):
     - `fmUnordered` — serial but any order — is absent because nothing has
       asked for it, and a mode with no instance is the field README question
       3 is about.
+
+    **ORDERED starves if anything it is waiting on never arrives**, and the
+    dispatcher owes it a deadline for that reason. Running the lowest armed
+    row means a row that is never served stops every later row of that node,
+    with their inputs pinned while they wait. Two ways in: a declaration
+    subsumed behind INTERACTIVE traffic forever, since `_pick` takes the
+    first need with an unserved row and urgency sorts first, so a person
+    scrubbing without pause means a sweep's rows never land; and, before it
+    was fixed, an activation cancelled while still waiting on a decode, which
+    never reached `_ready` and so never disarmed. The first is what
+    `DEADLINE_S` is for and the second is now disarmed at the point of
+    cancellation.
 
     **ORDERED is over everything armed, not over what happens to be ready.**
     An earlier draft ordered only among simultaneously-ready activations,
@@ -366,13 +403,25 @@ class Dispatcher:
     def __init__(self, graph: Graph, pool: Pool, form_key: str,
                  fetcher_factory: Callable[[], Any],
                  recorders: int = 2, readers: int = 1,
-                 t0: float = 0.0) -> None:
+                 deadline_s: float = DEADLINE_S, t0: float = 0.0) -> None:
         self.graph = graph
         self.pool = pool
         self.form_key = form_key
         self._fetcher_factory = fetcher_factory
         self._recorder_count = max(1, recorders)
         self._reader_count = max(1, readers)
+        #: 0 disables the expiry queue, which is how an experiment measures
+        #: what the ranking does when nothing rescues it.
+        self.deadline_s = deadline_s
+        self.expiry_batch = EXPIRY_BATCH
+        #: when each node last had a row served. The clock the deadline is
+        #: measured against; a node absent from here has never been served
+        #: and ages from when it declared.
+        self._last_served: dict[str, float] = {}
+        #: the node currently draining its expiry batch, and how much of the
+        #: batch is left.
+        self._expiry_node: str | None = None
+        self._expiry_left = 0
         self._t0 = t0
 
         self._lock = threading.Lock()
@@ -419,6 +468,9 @@ class Dispatcher:
         #: Comparing the two is comparing an interval to an event.
         self.blocked = 0
         self.blocked_s = 0.0
+        #: picks the expiry queue made that the ranking would not have. Zero
+        #: means the ranking never starved anybody over this run.
+        self.expired_picks = 0
         self.by_pressure: dict[str, int] = {}
         self.trace: list[tuple] = []
         self.trace_cap = 20_000
@@ -531,6 +583,12 @@ class Dispatcher:
                     previous.cancelled = True
                     self.superseded += 1
                     superseded = previous
+                    #: here and not only where a cancelled activation is
+                    #: dropped from `_ready`: one cancelled while still
+                    #: waiting on a decode never reaches `_ready`, so that
+                    #: path never runs and an ORDERED node would block on a
+                    #: row that is never going to run.
+                    self._disarm(previous)
             self._current[ctx.node_id] = ctx
             missing = [key for key in ctx.asked if not self.pool.has(*key)]
             ctx.outstanding = len(missing)
@@ -553,6 +611,7 @@ class Dispatcher:
             if not ctx.cancelled:
                 ctx.cancelled = True
                 self.superseded += 1
+                self._disarm(ctx)
 
     # ── landings ─────────────────────────────────────────────────────────
 
@@ -592,6 +651,16 @@ class Dispatcher:
 
         Called under `_lock` so taking a pick and claiming it are one step.
         """
+        batched = self._batch_pick(interactive_only)
+        if batched is not None:
+            self.expired_picks += 1
+            return batched
+        expired = self._expired_pick(interactive_only)
+        if expired is not None:
+            self.expired_picks += 1
+            self._expiry_node = expired[0].node_id
+            self._expiry_left = self.expiry_batch - 1
+            return expired
         for need in self.graph.pressure_queue():
             if need.form_key != self.form_key:
                 continue
@@ -605,6 +674,56 @@ class Dispatcher:
                     return need, row
         return None
 
+    def _serviceable(self, need: Need, interactive_only: bool | None):
+        """The first row of *need* this reader may take, or None."""
+        if need.form_key != self.form_key:
+            return None
+        if (interactive_only is not None
+                and interactive_only != (need.urgency
+                                         is Urgency.INTERACTIVE)):
+            return None
+        for row in need.unserved(self.pool.has):
+            if (row, need.form_key) not in self._claimed:
+                return row
+        return None
+
+    def _batch_pick(self, interactive_only: bool | None):
+        """Keep draining the expired node's batch, if it has one left."""
+        if self._expiry_left <= 0 or self._expiry_node is None:
+            return None
+        for need in self.graph.pressure_queue():
+            if need.node_id != self._expiry_node:
+                continue
+            row = self._serviceable(need, interactive_only)
+            if row is not None:
+                self._expiry_left -= 1
+                return need, row
+            break
+        self._expiry_node, self._expiry_left = None, 0
+        return None
+
+    def _expired_pick(self, interactive_only: bool | None):
+        """A node that has gone `deadline_s` without being served.
+
+        The expiry queue a deadline scheduler keeps beside its sorted one,
+        consulted before the ranking because a node that has expired is by
+        definition one the ranking was not going to reach. `expired_picks`
+        counting zero is what says the ranking never starved anybody over a
+        run, and it is the number to read before concluding that it cannot.
+        """
+        if self.deadline_s <= 0:
+            return None
+        now = time.perf_counter()
+        cutoff = now - self.deadline_s
+        for declared_at, need in self.graph.by_age():
+            last = self._last_served.get(need.node_id, declared_at)
+            if last > cutoff:
+                continue
+            row = self._serviceable(need, interactive_only)
+            if row is not None:
+                return need, row
+        return None
+
     def _await_pick(self,
                     interactive_only: bool | None) -> tuple[Need, int] | None:
         with self._pickable:
@@ -613,6 +732,10 @@ class Dispatcher:
                 if pick is not None:
                     need, row = pick
                     self._claimed.add((row, need.form_key))
+                    #: served, so this node's deadline clock restarts. What
+                    #: makes the expiry queue a floor under service rather
+                    #: than a replacement for the ranking.
+                    self._last_served[need.node_id] = time.perf_counter()
                     return pick
                 self.blocked += 1
                 self.last = "blocked"
@@ -799,6 +922,9 @@ class Dispatcher:
             #: has: how many times there was nothing to fetch, and how long
             #: that lasted. Neither is a poll.
             "blocked": self.blocked, "blocked_s": round(self.blocked_s, 3),
+            "deadline_s": self.deadline_s,
+            "expiry_batch": self.expiry_batch,
+            "expired_picks": self.expired_picks,
             "by_pressure": dict(self.by_pressure),
             "activations": self.activations, "reentries": self.reentries,
             "immediate": self.immediate, "superseded": self.superseded,

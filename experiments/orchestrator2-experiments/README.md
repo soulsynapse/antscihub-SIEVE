@@ -235,7 +235,17 @@ against.
 3. **The `refetched` / `predicted` pair.** `refetched` alone is not an
    accusation — coming back to a window is a fetch. `predicted` is the number
    ADR-0008 targets at zero.
-4. **`closeEvent` releases the sweep before the log is saved**, which is why
+4. **The deadline under `pressure_queue`.** Ranking for locality is what
+   starves whoever ranks last, and the queue's subsumption rule is
+   anticipatory scheduling (prior art: Iyer & Druschel, SOSP 2001) carried
+   without the anti-starvation half that literature always pairs it with. An
+   ORDERED node behind a person scrubbing without pause computed 1 of 60
+   armed rows; with an expiry queue keyed on last service and drained in a
+   batch it computed 60, taking 5.6% of picks to do it. `05-starvation.py`,
+   and `expired_picks` is the counter — zero means the ranking never starved
+   anybody over that run, and it is zero in every uncontended experiment
+   here.
+5. **`closeEvent` releases the sweep before the log is saved**, which is why
    `graph_holds` reads 1 in a V1 log while a window is live. The
    derived-eviction finding documents it under "how to recreate"; a V2 log
    that repeats it without saying so is a log that will be misread the same

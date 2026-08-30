@@ -13,6 +13,16 @@ one contract — "give me frame N" — and the graph decides who asks whom, in w
 order, reusing what. The runtime knows when a frame's last consumer has read it,
 and drops it.
 
+**Superseded as a mechanism by `../orchestrator2-experiments/`, and not as a
+record.** That folder rewrites the orchestrator around VapourSynth's
+activation model — a consumer is re-entered when its inputs land instead of
+polling for them — which is the half of the comparison below this folder
+never built. What is settled here stays settled and is cited there rather
+than re-measured: questions 2 and 5, and the three findings dated 2026.08.30.
+This explorer stays runnable and is not edited; two published findings give
+`explorer.py --walk` as their how-to-recreate, and it retires only once V2's
+walk reproduces its numbers leg for leg.
+
 SIEVE needs the same layer, and the constraints that make its version
 non-trivial are already measured:
 

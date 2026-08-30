@@ -12,7 +12,7 @@
   - 📁 `adr/` (10 files)
   - 📁 `decode/`
     - 📄 `ideas.md`
-  - 📁 `findings/` (16 files)
+  - 📁 `findings/` (17 files)
   - 📁 `solutions/` (14 files)
   - 📁 `vocab/` (38 files)
   - 📄 `ADR.md`
@@ -56,6 +56,17 @@
     - 📄 `explorer.py` — Feel the orchestrator: one dispatcher, ranked by pressure, sharing every decode.
     - 📄 `fetch.py` — One open container, absolute frame indices, and how it got there.
     - 📄 `graph.py` — The declaration graph: what every consumer of frames says it needs.
+    - 📄 `pool.py` — The graph-managed frame pool: hold, reserve, release, evict, and say who shared.
+  - 📁 `orchestrator2-experiments/`
+    - 📁 `results/`
+      - 📄 `01-reentry-20260830T224008Z.json`
+      - 📄 `01-reentry-20260830T224333Z.json`
+    - 📄 `01-reentry.py` — Does re-entry beat polling, on a window fill with one step riding along?
+    - 📄 `README.md`
+    - 📄 `dispatcher.py` — The dispatcher, re-entrant: it calls consumers back instead of being polled.
+    - 📄 `fetch.py` — One open container, absolute frame indices, and how it got there.
+    - 📄 `graph.py` — The declaration graph: what every consumer of frames says it needs.
+    - 📄 `nodes.py` — The consumers, as activations synthesised around what each declared.
     - 📄 `pool.py` — The graph-managed frame pool: hold, reserve, release, evict, and say who shared.
   - 📁 `storage-experiments/`
     - 📁 `explorer-logs/` (81 files)

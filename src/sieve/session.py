@@ -10,14 +10,23 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
+import numpy as np
+
 from sieve.chunks import ChunkStore
 from sieve.contract import Tool
 from sieve.contract.edges import Access
 from sieve.contract.forms import Form
 from sieve.fill import Readers, WindowFill, WriteBehind, window_for
+from sieve.ordinals import Ordinals
+from sieve.pipeline import Binding, Bound, Chain, Node, bind
 from sieve.proxy import Proxy, proxy_form
-from sieve.serve import Ordinals, Route, Served, Serving
+from sieve.series import Series
+from sieve.serve import Route, Served, Serving
 from sieve.store import Store, opened
+
+#: The head's node id. One source for now; a chain naming two would name them
+#: apart here, which is why this is a constant and not a literal.
+HEAD = "source"
 
 #: Positions a landing claims.
 WINDOW = 300
@@ -50,6 +59,14 @@ class Session:
         self.whole: bool = True
         self.at: int | None = None
         self.steps: tuple[Tool, ...] = ()
+        self.bound: Bound | None = None
+        #: which node's field the canvas is drawing. One at a time; the chain
+        #: binds every step whether or not anything is looking at it.
+        self.showing: str | None = None
+        #: steps that would not bind, and why — reported rather than dropped
+        #: silently, which is how a broken tool becomes a missing overlay
+        #: nobody can explain.
+        self.unbound: tuple[tuple[str, str], ...] = ()
         self.ceiling: float = 0.0
 
     # -- queries -----------------------------------------------------------
@@ -178,6 +195,9 @@ class Session:
         self.whole = True
         self.at = None
         self.steps = ()
+        self.bound = None
+        self.showing = None
+        self.unbound = ()
         self.ceiling = 0.0
         if self.store is not None:
             self.store.close()
@@ -289,6 +309,10 @@ class Session:
         self.whole = False
         self.ceiling = 0.0
         self._rebudget()
+        # The crop is half of what a step's values are filed under, so a new
+        # one is a new binding and a new store to write into, not the old one
+        # looked at differently.
+        self._rebind()
 
     def toggle_whole(self) -> bool:
         """Toggle between crop and whole-frame view.  Returns new *whole*."""
@@ -300,56 +324,121 @@ class Session:
     # -- steps -------------------------------------------------------------
 
     def set_steps(self, steps: tuple[Tool, ...]) -> None:
+        """Place every loaded step in the chain, each fed by the source.
+
+        A fan off the head rather than a chain, and that is not a limitation
+        of the binding: nothing in this tree consumes a value, so every step
+        here wants frames and one fed another step's output is refused. What
+        this replaces is `steps[0]` being the pipeline and the rest being
+        cards.
+        """
         self.steps = steps
         self.ceiling = 0.0
+        self._rebind()
+
+    def _rebind(self) -> None:
+        """Build the chain and resolve it against the open source.
+
+        Called again whenever the crop moves: a step's wanted form follows the
+        crop, and a form is half of what its values are filed under, so a new
+        crop is a new binding rather than the same one looked at differently.
+        """
+        self.bound = None
+        self.showing = None
+        self.unbound = ()
+        if self.store is None or not self.steps:
+            return
+        head = self.store.output
+        heads = {HEAD: {head.edge.name: head}}
+        rect = self.form().rect
+
+        # Each step probed on its own, so one that cannot bind is named
+        # rather than taking the others down with it. An authored chain
+        # should refuse to run whole; this fan is assembled out of whatever
+        # happens to be installed, which is a different thing and is the
+        # arrangement the pipeline document exists to replace.
+        usable: list[Tool] = []
+        refused: list[tuple[str, str]] = []
+        for tool in self.steps:
+            probe = Chain(
+                (Node(HEAD, self.store.tool), Node(tool.name, tool)),
+                (Binding(HEAD, head.edge.name, tool.name),))
+            try:
+                bind(probe, heads, rect, self._sink_for)
+            except (ValueError, KeyError) as why:
+                refused.append((tool.name, str(why)))
+            else:
+                usable.append(tool)
+
+        self.unbound = tuple(refused)
+        if not usable:
+            return
+        chain = Chain(
+            tuple([Node(HEAD, self.store.tool)]
+                  + [Node(tool.name, tool) for tool in usable]),
+            tuple(Binding(HEAD, head.edge.name, tool.name) for tool in usable))
+        self.bound = bind(chain, heads, rect, self._sink_for)
+        self.showing = usable[0].name
+
+    def _sink_for(self, node: str, key: str, form: Form,
+                  listed: tuple[int, ...], timebase: str) -> Series:
+        """Where one node's values are kept. Empty until something writes.
+
+        Nothing does yet: a value is recorded where its inputs landed
+        (ADR-0005) and the fill does not run steps, so every row reads back
+        `LATER` and the overlay keeps computing its field on the way past
+        without recording anything. That is the honest state, not an
+        oversight — the recorder is its own piece of work.
+        """
+        return Series(source=self.address or "", step_key=key,
+                      form_key=form.key(), timebase=timebase,
+                      pts=np.asarray(listed, dtype=np.int64))
 
     def set_ceiling(self, value: float) -> None:
         """Move the overlay's scale top deliberately. 0 re-takes it."""
         self.ceiling = max(float(value), 0.0)
 
     def step_inputs(self, position: int) -> tuple | None:
-        """What the first step needs at *position*: (step, frames, ordinal).
+        """What the shown step needs at *position*: (step, frames, row).
 
         Tier reads and nothing else, so it stays on the thread that owns the
         tiers while the arithmetic goes elsewhere. Never blocks: returns
-        ``None`` when any needed frame is not resident at the step's wanted
-        form. That form is the step's own, bounded to the proxy's long edge —
-        whole-frame it is the proxy's form exactly, and a crop inside the
-        bound is the fill's, so it succeeds once the covering tier has
-        reached the neighbourhood.
+        ``None`` when any needed frame is not resident.
+
+        What is needed is the binding's to say — `Demand` carries the form and
+        the positions, already resolved against the listing — and what is
+        *held* is this session's. The one thing added here is the bound on the
+        form, and it is a display concession rather than part of the
+        declaration: the demand's form is the step's own, and this reads it at
+        the proxy's long edge instead. Whole-frame that resolves to the
+        proxy's form exactly, so a scrub is served from the tier it was
+        already being served from; a crop inside the bound stays native. Above
+        the bound the read is resampled and `forms.grade` calls it APPROX,
+        which is what this field is: drawn, then discarded. A value recorded
+        under the demand's own form is a different thing and is not written
+        from here (ADR-0005).
         """
-        if not self.steps or self.store is None or self.serving is None:
+        if self.bound is None or self.showing is None or self.serving is None:
             return None
-        step = self.steps[0].role
-        rect = self.form().rect
-        # Bounded by the same long edge the proxy is built at, which whole-frame
-        # resolves to the proxy's own form — the tier a whole-frame view is
-        # already served from, rather than a second downscale rule. A crop
-        # inside the bound is untouched and stays native; above it the form is
-        # resampled and `forms.grade` calls anything from it APPROX, which is
-        # what this field is: drawn, then discarded. The series is written
-        # where frames are admitted, never from here.
-        want = proxy_form(step.form_for(rect))
         ordinal = self.serving.ordinals.rank(position)
         if ordinal is None:
             return None
-        listed = self.serving.ordinals.listed
+        demand = self.bound.demand(self.showing, ordinal)
+        if demand is None:
+            return None
+        want = proxy_form(demand.form)
         frames: dict[int, Any] = {}
-        for offset in step.offsets:
-            needed_ord = ordinal + offset
-            if needed_ord < 0 or needed_ord >= len(listed):
-                return None
-            needed_pos = listed[needed_ord]
+        for row, needed in zip(demand.rows, demand.positions):
             # Through the tiers, not into the cache. The fill holds the whole
             # frame in colour at source sampling and a step wants gray, so an
             # exact key lookup misses every time and `dominator` will not
             # cross a pixel format — whole-frame the answer is the proxy,
             # which is already gray at this very form.
-            served = self.serving.exact(needed_pos, want)
+            served = self.serving.exact(needed, want)
             if served.frame is None:
                 return None
-            frames[needed_ord] = served.frame
-        return step, frames, ordinal
+            frames[row] = served.frame
+        return self.bound.chain.node(self.showing).tool.role, frames, demand.row
 
     @staticmethod
     def run_step(step: Any, frames: Any, ordinal: int) -> tuple:

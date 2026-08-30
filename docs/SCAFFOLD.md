@@ -157,6 +157,9 @@
           - 📄 `view.py` — The transport: a control row over the strip, in the bottom pane.
       - 📄 `metrics.py` — Corner radius and text sizes for every view — the shape counterpart to palette.
       - 📄 `palette.py` — Eight colour roles, mutated in place so every holder sees the swap.
+    - 📁 `pipeline/` — The chain: which node's output satisfies which node's want.
+      - 📄 `bind.py` — Binding a chain: the facts a node is not allowed to declare about itself.
+      - 📄 `chain.py` — The chain as a document: what nodes exist, and what feeds what.
     - 📁 `project/` — What a project is: one recording, and the list of them.
       - 📄 `footage.py` — What can be said about a recording without opening it.
       - 📄 `library.py` — Which recordings this person has opened, and when they last did.

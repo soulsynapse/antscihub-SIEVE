@@ -163,6 +163,7 @@
     - 📄 `__main__.py` — `uv run sieve`, or `uv run python -m sieve`.
     - 📄 `chunks.py` — Write-behind persistence: a window that was filled once refills at cut speed.
     - 📄 `fill.py` — The landing sequence: fill a window into RAM so a seek inside it is free.
+    - 📄 `ordinals.py` — What row a listed position is, in one store's snapshot of a listing.
     - 📄 `proxy.py` — The display tier: the whole recording at display sampling, built behind you.
     - 📄 `registry.py` — Which tools this SIEVE found, and which it could not load.
     - 📄 `relaunch.py` — Replace the running process with a fresh run of the same command.

@@ -73,11 +73,14 @@ its group leaves this index while keeping its number and its file.""",
         doc_path="docs/VOCAB.md",
         title="# VOCAB — what the words mean",
         preamble="""\
-Derived: each line is its term's first paragraph, so that file is the home and
-this index cannot drift from it. The shelf a term sits on is `group` and its
-order along that shelf is `position`, both placement only — a term that drops
-its group leaves this index while keeping its file. A term the tree has not
-agreed on is listed apart, below.""",
+Derived: each line is its term's `gloss`, so that file is the home and this
+index cannot drift from it. A gloss is capped and names no code, which is what
+keeps this page scannable and keeps a rename out of it — the entry's own
+`## Where it lives` is where code goes, and `checks/vocab.py` holds both to it.
+The shelf a term sits on is `group` and its order along that shelf is
+`position`, both placement only — a term that drops its group leaves this index
+while keeping its file. A term the tree has not agreed on is listed apart,
+below.""",
         tally="*{count} defined.*",
         pending_title="## Unsettled",
         pending_preamble="""\
@@ -259,6 +262,10 @@ def render_shelf(shelf: Shelf, paths: list[str], blobs: dict[str, bytes]) -> str
         fields, paragraph = front_matter(blobs.get(path, b""))
         if not fields.get("group"):
             continue
+        # A shelf whose notes carry a `gloss` speaks with it; one whose notes
+        # do not falls back to the paragraph. The gloss is a line written to be
+        # quoted here, and it is capped where the paragraph is not.
+        paragraph = fields.get("gloss") or paragraph
         position = fields.get("position", "")
         link = f"{shelf.directory[len(DOCS):]}{name}"
         unsettled = (

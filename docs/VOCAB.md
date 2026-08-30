@@ -2,25 +2,32 @@
 
 # VOCAB — what the words mean
 
-Derived: each line is its term's first paragraph, so that file is the home and
-this index cannot drift from it. The shelf a term sits on is `group` and its
-order along that shelf is `position`, both placement only — a term that drops
-its group leaves this index while keeping its file. A term the tree has not
-agreed on is listed apart, below.
+Derived: each line is its term's `gloss`, so that file is the home and this
+index cannot drift from it. A gloss is capped and names no code, which is what
+keeps this page scannable and keeps a rename out of it — the entry's own
+`## Where it lives` is where code goes, and `checks/vocab.py` holds both to it.
+The shelf a term sits on is `group` and its order along that shelf is
+`position`, both placement only — a term that drops its group leaves this index
+while keeping its file. A term the tree has not agreed on is listed apart,
+below.
 
 - 📁 `Layer 1`
-  - 📄 [window](vocab/window.md) — The application. Houses panes.
-  - 📄 [pane](vocab/pane.md) — A compartment the window divides into: a region with a boundary, a size policy, and a name, holding whatever is put in it. A pane is the space, never its occupant — it stays a pane while empty, and swapping what stands in it does not make it a different pane.
-  - 📄 [subpane](vocab/subpane.md) — A smaller pane anchored to a side inside a main pane.
-  - 📄 [view](vocab/view.md) — Anything a pane can house — the occupant, not the space. "Surface" used to mean this and was dropped for doing double duty: a thing a pane houses, and a thing paint lands on. A view names only the first.
-  - 📄 [menu](vocab/menu.md) — The drop menu at the top of the window.
-  - 📄 [swipe](vocab/swipe.md) — A run of views laid side by side inside one pane, one of them in front at a time, reached by sliding the run rather than by replacing what the pane holds. A swipe is itself a view: it occupies one pane and never adds one, so a screen reached by swiping is a position on the track and not a pane of its own.
+  - 📄 [window](vocab/window.md) — The application — the one top-level frame, holding a menu bar, the panes, and the boundaries between them. There is exactly one, and nothing else divides into panes.
+  - 📄 [pane](vocab/pane.md) — A compartment the window divides into — a region with a boundary, a size policy and a name, holding whatever is put in it. The space, never its occupant.
+  - 📄 [subpane](vocab/subpane.md) — A smaller pane anchored to a side inside a main pane. A pane in every other respect — it is the anchoring, not a different kind of space, that the word records.
+  - 📄 [view](vocab/view.md) — Anything a pane can house — the occupant, not the space. One folder each.
+  - 📄 [menu](vocab/menu.md) — The drop menu at the top of the window — the bar, and what the window itself can be asked to do.
+  - 📄 [swipe](vocab/swipe.md) — A run of views laid side by side in one pane, one in front at a time, reached by sliding the run rather than by replacing what the pane holds. A swipe is itself a view.
 - 📁 `Substrate`
-  - 📄 [tier](vocab/tier.md) — A place a frame can be answered from: one of an ordered stack, cheapest first, over one open recording. Tiers are ranked by what an answer costs and not by what it is worth, because they are all answering the same question — this position, in this form — and differ only in what they give up to answer it sooner. The store's budget of decoded frames is the ground floor; the chunk store, the display proxy and the source itself are the rest.
-  - 📄 [form](vocab/form.md) — What a frame is, apart from which instant it is: which source pixels, at what sampling, in what format. All three at once, never one of them — a form is not a resolution and not a pixel format, because two consumers wanting one instant at the same size in different formats want two arrays, and so do two wanting one format at two crops. Position and form are the two halves of every key the substrate holds a frame under, and `Form` is frozen so it can be that half.
-  - 📄 [position](vocab/position.md) — Which instant a frame is, apart from what it is: the source's own presentation timestamp, integer ticks in the stream's timebase. A position is a name and never a count, which is what lets it cross a file, a session or a tool boundary and still mean one frame — the other half of every key the substrate holds a frame under, form being the half that says what. Its partner *ordinal* is the row that position lands on inside one listing, and it is only ever valid beside the table that produced it.
+  - 📄 [tier](vocab/tier.md) — A place a frame can be answered from — one of an ordered stack, cheapest first, over one open recording. Ranked by what an answer costs, never by what it is worth.
+  - 📄 [form](vocab/form.md) — What a frame is, apart from which instant it is — which source pixels, at what sampling, in what format. All three at once, never one of them.
+  - 📄 [position](vocab/position.md) — Which instant a frame is, apart from what it is — the source's own presentation timestamp, integer ticks in the stream's timebase. A name, never a count.
+  - 📄 [ordinal](vocab/ordinal.md) — What row a listed position is, inside one store's snapshot of one listing. A coordinate, valid only beside the table that produced it, and never a frame's identity.
+  - 📄 [refusal](vocab/refusal.md) — A no with a kind on it — what a producer answers with instead of a frame, drawn from a closed set of three: permanently gone, wrong shape, or not to this caller now.
+  - 📄 [binding](vocab/binding.md) — The join between an edge one node wants and an edge another offers, made by name and not by wire — and where every fact a producer could not honestly state about itself gets worked out.
+  - 📄 [step](vocab/step.md) — The role a tool fills to process frames — an arithmetic over a fixed set of listed positions, run once per position, producing an image-sized field and the scalar it reduces to.
 
-*9 defined.*
+*13 defined.*
 
 ## Unsettled
 
@@ -32,6 +39,10 @@ frontmatter is what puts a term here; deleting that line is what settles
 it.
 
 - 📁 `Layer 1`
-  - 📄 [surface](vocab/surface.md) — Four live senses, and a fifth the vocabulary says is retired. The entry for "view" records the word being dropped for doing double duty — a thing a pane houses, and a thing paint lands on — and the tree kept using it for both anyway, plus two more. Nothing here is wrong on its own; what is wrong is that "surface" in a docstring does not tell a reader which of them is meant.
+  - 📄 [surface](vocab/surface.md) — Four live senses, and a fifth the vocabulary says is retired. A rendering path, a pane's occupant, whatever is on screen now, and a filled region a colour applies to.
+- 📁 `Substrate`
+  - 📄 [edge](vocab/edge.md) — Three live senses. A named thing a node offers or wants, of a closed kind; an arrow the pipeline view draws between cards from list order; and the border of a rectangle.
+  - 📄 [node](vocab/node.md) — Two live senses about the same running system that disagree about who counts — a role a tool fills because it offers an edge, and anything that declares a need on the store.
+  - 📄 [field](vocab/field.md) — Three live senses, two of them in one directory. A step's image-sized result, one number per pixel; a text box; and a record's attribute, which is Python's own word.
 
-*1 contested.*
+*4 contested.*

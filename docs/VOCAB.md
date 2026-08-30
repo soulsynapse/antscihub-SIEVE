@@ -18,9 +18,9 @@ the collision without anybody having to settle it. The shelf a term sits on is
   - 📄 [swipe](vocab/swipe.md) — A run of views laid side by side in one pane, one in front at a time, reached by sliding the run rather than by replacing what the pane holds.
   - 📄 [surface (rendering)](vocab/surface-rendering.md) — A rendering path — painter primitives against a rasteriser. The live surface and the report surface are different code.
   - 📄 [surface (fill)](vocab/surface-fill.md) — The filled region a colour applies to: the design-token sense every widget kit has.
-  - 📄 [surface (occupant)](vocab/surface-occupant.md) — A pane's occupant. Retired — view is the word — and still in use.
+  - 📄 [surface (occupant)](vocab/surface-occupant.md) — A pane's occupant. Retired: view is the word.
   - 📄 [edge (border)](vocab/edge-border.md) — A rectangle's side, or the colour drawn along it. Also the long edge a proxy form is bounded to.
-  - 📄 [edge (pipeline)](vocab/edge-pipeline.md) — An arrow drawn between chain cards, from their order in the list rather than from any binding.
+  - 📄 [edge (pipeline)](vocab/edge-pipeline.md) — An arrow drawn between cards in the pipeline pane. A picture of the chain, never the join itself — that is a binding.
   - 📄 [node (pipeline)](vocab/node-pipeline.md) — A slot in a chain with a durable id, keeping its identity when the tool standing in it is swapped.
   - 📄 [field (widget)](vocab/field-widget.md) — A text box.
 - 📁 `Substrate`
@@ -31,13 +31,14 @@ the collision without anybody having to settle it. The shelf a term sits on is
   - 📄 [ordinal](vocab/ordinal.md) — What row a listed position is, inside one snapshot of one listing. A coordinate, valid only beside the table that produced it.
   - 📄 [refusal](vocab/refusal.md) — A no with a kind on it — gone, wrong form, or not now — from a closed set of three. Only gone is a hole.
   - 📄 [tool](vocab/tool.md) — The work an author supplies that SIEVE never names — a measurement an ethologist wants, done entirely through what the substrate provides. It fills a node's role; the set of them is open, and the substrate's capabilities are not.
-  - 📄 [edge (contract)](vocab/edge-contract.md) — A named thing a node offers or wants, of a closed kind: a frame, a mask, or a value. SIEVE's alone to extend.
-  - 📄 [node (contract)](vocab/node-contract.md) — A role a tool fills, and you are one because you offer an edge: a source has no inputs, a step has frame inputs.
+  - 📄 [edge (contract)](vocab/edge-contract.md) — A named thing a node offers or wants, of a kind from a closed set that SIEVE alone extends. Carries the properties its kind needs; which of them are present is per instance.
+  - 📄 [want](vocab/want.md) — The input half of a node: what it must be fed before it can run, and in what form. What a node takes, never which instant of it — asking for an instant is a need.
+  - 📄 [node (contract)](vocab/node-contract.md) — A role a tool fills, and you are one because you offer an edge. The roles differ by what each must be fed: a source is fed nothing.
   - 📄 [node (orchestrator)](vocab/node-orchestrator.md) — Anything that declares a need on the store — a tool, the series writer, the proxy builder, the GUI — which is a wider net than the contract's.
   - 📄 [binding](vocab/binding.md) — The join between an edge one node wants and an edge another offers, made by name. Where the facts a producer cannot state about itself — timebase, extent, access — are derived.
   - 📄 [source](vocab/source.md) — The role a tool fills to bring a recording in: a node with no inputs, which opens an address, declares the kinds of edge it offers, and answers a read for one instant in one form.
-  - 📄 [step](vocab/step.md) — The role a tool fills to process frames: an arithmetic over listed positions, run once per position, producing an image-sized field and the scalar it reduces to.
-  - 📄 [field (step)](vocab/field-step.md) — A step's image-sized result — one number per pixel, float32, computed where it is drawn and discarded there.
+  - 📄 [step](vocab/step.md) — The role a tool fills to compute over what feeds it: an arithmetic over listed positions, run once per position, producing an image-sized field and the scalar it reduces to.
+  - 📄 [field (step)](vocab/field-step.md) — A step's image-sized result: one measurement per pixel, at the form the step read its input in. The thing a step reduces to its scalar.
   - 📄 [chain](vocab/chain.md) — The user's pipeline as a document — which nodes exist and which node's output feeds which node's want. Structure only; whether a feed is legal needs the producer open. Names tools, never a recording.
   - 📄 [recording](vocab/recording.md) — The footage the work is about — a video file, a folder of stills, a camera, whatever a source can open. Named by an address, which is not always a path. The material itself, never the tool that reads it.
   - 📄 [store (frames)](vocab/store-frames.md) — What SIEVE holds from one open recording, and the thing a need for a frame is put to. Addressed by which instant and which form together, never by either alone. Held material, never the source that decoded it.
@@ -48,4 +49,4 @@ the collision without anybody having to settle it. The shelf a term sits on is
   - 📄 [timebase](vocab/timebase.md) — The rate a source's positions are counted in — ticks per second as an exact fraction, recorded once beside them. Every source declares one, so it is real elapsed time only where the recording carried time to begin with.
   - 📄 [address](vocab/address.md) — The name a source is handed to open a recording — claimed and parsed by that source alone, sometimes a path and sometimes not. Where a recording is, never what it is; durable identity is a separate claim.
 
-*36 defined.*
+*37 defined.*

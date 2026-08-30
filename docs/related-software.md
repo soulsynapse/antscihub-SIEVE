@@ -25,4 +25,6 @@ Scheduling and storage
 - GreedyDual-Size
 - libavfilter's activate callback
 - Excel's restarting scheduler
+
+Cautionary tales: 
 - AviSynth+'s MT modes (MT_NICE_FILTER, MT_MULTI_INSTANCE, MT_SERIALIZED)

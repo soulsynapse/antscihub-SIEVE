@@ -24,3 +24,4 @@ Scheduling and storage
 - 2Q
 - GreedyDual-Size
 - libavfilter's activate callback
+- Excel's restarting scheduler

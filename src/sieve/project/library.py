@@ -144,6 +144,27 @@ class Entry:
         return not Path(self.video).is_absolute()
 
     @property
+    def misplaced(self) -> bool:
+        """Is the recording gone from somewhere this machine can still see?
+
+        The distinction `available` cannot draw. An unplugged drive and a
+        moved file are both unavailable, and the module docstring says why
+        the first must never be treated as the second: it is the ordinary
+        case. What separates them is whether the volume the row names is
+        mounted — with `E:\\` there and `E:\\shoots\\day1.mp4` not, the
+        recording left; with `E:\\` itself absent, nothing can be said and
+        this answers `False` rather than guessing.
+
+        Only ever a reason to *offer* something, never to act. A share that
+        mounts with its subtree unreachable still reads as misplaced, so the
+        person is the one who settles it.
+        """
+        if self.available:
+            return False
+        anchor = Path(self.video).anchor
+        return bool(anchor) and footage.on_disk(anchor)
+
+    @property
     def last(self) -> str:
         """The stamp the list is ordered by: opened if ever, added otherwise."""
         return self.opened or self.added
@@ -255,12 +276,19 @@ class Library:
         Only within one algorithm: two identities produced by different
         methods are not comparable, and treating them as equal or unequal
         would both be claims this cannot make.
+
+        An empty *besides* excludes nothing and has to be spelled that way:
+        `_key("")` is the working directory, because `Path("")` is `Path(".")`
+        and exists, so the documented default would silently drop whichever
+        row is the folder SIEVE was launched from. Resolved once rather than
+        per row — it is a `stat` a piece, on the thread that draws.
         """
         if not token:
             return []
+        skip = _key(besides) if besides else None
         return [entry for entry in self.entries
                 if entry.identity == token and entry.identity_by == algorithm
-                and entry.video != _key(besides)]
+                and entry.video != skip]
 
     def relink(self, entry: Entry, video: Path | str) -> Entry:
         """Point an existing row at where the recording is now.

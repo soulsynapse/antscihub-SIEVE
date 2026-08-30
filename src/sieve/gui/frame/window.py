@@ -292,15 +292,22 @@ class MainWindow(QMainWindow):
         return self.tools.source_for(address, FRAME)
 
     def _source_landed(self, landed: tuple) -> None:
-        """An opened source and its first frame, back on the GUI thread."""
+        """An opened source and its first frame, back on the GUI thread.
+
+        The tiers are wired to `store.tool` — the producer that actually
+        answered — and not to a fresh `_source_for`. Remembering the identity
+        just above can relink a row, so a re-read here would consult a
+        different row's `source` than the open did, and where two loaded
+        tools both handle the address that is two producers in one session:
+        exactly what recording `source` per row exists to prevent (ADR-0010).
+        """
         store, frame, position, identity = landed
         if store.address != self._opening:
             store.close()
             return
         self._opening = None
         self._remember_identity(store.address, identity)
-        tool = self._source_for(store.address)
-        self.session.attach(store, tool, store.address)
+        self.session.attach(store, store.tool, store.address)
         self.frames.drawable = True
         self.canvas.set_aspect(self.session.aspect)
         self.frames.show_frame(frame)
@@ -332,6 +339,12 @@ class MainWindow(QMainWindow):
         recording it was handed and asks. It never goes looking, and it says
         nothing when more than one row matches, because an ambiguous question
         is worse than none.
+
+        `misplaced`, not `not available`: an unplugged drive is the ordinary
+        case the library is built around, and offering to repoint a project
+        away from a drive that is merely in somebody's bag — on the strength
+        of a working copy of the same footage sitting on the internal disk —
+        would lose the drive-resident row the moment they said yes.
         """
         if identity is None:
             return
@@ -339,7 +352,7 @@ class MainWindow(QMainWindow):
         elsewhere = [entry for entry
                      in self.library.same_as(identity.algorithm, identity.token,
                                              besides=address)
-                     if not entry.available]
+                     if entry.misplaced]
         if len(elsewhere) != 1:
             return
         gone = elsewhere[0]

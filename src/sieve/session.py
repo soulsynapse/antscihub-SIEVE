@@ -149,11 +149,22 @@ class Session:
         stat for a file, a hash of names and sizes for a folder of stills —
         and its cost is the tool's to have, not the frame period's. `None`
         from a source with no durable identity, which is a camera.
+
+        Guarded, because the contract does not forbid `fingerprint` raising
+        and the caller reports anything out of this as "that recording could
+        not be opened" — which would be said about a store that opened and
+        decoded a frame, and would drop it unclosed, holding a lock on the
+        file the person was just told was unreadable. Identity is a nicety.
+        The open is not.
         """
         store = opened(tool, address)
         position = store.first_start()
         frame = None if position is None else store.frame(position)
-        return store, frame, position, store.opened.fingerprint()
+        try:
+            identity = store.opened.fingerprint()
+        except Exception:  # noqa: BLE001 — a tool's identity is not its open
+            identity = None
+        return store, frame, position, identity
 
     def attach(self, store: Store, tool: Tool | None, address: str) -> None:
         """Wire tiers for a newly opened *store*.  Call from the GUI thread."""

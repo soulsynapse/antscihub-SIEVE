@@ -14,5 +14,7 @@ its group leaves this index while keeping its file.
   - 📄 [view](vocab/view.md) — Anything a pane can house — the occupant, not the space. "Surface" used to mean this and was dropped for doing double duty: a thing a pane houses, and a thing paint lands on. A view names only the first.
   - 📄 [menu](vocab/menu.md) — The drop menu at the top of the window.
   - 📄 [swipe](vocab/swipe.md) — A run of views laid side by side inside one pane, one of them in front at a time, reached by sliding the run rather than by replacing what the pane holds. A swipe is itself a view: it occupies one pane and never adds one, so a screen reached by swiping is a position on the track and not a pane of its own.
+- 📁 `Substrate`
+  - 📄 [tier](vocab/tier.md) — A place a frame can be answered from: one of an ordered stack, cheapest first, over one open recording. Tiers are ranked by what an answer costs and not by what it is worth, because they are all answering the same question — this position, in this form — and differ only in what they give up to answer it sooner. The store's budget of decoded frames is the ground floor; the chunk store, the display proxy and the source itself are the rest.
 
-*6 defined.*
+*7 defined.*

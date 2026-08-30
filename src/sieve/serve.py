@@ -220,7 +220,7 @@ class Serving:
             return Served(cut, Route.CUT)
         answered = self.store.answer(position, form)
         if answered.delivered:
-            return Served(answered.frame, Route.SOURCE)
+            return Served(answered.payload, Route.SOURCE)
         if answered.refusal is Refusal.GONE:
             return Served(None, Route.GONE)
         return Served(None, Route.HOLD)

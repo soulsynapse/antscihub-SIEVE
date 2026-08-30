@@ -1,0 +1,82 @@
+{
+ "experiment": "01-derived-binding",
+ "question": "Is a step's positioning and extent derivable from what feeds it plus its own offsets, or does a step have to declare them?",
+ "when": "2026-08-30T20:55:39.024397+00:00",
+ "sieve_rev": "aa7af21",
+ "machine": {
+  "platform": "Windows-11-10.0.26200-SP0",
+  "processor": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
+  "logical_cpus": 32,
+  "python": "3.13.5"
+ },
+ "versions": {
+  "av": "18.1.0",
+  "cv2": "5.0.0",
+  "numpy": "2.5.2",
+  "ffmpeg": "ffmpeg version 2025-02-06-git-6da82b4485-full_build-www.gyan.dev Copyright (c) 2000-2025 the FFmpeg developers"
+ },
+ "footage": [],
+ "notes": [
+  "heads at listed[reach]: {'lag mhi': 30030, 'lk flow': 1001}, 29 rows apart",
+  "one positioning for both steps: random, window=None; over a FORWARD input the output is random",
+  "product names are tool-local: two crops both offer ['flow', 'flow field']; qualification is the pipeline's",
+  "a value edge's payload arrives in `Answer.payload` \u2014 the field was named `frame` when this ran, and holding a float under a name meant for pixels is what got it renamed",
+  "heads, positioning and end-to-end read all held"
+ ],
+ "cases": [
+  {
+   "name": "lk-flow-through-a-binding",
+   "params": {
+    "source": "synthetic:frames=200",
+    "rows": 40,
+    "form": "0+0+640x360@640x360:gray"
+   },
+   "unit": "ms per position",
+   "note": "field and reduce only; the read is not timed",
+   "truncated": false,
+   "n": 40,
+   "samples_ms": [
+    11.079600000812206,
+    4.049700000905432,
+    3.6242999995010905,
+    3.429700002016034,
+    3.411400000914,
+    3.53989999712212,
+    3.244200001063291,
+    3.460599997197278,
+    3.352400002768263,
+    3.437400002439972,
+    3.3236000017495826,
+    3.5968999945907854,
+    3.367400000570342,
+    3.490099996270146,
+    3.347999998368323,
+    3.405900002690032,
+    3.4325000015087426,
+    3.420500004722271,
+    3.619099996285513,
+    3.627899997809436,
+    3.35879999329336,
+    3.453100005572196,
+    3.3589999948162585,
+    3.5429999988991767,
+    3.4958000032929704,
+    4.242099996190518,
+    3.4739999973680824,
+    3.478999999060761,
+    3.366900004039053,
+    3.404800001590047,
+    3.2815000013215467,
+    3.3512999943923205,
+    4.039599996758625,
+    3.5310000021127053,
+    3.298199997516349,
+    3.515199998219032,
+    3.3019999973475933,
+    3.277299998444505,
+    3.2261000014841557,
+    3.345899996929802
+   ]
+  }
+ ]
+}

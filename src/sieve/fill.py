@@ -178,8 +178,8 @@ class WindowFill:
                     # Only GONE — LATER and FORM are transient, not permanent holes.
                     self.holes.add(position)
                 continue    # a hole, or not to us now; either way not a chunk
-            self.cache.put(position, self.form, answered.frame)
-            buffer.append(answered.frame)
+            self.cache.put(position, self.form, answered.payload)
+            buffer.append(answered.payload)
             self.at = ordinal
             delivered += 1
         if len(buffer) == cend - cstart and self.form.pix == "gray":

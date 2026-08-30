@@ -16,6 +16,14 @@ property share the type and nothing else.
 Properties are optional per instance: a kind does not mandate which properties
 are present. The tool and the substrate check at the point of use.
 
+FIELD is the fourth kind and the one that had to be argued for. A measurement
+per pixel is neither a picture nor a classification, and the ground `nodes.Step`
+refused to offer one on was that a float32 field would grade EXACT against a
+uint8 gray frame over the same rect. That closes where the mistake would be
+made, in `forms.Form.pix`, rather than here — which is why the kind is
+admissible at all. What a chained field costs held against recomputed is a
+measurement, and it is in `docs/findings/`.
+
 Position-indexing is a property of the edge, not a kind of its own: a
 constant is a value whose declaration ignores position, which is ADR-0006's
 declaration in its degenerate case rather than a second mechanism beside it.
@@ -32,8 +40,13 @@ from sieve.contract.forms import Form
 FRAME = "frame"   #: pixels at a form — an image
 MASK = "mask"     #: pixels at a form — a classification per pixel
 VALUE = "value"   #: a number — a threshold, a count, a rate
+FIELD = "field"   #: pixels at a form — one measurement per pixel
 
-KINDS: frozenset[str] = frozenset({FRAME, MASK, VALUE})
+KINDS: frozenset[str] = frozenset({FRAME, MASK, VALUE, FIELD})
+
+#: The kinds that are pixels, and so the ones that carry a form and spell a
+#: sample format. A value says a dtype instead.
+PIXELS: frozenset[str] = frozenset({FRAME, MASK, FIELD})
 
 
 class Access(str, Enum):

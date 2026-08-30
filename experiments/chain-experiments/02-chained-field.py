@@ -45,6 +45,14 @@ Leaving the frame side to vary would price that again and bury the field
 question underneath it, so every frame this needs is resident before either
 case is timed and the only thing that differs is whether a *field* is kept.
 
+**Landed.** The first paragraph describes the tree as it was: `FIELD` is an
+edge kind now, `Form.pix` spells the sample format, `nodes.Step` carries a
+`Wanted`, and `pipeline/binding.py` checks the kind against the want and offers
+a field product. The records below are imported from `contract/` rather than
+proposed, so a re-run measures what landed. `lk flow` offers its field for
+real, and that re-keys nothing: `chain.key` folds name, version and params, and
+a product is none of the three.
+
 Run: `uv run --group tools --group experiments python 02-chained-field.py`
 """
 
@@ -140,14 +148,13 @@ def producer(tool) -> Declared:
     """`lk flow` as it would declare itself once a field is a kind.
 
     Its arithmetic verbatim, its frame want made a record, and the field it
-    already computes offered as a product instead of drawn and discarded. The
-    tool file is not edited: what a tool declares is the question, and editing
-    it before the answer is in would re-key every series it has written
-    (ADR-0010) for a proposal that might not survive.
+    already computes offered as a product instead of drawn and discarded. Since
+    this landed the tool file says the same thing itself, and this stays as the
+    declaration the measurement was made against.
     """
     step = tool.role
     return Declared(
-        wants=Wanted(FRAME, step.form_for),
+        wants=step.wants,
         offsets=step.offsets,
         field=step.field,
         reduce=step.reduce,
@@ -199,7 +206,7 @@ def _resident(upstream: Output, want: Form, listed: tuple[int, ...],
         answer = read_form(upstream, listed[row], want)
         if not answer.delivered:
             raise SystemExit(f"row {row} refused {answer.refusal} while warming")
-        kept[row] = answer.frame
+        kept[row] = answer.payload
 
     ranks = {position: row for row, position in enumerate(listed)}
 

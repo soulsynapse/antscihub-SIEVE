@@ -30,9 +30,9 @@ import cv2
 import numpy as np
 
 from sieve.contract import Tool
-from sieve.contract.edges import VALUE
+from sieve.contract.edges import FIELD, FRAME, VALUE
 from sieve.contract.forms import Form
-from sieve.contract.nodes import Produced, Step
+from sieve.contract.nodes import Produced, Step, Wanted
 
 _MAX_CORNERS = 500
 _QUALITY = 0.01
@@ -89,11 +89,12 @@ TOOLS = (
         name="lk flow",
         version=1,
         role=Step(
-            form_for=_analysis_form,
+            wants=Wanted(FRAME, _analysis_form),
             offsets=_OFFSETS,
             field=_field,
             reduce=_reduce,
-            produces=(Produced("flow", VALUE, dtype="float"),),
+            produces=(Produced("flow", VALUE, dtype="float"),
+                      Produced("flow field", FIELD, pix="f32")),
             params={
                 "corners": _MAX_CORNERS,
                 "quality": _QUALITY,

@@ -8,23 +8,23 @@ Two models, same workload:
               The window is a consequence of the graph's reaches, not a
               parameter.
 
-The workload: a simulated fill over 600 positions with three consumers —
+The workload: a simulated fill over 600 rows with three consumers —
 the GUI at reach 1, `absdiff` at reach 1 (offsets -1,0), and `lag_mhi` at
 reach 30 (offsets -30,-20,-10,0). The interesting case is `lag_mhi`: its
-reach is 30, but it only needs four positions out of those thirty. The fixed
+reach is 30, but it only needs four rows out of those thirty. The fixed
 window holds all 300; the derived model should hold only the union of what
-the three consumers declare, which is at most 34 positions (30 + 1 + 0 for
+the three consumers declare, which is at most 34 rows (30 + 1 + 0 for
 gui + 2 for absdiff, minus overlaps with mhi's set).
 
 Three things are measured:
 
-1. **Peak holds.** The maximum number of (position, form_key) pairs held at
+1. **Peak holds.** The maximum number of (row, form_key) pairs held at
    any point during the sweep, under each model.
 
 2. **Eviction events.** How many frames each model drops over the sweep.
    Derived should evict earlier and more often.
 
-3. **Correctness.** At every position, verify that no consumer's declared
+3. **Correctness.** At every row, verify that no consumer's declared
    need is evicted — the invariant the derived model must never violate.
 """
 
@@ -78,7 +78,7 @@ def run_derived(run: harness.Run) -> None:
         all_fetched |= held
 
         # series writer releases after consuming
-        g.release_position("series_w", pos, form_a.key())
+        g.release_row("series_w", pos, form_a.key())
 
         # evict anything the graph says is free
         can_evict = g.evictable(all_fetched)
@@ -93,7 +93,7 @@ def run_derived(run: harness.Run) -> None:
         for nid, need in [("gui", Need("gui", pos, (0,), form_gui.key())),
                           ("absdiff", Need("absdiff", pos, tool_a.offsets, form_a.key())),
                           ("mhi", Need("mhi", pos, tool_m.offsets, form_m.key()))]:
-            for p in need.needed_positions():
+            for p in need.needed_rows():
                 key = (p, need.form_key)
                 if key not in current_held:
                     errors.append(f"pos={pos}: {nid} needs {key} but not held")
@@ -134,13 +134,13 @@ def run_fixed(run: harness.Run) -> None:
     held: set[tuple[int, str]] = set()
 
     for pos in range(max(-min(tool_m.offsets), 1), SWEEP + 1):
-        # simulate fetching for all consumers at this position
+        # simulate fetching for all consumers at this row
         gui_needs = {(pos, form_gui.key())}
         a_needs = {(pos + off, form_a.key()) for off in tool_a.offsets}
         m_needs = {(pos + off, form_m.key()) for off in tool_m.offsets}
         held |= gui_needs | a_needs | m_needs
 
-        # fixed window: drop anything more than WINDOW positions back
+        # fixed window: drop anything more than WINDOW rows back
         before = len(held)
         held = {(p, fk) for p, fk in held if p > pos - WINDOW}
         evictions += before - len(held)

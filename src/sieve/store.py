@@ -252,7 +252,7 @@ class Store:
         if answered.refusal is Refusal.GONE:
             self.missing.add(position)
         elif answered.delivered:
-            self.frames.put(position, wanted, answered.frame)
+            self.frames.put(position, wanted, answered.payload)
         return answered
 
     def frame(self, position: int, want: Form | None = None) -> Any | None:
@@ -264,7 +264,7 @@ class Store:
         `answer` — and this is the shorter name, so the shorter name is the
         one that loses information.
         """
-        return self.answer(position, want).frame
+        return self.answer(position, want).payload
 
     def starts(self) -> tuple[int, ...]:
         """Where a read may begin, as the source says. Every position if not.

@@ -28,7 +28,7 @@ from pathlib import Path
 import av
 import numpy as np
 
-#: Beyond this many positions ahead, a seek beats stepping. Measured in
+#: Beyond this many rows ahead, a seek beats stepping. Measured in
 #: `decode-experiments/03`; the value lives there and this is a use of it.
 STEP_WITHIN = 60
 
@@ -79,7 +79,7 @@ class Fetcher:
         """Would serving *idx* be a step from where the cursor stands?
 
         The question the rule the dispatcher finding leaves unimplemented has
-        to ask: do not abandon a sequential run for a position that run will
+        to ask: do not abandon a sequential run for a row that run will
         arrive at anyway.
         """
         if self._pos is None or self._decoded is None:

@@ -125,7 +125,7 @@ def main() -> None:
     errors: list[str] = []
     bound = {}
     for name, tool in steps.items():
-        form = tool.role.form_for(rect)
+        form = tool.role.wants.form_for(rect)
         series = _series_for(tool, upstream, listed, form)
         bound[name] = (tool, series, bind(tool.role, upstream, rect, series))
 
@@ -167,7 +167,7 @@ def main() -> None:
     forward = registry.source_for(FORWARD_AT, FRAME).role.open(FORWARD_AT)
     up_forward = _frame_output(forward)
     tool = steps["lk flow"]
-    forward_form = tool.role.form_for(up_forward.edge.form.rect)
+    forward_form = tool.role.wants.form_for(up_forward.edge.form.rect)
     forward_bound = bind(
         tool.role, up_forward, up_forward.edge.form.rect,
         _series_for(tool, up_forward, up_forward.extent().listed, forward_form))
@@ -192,7 +192,7 @@ def main() -> None:
     x, y, w, h = rect
     other = (x, y, max(2, w // 2), max(2, h // 2))
     tool = steps["lk flow"]
-    left_form, right_form = tool.role.form_for(rect), tool.role.form_for(other)
+    left_form, right_form = tool.role.wants.form_for(rect), tool.role.wants.form_for(other)
     left = bind(tool.role, upstream, rect,
                 _series_for(tool, upstream, listed, left_form))
     right = bind(tool.role, upstream, other,
@@ -228,13 +228,14 @@ def main() -> None:
         errors.append(f"a covered row refused {covered.refusal}")
     if uncovered.refusal is not Refusal.LATER:
         errors.append(f"an uncovered row answered {uncovered!r}, not LATER")
-    if not isinstance(covered.frame, float):
-        errors.append(f"a value edge answered with {type(covered.frame)}")
+    if not isinstance(covered.payload, float):
+        errors.append(f"a value edge answered with {type(covered.payload)}")
     print(f"  computed {len(samples)} rows from {listed[head_row]}; "
-          f"covered row reads {covered.frame:.4f}, "
+          f"covered row reads {covered.payload:.4f}, "
           f"uncovered row refuses {uncovered.refusal.value}")
-    run.note("a value edge's payload arrives in `Answer.frame` — the record "
-             "holds a float under a field named for pixels")
+    run.note("a value edge's payload arrives in `Answer.payload` — the field "
+             "was named `frame` when this ran, and holding a float under a "
+             "name meant for pixels is what got it renamed")
 
     case = harness.Case(
         "lk-flow-through-a-binding",

@@ -6,8 +6,9 @@ against two steps of different reach and a forward-only source.
 
 Where each field of a bound edge comes from:
 
-  form       the step's `form_for` against the crop, checked against what the
-             producer holds with `forms.grade`
+  form       for a frame want, the step's `form_for` against the crop, checked
+             against what the producer holds with `forms.grade`; for a field
+             want, the producer's own, matched by equality
   timebase   the producer's, carried. A step never sees one.
   origin     the producer's, carried.
   access     RANDOM, and *not* the producer's. A step's output is read out of
@@ -33,6 +34,14 @@ answers it; getting the frames is the tier stack's and running the arithmetic
 is the caller's. `Demand` is the whole of what crosses that line, and it is
 `orchestrator-experiments/graph.py`'s `Need` without the urgency the graph
 derives for itself.
+
+**So a field edge reads out of the hold, and never computes.** Serving a field
+means running the producer's arithmetic, which needs frames, which this file
+does not fetch — so a bound field is served the same way a bound value is: read
+out of where it was kept, by whoever ran it. A value comes from the sink and a
+field comes from `Held`, and both answer LATER until something has written.
+That is the same shape as `Positioning.access` being RANDOM for a step over a
+forward-only source, and it is why that is honest.
 """
 
 from __future__ import annotations
@@ -41,9 +50,9 @@ from dataclasses import dataclass
 from typing import Any, Callable, Mapping, Protocol
 
 from sieve.contract import forms
-from sieve.contract.edges import FRAME, Access, Edge, Extent, Positioning
+from sieve.contract.edges import FIELD, FRAME, Access, Edge, Extent, Positioning
 from sieve.contract.forms import Form
-from sieve.contract.nodes import Answer, Output, Refusal
+from sieve.contract.nodes import Answer, Output, Refusal, Wanted
 from sieve.ordinals import Ordinals
 from sieve.pipeline.chain import Chain
 
@@ -81,6 +90,45 @@ class Demand:
     row: int
 
 
+class Held:
+    """Fields kept because some declaration downstream still admits them.
+
+    ADR-0006's hold-and-release with a field in it instead of a frame. What is
+    released is derived from the consumer's own offsets — `keep_from` takes the
+    oldest row anything can still ask for — rather than from a window somebody
+    sized, which is the arrangement measured for frames in
+    `orchestrator-experiments/02-derived-eviction.py` and for fields in
+    `chain-experiments/02-chained-field.py`.
+
+    **Scoped to one bound node, and that is what makes a row a key.** Rows are
+    ranks against the extent this binding snapshotted, so one `Held` means one
+    producer, one form and one table, and a row names a field completely.
+    Shared across two bindings it names nothing — two tables, and an ordinal is
+    only valid beside the one that produced it (ADR-0004).
+
+    Not to be grown into a pool. Composite keys, a byte budget and sharing
+    counts are `orchestrator-experiments/pool.py`; a second one of those spelled
+    differently is the accretion rather than the fix.
+    """
+
+    def __init__(self) -> None:
+        self._by_row: dict[int, Any] = {}
+
+    def get(self, row: int) -> Any | None:
+        return self._by_row.get(row)
+
+    def put(self, row: int, field: Any) -> None:
+        self._by_row[row] = field
+
+    def keep_from(self, row: int) -> None:
+        """Drop every row below *row* — no admitted offset still names them."""
+        for stale in [held for held in self._by_row if held < row]:
+            del self._by_row[stale]
+
+    def __len__(self) -> int:
+        return len(self._by_row)
+
+
 @dataclass(frozen=True)
 class Placed:
     """One node, bound: what it offers, what it wants, where it writes."""
@@ -92,6 +140,9 @@ class Placed:
     sink: Sink | None = None
     offsets: tuple[int, ...] = ()
     listed: tuple[int, ...] = ()
+    #: where this node's field products are kept between the demands that
+    #: share them. None for a node that offers no field.
+    held: Held | None = None
 
 
 class Bound:
@@ -107,6 +158,10 @@ class Bound:
     def sink(self, node: str) -> Sink | None:
         """Where *node*'s values are kept, for whoever admits its inputs."""
         return self.placed[node].sink
+
+    def hold(self, node: str) -> Held | None:
+        """Where *node*'s fields are kept, for whoever runs its arithmetic."""
+        return self.placed[node].held
 
     def demand(self, node: str, row: int) -> Demand | None:
         """What *node* needs to answer *row*, or None if it cannot.
@@ -153,18 +208,10 @@ def _bind_step(chain: Chain, node: Any, placed: Mapping[str, Placed],
     feeding = chain.feeding(node.id)
     upstream = _producing(placed, feeding)
 
-    if upstream.edge.kind != FRAME:
-        raise ValueError(
-            f"{node.id!r} wants frames and {feeding.producer}.{feeding.product} "
-            f"is a {upstream.edge.kind}")
     if upstream.extent is None or upstream.edge.at is None:
         raise ValueError(f"{feeding.producer}.{feeding.product} is not positioned")
 
-    want = step.form_for(rect)
-    have = upstream.edge.form
-    if forms.grade(have, want) is None:
-        raise ValueError(
-            f"{node.id!r} wants {want.key()}, which {have.key()} cannot answer")
+    want = _wanted_form(node.id, step.wants, upstream, feeding, rect)
 
     up = upstream.edge.at
     at = Positioning(timebase=up.timebase, origin=up.origin,
@@ -193,15 +240,67 @@ def _bind_step(chain: Chain, node: Any, placed: Mapping[str, Placed],
         return (Answer(value) if value is not None
                 else Answer(refusal=Refusal.LATER))
 
-    outputs = {
-        product.name: Output(
+    held = Held() if any(product.kind == FIELD
+                         for product in step.produces) else None
+
+    def read_field(shape: Form) -> Callable[..., Answer]:
+        def read(position: int | None, form: Form | None = None) -> Answer:
+            # A form the step did not measure at is refused rather than built:
+            # `read_form`'s fallback is `forms.build`, which crops and
+            # resamples, and neither is a thing to do to a measurement.
+            if form is not None and form != shape:
+                return Answer(refusal=Refusal.FORM)
+            row = rows.rank(position) if position is not None else None
+            got = None if row is None else held.get(row)
+            return Answer(got) if got is not None else Answer(refusal=Refusal.LATER)
+        return read
+
+    outputs: dict[str, Output] = {}
+    for product in step.produces:
+        if product.kind == FIELD:
+            # The step said the sample format, because that is a property of
+            # its arithmetic; the geometry is the one it read its input in,
+            # and was never the step's to say.
+            shape = Form(want.rect, want.out, product.pix)
+            outputs[product.name] = Output(
+                edge=Edge(product.name, FIELD, form=shape, at=at),
+                read=read_field(shape), extent=extent, starts=None,
+            )
+            continue
+        outputs[product.name] = Output(
             edge=Edge(product.name, product.kind, dtype=product.dtype, at=at),
             read=read, extent=extent, starts=None,
         )
-        for product in step.produces
-    }
     return Placed(node.id, outputs, upstream=upstream, want=want, sink=sink,
-                  offsets=step.offsets, listed=listed)
+                  offsets=step.offsets, listed=listed, held=held)
+
+
+def _wanted_form(node: str, want: Wanted, upstream: Output, feeding: Any,
+                 rect: tuple[int, int, int, int]) -> Form:
+    """The form *node* reads its input in, or raise saying why it cannot.
+
+    The kind is checked before the form, which is the whole of what making the
+    want a declaration buys: a frame cannot answer a field want by being the
+    same size, and a field cannot answer a frame want by being pixels.
+    """
+    have = upstream.edge
+    if have.kind != want.kind:
+        raise ValueError(
+            f"{node!r} wants a {want.kind} and {feeding.producer}."
+            f"{feeding.product} is a {have.kind}")
+    if want.kind == FRAME:
+        asked = want.form_for(rect)
+        if forms.grade(have.form, asked) is None:
+            raise ValueError(
+                f"{node!r} wants {asked.key()}, which {have.form.key()} "
+                f"cannot answer")
+        return asked
+    if have.form is None:
+        raise ValueError(f"{feeding.producer}.{feeding.product} is a "
+                         f"{have.kind} carrying no form")
+    # Equality, not `grade`: a measurement resampled is a different
+    # measurement, so a field either is the one asked for or is not.
+    return have.form
 
 
 def _producing(placed: Mapping[str, Placed], feeding: Any) -> Output:

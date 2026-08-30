@@ -30,9 +30,9 @@ import cv2
 import numpy as np
 
 from sieve.contract import Tool
-from sieve.contract.edges import VALUE
+from sieve.contract.edges import FRAME, VALUE
 from sieve.contract.forms import Form
-from sieve.contract.nodes import Produced, Step
+from sieve.contract.nodes import Produced, Step, Wanted
 
 #: How far back each difference is taken, longest first once negated.
 _LAGS = (30, 20, 10)
@@ -71,7 +71,7 @@ TOOLS = (
         name="lag mhi",
         version=1,
         role=Step(
-            form_for=_analysis_form,
+            wants=Wanted(FRAME, _analysis_form),
             offsets=_OFFSETS,
             field=_field,
             reduce=_reduce,

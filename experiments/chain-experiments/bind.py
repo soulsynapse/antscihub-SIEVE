@@ -30,11 +30,17 @@ The ordinals are snapshotted at bind, for the reason `serve.Ordinals` is
 snapshotted rather than living on the store: an extent that grows would
 otherwise renumber rows already written.
 
-## The consumer side, proposed
+## The consumer side — proposed here, landed in `contract/`
 
-`02-chained-field.py` asks what happens when the thing upstream is another
-step. Three records here are proposals for `contract/`, held out here until a
-measurement says whether they survive:
+`02-chained-field.py` asked what happens when the thing upstream is another
+step. The three records it proposed are now imported from the tree rather than
+defined here: `Wanted` and `Produced` in `contract/nodes.py`, `FIELD` and
+`PIXELS` in `contract/edges.py`, the sample format in `Form.pix`, and the
+consumer-side binding in `pipeline/binding.py`. What is still local is this
+file's single-step binder, which fetches through the `Output` it is handed —
+the product's does not fetch at all — and the counting `Held` below, which the
+timing needed. The paragraphs that follow are the argument as it was made,
+kept because the result is filed against them:
 
 `Wanted` is what `nodes.Step` currently implies and never says. Today the want
 lives in two places that cannot disagree because neither is a declaration:
@@ -77,29 +83,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Callable, Mapping, Protocol
 
-from sieve.contract import edges
 from sieve.contract import forms
-from sieve.contract.edges import FRAME, MASK, Access, Edge, Extent, Positioning
+from sieve.contract.edges import (
+    FIELD, FRAME, PIXELS, Access, Edge, Extent, Positioning,
+)
 from sieve.contract.forms import Form
-from sieve.contract.nodes import Answer, Output, Refusal, Step, read_form
+from sieve.contract.nodes import (
+    Answer, Output, Produced as Product, Refusal, Step, Wanted, read_form,
+)
 from sieve.serve import Ordinals
-
-#: Proposed for `edges.KINDS`: a measurement per pixel, which is neither a
-#: picture nor a classification. Carries a form because it is pixels.
-FIELD = "field"
-
-# `edges.KINDS` is closed and SIEVE's alone to extend, so `Edge` refuses this
-# kind until the file says otherwise. Opened here rather than there because
-# what the experiment is testing is whether the kind is worth the decision —
-# and an experiment that could not name the cost of its own proposal in one
-# line would be hiding it. This is that line, and it is the whole of what
-# `contract/edges.py` changes if the answer is yes.
-edges.KINDS = edges.KINDS | {FIELD}
-
-#: The kinds that are pixels, and therefore the ones a product spells a sample
-#: format for. A value says a dtype instead; the properties are flat on the
-#: edge and two kinds that share one share the type (`contract/edges.py`).
-PIXELS = frozenset({FRAME, MASK, FIELD})
 
 
 class Unreachable(LookupError):
@@ -112,73 +104,14 @@ class Sink(Protocol):
     def get(self, row: int) -> float | None: ...
 
 
-@dataclass(frozen=True)
-class Wanted:
-    """What a step consumes. `form_for` belongs to pixel kinds and nothing else.
-
-    A field want carries no `form_for` deliberately: a step fed a field takes
-    the form it is handed, because the producer measured at a geometry the
-    consumer had no say in. Only a frame want gets to name a form, and what it
-    names is the crop.
-    """
-
-    kind: str
-    form_for: Callable[[tuple[int, int, int, int]], Form] | None = None
-
-    def __post_init__(self) -> None:
-        if self.kind == FRAME and self.form_for is None:
-            raise ValueError("a frame want names the form it wants the crop in")
-        if self.kind != FRAME and self.form_for is not None:
-            raise ValueError(f"a {self.kind} want does not choose its own form")
+#: What `02` declared its steps as, now that `contract/nodes.Step` carries
+#: the want. Kept as a name because the results and the prose use it.
+Declared = Step
 
 
-@dataclass(frozen=True)
-class Product:
-    """`nodes.Produced` with the sample format a pixel kind has to spell."""
-
-    name: str
-    kind: str
-    dtype: str | None = None   #: a value is a number
-    pix: str | None = None     #: a frame, mask or field is pixels
-
-    def __post_init__(self) -> None:
-        if (self.kind in PIXELS) != (self.pix is not None):
-            raise ValueError(f"a {self.kind} product spells pix, or does not")
-
-
-@dataclass(frozen=True)
-class Declared:
-    """A step whose want is a declaration instead of a hardcoded FRAME.
-
-    `nodes.Step` with `wants` added and `form_for` moved onto it. Everything
-    else is unchanged and deliberately so: what a step admits, what it
-    computes and what it reduces to were never the part in question.
-    """
-
-    wants: Wanted
-    offsets: tuple[int, ...]
-    field: Callable[[Mapping[int, Any], int], Any]
-    reduce: Callable[[Any], float]
-    produces: tuple[Product, ...]
-    params: Mapping[str, Any] | None = None
-
-    def needs(self, row: int) -> tuple[int, ...]:
-        return tuple(row + off for off in self.offsets)
-
-    @property
-    def reach(self) -> int:
-        return -min(self.offsets)
-
-
-def wants_of(step: Step | Declared) -> Wanted:
-    """What *step* consumes — declared, or the frame want the tree implies.
-
-    The fallback is the statement of what `contract/nodes.py` says today: a
-    step is "a node with frame inputs", and its `form_for` is the frame want
-    with the record taken off.
-    """
-    declared = getattr(step, "wants", None)
-    return declared if declared is not None else Wanted(FRAME, step.form_for)
+def wants_of(step: Step) -> Wanted:
+    """What *step* consumes. One field now, and no fallback behind it."""
+    return step.wants
 
 
 def wanted_form(step: Step | Declared, upstream: Output,
@@ -215,13 +148,20 @@ class Held:
     a window size somebody chose, which is the arrangement
     `orchestrator-experiments/02-derived-eviction.py` measured for frames.
 
-    **Keyed by row, which is narrower than it looks.** `pool.py` keys by
-    position and form together, because two consumers at different forms
-    need different arrays of one instant and a pool keyed by one of them
-    thinks either satisfies the other — the lesson `store.py` learned first
-    and the pool learned again. This holds one producer's fields at one
-    form, so a row is a complete key here and nowhere else. Anything that
-    grows a second producer or a second crop wants the pool, not this.
+    **Scoped to one bind, and that is the whole of what makes a row a key.**
+    Rows here are ranks against the extent snapshot this binding took, for
+    the reason the snapshot is taken at all: an extent that grows renumbers
+    rows already written. One `Held` per `bind` call means one producer,
+    one form and one table, so a row names a field completely. Shared
+    across two bindings it names nothing — two tables, and an ordinal is
+    only valid beside the one that produced it (ADR-0004).
+
+    Not to be grown into a pool. Composite keys, a byte budget and sharing
+    counts are `orchestrator-experiments/pool.py`, and a second one of
+    those spelled differently is the accretion, not the fix. What a real
+    key for a field looks like is `chain.key` — the producer's key folded
+    in front, which is the part no node can spell for itself and the part
+    a node id would miss.
 
     Counts are kept because the reuse is the result: a consumer at lags 30,
     20 and 10 asks for each upstream row four times, thirty rows apart, so a
@@ -365,5 +305,5 @@ def inputs_for(step: Step | Declared, upstream: Output,
                   else upstream.read(listed[needed], asked))
         if not answer.delivered:
             return None
-        inputs[needed] = answer.frame
+        inputs[needed] = answer.payload
     return inputs

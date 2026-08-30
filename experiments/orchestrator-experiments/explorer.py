@@ -5,7 +5,7 @@ Forked from `storage-experiments/session-explorer.py` and
 except the dispatcher, and everything that wants a frame — the GUI's drag,
 the window sweep, the tool's ordered pass — says so by declaring a `Need`
 through the graph. The dispatcher reads `graph.pressure_queue()` and serves
-the highest-pressure position that is not on hand. That is the whole
+the highest-pressure row that is not on hand. That is the whole
 scheduling policy, and this explorer exists to find out what it feels like.
 
 What changed from the first version of this explorer, and why:
@@ -159,7 +159,7 @@ LIVE_PLAYHEAD = "--live-playhead" in sys.argv
 #: the trace implies. Each is independent, and they compose.
 #:
 #: `--abandon-within N`: an INTERACTIVE need the running sequential producer
-#: will reach within N positions does not get preempted for. The finding's
+#: will reach within N rows does not get preempted for. The finding's
 #: first rule. N <= STEP_WITHIN is a no-op by construction, because inside
 #: that distance the fetcher steps rather than seeks and the pick was never
 #: a seek to refuse; the sweep is over values above it.
@@ -177,7 +177,7 @@ GUI_CURSOR = "--gui-cursor" in sys.argv
 #: target is put in the pool instead of discarded. Not named by the
 #: finding, which read the return seek as the price of moving the cursor;
 #: it is also the price of throwing away what moving it decoded. A step of
-#: 40 to serve the GUI passes 39 positions the sweep had declared and then
+#: 40 to serve the GUI passes 39 rows the sweep had declared and then
 #: seeks back for them.
 KEEP_PASSED = "--keep-passed" in sys.argv
 
@@ -213,7 +213,7 @@ class Fetcher:
     """One open container, absolute frame indices, sequential cursor.
 
     Reports how it got there. A dispatcher ranked by pressure rather than by
-    position pays for every reorder in seeks, and the seek/step split is the
+    row pays for every reorder in seeks, and the seek/step split is the
     price of the policy — the number that says whether priority scheduling
     is worth what locality it gave up.
     """
@@ -228,7 +228,7 @@ class Fetcher:
 
     @property
     def cursor(self) -> int | None:
-        """Where the sequential run has got to, or None if there is no run.
+        """Which row the sequential run has got to, or None if there is no run.
 
         Read by the dispatcher, which owns the only policy that can decline
         to move it. The fetcher itself has no opinion about whether being
@@ -242,10 +242,10 @@ class Fetcher:
               ) -> tuple[np.ndarray, str]:
         """Decode `idx`, stepping if it is close enough ahead.
 
-        `deposit` is offered every position passed on the way. Discarding
+        `deposit` is offered every row passed on the way. Discarding
         them is the default because it is what the committed logs were
         taken under, not because it is right: a step of 40 decodes 40
-        frames and returns one, and the 39 are exactly the positions the
+        frames and returns one, and the 39 are exactly the rows the
         run being interrupted had declared.
         """
         if self._decoded is not None and self._pos is not None:
@@ -278,7 +278,7 @@ class Dispatcher:
     """The only thing in this explorer that decodes.
 
     Reads the graph's pressure queue, takes the highest-pressure need with
-    an unserved position, decodes that one position, puts it in the pool,
+    an unserved row, decodes that one row, puts it in the pool,
     and re-consults. Re-consulting after every single frame is what makes
     preemption granularity one decode rather than one window; it is also
     what lets a node's declared *order* (attention-first, for a sweep) win
@@ -304,10 +304,10 @@ class Dispatcher:
         self.idle_polls = 0
         self.failures = 0
         #: decodes that landed after the node asking had already moved on.
-        #: The price of preempting per-frame for a consumer whose position
+        #: The price of preempting per-frame for a consumer whose row
         #: changes faster than a seek — a scrub declares dozens of these.
         self.stale = 0
-        #: positions decoded on the way to somewhere else and kept
+        #: rows decoded on the way to somewhere else and kept
         #: (`--keep-passed`). Counted apart from `served` because they are
         #: not a serve to anyone: nothing asked the dispatcher for them at
         #: the moment they were produced, and folding them into the decode
@@ -318,7 +318,7 @@ class Dispatcher:
         #: rather than inferred from the seeks that remain.
         self.refused = 0
         self.by_pressure: dict[str, int] = {}
-        #: every choice in order — role, position, how, cost, and how much
+        #: every choice in order — role, row, how, cost, and how much
         #: of the window was covered when it was made. The counts say what
         #: the policy cost; only the sequence says why, because the cost of
         #: a decode is a function of the one before it.
@@ -340,8 +340,8 @@ class Dispatcher:
     def running(self) -> bool:
         return self._thread is not None and self._thread.is_alive()
 
-    def _deposit(self, position: int, arr: np.ndarray) -> None:
-        """Keep a position the fetcher passed on its way somewhere else.
+    def _deposit(self, row: int, arr: np.ndarray) -> None:
+        """Keep a row the fetcher passed on its way somewhere else.
 
         Attributed to the run that was interrupted, not to the node the
         step was for: the sweep is who declared these and who would
@@ -350,13 +350,13 @@ class Dispatcher:
         window, which is the attribution error the dispatch envelope
         comment already warns about one level up.
         """
-        if self.pool.has(position, self.form_key):
+        if self.pool.has(row, self.form_key):
             return
-        self.pool.put(position, self.form_key, arr, by="fill")
+        self.pool.put(row, self.form_key, arr, by="fill")
         self.passed_kept += 1
 
     def _pick(self, cursor: int | None = None) -> tuple[Need, int] | None:
-        """The highest-pressure need with an unserved position.
+        """The highest-pressure need with an unserved row.
 
         `cursor` is where the sequential run has got to. Under
         `ABANDON_WITHIN` it is what lets a pick be refused: `pressure_queue`
@@ -382,7 +382,7 @@ class Dispatcher:
         return None
 
     def _reachable_soon(self, queue: list[Need], cursor: int) -> set[int]:
-        """Positions the running sequential producer will reach within
+        """Rows the running sequential producer will reach within
         `ABANDON_WITHIN`, if it is left alone.
 
         The producer is whichever declaration the cursor is currently
@@ -391,24 +391,24 @@ class Dispatcher:
         """
         soon: set[int] = set()
         for need in queue:
-            positions = need.needed_positions()
-            if not positions:
+            rows = need.needed_rows()
+            if not rows:
                 continue
-            lo, hi = min(positions), max(positions)
+            lo, hi = min(rows), max(rows)
             if not lo <= cursor <= hi:
                 continue
             if need.span <= 1:
                 continue
-            soon |= {p for p in positions
-                     if cursor < p <= cursor + ABANDON_WITHIN}
+            soon |= {r for r in rows
+                     if cursor < r <= cursor + ABANDON_WITHIN}
         return soon
 
     def _yields_to_run(self, need: Need, cursor: int,
                        soon: set[int]) -> bool:
-        """Is every position this need still wants one the run is about to
-        hand it anyway? Only then is refusing it free of starvation: a need
-        with one unserved position outside `soon` is not deferred, it is
-        served, because nothing else was going to produce that position.
+        """Is every row this need still wants one the run is about to hand
+        it anyway? Only then is refusing it free of starvation: a need with
+        one unserved row outside `soon` is not deferred, it is served,
+        because nothing else was going to produce that row.
         """
         unserved = need.unserved(self.pool.has)
         if not unserved:
@@ -453,7 +453,7 @@ class Dispatcher:
                     arr, how = reader.exact(idx, deposit)
                 except Exception:
                     self.failures += 1
-                    #: a position nothing can decode would otherwise be
+                    #: a row nothing can decode would otherwise be
                     #: picked forever — park a None so `has` says yes
                     self.pool.put(idx, need.form_key, np.zeros((1, 1), np.uint8),
                                   by=need.node_id)
@@ -493,10 +493,10 @@ class Dispatcher:
 class Sweep:
     """A node that wants a whole window, in attention-first order.
 
-    Not a thread. It declares once — every position in the window, as
+    Not a thread. It declares once — every row in the window, as
     offsets rotated so the anchor comes first — and the dispatcher works
     through that order at BACKGROUND pressure whenever nothing outranks it.
-    The declaration is also the hold: 480 positions in the graph's refs is
+    The declaration is also the hold: 480 rows in the graph's refs is
     what keeps the pool from sweeping the window out from under the tool.
 
     Replacing a fill thread with a declaration is the point. The old fill
@@ -538,15 +538,15 @@ class Sweep:
 class ToolRunner:
     """A tool's ordered pass over the window, riding on the sweep's decodes.
 
-    Declares source-form positions through the graph — the same form the
+    Declares source-form rows through the graph — the same form the
     GUI and the sweep declare — and derives its crop itself. The derivation
     is inside the envelope on purpose: it is the tool's cost, not the
     dispatcher's, and a graph that hid it would report a step as free that
-    is paying 1 MB of memcpy a position.
+    is paying 1 MB of memcpy a row.
 
     It declares DEFERRED and says nothing about where it ranks. It used to
     raise itself toward the playhead, which read as reasonable and was the
-    measured defect: its positions sit inside the sweep's declared window,
+    measured defect: its rows sit inside the sweep's declared window,
     so outranking the sweep bought by seek what was already arriving by
     sequential read, and stalled the producer while doing it. The graph
     subsumes it now (ADR-0006, ADR-0007).
@@ -565,7 +565,7 @@ class ToolRunner:
         self.values: dict[int, float] = {}
         self.pos: int | None = None
         self.computed = 0
-        self.starved = 0     #: positions abandoned waiting on the dispatcher
+        self.starved = 0     #: rows abandoned waiting on the dispatcher
         self.derive_ms = 0.0
 
     def running(self) -> bool:
@@ -640,7 +640,7 @@ class ToolRunner:
                 self.computed += 1
 
                 for n in needed:
-                    self.graph.release_position(self.node_id, n, fk)
+                    self.graph.release_row(self.node_id, n, fk)
         finally:
             self.graph.release(self.node_id)
 

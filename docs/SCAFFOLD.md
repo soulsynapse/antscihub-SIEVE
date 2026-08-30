@@ -20,13 +20,12 @@
   - 📄 `VOCAB.md`
   - 📄 `architecture-leads.md`
   - 📄 `kendricks-understanding.md`
+  - 📄 `related-software.md`
+  - 📄 `todo.md`
   - 📄 `vision-and-notes.md`
 - 📁 `experiments/`
   - 📁 `chain-experiments/`
-    - 📁 `results/`
-      - 📄 `01-derived-binding-20260830T183311Z.json`
-      - 📄 `01-derived-binding-20260830T200541Z.json`
-      - 📄 `02-chained-field-20260830T200535Z.json`
+    - 📁 `results/` (7 files)
     - 📄 `01-derived-binding.py` — Is a step's positioning derivable from what feeds it, or did it have to declare it?
     - 📄 `02-chained-field.py` — Can a step be fed another step's field, and what does serving that field cost?
     - 📄 `README.md`
@@ -46,8 +45,8 @@
     - 📄 `explorer.py` — Feel the decode approaches by hand: scrub, play, step and sweep each backend.
     - 📄 `harness.py` — What every decode experiment needs and none of them should decide twice.
   - 📁 `orchestrator-experiments/`
-    - 📁 `explorer-logs/` (45 files)
-    - 📁 `results/` (11 files)
+    - 📁 `explorer-logs/` (48 files)
+    - 📁 `results/` (15 files)
     - 📄 `01-unified-declaration.py` — Can one declaration contract schedule the GUI, two tools and a series writer?
     - 📄 `02-derived-eviction.py` — Does eviction derived from declarations hold fewer frames than a fixed window?
     - 📄 `03-non-frame-nodes.py` — Can a series writer release frames the graph tracks, without leaking?

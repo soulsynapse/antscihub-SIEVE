@@ -51,11 +51,10 @@ out 29029 apart, not 29. ADR-0004 says this and the code still went the other
 way on the first try. Nothing would have flagged it: both numbers are
 plausible, and one of them is a position that exists.
 
-**A value edge's payload arrives in `Answer.frame`.** `Answer` was written
-when the only producer was a source, so a float now travels under a field
-named for pixels. `__post_init__` only tests `is None`, so `0.0` is safe — it
-is the name that lies, and renaming it to `payload` is cheaper than forking
-the record.
+**A value edge's payload arrived in `Answer.frame`.** `Answer` was written
+when the only producer was a source, so a float travelled under a field named
+for pixels. `__post_init__` only tests `is None`, so `0.0` was never at risk —
+it was the name that lied. Renamed to `payload` when this landed.
 
 **A field's form is a frame's form wearing a different sample format.**
 `nodes.Step` refuses to offer the field on the ground that image-sized
@@ -87,9 +86,9 @@ discovering it once the name is in the tool contract.
 
 `bind.py` — the derivation under test, and the code the pipeline package
 ports: where each field of `Positioning` and `Extent` comes from, and why
-`access` is the input's least of all. It also holds the records `02` proposes for
-`contract/` — `Wanted`, `Product`, `FIELD` and the `Held` cache — out here
-rather than in the tree, and opens `edges.KINDS` in one line so the cost of
-the proposal is visible where it is made. `01` runs through the same binder
-unchanged, on a fallback that states what `nodes.Step` implies today: a step
-with no declared want wants frames at its `form_for`.
+`access` is the input's least of all. The records `02` proposed for
+`contract/` — `Wanted`, `Product` and `FIELD` — are now imported from there
+rather than defined here, and `edges.KINDS` carries the kind. What is still
+local is this file's single-step binder, which fetches through the `Output` it
+is handed where the product's binding does not fetch at all, and a counting
+`Held` the timing needed. `01` runs through the same binder unchanged.

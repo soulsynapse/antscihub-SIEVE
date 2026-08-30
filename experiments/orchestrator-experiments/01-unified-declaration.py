@@ -14,18 +14,18 @@ The graph has four nodes, each declaring {form, offsets, pressure}:
 Three things are measured:
 
 1. **Graph overhead.** The cost of `declare`, `held`, `evictable`, and
-   `release_position` against the same decisions made by hand (the flat
+   `release_row` against the same decisions made by hand (the flat
    `residency` call from `tool-experiments/tools.py`). The null hypothesis
    is that the graph operations are dict touches and in the noise.
 
 2. **Declaration completeness.** Does the graph's `held()` set match the
    union of what every node needs? Does `evictable()` correctly identify
-   frames no node wants? Run the four-node graph over a 300-position
-   sweep and verify at every position.
+   frames no node wants? Run the four-node graph over a 300-row
+   sweep and verify at every row.
 
 3. **Priority ordering.** Does `pressure_queue()` consistently rank the GUI
    above the tools, and the tools above idle nodes? Verified at every
-   position in the sweep.
+   row in the sweep.
 
 The experiment does not decode frames or fill a store. It tests the
 declaration contract in isolation — whether the bookkeeping is correct and
@@ -61,7 +61,7 @@ FORM_BGR = forms.Form(CROP, (CROP[2], CROP[3]), "bgr")
 
 
 def run_graph_sweep(run: harness.Run) -> None:
-    """Sweep the graph over SWEEP positions and verify at every step."""
+    """Sweep the graph over SWEEP rows and verify at every step."""
     g = Graph()
 
     tool_a = tools_mod.absdiff()
@@ -110,7 +110,7 @@ def run_graph_sweep(run: harness.Run) -> None:
         #: the derived properties, which is the whole of the contract now
         #: that nothing declares a rank. A tool sitting inside the sweep's
         #: declared window must fall behind it: the sweep will reach those
-        #: positions in its own order, and jumping the queue buys by seek
+        #: rows in its own order, and jumping the queue buys by seek
         #: what was already arriving by sequential read (ADR-0006).
         if order.index("sweep") > order.index("absdiff"):
             errors.append(f"pos={pos}: absdiff outranks the sweep feeding it")
@@ -120,7 +120,7 @@ def run_graph_sweep(run: harness.Run) -> None:
             errors.append(f"pos={pos}: sweep outranks a waiting person")
 
         # series writer releases after consuming
-        evictable_before = g.release_position("series_w", pos, form_a.key())
+        evictable_before = g.release_row("series_w", pos, form_a.key())
 
         # absdiff and dis_flow also hold pos at form_a.key() so it should
         # not be evictable yet (unless form keys differ)
@@ -158,14 +158,14 @@ def time_graph_ops(run: harness.Run) -> None:
             g.held()
             g.evictable(set())
             g.pressure_queue()
-            g.release_position("series_w", pos, form_a.key())
+            g.release_row("series_w", pos, form_a.key())
             yield pos
 
     harness.time_case(
         run, "graph-declare-hold-evict-priority",
         graph_work,
         params={"nodes": 4, "sweep": SWEEP, "forms": 2},
-        unit="ms per position",
+        unit="ms per row",
     )
     harness.report(run.cases[-1])
 
@@ -185,7 +185,7 @@ def time_graph_ops(run: harness.Run) -> None:
         run, "flat-residency",
         flat_work,
         params={"tools": 2, "sweep": SWEEP},
-        unit="ms per position",
+        unit="ms per row",
     )
     harness.report(run.cases[-1])
 

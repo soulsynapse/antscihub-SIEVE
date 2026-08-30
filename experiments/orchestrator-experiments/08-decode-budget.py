@@ -21,19 +21,23 @@ machine that ran it:
                       AVFrame) and the difference between the two is the
                       real price of not pinning it.
     the copy, cold    the same copy off a frame already held, which is what
-                      a microbenchmark of `.copy()` would report. It is
-                      several times the in-situ cost because the decoder's
-                      buffer is hot, and it is here so that the difference
-                      is on the record rather than rediscovered.
+                      a microbenchmark of `.copy()` would report. It runs an
+                      order above the in-situ cost, and not because of cache:
+                      15.9 MB at the in-situ figure would be above this
+                      machine's DRAM. The decoder is multithreaded and runs
+                      ahead, so in situ the copy overlaps codec threads that
+                      are the critical path. Both numbers are here because
+                      the small one holds only while decode is the
+                      bottleneck.
     graph bookkeeping what the dispatcher pays per decode before it decodes:
-                      `pressure_queue`, `unserved` over a 480-position
+                      `pressure_queue`, `unserved` over a 480-row
                       declaration, `still_wants`, and the GUI's `declare`.
                       Measured because it was the author's first hypothesis
                       for the gap and the measurement refuted it.
 
 The last one is the reason this file exists rather than a paragraph of
 arithmetic. `pressure_queue` sorts every need and builds a set of every
-declared position twice per call, and it is called after every single
+declared row twice per call, and it is called after every single
 decode; reading the code, that is obviously the hot spot. It is not, by two
 orders of magnitude. An unmeasured "obviously" is what this folder's rule
 about a number taken in the loop is for.
@@ -111,7 +115,7 @@ def _decode_case(run: harness.Run, name: str, hold) -> None:
 def _graph_case(run: harness.Run) -> None:
     """The dispatcher's per-decode bookkeeping, at the explorer's shape.
 
-    One sweep declaring a 480-frame window, a GUI at one position, a tool
+    One sweep declaring a 480-row window, a GUI at one row, a tool
     admitting four offsets -- what `explorer.py --walk` puts in the graph.
     The pool is a set, so `has` costs what a dict probe costs and no more;
     a pool under its lock is the explorer's number, not this one.
@@ -125,8 +129,8 @@ def _graph_case(run: harness.Run) -> None:
                        Urgency.DEFERRED))
     have = set(range(3768, 3768 + 300))
 
-    def has(position: int, _fk: str) -> bool:
-        return position in have
+    def has(row: int, _fk: str) -> bool:
+        return row in have
 
     sweep = next(n for n in graph.pressure_queue() if n.node_id == "fill")
 
@@ -144,7 +148,7 @@ def _graph_case(run: harness.Run) -> None:
 
     case = harness.time_case(run, "graph bookkeeping per decode", work,
                              warmup=WARMUP, unit="ms per dispatch",
-                             params={"declared_positions": 480, "nodes": 3})
+                             params={"declared_rows": 480, "nodes": 3})
     harness.report(case)
 
 
@@ -164,9 +168,9 @@ def _cold_copy_case(run: harness.Run) -> None:
             run, "the copy alone, off a held frame", work, warmup=WARMUP,
             unit="ms per copy", params={"bytes": int(nbytes)},
             note="what a microbenchmark of .copy() reports; the in-situ "
-                 "cost is the decode+copy minus decode+view difference, "
-                 "and is several times smaller because the decoder's "
-                 "buffer is still hot")
+                 "cost is the decode+copy minus decode+view difference, and "
+                 "is an order smaller because it hides behind the codec "
+                 "threads rather than because anything is cached")
         harness.report(case)
     finally:
         container.close()

@@ -7,10 +7,14 @@ twice, because every pool and store in this tree is keyed by the form's
 *string*, and string equality is a strictly weaker relation than
 `forms.grade`.
 
-    Frames.get      key = (position, form.key())      sieve/store.py
-    Pool.get        key = (position, form_key)        pool.py
+    Frames.get      key = (position, form.key())    sieve/store.py
+    Pool.get        key = (row, form_key)          pool.py
     Serving._cut    form != self.held_form            sieve/serve.py
     Serving._lo     forms.grade(proxy.form, form)     sieve/serve.py
+
+The first two are the same shape in different coordinates — a pts in
+`sieve/`, an ordinal here — which is not what this experiment is about and
+is worth not misreading off the table.
 
 Only the last consults the relation, and only for the proxy. So a held
 frame that EXACT-dominates the one being asked for is a miss, and the miss
@@ -24,7 +28,7 @@ source sampling and a canvas wanting the whole frame at display width:
                    decodes, each sequential and cheap.
     one-cursor     one decoder, pool keyed by exact form. The second
                    consumer's miss lands on a cursor already standing on the
-                   position it wants, and a re-read of where you already are
+                   row it wants, and a re-read of where you already are
                    is a seek.
     dominator      one decoder, the source-native plane held, every crop
                    derived from it. `grade` says EXACT for all three, so all
@@ -37,7 +41,7 @@ inadmissible route is even the cheaper one is a measurement and not an
 assumption; the result file carries it.
 
 Correctness, checked rather than asserted in prose: for every consumer at a
-sample of positions, the bytes derived from the plane are compared against
+sample of rows, the bytes derived from the plane are compared against
 `forms.build` from the same plane. EXACT is a claim about bytes and nothing
 in this tree had checked it.
 """
@@ -72,7 +76,7 @@ CROP_A = (2144, 982, 1024, 1024)     #: what one step reads
 CROP_B = (3300, 1200, 768, 768)      #: what the other reads
 DISPLAY_W = 1328                     #: what the canvas asks for
 
-#: how many positions to verify byte-for-byte. Every position would double
+#: how many rows to verify byte-for-byte. Every row would double
 #: the wall of the arrangement that happens to run the check.
 VERIFY = 5
 
@@ -128,15 +132,15 @@ def run_one_cursor(run: harness.Run, source, consumers) -> None:
             derives += 1
             pool.put(idx, form.key(), out, by=name)
         samples.append((time.perf_counter() - began) * 1000.0)
-        for name, form in consumers:      # one position at a time
-            graph.release_position(name, idx, form.key())
+        for name, form in consumers:      # one row at a time
+            graph.release_row(name, idx, form.key())
         pool.sweep()
     seeks, steps = fetcher.seeks, fetcher.steps
     fetcher.close()
     _record(run, "one-cursor-exact-key", samples, decodes, derives, seeks,
             steps, held_bytes=sum(form.nbytes for _, form in consumers),
             note=("pool keyed by form.key(); a second consumer's miss is a "
-                  "re-read of the position the cursor is standing on"))
+                  "re-read of the row the cursor is standing on"))
 
 
 def run_dominator(run: harness.Run, source, consumers, verify: bool) -> None:
@@ -166,14 +170,14 @@ def run_dominator(run: harness.Run, source, consumers, verify: bool) -> None:
                 out, _ = forms_mod.derive(plane, source, form)
                 if not np.array_equal(out, forms_mod.build(plane, form)):
                     mismatches.append(f"{name}@{idx}")
-        pool.wipe()               # per-position: this is a cost comparison
+        pool.wipe()               # per-row: this is a cost comparison
     seeks, steps = fetcher.seeks, fetcher.steps
     fetcher.close()
     note = ("the source plane EXACT-dominates all three consumers; "
             "one decode, three derives")
     if verify:
         note += (f"; bytes verified against forms.build at {VERIFY} "
-                 f"positions x {len(consumers)} consumers: "
+                 f"rows x {len(consumers)} consumers: "
                  + ("all equal" if not mismatches
                     else f"MISMATCH {mismatches}"))
     _record(run, "dominator", samples, decodes, derives, seeks, steps,
@@ -241,7 +245,7 @@ def _record(run, name, samples, decodes, derives, seeks, steps, held_bytes,
                 "seeks": seeks, "steps": steps,
                 "held_mb_per_position": round(held_bytes / (1 << 20), 2)},
         samples_ms=samples,
-        unit="ms per position, all consumers served",
+        unit="ms per row, all consumers served",
         note=note,
     )
     run.cases.append(case)

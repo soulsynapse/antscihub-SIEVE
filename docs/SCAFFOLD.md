@@ -21,6 +21,12 @@
   - 📄 `kendricks-understanding.md`
   - 📄 `vision-and-notes.md`
 - 📁 `experiments/`
+  - 📁 `chain-experiments/`
+    - 📁 `results/`
+      - 📄 `01-derived-binding-20260830T183311Z.json`
+    - 📄 `01-derived-binding.py` — Is a step's positioning derivable from what feeds it, or did it have to declare it?
+    - 📄 `README.md`
+    - 📄 `bind.py` — Binding a step to what feeds it: the facts a step is not allowed to declare.
   - 📁 `decode-experiments/`
     - 📁 `explorer-logs/` (30 files)
     - 📁 `results/` (11 files)

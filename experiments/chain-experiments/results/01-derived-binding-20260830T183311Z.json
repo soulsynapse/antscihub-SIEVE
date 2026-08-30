@@ -1,0 +1,82 @@
+{
+ "experiment": "01-derived-binding",
+ "question": "Is a step's positioning and extent derivable from what feeds it plus its own offsets, or does a step have to declare them?",
+ "when": "2026-08-30T18:33:11.818338+00:00",
+ "sieve_rev": "06ad9c1",
+ "machine": {
+  "platform": "Windows-11-10.0.26200-SP0",
+  "processor": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
+  "logical_cpus": 32,
+  "python": "3.13.5"
+ },
+ "versions": {
+  "av": "18.1.0",
+  "cv2": "5.0.0",
+  "numpy": "2.5.2",
+  "ffmpeg": "ffmpeg version 2025-02-06-git-6da82b4485-full_build-www.gyan.dev Copyright (c) 2000-2025 the FFmpeg developers"
+ },
+ "footage": [],
+ "notes": [
+  "heads at listed[reach]: {'lag mhi': 30030, 'lk flow': 1001}, 29 rows apart",
+  "one positioning for both steps: random, window=None; over a FORWARD input the output is random",
+  "product names are tool-local: two crops both offer ['flow']; qualification is the pipeline's",
+  "a value edge's payload arrives in `Answer.frame` \u2014 the record holds a float under a field named for pixels",
+  "heads, positioning and end-to-end read all held"
+ ],
+ "cases": [
+  {
+   "name": "lk-flow-through-a-binding",
+   "params": {
+    "source": "synthetic:frames=200",
+    "rows": 40,
+    "form": "0+0+640x360@640x360:gray"
+   },
+   "unit": "ms per position",
+   "note": "field and reduce only; the read is not timed",
+   "truncated": false,
+   "n": 40,
+   "samples_ms": [
+    10.747000000264961,
+    3.6337999990792014,
+    3.4496999978728127,
+    3.3451000017521437,
+    3.110400000878144,
+    3.266700001404388,
+    3.1694000026618596,
+    3.3346999989589676,
+    3.351499999553198,
+    4.247200002282625,
+    3.2619000012346078,
+    3.1328000004577916,
+    3.1386000009661075,
+    3.3899999980349094,
+    3.3011000014084857,
+    3.1899999994493555,
+    3.258799999457551,
+    3.118499997071922,
+    3.0975000008766074,
+    4.082100000232458,
+    3.0982999996922445,
+    3.151199998683296,
+    3.1718000027467497,
+    3.257500000472646,
+    2.7257000001554843,
+    3.0805999995209277,
+    3.264599999965867,
+    3.0495999999402557,
+    2.9876000007789116,
+    3.375600001163548,
+    3.1832999993639532,
+    3.1095000013010576,
+    3.2219999993685633,
+    3.7897000001976267,
+    3.153100002236897,
+    5.063100001279963,
+    3.302199998870492,
+    3.4967999999935273,
+    3.363899999385467,
+    3.8623000000370666
+   ]
+  }
+ ]
+}

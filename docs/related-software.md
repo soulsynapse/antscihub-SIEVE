@@ -13,3 +13,18 @@ Cautionary-ish tales
 
 - Napari
 - ImageJ
+
+Scheduling and storage
+- Halide
+- Torch
+- JAX
+- Dask
+- Ray
+- ARC
+- 2Q
+- GreedyDual-Size
+- libavfilter's activate callback
+- Excel's restarting scheduler
+
+Cautionary tales: 
+- AviSynth+'s MT modes (MT_NICE_FILTER, MT_MULTI_INSTANCE, MT_SERIALIZED)

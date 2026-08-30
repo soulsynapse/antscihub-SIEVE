@@ -419,6 +419,7 @@
     - 📄 `registry.py` — Which tools this SIEVE found, and which it could not load.
     - 📄 `relaunch.py` — Replace the running process with a fresh run of the same command.
     - 📄 `serve.py` — Which tier answers a request, and which one did.
+    - 📄 `session.py` — The recording session: one open recording, its tiers, and its navigation.
     - 📄 `settings.py` — Flat JSON preferences at ``path()``, read once per run.
     - 📄 `store.py` — What SIEVE has on hand from one open recording.
 - 📁 `tools/`

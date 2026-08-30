@@ -43,5 +43,6 @@ the collision without anybody having to settle it. The shelf a term sits on is
   - 📄 [need](vocab/need.md) — What a node says it wants right now — which instant, the offsets around it, in what form, and whether anyone is waiting. What it wants, never where that ranks; the rank is derived from everything else in flight.
   - 📄 [proxy](vocab/proxy.md) — A whole recording held at one coarse form, built in the background and complete across its extent — the tier a scrub falls to when the nearer ones hold nothing. Its pixels are for looking at, never admitted as recorded.
   - 📄 [extent](vocab/extent.md) — Which positions a producer says exist, asked as of now rather than fixed, and whether that set can still grow. A claim about what is offered, never a promise any of it will be delivered.
+  - 📄 [timebase](vocab/timebase.md) — The rate a source's positions are counted in — ticks per second as an exact fraction, recorded once beside them. Every source declares one, so it is real elapsed time only where the recording carried time to begin with.
 
-*32 defined.*
+*33 defined.*

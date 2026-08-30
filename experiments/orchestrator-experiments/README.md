@@ -147,17 +147,14 @@ degrades the first by a measurable factor. So the priority system is not
 about ordering idle work — it is about deciding which work to *defer* when
 the machine cannot do everything at once.
 
-Measured, and the answer is that priority is the wrong axis. With the fill
-declaring its window attention-first — which is what `sieve/fill.py` already
-does — a cursor moving smoothly never contends at all, and every
-arbitration comes out the same within noise, because the frontier outruns
-the person. The policies separate only under a jumping cursor, and what
-separates them is not rank: ranking the queue against round-robin bought no
-seeks back, reproducing the dispatcher finding's conclusion on a second
-topology. What did move the wall is the rule that finding named and left
-unimplemented — do not leave a sequential run for a position that run will
-reach anyway. Results in `results/05-priority-under-contention-*`, two runs
-that reproduce leg for leg because the cursor's walk is seeded.
+Asked once and withdrawn. The experiment written for it compared queue
+orders for a single decoder, which is a question about the explorer's
+dispatcher and not about the orchestrator: declarations, refcounts and
+envelopes are indifferent to how many readers exist. The question worth
+asking is whether the graph's knowledge of what every consumer declared
+assigns N readers better than the fixed assignment the product has, where
+the fill borrows one, the drawing thread has the store's, and the proxy
+borrows a third with nothing coordinating them.
 
 ## What this folder is for
 
@@ -225,8 +222,9 @@ the architecture:
    clocks are the baseline for whether the graph-derived breakdown says the
    same thing.
 
-5. **Priority under contention.** Run — `05-priority-under-contention.py`,
-   and the settled note is under question 5 above. Two consumers filling
+5. **Reader assignment under contention.** Rewritten — see question 5
+   above; what stood here measured queue orders for one decoder, which is
+   the explorer's dispatcher and not this layer. Two consumers filling
    concurrently, one at
    high priority (the GUI's cursor region) and one at low (a tool's
    background sweep). Under machine load, does the high-priority consumer
@@ -234,20 +232,20 @@ the architecture:
    current model where both fill at equal priority and contention degrades
    both. `07-contention` is the baseline.
 
-6. **Invalidation as a graph operation.** Run — `06-invalidation.py`. A crop
-   change propagated through the graph: which nodes are invalidated, which
-   frames are evicted, which fills restart, measured against recomputing
-   everything from scratch. The other branch's frames do survive, and
-   surviving turns out not to be worth much: on a diamond fed by one decode,
-   dropping the untouched branch costs nothing to put back, because the
-   decode the changed branch needs was already serving both. Derived
-   invalidation buys the derivation and not the decode. What changes the
-   number is holding a form that dominates both branches, which makes a crop
-   change a derivation rather than a decode at a memory price the result
-   file states. Nothing here can invalidate a *value*: after a parameter
-   change every held frame is still correct and every scalar computed under
-   the old parameters is wrong, and no declaration in this tree links the
-   two.
+6. **Invalidation as a graph operation.** Withdrawn. A crop change
+   propagated through the graph: which nodes are invalidated, which frames
+   are evicted, which fills restart. The harness written for it answered
+   from the topology it was handed rather than from the world — on a diamond
+   fed by one decode, whether the untouched branch survives cannot change
+   what the changed branch has to decode — and its one real term is what
+   question 7 measures directly. What a crop change costs is a question
+   about `Session.apply_crop` under a person's hand, and belongs to a driven
+   session rather than here.
+
+   One thing it did surface, which is a gap and not a measurement: nothing
+   in this tree can invalidate a *value*. After a parameter change every
+   held frame is still correct and every scalar computed under the old
+   parameters is wrong, and no declaration links the two.
 
 7. **Form negotiation across the graph.** Run — `07-form-negotiation.py`,
    and the graph does not make the right choice, because no pool in this

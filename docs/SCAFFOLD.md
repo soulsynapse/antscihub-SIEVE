@@ -133,7 +133,7 @@
           - 📄 `icon_grid.py` — Reflowing grid of every vendored glyph, for browsing by shape.
           - 📄 `view.py` — Dev bench: section catalogue for internal tools.
         - 📁 `pipeline/` — The pipeline: the chain of steps in the open project.
-          - 📄 `view.py` — Pipeline view: head and the room its steps will stand in.
+          - 📄 `view.py` — Pipeline view: the chain of steps, starting with the source.
         - 📁 `preferences/` — Preferences: application-level settings, as against what a project holds.
           - 📄 `minor_visuals.py` — Corner-radius and text-size sliders, live-previewed on the card they sit in.
           - 📄 `palettes.py` — Palette chooser: every palette as a row, grouped light then dark.
@@ -163,6 +163,7 @@
     - 📄 `session.py` — The recording session: one open recording, its tiers, and its navigation.
     - 📄 `settings.py` — Flat JSON preferences at ``path()``, read once per run.
     - 📄 `store.py` — What SIEVE has on hand from one open recording.
+    - 📄 `surfaces.py` — Drawing a step's output at display resolution.
 - 📁 `tools/`
   - 📄 `image_directory_source.py` — The image directory source: frames as separate files in a folder, in name order.
   - 📄 `synthetic_source.py` — The synthetic source: frames from arithmetic, shaped by whatever is being tested.

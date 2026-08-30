@@ -37,6 +37,7 @@ from sieve.project import Library
 from sieve.registry import load as load_tools
 from sieve.relaunch import relaunch
 from sieve.session import HOLD, Session
+from sieve import surfaces
 from sieve.gui.view.canvas import Canvas
 from sieve.gui.view.canvas.video_canvas import FrameView
 from sieve.gui.view.dev import Dev
@@ -289,6 +290,14 @@ class MainWindow(QMainWindow):
             self.session.positions, self.session.starts(),
             self.session.access,
         )
+        w, h = store.form.out
+        self.pipeline.show_source(
+            store.address, store.tool.name, w, h, len(self.session.positions),
+        )
+        steps = self.tools.of_kind("step")
+        self.session.set_steps(steps)
+        if steps:
+            self.pipeline.show_steps(steps)
         if position is not None:
             self.session.at = position
             self.transport.show_playhead(position)
@@ -306,6 +315,7 @@ class MainWindow(QMainWindow):
         """A release or a playback step. This one is paid for."""
         frame = self.session.commit(position)
         if frame is not HOLD:
+            frame = self._compose(frame, position)
             self.frames.show_frame(frame)
 
     # -- landing a window --------------------------------------------------
@@ -314,6 +324,7 @@ class MainWindow(QMainWindow):
         """A release on the strip: serve it, and commit attention there."""
         frame = self.session.land(position)
         if frame is not HOLD:
+            frame = self._compose(frame, position)
             self.frames.show_frame(frame)
 
     def _covered(self, landed: tuple) -> None:
@@ -327,6 +338,19 @@ class MainWindow(QMainWindow):
         del landed
         if self.session.at is not None:
             self.commit_at(self.session.at)
+
+    def _compose(self, frame, position: int):
+        """Overlay the step's field on *frame* when one is ready."""
+        if frame is None or not self.session.steps:
+            return frame
+        result = self.session.evaluate_step(position)
+        if result is None:
+            return frame
+        field, value = result
+        ceiling = self.session.ceiling
+        if ceiling > 0:
+            self.pipeline.update_step(0, min(value / ceiling, 1.0))
+        return surfaces.overlay(frame, field, ceiling)
 
     # -- the drawn crop ----------------------------------------------------
 
@@ -397,6 +421,7 @@ class MainWindow(QMainWindow):
         """Everything the recording brought, in the order that makes it safe."""
         self.session.close()
         self.transport.show_source((), (), Access.RANDOM)
+        self.pipeline.clear_source()
 
     def remove_project(self, project: Project) -> None:
         """A project's ✕: out of the library. The recording is not touched."""

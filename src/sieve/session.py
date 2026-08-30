@@ -15,7 +15,7 @@ from sieve.contract import Tool
 from sieve.contract.edges import Access
 from sieve.contract.forms import Form
 from sieve.fill import Readers, WindowFill, WriteBehind, window_for
-from sieve.proxy import Proxy
+from sieve.proxy import Proxy, proxy_form
 from sieve.serve import Ordinals, Route, Served, Serving
 from sieve.store import Store, opened
 
@@ -49,6 +49,8 @@ class Session:
         self.crop: Form | None = None
         self.whole: bool = True
         self.at: int | None = None
+        self.steps: tuple[Tool, ...] = ()
+        self.ceiling: float = 0.0
 
     # -- queries -----------------------------------------------------------
 
@@ -175,6 +177,8 @@ class Session:
         self.crop = None
         self.whole = True
         self.at = None
+        self.steps = ()
+        self.ceiling = 0.0
         if self.store is not None:
             self.store.close()
             self.store = None
@@ -283,6 +287,7 @@ class Session:
             self.serving.chunks.wipe()
         self.crop = crop
         self.whole = False
+        self.ceiling = 0.0
         self._rebudget()
 
     def toggle_whole(self) -> bool:
@@ -291,6 +296,63 @@ class Session:
             return self.whole
         self.whole = not self.whole
         return self.whole
+
+    # -- steps -------------------------------------------------------------
+
+    def set_steps(self, steps: tuple[Tool, ...]) -> None:
+        self.steps = steps
+        self.ceiling = 0.0
+
+    def set_ceiling(self, value: float) -> None:
+        """Move the overlay's scale top deliberately. 0 re-takes it."""
+        self.ceiling = max(float(value), 0.0)
+
+    def evaluate_step(self, position: int) -> tuple | None:
+        """Run the first loaded step at *position*, returning (field, value).
+
+        Never blocks: returns ``None`` when any needed frame is not cached
+        at the step's wanted form. That form is the step's own, bounded to
+        the proxy's long edge — whole-frame it is the proxy's form exactly,
+        and a crop inside the bound is the fill's, so evaluation succeeds
+        once the covering tier has reached the neighbourhood.
+        """
+        if not self.steps or self.store is None or self.serving is None:
+            return None
+        step = self.steps[0].role
+        rect = self.form().rect
+        # Bounded by the same long edge the proxy is built at, which whole-frame
+        # resolves to the proxy's own form — the tier a whole-frame view is
+        # already served from, rather than a second downscale rule. A crop
+        # inside the bound is untouched and stays native; above it the form is
+        # resampled and `forms.grade` calls anything from it APPROX, which is
+        # what this field is: drawn, then discarded. The series is written
+        # where frames are admitted, never from here.
+        want = proxy_form(step.form_for(rect))
+        ordinal = self.serving.ordinals.rank(position)
+        if ordinal is None:
+            return None
+        listed = self.serving.ordinals.listed
+        frames: dict[int, Any] = {}
+        for offset in step.offsets:
+            needed_ord = ordinal + offset
+            if needed_ord < 0 or needed_ord >= len(listed):
+                return None
+            needed_pos = listed[needed_ord]
+            held = self.store.frames.get(needed_pos, want)
+            if held is None:
+                return None
+            frames[needed_ord] = held
+        # Not guarded. A step that raises is a broken tool, and swallowing it
+        # here makes it indistinguishable from a frame that is not cached yet
+        # — the overlay simply never appears and nothing says why.
+        field = step.field(frames, ordinal)
+        value = float(step.reduce(field))
+        if not self.ceiling:
+            # Held, not autoscaled: the first honest field sets the top and
+            # later frames are drawn against it, so a still scene does not
+            # look as active as a moving one. `set_ceiling` moves it.
+            self.ceiling = max(float(field.max()), 1.0)
+        return field, value
 
     # -- internal ----------------------------------------------------------
 

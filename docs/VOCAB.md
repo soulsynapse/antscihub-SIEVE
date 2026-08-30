@@ -24,6 +24,7 @@ the collision without anybody having to settle it. The shelf a term sits on is
   - 📄 [node (pipeline)](vocab/node-pipeline.md) — A slot in a chain with a durable id, keeping its identity when the tool standing in it is swapped.
   - 📄 [field (widget)](vocab/field-widget.md) — A text box.
 - 📁 `Substrate`
+  - 📄 [frame](vocab/frame.md) — One instant of a recording, as pixels — the unit a source reads, a store holds, and a step runs over. Its form is what it is, its position is which instant, and the position is its identity.
   - 📄 [tier](vocab/tier.md) — A place a frame can be answered from — one of an ordered stack, cheapest first, over one open recording. Ranked by what an answer costs, not by what it is worth.
   - 📄 [form](vocab/form.md) — What a frame is, apart from which instant it is — which source pixels, at what sampling, in what format, all three at once. Pixels only: a value edge declares a dtype instead.
   - 📄 [position](vocab/position.md) — Which instant a frame is, apart from what it is — the source's own presentation timestamp, integer ticks in the stream's timebase. A name, never a count.
@@ -45,4 +46,4 @@ the collision without anybody having to settle it. The shelf a term sits on is
   - 📄 [extent](vocab/extent.md) — Which positions a producer says exist, asked as of now rather than fixed, and whether that set can still grow. A claim about what is offered, never a promise any of it will be delivered.
   - 📄 [timebase](vocab/timebase.md) — The rate a source's positions are counted in — ticks per second as an exact fraction, recorded once beside them. Every source declares one, so it is real elapsed time only where the recording carried time to begin with.
 
-*33 defined.*
+*34 defined.*

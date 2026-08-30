@@ -30,7 +30,8 @@ that the graph *announces* a change rather than being asked about one on an
 interval. V1's dispatcher slept 4 ms whenever nothing was pickable, and the
 only thing that could make something pickable was a declaration arriving
 here; a store of shared state that knows precisely when it changed, polled by
-the one thread that cares, is the arrangement `core.py` exists to remove.
+the one thread that cares, is the arrangement `dispatcher.py` exists
+to remove.
 
 **Listeners fire outside the lock, and that is a rule rather than a
 detail.** A listener takes the core's lock and the core's `_arm` takes this
@@ -324,6 +325,17 @@ class Graph:
         """
         with self._lock:
             return self._gen.get(node_id, 0) != generation
+
+    def is_held(self, key: tuple[int, str]) -> bool:
+        """Does any node still need this one key?
+
+        A dict membership rather than `key in held()`, which builds a set of
+        every held pair. The pool asks this on every serve to tell a victim
+        hit from an ordinary one, and a serve that allocated a set the size of
+        the window would be an instrument costing more than what it measures.
+        """
+        with self._lock:
+            return key in self._refs
 
     def held(self) -> set[tuple[int, str]]:
         """Every (row, form_key) pair that at least one node still needs."""

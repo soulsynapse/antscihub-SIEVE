@@ -74,12 +74,36 @@ implement that. What it does is make the count a knob so the question can be
 asked, and preserve the property that the extra reader is idle unless
 something interactive is pending.
 
-**Nothing has an interval.** The fetch thread blocks on a condition the graph
-notifies when a declaration arrives; the recorder threads block on a
-condition this class notifies when a key lands in the pool. `blocked` counts
-waits where V1's `idle_polls` counted naps, and the two are not the same
-measurement — one is how often there was nothing to do, the other is how
-often we checked. That difference is the countable half of README question 1.
+**Nothing has an interval**, and that is a property rather than the
+argument. The fetch thread blocks on a condition the graph notifies when a
+declaration arrives; the recorder threads block on a condition this class
+notifies when a key lands in the pool. `blocked` counts waits where V1's
+`idle_polls` counted naps, and the two are not the same measurement — one is
+how often there was nothing to do, the other is how often we checked.
+
+**Why two phases, given that a coroutine would also never sleep.** The
+alternative this design has to beat is not polling, which is only what V1
+did. It is a suspending scheduler: a consumer awaiting each input as it needs
+it, with no interval, no deadline, no context object and far less ceremony
+than a two-call callback. Against that, "nothing sleeps" argues for nothing.
+
+What earns the split is that the INITIAL call's output is a **scheduling
+input**. `Graph.pressure_queue` cannot rank a need it has not seen whole:
+subsumption asks whether one declaration's rows lie inside a wider one's,
+urgency ranks across every node in flight, and ADR-0006 makes the declaration
+itself the hold, so the refcount needs the complete set at the moment it is
+taken. A coroutine reveals demand one await at a time, so the dispatcher
+would know a consumer wanted row *n* and not that it also wanted *n-30*,
+*n-20* and *n-10*; it would serve *n*, learn the rest, and seek back — the
+shape `2026.08.30-the-pressure-dispatcher-preempts-into-seeks` measured, a
+consumer buying by seek what was arriving sequentially.
+
+So the design commitment is that **a declaration is complete before anything
+is served**, and these two phases are where that is enforced. It is not a
+commitment to callbacks: a coroutine that gathers its whole demand set in one
+await has re-invented INITIAL, and this could become `async` without giving
+anything up. What could not be kept is a consumer that discovers its inputs
+by running.
 
 **Lock order is not a rule here, because there is no order to keep.** The
 graph fires its listeners after dropping its own lock and the pool fires
@@ -630,7 +654,13 @@ class Dispatcher:
                 env.route = how
                 env.close()
                 self.graph.record(env)
-                self.pool.put(row, need.form_key, arr, by=need.node_id)
+                #: the envelope just timed this decode, so the replacement
+                #: policy is told what the key cost rather than guessing. A
+                #: seek and a step differ by more than an order of magnitude
+                #: and that difference is the whole reason the pool ranks by
+                #: cost instead of by recency.
+                self.pool.put(row, need.form_key, arr, by=need.node_id,
+                              cost_ms=env.ms)
                 self._unclaim(row, need.form_key)
                 self.served += 1
                 if how == "seek":

@@ -29,6 +29,7 @@ the collision without anybody having to settle it. The shelf a term sits on is
   - 📄 [position](vocab/position.md) — Which instant a frame is, apart from what it is — the source's own presentation timestamp, integer ticks in the stream's timebase. A name, never a count.
   - 📄 [ordinal](vocab/ordinal.md) — What row a listed position is, inside one snapshot of one listing. A coordinate, valid only beside the table that produced it.
   - 📄 [refusal](vocab/refusal.md) — A no with a kind on it — gone, wrong form, or not now — from a closed set of three. Only gone is a hole.
+  - 📄 [tool](vocab/tool.md) — The work an author supplies that SIEVE never names — a measurement an ethologist wants, done entirely through what the substrate provides. It fills a node's role; the set of them is open, and the substrate's capabilities are not.
   - 📄 [edge (contract)](vocab/edge-contract.md) — A named thing a node offers or wants, of a closed kind: a frame, a mask, or a value. SIEVE's alone to extend.
   - 📄 [node (contract)](vocab/node-contract.md) — A role a tool fills, and you are one because you offer an edge: a source has no inputs, a step has frame inputs.
   - 📄 [node (orchestrator)](vocab/node-orchestrator.md) — Anything that declares a need on the store — a tool, the series writer, the proxy builder, the GUI — which is a wider net than the contract's.
@@ -43,4 +44,4 @@ the collision without anybody having to settle it. The shelf a term sits on is
   - 📄 [proxy](vocab/proxy.md) — A whole recording held at one coarse form, built in the background and complete across its extent — the tier a scrub falls to when the nearer ones hold nothing. Its pixels are for looking at, never admitted as recorded.
   - 📄 [extent](vocab/extent.md) — Which positions a producer says exist, asked as of now rather than fixed, and whether that set can still grow. A claim about what is offered, never a promise any of it will be delivered.
 
-*31 defined.*
+*32 defined.*

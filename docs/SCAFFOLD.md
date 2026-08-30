@@ -14,7 +14,7 @@
     - 📄 `ideas.md`
   - 📁 `findings/` (15 files)
   - 📁 `solutions/` (12 files)
-  - 📁 `vocab/` (32 files)
+  - 📁 `vocab/` (33 files)
   - 📄 `ADR.md`
   - 📄 `SCAFFOLD.md`
   - 📄 `VOCAB.md`

@@ -12,7 +12,7 @@
   - 📁 `adr/` (10 files)
   - 📁 `decode/`
     - 📄 `ideas.md`
-  - 📁 `findings/` (15 files)
+  - 📁 `findings/` (16 files)
   - 📁 `solutions/` (12 files)
   - 📁 `vocab/` (37 files)
   - 📄 `ADR.md`

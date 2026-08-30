@@ -13,4 +13,4 @@ fi
 root=$(git rev-parse --show-toplevel)
 uv run --quiet python "$root/scripts/doc_index.py" --quiet
 git add -- "$root/docs/SCAFFOLD.md" "$root/docs/ADR.md" \
-	"$root/docs/VOCAB.md"
+	"$root/docs/VOCAB.md" "$root/docs/solutions/INDEX.md"

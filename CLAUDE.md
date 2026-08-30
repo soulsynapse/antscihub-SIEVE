@@ -14,7 +14,11 @@ If you're being asked to build something for the main products, there is almost 
   never hand-edit it. Fix a wrong gloss at its source (the module's first
   docstring line). Hooks live in `.githooks/`; a fresh clone enables them with
   `git config core.hooksPath .githooks`. `SIEVE_SKIP_SCAFFOLD=1` skips the
-  hook.
+  hook. `docs/solutions/INDEX.md` is generated the same way.
+- Before building a mechanism, scan `docs/solutions/INDEX.md` — if the want
+  is listed, the repo already has an answer. A solution enters when something
+  was reinvented; editing the source file in `docs/solutions/` regenerates
+  the index at commit.
 - ADRs and findings: suggest, never mint unprompted. A finding records a
   measurement — what, on what, and when — so a later one supersedes it rather
   than argues with it; anything a reader must re-check first is not one.

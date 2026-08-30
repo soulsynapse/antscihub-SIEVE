@@ -1,9 +1,7 @@
 """Frame-level key bindings: eager shortcuts and yielded keys.
 
-`_KEYS` are QShortcuts and fire before the focused widget — only keys nothing
-else wants belong there. `_YIELDED_KEYS` are handled in keyPressEvent after
-the focus chain declines. No autorepeat on either table: the swipe re-aims a
-running slide, so a held arrow would walk at the keyboard's repeat rate.
+No autorepeat on either table — a held arrow would walk at the keyboard's
+repeat rate instead of re-aiming the running swipe.
 """
 
 from __future__ import annotations
@@ -18,22 +16,13 @@ if TYPE_CHECKING:  # importing it for real would close the loop back to `window`
 
 _KEYS: tuple[tuple[str, str], ...] = (("Ctrl+R", "reload"),)
 
-#: Answered only if nothing nearer the user wanted the key.
-#:
-#: The transport is on Space and the comma/period pair because ADR-0003 spent
-#: the arrows: ← and → walk the swipe track, and ↑/↓ belong to whatever
-#: selection the position in view owns. Yielded rather than eager, so a text
-#: field still gets its own space bar.
+#: Yielded (not eager) so a focused text field still gets its own space bar.
 _YIELDED_KEYS: tuple[tuple[str, str], ...] = (
     ("Left", "swipe_back"),
     ("Right", "swipe_forward"),
     ("Space", "play_pause"),
     (",", "step_back"),
     (".", "step_forward"),
-    # The whole frame under the crop, which is where a crop gets drawn. A key
-    # and not a button because there is nowhere to put a button: the bottom
-    # pane is the transport's and this is about the canvas, and a 96-pixel
-    # subpane over the left pane for one toggle would be the wrong trade.
     ("F", "show_whole_frame"),
 )
 
@@ -73,8 +62,8 @@ def answer_key(hotkeys: Hotkeys, event: QKeyEvent) -> bool:
 def suspend_hotkeys(hotkeys: Hotkeys, suspended: bool) -> None:
     """Disable both tables while a cover stands over the panes.
 
-    The flag covers yielded keys too: an unhandled key walks up the parent
-    chain, so disabling the shortcuts alone would still let `answer_key` act.
+    Covers yielded keys too — disabling shortcuts alone still lets unhandled
+    keys walk up the parent chain to `answer_key`.
     """
     hotkeys.suspended = suspended
     for shortcut in hotkeys.shortcuts:

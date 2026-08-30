@@ -21,17 +21,14 @@ else and never reaches the source; `commit` is the exact one and may.
 Blocking miss decodes on the drag path measured 200-370 ms apiece and are
 what "frozen" was.
 
-**The ladder has a rung missing and it is named rather than hidden.** Between
-a held frame and holding still belongs the display proxy — a right-instant,
-coarse picture, which is what makes a scrub *outside* the filled window cost
-anything at all. It is absent here because nothing can produce one: a proxy
-form is resampled, `forms.grade` grades it APPROX, and `forms.build` refuses
-to resample because which resampler is canonical is undecided. So `guess`
-runs out of tiers one position past the frontier and the picture holds. The
-same gap is why `NEAR` has one threshold and not two — the explorer's second,
-tighter one exists to say *a very near held frame beats the proxy*, and a
-threshold whose whole job is to rank against a tier that does not exist ranks
-against nothing.
+**The near tier is asked twice, at two distances, with the proxy between
+them.** A held frame within `CLOSE` beats a coarse right-instant picture,
+because three positions off at the wanted form is nearly the frame asked for.
+A held frame merely within `NEAR` loses to it, because at twelve positions
+back the picture has stopped tracking the cursor and a right-instant
+low-resolution frame is the better lie. One threshold picks the wrong tier at
+one end or the other, which is why the explorer had two and this had one for
+as long as there was nothing to rank against.
 
 Nothing here imports Qt, and nothing here holds a thread. The caller owns
 both, and owes this module the rule `store.py` states: one thread calls
@@ -45,15 +42,21 @@ from enum import Enum
 from typing import Any
 
 from sieve.chunks import ChunkStore
+from sieve.contract import forms
 from sieve.contract.forms import Form
 from sieve.contract.nodes import Refusal
+from sieve.proxy import Proxy
 from sieve.store import Store
 
-#: How far off a held frame may be and still be shown during a drag, in listed
-#: positions. The explorer's radius: near enough that the picture tracks the
-#: cursor, far enough that a filling window is draggable before it is covered
-#: — the frontier races the cursor, and a frame a few positions back is a
-#: picture where an exact one would be a stall.
+#: How far off a held frame may be and still beat the proxy, in listed
+#: positions. Small on purpose: this is the distance at which a wrong frame
+#: still reads as the right one.
+CLOSE = 3
+
+#: How far off a held frame may be and still be shown at all. Far enough that
+#: a filling window is draggable before it is covered — the frontier races the
+#: cursor, and a frame a few positions back is a picture where an exact one
+#: would be a stall.
 NEAR = 12
 
 
@@ -69,8 +72,13 @@ class Route(str, Enum):
     HELD = "held"
     #: a chunk written behind an earlier fill, read back at cut speed
     CUT = "cut"
-    #: a held frame within `NEAR`: right form, nearly the right instant
+    #: a held frame within `CLOSE` or `NEAR`: right form, nearly the right
+    #: instant. One name and two thresholds — which one let it through is
+    #: policy inside the tier, not a different place the frame came from.
     NEAR = "near"
+    #: the display proxy, derived down to the wanted form: right instant,
+    #: coarse pixels, and never written to the store
+    LO = "lo"
     #: the source itself, decoded now. Only an exact request may reach it.
     SOURCE = "source"
     #: the source will never deliver this position — the one route that blanks
@@ -167,6 +175,9 @@ class Serving:
         self.held_form: Form | None = None
         #: the filled span, in ordinals. None when nothing is filled.
         self.active: tuple[int, int] | None = None
+        #: the display tier, once one is building. Outside the filled window
+        #: it is the only tier there is.
+        self.proxy: Proxy | None = None
 
     # -- the two callers ---------------------------------------------------
 
@@ -174,12 +185,19 @@ class Serving:
         """A drag. Never blocks, and never reaches the source.
 
         The nearest tier is what makes a filling window draggable before it is
-        covered. Outside a window it finds nothing and the answer is `HOLD`,
-        which is honest and is the rung this ladder is missing.
+        covered; the proxy is what makes a drag *outside* one cost anything at
+        all. `HOLD` is what is left where neither has reached, which early in
+        a session is most of the recording.
         """
         held = self.store.frames.get(position, form)
         if held is not None:
             return Served(held, Route.HELD)
+        close = self._near(position, form, CLOSE)
+        if close is not None:
+            return Served(close, Route.NEAR)
+        low = self._lo(position, form)
+        if low is not None:
+            return Served(low, Route.LO)
         near = self._near(position, form, NEAR)
         if near is not None:
             return Served(near, Route.NEAR)
@@ -242,3 +260,26 @@ class Serving:
             return None
         ordinal = self.ordinals.rank(position)
         return None if ordinal is None else self.chunks.fetch(ordinal)
+
+    def _lo(self, position: int, form: Form) -> Any | None:
+        """The display proxy, derived down to *form*. Never written back.
+
+        `grade` is the gate rather than a caught exception: the proxy is gray,
+        so a request for the whole frame in colour is one it cannot answer at
+        any quality, and asking would be a decode thrown away. That is the
+        question `read_form` asks before it decodes, one tier up.
+
+        Nothing here puts the result in the cache, and that is where
+        `experiments/tool-experiments/forms.py`'s law has teeth: derived is
+        for looking at, decoded is for recording. A proxy pixel admitted once
+        is a wrong pixel under a right key forever.
+        """
+        if self.proxy is None or forms.grade(self.proxy.form, form) is None:
+            return None
+        ordinal = self.ordinals.rank(position)
+        if ordinal is None:
+            return None
+        frame = self.proxy.fetch(ordinal)
+        if frame is None:
+            return None
+        return forms.derive(frame, self.proxy.form, form)

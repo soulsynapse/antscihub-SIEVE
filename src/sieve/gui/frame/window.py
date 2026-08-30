@@ -25,6 +25,7 @@ from sieve.contract.edges import FRAME, Access
 from sieve.contract.forms import Form
 from sieve.fill import Readers, WindowFill, WriteBehind, window_for
 from sieve.gui import palette
+from sieve.proxy import Proxy
 from sieve.gui.frame.chrome import dress_title_bar, stylesheet
 from sieve.gui.frame.hotkeys import answer_key, bind_hotkeys, suspend_hotkeys
 from sieve.gui.frame.menu import build_menu_bar, preferences_anchor, show_about
@@ -338,6 +339,13 @@ class MainWindow(QMainWindow):
             self.serving.chunks = ChunkStore()
             self.writer = WriteBehind(self.serving.chunks)
             self.readers = Readers(tool, store.address)
+            # The display tier starts building the moment there is a
+            # recording, because it is what every drag outside the filled
+            # window is served from and there is no window yet.
+            self.serving.proxy = Proxy(
+                self.serving.ordinals.listed, store.form, self.readers,
+                holes=store.missing,
+            )
         self.canvas.set_aspect(store.aspect)
         self.frames.show_frame(frame)
         self.transport.show_source(
@@ -347,6 +355,8 @@ class MainWindow(QMainWindow):
         if position is not None:
             self._at = position
             self.transport.show_playhead(position)
+        if self.serving.proxy is not None:
+            self.serving.proxy.build(self.serving.ordinals.rank(position) or 0)
 
     # -- the form the tiers hold -------------------------------------------
 
@@ -454,6 +464,12 @@ class MainWindow(QMainWindow):
             # would be a landing that stalls, which is the whole complaint.
             self.fill.stop(wait=False)
         self.serving.active = (low, high)
+        # The display build follows attention too, and for the same reason the
+        # window does: a scrub lands somewhere and everything coarse about
+        # that neighbourhood should arrive before everything about the last
+        # one. `06-build-order` prices the redirect rather than assuming it.
+        if self.serving.proxy is not None:
+            self.serving.proxy.build(anchor)
         # What the chunk tier may answer for, set from the form the fill is
         # launched with rather than re-derived when it is read back: the two
         # would be the same fact in two places, and a form change moves one.
@@ -589,8 +605,11 @@ class MainWindow(QMainWindow):
         if self.readers is not None:
             self.readers.close()
             self.readers = None
-        if self.serving is not None and self.serving.chunks is not None:
-            self.serving.chunks.destroy()
+        if self.serving is not None:
+            if self.serving.proxy is not None:
+                self.serving.proxy.close()
+            if self.serving.chunks is not None:
+                self.serving.chunks.destroy()
         self.serving = None
         self.crop = None
         self.whole = True

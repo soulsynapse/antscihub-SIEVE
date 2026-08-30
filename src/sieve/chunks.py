@@ -64,10 +64,17 @@ from sieve.contract.forms import Form
 #: with; a window snaps to this grid so chunks tile it exactly.
 CHUNK_FRAMES = 96
 
-#: Open containers held for reading. Three, because a fill refilling one chunk
-#: while the drawing thread serves out of another is the contention this tier
-#: is for, and a fourth has never been asked for.
-_OPEN_CHUNKS = 3
+#: Open containers held for reading, by default. Three, because a fill
+#: refilling one chunk while the drawing thread serves out of another is the
+#: contention this tier was built for, and a window walks its chunks in order.
+#:
+#: A fourth has now been asked for, by the display proxy: a scrub outside the
+#: filled window lands in a different chunk almost every step, and at three
+#: every one of those evicted the chunk it was about to want. Reopening is the
+#: whole cost of that route — 41 ms rotating against 0.96 ms walking within
+#: one chunk, on the 5.3K footage in `video-tests/` — so how many stay open is
+#: a property of the access pattern and belongs to whoever owns the store.
+DEFAULT_OPEN_CHUNKS = 3
 
 #: What the cut is. The finding above measured this exact combination against
 #: four others on this exact shape.
@@ -116,10 +123,12 @@ class ChunkStore:
     unreachable the moment the counter moves, and swept when the session ends.
     """
 
-    def __init__(self, directory: Path | None = None) -> None:
+    def __init__(self, directory: Path | None = None,
+                 open_chunks: int = DEFAULT_OPEN_CHUNKS) -> None:
         self.directory = directory or Path(tempfile.gettempdir()) / (
             f"sieve-chunks-{os.getpid()}"
         )
+        self.open_chunks = max(1, open_chunks)
         self.directory.mkdir(parents=True, exist_ok=True)
         #: bumped by `wipe`; what is written and read carries it, so a file the
         #: previous form left behind cannot be found by the current one
@@ -176,7 +185,23 @@ class ChunkStore:
                 f"a chunk is written from gray; {form.key()} is {form.pix}"
             )
         width, height = form.out
-        with av.open(str(self._path(start, generation)), "w") as out:
+        # Written aside and moved into place, so a chunk becomes *visible*
+        # only once it is whole. `persisted` globs and `fetch` opens what it
+        # finds, and a container that exists with no moov yet is not a short
+        # chunk — it is an `InvalidDataError` out of `av.open`, outside the
+        # read loop's own guard. The display proxy is what found this: it
+        # reads its own store while it is still writing it, where a window
+        # fill reads back after a form change and rarely raced itself.
+        #
+        # The name gains a suffix rather than losing its extension, and the
+        # muxer is named rather than inferred. `av.open` picks a format from
+        # the extension, so a bare `.part` produced no muxer and every chunk
+        # died inside the write-behind's `except` — a build reporting no
+        # progress rather than an error. `persisted`'s glob wants a name
+        # ending `.mp4`; this one does not, which is the whole trick.
+        final = self._path(start, generation)
+        partial = final.with_name(final.name + ".part")
+        with av.open(str(partial), "w", format="mp4") as out:
             stream = out.add_stream(_CODEC, rate=_RATE)
             stream.width, stream.height = width, height
             stream.pix_fmt = "yuv420p"
@@ -188,6 +213,7 @@ class ChunkStore:
                 time.sleep(0.001)
             for packet in stream.encode():
                 out.mux(packet)
+        os.replace(partial, final)
 
     # -- reading -----------------------------------------------------------
 
@@ -212,7 +238,7 @@ class ChunkStore:
                 container = av.open(str(path))
                 self._open[start] = container
                 self._readers[start] = threading.Lock()
-                while len(self._open) > _OPEN_CHUNKS:
+                while len(self._open) > self.open_chunks:
                     evicted, old = self._open.popitem(last=False)
                     self._readers.pop(evicted, None)
                     old.close()
@@ -250,7 +276,10 @@ class ChunkStore:
                 container.close()
             self._open.clear()
             self._readers.clear()
-        for path in self.directory.glob("chunk-*.mp4"):
+        # `chunk-*` and not `chunk-*.mp4`: a chunk being encoded right now is
+        # a `.part`, and one left behind is what stops the directory being
+        # removed when the recording closes.
+        for path in self.directory.glob("chunk-*"):
             try:
                 path.unlink()
             except OSError:

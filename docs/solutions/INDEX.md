@@ -13,8 +13,9 @@ list — if the want is here, the repo already has an answer.
 - **draw a step's output at display resolution** → experiments/tool-experiments/surfaces.py — paint cost is the bottleneck, not the tier stack
 - **identify a frame across boundaries** → pts in stream timebase, ordinal only inside a store (ADR-0004)
 - **implement a feature for the main tree** → experiments/ has working code to port — find the experiment area that measured it
+- **run per-frame work that cannot fit the frame period** → src/sieve/gui/frame/stepwork.py — one in flight, one pending, latest wins, superseded work dropped on a compared revision rather than a cancel flag (shape from v2 gui/preview_runner.py)
 - **schedule which frames to fetch and decode** → declaration graph, hold-and-release (ADR-0006, experiments/orchestrator-experiments/graph.py)
 - **share setup across experiments in a battery** → harness.py in the experiment folder (experiments/decode-experiments/harness.py is the pattern)
 - **store a step's reduced output per position** → series: one float per position, coverage record beside it (experiments/tool-experiments/series.py)
 
-*10 solved.*
+*11 solved.*

@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Iterable
 
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QPainter
 from PySide6.QtWidgets import (
     QFrame,
     QScrollArea,
@@ -44,6 +45,31 @@ def sheet() -> str:
     """
 
 
+class _Ground(QWidget):
+    """The column the cards stand in, and whatever the stack draws under them.
+
+    It fills its own background rather than taking the sheet's. A stylesheet
+    background reaches plain `QWidget` and not a subclass that overrides
+    `paintEvent`, and the ground has to be a subclass for anything to be drawn
+    between the cards — so the fill is done here, from the same role the sheet
+    names. Children paint after their parent, so what is drawn here lands
+    behind the cards and shows in the gaps, which is where the chain's edges
+    live.
+    """
+
+    def __init__(self, stack: "CardStack") -> None:
+        super().__init__()
+        self._stack = stack
+
+    def paintEvent(self, event) -> None:
+        del event
+        painter = QPainter(self)
+        painter.fillRect(self.rect(), STACK_BG)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        self._stack.paint_ground(painter)
+        painter.end()
+
+
 class CardStack(View):
     """View holding a scrolling column of cards on a coloured ground."""
 
@@ -56,7 +82,7 @@ class CardStack(View):
     ) -> None:
         super().__init__(title, parent)
 
-        self._ground = QWidget()
+        self._ground = _Ground(self)
         self._ground.setObjectName("stackground")
         self._column = QVBoxLayout(self._ground)
         self._column.setContentsMargins(_MARGIN, _MARGIN, _MARGIN, _MARGIN)
@@ -88,6 +114,10 @@ class CardStack(View):
     def insert_card(self, index: int, card: QWidget) -> None:
         """Insert a card at *index*, clamped to bounds."""
         self._column.insertWidget(max(0, min(len(self.cards()), index)), card)
+        self._ground.update()
+
+    def paint_ground(self, painter: QPainter) -> None:
+        """Draw under the cards. Nothing by default; a chain draws its edges."""
 
     def cards(self) -> tuple[QWidget, ...]:
         """Cards in column order (excludes the trailing stretch)."""
@@ -100,6 +130,7 @@ class CardStack(View):
         for card in self.cards():
             self._column.removeWidget(card)
             card.deleteLater()
+        self._ground.update()
 
     def ensure_visible(self, card: QWidget) -> None:
         self._scroll.ensureWidgetVisible(card)

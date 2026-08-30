@@ -35,7 +35,7 @@ together. This package is the in-memory chain, and its shape is meant to take
 them as additions rather than as a rewrite.
 """
 
-from sieve.pipeline.bind import Bound, Demand, bind
+from sieve.pipeline.binding import Bound, Demand, bind
 from sieve.pipeline.chain import Binding, Chain, Node
 
 __all__ = ["Binding", "Bound", "Chain", "Demand", "Node", "bind"]

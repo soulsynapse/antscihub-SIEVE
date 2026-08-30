@@ -6,7 +6,7 @@
   - 📄 `pre-commit`
 - 📁 `checks/` — One structural check per ADR, each registered under the ADR's number.
   - 📄 `adr0010-baseline.json`
-  - 📄 `adr0010.py` — ADR-0010 tripwire: hash per top-level def, static on purpose — the tools
+  - 📄 `adr0010.py` — ADR-0010 tripwire: hash per top-level def, static on purpose — a tool
 - 📁 `docs/`
   - 📁 `adr/` (10 files)
   - 📁 `decode/`
@@ -158,7 +158,7 @@
       - 📄 `metrics.py` — Corner radius and text sizes for every view — the shape counterpart to palette.
       - 📄 `palette.py` — Eight colour roles, mutated in place so every holder sees the swap.
     - 📁 `pipeline/` — The chain: which node's output satisfies which node's want.
-      - 📄 `bind.py` — Binding a chain: the facts a node is not allowed to declare about itself.
+      - 📄 `binding.py` — Binding a chain: the facts a node is not allowed to declare about itself.
       - 📄 `chain.py` — The chain as a document: what nodes exist, and what feeds what.
     - 📁 `project/` — What a project is: one recording, and the list of them.
       - 📄 `footage.py` — What can be said about a recording without opening it.

@@ -1,0 +1,82 @@
+{
+ "experiment": "01-derived-binding",
+ "question": "Is a step's positioning and extent derivable from what feeds it plus its own offsets, or does a step have to declare them?",
+ "when": "2026-08-30T20:05:41.872069+00:00",
+ "sieve_rev": "b90f13b",
+ "machine": {
+  "platform": "Windows-11-10.0.26200-SP0",
+  "processor": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
+  "logical_cpus": 32,
+  "python": "3.13.5"
+ },
+ "versions": {
+  "av": "18.1.0",
+  "cv2": "5.0.0",
+  "numpy": "2.5.2",
+  "ffmpeg": "ffmpeg version 2025-02-06-git-6da82b4485-full_build-www.gyan.dev Copyright (c) 2000-2025 the FFmpeg developers"
+ },
+ "footage": [],
+ "notes": [
+  "heads at listed[reach]: {'lag mhi': 30030, 'lk flow': 1001}, 29 rows apart",
+  "one positioning for both steps: random, window=None; over a FORWARD input the output is random",
+  "product names are tool-local: two crops both offer ['flow']; qualification is the pipeline's",
+  "a value edge's payload arrives in `Answer.frame` \u2014 the record holds a float under a field named for pixels",
+  "heads, positioning and end-to-end read all held"
+ ],
+ "cases": [
+  {
+   "name": "lk-flow-through-a-binding",
+   "params": {
+    "source": "synthetic:frames=200",
+    "rows": 40,
+    "form": "0+0+640x360@640x360:gray"
+   },
+   "unit": "ms per position",
+   "note": "field and reduce only; the read is not timed",
+   "truncated": false,
+   "n": 40,
+   "samples_ms": [
+    13.074599999526981,
+    3.992300000390969,
+    3.5711999953491613,
+    3.1607999990228564,
+    3.5142999986419454,
+    3.255299998272676,
+    3.3192999981110916,
+    3.226399996492546,
+    3.5123999987263232,
+    3.170500000123866,
+    3.3221999983652495,
+    3.1251000036718324,
+    3.361299997777678,
+    3.5144000066793524,
+    3.3780999947339296,
+    3.0597000004490837,
+    3.570100001525134,
+    3.113300001132302,
+    3.351800005475525,
+    3.1495000002905726,
+    3.380399997695349,
+    3.1682999979238957,
+    3.4712000051513314,
+    3.4577000042190775,
+    5.144900002051145,
+    3.0090000000200234,
+    3.1642999965697527,
+    3.029600004083477,
+    3.2925999985309318,
+    3.1879000016488135,
+    3.2519999949727207,
+    3.5462999949231744,
+    3.239400000893511,
+    3.1472999980906025,
+    3.243899998778943,
+    3.1148000052780844,
+    3.2710000014049,
+    3.0846000008750707,
+    3.6917999968864024,
+    3.2838000042829663
+   ]
+  }
+ ]
+}

@@ -13,3 +13,10 @@ Cautionary-ish tales
 
 - Napari
 - ImageJ
+
+Scheduling and storage
+- Halide
+- Torch
+- JAX
+- Dask
+- Ray

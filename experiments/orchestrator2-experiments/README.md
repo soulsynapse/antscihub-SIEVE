@@ -266,6 +266,23 @@ consumer admitting sparse lags against the producer's field, at the small
 analysis form. Frames resident by construction in both cases, as in the
 finding, so decode is in neither number.
 
+**Answered: the second branch.**
+`docs/findings/2026.08.30-making-a-field-requestable-costs-about-what-the-crossover-is`.
+The dispatcher costs about 0.33 ms per activation over a plain `Held` dict —
+the same figure the re-entry finding measured as the handoff, arrived at from
+a different experiment — and the chained-field crossover it would be judged
+against is the same order. So requestability is a threshold and not a policy:
+free for a frame, where a decode is 6–10 ms, and not free for a chain of cheap
+steps. That is a measured argument for the separation `binding.py` already
+asserts when it says its `Held` is not to be grown into a pool.
+
+One thing the experiment does **not** establish, and the README overclaimed by
+implying: demand does not propagate backwards. A consumer asking for a
+producer's field row waits for it rather than causing it, and the producer is
+driven by its own `Pass`. VapourSynth's `requestFrameFilter` propagates
+through the DAG, and that half is not built — so "requestable" here means
+"held and served under a key", which is weaker than the word suggests.
+
 ### 3. Does a node have to declare how it may be scheduled?
 
 `contract/nodes.py`'s `Step.sequential` and `tool-experiments/tools.py`'s

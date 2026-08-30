@@ -139,15 +139,32 @@ class Session:
     # -- source lifecycle --------------------------------------------------
 
     @staticmethod
-    def open_source(tool: Tool, address: str) -> tuple[Store, Any | None, int | None]:
+    def open_source(tool: Tool, address: str) -> tuple:
         """Open *address* with *tool*.  Blocks — call from a worker thread.
 
-        Returns (store, first_frame, first_position).
+        Returns (store, first_frame, first_position, fingerprint).
+
+        The fingerprint is asked here rather than by whoever draws, for the
+        same reason the open is: it is the source's own work — two seeks and a
+        stat for a file, a hash of names and sizes for a folder of stills —
+        and its cost is the tool's to have, not the frame period's. `None`
+        from a source with no durable identity, which is a camera.
+
+        Guarded, because the contract does not forbid `fingerprint` raising
+        and the caller reports anything out of this as "that recording could
+        not be opened" — which would be said about a store that opened and
+        decoded a frame, and would drop it unclosed, holding a lock on the
+        file the person was just told was unreadable. Identity is a nicety.
+        The open is not.
         """
         store = opened(tool, address)
         position = store.first_start()
         frame = None if position is None else store.frame(position)
-        return store, frame, position
+        try:
+            identity = store.opened.fingerprint()
+        except Exception:  # noqa: BLE001 — a tool's identity is not its open
+            identity = None
+        return store, frame, position, identity
 
     def attach(self, store: Store, tool: Tool | None, address: str) -> None:
         """Wire tiers for a newly opened *store*.  Call from the GUI thread."""
@@ -379,6 +396,19 @@ class Session:
             tuple(Binding(HEAD, head.edge.name, tool.name) for tool in usable))
         self.bound = bind(chain, heads, rect, self._sink_for)
         self.showing = usable[0].name
+
+    def feeds(self) -> dict[str, str]:
+        """Which node feeds which, by name. Empty when nothing is bound.
+
+        Handed over rather than reached for. The drawing needs the shape of
+        the chain and nothing else about it, and a caller assembling this
+        itself would be reading the pipeline's records two levels deep
+        through the session that exists to hold them.
+        """
+        if self.bound is None:
+            return {}
+        return {edge.consumer: edge.producer
+                for edge in self.bound.chain.bindings}
 
     def _sink_for(self, node: str, key: str, form: Form,
                   listed: tuple[int, ...], timebase: str) -> Series:

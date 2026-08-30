@@ -102,6 +102,7 @@ source_modules = ["sieve.gui"]
 forbidden_modules = [
     "sieve.chunks",
     "sieve.fill",
+    "sieve.pipeline",
     "sieve.proxy",
     "sieve.serve",
     "sieve.store",
@@ -109,13 +110,24 @@ forbidden_modules = [
 ignore_imports = [
     "sieve.session -> sieve.chunks",
     "sieve.session -> sieve.fill",
+    "sieve.session -> sieve.pipeline",
     "sieve.session -> sieve.proxy",
     "sieve.session -> sieve.serve",
     "sieve.session -> sieve.store",
 ]
 
+# The tools that run, not only the ones that were measured. This watched the
+# experiment alone until a series was keyed by a step's version, at which point
+# an unaffirmed edit to `tools/` became silent staleness with a store behind
+# it — the exact failure the ADR exists to prevent, in the one place it was
+# unguarded.
 [[tool.importlinter.contracts]]
 name = "ADR-0010: a key carries a version"
 type = "adr0010_key_version"
-tools_file = "experiments/tool-experiments/tools.py"
+# Globs, not a list of files: a contract that names its files misses the next
+# one added, which is the shape of hole this edit exists to close.
+tools_files = [
+    "tools/*.py",
+    "experiments/tool-experiments/tools.py",
+]
 baseline_file = "checks/adr0010-baseline.json"

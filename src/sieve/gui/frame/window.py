@@ -292,14 +292,22 @@ class MainWindow(QMainWindow):
         return self.tools.source_for(address, FRAME)
 
     def _source_landed(self, landed: tuple) -> None:
-        """An opened source and its first frame, back on the GUI thread."""
-        store, frame, position = landed
+        """An opened source and its first frame, back on the GUI thread.
+
+        The tiers are wired to `store.tool` — the producer that actually
+        answered — and not to a fresh `_source_for`. Remembering the identity
+        just above can relink a row, so a re-read here would consult a
+        different row's `source` than the open did, and where two loaded
+        tools both handle the address that is two producers in one session:
+        exactly what recording `source` per row exists to prevent (ADR-0010).
+        """
+        store, frame, position, identity = landed
         if store.address != self._opening:
             store.close()
             return
         self._opening = None
-        tool = self._source_for(store.address)
-        self.session.attach(store, tool, store.address)
+        self._remember_identity(store.address, identity)
+        self.session.attach(store, store.tool, store.address)
         self.frames.drawable = True
         self.canvas.set_aspect(self.session.aspect)
         self.frames.show_frame(frame)
@@ -315,14 +323,50 @@ class MainWindow(QMainWindow):
         self.session.set_steps(steps)
         self._step_names = [tool.name for tool in steps]
         if steps:
-            bound = self.session.bound
-            feeds = ({b.consumer: b.producer for b in bound.chain.bindings}
-                     if bound is not None else {})
-            self.pipeline.show_steps(steps, dict(self.session.unbound), feeds)
+            self.pipeline.show_steps(
+                steps, dict(self.session.unbound), self.session.feeds())
         if position is not None:
             self.session.at = position
             self.transport.show_playhead(position)
         self.session.start_proxy(position)
+
+    def _remember_identity(self, address: str, identity) -> None:
+        """Record what the source says this recording is, and offer a relink.
+
+        The offer is the whole of the repair. A byte-identical copy beside the
+        original is an ordinary folder, so a match is genuinely ambiguous and
+        only the person who has both can settle it — SIEVE recognises the
+        recording it was handed and asks. It never goes looking, and it says
+        nothing when more than one row matches, because an ambiguous question
+        is worse than none.
+
+        `misplaced`, not `not available`: an unplugged drive is the ordinary
+        case the library is built around, and offering to repoint a project
+        away from a drive that is merely in somebody's bag — on the strength
+        of a working copy of the same footage sitting on the internal disk —
+        would lose the drive-resident row the moment they said yes.
+        """
+        if identity is None:
+            return
+        self.library.identify(address, identity.algorithm, identity.token)
+        elsewhere = [entry for entry
+                     in self.library.same_as(identity.algorithm, identity.token,
+                                             besides=address)
+                     if entry.misplaced]
+        if len(elsewhere) != 1:
+            return
+        gone = elsewhere[0]
+        answer = QMessageBox.question(
+            self, "The same recording",
+            f"This is the recording remembered as '{gone.name}', which is "
+            f"not where it was:\n\n{gone.video}\n\n"
+            f"Point that project at this file instead of keeping two?",
+        )
+        if answer is not QMessageBox.StandardButton.Yes:
+            return
+        self.library.forget(address)
+        self.library.relink(gone, address)
+        self.show_library(standing=gone.video)
 
     # -- where the work is standing ----------------------------------------
 

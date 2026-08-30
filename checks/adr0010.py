@@ -1,6 +1,13 @@
-"""ADR-0010 tripwire: hash per top-level def, static on purpose — the tools
+"""ADR-0010 tripwire: hash per top-level def, static on purpose — a tool
 module imports its solvers, and a check that imported it could not run where
 the solvers are not installed.
+
+Watches every file the contract names, given as paths or globs. Globs because
+a contract that lists its files stops covering the next one added, silently —
+which is how `tools/` went unwatched while only the experiment was named.
+
+Keys are qualified by the file they came from, so two tools defining `_field`
+are two entries rather than one that flickers.
 
 Hashes are CR-stripped so autocrlf-only checkouts don't trip.
 """
@@ -11,45 +18,64 @@ import ast
 import hashlib
 import json
 import sys
+import tomllib
 from pathlib import Path
 
 from importlinter import Contract, ContractCheck, fields, output
 
 RECORD_HINT = "uv run python -m checks.adr0010"
 
+ROOT = Path(__file__).resolve().parent.parent
 
-def snapshot(tools_file: Path) -> dict:
-    """Return {functions: {name: hash}, versions: {tool: version}} from source."""
-    source = tools_file.read_bytes().decode("utf-8")
-    tree = ast.parse(source)
-    functions = {}
-    for node in tree.body:
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef,
-                             ast.ClassDef)):
-            segment = ast.get_source_segment(source, node) or ""
-            digest = hashlib.sha256(
-                segment.replace("\r", "").encode("utf-8")).hexdigest()
-            functions[node.name] = digest
-    versions = {}
-    for node in ast.walk(tree):
-        if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
-                and node.func.id == "Tool"):
-            kw = {k.arg: k.value for k in node.keywords}
-            name, version = kw.get("name"), kw.get("version")
-            if (isinstance(name, ast.Constant)
-                    and isinstance(version, ast.Constant)):
-                versions[str(name.value)] = version.value
+
+def expand(patterns: list[str], root: Path = ROOT) -> list[Path]:
+    """The files a contract's patterns name, sorted and deduplicated.
+
+    A pattern matching nothing is left to the caller to notice: an empty
+    baseline is louder than a missing one, and both are visible at record.
+    """
+    found: set[Path] = set()
+    for pattern in patterns:
+        if any(ch in pattern for ch in "*?["):
+            found.update(root.glob(pattern))
+        else:
+            found.add(root / pattern)
+    return sorted(path for path in found if path.is_file())
+
+
+def snapshot(paths: list[Path], root: Path = ROOT) -> dict:
+    """{functions: {file:name -> hash}, versions: {file:tool -> version}}."""
+    functions: dict[str, str] = {}
+    versions: dict[str, object] = {}
+    for path in paths:
+        where = path.relative_to(root).as_posix()
+        source = path.read_bytes().decode("utf-8")
+        tree = ast.parse(source)
+        for node in tree.body:
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef,
+                                 ast.ClassDef)):
+                segment = ast.get_source_segment(source, node) or ""
+                functions[f"{where}:{node.name}"] = hashlib.sha256(
+                    segment.replace("\r", "").encode("utf-8")).hexdigest()
+        for node in ast.walk(tree):
+            if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                    and node.func.id == "Tool"):
+                kw = {k.arg: k.value for k in node.keywords}
+                name, version = kw.get("name"), kw.get("version")
+                if (isinstance(name, ast.Constant)
+                        and isinstance(version, ast.Constant)):
+                    versions[f"{where}:{name.value}"] = version.value
     return {"functions": functions, "versions": versions}
 
 
 class KeyVersionContract(Contract):
-    """Fails when the tools module no longer matches its recorded baseline."""
+    """Fails when a watched tool no longer matches its recorded baseline."""
 
-    tools_file = fields.StringField()
+    tools_files = fields.ListField(subfield=fields.StringField())
     baseline_file = fields.StringField()
 
     def check(self, graph, verbose):
-        current = snapshot(Path(self.tools_file))
+        current = snapshot(expand(list(self.tools_files)))
         base_path = Path(self.baseline_file)
         if not base_path.exists():
             return ContractCheck(kept=False, metadata={"unrecorded": True})
@@ -72,7 +98,7 @@ class KeyVersionContract(Contract):
         changed = ", ".join(check.metadata["changed"])
         output.print_error(
             f"ADR-0010: the text of {changed} moved under the recorded "
-            f"baseline ({self.tools_file}).")
+            f"baseline.")
         if check.metadata["bumped"]:
             output.print_error(
                 "Versions already bumped since the baseline: "
@@ -85,20 +111,33 @@ class KeyVersionContract(Contract):
             f"Either way, affirm by re-recording: {RECORD_HINT}")
 
 
-def record(tools_file: Path, baseline_file: Path) -> None:
+def watched(root: Path = ROOT) -> tuple[list[str], Path]:
+    """What the registered contract watches, read from `pyproject.toml`.
+
+    Read rather than repeated: a recorder with its own list records a set the
+    check does not test, and the two drift with nothing to say so.
+    """
+    config = tomllib.loads(
+        (root / "pyproject.toml").read_bytes().decode("utf-8"))
+    for contract in config["tool"]["importlinter"]["contracts"]:
+        if contract.get("type") == "adr0010_key_version":
+            return contract["tools_files"], root / contract["baseline_file"]
+    raise SystemExit("no adr0010_key_version contract in pyproject.toml")
+
+
+def record(patterns: list[str], baseline_file: Path) -> None:
     """Write the baseline — the author's act of affirming the current text."""
-    current = snapshot(tools_file)
+    paths = expand(patterns)
+    current = snapshot(paths)
     baseline_file.parent.mkdir(parents=True, exist_ok=True)
     baseline_file.write_bytes(
         json.dumps(current, indent=1, sort_keys=True).encode("utf-8") + b"\n")
     versions = ", ".join(f"{k}@{v}" for k, v in
                          sorted(current["versions"].items()))
-    print(f"recorded {len(current['functions'])} definitions "
-          f"({versions}) -> {baseline_file}")
+    print(f"recorded {len(current['functions'])} definitions across "
+          f"{len(paths)} files ({versions}) -> {baseline_file}")
 
 
 if __name__ == "__main__":
-    root = Path(__file__).resolve().parent.parent
-    record(root / "experiments/tool-experiments/tools.py",
-           root / "checks/adr0010-baseline.json")
+    record(*watched())
     sys.exit(0)

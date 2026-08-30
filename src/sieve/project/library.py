@@ -6,7 +6,11 @@ opening the same file each have their own list, and a recording handed to a
 colleague does not arrive already in theirs.
 
 **Keyed by the recording's address — resolved when that address is a path,
-which is location and not identity.** The key answers which row a file on this machine belongs to, and
+which is location and not identity.** A source's own identity for a recording
+is *recorded* on the row once it has been opened (`identify`), and is never
+the key: that is what lets this list recognise a recording it is handed at a
+new path without claiming to know which of two byte-identical files somebody
+meant. The key answers which row a file on this machine belongs to, and
 nothing beyond that: the same recording is one path on a desktop and another
 on a cluster, and one renamed in place becomes a new row with the old one
 left pointing at nothing. That is the right trade for a list that never
@@ -97,6 +101,16 @@ class Entry:
     opened: str = ""
     #: which source tool answered for this recording when the row was made
     source: str = ""
+    #: what the source said this recording *is*, recorded once it has been
+    #: opened. Remembered, never keyed by: this row is a location, and the
+    #: module docstring says why identity belongs in a document beside the
+    #: recording instead. Empty from a source with none — a camera — and on
+    #: every row written before it was asked for.
+    identity: str = ""
+    #: which algorithm produced it, named rather than implied, so a
+    #: content-level identity can coexist with a byte-level one instead of
+    #: orphaning what was written under it
+    identity_by: str = ""
 
     @property
     def folder(self) -> str:
@@ -128,6 +142,27 @@ class Entry:
         if footage.on_disk(self.video):
             return True
         return not Path(self.video).is_absolute()
+
+    @property
+    def misplaced(self) -> bool:
+        """Is the recording gone from somewhere this machine can still see?
+
+        The distinction `available` cannot draw. An unplugged drive and a
+        moved file are both unavailable, and the module docstring says why
+        the first must never be treated as the second: it is the ordinary
+        case. What separates them is whether the volume the row names is
+        mounted — with `E:\\` there and `E:\\shoots\\day1.mp4` not, the
+        recording left; with `E:\\` itself absent, nothing can be said and
+        this answers `False` rather than guessing.
+
+        Only ever a reason to *offer* something, never to act. A share that
+        mounts with its subtree unreachable still reads as misplaced, so the
+        person is the one who settles it.
+        """
+        if self.available:
+            return False
+        anchor = Path(self.video).anchor
+        return bool(anchor) and footage.on_disk(anchor)
 
     @property
     def last(self) -> str:
@@ -215,6 +250,57 @@ class Library:
         else:
             entry.added = now()
             entry.source = source or entry.source
+        self._sort()
+        self.save()
+        return entry
+
+    def identify(self, video: Path | str, algorithm: str, token: str) -> Entry | None:
+        """Record what a source said this recording is. Unknown rows are not minted.
+
+        Written on open, because that is when a source can answer cheaply and
+        when the answer is about a recording somebody is actually holding.
+        """
+        entry = self.find(video)
+        if entry is None or not token:
+            return None
+        if (entry.identity, entry.identity_by) == (token, algorithm):
+            return entry
+        entry.identity, entry.identity_by = token, algorithm
+        self.save()
+        return entry
+
+    def same_as(self, algorithm: str, token: str,
+                besides: str = "") -> list[Entry]:
+        """Rows the source calls the same recording, other than *besides*.
+
+        Only within one algorithm: two identities produced by different
+        methods are not comparable, and treating them as equal or unequal
+        would both be claims this cannot make.
+
+        An empty *besides* excludes nothing and has to be spelled that way:
+        `_key("")` is the working directory, because `Path("")` is `Path(".")`
+        and exists, so the documented default would silently drop whichever
+        row is the folder SIEVE was launched from. Resolved once rather than
+        per row — it is a `stat` a piece, on the thread that draws.
+        """
+        if not token:
+            return []
+        skip = _key(besides) if besides else None
+        return [entry for entry in self.entries
+                if entry.identity == token and entry.identity_by == algorithm
+                and entry.video != skip]
+
+    def relink(self, entry: Entry, video: Path | str) -> Entry:
+        """Point an existing row at where the recording is now.
+
+        Called only when somebody has said to. A byte-identical copy beside
+        the original is an ordinary folder, so the match is genuinely
+        ambiguous and SIEVE never settles it on its own; what it can do is
+        recognise the recording it was handed and offer.
+        """
+        entry.video = _key(video)
+        entry.name = Path(entry.video).stem
+        entry.opened = now()
         self._sort()
         self.save()
         return entry

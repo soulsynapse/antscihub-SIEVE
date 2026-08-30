@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import threading
 from pathlib import Path
-from typing import Any
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
@@ -21,7 +20,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from sieve.chunks import CHUNK_FRAMES, ChunkStore
+from sieve.chunks import ChunkStore
 from sieve.contract.edges import FRAME, Access
 from sieve.contract.forms import Form
 from sieve.fill import Readers, WindowFill, WriteBehind, window_for
@@ -40,7 +39,7 @@ from sieve.gui.frame.swipe import POSITIONS, Arrows, build_swipe
 from sieve.project import Library
 from sieve.registry import load as load_tools
 from sieve.relaunch import relaunch
-from sieve.contract.nodes import Refusal
+from sieve.serve import Ordinals, Route, Served, Serving
 from sieve.store import Store, opened
 from sieve.gui.view.canvas import Canvas
 from sieve.gui.view.canvas.video_canvas import FrameView
@@ -69,11 +68,6 @@ _CACHE_BYTES = 600_000_000
 
 #: A crop below this on either axis is a slip, not a gesture.
 _MIN_CROP = 64
-
-#: How far off a held frame may be and still be shown during a drag, in listed
-#: positions. The explorer's radius: near enough that the picture tracks the
-#: cursor, far enough that a filling window is draggable before it is covered.
-_NEAR = 12
 
 
 class MainWindow(QMainWindow):
@@ -121,17 +115,14 @@ class MainWindow(QMainWindow):
         #: one; the whole frame is the marked exception, summoned to see
         #: context or to draw a different crop.
         self.whole = True
-        #: The filled span, in ordinals over `_listed`.
-        self.active: tuple[int, int] | None = None
+        #: The tiers of the open recording, and which one answered. It owns
+        #: the ordinal snapshot, the chunks and the filled span, so the two
+        #: questions this window used to ask apart — is there a crop, is the
+        #: whole frame showing — become one question about a form.
+        self.serving: Serving | None = None
         self.fill: WindowFill | None = None
         self.readers: Readers | None = None
-        self.chunks: ChunkStore | None = None
         self.writer: WriteBehind | None = None
-        #: The listing as of the open, with the table ADR-0004 requires beside
-        #: an ordinal. A snapshot, which is wrong for a source still being
-        #: written into — `docs/vertical-slice.md` names that as untested.
-        self._listed: tuple[int, ...] = ()
-        self._rank: dict[int, int] = {}
         self._at: int | None = None
 
         self.swipe = build_swipe("right")
@@ -337,21 +328,21 @@ class MainWindow(QMainWindow):
             return
         self._opening = None
         self.store = store
-        self._listed = store.positions
-        self._rank = {pts: index for index, pts in enumerate(self._listed)}
+        self.serving = Serving(store, Ordinals(store.positions))
         self.crop = None
         self.whole = True
         self.frames.drawable = True
         self._rebudget()
         tool = self._source_for(store.address)
         if tool is not None:
-            self.chunks = ChunkStore()
-            self.writer = WriteBehind(self.chunks)
+            self.serving.chunks = ChunkStore()
+            self.writer = WriteBehind(self.serving.chunks)
             self.readers = Readers(tool, store.address)
         self.canvas.set_aspect(store.aspect)
         self.frames.show_frame(frame)
         self.transport.show_source(
-            self._listed, store.starts(), store.output.edge.at.access
+            self.serving.ordinals.listed, store.starts(),
+            store.output.edge.at.access,
         )
         if position is not None:
             self._at = position
@@ -382,88 +373,42 @@ class MainWindow(QMainWindow):
     def guess_at(self, position: int) -> None:
         """A drag. Serve it from what is held, or leave the picture alone.
 
-        The one rule the freeze hunt left with teeth: the GUI thread may block
-        only for an exact request the user just released. Everything else
-        serves from a cheaper tier — a held frame, then a *nearby* held frame,
-        then the picture already on screen. A 350 ms decode per drag step is
-        the version that reads as frozen.
-
-        The nearest tier is what makes a filling window draggable before it is
-        covered: the frontier races the cursor, and a frame a few positions off
-        is a right-time picture where an exact one would be a stall. Outside a
-        window it finds nothing and the picture holds, which is honest — the
-        tier that serves a scrub over the whole file is the display proxy, and
-        it is not built.
+        Which tier that is belongs to `serve.py`; what belongs here is the one
+        rule about this thread — a drag may not block — and what a route means
+        for the canvas. `HOLD` leaves the picture where it is, and outside a
+        filled window that is every drag step, because the tier that would
+        serve one is the display proxy and it does not exist.
         """
-        if self.store is None:
+        if self.serving is None:
             return
         self._at = position
-        form = self._shown()
-        held = self.store.frames.get(position, form)
-        if held is None:
-            held = self._near(position, form)
-        if held is not None:
-            self.frames.show_frame(held)
-
-    def _near(self, position: int, form: Form) -> Any | None:
-        """A held frame within `_NEAR` listed positions, the closest first.
-
-        Distance is counted in positions and never in pts: at 90 kHz over
-        23.976 fps one frame is 3753.75 ticks, so a pts difference compared
-        against a count of frames makes every step look like a jump.
-        """
-        if self.active is None:
-            return None
-        low, high = self.active
-        here = self._rank.get(position)
-        if here is None:
-            return None
-        span = self._listed[max(low, here - _NEAR) : min(high, here + _NEAR + 1)]
-        covered = self.store.frames.covered(span, form)
-        if not covered:
-            return None
-        best = min(covered, key=lambda pts: abs(self._rank[pts] - here))
-        return self.store.frames.get(best, form)
+        self._show(self.serving.guess(position, self._shown()))
 
     def commit_at(self, position: int) -> None:
         """A release or a playback step. This one is paid for.
 
-        Both go through here because both are exact — a step names the position
-        it wants as squarely as a release does. What separates them is that a
-        step is on a timer and will be along again, so a slow one delays the
-        next rather than skipping it; nothing here computes anything, so
-        nothing is lost by the picture arriving late.
-
-        Three tiers, cheapest first: the held frame, the chunk it was written
-        into, and the source. The middle one is why a window survives its own
-        cache — the budget evicts, the chunks do not, and a revisited position
-        costs a cut's random access rather than the original's seek.
-
-        Only `GONE` blanks the canvas, and that is what `Refusal` is for. A
-        forward-only source asked behind its head refuses `LATER` — the frame
-        exists and this consumer cannot have it — and clearing the picture
-        there would report a live source's whole past as empty. Stepping back
-        with `,` on one is exactly that case, and it is reachable: the strip
-        declines the gesture, the key does not.
+        Both come here because both are exact — a step names its position as
+        squarely as a release does — and the difference is only that a step
+        will be along again, so a slow one delays the next rather than
+        skipping it.
         """
-        if self.store is None:
+        if self.serving is None:
             return
         self._at = position
-        form = self._shown()
-        held = self.store.frames.get(position, form)
-        if held is not None:
-            self.frames.show_frame(held)
+        self._show(self.serving.commit(position, self._shown()))
+
+    def _show(self, served: Served) -> None:
+        """Draw what a route produced, or decline to.
+
+        Two routes carry no frame and they are opposite instructions: `GONE`
+        says the position holds nothing and the canvas is cleared, `HOLD` says
+        nothing presentable arrived and the picture already on screen is still
+        the best answer. Collapsing them is how a forward-only source's whole
+        past gets reported as empty.
+        """
+        if served.route is Route.HOLD:
             return
-        if self.crop is not None and not self.whole and self.chunks is not None:
-            ordinal = self._rank.get(position)
-            cut = None if ordinal is None else self.chunks.fetch(ordinal)
-            if cut is not None:
-                self.store.frames.put(position, form, cut)
-                self.frames.show_frame(cut)
-                return
-        answered = self.store.answer(position, form)
-        if answered.delivered or answered.refusal is Refusal.GONE:
-            self.frames.show_frame(answered.frame)
+        self.frames.show_frame(served.frame)
 
     # -- landing a window --------------------------------------------------
 
@@ -475,10 +420,13 @@ class MainWindow(QMainWindow):
         is somewhere else now, and the frontier goes there.
         """
         self.commit_at(position)
-        ordinal = self._rank.get(position)
+        if self.serving is None:
+            return
+        ordinal = self.serving.ordinals.rank(position)
         if ordinal is None:
             return
-        if self.active is not None and self.active[0] <= ordinal < self.active[1]:
+        active = self.serving.active
+        if active is not None and active[0] <= ordinal < active[1]:
             return
         self._set_window(ordinal)
 
@@ -491,20 +439,28 @@ class MainWindow(QMainWindow):
         that span, because chunks live on the store's own ordinals and a
         window must not bend the grid to itself.
         """
-        if self.readers is None or self.chunks is None or self.writer is None:
+        if self.serving is None or self.readers is None or self.writer is None:
             return
-        low, high = window_for(anchor, WINDOW, len(self._listed))
-        if self.active == (low, high):
+        chunks = self.serving.chunks
+        if chunks is None:
+            return
+        listed = self.serving.ordinals.listed
+        low, high = window_for(anchor, WINDOW, len(listed))
+        if self.serving.active == (low, high):
             return
         if self.fill is not None:
             # Not waited on: the dying frontier's last frames land in the same
             # cache at the same form, which is harmless. A landing that waited
             # would be a landing that stalls, which is the whole complaint.
             self.fill.stop(wait=False)
-        self.active = (low, high)
+        self.serving.active = (low, high)
+        # What the chunk tier may answer for, set from the form the fill is
+        # launched with rather than re-derived when it is read back: the two
+        # would be the same fact in two places, and a form change moves one.
+        self.serving.held_form = self._form()
         self.fill = WindowFill(
-            self._listed, low, high, anchor, self._form(),
-            self.store.frames, self.chunks, self.writer, self.readers,
+            listed, low, high, anchor, self._form(),
+            self.store.frames, chunks, self.writer, self.readers,
             on_covered=lambda *landed: self.window_covered.emit(landed),
             holes=self.store.missing,
         )
@@ -566,10 +522,11 @@ class MainWindow(QMainWindow):
             self.fill = None
         if self.writer is not None:
             self.writer.drain()
-        self.active = None
+        self.serving.active = None
+        self.serving.held_form = None
         self.store.frames.wipe()
-        if self.chunks is not None:
-            self.chunks.wipe()
+        if self.serving.chunks is not None:
+            self.serving.chunks.wipe()
         self.crop = crop
         self.whole = False
         self.frames.drawable = False
@@ -632,13 +589,12 @@ class MainWindow(QMainWindow):
         if self.readers is not None:
             self.readers.close()
             self.readers = None
-        if self.chunks is not None:
-            self.chunks.destroy()
-            self.chunks = None
-        self.active = None
+        if self.serving is not None and self.serving.chunks is not None:
+            self.serving.chunks.destroy()
+        self.serving = None
         self.crop = None
         self.whole = True
-        self._listed, self._rank, self._at = (), {}, None
+        self._at = None
         if self.store is not None:
             self.store.close()
             self.store = None

@@ -83,6 +83,9 @@ class MainWindow(QMainWindow):
         self.transport.released.connect(self.land_at)
         self.transport.stepped.connect(self.commit_at)
         self._opening: str | None = None
+        #: step cards in the order the pipeline view drew them, so a result
+        #: can find the card belonging to the node that produced it
+        self._step_names: list[str] = []
         self.source_opened.connect(self._source_landed)
         self.source_failed.connect(self._source_broke)
         self.window_covered.connect(self._covered)
@@ -310,8 +313,12 @@ class MainWindow(QMainWindow):
         )
         steps = self.tools.of_kind("step")
         self.session.set_steps(steps)
+        self._step_names = [tool.name for tool in steps]
         if steps:
-            self.pipeline.show_steps(steps)
+            bound = self.session.bound
+            feeds = ({b.consumer: b.producer for b in bound.chain.bindings}
+                     if bound is not None else {})
+            self.pipeline.show_steps(steps, dict(self.session.unbound), feeds)
         if position is not None:
             self.session.at = position
             self.transport.show_playhead(position)
@@ -371,8 +378,13 @@ class MainWindow(QMainWindow):
         # deliberate `set_ceiling` made while it was running.
         if not self.session.ceiling:
             self.session.set_ceiling(ceiling)
-        if ceiling > 0:
-            self.pipeline.update_step(0, min(value / ceiling, 1.0))
+        # The card for the step that produced this, not card 0: the shown
+        # node is the first step the chain could *bind*, which is only card 0
+        # while every step binds.
+        if ceiling > 0 and self.session.showing in self._step_names:
+            self.pipeline.update_step(
+                self._step_names.index(self.session.showing),
+                min(value / ceiling, 1.0))
         self.frames.show_frame(image)
 
     # -- the drawn crop ----------------------------------------------------

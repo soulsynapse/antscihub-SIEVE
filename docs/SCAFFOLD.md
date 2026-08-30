@@ -34,6 +34,9 @@
     - 📄 `2026.08.22-what-froze-the-felt-loop.md`
     - 📄 `2026.08.28-the-v3-suite-outweighed-its-program.md`
     - 📄 `2026.08.29-what-two-more-sources-found-the-contract-cannot-say.md`
+    - 📄 `2026.08.30-a-twenty-second-full-frame-window-costs-3.7s-and-7.1gb.md`
+    - 📄 `2026.08.30-derived-eviction-reproduces-the-fixed-window.md`
+    - 📄 `2026.08.30-the-pressure-dispatcher-preempts-into-seeks.md`
   - 📁 `vocab/`
     - 📄 `menu.md`
     - 📄 `pane.md`

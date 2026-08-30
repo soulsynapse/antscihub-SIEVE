@@ -35,5 +35,6 @@ the collision without anybody having to settle it. The shelf a term sits on is
   - 📄 [binding](vocab/binding.md) — The join between an edge one node wants and an edge another offers, made by name. Where the facts a producer cannot state about itself — timebase, extent, access — are derived.
   - 📄 [step](vocab/step.md) — The role a tool fills to process frames: an arithmetic over listed positions, run once per position, producing an image-sized field and the scalar it reduces to.
   - 📄 [field (step)](vocab/field-step.md) — A step's image-sized result — one number per pixel, float32, computed where it is drawn and discarded there.
+  - 📄 [chain](vocab/chain.md) — The user's pipeline as a document — which nodes exist and which node's output feeds which node's want. Structure only; whether a feed is legal needs the producer open. Names tools, never a recording.
 
-*24 defined.*
+*25 defined.*

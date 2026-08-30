@@ -69,40 +69,44 @@ repeating.
   nothing, which is the line ADR-0009 actually draws.
 - **A drawn crop, and the invalidation a form change needs.** The crop is what
   makes a window holdable at all, and drawing one is what gives the
-  invalidation path a caller. Landing, the four serve tiers and the crop are in
-  `gui/frame/window.py`.
+  invalidation path a caller.
+
+- **The route table.** `sieve/serve.py`: the tiers of one open recording in
+  one place, and a serve that names which one answered. The window kept the
+  two things that are its own — a drag may not block, and what a route means
+  for a canvas — and gave up the ordinal snapshot, the chunks and the filled
+  span. `HOLD` and `GONE` are opposite instructions and were being told apart
+  by re-deriving a refusal.
+
+- **The display proxy.** `sieve/proxy.py`, which is the chunk store and the
+  window fill at a coarser form over the whole extent, anchored at attention
+  and redirected on landing. It needed `forms.build` to stop refusing to
+  resample — a refusal that was argued where `tool-experiments/forms.py` had
+  already settled the construction and the grade.
 
   What each of those cost is in the commit messages that landed them, which is
   the wrong shelf for it — a finding is owed here and none has been minted.
+  The proxy's is the most owed: it moved a drag outside the filled window from
+  the source's seek to a cut's random access, and it found two defects in the
+  chunk tier that a window fill cannot reach.
 
 ## Next, in order
 
-**1. The display proxy and the route table.** Ports `_serve`'s selection.
-This is what a scrub *outside* the filled window costs, and it is now the only
-place a seek is still paid on the thread that draws: inside a window every
-route is a few milliseconds, and one position beyond it the picture holds
-still because the tier that would serve it does not exist. `Frames.covered`
-landed with the fill; `nearest` is currently the window's own, in
-`gui/frame/window.py`, and belongs down there once a second caller wants it.
-Keep the two-threshold subtlety: a very near cached frame beats the proxy, a
-merely near one loses to it, because a right-time low-resolution frame beats a
-wrong-time sharp one.
-
-The proxy is also what makes a *crop* drawable anywhere: the crop gesture
-needs the whole frame, and the whole frame is a source-form decode per
-position. Drawing one today means scrubbing at ~200 ms a step to find the
-place to draw it.
-
-**2. The step contract.** `contract/nodes.py` says one contract per tool type
+**1. The step contract.** `contract/nodes.py` says one contract per tool type
 and a source is the first. `experiments/tool-experiments/tools.py` is the
 shape: a form that is a function of the crop, the offsets a step admits, its
-reach, its key. Cost class stays computed and never declared (ADR-0007). Not
-before 1 and 2 — a step contract designed against a loop that is not yet fast
-enough to feel is the mistake tool-experiments' post-mortem records.
+reach, its key. Cost class stays computed and never declared (ADR-0007). It
+was gated on the loop being fast enough to feel — a step contract designed
+against one that is not is the mistake tool-experiments' post-mortem records
+— and that gate is now open in the substrate and not yet in the hand. What
+is owed before this is a driven session rather than more code: every route
+was timed by a script, and what the gate was about is the loop under a
+person's cursor.
 
 The keyframe strip was first in the storage plan's tier list and is no longer
-urgent: `Output.starts` removed the reason. A filmstrip is now a transport
-concern and folds into 1 and 2 rather than standing before them.
+urgent: `Output.starts` removed the reason, and the display proxy is now the
+tier a filmstrip would be drawn from. It is a transport concern and folds
+into the step contract rather than standing before it.
 
 ## Waiting on a decision that is not the code's
 
@@ -137,6 +141,24 @@ lead-shaped and belongs in `architecture-leads.md` if it is not settled soon.
 - **A landing while a chunk of the same window is still encoding.** The
   explorer priced both halves of that seam solo and the overlap not at all,
   and nothing here has driven it either. The writer's queue is the seam.
+
+- **Three readers of one recording at once.** The window fill, the proxy
+  build and the drawing thread all borrow from the same pool now, where the
+  measured case was two
+  (`findings/2026.08.21-software-decoders-collapse-under-contention.md` is
+  the shape of what a third could cost, and it was not measured on this
+  pairing).
+
+- **A session killed rather than closed leaves its scratch behind**, and a
+  whole-file proxy is a much larger thing to leave than a 300-frame window.
+  Nothing sweeps a dead process's directory. `nodes.py`'s granted scratch
+  space is where this belongs and it does not exist.
+
+- **A write-behind that fails every chunk reports nothing.** `WriteBehind`
+  swallows an encode exception so one bad chunk re-derives rather than
+  killing the writer, which is right; a build where *every* encode fails
+  looks identical to one making no progress, which is how a broken partial
+  rename survived a full run. There is no logging facility to fix it with.
 - **A second recording opened over a filled one.** `_close_source` stops the
   fill, closes the readers and destroys the chunks in that order; the order is
   argued and has not been driven with a fill actually running.

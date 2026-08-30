@@ -26,7 +26,6 @@ from typing import Any
 
 from sieve import settings
 from sieve.contract import Tool
-from sieve.contract.nodes import Source
 
 #: Overrides the search path entirely, so a check loading a fixture tool does
 #: not also pick up whatever the person keeps in their own directory.
@@ -55,9 +54,21 @@ class Registry:
     tools: tuple[Tool, ...] = ()
     unavailable: tuple[Unavailable, ...] = ()
 
+    def of_kind(self, kind: str) -> tuple[Tool, ...]:
+        """Every loaded tool filling *kind*, in search-path order.
+
+        Asking by role name rather than by class is what keeps this file
+        from having to be edited when SIEVE contracts another role — the
+        table in `contract.nodes` is the one place that changes.
+        """
+        return tuple(t for t in self.tools if t.kind == kind)
+
     @property
     def sources(self) -> tuple[Tool, ...]:
-        return tuple(t for t in self.tools if isinstance(t.role, Source))
+        """The tools that bring a file in. `offering` and `source_for` ask
+        source-only questions of these — `handles`, `offers`, `patterns` —
+        which is why they narrow here and not over every role."""
+        return self.of_kind("source")
 
     def offering(self, kind: str) -> tuple[Tool, ...]:
         """The sources that serve *kind*, in search-path order.
@@ -170,7 +181,14 @@ def _load_file(
         unavailable.append(Unavailable(path, f"exports no {_EXPORT}"))
         return
     for tool in exported:
-        if isinstance(tool, Tool) and isinstance(tool.role, Source):
+        #: `Tool` refuses an unknown role when it is built, inside the
+        #: tool's own module, so anything arriving here is already a
+        #: contracted role. What is left to check is that it is a `Tool` at
+        #: all — and the report says which, because "is not a Tool" was
+        #: also what a perfectly good tool filling a role this file had not
+        #: been taught about used to get.
+        if isinstance(tool, Tool):
             tools.append(tool)
         else:
-            unavailable.append(Unavailable(path, f"{tool!r} is not a Tool"))
+            unavailable.append(
+                Unavailable(path, f"{tool!r} is not a {Tool.__name__}"))

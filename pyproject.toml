@@ -79,6 +79,40 @@ forbidden_modules = [
     "sieve.__main__",
 ]
 
+# The role slot stays open by the registry not being able to name a role.
+# It was documented open and gated shut — `isinstance(tool.role, Source)` —
+# so a tool filling any other contracted role was dropped at load and
+# reported as malformed. `Tool.kind` is the question to ask; a file that
+# cannot import the class cannot go back to asking the other one.
+[[tool.importlinter.contracts]]
+name = "the registry never names a role"
+type = "forbidden"
+source_modules = ["sieve.registry"]
+forbidden_modules = ["sieve.contract.nodes"]
+# direct only: `Tool` lives in `sieve.contract`, which imports nodes itself,
+# so the transitive path is every importer of `Tool` and forbidding it would
+# forbid the contract. What must not happen is this file naming the module.
+allow_indirect_imports = "true"
+
+[[tool.importlinter.contracts]]
+name = "the GUI never imports the orchestrator"
+type = "forbidden"
+source_modules = ["sieve.gui"]
+forbidden_modules = [
+    "sieve.chunks",
+    "sieve.fill",
+    "sieve.proxy",
+    "sieve.serve",
+    "sieve.store",
+]
+ignore_imports = [
+    "sieve.session -> sieve.chunks",
+    "sieve.session -> sieve.fill",
+    "sieve.session -> sieve.proxy",
+    "sieve.session -> sieve.serve",
+    "sieve.session -> sieve.store",
+]
+
 [[tool.importlinter.contracts]]
 name = "ADR-0010: a key carries a version"
 type = "adr0010_key_version"

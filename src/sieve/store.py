@@ -316,6 +316,13 @@ def opened(tool: Tool, address: str) -> Store:
     rather than a `Store` that answers nothing: the tool said frames and did
     not bring one.
     """
+    #: the annotation used to carry this: `Tool.role` was `Source`, so a
+    #: tool reaching here could only be one. Now that a role is anything in
+    #: `nodes.ROLES`, the requirement is this function's to state.
+    if tool.kind != "source":
+        raise ValueError(
+            f"{tool.name} fills the {tool.kind} role; opening an address "
+            f"is a source's")
     handle = tool.role.open(address)
     for output in handle.outputs.values():
         if output.edge.kind == FRAME:

@@ -12,6 +12,11 @@ The reduction counts only tracked points, so a mostly-static scene with a few
 moving features produces a meaningful signal rather than one diluted by the
 zero background.
 
+**One product, and it is the reduction.** `flow` is the mean magnitude over
+tracked points, one number per position. The field is drawn and discarded, so
+it is offered to nothing and named in no edge — the contract's reasoning is on
+`nodes.Step`.
+
 **No persistent state.** `goodFeaturesToTrack` and `calcOpticalFlowPyrLK` are
 both stateless calls — no solver object, no thread-local instance. Two threads
 calling `field` concurrently share nothing.
@@ -25,14 +30,20 @@ import cv2
 import numpy as np
 
 from sieve.contract import Tool
+from sieve.contract.edges import VALUE
 from sieve.contract.forms import Form
-from sieve.contract.nodes import Step
+from sieve.contract.nodes import Produced, Step
 
 _MAX_CORNERS = 500
 _QUALITY = 0.01
 _MIN_DIST = 7
 _WIN_SIZE = 15
 _MAX_LEVEL = 2
+
+#: named once and read by both the declaration and `_field`, so a change to
+#: what this admits cannot leave the arithmetic reaching for a row nobody
+#: fetched. The previous position and the one being computed.
+_OFFSETS = (-1, 0)
 
 
 def _analysis_form(rect: tuple[int, int, int, int]) -> Form:
@@ -41,7 +52,7 @@ def _analysis_form(rect: tuple[int, int, int, int]) -> Form:
 
 
 def _field(frames: dict[int, Any], row: int) -> Any:
-    prev = frames[row - 1]
+    prev = frames[row + _OFFSETS[0]]
     curr = frames[row]
     h, w = curr.shape[:2]
     pts = cv2.goodFeaturesToTrack(
@@ -79,9 +90,10 @@ TOOLS = (
         version=1,
         role=Step(
             form_for=_analysis_form,
-            offsets=(-1, 0),
+            offsets=_OFFSETS,
             field=_field,
             reduce=_reduce,
+            produces=(Produced("flow", VALUE, dtype="float"),),
             params={
                 "corners": _MAX_CORNERS,
                 "quality": _QUALITY,

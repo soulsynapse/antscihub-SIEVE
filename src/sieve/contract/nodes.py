@@ -97,6 +97,34 @@ class Source:
 
 
 @dataclass(frozen=True)
+class Produced:
+    """An edge a step will offer — as much of one as a step can honestly say.
+
+    Not an `Edge`, and the difference is the point. An edge carries a form
+    and a `Positioning`, and a step can fill in neither: its form follows
+    the crop it was handed, its timebase and origin are its input's, and its
+    access is a property of where its output is kept rather than of the
+    arithmetic. A record that carried those fields and then refused them
+    would permit in its type exactly what it forbids in its checks. So the
+    step says the name, the kind and the dtype, and the binding says the
+    rest.
+
+    The name is the step's own — two crops of one tool both produce
+    `"flow"` — and qualifying it across a chain is the pipeline's job.
+    """
+
+    name: str
+    kind: str                #: one of `edges.KINDS`
+    dtype: str | None = None
+
+    def __post_init__(self) -> None:
+        if not self.name:
+            raise ValueError("a produced edge is named or nothing can bind it")
+        if self.kind not in KINDS:
+            raise ValueError(f"{self.kind!r} is not an edge kind")
+
+
+@dataclass(frozen=True)
 class Step:
     """A node with frame inputs. The role a tool fills to process frames.
 
@@ -105,13 +133,34 @@ class Step:
     computed must be resident — non-positive, 0 included; the scheduler
     resolves them against the listing, so a step never sees a timebase.
     `field` produces the image-sized result; `reduce` compresses it to the
-    scalar a series stores.
+    scalar a series stores. `produces` is what the step offers downstream —
+    the declaration only, never the serving: what serves it needs the tier
+    stack and the series store, neither of which a tool may import, and a
+    tool that returned its own `Output` would be a tool deciding when a
+    value is recorded (ADR-0005).
+
+    **The field is not among the products, deliberately.** It is float32
+    and image-sized, and `Form` spells gray and bgr, so a bound field edge
+    would carry a form nothing can honestly compare: `forms.grade` and
+    `store.Frames.dominator` match on pix and rect, and a uint8 gray frame
+    over the same rect would grade EXACT against it — plausible numbers, no
+    crash. Nothing binds a field either; it is computed where it is drawn
+    and discarded there. The trigger for declaring one is a step consuming
+    another step's field, or a field that gets stored, and it reopens
+    `edges.KINDS` with it — a measurement per pixel is neither a picture nor
+    a classification.
+
+    Output positions are the input's, one for one. A step that resamples
+    time — decimation, a rolling summary — is the trigger for a declared
+    relation, and it is absent until then rather than present with a single
+    legal value nothing reads.
     """
 
     form_for: Callable[[tuple[int, int, int, int]], Form]
     offsets: tuple[int, ...]
     field: Callable[[Mapping[int, Any], int], Any]
     reduce: Callable[[Any], float]
+    produces: tuple[Produced, ...]
     sequential: bool = False
     params: Mapping[str, Any] | None = None
 
@@ -121,6 +170,24 @@ class Step:
     @property
     def reach(self) -> int:
         return -min(self.offsets)
+
+    def __post_init__(self) -> None:
+        if not self.offsets:
+            raise ValueError("a step admits at least the position it computes")
+        if len(set(self.offsets)) != len(self.offsets):
+            # `needs` would return a multiset and every refcount would overcount
+            raise ValueError(f"{self.offsets} names a position twice")
+        if any(offset > 0 for offset in self.offsets):
+            # `first_honest` trims a head; nothing in the tree trims a tail
+            raise ValueError(f"{self.offsets} reaches ahead; offsets are non-positive")
+        if 0 not in self.offsets:
+            # a value about a position computed without it is about another one
+            raise ValueError(f"{self.offsets} omits 0, the position being computed")
+        if not self.produces:
+            raise ValueError("a step that offers nothing is not a node")
+        names = [product.name for product in self.produces]
+        if len(set(names)) != len(names):
+            raise ValueError(f"{sorted(names)} names one product twice")
 
 
 #: Substrate-owned and closed, like edge kinds.

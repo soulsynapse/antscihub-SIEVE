@@ -215,6 +215,14 @@ class Held:
     a window size somebody chose, which is the arrangement
     `orchestrator-experiments/02-derived-eviction.py` measured for frames.
 
+    **Keyed by row, which is narrower than it looks.** `pool.py` keys by
+    position and form together, because two consumers at different forms
+    need different arrays of one instant and a pool keyed by one of them
+    thinks either satisfies the other — the lesson `store.py` learned first
+    and the pool learned again. This holds one producer's fields at one
+    form, so a row is a complete key here and nowhere else. Anything that
+    grows a second producer or a second crop wants the pool, not this.
+
     Counts are kept because the reuse is the result: a consumer at lags 30,
     20 and 10 asks for each upstream row four times, thirty rows apart, so a
     cache that spans less than the consumer's reach captures none of it and

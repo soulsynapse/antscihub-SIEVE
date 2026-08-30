@@ -11,11 +11,13 @@ list — if the want is here, the repo already has an answer.
 - **decide which frames to evict from memory** → refcounted from declarations, not LRU or fixed window (ADR-0006, experiments/orchestrator-experiments/pool.py)
 - **decode a frame from the container** → one cursor, step-forward or seek by distance (experiments/orchestrator-experiments/fetch.py)
 - **draw a step's output at display resolution** → experiments/tool-experiments/surfaces.py — paint cost is the bottleneck, not the tier stack
+- **hold a computed value between the demands that share it** → the declaration-held pool, whatever the payload is — keyed by what the value is about, position and form, never by the row that asked (ADR-0006, experiments/orchestrator-experiments/pool.py; chain-experiments/bind.py holds fields row-keyed, which is safe only while one producer at one form is the whole graph)
 - **identify a frame across boundaries** → pts in stream timebase, ordinal only inside a store (ADR-0004)
 - **implement a feature for the main tree** → experiments/ has working code to port — find the experiment area that measured it
+- **price one layer of the stack without the layer below it in the measurement** → hold the lower layer resident before timing and report the residual (ADR-0007, experiments/tool-experiments/03-free-while-hot.py; chain-experiments/02 does it twice — frames resident across both cases, and a floor probe with every field pre-held to separate what a cache cannot remove from what it can)
 - **run per-frame work that cannot fit the frame period** → src/sieve/gui/frame/stepwork.py — one in flight, one pending, latest wins, superseded work dropped on a compared revision rather than a cancel flag (shape from v2 gui/preview_runner.py)
 - **schedule which frames to fetch and decode** → declaration graph, hold-and-release (ADR-0006, experiments/orchestrator-experiments/graph.py)
 - **share setup across experiments in a battery** → harness.py in the experiment folder (experiments/decode-experiments/harness.py is the pattern)
 - **store a step's reduced output per position** → series: one float per position, coverage record beside it (experiments/tool-experiments/series.py)
 
-*11 solved.*
+*13 solved.*

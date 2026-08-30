@@ -10,16 +10,17 @@ defined: 2026-08-30
 Which instant a frame is, apart from what it is: the source's own presentation
 timestamp, integer ticks in the stream's timebase. A position is a name and
 never a count, which is what lets it cross a file, a session or a tool boundary
-and still mean one frame. See [form](form.md) for the other half of the key,
-and [ordinal](ordinal.md) for the row it lands on inside one listing, which is
+and still mean one frame. See [form](form.md) for the other half of the store's
+key, and [ordinal](ordinal.md) for the row it lands on in one listing, which is
 the thing it is most often confused with and the only one of the two that can
 be counted with.
 
 ## Where it lives
 
-`store.py` is keyed by position and holds no rows at all. `chunks.py` and
-`proxy.py` fetch by ordinal, because a chunk grid has to be filed somewhere
-fixed, and `fill.py` sits between them doing the only conversion.
+`store.py` is keyed by `(position, form)` and holds no rows at all.
+`chunks.py` and `proxy.py` fetch by ordinal, because a chunk grid has to be
+filed somewhere fixed, and `fill.py` sits between them doing the only
+conversion.
 
 ADR-0004 settled this identity and never named it; this file names it. Nothing
 chose the word: `store.py`, `chunks.py`, `fill.py`, `serve.py`, `proxy.py` and

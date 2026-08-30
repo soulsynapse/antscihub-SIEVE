@@ -25,7 +25,7 @@ answers `4.0` for the fifth image whatever the interval was. Nothing in the
 contract can tell that this is a lie, which is a finding rather than a defect
 here, and is written up as one.
 
-**One form for the whole folder, decided by the first image.** `Edge.spec.form`
+**One form for the whole folder, decided by the first image.** `Edge.form`
 is fixed at open, so a directory whose images differ in size cannot be described
 at all. This tool reports the first image's dimensions, and an image of another
 size refuses with `Refusal.FORM` — the position is fine and the shape is not the
@@ -49,7 +49,6 @@ from sieve.contract.edges import (
     Access,
     Edge,
     Extent,
-    FrameSpec,
     Origin,
     Positioning,
     Timebase,
@@ -171,7 +170,7 @@ class _Folder:
             return Answer(refusal=Refusal.GONE)
         if frame.shape[:2] != (self.height, self.width):
             # A perfectly good image, in a form this source could not declare:
-            # `Edge.spec.form` was fixed from the first still and a folder may
+            # `Edge.form` was fixed from the first still and a folder may
             # hold several sizes. FORM and not GONE, because nothing is wrong
             # with the position — the answer is about the shape asked for.
             return Answer(refusal=Refusal.FORM)
@@ -230,7 +229,7 @@ def _open(address: str) -> Opened:
         # meaning depends on which tool answered.
         name="images:0",
         kind=FRAME,
-        spec=FrameSpec(source_form(state.width, state.height, "bgr")),
+        form=source_form(state.width, state.height, "bgr"),
         at=Positioning(
             # One tick per image. There is nothing here to derive a rate from,
             # and the contract requires a timebase to be positioned at all.

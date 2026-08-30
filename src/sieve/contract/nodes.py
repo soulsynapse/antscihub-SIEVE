@@ -14,7 +14,7 @@ from enum import Enum
 from typing import Any
 
 from sieve.contract import forms
-from sieve.contract.edges import SPECS, Edge, Extent
+from sieve.contract.edges import KINDS, Edge, Extent
 from sieve.contract.forms import Form
 
 
@@ -92,12 +92,39 @@ class Source:
 
     def __post_init__(self) -> None:
         for kind in self.offers:
-            if kind not in SPECS:
+            if kind not in KINDS:
                 raise ValueError(f"{kind!r} is not an edge kind")
 
 
+@dataclass(frozen=True)
+class Step:
+    """A node with frame inputs. The role a tool fills to process frames.
+
+    `form_for` builds the wanted input form from a crop rect in source
+    pixels. `offsets` names which listed positions relative to the one being
+    computed must be resident — non-positive, 0 included; the scheduler
+    resolves them against the listing, so a step never sees a timebase.
+    `field` produces the image-sized result; `reduce` compresses it to the
+    scalar a series stores.
+    """
+
+    form_for: Callable[[tuple[int, int, int, int]], Form]
+    offsets: tuple[int, ...]
+    field: Callable[[Mapping[int, Any], int], Any]
+    reduce: Callable[[Any], float]
+    sequential: bool = False
+    params: Mapping[str, Any] | None = None
+
+    def needs(self, row: int) -> tuple[int, ...]:
+        return tuple(row + off for off in self.offsets)
+
+    @property
+    def reach(self) -> int:
+        return -min(self.offsets)
+
+
 #: Substrate-owned and closed, like edge kinds.
-ROLES: dict[str, type] = {"source": Source}
+ROLES: dict[str, type] = {"source": Source, "step": Step}
 
 
 def role_kind(role: object) -> str | None:
@@ -113,7 +140,7 @@ def read_form(output: Output, position: int | None, want: Form) -> Answer:
     answer = output.read(position, want)
     if answer.refusal is not Refusal.FORM:
         return answer
-    have = output.edge.spec.form
+    have = output.edge.form
     if forms.grade(have, want) is None:
         raise ValueError(f"{have.key()} cannot answer for {want.key()}")
     answer = output.read(position, have)

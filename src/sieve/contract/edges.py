@@ -7,9 +7,14 @@ how it is stored, how it is keyed, how a declaration reaches over it, how it
 is drawn. That is ADR-0009's accretion in the type system, where it is harder
 to see. Adding a kind here is a decision; that is the point of the file.
 
-An edge is one type. What varies is the `spec` it holds and whether it holds
-a `Positioning` — composition rather than a hierarchy, so nothing subclasses
-anything and a reader has one shape to learn.
+An edge is one kind, and it composes the properties it needs from a shared
+vocabulary. A frame and a mask both carry a form because both are pixels; a
+value carries a dtype because it is a number. The properties are flat on the
+edge, not inherited through a spec hierarchy, so two kinds that share a
+property share the type and nothing else.
+
+Properties are optional per instance: a kind does not mandate which properties
+are present. The tool and the substrate check at the point of use.
 
 Position-indexing is a property of the edge, not a kind of its own: a
 constant is a value whose declaration ignores position, which is ADR-0006's
@@ -24,12 +29,11 @@ from fractions import Fraction
 
 from sieve.contract.forms import Form
 
-FRAME = "frame"   #: pixels at a form
+FRAME = "frame"   #: pixels at a form — an image
+MASK = "mask"     #: pixels at a form — a classification per pixel
 VALUE = "value"   #: a number — a threshold, a count, a rate
 
-# TODO: geometry — a rect, point or polygon. Will be built. Not here yet
-# because it has to carry its coordinate grid, and four ints that are secretly
-# a rect is that convention crossing an edge undeclared.
+KINDS: frozenset[str] = frozenset({FRAME, MASK, VALUE})
 
 
 class Access(str, Enum):
@@ -98,46 +102,28 @@ class Positioning:
 
 
 @dataclass(frozen=True)
-class FrameSpec:
-    """Pixels. The form is the vocabulary; `forms.py` is its authority."""
-
-    form: Form
-
-
-@dataclass(frozen=True)
-class ValueSpec:
-    """A number. Not geometry — see the TODO above."""
-
-    dtype: str   #: "int" | "float"
-
-
-#: Which spec belongs to which kind. The whole closed set, in one place.
-SPECS = {FRAME: FrameSpec, VALUE: ValueSpec}
-
-
-@dataclass(frozen=True)
 class Edge:
     """A named thing a node offers or wants.
 
     The name is what a binding names — a document and a key within it, since
     one crop document holds several regions and one file may hold several
-    streams (`docs/architecture-leads.md`).
+    streams (``docs/architecture-leads.md``).
+
+    Properties are composed, not inherited: each edge carries the properties
+    its kind needs, and two kinds that share a property share the type. All
+    properties are optional per instance; the tool and the substrate check
+    at the point of use.
     """
 
     name: str
     kind: str
-    spec: FrameSpec | ValueSpec
-    at: Positioning | None = None   #: None means the value ignores position
+    form: Form | None = None       #: pixel shape — frame and mask carry this
+    dtype: str | None = None       #: "int" | "float" — value carries this
+    at: Positioning | None = None  #: None means the value ignores position
 
     def __post_init__(self) -> None:
-        expected = SPECS.get(self.kind)
-        if expected is None:
+        if self.kind not in KINDS:
             raise ValueError(f"{self.kind!r} is not an edge kind")
-        if not isinstance(self.spec, expected):
-            raise TypeError(
-                f"{self.kind} edges carry {expected.__name__}, "
-                f"not {type(self.spec).__name__}"
-            )
 
     @property
     def positioned(self) -> bool:

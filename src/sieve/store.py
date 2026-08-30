@@ -221,7 +221,7 @@ class Store:
     @property
     def form(self) -> Form:
         """The source's own form — whole frame, source sampling, as decoded."""
-        return self.output.edge.spec.form
+        return self.output.edge.form
 
     @property
     def aspect(self) -> float:

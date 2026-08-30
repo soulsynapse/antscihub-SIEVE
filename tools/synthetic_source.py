@@ -51,7 +51,6 @@ from sieve.contract.edges import (
     Access,
     Edge,
     Extent,
-    FrameSpec,
     Origin,
     Positioning,
     Timebase,
@@ -228,7 +227,7 @@ def _open(address: str) -> Opened:
     edge = Edge(
         name="synthetic:0",
         kind=FRAME,
-        spec=FrameSpec(source_form(state.width, state.height, "bgr")),
+        form=source_form(state.width, state.height, "bgr"),
         at=Positioning(
             timebase=Timebase(1, state.rate),
             # Minted: nothing was read out of anything. The ticks are this

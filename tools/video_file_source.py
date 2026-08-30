@@ -48,7 +48,6 @@ from sieve.contract.edges import (
     Access,
     Edge,
     Extent,
-    FrameSpec,
     Origin,
     Positioning,
     Timebase,
@@ -266,10 +265,8 @@ def _open(address: str) -> Opened:
         # second stream appears is a binding that breaks silently.
         name=f"video:{stream.index}",
         kind=FRAME,
-        spec=FrameSpec(
-            source_form(stream.codec_context.width,
-                        stream.codec_context.height, "bgr")
-        ),
+        form=source_form(stream.codec_context.width,
+                         stream.codec_context.height, "bgr"),
         at=Positioning(
             timebase=Timebase(base.numerator, base.denominator),
             origin=Origin.CARRIED,

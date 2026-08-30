@@ -1,21 +1,16 @@
-"""Vocab convention check: the shape of a term's entry, and whether its
-citations still resolve.
+"""Vocab convention check: the shape of an entry, and whether its citations
+still resolve.
 
-Two failures this exists for, both seen. An entry grows until nobody reads it,
-because nothing told the writer a definition has a size. And an entry cites a
-symbol that later moves — `serve.Ordinals` survived the row table moving to
-`sieve/ordinals.py` — so the paragraph *defining* a word reads false while
-only the code moved.
+Two failures, both seen. An entry grows until nobody reads it. And an entry
+cites a symbol that later moves — `serve.Ordinals` went to `sieve/ordinals.py`
+and left the paragraph *defining* position reading false — so the fix is not to
+stop citing code but to keep the citations under one heading and check that
+heading. The definition must hold across a refactor; `## Where it lives` is
+expected to move.
 
-The answer to the second is not to stop citing code. It is to keep the
-citations out of the definition and in one section, and to check that section:
-the definition says what the word names and must hold across a refactor, and
-`## Where it lives` says where to go look and is expected to move.
-
-What is deliberately not checked: bare backticked names (`ROLES`, `bind`).
-Resolving those needs a guess about what is a symbol and what is prose, and a
-check with false positives is a check somebody turns off. Dotted references
-and paths are unambiguous, and they are what goes stale.
+Bare backticked names (`ROLES`, `bind`) are deliberately not resolved: telling
+a symbol from prose needs a guess, and a check with false positives is a check
+somebody turns off.
 
 Run: `uv run python -m checks.vocab`
 """
@@ -30,6 +25,11 @@ from pathlib import Path
 VOCAB = "docs/vocab"
 GLOSS_WORDS = 40
 DEFINITION_WORDS = 150
+#: The whole entry. An unsettled one is allowed more because it is a different
+#: genre — an argument enumerating live senses, where the citations are the
+#: content — but it is capped too, or it grows into the essay this prevents.
+ENTRY_WORDS = 320
+UNSETTLED_WORDS = 400
 
 #: Trees whose modules a dotted citation may name.
 SOURCES = ("src", "tools", "experiments", "checks", "scripts", "mockup")
@@ -174,6 +174,11 @@ def check(path: Path, text: str, tree: Tree) -> list[str]:
                    " — it is what VOCAB.md prints, so it has to scan")
     if "`" in gloss:
         bad.append("gloss names code; the gloss outlives the code")
+
+    cap = UNSETTLED_WORDS if unsettled else ENTRY_WORDS
+    if len(body.split()) > cap:
+        bad.append(f"the entry is {len(body.split())} words, over {cap} — say "
+                   "where to look and what could not be derived by looking")
 
     definition = SECTION.split(body)[0]
     words = len(definition.split())

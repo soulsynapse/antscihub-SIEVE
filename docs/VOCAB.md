@@ -3,10 +3,9 @@
 # VOCAB — what the words mean
 
 Derived: each line is its term's `gloss`, so that file is the home and this
-index cannot drift from it. A gloss is capped and names no code, which is what
-keeps this page scannable and keeps a rename out of it — the entry's own
-`## Where it lives` is where code goes, and `checks/vocab.py` holds both to it.
-The shelf a term sits on is `group` and its order along that shelf is
+index cannot drift from it. A gloss is capped and names no code, which keeps
+this page scannable and keeps a rename out of it; `checks/vocab.py` holds it
+there. The shelf a term sits on is `group` and its order along that shelf is
 `position`, both placement only — a term that drops its group leaves this index
 while keeping its file. A term the tree has not agreed on is listed apart,
 below.

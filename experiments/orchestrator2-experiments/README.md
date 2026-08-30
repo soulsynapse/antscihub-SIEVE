@@ -334,6 +334,24 @@ inherently sequential. **This folder should reach for that literature first
 rather than re-deriving it**: filter graphs, stream operators and prefix scans
 are old, and SIEVE's novelty is the seek cost, not the scheduling.
 
+## What has not moved, and why the shelf still points at V1
+
+`docs/solutions/INDEX.md` has four entries pointing into
+`orchestrator-experiments/` — the decode cursor at `fetch.py`, fetch
+scheduling at `graph.py`, and both frame eviction and the held intermediate at
+`pool.py`. **None of them moves here yet**, because none of those mechanisms
+has moved: V1 is still the runnable explorer, still the folder the published
+findings recreate from, and this folder's copies are a parallel arrangement
+rather than a replacement. A shelf naming superseded code is worse than no
+shelf, and so is a shelf naming code that has not superseded anything.
+
+One entry did change content without changing where it points: the held
+intermediate now carries which of the pool and a binding-scoped hold to reach
+for, because that stopped being a matter of taste when question 2 measured it.
+
+When V2's walk reproduces V1's numbers leg for leg and V1 retires, all four
+move together, in the commit that retires it.
+
 ## The rule for a result
 
 `docs/findings/` rules, plus the two this shelf inherits from V1: import

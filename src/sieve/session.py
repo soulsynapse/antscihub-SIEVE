@@ -380,6 +380,19 @@ class Session:
         self.bound = bind(chain, heads, rect, self._sink_for)
         self.showing = usable[0].name
 
+    def feeds(self) -> dict[str, str]:
+        """Which node feeds which, by name. Empty when nothing is bound.
+
+        Handed over rather than reached for. The drawing needs the shape of
+        the chain and nothing else about it, and a caller assembling this
+        itself would be reading the pipeline's records two levels deep
+        through the session that exists to hold them.
+        """
+        if self.bound is None:
+            return {}
+        return {edge.consumer: edge.producer
+                for edge in self.bound.chain.bindings}
+
     def _sink_for(self, node: str, key: str, form: Form,
                   listed: tuple[int, ...], timebase: str) -> Series:
         """Where one node's values are kept. Empty until something writes.

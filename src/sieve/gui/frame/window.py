@@ -315,10 +315,8 @@ class MainWindow(QMainWindow):
         self.session.set_steps(steps)
         self._step_names = [tool.name for tool in steps]
         if steps:
-            bound = self.session.bound
-            feeds = ({b.consumer: b.producer for b in bound.chain.bindings}
-                     if bound is not None else {})
-            self.pipeline.show_steps(steps, dict(self.session.unbound), feeds)
+            self.pipeline.show_steps(
+                steps, dict(self.session.unbound), self.session.feeds())
         if position is not None:
             self.session.at = position
             self.transport.show_playhead(position)

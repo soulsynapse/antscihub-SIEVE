@@ -4,7 +4,21 @@ SIEVE isolates ethological events from video. The product constraint: the
 interactive tuning loop — drag a slider, graphs refill faster than the video
 plays.
 
-If you're being asked to build something for the main products, there is almost certainly an experiment folder you can lean on for how to implement it.
+If you're being asked to build something for the main products, there is almost certainly an experiment folder you can lean on for how to implement it, or at worst, prior art from similar applications.
+
+## Code comments
+
+- Prefer self-explanatory code and descriptive names over comments.
+- Do not add comments that merely describe what the next line/block does.
+- Comments should explain WHY something non-obvious is necessary, not WHAT the code does.
+- Comment important invariants, constraints, compatibility workarounds,
+  surprising behavior, and non-obvious tradeoffs.
+- Do not write comments describing the history of your changes.
+- Do not add comments addressed to the user/reviewer.
+- Keep comments concise.
+- Preserve existing useful comments unless they become incorrect.
+- Before finishing, remove comments you added that provide no information
+  beyond what can be inferred from the code itself.
 
 ## Conventions
 

@@ -1,0 +1,775 @@
+{
+ "tool": "orchestrator-explorer",
+ "when": "2026-08-30T21:06:30.397927+00:00",
+ "sieve_rev": "20d44d7",
+ "machine": {
+  "platform": "Windows-11-10.0.26200-SP0",
+  "processor": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
+  "logical_cpus": 32,
+  "python": "3.13.5"
+ },
+ "versions": {
+  "av": "18.1.0",
+  "cv2": "5.0.0",
+  "numpy": "2.5.2",
+  "ffmpeg": "ffmpeg version 2025-02-06-git-6da82b4485-full_build-www.gyan.dev Copyright (c) 2000-2025 the FFmpeg developers"
+ },
+ "topology": {
+  "nodes": [
+   "gui",
+   "fill (sweep)",
+   "tool"
+  ],
+  "edges": "source -> pool -> {gui, tool}",
+  "form": "0+0+5312x2988@5312x2988:gray",
+  "policy": "single dispatcher, pressure-ranked, preempt granularity one decode",
+  "preemption": {
+   "abandon_within": 0,
+   "gui_cursor": false,
+   "keep_passed": false
+  },
+  "walk": "full",
+  "window_is_full_size": true,
+  "playhead": "parked"
+ },
+ "total_frames": 11304,
+ "fps": 23.976023976023978,
+ "window_seconds": 20.0,
+ "window_frames": 480,
+ "tool_crop": [
+  2144,
+  982,
+  1024,
+  1024
+ ],
+ "active_tool": "absdiff",
+ "pool": {
+  "frames": 62,
+  "bytes": 984079872,
+  "gb": 0.916,
+  "decodes": 63,
+  "shared": 23,
+  "shared_pairs": {
+   "fill>tool": 16,
+   "gui>tool": 7
+  },
+  "evicted": 1,
+  "forced_evictions": 0,
+  "refetched": 0,
+  "refetched_predicted": 0,
+  "refetch_gap_ms_p50": null
+ },
+ "dispatcher": {
+  "served": 63,
+  "seeks": 26,
+  "steps": 37,
+  "failures": 0,
+  "stale": 30,
+  "idle_polls": 10,
+  "passed_kept": 0,
+  "refused": 0,
+  "by_pressure": {
+   "gui/INTERACTIVE": 47,
+   "fill/DEFERRED": 16
+  }
+ },
+ "dispatch_trace": [
+  [
+   0.2667,
+   "gui",
+   0,
+   "seek",
+   263.59
+  ],
+  [
+   0.4543,
+   "gui",
+   100,
+   "seek",
+   151.64
+  ],
+  [
+   0.7038,
+   "fill",
+   500,
+   "seek",
+   240.0
+  ],
+  [
+   0.7314,
+   "gui",
+   504,
+   "step",
+   27.36
+  ],
+  [
+   0.7387,
+   "gui",
+   505,
+   "step",
+   7.18
+  ],
+  [
+   1.0263,
+   "fill",
+   501,
+   "seek",
+   287.37
+  ],
+  [
+   1.1058,
+   "gui",
+   510,
+   "step",
+   79.25
+  ],
+  [
+   1.1141,
+   "gui",
+   511,
+   "step",
+   8.17
+  ],
+  [
+   1.121,
+   "gui",
+   512,
+   "step",
+   6.64
+  ],
+  [
+   1.4081,
+   "fill",
+   502,
+   "seek",
+   286.95
+  ],
+  [
+   1.51,
+   "gui",
+   517,
+   "step",
+   101.61
+  ],
+  [
+   1.5203,
+   "gui",
+   519,
+   "step",
+   10.1
+  ],
+  [
+   1.8315,
+   "fill",
+   503,
+   "seek",
+   310.94
+  ],
+  [
+   1.9767,
+   "gui",
+   524,
+   "step",
+   144.97
+  ],
+  [
+   1.9855,
+   "gui",
+   526,
+   "step",
+   8.69
+  ],
+  [
+   1.9894,
+   "gui",
+   527,
+   "step",
+   3.74
+  ],
+  [
+   2.3262,
+   "fill",
+   506,
+   "seek",
+   336.51
+  ],
+  [
+   2.5354,
+   "gui",
+   533,
+   "step",
+   209.09
+  ],
+  [
+   2.5577,
+   "gui",
+   536,
+   "step",
+   21.87
+  ],
+  [
+   2.5628,
+   "gui",
+   537,
+   "step",
+   4.81
+  ],
+  [
+   2.961,
+   "fill",
+   507,
+   "seek",
+   397.83
+  ],
+  [
+   3.2395,
+   "gui",
+   543,
+   "step",
+   278.3
+  ],
+  [
+   3.2882,
+   "gui",
+   548,
+   "step",
+   48.31
+  ],
+  [
+   3.2929,
+   "gui",
+   549,
+   "step",
+   4.4
+  ],
+  [
+   3.5433,
+   "fill",
+   508,
+   "seek",
+   250.02
+  ],
+  [
+   3.8915,
+   "gui",
+   553,
+   "step",
+   347.79
+  ],
+  [
+   3.9428,
+   "gui",
+   559,
+   "step",
+   51.0
+  ],
+  [
+   3.9524,
+   "gui",
+   560,
+   "step",
+   9.24
+  ],
+  [
+   4.2096,
+   "fill",
+   509,
+   "seek",
+   256.79
+  ],
+  [
+   4.6617,
+   "gui",
+   565,
+   "step",
+   451.79
+  ],
+  [
+   4.7302,
+   "gui",
+   573,
+   "step",
+   68.12
+  ],
+  [
+   4.7356,
+   "gui",
+   574,
+   "step",
+   5.03
+  ],
+  [
+   5.0115,
+   "fill",
+   513,
+   "seek",
+   275.68
+  ],
+  [
+   5.4087,
+   "gui",
+   579,
+   "seek",
+   396.82
+  ],
+  [
+   5.4535,
+   "gui",
+   584,
+   "step",
+   44.62
+  ],
+  [
+   5.7235,
+   "fill",
+   514,
+   "seek",
+   269.84
+  ],
+  [
+   5.9948,
+   "gui",
+   587,
+   "seek",
+   270.92
+  ],
+  [
+   6.0223,
+   "gui",
+   592,
+   "step",
+   27.17
+  ],
+  [
+   6.0274,
+   "gui",
+   593,
+   "step",
+   4.77
+  ],
+  [
+   6.3125,
+   "fill",
+   515,
+   "seek",
+   284.65
+  ],
+  [
+   6.6556,
+   "gui",
+   598,
+   "seek",
+   342.77
+  ],
+  [
+   6.7211,
+   "gui",
+   604,
+   "step",
+   65.38
+  ],
+  [
+   6.7262,
+   "gui",
+   605,
+   "step",
+   4.75
+  ],
+  [
+   7.0025,
+   "fill",
+   516,
+   "seek",
+   275.84
+  ],
+  [
+   7.257,
+   "gui",
+   610,
+   "seek",
+   254.31
+  ],
+  [
+   7.2887,
+   "gui",
+   614,
+   "step",
+   31.59
+  ],
+  [
+   7.2951,
+   "gui",
+   615,
+   "step",
+   6.04
+  ],
+  [
+   7.6007,
+   "fill",
+   518,
+   "seek",
+   305.16
+  ],
+  [
+   7.9449,
+   "gui",
+   620,
+   "seek",
+   343.85
+  ],
+  [
+   7.9854,
+   "gui",
+   626,
+   "step",
+   40.14
+  ],
+  [
+   7.9901,
+   "gui",
+   627,
+   "step",
+   4.42
+  ],
+  [
+   8.2977,
+   "fill",
+   520,
+   "seek",
+   307.18
+  ],
+  [
+   8.5613,
+   "gui",
+   633,
+   "seek",
+   263.29
+  ],
+  [
+   8.5874,
+   "gui",
+   637,
+   "step",
+   25.76
+  ],
+  [
+   8.5941,
+   "gui",
+   638,
+   "step",
+   6.31
+  ],
+  [
+   8.9188,
+   "fill",
+   521,
+   "seek",
+   324.33
+  ],
+  [
+   9.2638,
+   "gui",
+   643,
+   "seek",
+   344.59
+  ],
+  [
+   9.3373,
+   "gui",
+   649,
+   "step",
+   73.12
+  ],
+  [
+   9.3439,
+   "gui",
+   650,
+   "step",
+   6.29
+  ],
+  [
+   9.3498,
+   "gui",
+   651,
+   "step",
+   5.55
+  ],
+  [
+   9.6793,
+   "fill",
+   522,
+   "seek",
+   329.1
+  ],
+  [
+   9.9543,
+   "gui",
+   656,
+   "seek",
+   274.6
+  ],
+  [
+   9.9897,
+   "gui",
+   661,
+   "step",
+   35.17
+  ]
+ ],
+ "graph_holds": 480,
+ "duration_bars": {
+  "dispatch:fill": 0.49662423143582396,
+  "dispatch:gui": 0.49992499037615684,
+  "tool-absdiff-2252693690352": 0.0034507781880191964
+ },
+ "timing_by_node": {
+  "dispatch:fill": {
+   "n": 16,
+   "min": 239.99720000574598,
+   "p50": 287.3667000021669,
+   "p95": 397.8257999988273,
+   "max": 397.8257999988273,
+   "mean": 296.1362687506153
+  },
+  "dispatch:gui": {
+   "n": 44,
+   "min": 3.7418000065372325,
+   "p50": 40.13700000359677,
+   "p95": 347.78759999608155,
+   "max": 451.7900000064401,
+   "mean": 107.60237045542453
+  },
+  "tool-absdiff-2252693690352": {
+   "n": 22,
+   "min": 1.054100001056213,
+   "p50": 1.6217999946093187,
+   "p95": 1.8837000025087036,
+   "max": 2.1436000024550594,
+   "mean": 1.49650454510596
+  }
+ },
+ "runs": [
+  {
+   "label": "hunt",
+   "started": "2026-08-30T21:06:20.430781+00:00",
+   "by_task": {
+    "hunt": {
+     "n": 1,
+     "min": 157.25,
+     "p50": 157.25,
+     "p95": 157.25,
+     "max": 157.25,
+     "mean": 157.25
+    },
+    "open": {
+     "n": 1,
+     "min": 266.62,
+     "p50": 266.62,
+     "p95": 266.62,
+     "max": 266.62,
+     "mean": 266.62
+    }
+   },
+   "routes": {
+    "dispatch": 2
+   },
+   "walls": [],
+   "suppressed_play_hits": 0,
+   "events_capped": false,
+   "events": [
+    {
+     "t": 0.269,
+     "task": "open",
+     "frame": 0,
+     "route": "dispatch 267ms",
+     "ms": 266.618
+    },
+    {
+     "t": 0.4558,
+     "task": "hunt",
+     "frame": 100,
+     "route": "dispatch 157ms",
+     "ms": 157.254
+    }
+   ]
+  },
+  {
+   "label": "window@500 w=480 tool=absdiff",
+   "started": "2026-08-30T21:06:20.941847+00:00",
+   "by_task": {
+    "scrub": {
+     "n": 1,
+     "min": 0.02,
+     "p50": 0.02,
+     "p95": 0.02,
+     "max": 0.02,
+     "mean": 0.02
+    },
+    "play": {
+     "n": 20,
+     "min": 0.02,
+     "p50": 0.03,
+     "p95": 0.04,
+     "max": 0.04,
+     "mean": 0.03
+    }
+   },
+   "routes": {
+    "near": 20,
+    "held": 1
+   },
+   "walls": [],
+   "suppressed_play_hits": 141,
+   "events_capped": false,
+   "events": [
+    {
+     "t": 0.8853,
+     "task": "play",
+     "frame": 508,
+     "route": "near d3",
+     "ms": 0.027
+    },
+    {
+     "t": 1.3265,
+     "task": "play",
+     "frame": 516,
+     "route": "near d4",
+     "ms": 0.032
+    },
+    {
+     "t": 1.7684,
+     "task": "play",
+     "frame": 524,
+     "route": "near d5",
+     "ms": 0.021
+    },
+    {
+     "t": 2.2646,
+     "task": "play",
+     "frame": 532,
+     "route": "near d5",
+     "ms": 0.022
+    },
+    {
+     "t": 2.7717,
+     "task": "play",
+     "frame": 540,
+     "route": "near d3",
+     "ms": 0.022
+    },
+    {
+     "t": 3.2264,
+     "task": "play",
+     "frame": 548,
+     "route": "near d11",
+     "ms": 0.022
+    },
+    {
+     "t": 3.6818,
+     "task": "play",
+     "frame": 556,
+     "route": "near d7",
+     "ms": 0.036
+    },
+    {
+     "t": 4.1445,
+     "task": "play",
+     "frame": 564,
+     "route": "near d4",
+     "ms": 0.023
+    },
+    {
+     "t": 4.6024,
+     "task": "play",
+     "frame": 572,
+     "route": "near d12",
+     "ms": 0.022
+    },
+    {
+     "t": 5.0494,
+     "task": "play",
+     "frame": 580,
+     "route": "near d6",
+     "ms": 0.023
+    },
+    {
+     "t": 5.728,
+     "task": "play",
+     "frame": 588,
+     "route": "near d4",
+     "ms": 0.025
+    },
+    {
+     "t": 6.1831,
+     "task": "play",
+     "frame": 596,
+     "route": "near d3",
+     "ms": 0.035
+    },
+    {
+     "t": 6.6394,
+     "task": "play",
+     "frame": 604,
+     "route": "near d11",
+     "ms": 0.036
+    },
+    {
+     "t": 7.0976,
+     "task": "play",
+     "frame": 612,
+     "route": "near d7",
+     "ms": 0.035
+    },
+    {
+     "t": 7.5526,
+     "task": "play",
+     "frame": 620,
+     "route": "near d5",
+     "ms": 0.029
+    },
+    {
+     "t": 8.0101,
+     "task": "play",
+     "frame": 628,
+     "route": "near d1",
+     "ms": 0.024
+    },
+    {
+     "t": 8.4699,
+     "task": "play",
+     "frame": 636,
+     "route": "near d9",
+     "ms": 0.027
+    },
+    {
+     "t": 8.9303,
+     "task": "play",
+     "frame": 644,
+     "route": "near d6",
+     "ms": 0.042
+    },
+    {
+     "t": 9.3969,
+     "task": "play",
+     "frame": 652,
+     "route": "near d1",
+     "ms": 0.044
+    },
+    {
+     "t": 9.8519,
+     "task": "play",
+     "frame": 660,
+     "route": "near d9",
+     "ms": 0.024
+    },
+    {
+     "t": 9.9659,
+     "task": "scrub",
+     "frame": 510,
+     "route": "held",
+     "ms": 0.019
+    }
+   ]
+  }
+ ]
+}

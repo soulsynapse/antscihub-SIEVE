@@ -41,5 +41,6 @@ the collision without anybody having to settle it. The shelf a term sits on is
   - 📄 [store](vocab/store.md) — What SIEVE holds from one open recording, and the thing a need for a frame is put to. Addressed by which instant and which form together, never by either alone. Held material, never the source that decoded it.
   - 📄 [need](vocab/need.md) — What a node says it wants right now — which instant, the offsets around it, in what form, and whether anyone is waiting. What it wants, never where that ranks; the rank is derived from everything else in flight.
   - 📄 [proxy](vocab/proxy.md) — A whole recording held at one coarse form, built in the background and complete across its extent — the tier a scrub falls to when the nearer ones hold nothing. Its pixels are for looking at, never admitted as recorded.
+  - 📄 [extent](vocab/extent.md) — Which positions a producer says exist, asked as of now rather than fixed, and whether that set can still grow. A claim about what is offered, never a promise any of it will be delivered.
 
-*30 defined.*
+*31 defined.*

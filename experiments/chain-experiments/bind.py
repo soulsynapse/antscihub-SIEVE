@@ -215,13 +215,20 @@ class Held:
     a window size somebody chose, which is the arrangement
     `orchestrator-experiments/02-derived-eviction.py` measured for frames.
 
-    **Keyed by row, which is narrower than it looks.** `pool.py` keys by
-    position and form together, because two consumers at different forms
-    need different arrays of one instant and a pool keyed by one of them
-    thinks either satisfies the other — the lesson `store.py` learned first
-    and the pool learned again. This holds one producer's fields at one
-    form, so a row is a complete key here and nowhere else. Anything that
-    grows a second producer or a second crop wants the pool, not this.
+    **Scoped to one bind, and that is the whole of what makes a row a key.**
+    Rows here are ranks against the extent snapshot this binding took, for
+    the reason the snapshot is taken at all: an extent that grows renumbers
+    rows already written. One `Held` per `bind` call means one producer,
+    one form and one table, so a row names a field completely. Shared
+    across two bindings it names nothing — two tables, and an ordinal is
+    only valid beside the one that produced it (ADR-0004).
+
+    Not to be grown into a pool. Composite keys, a byte budget and sharing
+    counts are `orchestrator-experiments/pool.py`, and a second one of
+    those spelled differently is the accretion, not the fix. What a real
+    key for a field looks like is `chain.key` — the producer's key folded
+    in front, which is the part no node can spell for itself and the part
+    a node id would miss.
 
     Counts are kept because the reuse is the result: a consumer at lags 30,
     20 and 10 asks for each upstream row four times, thirty rows apart, so a

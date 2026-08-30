@@ -93,6 +93,7 @@
         - 📄 `menu.py` — The bar across the top, and what the window itself can be asked to do.
         - 📄 `overlay.py` — What stands over the panes instead of in one.
         - 📄 `panes.py` — The three panes, the sides a subpane anchors to in each, and nothing standing in either yet.
+        - 📄 `stepwork.py` — Running a step off the thread that draws, one in flight and one pending.
         - 📄 `swipe.py` — The run of views a pane shows one at a time, and the slide between them.
         - 📄 `window.py` — The window: a menu bar, three panes, and the boundaries between them.
       - 📁 `icons/` — Lucide line icons, tinted to the palette and returned as QPixmaps/QIcons.

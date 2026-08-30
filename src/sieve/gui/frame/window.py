@@ -32,12 +32,12 @@ from sieve.gui.frame.panes import (
     build_right,
     build_seam,
 )
+from sieve.gui.frame.stepwork import StepRunner
 from sieve.gui.frame.swipe import POSITIONS, Arrows, build_swipe
 from sieve.project import Library
 from sieve.registry import load as load_tools
 from sieve.relaunch import relaunch
 from sieve.session import HOLD, Session
-from sieve import surfaces
 from sieve.gui.view.canvas import Canvas
 from sieve.gui.view.canvas.video_canvas import FrameView
 from sieve.gui.view.dev import Dev
@@ -90,6 +90,9 @@ class MainWindow(QMainWindow):
         self.session = Session(
             on_covered=lambda *landed: self.window_covered.emit(landed),
         )
+        #: the step's field, computed off this thread and drawn when it lands
+        self.steps_at = StepRunner(self)
+        self.steps_at.painted.connect(self._overlay_ready)
 
         self.swipe = build_swipe("right")
         self.right.body.addWidget(self.swipe)
@@ -148,6 +151,17 @@ class MainWindow(QMainWindow):
             event.accept()
             return
         super().keyPressEvent(event)
+
+    def closeEvent(self, event) -> None:
+        """Stop the step thread before the window that owns it goes.
+
+        A QThread still running when its object is destroyed is a warning at
+        best and a crash on exit at worst, and it holds frames the store is
+        about to close underneath it.
+        """
+        self.steps_at.shutdown()
+        self._close_source()
+        super().closeEvent(event)
 
     def _restyle(self) -> None:
         """Reapply stylesheet and repaint all children (paintEvent widgets need an explicit update)."""
@@ -315,8 +329,8 @@ class MainWindow(QMainWindow):
         """A release or a playback step. This one is paid for."""
         frame = self.session.commit(position)
         if frame is not HOLD:
-            frame = self._compose(frame, position)
             self.frames.show_frame(frame)
+            self._ask_overlay(frame, position)
 
     # -- landing a window --------------------------------------------------
 
@@ -324,8 +338,8 @@ class MainWindow(QMainWindow):
         """A release on the strip: serve it, and commit attention there."""
         frame = self.session.land(position)
         if frame is not HOLD:
-            frame = self._compose(frame, position)
             self.frames.show_frame(frame)
+            self._ask_overlay(frame, position)
 
     def _covered(self, landed: tuple) -> None:
         """A fill finished, back on the GUI thread.
@@ -339,18 +353,27 @@ class MainWindow(QMainWindow):
         if self.session.at is not None:
             self.commit_at(self.session.at)
 
-    def _compose(self, frame, position: int):
-        """Overlay the step's field on *frame* when one is ready."""
+    def _ask_overlay(self, frame, position: int) -> None:
+        """Ask for this position's overlay. The picture is already up.
+
+        The field costs more than a frame period and no knob brings it under
+        one, so the overlay lands a beat behind the picture rather than
+        holding it. `StepRunner` drops whatever the user has already left.
+        """
         if frame is None or not self.session.steps:
-            return frame
-        result = self.session.evaluate_step(position)
-        if result is None:
-            return frame
-        field, value = result
-        ceiling = self.session.ceiling
+            return
+        self.steps_at.request(self.session, position, frame)
+
+    def _overlay_ready(self, image, value: float, ceiling: float) -> None:
+        """A field came back for the position still wanted. Draw it."""
+        # Only to take the first one. A job in flight carries the ceiling it
+        # was issued with, so echoing it back unconditionally would undo a
+        # deliberate `set_ceiling` made while it was running.
+        if not self.session.ceiling:
+            self.session.set_ceiling(ceiling)
         if ceiling > 0:
             self.pipeline.update_step(0, min(value / ceiling, 1.0))
-        return surfaces.overlay(frame, field, ceiling)
+        self.frames.show_frame(image)
 
     # -- the drawn crop ----------------------------------------------------
 
@@ -376,6 +399,9 @@ class MainWindow(QMainWindow):
         """
         self.transport.stop()
         self.session.apply_crop(crop)
+        # The form the step analyses changed under it, so anything still in
+        # flight is for the old crop and its ceiling.
+        self.steps_at.reset()
         self.frames.drawable = False
         self.canvas.set_aspect(crop.out[0] / crop.out[1])
         if self.session.at is not None:
@@ -419,6 +445,7 @@ class MainWindow(QMainWindow):
 
     def _close_source(self) -> None:
         """Everything the recording brought, in the order that makes it safe."""
+        self.steps_at.reset()
         self.session.close()
         self.transport.show_source((), (), Access.RANDOM)
         self.pipeline.clear_source()

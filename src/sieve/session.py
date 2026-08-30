@@ -307,14 +307,16 @@ class Session:
         """Move the overlay's scale top deliberately. 0 re-takes it."""
         self.ceiling = max(float(value), 0.0)
 
-    def evaluate_step(self, position: int) -> tuple | None:
-        """Run the first loaded step at *position*, returning (field, value).
+    def step_inputs(self, position: int) -> tuple | None:
+        """What the first step needs at *position*: (step, frames, ordinal).
 
-        Never blocks: returns ``None`` when any needed frame is not cached
-        at the step's wanted form. That form is the step's own, bounded to
-        the proxy's long edge — whole-frame it is the proxy's form exactly,
-        and a crop inside the bound is the fill's, so evaluation succeeds
-        once the covering tier has reached the neighbourhood.
+        Tier reads and nothing else, so it stays on the thread that owns the
+        tiers while the arithmetic goes elsewhere. Never blocks: returns
+        ``None`` when any needed frame is not resident at the step's wanted
+        form. That form is the step's own, bounded to the proxy's long edge —
+        whole-frame it is the proxy's form exactly, and a crop inside the
+        bound is the fill's, so it succeeds once the covering tier has
+        reached the neighbourhood.
         """
         if not self.steps or self.store is None or self.serving is None:
             return None
@@ -347,16 +349,37 @@ class Session:
             if served.frame is None:
                 return None
             frames[needed_ord] = served.frame
-        # Not guarded. A step that raises is a broken tool, and swallowing it
-        # here makes it indistinguishable from a frame that is not cached yet
-        # — the overlay simply never appears and nothing says why.
+        return step, frames, ordinal
+
+    @staticmethod
+    def run_step(step: Any, frames: Any, ordinal: int) -> tuple:
+        """The step's arithmetic. Touches no tier and no session state.
+
+        Separate from `step_inputs` so it can run off the thread that owns
+        the tiers. A step that raises is left to raise: guarding it made a
+        broken tool indistinguishable from a frame that is not cached yet —
+        the overlay simply never appeared and nothing said why.
+        """
         field = step.field(frames, ordinal)
-        value = float(step.reduce(field))
+        return field, float(step.reduce(field))
+
+    def note_field(self, field: Any) -> None:
+        """Take the ceiling from the first honest field, then hold it.
+
+        Held, not autoscaled: later frames are drawn against the first one's
+        top, so a still scene does not look as active as a moving one.
+        `set_ceiling` moves it.
+        """
         if not self.ceiling:
-            # Held, not autoscaled: the first honest field sets the top and
-            # later frames are drawn against it, so a still scene does not
-            # look as active as a moving one. `set_ceiling` moves it.
             self.ceiling = max(float(field.max()), 1.0)
+
+    def evaluate_step(self, position: int) -> tuple | None:
+        """Inputs then arithmetic, on the calling thread. Returns (field, value)."""
+        got = self.step_inputs(position)
+        if got is None:
+            return None
+        field, value = self.run_step(*got)
+        self.note_field(field)
         return field, value
 
     # -- internal ----------------------------------------------------------

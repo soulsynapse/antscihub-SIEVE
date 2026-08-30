@@ -17,10 +17,10 @@ ADRs for what is settled; read this for why.
 draws may decide what gets recorded, because what a renderer selects depends
 on what the machine had time to draw.
 
-**A declaration is a fetch plan** (ADR-0006). A step names the inputs it
-admits as a function of the position being computed, and the justification is
-scheduling fetches rather than saving memory — the memory argument is the one
-that suggests itself and does not survive measurement.
+**A declaration is a fetch plan** (ADR-0006). What a step names, what is
+held, and what a re-fetch means are the ADR's to say; restating them here is
+how the two drift apart. What this folder measures against it is `tools.py`'s
+offsets and `series.py`'s writes.
 
 **A cost class belongs to the pairing** (ADR-0007). Measured where it runs,
 never declared, so a weaker machine falls back deliberately instead of

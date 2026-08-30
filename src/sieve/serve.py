@@ -70,6 +70,10 @@ class Route(str, Enum):
 
     #: held in RAM at exactly this form — the tier everything else defers to
     HELD = "held"
+    #: held at *another* form that produces this one byte for byte, and
+    #: derived on the way out. Right instant, right pixels, work rather
+    #: than a decode.
+    DERIVED = "derived"
     #: a chunk written behind an earlier fill, read back at cut speed
     CUT = "cut"
     #: a held frame within `CLOSE` or `NEAR`: right form, nearly the right
@@ -192,6 +196,9 @@ class Serving:
         held = self.store.frames.get(position, form)
         if held is not None:
             return Served(held, Route.HELD)
+        made = self._derived(position, form)
+        if made is not None:
+            return Served(made, Route.DERIVED)
         close = self._near(position, form, CLOSE)
         if close is not None:
             return Served(close, Route.NEAR)
@@ -224,6 +231,9 @@ class Serving:
         held = self.store.frames.get(position, form)
         if held is not None:
             return Served(held, Route.HELD)
+        made = self._derived(position, form)
+        if made is not None:
+            return Served(made, Route.DERIVED)
         cut = self._cut(position, form)
         if cut is not None:
             self.store.frames.put(position, form, cut)
@@ -236,6 +246,32 @@ class Serving:
         return Served(None, Route.HOLD)
 
     # -- the tiers ---------------------------------------------------------
+
+    def _derived(self, position: int, form: Form) -> Any | None:
+        """A frame held at another form of this instant, cropped down to this one.
+
+        A key compares as a key, so a whole frame that reproduces a crop of
+        itself byte for byte reads as a miss and the crop goes back to the
+        decoder. `Frames.dominator` is the relation instead of the string;
+        `experiments/orchestrator-experiments/07-form-negotiation.py` prices
+        both sides.
+
+        Nothing is admitted. The frame budget is a count sized against one
+        form (`Session._rebudget`), so a second form of an instant admitted
+        under it evicts the window a fill is holding, and the derivation
+        costs far less than that trade. Revisit when the budget is bytes.
+
+        No caller in the product yet: the whole frame is shown in colour and
+        a crop is cut in gray, and `dominator` will not cross the format.
+        This fires for two consumers wanting two crops in one format.
+        """
+        have = self.store.frames.dominator(position, form)
+        if have is None:
+            return None
+        frame = self.store.frames.get(position, have)
+        if frame is None:      # evicted between the asking and the reading
+            return None
+        return forms.derive(frame, have, form)
 
     def _near(self, position: int, form: Form, radius: int) -> Any | None:
         """The closest held frame within *radius* rows, inside the window.

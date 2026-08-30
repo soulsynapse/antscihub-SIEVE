@@ -53,7 +53,7 @@ import threading
 from collections import OrderedDict
 from typing import Any
 
-from sieve.contract import Tool
+from sieve.contract import Tool, forms
 from sieve.contract.edges import FRAME
 from sieve.contract.forms import Form
 from sieve.contract.nodes import Answer, Opened, Output, Refusal, read_form
@@ -80,28 +80,68 @@ class Frames:
     touch and never a decode. A lock a decode runs inside is the fill thread
     stalling whoever is drawing, which is the freeze this whole shelf exists
     to avoid.
+
+    **Equality is not the whole order on forms.** Two forms of one instant
+    are two entries here and must be, but a whole frame at source sampling
+    produces a crop of itself byte for byte and by key alone reads as a
+    miss. The lookup stays exact; `dominator` is the second question, asked
+    on a miss by whoever will derive. `_at` keeps it a dict touch rather
+    than a scan under the lock the fill thread wants back, and it is an
+    index rather than a second record: every write moves both.
     """
 
     def __init__(self, budget: int = DEFAULT_BUDGET) -> None:
         self.budget = max(1, budget)
-        self._held: OrderedDict[tuple[int, str], Any] = OrderedDict()
+        self._held: OrderedDict[tuple[int, Form], Any] = OrderedDict()
+        #: position -> the forms held at it, so `dominator` never walks the
+        #: whole cache under the lock the fill thread wants back
+        self._at: dict[int, set[Form]] = {}
         self._lock = threading.Lock()
 
     def get(self, position: int, form: Form) -> Any | None:
-        key = (position, form.key())
+        key = (position, form)
         with self._lock:
             if key not in self._held:
                 return None
             self._held.move_to_end(key)
             return self._held[key]
 
+    def dominator(self, position: int, want: Form) -> Form | None:
+        """A held form at *position* whose pixels produce *want* exactly.
+
+        Asked after `get` has missed, so *want* itself is never the answer.
+        Exact only, and the smallest dominator wins — the cheaper derivation.
+
+        Never across pixel formats, which is narrower than `grade`. Colour
+        exactly answers gray by `build`'s BT.601 fallback, but a producer
+        holding luma serves the decoder's plane, and the two differ in the
+        low bits on the footage in `video-tests/`. Both are legitimate;
+        mixing them under one key is the `keys that lie` failure `forms.py`
+        names. Lifted only by a frame carrying which producer made it.
+        """
+        with self._lock:
+            candidates = [have for have in self._at.get(position, ())
+                          if have != want and have.pix == want.pix
+                          and forms.grade(have, want) == forms.EXACT]
+        return min(candidates, key=lambda have: have.nbytes, default=None)
+
     def put(self, position: int, form: Form, frame: Any) -> None:
-        key = (position, form.key())
+        key = (position, form)
         with self._lock:
             self._held[key] = frame
             self._held.move_to_end(key)
+            self._at.setdefault(position, set()).add(form)
             while len(self._held) > self.budget:
-                self._held.popitem(last=False)
+                self._forget(*self._held.popitem(last=False)[0])
+
+    def _forget(self, position: int, form: Form) -> None:
+        """Drop one evicted key from the index. Called under the lock."""
+        forms_at = self._at.get(position)
+        if forms_at is None:
+            return
+        forms_at.discard(form)
+        if not forms_at:
+            del self._at[position]
 
     def covered(self, positions: tuple[int, ...], form: Form) -> tuple[int, ...]:
         """Which of *positions* are held at *form*, in the order given.
@@ -113,21 +153,26 @@ class Frames:
         wants back. It answers with positions and not frames deliberately —
         a caller that wanted the arrays would be holding a window's worth
         outside the budget that caps them.
+
+        Held *at that form*, and never what `dominator` could produce into
+        it: this is what a fill reports as landed and what a drag searches
+        for something near, and a coverage record counting what could be
+        derived would call a window filled that nothing had decoded.
         """
-        key = form.key()
         with self._lock:
-            return tuple(p for p in positions if (p, key) in self._held)
+            return tuple(p for p in positions if (p, form) in self._held)
 
     def set_budget(self, budget: int) -> None:
         with self._lock:
             self.budget = max(1, budget)
             while len(self._held) > self.budget:
-                self._held.popitem(last=False)
+                self._forget(*self._held.popitem(last=False)[0])
 
     def wipe(self) -> None:
         """Drop everything. What a form change calls before the rect moves."""
         with self._lock:
             self._held.clear()
+            self._at.clear()
 
     def __len__(self) -> int:
         with self._lock:

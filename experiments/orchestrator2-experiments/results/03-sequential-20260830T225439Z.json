@@ -1,0 +1,283 @@
+{
+ "experiment": "03-sequential",
+ "question": "Must a node declare how it may be scheduled, or is `sequential` a field with one legal value?",
+ "when": "2026-08-30T22:54:39.329554+00:00",
+ "sieve_rev": "87b274b",
+ "machine": {
+  "platform": "Windows-11-10.0.26200-SP0",
+  "processor": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
+  "logical_cpus": 32,
+  "python": "3.13.5"
+ },
+ "versions": {
+  "av": "18.1.0",
+  "cv2": "5.0.0",
+  "numpy": "2.5.2",
+  "ffmpeg": "ffmpeg version 2025-02-06-git-6da82b4485-full_build-www.gyan.dev Copyright (c) 2000-2025 the FFmpeg developers"
+ },
+ "footage": [
+  {
+   "path": "C:\\Users\\khnakam1\\Documents\\Code\\antscihub-SIEVE-v4\\video-tests\\GX010047c2_02_17_26.MP4",
+   "name": "GX010047c2_02_17_26.MP4",
+   "bytes": 3546062144,
+   "mtime": "2026-07-14T18:50:16.126370+00:00",
+   "codec_name": "hevc",
+   "profile": "Main",
+   "width": 5312,
+   "height": 2988,
+   "pix_fmt": "yuvj420p",
+   "r_frame_rate": "24000/1001",
+   "nb_frames": "11328",
+   "duration": "471.651625",
+   "size": "3546062144",
+   "bit_rate": "60147141"
+  }
+ ],
+ "notes": [
+  "topology: source -> pool -> {sweep declares the window attention-first from an anchor at its midpoint; one stateful step at offsets (0,) carrying a decayed motion accumulator}. The step is built for this experiment because the tree has none; it is the one `tools.lag_mhi`'s docstring names.",
+  "core shape: 1 fetch thread, 1 reader, 2 recorder threads, request depth 120 (the whole window armed at once, which is what gives the dispatcher something to order).",
+  "window: rows 3768..3888 (120 frames), run at anchor fractions (0.0, 0.5). Nothing shuffles delivery: the sweep's attention-first order is V1's, carried intact, and is why rows arrive out of ascending order in the ordinary case. At anchor 0.0 that order is ascending anyway, which is the control for what ordering costs when it costs nothing.",
+  "arm parallel at anchor 0.0: the arithmetic saw 1 ascending run(s) over 120 rows; 117 of 120 rows disagree with the ascending reference, max abs difference 0.6824698448181152; wall 1.189 s, peak concurrent 2, peak ready depth 1, activation wait p50 729.56 ms p95 1145.44 ms.",
+  "arm ordered at anchor 0.0: the arithmetic saw 1 ascending run(s) over 120 rows; 0 of 120 rows disagree with the ascending reference, max abs difference 0.0; wall 1.386 s, peak concurrent 1, peak ready depth 6, activation wait p50 856.51 ms p95 1309.68 ms.",
+  "arm parallel at anchor 0.5: the arithmetic saw 2 ascending run(s) over 120 rows; 120 of 120 rows disagree with the ascending reference, max abs difference 5.895465850830078; wall 1.53 s, peak concurrent 2, peak ready depth 0, activation wait p50 1039.92 ms p95 1487.18 ms.",
+  "arm ordered at anchor 0.5: the arithmetic saw 1 ascending run(s) over 120 rows; 0 of 120 rows disagree with the ascending reference, max abs difference 0.0; wall 2.0 s, peak concurrent 1, peak ready depth 63, activation wait p50 1087.13 ms p95 1558.04 ms."
+ ],
+ "cases": [
+  {
+   "name": "parallel-anchor0.0",
+   "params": {
+    "mode": "parallel",
+    "wall_s": 1.189,
+    "computed": 120,
+    "peak_ready_depth": 1,
+    "peak_concurrent": 2,
+    "dispatcher": {
+     "threads": {
+      "fetch": 1,
+      "recorders": 2
+     },
+     "served": 120,
+     "seeks": 1,
+     "steps": 119,
+     "failures": 0,
+     "stale": 0,
+     "blocked": 4,
+     "blocked_s": 0.008,
+     "by_pressure": {
+      "fill/DEFERRED": 120
+     },
+     "activations": 120,
+     "reentries": 120,
+     "immediate": 0,
+     "superseded": 0,
+     "pending_waits": 0,
+     "ready_depth": 0,
+     "wait_ms_p50": 729.56,
+     "wait_ms_p95": 1145.44
+    },
+    "pool": {
+     "frames": 120,
+     "bytes": 1904670720,
+     "gb": 1.774,
+     "puts": 120,
+     "shared": 120,
+     "shared_pairs": {
+      "fill>tool": 120
+     },
+     "evicted": 0,
+     "forced_evictions": 0,
+     "refetched": 0,
+     "refetched_predicted": 0,
+     "refetch_gap_ms_p50": null
+    },
+    "anchor_fraction": 0.0,
+    "ascending_runs": 1,
+    "rows_compared": 120,
+    "rows_disagreeing": 117,
+    "max_abs_diff": 0.6824698448181152
+   },
+   "unit": "see params",
+   "note": "values and per-row order omitted from params for size; the disagreement counts are the result",
+   "truncated": false,
+   "n": 0,
+   "samples_ms": []
+  },
+  {
+   "name": "ordered-anchor0.0",
+   "params": {
+    "mode": "ordered",
+    "wall_s": 1.386,
+    "computed": 120,
+    "peak_ready_depth": 6,
+    "peak_concurrent": 1,
+    "dispatcher": {
+     "threads": {
+      "fetch": 1,
+      "recorders": 2
+     },
+     "served": 120,
+     "seeks": 1,
+     "steps": 119,
+     "failures": 0,
+     "stale": 0,
+     "blocked": 7,
+     "blocked_s": 0.035,
+     "by_pressure": {
+      "fill/DEFERRED": 120
+     },
+     "activations": 120,
+     "reentries": 120,
+     "immediate": 0,
+     "superseded": 0,
+     "pending_waits": 0,
+     "ready_depth": 0,
+     "wait_ms_p50": 856.51,
+     "wait_ms_p95": 1309.68
+    },
+    "pool": {
+     "frames": 120,
+     "bytes": 1904670720,
+     "gb": 1.774,
+     "puts": 120,
+     "shared": 120,
+     "shared_pairs": {
+      "fill>tool": 120
+     },
+     "evicted": 0,
+     "forced_evictions": 0,
+     "refetched": 0,
+     "refetched_predicted": 0,
+     "refetch_gap_ms_p50": null
+    },
+    "anchor_fraction": 0.0,
+    "ascending_runs": 1,
+    "rows_compared": 120,
+    "rows_disagreeing": 0,
+    "max_abs_diff": 0.0
+   },
+   "unit": "see params",
+   "note": "values and per-row order omitted from params for size; the disagreement counts are the result",
+   "truncated": false,
+   "n": 0,
+   "samples_ms": []
+  },
+  {
+   "name": "parallel-anchor0.5",
+   "params": {
+    "mode": "parallel",
+    "wall_s": 1.53,
+    "computed": 120,
+    "peak_ready_depth": 0,
+    "peak_concurrent": 2,
+    "dispatcher": {
+     "threads": {
+      "fetch": 1,
+      "recorders": 2
+     },
+     "served": 120,
+     "seeks": 2,
+     "steps": 118,
+     "failures": 0,
+     "stale": 0,
+     "blocked": 3,
+     "blocked_s": 0.007,
+     "by_pressure": {
+      "fill/DEFERRED": 120
+     },
+     "activations": 120,
+     "reentries": 120,
+     "immediate": 0,
+     "superseded": 0,
+     "pending_waits": 0,
+     "ready_depth": 0,
+     "wait_ms_p50": 1039.92,
+     "wait_ms_p95": 1487.18
+    },
+    "pool": {
+     "frames": 120,
+     "bytes": 1904670720,
+     "gb": 1.774,
+     "puts": 120,
+     "shared": 120,
+     "shared_pairs": {
+      "fill>tool": 120
+     },
+     "evicted": 0,
+     "forced_evictions": 0,
+     "refetched": 0,
+     "refetched_predicted": 0,
+     "refetch_gap_ms_p50": null
+    },
+    "anchor_fraction": 0.5,
+    "ascending_runs": 2,
+    "rows_compared": 120,
+    "rows_disagreeing": 120,
+    "max_abs_diff": 5.895465850830078
+   },
+   "unit": "see params",
+   "note": "values and per-row order omitted from params for size; the disagreement counts are the result",
+   "truncated": false,
+   "n": 0,
+   "samples_ms": []
+  },
+  {
+   "name": "ordered-anchor0.5",
+   "params": {
+    "mode": "ordered",
+    "wall_s": 2.0,
+    "computed": 120,
+    "peak_ready_depth": 63,
+    "peak_concurrent": 1,
+    "dispatcher": {
+     "threads": {
+      "fetch": 1,
+      "recorders": 2
+     },
+     "served": 120,
+     "seeks": 2,
+     "steps": 118,
+     "failures": 0,
+     "stale": 0,
+     "blocked": 63,
+     "blocked_s": 0.391,
+     "by_pressure": {
+      "fill/DEFERRED": 120
+     },
+     "activations": 120,
+     "reentries": 120,
+     "immediate": 0,
+     "superseded": 0,
+     "pending_waits": 0,
+     "ready_depth": 0,
+     "wait_ms_p50": 1087.13,
+     "wait_ms_p95": 1558.04
+    },
+    "pool": {
+     "frames": 120,
+     "bytes": 1904670720,
+     "gb": 1.774,
+     "puts": 120,
+     "shared": 120,
+     "shared_pairs": {
+      "fill>tool": 120
+     },
+     "evicted": 0,
+     "forced_evictions": 0,
+     "refetched": 0,
+     "refetched_predicted": 0,
+     "refetch_gap_ms_p50": null
+    },
+    "anchor_fraction": 0.5,
+    "ascending_runs": 1,
+    "rows_compared": 120,
+    "rows_disagreeing": 0,
+    "max_abs_diff": 0.0
+   },
+   "unit": "see params",
+   "note": "values and per-row order omitted from params for size; the disagreement counts are the result",
+   "truncated": false,
+   "n": 0,
+   "samples_ms": []
+  }
+ ]
+}

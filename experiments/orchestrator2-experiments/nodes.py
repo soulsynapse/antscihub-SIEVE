@@ -193,6 +193,18 @@ class StepNode:
         #: scoped to this one node, which is what makes a row a key.
         self.held = Held()
         self.values: dict[int, float] = {}
+        #: the rows the arithmetic actually ran in, in the order it ran them.
+        #: Not a diagnostic: for a step carrying state across rows this *is*
+        #: the input, and a node that cannot say what order it saw cannot be
+        #: checked against one that ran in order.
+        self.order: list[int] = []
+        #: how many of this node's activations were inside the arithmetic at
+        #: once. `order` alone cannot see this: it is appended at the end, so
+        #: two activations that overlapped completely still record an
+        #: ascending pair. For a node carrying state, concurrency corrupts it
+        #: independently of order, and only this number tells them apart.
+        self.peak_concurrent = 0
+        self._in_arithmetic = 0
         self.computed = 0
         self.derive_ms = 0.0
         self._lock = threading.Lock()
@@ -208,6 +220,10 @@ class StepNode:
                 ctx.request(needed)
             return
 
+        with self._lock:
+            self._in_arithmetic += 1
+            self.peak_concurrent = max(self.peak_concurrent,
+                                       self._in_arithmetic)
         env = Envelope(self.node_id, ctx.row, self.source_key,
                        "field").open()
         frames = {}
@@ -236,6 +252,8 @@ class StepNode:
             self.series.put(ctx.row, value)
         with self._lock:
             self.values[ctx.row] = value
+            self.order.append(ctx.row)
+            self._in_arithmetic -= 1
             self.computed += 1
         ctx.release()
 

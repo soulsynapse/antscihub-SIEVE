@@ -12,7 +12,7 @@
   - 📁 `adr/` (10 files)
   - 📁 `decode/`
     - 📄 `ideas.md`
-  - 📁 `findings/` (19 files)
+  - 📁 `findings/` (20 files)
   - 📁 `solutions/` (14 files)
   - 📁 `vocab/` (38 files)
   - 📄 `ADR.md`
@@ -59,11 +59,9 @@
     - 📄 `graph.py` — The declaration graph: what every consumer of frames says it needs.
     - 📄 `pool.py` — The graph-managed frame pool: hold, reserve, release, evict, and say who shared.
   - 📁 `orchestrator2-experiments/`
-    - 📁 `results/`
-      - 📄 `01-reentry-20260830T224008Z.json`
-      - 📄 `01-reentry-20260830T224333Z.json`
-      - 📄 `01-reentry-20260830T224923Z.json`
+    - 📁 `results/` (7 files)
     - 📄 `01-reentry.py` — Does re-entry beat polling, on a window fill with one step riding along?
+    - 📄 `03-sequential.py` — Is `sequential` load-bearing, or does the bounded-reach contract already cover it?
     - 📄 `README.md`
     - 📄 `dispatcher.py` — The dispatcher, re-entrant: it calls consumers back instead of being polled.
     - 📄 `fetch.py` — One open container, absolute frame indices, and how it got there.

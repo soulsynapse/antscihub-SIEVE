@@ -293,9 +293,29 @@ that reorders.
   nothing can falsify is worse than its absence, because a later reader takes
   it for a decision somebody made.
 
-The failure this must not commit is measuring the core's ordering against a
-workload that is ordered by construction. The parallel case has to actually
-reorder, and the experiment states how it forced that.
+The failure this must not commit is measuring the dispatcher's ordering
+against a workload that is ordered by construction. The parallel case has to
+actually reorder, and the experiment states how it forced that.
+
+**Answered, and neither branch won as written.**
+`docs/findings/2026.08.30-a-decaying-accumulator-has-a-reach-and-stops-needing-a-flag`.
+The step built to need the flag dissolves into the contract the tree already
+has: because the accumulator decays, its history has an effective reach, and
+restated as a stateless step at bounded offsets it agrees with the unbounded
+version to 2e-6 by reach 40 and needs no ordering, no state, and no flag.
+`tools.lag_mhi` is that restatement and predates the question.
+
+Two corrections the experiment forced on this folder. The first version's
+parallel arm shared one tool instance across recorder threads and reported the
+resulting data race as evidence that parallel dispatch breaks stateful steps;
+it is evidence that shared mutable state breaks under threads. And the whole
+question was posed without leaning on prior art that has mapped it: AviSynth+'s
+`MT_NICE_FILTER` / `MT_MULTI_INSTANCE` / `MT_SERIALIZED` already say state
+implies unshared state rather than serialization, and the recurrence is an
+associative max-plus scan, so Blelloch's decomposition applies and it was never
+inherently sequential. **This folder should reach for that literature first
+rather than re-deriving it**: filter graphs, stream operators and prefix scans
+are old, and SIEVE's novelty is the seek cost, not the scheduling.
 
 ## The rule for a result
 

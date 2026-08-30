@@ -1,0 +1,491 @@
+{
+ "experiment": "03-sequential",
+ "question": "Is `sequential` load-bearing, or does the bounded-reach contract the tree already has cover the case?",
+ "when": "2026-08-30T23:00:08.858353+00:00",
+ "sieve_rev": "87b274b",
+ "machine": {
+  "platform": "Windows-11-10.0.26200-SP0",
+  "processor": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
+  "logical_cpus": 32,
+  "python": "3.13.5"
+ },
+ "versions": {
+  "av": "18.1.0",
+  "cv2": "5.0.0",
+  "numpy": "2.5.2",
+  "ffmpeg": "ffmpeg version 2025-02-06-git-6da82b4485-full_build-www.gyan.dev Copyright (c) 2000-2025 the FFmpeg developers"
+ },
+ "footage": [
+  {
+   "path": "C:\\Users\\khnakam1\\Documents\\Code\\antscihub-SIEVE-v4\\video-tests\\GX010047c2_02_17_26.MP4",
+   "name": "GX010047c2_02_17_26.MP4",
+   "bytes": 3546062144,
+   "mtime": "2026-07-14T18:50:16.126370+00:00",
+   "codec_name": "hevc",
+   "profile": "Main",
+   "width": 5312,
+   "height": 2988,
+   "pix_fmt": "yuvj420p",
+   "r_frame_rate": "24000/1001",
+   "nb_frames": "11328",
+   "duration": "471.651625",
+   "size": "3546062144",
+   "bit_rate": "60147141"
+  }
+ ],
+ "notes": [
+  "topology: source -> pool -> {sweep declares the window attention-first from an anchor at its midpoint; one step}. The stateful step is built for this experiment because the tree contains none, and tools.py argues none should exist until something real needs one.",
+  "core shape: 1 fetch thread, 1 reader, 2 recorder threads, the whole window armed at once. Window rows 3768..3928, anchor 3848. Comparisons start at row 3808, past the reference's own warm-up.",
+  "prior art leaned on rather than re-derived: AviSynth+'s three MT modes (nice / multi-instance / serialized) and VapourSynth's four, which say state implies unshared state rather than serialization; and the max-plus recurrence being associative, so the accumulator is a prefix scan whose history decays as alpha^j, giving an effective reach \u2014 the same structure as a keyframe bounding a seek.",
+  "arm shared-parallel (race): one tool instance across two recorder threads: a data race, included to show what a naive port does. wall 1.748 s, 2 ascending run(s), peak concurrent 2, peak ready depth 1; against the reference on 120 rows, 120 disagree, max abs 5.446924, mean abs 0.192738.",
+  "arm ordered: serial and ascending; correct, and the cost is the point. wall 2.322 s, 1 ascending run(s), peak concurrent 1, peak ready depth 83; against the reference on 120 rows, 0 disagree, max abs 0.0, mean abs 0.0.",
+  "arm bounded-2: stateless, offsets (-2..0); nothing to race and nothing to order. wall 1.91 s, 7 ascending run(s), peak concurrent 2, peak ready depth 3; against the reference on 120 rows, 120 disagree, max abs 1.436566, mean abs 1.067391.",
+  "arm bounded-5: stateless, offsets (-5..0); nothing to race and nothing to order. wall 2.968 s, 24 ascending run(s), peak concurrent 2, peak ready depth 72; against the reference on 120 rows, 120 disagree, max abs 0.284174, mean abs 0.16367.",
+  "arm bounded-10: stateless, offsets (-10..0); nothing to race and nothing to order. wall 5.08 s, 5 ascending run(s), peak concurrent 2, peak ready depth 109; against the reference on 120 rows, 120 disagree, max abs 0.019593, mean abs 0.007252.",
+  "arm bounded-20: stateless, offsets (-20..0); nothing to race and nothing to order. wall 8.818 s, 12 ascending run(s), peak concurrent 2, peak ready depth 121; against the reference on 120 rows, 120 disagree, max abs 0.000225, mean abs 8e-05.",
+  "arm bounded-40: stateless, offsets (-40..0); nothing to race and nothing to order. wall 15.046 s, 6 ascending run(s), peak concurrent 2, peak ready depth 111; against the reference on 120 rows, 90 disagree, max abs 2e-06, mean abs 1e-06."
+ ],
+ "cases": [
+  {
+   "name": "shared-parallel (race)",
+   "params": {
+    "mode": "parallel",
+    "tool": "mhi-stateful",
+    "reach": 0,
+    "wall_s": 1.748,
+    "computed": 160,
+    "peak_ready_depth": 1,
+    "peak_concurrent": 2,
+    "dispatcher": {
+     "threads": {
+      "fetch": 1,
+      "recorders": 2
+     },
+     "served": 160,
+     "seeks": 2,
+     "steps": 158,
+     "failures": 0,
+     "stale": 0,
+     "blocked": 3,
+     "blocked_s": 0.008,
+     "by_pressure": {
+      "fill/DEFERRED": 160
+     },
+     "activations": 160,
+     "reentries": 160,
+     "immediate": 0,
+     "superseded": 0,
+     "pending_waits": 0,
+     "ready_depth": 0,
+     "wait_ms_p50": 1116.24,
+     "wait_ms_p95": 1680.72
+    },
+    "pool": {
+     "frames": 160,
+     "bytes": 2539560960,
+     "gb": 2.365,
+     "puts": 160,
+     "shared": 160,
+     "shared_pairs": {
+      "fill>tool": 160
+     },
+     "evicted": 0,
+     "forced_evictions": 0,
+     "refetched": 0,
+     "refetched_predicted": 0,
+     "refetch_gap_ms_p50": null
+    },
+    "note": "one tool instance across two recorder threads: a data race, included to show what a naive port does",
+    "comparison": {
+     "rows_compared": 120,
+     "rows_disagreeing": 120,
+     "max_abs_diff": 5.446924,
+     "mean_abs_diff": 0.192738
+    }
+   },
+   "unit": "see params",
+   "note": "one tool instance across two recorder threads: a data race, included to show what a naive port does",
+   "truncated": false,
+   "n": 0,
+   "samples_ms": []
+  },
+  {
+   "name": "ordered",
+   "params": {
+    "mode": "ordered",
+    "tool": "mhi-stateful",
+    "reach": 0,
+    "wall_s": 2.322,
+    "computed": 160,
+    "peak_ready_depth": 83,
+    "peak_concurrent": 1,
+    "dispatcher": {
+     "threads": {
+      "fetch": 1,
+      "recorders": 2
+     },
+     "served": 160,
+     "seeks": 2,
+     "steps": 158,
+     "failures": 0,
+     "stale": 0,
+     "blocked": 85,
+     "blocked_s": 0.431,
+     "by_pressure": {
+      "fill/DEFERRED": 160
+     },
+     "activations": 160,
+     "reentries": 160,
+     "immediate": 0,
+     "superseded": 0,
+     "pending_waits": 0,
+     "ready_depth": 0,
+     "wait_ms_p50": 1221.23,
+     "wait_ms_p95": 1745.13
+    },
+    "pool": {
+     "frames": 160,
+     "bytes": 2539560960,
+     "gb": 2.365,
+     "puts": 160,
+     "shared": 160,
+     "shared_pairs": {
+      "fill>tool": 160
+     },
+     "evicted": 0,
+     "forced_evictions": 0,
+     "refetched": 0,
+     "refetched_predicted": 0,
+     "refetch_gap_ms_p50": null
+    },
+    "note": "serial and ascending; correct, and the cost is the point",
+    "comparison": {
+     "rows_compared": 120,
+     "rows_disagreeing": 0,
+     "max_abs_diff": 0.0,
+     "mean_abs_diff": 0.0
+    }
+   },
+   "unit": "see params",
+   "note": "serial and ascending; correct, and the cost is the point",
+   "truncated": false,
+   "n": 0,
+   "samples_ms": []
+  },
+  {
+   "name": "bounded-2",
+   "params": {
+    "mode": "parallel",
+    "tool": "mhi-reach2",
+    "reach": 2,
+    "wall_s": 1.91,
+    "computed": 158,
+    "peak_ready_depth": 3,
+    "peak_concurrent": 2,
+    "dispatcher": {
+     "threads": {
+      "fetch": 1,
+      "recorders": 2
+     },
+     "served": 160,
+     "seeks": 2,
+     "steps": 158,
+     "failures": 0,
+     "stale": 0,
+     "blocked": 6,
+     "blocked_s": 0.03,
+     "by_pressure": {
+      "fill/DEFERRED": 160
+     },
+     "activations": 158,
+     "reentries": 158,
+     "immediate": 0,
+     "superseded": 0,
+     "pending_waits": 0,
+     "ready_depth": 0,
+     "wait_ms_p50": 1237.55,
+     "wait_ms_p95": 1829.58
+    },
+    "pool": {
+     "frames": 160,
+     "bytes": 2539560960,
+     "gb": 2.365,
+     "puts": 160,
+     "shared": 160,
+     "shared_pairs": {
+      "fill>tool": 160
+     },
+     "evicted": 0,
+     "forced_evictions": 0,
+     "refetched": 0,
+     "refetched_predicted": 0,
+     "refetch_gap_ms_p50": null
+    },
+    "note": "stateless, offsets (-2..0); nothing to race and nothing to order",
+    "comparison": {
+     "rows_compared": 120,
+     "rows_disagreeing": 120,
+     "max_abs_diff": 1.436566,
+     "mean_abs_diff": 1.067391
+    }
+   },
+   "unit": "see params",
+   "note": "stateless, offsets (-2..0); nothing to race and nothing to order",
+   "truncated": false,
+   "n": 0,
+   "samples_ms": []
+  },
+  {
+   "name": "bounded-5",
+   "params": {
+    "mode": "parallel",
+    "tool": "mhi-reach5",
+    "reach": 5,
+    "wall_s": 2.968,
+    "computed": 155,
+    "peak_ready_depth": 72,
+    "peak_concurrent": 2,
+    "dispatcher": {
+     "threads": {
+      "fetch": 1,
+      "recorders": 2
+     },
+     "served": 160,
+     "seeks": 2,
+     "steps": 158,
+     "failures": 0,
+     "stale": 0,
+     "blocked": 74,
+     "blocked_s": 1.026,
+     "by_pressure": {
+      "fill/DEFERRED": 160
+     },
+     "activations": 155,
+     "reentries": 155,
+     "immediate": 0,
+     "superseded": 0,
+     "pending_waits": 0,
+     "ready_depth": 0,
+     "wait_ms_p50": 1277.59,
+     "wait_ms_p95": 1899.31
+    },
+    "pool": {
+     "frames": 160,
+     "bytes": 2539560960,
+     "gb": 2.365,
+     "puts": 160,
+     "shared": 160,
+     "shared_pairs": {
+      "fill>tool": 160
+     },
+     "evicted": 0,
+     "forced_evictions": 0,
+     "refetched": 0,
+     "refetched_predicted": 0,
+     "refetch_gap_ms_p50": null
+    },
+    "note": "stateless, offsets (-5..0); nothing to race and nothing to order",
+    "comparison": {
+     "rows_compared": 120,
+     "rows_disagreeing": 120,
+     "max_abs_diff": 0.284174,
+     "mean_abs_diff": 0.16367
+    }
+   },
+   "unit": "see params",
+   "note": "stateless, offsets (-5..0); nothing to race and nothing to order",
+   "truncated": false,
+   "n": 0,
+   "samples_ms": []
+  },
+  {
+   "name": "bounded-10",
+   "params": {
+    "mode": "parallel",
+    "tool": "mhi-reach10",
+    "reach": 10,
+    "wall_s": 5.08,
+    "computed": 150,
+    "peak_ready_depth": 109,
+    "peak_concurrent": 2,
+    "dispatcher": {
+     "threads": {
+      "fetch": 1,
+      "recorders": 2
+     },
+     "served": 160,
+     "seeks": 2,
+     "steps": 158,
+     "failures": 0,
+     "stale": 0,
+     "blocked": 114,
+     "blocked_s": 3.074,
+     "by_pressure": {
+      "fill/DEFERRED": 160
+     },
+     "activations": 150,
+     "reentries": 150,
+     "immediate": 0,
+     "superseded": 0,
+     "pending_waits": 0,
+     "ready_depth": 0,
+     "wait_ms_p50": 1384.4,
+     "wait_ms_p95": 1932.12
+    },
+    "pool": {
+     "frames": 160,
+     "bytes": 2539560960,
+     "gb": 2.365,
+     "puts": 160,
+     "shared": 160,
+     "shared_pairs": {
+      "fill>tool": 160
+     },
+     "evicted": 0,
+     "forced_evictions": 0,
+     "refetched": 0,
+     "refetched_predicted": 0,
+     "refetch_gap_ms_p50": null
+    },
+    "note": "stateless, offsets (-10..0); nothing to race and nothing to order",
+    "comparison": {
+     "rows_compared": 120,
+     "rows_disagreeing": 120,
+     "max_abs_diff": 0.019593,
+     "mean_abs_diff": 0.007252
+    }
+   },
+   "unit": "see params",
+   "note": "stateless, offsets (-10..0); nothing to race and nothing to order",
+   "truncated": false,
+   "n": 0,
+   "samples_ms": []
+  },
+  {
+   "name": "bounded-20",
+   "params": {
+    "mode": "parallel",
+    "tool": "mhi-reach20",
+    "reach": 20,
+    "wall_s": 8.818,
+    "computed": 140,
+    "peak_ready_depth": 121,
+    "peak_concurrent": 2,
+    "dispatcher": {
+     "threads": {
+      "fetch": 1,
+      "recorders": 2
+     },
+     "served": 160,
+     "seeks": 2,
+     "steps": 158,
+     "failures": 0,
+     "stale": 0,
+     "blocked": 121,
+     "blocked_s": 6.745,
+     "by_pressure": {
+      "fill/DEFERRED": 160
+     },
+     "activations": 140,
+     "reentries": 140,
+     "immediate": 0,
+     "superseded": 0,
+     "pending_waits": 0,
+     "ready_depth": 0,
+     "wait_ms_p50": 1534.31,
+     "wait_ms_p95": 1960.0
+    },
+    "pool": {
+     "frames": 160,
+     "bytes": 2539560960,
+     "gb": 2.365,
+     "puts": 160,
+     "shared": 160,
+     "shared_pairs": {
+      "fill>tool": 160
+     },
+     "evicted": 0,
+     "forced_evictions": 0,
+     "refetched": 0,
+     "refetched_predicted": 0,
+     "refetch_gap_ms_p50": null
+    },
+    "note": "stateless, offsets (-20..0); nothing to race and nothing to order",
+    "comparison": {
+     "rows_compared": 120,
+     "rows_disagreeing": 120,
+     "max_abs_diff": 0.000225,
+     "mean_abs_diff": 8e-05
+    }
+   },
+   "unit": "see params",
+   "note": "stateless, offsets (-20..0); nothing to race and nothing to order",
+   "truncated": false,
+   "n": 0,
+   "samples_ms": []
+  },
+  {
+   "name": "bounded-40",
+   "params": {
+    "mode": "parallel",
+    "tool": "mhi-reach40",
+    "reach": 40,
+    "wall_s": 15.046,
+    "computed": 120,
+    "peak_ready_depth": 111,
+    "peak_concurrent": 2,
+    "dispatcher": {
+     "threads": {
+      "fetch": 1,
+      "recorders": 2
+     },
+     "served": 160,
+     "seeks": 2,
+     "steps": 158,
+     "failures": 0,
+     "stale": 0,
+     "blocked": 115,
+     "blocked_s": 12.442,
+     "by_pressure": {
+      "fill/DEFERRED": 160
+     },
+     "activations": 120,
+     "reentries": 120,
+     "immediate": 0,
+     "superseded": 0,
+     "pending_waits": 0,
+     "ready_depth": 0,
+     "wait_ms_p50": 2268.37,
+     "wait_ms_p95": 2449.91
+    },
+    "pool": {
+     "frames": 160,
+     "bytes": 2539560960,
+     "gb": 2.365,
+     "puts": 160,
+     "shared": 160,
+     "shared_pairs": {
+      "fill>tool": 160
+     },
+     "evicted": 0,
+     "forced_evictions": 0,
+     "refetched": 0,
+     "refetched_predicted": 0,
+     "refetch_gap_ms_p50": null
+    },
+    "note": "stateless, offsets (-40..0); nothing to race and nothing to order",
+    "comparison": {
+     "rows_compared": 120,
+     "rows_disagreeing": 90,
+     "max_abs_diff": 2e-06,
+     "mean_abs_diff": 1e-06
+    }
+   },
+   "unit": "see params",
+   "note": "stateless, offsets (-40..0); nothing to race and nothing to order",
+   "truncated": false,
+   "n": 0,
+   "samples_ms": []
+  }
+ ]
+}

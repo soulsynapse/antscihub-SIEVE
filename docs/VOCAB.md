@@ -33,6 +33,7 @@ the collision without anybody having to settle it. The shelf a term sits on is
   - 📄 [node (contract)](vocab/node-contract.md) — A role a tool fills, and you are one because you offer an edge: a source has no inputs, a step has frame inputs.
   - 📄 [node (orchestrator)](vocab/node-orchestrator.md) — Anything that declares a need on the store — a tool, the series writer, the proxy builder, the GUI — which is a wider net than the contract's.
   - 📄 [binding](vocab/binding.md) — The join between an edge one node wants and an edge another offers, made by name. Where the facts a producer cannot state about itself — timebase, extent, access — are derived.
+  - 📄 [source](vocab/source.md) — The role a tool fills to bring a recording in: a node with no inputs, which opens an address, declares the kinds of edge it offers, and answers a read for one instant in one form.
   - 📄 [step](vocab/step.md) — The role a tool fills to process frames: an arithmetic over listed positions, run once per position, producing an image-sized field and the scalar it reduces to.
   - 📄 [field (step)](vocab/field-step.md) — A step's image-sized result — one number per pixel, float32, computed where it is drawn and discarded there.
   - 📄 [chain](vocab/chain.md) — The user's pipeline as a document — which nodes exist and which node's output feeds which node's want. Structure only; whether a feed is legal needs the producer open. Names tools, never a recording.
@@ -40,4 +41,4 @@ the collision without anybody having to settle it. The shelf a term sits on is
   - 📄 [store](vocab/store.md) — What SIEVE holds from one open recording, and the thing a need for a frame is put to. Addressed by which instant and which form together, never by either alone. Held material, never the source that decoded it.
   - 📄 [need](vocab/need.md) — What a node says it wants right now — which instant, the offsets around it, in what form, and whether anyone is waiting. What it wants, never where that ranks; the rank is derived from everything else in flight.
 
-*28 defined.*
+*29 defined.*

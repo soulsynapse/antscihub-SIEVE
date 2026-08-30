@@ -45,5 +45,6 @@ the collision without anybody having to settle it. The shelf a term sits on is
   - 📄 [proxy](vocab/proxy.md) — A whole recording held at one coarse form, built in the background and complete across its extent — the tier a scrub falls to when the nearer ones hold nothing. Its pixels are for looking at, never admitted as recorded.
   - 📄 [extent](vocab/extent.md) — Which positions a producer says exist, asked as of now rather than fixed, and whether that set can still grow. A claim about what is offered, never a promise any of it will be delivered.
   - 📄 [timebase](vocab/timebase.md) — The rate a source's positions are counted in — ticks per second as an exact fraction, recorded once beside them. Every source declares one, so it is real elapsed time only where the recording carried time to begin with.
+  - 📄 [address](vocab/address.md) — The name a source is handed to open a recording — claimed and parsed by that source alone, sometimes a path and sometimes not. Where a recording is, never what it is; durable identity is a separate claim.
 
-*34 defined.*
+*35 defined.*

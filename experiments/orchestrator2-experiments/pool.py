@@ -368,6 +368,23 @@ class Pool:
     def nbytes(self) -> int:
         return self._bytes
 
+    def held_bytes(self) -> int:
+        """Bytes under keys some declaration still names.
+
+        What a resident window costs, where `nbytes` is that plus everything
+        released and not yet swept. The two agree only where something drops
+        the unreferenced on every landing, which the explorer does and a
+        headless arm does not — so an experiment about what a form costs to
+        *hold* has to ask this one rather than the ceiling.
+
+        The graph's lock is taken and released before this one, which is the
+        order `get` already establishes.
+        """
+        held = self.graph.held()
+        with self._lock:
+            return sum(_nbytes(frame) for key, frame in self._frames.items()
+                       if key in held)
+
     def victims(self) -> tuple[int, int]:
         """How many unpinned keys the pool is retaining, and their bytes."""
         with self._lock:

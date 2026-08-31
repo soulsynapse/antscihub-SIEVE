@@ -536,6 +536,38 @@ So **`readers=2` is V2's core shape for anything with a person in it**, and
 `readers=1` stays the default only because every other number in this folder
 was taken at it. An experiment that reports a wall names its reader count.
 
+**Two forms of one instant, and what keeps them one decode (ADR-0017).**
+`09-display-sampling.py`. What is looked at is held at display sampling and
+what is recorded at source sampling, which is the ADR as written and which no
+number in this folder before 2026-08-31 was taken under. The pool was already
+keyed for it; what it needed was the negotiation V1 diagnosed as its question
+7 and did not build — a decode produces the source plane whatever form asked
+for it, so `Dispatcher(tiers=...)` puts every *declared and unserved* other
+form of that row from the same decode. Building one nobody declared is
+retention on a guess, which is the move the retention finding refused.
+
+Two levers, and each is invisible while the other is right:
+
+- **Order.** A step whose rows the fill is about to decode gets them free; one
+  that reaches a row first buys its own decode of it. `Sweep.rows()` and
+  `nodes.following_order` are what let a step walk the fill's rotation, and
+  the seam — the anchor's own inputs, which an attention-first order reaches
+  last — is the one row that has to move.
+- **Depth.** With nothing competing, order is enough at depth 1. Once anything
+  else takes the cursor the frontier and the step separate, and the request
+  depth is what spans the lag. **This supersedes question 1's depth of 1**,
+  which was measured under one form where a step's rows *are* the fill's rows;
+  the explorer's default moved with it and every log says which it used.
+
+What it buys is what the window weighs, and what it costs is the rows the
+co-serve missed, billed as seeks — two sequential runs at different forms on
+one cursor, which is the shape `a-second-cursor-that-overlaps-costs-a-scrub-
+nothing` already priced for a different pair. The numbers are in
+`results/09-display-sampling-*.json` and in the walk logs that name a
+`display_divisor`; **a reader per tier is the un-built move the seek count
+points at**, and it is the same partition `readers` already performs by
+urgency.
+
 **The pressure queue needed a deadline.** `05-starvation.py` and the
 do-not-regress list below: ranking for locality starves whoever ranks last,
 which is the half of anticipatory scheduling this folder had carried without.

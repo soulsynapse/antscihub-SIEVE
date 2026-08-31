@@ -350,6 +350,26 @@ class Graph:
                 return False
             return row in need.needed_rows()
 
+    def wanter(self, row: int, form_key: str) -> str | None:
+        """Who declares this row at this form, or None.
+
+        Asked by the fetch thread once per decode and once per form it did
+        not pick: a decode produces the source plane whatever form was asked
+        for, so every *other* declared form of that row can be built from the
+        one it already has. This is what says which of them are declared —
+        building one nobody asked for would be holding on a guess, which is
+        what the retention finding refused for the same reason.
+
+        The first declarer, not all of them. The answer is used to attribute
+        the put, and any node that declared it is a true answer to who it was
+        produced for; the sharing counts do the rest from the reads.
+        """
+        with self._lock:
+            for need in self._needs.values():
+                if need.form_key == form_key and row in need.needed_rows():
+                    return need.node_id
+        return None
+
     def dropped_under(self,
                       key: tuple[int, str]) -> tuple[str, int, bool] | None:
         """Who last stopped needing this, at which generation, and whether the

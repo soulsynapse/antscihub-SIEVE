@@ -44,6 +44,11 @@ Run:
     ... --software     force both bands onto software, which is what every
                        wall here before 2026-08-31 was taken on and what a
                        leg-for-leg comparison against V1 runs
+    ... --display-divisor N
+                       hold what is looked at at 1/N sampling in each axis
+                       (ADR-0017), default 4. `--display-divisor 1` collapses
+                       the two tiers into one and is what every log before
+                       2026-08-31 was taken at
     ... --no-snap      serve a drag the exact row rather than the keyframe at
                        or before it, which is what ADR-0018 rejects; here so
                        the arm can be measured rather than asserted
@@ -98,14 +103,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tool-experiment
 import harness
 from harness import FOOTAGE
 
-import forms as forms_mod
 import tools as tools_mod
 from dispatcher import Dispatcher, Reason
 import probe as probe_mod
 from fetch import Fetcher, keyframe_rows, snap_back
 from graph import Graph, Urgency
-from nodes import Pass, StepNode, Sweep
+from nodes import Pass, StepNode, Sweep, following_order
 from pool import Pool
+from tiers import display_form, source_form, tiers
 
 BIG = FOOTAGE / "GX010047c2_02_17_26.MP4"
 LOGS = Path(__file__).resolve().parent / "explorer-logs"
@@ -131,7 +136,19 @@ WINDOW_SECONDS = _argf("--window-seconds", 20.0)
 #: a-live-playhead-free`). `--readers 1` is still how the V1 comparison is run,
 #: and every log says which it was.
 READERS = int(_argf("--readers", 2))
-DEPTH = int(_argf("--depth", 1))
+#: **32, and it was 1 until two tiers made it load-bearing.** Question 1
+#: measured depth under a single form, where a step's rows are the fill's
+#: rows and depth bought no wall, and settled it at 1. Under ADR-0017 the
+#: step reads a form the fill does not, so its rows are only free where it is
+#: declaring what the fill is about to decode — and a depth of 1 cannot span
+#: the lag between them once anything else competes for the cursor
+#: (`09-display-sampling.py`). It costs `depth` source rows held.
+DEPTH = int(_argf("--depth", 32))
+#: ADR-0017: what is looked at is held at display sampling and what is
+#: recorded at source sampling. 1 collapses the two tiers into one and is
+#: every log in this folder before 2026-08-31 — the arm a leg-for-leg
+#: comparison against those is run at.
+DISPLAY_DIVISOR = int(_argf("--display-divisor", 4))
 GOP = 24
 CROP_RECT = [2144, 982, 1024, 1024]
 POOL_BUDGET = 12 << 30
@@ -243,13 +260,19 @@ class Explorer(QMainWindow):
         self.t0 = time.perf_counter()
         self.graph = Graph()
         self.pool = Pool(self.graph, budget_bytes=POOL_BUDGET)
-        self.source_form = forms_mod.Form(
-            (0, 0, self.orig_w, self.orig_h), (self.orig_w, self.orig_h),
-            "gray")
+        self.source_form = source_form(self.orig_w, self.orig_h)
         self.form_key = self.source_form.key()
+        #: what the sweep declares and the GUI shows. The step keeps
+        #: `source_form`, because a display row grades APPROX for anything
+        #: derived from it and `forms.py` refuses that admission — derived is
+        #: for looking at, decoded is for recording.
+        self.display_form = display_form(self.orig_w, self.orig_h,
+                                         DISPLAY_DIVISOR)
+        self.display_key = self.display_form.key()
         self.dispatcher = Dispatcher(
             self.graph, self.pool, self.form_key, self._fetcher,
-            recorders=2, readers=READERS, t0=self.t0)
+            recorders=2, readers=READERS, t0=self.t0,
+            tiers=tiers(self.source_form, self.display_form))
         self.dispatcher.start()
 
         self.tool_a = tools_mod.absdiff()
@@ -409,7 +432,7 @@ class Explorer(QMainWindow):
         #: keyframe and are the same request.
         target = row
         if (self._scrubbing and not NO_SNAP
-                and not self.pool.has(row, self.form_key)):
+                and not self.pool.has(row, self.display_key)):
             target = snap_back(self.keyframes, row)
             if target != row:
                 task = "snap"
@@ -429,7 +452,7 @@ class Explorer(QMainWindow):
         self.run = self.runs[label]
 
         self.dispatcher.get_frame("gui", target, self._activation_for(task),
-                                  Urgency.INTERACTIVE, self.form_key,
+                                  Urgency.INTERACTIVE, self.display_key,
                                   supersedes=True)
 
     def _activation_for(self, task: str):
@@ -515,7 +538,7 @@ class Explorer(QMainWindow):
 
         #: one node re-declaring, so the overlap between two windows is never
         #: unheld and there is no order to get wrong.
-        self.sweep = Sweep(start, end, row, self.form_key, self.graph)
+        self.sweep = Sweep(start, end, row, self.display_key, self.graph)
         self.sweep.declare()
         if not KEEP_VICTIMS:
             #: **Declared before dropping, and that order is load-bearing.**
@@ -537,7 +560,7 @@ class Explorer(QMainWindow):
         self.step = StepNode(self.active_tool, self.source_form,
                              tuple(CROP_RECT), self.dispatcher)
         self.step_pass = Pass(self.step, start + self.active_tool.reach, end,
-                              depth=DEPTH)
+                              depth=DEPTH, order=self._step_order())
         self.step_pass.run()
         #: the walk scripts the playhead; letting `_land_at` start the loop
         #: underneath every leg puts an unscripted third consumer in the
@@ -549,11 +572,25 @@ class Explorer(QMainWindow):
         self._drive()
         self.hud.setText(f"window @{start} ({end - start} frames)")
 
+    def _step_order(self) -> tuple[int, ...] | None:
+        """The rows the step walks, in the order the sweep asks for them.
+
+        Under one tier this is a preference about which rows are computed
+        first. Under two it is what makes the window one decode: the
+        dispatcher puts the source form only where it is already declared, so
+        a step that reaches a row before the fill does buys its own decode of
+        it (`09-display-sampling.py`).
+        """
+        if self.sweep is None:
+            return None
+        first = self.sweep.start + self.active_tool.reach
+        return following_order(self.sweep.rows(), self.active_tool, first)
+
     def _check_covered(self) -> None:
         if self.active is None or self._covered_wall is not None:
             return
         start, end = self.active
-        if len(self.pool.covered(start, end, self.form_key)) < end - start:
+        if len(self.pool.covered(start, end, self.display_key)) < end - start:
             return
         self._covered_wall = time.perf_counter() - self._landed_at
         if self.run is not None:
@@ -611,7 +648,7 @@ class Explorer(QMainWindow):
                                  tuple(CROP_RECT), self.dispatcher)
             self.step_pass = Pass(self.step,
                                   start + self.active_tool.reach, end,
-                                  depth=DEPTH)
+                                  depth=DEPTH, order=self._step_order())
             self.step_pass.run()
 
     # ── status ───────────────────────────────────────────────────────────
@@ -668,7 +705,7 @@ class Explorer(QMainWindow):
         start, end = self.active
         deadline = time.perf_counter() + timeout_s
         while time.perf_counter() < deadline:
-            if len(self.pool.covered(start, end, self.form_key)) >= end - start:
+            if len(self.pool.covered(start, end, self.display_key)) >= end - start:
                 self._check_covered()
                 return True
             QApplication.processEvents()
@@ -785,6 +822,9 @@ class Explorer(QMainWindow):
                            if k in ("sweep", "interactive")},
                 "crop": CROP_RECT,
                 "form": self.form_key,
+                "display_form": self.display_key,
+                "display_divisor": DISPLAY_DIVISOR,
+                "step_follows_fill": True,
                 "total_rows": self.total,
                 "fps": round(self.fps, 3),
                 "quick": QUICK,
@@ -807,7 +847,23 @@ class Explorer(QMainWindow):
             #: from the graph, so the number is what was held. A reader
             #: comparing the two fields across the folders is comparing a
             #: measurement against an artefact.
+            #: what the step got through, which no field said before two
+            #: tiers made it possible for a pass to stall without anything
+            #: else in the log moving: its rows come from decodes the fill
+            #: was going to make anyway, so a step that falls off the
+            #: frontier stops computing while the fill wall stays what it was.
+            "step": {
+                "tool": self.active_tool.name,
+                "computed": self.step.computed if self.step else 0,
+                "issued": self.step_pass.issued if self.step_pass else 0,
+                "wanted": (len(self.step_pass._rows)
+                           if self.step_pass else 0),
+            },
             "graph_holds": len(self.graph.held()),
+            #: what the held set weighs, which is what ADR-0017 is about and
+            #: what `pool.gb` is not: that one counts released rows nothing
+            #: has swept yet as well.
+            "pool_held_gb": round(self.pool.held_bytes() / (1 << 30), 3),
             "duration_bars": self.graph.duration_bars(),
             "dispatch_trace": self.dispatcher.trace,
             "legs": {label: run.summary() for label, run in self.runs.items()},

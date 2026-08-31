@@ -59,8 +59,8 @@
     - 📄 `graph.py` — The declaration graph: what every consumer of frames says it needs.
     - 📄 `pool.py` — The graph-managed frame pool: hold, reserve, release, evict, and say who shared.
   - 📁 `orchestrator2-experiments/`
-    - 📁 `explorer-logs/` (24 files)
-    - 📁 `results/` (18 files)
+    - 📁 `explorer-logs/` (33 files)
+    - 📁 `results/` (21 files)
     - 📄 `01-reentry.py` — Does re-entry beat polling, on a window fill with one step riding along?
     - 📄 `02-requestable.py` — Does routing a chained field through the dispatcher cost more than holding it in a dict?
     - 📄 `03-sequential.py` — Is `sequential` load-bearing, or does the bounded-reach contract already cover it?
@@ -69,6 +69,7 @@
     - 📄 `06-two-readers.py` — Does a second cursor let the fill and the person overlap, or only stop them fighting?
     - 📄 `07-playback-divergence.py` — Does the fill fall progressively further behind a playhead, and does a second cursor break the loop?
     - 📄 `08-cadence.py` — Does the recorded set depend on what the machine had time to draw?
+    - 📄 `09-display-sampling.py` — Two forms of one instant: what the display tier costs, and what keeps it one decode.
     - 📄 `README.md`
     - 📄 `dispatcher.py` — The dispatcher, re-entrant: it calls consumers back instead of being polled.
     - 📄 `explorer.py` — Feel the activation model: nothing polls, and the GUI is a node like any other.
@@ -79,6 +80,7 @@
     - 📄 `probe-cache.json`
     - 📄 `probe.py` — Which decoder each band opens, measured on this machine and remembered.
     - 📄 `replacement.py` — Which unpinned key to evict — five rules, so the choice is measured.
+    - 📄 `tiers.py` — What one decode is stored as, and how each form is made from it (ADR-0017).
   - 📁 `storage-experiments/`
     - 📁 `explorer-logs/` (81 files)
     - 📁 `results/` (7 files)

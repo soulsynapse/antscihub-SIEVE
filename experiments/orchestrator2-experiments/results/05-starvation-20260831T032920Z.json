@@ -1,0 +1,133 @@
+{
+ "experiment": "05-starvation",
+ "question": "Does ranking for locality starve the node it ranks last, and does an expiry deadline fix it without taking over?",
+ "when": "2026-08-31T03:29:20.850077+00:00",
+ "sieve_rev": "3324fe3",
+ "machine": {
+  "platform": "Windows-11-10.0.26200-SP0",
+  "processor": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
+  "logical_cpus": 32,
+  "python": "3.13.5"
+ },
+ "versions": {
+  "av": "18.1.0",
+  "cv2": "5.0.0",
+  "numpy": "2.5.2",
+  "ffmpeg": "ffmpeg version 2025-02-06-git-6da82b4485-full_build-www.gyan.dev Copyright (c) 2000-2025 the FFmpeg developers"
+ },
+ "footage": [],
+ "notes": [
+  "synthetic: no footage, a fetcher charging 2 ms a frame and nothing else. What is measured is which declaration the scheduler picks; a real decoder would lay a seek/step distribution over an effect that is about ordering.",
+  "topology: one ORDERED node arming 60 rows at once at DEFERRED, against a person scrubbing without pause \u2014 a 40-row INTERACTIVE declaration re-stated every 20 ms at a new position, so it is always unserved and always outranks. 3.0 s per arm.",
+  "prior art: the subsumption rule this starves under is anticipatory scheduling (Iyer & Druschel, SOSP 2001); the expiry queue that repairs it is the deadline family's anti-starvation half, drained in a batch after `fifo_batch`.",
+  "arm no deadline: the ordered node computed 1 of 60 armed rows; the expiry queue made 0 of 995 picks (0.0).",
+  "arm deadline 0.3s: the ordered node computed 60 of 60 armed rows; the expiry queue made 59 of 1058 picks (0.0558).",
+  "result: 1/60 rows without a deadline against 60/60 with one, and the expiry queue took 0.0558 of picks doing it \u2014 a floor under service, not a replacement for the ranking."
+ ],
+ "cases": [
+  {
+   "name": "no-deadline",
+   "params": {
+    "deadline_s": 0.0,
+    "ordered_rows_computed": 1,
+    "ordered_rows_armed": 60,
+    "expired_picks": 0,
+    "total_decodes": 995,
+    "expired_share": 0.0,
+    "dispatcher": {
+     "threads": {
+      "fetch": 1,
+      "recorders": 2
+     },
+     "served": 995,
+     "seeks": 0,
+     "steps": 995,
+     "failures": 0,
+     "stale": 143,
+     "tiers": [
+      "F"
+     ],
+     "coserve": true,
+     "cofetched": 0,
+     "coserve_present": 0,
+     "coserve_undeclared": 0,
+     "tier_ms": 0.3,
+     "blocked": 1,
+     "blocked_s": 0.001,
+     "deadline_s": 0.0,
+     "expiry_batch": 16,
+     "expired_picks": 0,
+     "by_pressure": {
+      "ord/DEFERRED": 1,
+      "gui/INTERACTIVE": 994
+     },
+     "activations": 60,
+     "reentries": 1,
+     "immediate": 0,
+     "superseded": 0,
+     "pending_waits": 59,
+     "ready_depth": 0,
+     "wait_ms_p50": 3.3,
+     "wait_ms_p95": 3.3
+    }
+   },
+   "unit": "see params",
+   "note": "the ranking unaided",
+   "truncated": false,
+   "n": 0,
+   "samples_ms": []
+  },
+  {
+   "name": "deadline-0.3s",
+   "params": {
+    "deadline_s": 0.3,
+    "ordered_rows_computed": 60,
+    "ordered_rows_armed": 60,
+    "expired_picks": 59,
+    "total_decodes": 1058,
+    "expired_share": 0.0558,
+    "dispatcher": {
+     "threads": {
+      "fetch": 1,
+      "recorders": 2
+     },
+     "served": 1058,
+     "seeks": 0,
+     "steps": 1058,
+     "failures": 0,
+     "stale": 15,
+     "tiers": [
+      "F"
+     ],
+     "coserve": true,
+     "cofetched": 0,
+     "coserve_present": 0,
+     "coserve_undeclared": 0,
+     "tier_ms": 0.4,
+     "blocked": 93,
+     "blocked_s": 0.256,
+     "deadline_s": 0.3,
+     "expiry_batch": 16,
+     "expired_picks": 59,
+     "by_pressure": {
+      "ord/DEFERRED": 60,
+      "gui/INTERACTIVE": 998
+     },
+     "activations": 60,
+     "reentries": 60,
+     "immediate": 0,
+     "superseded": 0,
+     "pending_waits": 0,
+     "ready_depth": 0,
+     "wait_ms_p50": 395.32,
+     "wait_ms_p95": 465.97
+    }
+   },
+   "unit": "see params",
+   "note": "expiry measured against last service, drained in a batch",
+   "truncated": false,
+   "n": 0,
+   "samples_ms": []
+  }
+ ]
+}

@@ -74,6 +74,17 @@ implement that. What it does is make the count a knob so the question can be
 asked, and preserve the property that the extra reader is idle unless
 something interactive is pending.
 
+**One decode, several forms.** A fetcher hands back the source plane
+whatever form was asked for, so which form a pick names decides what is
+*stored* and not what is read. `tiers` is that map — a key and an opaque
+callable that makes it from the plane — and it is how ADR-0017 arrives here:
+display sampling for what is looked at, source sampling for what is recorded,
+both of one instant, one decode. The second form is built only where
+something already declared it (`graph.wanter`), because building one nobody
+asked for is retention on a guess and that is the move the retention finding
+refused. Nothing here learns what a form is; the callable comes from whoever
+knew.
+
 **Nothing has an interval**, and that is a property rather than the
 argument. The fetch thread blocks on a condition the graph notifies when a
 declaration arrives; the recorder threads block on a condition this class
@@ -412,7 +423,9 @@ class Dispatcher:
     def __init__(self, graph: Graph, pool: Pool, form_key: str,
                  fetcher_factory: Callable[[], Any],
                  recorders: int = 2, readers: int = 1,
-                 deadline_s: float = DEADLINE_S, t0: float = 0.0) -> None:
+                 deadline_s: float = DEADLINE_S, t0: float = 0.0,
+                 tiers: dict[str, Callable[[Any], Any]] | None = None,
+                 coserve: bool = True) -> None:
         #: `readers` defaults to 1 here and to 2 in the explorer, which is
         #: deliberate rather than an oversight: a headless experiment is
         #: comparing against numbers taken at one reader, and a driven session
@@ -420,6 +433,23 @@ class Dispatcher:
         self.graph = graph
         self.pool = pool
         self.form_key = form_key
+        #: which keys a decode can be turned into, and how (ADR-0017). A
+        #: fetcher hands back one thing — the source plane — and every form
+        #: of that row is a function of it, so what varies between them is a
+        #: callable and not a route. The dispatcher never learns what a form
+        #: is: it holds an opaque maker per key, the same refusal `pool.put`
+        #: makes about payloads.
+        #:
+        #: Default is the one identity entry, which is every measurement in
+        #: this folder taken before 2026-08-31 and is not the same
+        #: arrangement as a one-entry map some caller passed.
+        self._tiers: dict[str, Callable[[Any], Any]] = (
+            dict(tiers) if tiers else {form_key: lambda arr: arr})
+        #: off is the control that prices the co-serve rather than assuming
+        #: it: with two tiers and no co-serve, each form is decoded on its own
+        #: pick, which is what a pool keyed by form does when nobody writes
+        #: the negotiation.
+        self.coserve = coserve
         self._fetcher_factory = fetcher_factory
         self._recorder_count = max(1, recorders)
         self._reader_count = max(1, readers)
@@ -484,6 +514,21 @@ class Dispatcher:
         #: picks the expiry queue made that the ranking would not have. Zero
         #: means the ranking never starved anybody over this run.
         self.expired_picks = 0
+        #: rows where one decode was put under more than one key, and what
+        #: the extra keys cost to build. The cross-form half of "decode once,
+        #: serve many": under a single form that claim is the pool's sharing
+        #: count, and under two it is this — a second consumer at a coarser
+        #: form is served without a second decode or it is not served at all.
+        self.cofetched = 0
+        #: why a co-serve declined, which is the difference between a rate
+        #: that is low because the tiers agree and one that is low because
+        #: they never meet. `present` is the other tier already resident —
+        #: somebody served it first, and nothing was lost. `undeclared` is
+        #: nobody wanting it at the moment it was free, which is the decode
+        #: that will be paid for again.
+        self.coserve_present = 0
+        self.coserve_undeclared = 0
+        self.tier_ms = 0.0
         self.by_pressure: dict[str, int] = {}
         self.trace: list[tuple] = []
         self.trace_cap = 20_000
@@ -674,9 +719,19 @@ class Dispatcher:
             self._claimed.discard((row, form_key))
 
     def _graph_changed(self) -> None:
-        """A declaration arrived or was released. Only the fetch thread cares."""
+        """A declaration arrived or was released. Only the fetch threads care.
+
+        `notify_all` and not `notify`, above one reader. The bands partition,
+        so a declaration is pickable by exactly one band and waking one
+        arbitrary waiter wakes the wrong one half the time — which leaves the
+        reader that could have served it asleep until some later declaration
+        happens to wake it. It self-heals under a person, who declares
+        constantly, and that is what makes it a defect worth naming rather
+        than one a run reports: nothing counts a wake that went to the wrong
+        band. The spurious wake costs a predicate test.
+        """
         with self._lock:
-            self._pickable.notify()
+            self._pickable.notify_all()
 
     # ── the fetch thread ─────────────────────────────────────────────────
 
@@ -701,7 +756,7 @@ class Dispatcher:
             self._expiry_left = self.expiry_batch - 1
             return expired
         for need in self.graph.pressure_queue():
-            if need.form_key != self.form_key:
+            if need.form_key not in self._tiers:
                 continue
             #: None means this reader is the only one and takes every band.
             if (interactive_only is not None
@@ -715,7 +770,7 @@ class Dispatcher:
 
     def _serviceable(self, need: Need, interactive_only: bool | None):
         """The first row of *need* this reader may take, or None."""
-        if need.form_key != self.form_key:
+        if need.form_key not in self._tiers:
             return None
         if (interactive_only is not None
                 and interactive_only != (need.urgency
@@ -834,9 +889,11 @@ class Dispatcher:
                 #: seek and a step differ by more than an order of magnitude
                 #: and that difference is the whole reason the pool ranks by
                 #: cost instead of by recency.
-                self.pool.put(row, need.form_key, arr, by=need.node_id,
-                              cost_ms=env.ms)
+                self.pool.put(row, need.form_key,
+                              self._make(need.form_key, arr, env),
+                              by=need.node_id, cost_ms=env.ms)
                 self._unclaim(row, need.form_key)
+                self._coserve(row, need.form_key, arr, env)
                 self.served += 1
                 if how == "seek":
                     self.seeks += 1
@@ -854,6 +911,62 @@ class Dispatcher:
                 self.last = f"{_role(need.node_id)}/{band} @{row} {how}"
         finally:
             fetcher.close()
+
+    def _make(self, form_key: str, arr: Any, env: Envelope) -> Any:
+        """This tier's payload, built from the one decode. Timed as the
+        tier's cost and not as the decode's: a build charged to the envelope
+        would report the sweep's decode as having got slower under a second
+        form, when what it did was produce two things."""
+        maker = self._tiers[form_key]
+        if maker is None:
+            return arr
+        began = time.perf_counter()
+        made = maker(arr)
+        self.tier_ms += (time.perf_counter() - began) * 1000.0
+        return made
+
+    def _coserve(self, row: int, served: str, arr: Any,
+                 env: Envelope) -> None:
+        """Put every *other* declared form of this row from the same decode.
+
+        ADR-0017 puts two forms of one instant in the pool — display sampling
+        for what is looked at, source sampling for what is recorded — and a
+        pool keyed by form would otherwise decode the row twice, once per
+        consumer. The decode does not depend on which form asked for it, so
+        the second form is a build over bytes already in hand.
+
+        **Declared and unserved only.** Building a form nobody asked for is
+        holding on a guess, and how far that gets is measured: the retention
+        finding refused a policy that kept rows on speculation, and the
+        information gap it named — the next want is not declared yet — is the
+        same one here. `graph.wanter` is the whole of the test.
+
+        Cost is the decode's, for every form. What a key would cost to
+        replace is what it would take to produce again, which is this decode
+        however cheap the build over it was.
+        """
+        if not self.coserve or len(self._tiers) == 1:
+            return
+        for form_key in self._tiers:
+            if form_key == served:
+                continue
+            if self.pool.has(row, form_key):
+                self.coserve_present += 1
+                continue
+            wanter = self.graph.wanter(row, form_key)
+            if wanter is None:
+                self.coserve_undeclared += 1
+                continue
+            with self._lock:
+                if (row, form_key) in self._claimed:
+                    continue
+                self._claimed.add((row, form_key))
+            try:
+                self.pool.put(row, form_key, self._make(form_key, arr, env),
+                              by=wanter, cost_ms=env.ms)
+            finally:
+                self._unclaim(row, form_key)
+            self.cofetched += 1
 
     # ── the recorder threads ─────────────────────────────────────────────
 
@@ -970,6 +1083,15 @@ class Dispatcher:
                         "recorders": self._recorder_count},
             "served": self.served, "seeks": self.seeks, "steps": self.steps,
             "failures": self.failures, "stale": self.stale,
+            "tiers": sorted(self._tiers), "coserve": self.coserve,
+            #: rows a second form was built from a decode that had already
+            #: happened. Under one tier it is 0 by construction and says
+            #: nothing; under two it is the cross-form half of "decode once,
+            #: serve many".
+            "cofetched": self.cofetched,
+            "coserve_present": self.coserve_present,
+            "coserve_undeclared": self.coserve_undeclared,
+            "tier_ms": round(self.tier_ms, 1),
             #: what `idle_polls` was, in the units the mechanism actually
             #: has: how many times there was nothing to fetch, and how long
             #: that lasted. Neither is a poll.

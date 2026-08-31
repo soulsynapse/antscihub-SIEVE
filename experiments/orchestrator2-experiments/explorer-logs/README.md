@@ -14,6 +14,8 @@ a log is an artifact of a build, and the build moves.
 | the walk paces on arrival, so leg 1 records anything at all | `legs["leg1 hunt"].by_task` is non-empty |
 | a landing drops unreferenced frames, so leg 5 is the cold refill its name says | `topology.drops_unreferenced_at_landing` present |
 | roles stripped of the per-activation `#seq`, so bars are per role | `duration_bars` keys are `dispatch:fill` / `dispatch:gui`, never `dispatch:gui#42` |
+| two tiers, so what is looked at is held at display sampling (ADR-0017) | `topology.display_divisor` present; above 1 the fill's rows are a different key from the step's |
+| the step's progress recorded, so a stalled pass is visible | `step` present, with `computed` against `wanted` |
 
 Both of the first two landed in one commit, so one fingerprint covers them.
 A log missing either is not wrong about everything — its `dispatch_trace`,
@@ -36,6 +38,13 @@ name: `readers`, `recorders`, `request_depth`, `replacement`, and
 `drops_unreferenced_at_landing`. A wall from one reader and a wall from two
 are different facts (`docs/findings/2026.08.30-a-second-cursor-that-overlaps-
 costs-a-scrub-nothing`), and so is a wall that kept its victims.
+
+**A log with `display_divisor` above 1 is not comparable to one without it**,
+and neither its walls nor its decode counts are. Two tiers change what a decode
+produces and what a window weighs: `pool_held_gb` is the number ADR-0017 moves
+and `pool.gb` is not, because that one also counts released rows nothing has
+swept. `request_depth` moved with the same change and is load-bearing under
+two tiers where it was not under one, so a comparison names both.
 
 `--quick` and `--window-seconds` below 20 both produce logs whose scheduling
 behaviour is real and whose walls and memory numbers are not; `topology.quick`

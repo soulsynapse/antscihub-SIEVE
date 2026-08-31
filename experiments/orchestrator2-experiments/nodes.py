@@ -42,6 +42,7 @@ from __future__ import annotations
 
 import threading
 import time
+from collections.abc import Sequence
 from typing import Any, Callable
 
 import numpy as np
@@ -87,15 +88,62 @@ class Sweep:
         self.graph = graph
         self.declared_at = time.perf_counter()
 
-    def declare(self) -> None:
-        span = list(range(0, self.end - self.start))
+    def rows(self) -> tuple[int, ...]:
+        """The window's rows in the order this declaration asks for them.
+
+        The same rotation `declare` spells as offsets, in absolute rows,
+        because that is what a consumer following the fill needs — see
+        `following_order`. Two spellings of one rotation is the duplication
+        that drifts, so there is one and this is it.
+        """
+        span = list(range(self.start, self.end))
         first = self.anchor - self.start
-        order = tuple(span[first:] + span[:first])
+        return tuple(span[first:] + span[:first])
+
+    def declare(self) -> None:
+        order = tuple(row - self.start for row in self.rows())
         self.graph.declare(Need(self.node_id, self.start, order,
                                 self.form_key, Urgency.DEFERRED))
 
     def release(self) -> None:
         self.graph.release(self.node_id)
+
+
+def following_order(rows: Sequence[int], tool: Any,
+                    first: int) -> tuple[int, ...]:
+    """*rows*, reordered so a step never asks ahead of what the fill has passed.
+
+    A `Pass` order for a step that wants to be served by somebody else's
+    decodes. Under one form this buys nothing — the fill's frontier is the
+    step's input whatever order either walks in, because they share a key.
+    Under two (ADR-0017) it is the whole of what makes them one decode:
+    `dispatcher` puts a second form only where it is already declared, so a
+    step reaching a row before the fill does buys its own decode of it.
+
+    A step with reach cannot simply take the rotation. An attention-first
+    order is contiguous everywhere except its own first row: `absdiff` at the
+    anchor reads the row *below* the anchor, which the rotation reaches last.
+    Issued first, that activation waits for the whole window, and a pass that
+    advances on completion never rejoins the frontier it was following.
+
+    So a row that reads something later in the rotation goes to the back,
+    where what it reads is resident by construction. The test is on position
+    in the rotation and not on what has been placed already: deferring
+    whatever is not yet placed cascades from the seam and unrotates the whole
+    order, which is the same as not following at all. For a contiguous reach
+    this moves exactly the seam.
+    """
+    at = {row: index for index, row in enumerate(rows)}
+    order: list[int] = []
+    deferred: list[int] = []
+    for row in rows:
+        if row < first:
+            continue
+        if any(at.get(need, -1) > at[row] for need in tool.needs(row)):
+            deferred.append(row)
+        else:
+            order.append(row)
+    return tuple(order + deferred)
 
 
 class Viewer:
@@ -337,11 +385,20 @@ class Pass:
     """
 
     def __init__(self, node: Any, start: int, end: int,
-                 depth: int = 8) -> None:
+                 depth: int = 8, order: Sequence[int] | None = None) -> None:
         self.node = node
         self.start, self.end = start, end
         self.depth = max(1, depth)
-        self._next = start
+        #: which rows, in which order. Ascending is the default and is what
+        #: a `for` loop in a worker thread was; `order` is for a pass that
+        #: has a reason to agree with somebody else's. A sweep spells
+        #: attention-first by rotating its offsets, and a step whose rows
+        #: arrive from the same decodes wants the same rotation — otherwise
+        #: the two walk the same window in two orders and every row one
+        #: reaches first is a decode the other does not get to share.
+        self._rows = (tuple(order) if order is not None
+                      else tuple(range(start, end)))
+        self._at = 0
         self._stopped = False
         self._lock = threading.Lock()
         self.issued = 0
@@ -361,12 +418,12 @@ class Pass:
 
     def _issue(self) -> bool:
         with self._lock:
-            if self._stopped or self._next >= self.end:
+            if self._stopped or self._at >= len(self._rows):
                 if self._in_flight == 0:
                     self.done.set()
                 return False
-            row = self._next
-            self._next += 1
+            row = self._rows[self._at]
+            self._at += 1
             self.issued += 1
             self._in_flight += 1
         self.node.want(row, then=self.advanced)
@@ -377,7 +434,7 @@ class Pass:
         with self._lock:
             self._in_flight -= 1
             finished = (self._in_flight == 0
-                        and (self._stopped or self._next >= self.end))
+                        and (self._stopped or self._at >= len(self._rows)))
         if finished:
             self.done.set()
             return

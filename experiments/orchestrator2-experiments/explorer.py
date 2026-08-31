@@ -38,6 +38,11 @@ Run:
     uv run --group tools --group experiments python experiments/orchestrator2-experiments/explorer.py
     ... --walk         the five legs, then write the log and exit
     ... --readers N    cursors. 1 is V1's shape; above 1 the bands partition
+    ... --live-playhead
+                       leave the transport running through every leg, so each
+                       window fills against a moving playhead. The A/B for
+                       what an interactive consumer costs a fill, and the
+                       condition a reader-count comparison has to be run in
     ... --window-seconds N
                        shrink the window for a fast validation run. Scheduling
                        is scale-free; the memory numbers are not, and the log
@@ -118,6 +123,14 @@ WALK = "--walk" in sys.argv
 #: what V1 did, and leg-for-leg comparability is what this explorer is for;
 #: `04-victim-cache.py` is where the choice was measured.
 KEEP_VICTIMS = "--keep-victims" in sys.argv
+#: leave the loop timer running through every leg, so each window fills
+#: against a moving playhead instead of an idle one. V1's flag of the same
+#: name and the same purpose: it is the A/B for what an interactive consumer
+#: costs a fill, and without it the walk scrubs and *then* waits for
+#: coverage, so the hand is idle for exactly the stretch being timed. A
+#: reader-count comparison run without this measures nothing, because there
+#: is nothing for the second cursor to overlap with.
+LIVE_PLAYHEAD = "--live-playhead" in sys.argv
 SMOKE = "--smoke" in sys.argv
 QUICK = "--quick" in sys.argv
 
@@ -418,6 +431,14 @@ class Explorer(QMainWindow):
         self.step_pass = Pass(self.step, start + self.active_tool.reach, end,
                               depth=DEPTH)
         self.step_pass.run()
+        #: the walk scripts the playhead; letting `_land_at` start the loop
+        #: underneath every leg puts an unscripted third consumer in the
+        #: pressure queue. V1 measured that swinging one leg from 7 s to 33 s
+        #: between two runs of an identical script, so it belongs in a leg
+        #: that asks for it and not beneath all of them.
+        if LIVE_PLAYHEAD:
+            self.play_btn.setChecked(True)
+        self._drive()
         self.hud.setText(f"window @{start} ({end - start} frames)")
 
     def _check_covered(self) -> None:
@@ -623,6 +644,7 @@ class Explorer(QMainWindow):
                 "request_depth": DEPTH,
                 "replacement": self.pool.policy.name,
                 "drops_unreferenced_at_landing": not KEEP_VICTIMS,
+                "live_playhead": LIVE_PLAYHEAD,
                 "crop": CROP_RECT,
                 "form": self.form_key,
                 "total_rows": self.total,

@@ -223,12 +223,12 @@ class Pool:
             by: str = "?", cost_ms: float | None = None) -> None:
         """Something lands under this key. What it is, is not asked.
 
-        `cost_ms` is what producing it cost, and it is the numerator of the
-        replacement policy's value. Whoever produced it has just timed it —
+        `cost_ms` is what producing it cost, and it is an input some
+        replacement policies rank on. Whoever produced it has just timed it —
         the fetch thread closes an `Envelope` around every decode — so it is
-        passed rather than guessed. A caller that does not know gets
-        `DEFAULT_COST_MS`, which ranks it below anything measured as
-        expensive and above anything measured as cheap.
+        passed rather than guessed, and `None` leaves the default to the
+        policy, which is the only thing placed to say what an unmeasured key
+        is worth against the ones it ranks.
         """
         if not self._store((row, form_key), payload, by, cost_ms):
             return
@@ -407,12 +407,6 @@ class Pool:
             self._counted.clear()
             self._dropped.clear()
             self._bytes = 0
-
-
-#: what a put is billed when its producer did not say. Between a step's
-#: arithmetic and a decode, so an unmeasured key outranks anything measured as
-#: trivial and yields to anything measured as expensive.
-DEFAULT_COST_MS = 1.0
 
 
 def _nbytes(frame: Any) -> int:

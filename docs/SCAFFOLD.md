@@ -59,6 +59,10 @@
     - 📄 `graph.py` — The declaration graph: what every consumer of frames says it needs.
     - 📄 `pool.py` — The graph-managed frame pool: hold, reserve, release, evict, and say who shared.
   - 📁 `orchestrator2-experiments/`
+    - 📁 `explorer-logs/`
+      - 📄 `orchestrator2-20260831T001554Z.json`
+      - 📄 `orchestrator2-20260831T001621Z.json`
+      - 📄 `orchestrator2-20260831T001728Z.json`
     - 📁 `results/` (16 files)
     - 📄 `01-reentry.py` — Does re-entry beat polling, on a window fill with one step riding along?
     - 📄 `02-requestable.py` — Does routing a chained field through the dispatcher cost more than holding it in a dict?

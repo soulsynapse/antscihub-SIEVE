@@ -113,6 +113,11 @@ POOL_BUDGET = 12 << 30
 NEAR_RADIUS = 12
 EVENT_CAP = 20_000
 WALK = "--walk" in sys.argv
+#: keep unpinned frames until the byte ceiling forces a choice, instead of
+#: discarding them at every landing. Off by default because discarding is
+#: what V1 did, and leg-for-leg comparability is what this explorer is for;
+#: `04-victim-cache.py` is where the choice was measured.
+KEEP_VICTIMS = "--keep-victims" in sys.argv
 SMOKE = "--smoke" in sys.argv
 QUICK = "--quick" in sys.argv
 
@@ -391,6 +396,19 @@ class Explorer(QMainWindow):
         #: unheld and there is no order to get wrong.
         self.sweep = Sweep(start, end, row, self.form_key, self.graph)
         self.sweep.declare()
+        if not KEEP_VICTIMS:
+            #: **Declared before dropping, and that order is load-bearing.**
+            #: The new window's overlap with the old is re-held by the
+            #: declaration above, so dropping after it keeps the overlap and
+            #: drops only what nothing wants. V1 measured the other order at
+            #: 72 decodes where 36 were already in RAM.
+            #:
+            #: Dropping at all is V1's behaviour, kept so leg 5 is the cold
+            #: refill its name says. `--keep-victims` lets the byte ceiling
+            #: decide instead, which is the arrangement `04-victim-cache.py`
+            #: measured — and which it found pays only when what survives is
+            #: contiguous.
+            self.pool.drop_unreferenced()
         self.graph.clear_timings()
         self._landed_at = time.perf_counter()
         self._covered_wall = None
@@ -476,6 +494,25 @@ class Explorer(QMainWindow):
 
     # ── the walk ─────────────────────────────────────────────────────────
 
+    def _wait_shown(self, row: int, timeout_s: float = 1.5) -> float:
+        """Let Qt run until *row* is on screen, or give up. Returns the wait.
+
+        This is the walk's hand, not the GUI's thread. V1 spelled the same
+        pacing as `request(..., exact=True)`, which blocked *inside* the
+        serve; here the serve has already returned and what waits is the
+        script, which is a person looking at a frame before jumping again.
+        Without it a hunt supersedes itself before any seek can land and the
+        leg records nothing at all — measured, on the first walk this
+        explorer ran.
+        """
+        started = time.perf_counter()
+        while time.perf_counter() - started < timeout_s:
+            QApplication.processEvents()
+            if self.pos == row:
+                break
+            time.sleep(0.005)
+        return (time.perf_counter() - started) * 1000.0
+
     def _wait(self, seconds: float) -> None:
         """Let Qt run. **Not a poll for a frame** — nothing here is waiting on
         the dispatcher; the walk is pacing a person's hand."""
@@ -519,6 +556,7 @@ class Explorer(QMainWindow):
             self._leg = "leg1 hunt"
             for row in [rng.randrange(self.total) for _ in range(n(12))]:
                 self.want(row, "hunt")
+                self._wait_shown(row)
                 self._wait(0.05)
 
             a = self.total // 3
@@ -553,7 +591,9 @@ class Explorer(QMainWindow):
             self._scrub(n(40), 10, pace)
             self._wait_covered()
             for _ in range(n(25)):
-                self.want(rng.randrange(*self.active), "hop")
+                row = rng.randrange(*self.active)
+                self.want(row, "hop")
+                self._wait_shown(row)
                 self._wait(0.02)
 
             self._leg = None
@@ -582,6 +622,7 @@ class Explorer(QMainWindow):
                 "recorders": 2,
                 "request_depth": DEPTH,
                 "replacement": self.pool.policy.name,
+                "drops_unreferenced_at_landing": not KEEP_VICTIMS,
                 "crop": CROP_RECT,
                 "form": self.form_key,
                 "total_rows": self.total,

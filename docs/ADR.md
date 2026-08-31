@@ -22,9 +22,8 @@ its group leaves this index while keeping its number and its file.
   - 📄 [Knowing what a step costs is solved with FFTW's measure-and-wisdom planner](adr/ADR-0007-what-a-step-costs-is-solved-with-fftws-measure-and-wisdom.md) — What cost class a step falls into is a property of that step paired with the input path feeding it, measured where it runs and cached like any other machine-dependent probe, never declared by the step itself. A slower machine therefore falls to a lower class and degrades in a way somebody chose, rather than chasing a figure set on different hardware.
   - 📄 [Cost is a fact, waste is a bug](adr/ADR-0008-cost-is-a-fact-waste-is-a-bug.md) — Instrumentation exists to find waste — work whose output is discarded or duplicated, and elapsed time that bought nothing — not to hold cost under a target. Cost is reported because it decides what a machine can offer; it is never a list of things to fix. Waste is a defect, is counted, and its target is zero.
   - 📄 [SIEVE is not its tools](adr/ADR-0009-sieve-is-not-its-tools.md) — SIEVE is substrate: it gets frames in a named form, schedules work over them, shows what was produced, and routes an interaction to whatever asked for one — without naming any tool. A tool does its work entirely through what SIEVE provides; one that has to reach past the contract has found a defect in the contract, not a private door. That list can be completed; the set of things an ethologist might want to measure cannot, and the boundary is what keeps the two from being one codebase with no finished state.
-  - 📄 [Reusing an answer after its definition changed is solved with Luigi's version parameter](adr/ADR-0010-reusing-an-answer-is-solved-with-luigis-version-parameter.md) — A durable key folds, beside the parameters the answer depends on, a version saying which definition of the step those parameters were fed to — declared like the rest, folded unconditionally, and bumped by the author when the code's answer changes, never derived from the code. A third-party solver an answer depends on belongs in `params`, not in the version, because a version can only honestly cover what its author can see change.
 
-*13 settled.*
+*12 settled.*
 
 ## Open
 
@@ -36,5 +35,7 @@ wins. Read as a brief for the experiment, never as a decision.
   - 📄 [A row that cannot be decoded is solved by TBD](adr/ADR-0013-an-undecodable-row-is-solved-by-tbd.md) — A row the decoder cannot produce has to reach the consumer waiting on it as something other than a value, and nothing here has earned the shape of that yet.
   - 📄 [A declaration that never runs is solved by TBD](adr/ADR-0015-a-declaration-that-never-runs-is-solved-by-tbd.md) — Ranking by urgency band bounds nothing about how long a lower band waits, and what makes the wait finite has not been decided.
   - 📄 [A derived value surviving a parameter change is solved by TBD](adr/ADR-0016-a-derived-value-surviving-a-parameter-change-is-solved-by-tbd.md) — After a parameter change every held frame is still correct and every value computed under the old parameters is wrong; ADR-0010 closes that for values by naming a different series, and what closes it for a held field is open.
+- 📁 `Substrate`
+  - 📄 [Reusing an answer after its definition changed is solved by TBD](adr/ADR-0010-reusing-an-answer-is-solved-by-tbd.md) — Two runs either side of an edit to a `field` are different answers under one name, and nothing in the key is in a position to notice — the same silent-reuse defect ADR-0005 records, arrived at from the code side rather than the data side. What closes it has candidates and no measurement.
 
-*3 open.*
+*4 open.*

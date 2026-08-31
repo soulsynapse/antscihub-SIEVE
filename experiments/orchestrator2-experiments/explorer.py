@@ -226,6 +226,9 @@ class Explorer(QMainWindow):
         self.pos = 0
         self._transport = 0
         self._scrubbing = False
+        self._last_task = ""
+        self.near_serves = 0
+        self._paint_ms: list[float] = []
         self._recent: deque[float] = deque(maxlen=30)
         self._last_image: np.ndarray | None = None
         self._landed_at = self.t0
@@ -248,6 +251,15 @@ class Explorer(QMainWindow):
         self._status_timer = QTimer(self)
         self._status_timer.timeout.connect(self._refresh_status)
         self._status_timer.start(250)
+        #: **A hand-driven session used to leave nothing behind.** `_save_log`
+        #: ran only from the walk and from `--smoke`, so closing a window you
+        #: had been driving wrote no log at all — and the rule for this folder
+        #: is that the log is ground truth for how it felt. A felt report with
+        #: no log is unfalsifiable, which is the state the first one arrived
+        #: in. Saved on a timer and again on close.
+        self._autosave = QTimer(self)
+        self._autosave.timeout.connect(lambda: self._save_log(quiet=True))
+        self._autosave.start(10_000)
 
     # ── ui ───────────────────────────────────────────────────────────────
 
@@ -294,8 +306,11 @@ class Explorer(QMainWindow):
         self.slider = JumpSlider(Qt.Orientation.Horizontal)
         self.slider.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.slider.setMaximum(self.total - 1)
+        #: `sliderMoved` only. `valueChanged` fires for the same drag *and*
+        #: for a keyboard step and a programmatic set, so connecting both
+        #: doubled every drag event; `_on_frame` already blocks signals when
+        #: it moves the handle to follow the frame that landed.
         self.slider.sliderMoved.connect(lambda i: self.want(i, "scrub"))
-        self.slider.valueChanged.connect(lambda i: self.want(i, "scrub"))
         self.slider.sliderPressed.connect(self._scrub_began)
         self.slider.sliderReleased.connect(self._released)
 
@@ -316,23 +331,72 @@ class Explorer(QMainWindow):
     # ── the GUI as a node ────────────────────────────────────────────────
 
     def want(self, row: int, task: str = "step") -> None:
-        """Declare INTERACTIVE and return. **This never waits.**
+        """Declare INTERACTIVE, show something now, and return.
 
-        V1's `_serve` sat here for up to 1.5 s, sleeping 2 ms and pumping
-        events, which is the interactive thread polling for a frame the fetch
-        thread already knew it had. What replaces it is the second half of
-        the activation: the row lands, a recorder is re-entered, and the
-        frame crosses back by signal.
+        **This never waits.** V1's `_serve` sat here for up to 1.5 s, sleeping
+        2 ms and pumping events, which is the interactive thread polling for a
+        frame the fetch thread already knew it had. What replaces the waiting
+        is the second half of the activation: the row lands, a recorder is
+        re-entered, and the frame crosses back by signal.
+
+        **What replaces the waiting is not nothing, and the first version of
+        this made that mistake.** Not waiting is only half of what V1 did.
+        The other half was `NEAR_RADIUS`: while dragging, serve the nearest
+        held frame rather than the exact one, so the picture tracks the
+        cursor. Without it a drag shows *nothing at all* — every tick
+        supersedes the one before, a seek is some hundreds of milliseconds
+        against drag events every few, so no request survives long enough to
+        land and the image sits frozen until the hand stops. That reads
+        exactly as lag, and it is a missing feature rather than a slow one.
+        The stand-in is a dict lookup against what is already resident: no
+        decode, no declaration, nothing scheduled.
         """
         row = max(0, min(self.total - 1, row))
+        #: coalesce. `sliderMoved` and `valueChanged` both fire on a drag, so
+        #: this used to issue two activations per pixel, each taking the
+        #: graph's lock and the dispatcher's and waking the fetch thread. V1
+        #: coalesced with a one-slot queue and a `_busy` flag; asking twice
+        #: for the row already asked for is the same request.
+        if row == self._transport and task == self._last_task:
+            return
         self._transport = row
+        self._last_task = task
         label = self._label_for(row)
         if label not in self.runs:
             self.runs[label] = RunLog(label, self.t0)
         self.run = self.runs[label]
+
+        #: gated on residency, not on whether a mouse button is down. If the
+        #: exact row is on hand the activation paints it within a
+        #: millisecond and a stand-in would be a wasted paint; if it is not,
+        #: the stand-in is the only thing that will appear for as long as a
+        #: seek takes. Gating on `_scrubbing` instead — the first version —
+        #: made this dead code in the walk, which sets no mouse state, so the
+        #: one path a felt report is about was the one path never exercised.
+        if not self.pool.has(row, self.form_key):
+            self._show_near(row)
         self.dispatcher.get_frame("gui", row, self._activation_for(task),
                                   Urgency.INTERACTIVE, self.form_key,
                                   supersedes=True)
+
+    def _show_near(self, row: int) -> None:
+        """Paint the closest resident frame within `NEAR_RADIUS`, if any.
+
+        A stand-in while the exact one is fetched, and never a substitute for
+        it: the activation is still issued and still replaces this when it
+        lands. Counted under its own route so a log can say how much of a
+        drag the person actually saw approximately — V1 recorded 83 of these
+        a run, which is how much of a scrub is carried by frames nobody asked
+        for.
+        """
+        near = self.pool.nearest(row, self.form_key, NEAR_RADIUS)
+        if near is None:
+            return
+        at, frame = near
+        self._show(frame)
+        self.near_serves += 1
+        if self.run is not None:
+            self.run.log(self._last_task, row, f"near d{row - at}", 0.0)
 
     def _activation_for(self, task: str):
         """One activation per request, closing over which task asked.
@@ -357,8 +421,14 @@ class Explorer(QMainWindow):
 
     def _on_frame(self, row: int, frame: object, wait_ms: float,
                   task: str) -> None:
+        painted = time.perf_counter()
         self.pos = row
         self._show(frame)
+        #: what the Qt thread itself spends. Measured because the first
+        #: guess at this session's lag was the paint path, and a bench put
+        #: the downscale at ~2 ms — so it was not that, and the next report
+        #: should not have to guess either.
+        self._paint_ms.append((time.perf_counter() - painted) * 1000.0)
         self._recent.append(wait_ms)
         if self.run is not None:
             self.run.log(task, row, "activated", wait_ms)
@@ -629,8 +699,9 @@ class Explorer(QMainWindow):
                 #: window somebody has to remember to close.
                 QTimer.singleShot(200, self.close)
 
-    def _save_log(self) -> None:
+    def _save_log(self, quiet: bool = False) -> None:
         stats = self.dispatcher.stats()
+        painted = sorted(self._paint_ms)
         payload = {
             "when": datetime.now(timezone.utc).isoformat(),
             "footage": BIG.name,
@@ -653,6 +724,14 @@ class Explorer(QMainWindow):
             },
             "dispatcher": stats,
             "pool": self.pool.stats(),
+            "gui": {
+                "near_serves": self.near_serves,
+                "painted": len(painted),
+                "paint_ms_p50": (round(painted[len(painted) // 2], 3)
+                                 if painted else None),
+                "paint_ms_p95": (round(painted[int(len(painted) * 0.95)], 3)
+                                 if painted else None),
+            },
             #: **Accurate here, unlike in V1's logs.** The derived-eviction
             #: finding documents `graph_holds` reading 1 in a V1 log because
             #: `closeEvent` released the sweep before saving; this saves
@@ -667,10 +746,17 @@ class Explorer(QMainWindow):
         }
         self.log_path.write_text(json.dumps(payload, indent=1),
                                  encoding="utf-8")
-        self.hud.setText(f"[walk] done — log at {self.log_path.name}")
-        print(f"[walk] wrote {self.log_path}")
+        if not quiet:
+            self.hud.setText(f"log at {self.log_path.name}")
+            print(f"[log] wrote {self.log_path}")
 
     def closeEvent(self, event) -> None:
+        #: saved *before* anything is torn down, so the log describes the
+        #: session that ran rather than its wreckage. V1's log has
+        #: `graph_holds` reading 1 for the opposite order, which the
+        #: derived-eviction finding documents as a gotcha rather than a
+        #: measurement.
+        self._save_log()
         if self.step_pass is not None:
             self.step_pass.stop()
         self.dispatcher.stop()

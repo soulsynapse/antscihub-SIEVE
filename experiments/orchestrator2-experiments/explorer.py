@@ -37,7 +37,10 @@ crash under a resize, which is the worst failure mode available.
 Run:
     uv run --group tools --group experiments python experiments/orchestrator2-experiments/explorer.py
     ... --walk         the five legs, then write the log and exit
-    ... --readers N    cursors. 1 is V1's shape; above 1 the bands partition
+    ... --readers N    cursors, default 2. `--readers 1` is V1's shape and
+                       what a leg-for-leg comparison against V1 is run at;
+                       above one the bands partition and the sweep's cursor
+                       is never taken by a person
     ... --live-playhead
                        leave the transport running through every leg, so each
                        window fills against a moving playhead. The A/B for
@@ -110,7 +113,17 @@ def _argf(flag: str, default: float) -> float:
 
 
 WINDOW_SECONDS = _argf("--window-seconds", 20.0)
-READERS = int(_argf("--readers", 1))
+#: **Two, because one is the arrangement the measurements refuse.** This was
+#: 1 for comparability with V1's numbers, which is the wrong thing to optimise
+#: on the tool whose entire job is how the loop feels. A hand-driven session
+#: at one reader spent 57% of its wall in seek latency — 21 fill seeks against
+#: 15 the GUI caused, which is the seek-pair signature of a cursor being taken
+#: and rejoined — and half the GUI's seeks landed after the playhead had moved
+#: on. The same walk at two readers costs a live playhead nothing
+#: (`docs/findings/2026.08.30-v2-reproduces-the-walk-and-a-second-cursor-makes-
+#: a-live-playhead-free`). `--readers 1` is still how the V1 comparison is run,
+#: and every log says which it was.
+READERS = int(_argf("--readers", 2))
 DEPTH = int(_argf("--depth", 1))
 GOP = 24
 CROP_RECT = [2144, 982, 1024, 1024]

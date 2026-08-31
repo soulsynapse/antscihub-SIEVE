@@ -413,6 +413,10 @@ class Dispatcher:
                  fetcher_factory: Callable[[], Any],
                  recorders: int = 2, readers: int = 1,
                  deadline_s: float = DEADLINE_S, t0: float = 0.0) -> None:
+        #: `readers` defaults to 1 here and to 2 in the explorer, which is
+        #: deliberate rather than an oversight: a headless experiment is
+        #: comparing against numbers taken at one reader, and a driven session
+        #: is trying to feel right. Both say which they used.
         self.graph = graph
         self.pool = pool
         self.form_key = form_key
@@ -598,6 +602,7 @@ class Dispatcher:
                     #: path never runs and an ORDERED node would block on a
                     #: row that is never going to run.
                     self._disarm(previous)
+                    self._unwait(previous)
             self._current[ctx.node_id] = ctx
             missing = [key for key in ctx.asked if not self.pool.has(*key)]
             ctx.outstanding = len(missing)
@@ -621,6 +626,28 @@ class Dispatcher:
                 ctx.cancelled = True
                 self.superseded += 1
                 self._disarm(ctx)
+                self._unwait(ctx)
+
+    def _unwait(self, ctx: Request) -> None:
+        """Drop a cancelled activation from the keys it was waiting on.
+
+        Called under `_lock`. Without it a cancelled activation stays
+        registered against every row it asked for until that row happens to
+        land — and a row a scrubbing person passed over may never land at
+        all. A driven session left 301 of these behind in twenty seconds,
+        which is a leak that grows with how much somebody scrubs; `_landed`
+        would still skip them, so it costs memory rather than correctness,
+        and `pending_waits` is what shows it.
+        """
+        for key in ctx.asked:
+            waiters = self._waiting.get(key)
+            if not waiters:
+                continue
+            remaining = [other for other in waiters if other is not ctx]
+            if remaining:
+                self._waiting[key] = remaining
+            else:
+                del self._waiting[key]
 
     # ── landings ─────────────────────────────────────────────────────────
 

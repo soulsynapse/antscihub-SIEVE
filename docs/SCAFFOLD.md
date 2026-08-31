@@ -59,7 +59,7 @@
     - 📄 `graph.py` — The declaration graph: what every consumer of frames says it needs.
     - 📄 `pool.py` — The graph-managed frame pool: hold, reserve, release, evict, and say who shared.
   - 📁 `orchestrator2-experiments/`
-    - 📁 `explorer-logs/` (10 files)
+    - 📁 `explorer-logs/` (12 files)
     - 📁 `results/` (16 files)
     - 📄 `01-reentry.py` — Does re-entry beat polling, on a window fill with one step riding along?
     - 📄 `02-requestable.py` — Does routing a chained field through the dispatcher cost more than holding it in a dict?
@@ -67,6 +67,7 @@
     - 📄 `04-victim-cache.py` — Does a victim cache beat dropping everything unreferenced, and which rule?
     - 📄 `05-starvation.py` — Does ranking for locality starve the node it ranks last, and does a deadline fix it?
     - 📄 `06-two-readers.py` — Does a second cursor let the fill and the person overlap, or only stop them fighting?
+    - 📄 `07-playback-divergence.py` — Does the fill fall progressively further behind a playhead, and does a second cursor break the loop?
     - 📄 `README.md`
     - 📄 `dispatcher.py` — The dispatcher, re-entrant: it calls consumers back instead of being polled.
     - 📄 `explorer.py` — Feel the activation model: nothing polls, and the GUI is a node like any other.

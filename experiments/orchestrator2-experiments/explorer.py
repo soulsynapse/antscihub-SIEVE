@@ -566,7 +566,19 @@ class Explorer(QMainWindow):
     # ── transport ────────────────────────────────────────────────────────
 
     def _scrub_began(self) -> None:
+        """The hand went down, which is already a request.
+
+        `JumpSlider` moves the handle to where the click landed before
+        emitting this, and `sliderMoved` only fires once the hand *travels* —
+        so a click that jumps somewhere and releases without moving asked for
+        nothing until the release, and the release asks for the exact row.
+        That put a full group-of-pictures replay between a click and any
+        change on screen, with the previous frame held throughout, which is
+        the one interaction still reported as laggy after the snap landed.
+        Asking here makes a click cost a keyframe like a drag does.
+        """
         self._scrubbing = True
+        self.want(self.slider.value(), "scrub")
         self._drive()
 
     def _released(self) -> None:

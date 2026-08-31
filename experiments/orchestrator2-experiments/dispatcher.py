@@ -617,7 +617,10 @@ class Dispatcher:
         #: activation's rows are dropped here and not by the new declaration:
         #: they are two holders now, so nothing releases them implicitly.
         if superseded is not None:
-            self.graph.release(superseded.holder)
+            #: `moved=True`: this release *is* the consumer changing its mind,
+            #: which is the one thing a holder that declares once can say
+            #: about why its rows went.
+            self.graph.release(superseded.holder, moved=True)
 
     def cancel(self, ctx: Request) -> None:
         """This activation is no longer wanted. It will not be re-entered."""
@@ -928,7 +931,7 @@ class Dispatcher:
         when the next activation supersedes it.
         """
         if ctx.released or ctx.cancelled:
-            self.graph.release(ctx.holder)
+            self.graph.release(ctx.holder, moved=ctx.cancelled)
         if ctx.then is not None:
             ctx.then()
 

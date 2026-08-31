@@ -158,7 +158,8 @@ class Pool:
         #: was. `stale` names work done for someone who left; `forced`
         #: names work the budget undid; this names work undone by dropping
         #: something that was still owed.
-        self._dropped: dict[tuple[int, str], tuple[float, str, int]] = {}
+        self._dropped: dict[tuple[int, str],
+                            tuple[float, str, int, bool]] = {}
         self.refetched = 0          #: decoded again after being dropped
         self.predicted = 0          #: ...under a plan that never changed
         self.refetch_gaps_ms: list[float] = []
@@ -246,16 +247,19 @@ class Pool:
                 return False
             dropped = self._dropped.pop(key, None)
             if dropped is not None:
-                when, releaser, generation = dropped
+                when, releaser, generation, moved = dropped
                 self.refetched += 1
                 self.refetch_gaps_ms.append(
                     (time.perf_counter() - when) * 1000.0)
                 #: ADR-0006: a re-fetch the declaration named is a defect;
-                #: one it could not have predicted is only a fetch. The
-                #: plan not having changed since the drop is what "named
-                #: it" means — the consumer still wants what it wanted,
-                #: and the frame went anyway.
-                if not self.graph.plan_changed_since(releaser, generation):
+                #: one it could not have predicted is only a fetch. Two ways
+                #: a consumer can have moved on — it restated its plan, which
+                #: the generation shows, or the release *was* the move, which
+                #: only `moved` shows. A holder that declares once and is
+                #: superseded has no generation to compare, so without the
+                #: second test every such re-fetch reads as the defect.
+                if not (moved or self.graph.plan_changed_since(
+                        releaser, generation)):
                     self.predicted += 1
             self._frames[key] = frame
             self._by[key] = by
@@ -276,7 +280,7 @@ class Pool:
         self.policy.forget(key)
         who = self.graph.dropped_under(key)
         if who is not None:
-            self._dropped[key] = (now, who[0], who[1])
+            self._dropped[key] = (now, who[0], who[1], who[2])
         self.evicted += 1
 
     def _sweep_locked(self, to_budget: bool = True) -> int:

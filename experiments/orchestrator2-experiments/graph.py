@@ -190,7 +190,18 @@ class Graph:
         #: dropped and fetched again is a defect if the plan never changed
         #: in between, and only a fetch if it did — ADR-0006's split, which
         #: needs a way to tell "the declaration named this" from "somebody
-        #: jumped". The generation is that way.
+        #: jumped". The generation is that way *for a node that re-declares*.
+        #:
+        #: **A holder that declares once cannot use it**, and that is why
+        #: `release` takes `moved`. Since holding became per-activation, a
+        #: consumer that supersedes itself mints a new holder rather than
+        #: restating an old one, so the old holder's generation is frozen at
+        #: the moment it was created and `plan_changed_since` can only ever
+        #: answer "unchanged". Every re-fetch after a supersession then reads
+        #: as predicted — the defect ADR-0008 targets at zero, reported by a
+        #: counter structurally unable to report anything else. Measured at 10
+        #: of 10 in a driven session once kf-snap made the GUI the dominant
+        #: releaser.
         self._gen: dict[str, int] = {}
         #: when each node's current declaration arrived. Kept here rather
         #: than on `Need`, so `Need` stays what V1 measured; a scheduler that
@@ -241,7 +252,8 @@ class Graph:
                     if not ref.live:
                         del self._refs[key]
                         self._last_release[key] = (
-                            need.node_id, self._gen.get(need.node_id, 0))
+                            need.node_id, self._gen.get(need.node_id, 0),
+                            False)
 
             added = new_set - old_set
             for key in new_set:
@@ -267,8 +279,16 @@ class Graph:
                  for node_id, need in self._needs.items()),
                 key=lambda pair: pair[0])
 
-    def release(self, node_id: str) -> None:
-        """A node is done — release all its holds."""
+    def release(self, node_id: str, moved: bool = False) -> None:
+        """A node is done — release all its holds.
+
+        `moved` says the release is itself the consumer changing its mind — a
+        superseded activation, a window re-landed — rather than a consumer
+        finishing with what it asked for. A re-fetch after a move is a jump
+        nothing could have predicted; after a completion it is the defect.
+        A holder that only ever declares once has no generation to compare, so
+        this is the only thing that can tell the two apart for it.
+        """
         with self._lock:
             old = self._needs.pop(node_id, None)
             self._declared_at.pop(node_id, None)
@@ -282,7 +302,7 @@ class Graph:
                     if not ref.live:
                         del self._refs[key]
                         self._last_release[key] = (
-                            node_id, self._gen.get(node_id, 0))
+                            node_id, self._gen.get(node_id, 0), moved)
         self._announce()
 
     def release_row(self, node_id: str, row: int, form_key: str) -> bool:
@@ -309,7 +329,8 @@ class Graph:
             ref.holders.discard(node_id)
             if not ref.live:
                 del self._refs[key]
-                self._last_release[key] = (node_id, self._gen.get(node_id, 0))
+                self._last_release[key] = (node_id,
+                                           self._gen.get(node_id, 0), False)
                 return True
             return False
 
@@ -329,9 +350,10 @@ class Graph:
                 return False
             return row in need.needed_rows()
 
-    def dropped_under(self, key: tuple[int, str]) -> tuple[str, int] | None:
-        """Who last stopped needing this, and at which generation of their
-        plan. `None` if nothing ever held it."""
+    def dropped_under(self,
+                      key: tuple[int, str]) -> tuple[str, int, bool] | None:
+        """Who last stopped needing this, at which generation, and whether the
+        release was itself a change of mind. `None` if nothing ever held it."""
         with self._lock:
             return self._last_release.get(key)
 

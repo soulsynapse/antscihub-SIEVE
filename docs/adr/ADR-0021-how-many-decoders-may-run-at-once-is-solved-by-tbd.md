@@ -12,9 +12,11 @@ nothing here has settled the shape.
 ## Candidates
 
 The asymmetric pair — one software decoder and one hardware, each with its own
-cursor, software suiting the sweep and hardware the interactive jump. Would have
-to be measured with the two actually overlapping, which nothing has run
-([best combinations](../../experiments/decode-experiments/2026.08.21-best-combinations.md),
+cursor, software suiting the sweep and hardware the interactive jump. Run now
+and ahead on every axis measured, including the sweep's own wall, which leaves
+the count rather than the shape open
+([a hardware interactive reader in place](../findings/2026.08.31-a-hardware-interactive-reader-is-worth-four-times-more-in-place-than-alone.md),
+[best combinations](../../experiments/decode-experiments/2026.08.21-best-combinations.md),
 [the remaining wall](../findings/2026.08.30-the-remaining-wall-is-decode-and-a-reader-that-does-not-overlap.md)).
 
 One reader per urgency band, all software — what

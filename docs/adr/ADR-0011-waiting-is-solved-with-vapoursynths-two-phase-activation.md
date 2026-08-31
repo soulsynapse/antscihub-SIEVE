@@ -12,10 +12,15 @@ is never running at a moment when it would have to wait.
 
 ## Accepted
 
-VapourSynth's two-phase activation — [experiments/orchestrator2-experiments/01-reentry.py](../../experiments/orchestrator2-experiments/01-reentry.py),
-[re-entry removes the poll interval and not the wall](../findings/2026.08.30-re-entry-removes-the-poll-interval-and-not-the-wall.md).
-Corroborated independently by libavfilter's `AVFilter.activate`, which
-reached the same shape under the same constraint.
+VapourSynth's `GetFrame(n, activationReason, frameCtx)` — `arInitial` calls
+`requestFrameFilter` and returns, `arAllFramesReady` re-enters the same call
+with `getFrameFilter` unable to miss. Settled here by
+[experiments/orchestrator2-experiments/01-reentry.py](../../experiments/orchestrator2-experiments/01-reentry.py)
+and [re-entry removes the poll interval and not the wall](../findings/2026.08.30-re-entry-removes-the-poll-interval-and-not-the-wall.md).
+
+Corroborated independently by libavfilter's `AVFilter.activate`
+(`ff_inlink_request_frame`, return `FFERROR_NOT_READY`, re-entered on link
+change), which reached the same shape under the same constraint.
 
 ## Rejected
 

@@ -16,6 +16,14 @@ named because borrowing a solved thing is the point — an ADR that says only
 what this tree does, with no shoulders under it, is either an invention worth
 being suspicious of or a citation somebody did not look for.
 
+**The prior art is a named artifact, never a category.** "The container's
+timestamp" and "a buffer pool's refcount" are descriptions of a family; what
+goes in a title and a citation is the specific thing somebody built, with the
+symbol, paper, or field you could go and open — `AVStream.time_base`,
+`FFTW_MEASURE` and its wisdom file, `arInitial` / `arAllFramesReady`. A family
+name cannot be checked, cannot be read for what else it decided, and hides
+whether the writer found one instance or none.
+
 An unsettled ADR becomes accepted by one edit: the candidate that won moves up,
 the title is rewritten to name it, the filename follows the title. **The
 number never changes**, because ADR-0013 is a permanent address for its

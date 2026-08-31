@@ -11,15 +11,16 @@ what makes the wait finite has not been decided.
 
 ## Candidates
 
-The deadline scheduler's expiry queue (Linux deadline, BFQ) — every
-declaration carries an expiry beside its urgency, and a need past its expiry
-is served next whatever its band. Would have to be measured for what a served
+Linux mq-deadline's `read_expire` / `write_expire` — a second queue in FIFO
+arrival order beside the sorted one, and a request past its expiry is served
+next whatever the elevator wanted; here every declaration would carry an
+expiry beside its urgency. Would have to be measured for what a served
 expiry costs the interactive path, which is the trade the whole pressure
 queue exists to make.
 
-Priority aging (RTOS scheduling, and CFS's vruntime as the fair-share form) —
-a need's effective urgency rises with the time it has waited, so no band is
-absolute and there is no second queue to keep. Would have to be measured for
+CFS's `vruntime` — a task's effective claim rises with how long it has gone
+unserved, so the ordering is one key and there is no second queue to keep;
+here a need's urgency would age rather than being fixed at declaration. Would have to be measured for
 whether the rise can be tuned without becoming the declared rank ADR-0007
 falsified.
 

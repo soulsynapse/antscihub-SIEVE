@@ -12,9 +12,10 @@ yet.
 
 ## Candidates
 
-libavfilter's link status — permanent absence rides the activation path as
-first-class link state, so a consumer is re-entered and told the input will
-never arrive. Would have to be measured for what the extra state costs a
+libavfilter's `ff_inlink_acknowledge_status` — permanent absence rides the
+activation path as first-class link state (`AVERROR_EOF` and the error code
+carried beside the frame queue), so a consumer is re-entered and told the
+input will never arrive. Would have to be measured for what the extra state costs a
 landing, and checked against a node that asked for several rows and lost one.
 
 A typed negative entry in the pool — absence is stored under the key like any

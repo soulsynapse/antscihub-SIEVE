@@ -12,9 +12,10 @@ by naming a different series, and what closes it for a held field is open.
 
 ## Candidates
 
-Salsa's early cutoff — a change marks dependents *potentially* stale, and
-revalidation compares each dependency's actual value before recomputing, so a
-change that leaves an intermediate identical stops propagating there. Would
+Salsa's red-green revalidation with early cutoff — a change marks dependents
+*potentially* stale (red) and revalidation compares each dependency's actual
+value before recomputing, so a query whose inputs all verify equal is reused
+and the propagation stops there. Would
 have to be measured for what the comparison costs against a field, which is
 the term that decides whether it beats recomputing outright.
 

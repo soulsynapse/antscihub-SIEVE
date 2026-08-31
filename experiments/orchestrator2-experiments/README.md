@@ -537,7 +537,9 @@ So **`readers=2` is V2's core shape for anything with a person in it**, and
 was taken at it. An experiment that reports a wall names its reader count.
 
 **Two forms of one instant, and what keeps them one decode (ADR-0017).**
-`09-display-sampling.py`. What is looked at is held at display sampling and
+`09-display-sampling.py` and `docs/findings/2026.08.31-a-display-tier-holds-a-
+window-at-a-sixteenth-and-bills-the-rows-the-step-reached-first`.
+What is looked at is held at display sampling and
 what is recorded at source sampling, which is the ADR as written and which no
 number in this folder before 2026-08-31 was taken under. The pool was already
 keyed for it; what it needed was the negotiation V1 diagnosed as its question
@@ -560,13 +562,15 @@ Two levers, and each is invisible while the other is right:
   the explorer's default moved with it and every log says which it used.
 
 What it buys is what the window weighs, and what it costs is the rows the
-co-serve missed, billed as seeks — two sequential runs at different forms on
-one cursor, which is the shape `a-second-cursor-that-overlaps-costs-a-scrub-
-nothing` already priced for a different pair. The numbers are in
-`results/09-display-sampling-*.json` and in the walk logs that name a
-`display_divisor`; **a reader per tier is the un-built move the seek count
-points at**, and it is the same partition `readers` already performs by
-urgency.
+co-serve missed, billed as mid-GOP seeks — two sequential runs at different
+forms on one cursor, which is the shape `a-second-cursor-that-overlaps-costs-
+a-scrub-nothing` already priced for a different pair. **A reader per tier is
+the un-built move the seek count points at**, and it is the same partition
+`readers` already performs by urgency. The other half of the bill is the
+resampling, which ADR-0017's own prior art does not pay because `lowres`
+reduces inside the decoder; what this tree pays instead, and whether a strided
+sampling should be a form of its own in `tool-experiments/forms.py`, is the
+finding's to state and nobody's to assume.
 
 **The pressure queue needed a deadline.** `05-starvation.py` and the
 do-not-regress list below: ranking for locality starves whoever ranks last,

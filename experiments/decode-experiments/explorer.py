@@ -1190,6 +1190,14 @@ class Explorer(QMainWindow):
 
 
 def main() -> None:
+    #: The approach names carry a downward arrow, and a piped stdout on
+    #: Windows is cp1252, which cannot encode one — so `--smoke` died in a
+    #: UnicodeEncodeError before printing its first row whenever it was run
+    #: anywhere but an interactive console. That is exactly where a smoke
+    #: test runs.
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
     app = QApplication.instance() or QApplication(sys.argv)
     window = Explorer()
     if "--smoke" in sys.argv:

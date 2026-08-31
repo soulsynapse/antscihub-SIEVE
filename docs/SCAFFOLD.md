@@ -31,7 +31,7 @@
     - 📄 `README.md`
     - 📄 `bind.py` — Binding a step to what feeds it: the facts a step is not allowed to declare.
   - 📁 `decode-experiments/`
-    - 📁 `explorer-logs/` (30 files)
+    - 📁 `explorer-logs/` (33 files)
     - 📁 `results/` (11 files)
     - 📄 `01-pyav-vs-opencv.py` — Does the inherited OpenCV sequential-decode corpus survive a binding change?
     - 📄 `02-random-access.py` — Random access: frame-accurate seek against grab-forward, by jump distance.

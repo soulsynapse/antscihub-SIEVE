@@ -1,0 +1,274 @@
+{
+ "tool": "explorer.py",
+ "when": "2026-08-31T01:04:14.637547+00:00",
+ "sieve_rev": "c06f686",
+ "machine": {
+  "platform": "Windows-11-10.0.26200-SP0",
+  "processor": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
+  "logical_cpus": 32,
+  "python": "3.13.5"
+ },
+ "versions": {
+  "av": "18.1.0",
+  "cv2": "5.0.0",
+  "numpy": "2.5.2",
+  "ffmpeg": "ffmpeg version 2025-02-06-git-6da82b4485-full_build-www.gyan.dev Copyright (c) 2000-2025 the FFmpeg developers"
+ },
+ "step_within": 40,
+ "coalesce": true,
+ "kf_snap": false,
+ "runs": [
+  {
+   "label": "GX010047c2_02_17 \u00b7 hybrid-ds-cache",
+   "source": "GX010047c2_02_17_26.MP4",
+   "approach": "hybrid \u2193display + LRU cache",
+   "target_fps": 23.976,
+   "by_task": {
+    "drag": {
+     "n": 3,
+     "min": 5.81,
+     "p50": 28.85,
+     "p95": 157.03,
+     "max": 157.03,
+     "mean": 63.9
+    },
+    "open": {
+     "n": 1,
+     "min": 249.71,
+     "p50": 249.71,
+     "p95": 249.71,
+     "max": 249.71,
+     "mean": 249.71
+    }
+   },
+   "play_achieved_fps": null,
+   "seek_p50_ms": null,
+   "sweeps": [],
+   "events_capped": false,
+   "started": "2026-08-31T01:04:12.511056+00:00",
+   "events": [
+    {
+     "t": 0.2542,
+     "task": "open",
+     "frame": 0,
+     "route": "sw step \u00d71",
+     "ms": 249.711,
+     "disp": 4.404
+    },
+    {
+     "t": 0.2846,
+     "task": "drag",
+     "frame": 5,
+     "route": "sw step \u00d75",
+     "ms": 28.854,
+     "disp": 1.345
+    },
+    {
+     "t": 0.2915,
+     "task": "drag",
+     "frame": 6,
+     "route": "sw step \u00d71",
+     "ms": 5.809,
+     "disp": 0.98
+    },
+    {
+     "t": 0.4496,
+     "task": "drag",
+     "frame": 30,
+     "route": "sw step \u00d724",
+     "ms": 157.028,
+     "disp": 1.037
+    }
+   ]
+  },
+  {
+   "label": "GX010047c2_02_17 \u00b7 cuda-ds-cache",
+   "source": "GX010047c2_02_17_26.MP4",
+   "approach": "cuda \u2193display + LRU cache",
+   "target_fps": 23.976,
+   "by_task": {
+    "drag": {
+     "n": 3,
+     "min": 5.33,
+     "p50": 23.37,
+     "p95": 113.46,
+     "max": 113.46,
+     "mean": 47.38
+    },
+    "open": {
+     "n": 1,
+     "min": 168.49,
+     "p50": 168.49,
+     "p95": 168.49,
+     "max": 168.49,
+     "mean": 168.49
+    }
+   },
+   "play_achieved_fps": null,
+   "seek_p50_ms": null,
+   "sweeps": [],
+   "events_capped": false,
+   "started": "2026-08-31T01:04:13.123055+00:00",
+   "events": [
+    {
+     "t": 0.1694,
+     "task": "open",
+     "frame": 0,
+     "route": "step \u00d71",
+     "ms": 168.493,
+     "disp": 0.833
+    },
+    {
+     "t": 0.1937,
+     "task": "drag",
+     "frame": 5,
+     "route": "step \u00d75",
+     "ms": 23.371,
+     "disp": 0.886
+    },
+    {
+     "t": 0.1999,
+     "task": "drag",
+     "frame": 6,
+     "route": "step \u00d71",
+     "ms": 5.328,
+     "disp": 0.842
+    },
+    {
+     "t": 0.3142,
+     "task": "drag",
+     "frame": 30,
+     "route": "step \u00d724",
+     "ms": 113.456,
+     "disp": 0.799
+    }
+   ]
+  },
+  {
+   "label": "GX010047c2_02_17 \u00b7 bgr-ds-cache",
+   "source": "GX010047c2_02_17_26.MP4",
+   "approach": "bgr24 \u2193display + LRU cache",
+   "target_fps": 23.976,
+   "by_task": {
+    "drag": {
+     "n": 3,
+     "min": 3.34,
+     "p50": 16.98,
+     "p95": 160.97,
+     "max": 160.97,
+     "mean": 60.43
+    },
+    "open": {
+     "n": 1,
+     "min": 259.85,
+     "p50": 259.85,
+     "p95": 259.85,
+     "max": 259.85,
+     "mean": 259.85
+    }
+   },
+   "play_achieved_fps": null,
+   "seek_p50_ms": null,
+   "sweeps": [],
+   "events_capped": false,
+   "started": "2026-08-31T01:04:13.489675+00:00",
+   "events": [
+    {
+     "t": 0.2618,
+     "task": "open",
+     "frame": 0,
+     "route": "step \u00d71",
+     "ms": 259.847,
+     "disp": 1.957
+    },
+    {
+     "t": 0.281,
+     "task": "drag",
+     "frame": 5,
+     "route": "step \u00d75",
+     "ms": 16.977,
+     "disp": 2.115
+    },
+    {
+     "t": 0.2866,
+     "task": "drag",
+     "frame": 6,
+     "route": "step \u00d71",
+     "ms": 3.338,
+     "disp": 2.157
+    },
+    {
+     "t": 0.45,
+     "task": "drag",
+     "frame": 30,
+     "route": "step \u00d724",
+     "ms": 160.969,
+     "disp": 2.344
+    }
+   ]
+  },
+  {
+   "label": "GX010047c2_02_17 \u00b7 chroma-mask",
+   "source": "GX010047c2_02_17_26.MP4",
+   "approach": "chroma-mask \u00b7 UV planes \u00bc res",
+   "target_fps": 23.976,
+   "by_task": {
+    "drag": {
+     "n": 3,
+     "min": 7.99,
+     "p50": 11.9,
+     "p95": 204.47,
+     "max": 204.47,
+     "mean": 74.79
+    },
+    "open": {
+     "n": 1,
+     "min": 292.76,
+     "p50": 292.76,
+     "p95": 292.76,
+     "max": 292.76,
+     "mean": 292.76
+    }
+   },
+   "play_achieved_fps": null,
+   "seek_p50_ms": null,
+   "sweeps": [],
+   "events_capped": false,
+   "started": "2026-08-31T01:04:14.067257+00:00",
+   "events": [
+    {
+     "t": 0.2964,
+     "task": "open",
+     "frame": 0,
+     "route": "step \u00d71",
+     "ms": 292.757,
+     "disp": 3.593
+    },
+    {
+     "t": 0.3124,
+     "task": "drag",
+     "frame": 5,
+     "route": "step \u00d75",
+     "ms": 11.901,
+     "disp": 3.564
+    },
+    {
+     "t": 0.3239,
+     "task": "drag",
+     "frame": 6,
+     "route": "step \u00d71",
+     "ms": 7.993,
+     "disp": 3.04
+    },
+    {
+     "t": 0.5323,
+     "task": "drag",
+     "frame": 30,
+     "route": "step \u00d724",
+     "ms": 204.474,
+     "disp": 3.535
+    }
+   ]
+  }
+ ]
+}

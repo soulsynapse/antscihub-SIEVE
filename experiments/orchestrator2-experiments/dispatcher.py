@@ -787,7 +787,20 @@ class Dispatcher:
         interactive_only = index > 0
         if self._reader_count == 1:
             interactive_only = None
-        fetcher = self._fetcher_factory()
+        #: the band is handed to the factory because ADR-0020 makes the route
+        #: a per-band decision — a sequential reader and a seeking one are the
+        #: two cases hardware decode falls on opposite sides of.
+        try:
+            fetcher = self._fetcher_factory(interactive_only)
+        except Exception as exc:
+            #: recorded rather than raised, for the reason `_record_loop`
+            #: keeps its own failures: a fetch thread that dies on the way up
+            #: takes every decode with it, and the symptom is a window that
+            #: never fills — which reads as a scheduling result and is a
+            #: crash. A hardware route that is unavailable arrives here.
+            self.errors.append(f"reader {index} could not open: {exc!r}")
+            self.failures += 1
+            return
         try:
             while not self._stop.is_set():
                 pick = self._await_pick(interactive_only)

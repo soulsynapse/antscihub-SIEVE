@@ -98,7 +98,7 @@ def run_arm(readers: int, width: int, height: int, start: int,
     source_form = forms_mod.Form((0, 0, width, height), (width, height),
                                  "gray")
     form_key = source_form.key()
-    dispatcher = Dispatcher(graph, pool, form_key, lambda: Fetcher(BIG),
+    dispatcher = Dispatcher(graph, pool, form_key, lambda _band: Fetcher(BIG),
                             recorders=2, readers=readers)
 
     ticks: list[tuple[float, int, bool, int]] = []

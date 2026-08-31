@@ -31,7 +31,7 @@
     - 📄 `README.md`
     - 📄 `bind.py` — Binding a step to what feeds it: the facts a step is not allowed to declare.
   - 📁 `decode-experiments/`
-    - 📁 `explorer-logs/` (33 files)
+    - 📁 `explorer-logs/` (34 files)
     - 📁 `results/` (11 files)
     - 📄 `01-pyav-vs-opencv.py` — Does the inherited OpenCV sequential-decode corpus survive a binding change?
     - 📄 `02-random-access.py` — Random access: frame-accurate seek against grab-forward, by jump distance.
@@ -59,7 +59,7 @@
     - 📄 `graph.py` — The declaration graph: what every consumer of frames says it needs.
     - 📄 `pool.py` — The graph-managed frame pool: hold, reserve, release, evict, and say who shared.
   - 📁 `orchestrator2-experiments/`
-    - 📁 `explorer-logs/` (17 files)
+    - 📁 `explorer-logs/` (19 files)
     - 📁 `results/` (18 files)
     - 📄 `01-reentry.py` — Does re-entry beat polling, on a window fill with one step riding along?
     - 📄 `02-requestable.py` — Does routing a chained field through the dispatcher cost more than holding it in a dict?

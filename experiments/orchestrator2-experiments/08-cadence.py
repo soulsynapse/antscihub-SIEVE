@@ -299,7 +299,7 @@ def _arena(width: int, height: int, start: int, end: int):
                                  "gray")
     form_key = source_form.key()
     dispatcher = Dispatcher(graph, pool, form_key,
-                            lambda: Fetcher(BIG), recorders=2)
+                            lambda _band: Fetcher(BIG), recorders=2)
     sweep = Sweep(start, end, start, form_key, graph)
     return graph, pool, source_form, form_key, dispatcher, sweep
 

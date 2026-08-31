@@ -125,8 +125,19 @@ class Fetcher:
     the frontier's decode.
     """
 
-    def __init__(self, path: Path, step_within: int = STEP_WITHIN) -> None:
-        self.container = av.open(str(path))
+    def __init__(self, path: Path, step_within: int = STEP_WITHIN,
+                 hwaccel: str | None = None) -> None:
+        #: ADR-0020: which decoder opens a source is a probed, per-machine
+        #: fact and not a constant, so it arrives as an argument. `None` is
+        #: software, which is what every measurement in this folder before
+        #: 2026-08-31 was taken on.
+        self.hwaccel = hwaccel
+        options = {}
+        if hwaccel:
+            from av.codec.hwaccel import HWAccel
+            options["hwaccel"] = HWAccel(device_type=hwaccel,
+                                         allow_software_fallback=False)
+        self.container = av.open(str(path), **options)
         self.stream = self.container.streams.video[0]
         self.stream.thread_type = "AUTO"
         self.pts_of, self.step = _pts_helpers(self.stream)

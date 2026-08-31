@@ -182,7 +182,7 @@ def run_dispatched(crops, producer, consumer, rows, recorders: int,
     pool = Pool(graph, budget_bytes=POOL_BUDGET)
     source_key = source_form.key()
     dispatcher = Dispatcher(graph, pool, source_key,
-                            lambda: Fetcher(SMALL), recorders=recorders,
+                            lambda _band: Fetcher(SMALL), recorders=recorders,
                             readers=1)
     for row, crop in crops.items():
         pool.put(row, source_key, crop, by="preload")

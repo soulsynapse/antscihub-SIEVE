@@ -161,7 +161,7 @@ def _arena(width: int, height: int):
     source_form = forms_mod.Form((0, 0, width, height), (width, height),
                                  "gray")
     dispatcher = Dispatcher(graph, pool, source_form.key(),
-                            lambda: Fetcher(BIG), recorders=2, readers=1)
+                            lambda _band: Fetcher(BIG), recorders=2, readers=1)
     return graph, pool, source_form, dispatcher
 
 

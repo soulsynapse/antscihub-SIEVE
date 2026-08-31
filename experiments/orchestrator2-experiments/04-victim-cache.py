@@ -143,7 +143,7 @@ def run_arm(policy_name: str, width: int, height: int,
     policy = Belady(next_use) if policy_name == "belady" else policy()
 
     pool = Pool(graph, budget_bytes=ceiling, policy=policy)
-    dispatcher = Dispatcher(graph, pool, form_key, lambda: Fetcher(BIG),
+    dispatcher = Dispatcher(graph, pool, form_key, lambda _band: Fetcher(BIG),
                             recorders=2, readers=1)
     dispatcher.start()
 

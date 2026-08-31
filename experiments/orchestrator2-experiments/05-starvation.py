@@ -102,7 +102,7 @@ class SlowFetcher:
 def run_arm(deadline_s: float) -> dict:
     graph = Graph()
     pool = Pool(graph, budget_bytes=1 << 30)
-    dispatcher = Dispatcher(graph, pool, "F", SlowFetcher, recorders=2,
+    dispatcher = Dispatcher(graph, pool, "F", lambda _band: SlowFetcher(), recorders=2,
                             readers=1, deadline_s=deadline_s)
     dispatcher.set_mode("ord", Mode.ORDERED)
     dispatcher.start()

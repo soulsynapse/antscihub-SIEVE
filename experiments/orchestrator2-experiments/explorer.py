@@ -41,6 +41,9 @@ Run:
                        what a leg-for-leg comparison against V1 is run at;
                        above one the bands partition and the sweep's cursor
                        is never taken by a person
+    ... --hw-interactive
+                       open the interactive reader through NVDEC while the
+                       sweep stays on software — ADR-0020's split, as an arm
     ... --no-snap      serve a drag the exact row rather than the keyframe at
                        or before it, which is what ADR-0018 rejects; here so
                        the arm can be measured rather than asserted
@@ -149,6 +152,11 @@ LIVE_PLAYHEAD = "--live-playhead" in sys.argv
 #: turn ADR-0018 off, so a walk can measure what it is worth on this footage
 #: rather than assert it. The decision is settled; the arm is for the log.
 NO_SNAP = "--no-snap" in sys.argv
+#: ADR-0020's arm: open the interactive reader through a hardware decoder
+#: while the sweep stays on software, which is the split the decode findings
+#: point at — hardware ahead on a seek, behind on a sustained read. Off until
+#: a walk says it is worth the second code path on this machine.
+HW_INTERACTIVE = "--hw-interactive" in sys.argv
 SMOKE = "--smoke" in sys.argv
 QUICK = "--quick" in sys.argv
 
@@ -234,7 +242,7 @@ class Explorer(QMainWindow):
             "gray")
         self.form_key = self.source_form.key()
         self.dispatcher = Dispatcher(
-            self.graph, self.pool, self.form_key, lambda: Fetcher(BIG),
+            self.graph, self.pool, self.form_key, self._fetcher,
             recorders=2, readers=READERS, t0=self.t0)
         self.dispatcher.start()
 
@@ -351,6 +359,17 @@ class Explorer(QMainWindow):
         holder = QWidget()
         holder.setLayout(body)
         self.setCentralWidget(holder)
+
+    def _fetcher(self, interactive_only: bool | None) -> Fetcher:
+        """One reader's decoder, routed by the band it serves (ADR-0020).
+
+        `interactive_only` is None when there is a single reader taking every
+        band, which is the case a hardware route cannot be chosen for: the one
+        cursor both sweeps and seeks, and the findings put hardware on
+        opposite sides of those two.
+        """
+        hw = "cuda" if (HW_INTERACTIVE and interactive_only) else None
+        return Fetcher(BIG, hwaccel=hw)
 
     # ── the GUI as a node ────────────────────────────────────────────────
 
@@ -743,6 +762,7 @@ class Explorer(QMainWindow):
                 "drops_unreferenced_at_landing": not KEEP_VICTIMS,
                 "live_playhead": LIVE_PLAYHEAD,
                 "kf_snap": not NO_SNAP,
+                "hw_interactive": HW_INTERACTIVE,
                 "crop": CROP_RECT,
                 "form": self.form_key,
                 "total_rows": self.total,

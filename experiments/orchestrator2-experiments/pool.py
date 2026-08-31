@@ -414,6 +414,10 @@ def _nbytes(frame: Any) -> int:
 
 
 def _short(node_id: str) -> str:
-    """`fill-140233...` -> `fill`. Node ids carry an object id so two
-    windows' fills are distinct holders; the counter wants the role."""
-    return node_id.split("-")[0]
+    """`fill-140233#57` -> `fill`. An id carries an object id after a dash so
+    two windows' fills are distinct holders, and a sequence after a hash since
+    holding became per-activation. The sharing counter wants neither: without
+    the second split, `shared_pairs` names a pair per activation and the
+    "decode once, serve many" claim is reported as thousands of one-off
+    sharings instead of one relationship."""
+    return node_id.split("-")[0].split("#")[0]

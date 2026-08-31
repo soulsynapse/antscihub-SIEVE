@@ -388,9 +388,18 @@ class Request:
 
 
 def _role(node_id: str) -> str:
-    """`tool-dis-140233...` -> `tool`. Ids carry an object id; the counters
-    and the duration bars want the role."""
-    return node_id.split("-")[0]
+    """`tool-dis-140233#57` -> `tool`. The counters and the duration bars want
+    the role, and an id carries two things that are not it.
+
+    **Both separators, and the `#` was a regression.** An id carries an object
+    id after a dash, so two windows' fills are distinct holders; since holding
+    became per-activation it also carries a sequence after a hash. Splitting
+    on the dash alone left `gui#42`, which put one key per activation into
+    `duration_bars` where there should be one per role — the same defect the
+    bars were fixed for in V1, arriving from the other direction. Caught by
+    `06-two-readers` reporting seeks under forty distinct `gui#n` names.
+    """
+    return node_id.split("-")[0].split("#")[0]
 
 
 class Dispatcher:

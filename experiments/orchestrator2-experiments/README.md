@@ -489,6 +489,26 @@ patented. No min-cut partitioning of the graph (prior art:
 `torch/_functorch/partitioners.py`), which is the right formulation for
 recompute-versus-store across a deep chain and is premature at depth two.
 
+## Settled outside the questions
+
+**A reader per band, and it overlaps.**
+`docs/findings/2026.08.30-a-second-cursor-that-overlaps-costs-a-scrub-nothing`.
+A scrubbing person costs a window fill 6.4x with one cursor and 13% with two,
+and the fill's seek count under a partition is what it is with nobody
+scrubbing at all. The second reader costs nothing idle. This is the term
+`the-remaining-wall-is-decode-and-a-reader-that-does-not-overlap` priced and
+called a lead; V2 is the first thing in this tree that could collect it,
+because V1 has one dispatcher thread that blocks in `exact()` whichever
+container it holds.
+
+So **`readers=2` is V2's core shape for anything with a person in it**, and
+`readers=1` stays the default only because every other number in this folder
+was taken at it. An experiment that reports a wall names its reader count.
+
+**The pressure queue needed a deadline.** `05-starvation.py` and the
+do-not-regress list below: ranking for locality starves whoever ranks last,
+which is the half of anticipatory scheduling this folder had carried without.
+
 ## What has not moved, and why the shelf still points at V1
 
 `docs/solutions/INDEX.md` has four entries pointing into

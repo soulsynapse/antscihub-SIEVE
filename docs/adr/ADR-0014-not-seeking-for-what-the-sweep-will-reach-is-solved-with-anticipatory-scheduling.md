@@ -11,12 +11,14 @@ than seeking, because the wider one is a sequential producer already on its
 way there, and a seek buys by cursor movement what a read was about to
 deliver for nothing.
 
-Settled by [the pressure dispatcher preempts into seeks](../findings/2026.08.30-the-pressure-dispatcher-preempts-into-seeks.md),
-[a second cursor makes preemption free](../findings/2026.08.30-a-second-cursor-makes-preemption-free.md),
-and [uncut seek costs a gop not a frame](../findings/2026.08.21-uncut-seek-costs-a-gop-not-a-frame.md).
+## Accepted
 
-Prior art: Iyer & Druschel, *Anticipatory scheduling: a disk scheduling
-framework to overcome deceptive idleness in synchronous I/O*, SOSP 2001.
+Anticipatory scheduling's deceptive idleness (Iyer & Druschel, SOSP 2001) —
+[the pressure dispatcher preempts into seeks](../findings/2026.08.30-the-pressure-dispatcher-preempts-into-seeks.md),
+[a second cursor makes preemption free](../findings/2026.08.30-a-second-cursor-makes-preemption-free.md),
+[uncut seek costs a gop not a frame](../findings/2026.08.21-uncut-seek-costs-a-gop-not-a-frame.md).
+
+## Rejected
 
 Work-conserving elevator cautionary tale: a scheduler that always serves
 whatever is queued seeks away during the gap between a sequential stream's

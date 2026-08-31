@@ -11,13 +11,15 @@ before any work starts, not to avoid blocking; that is what makes this a
 restarting scheduler rather than a suspending one, and it is why the phase
 cannot be collapsed away.
 
-Settled by [experiments/orchestrator2-experiments/01-reentry.py](../../experiments/orchestrator2-experiments/01-reentry.py),
-[the pressure dispatcher preempts into seeks](../findings/2026.08.30-the-pressure-dispatcher-preempts-into-seeks.md),
-and [a second cursor makes preemption free](../findings/2026.08.30-a-second-cursor-makes-preemption-free.md) —
-each ranks by facts a declaration carried.
+## Accepted
 
-Taxonomy: Mokhov, Mitchell & Peyton Jones, *Build Systems a la Carte*, ICFP
-2018 — scheduler as topological, restarting, or suspending.
+*Build Systems a la Carte*'s restarting scheduler (Mokhov, Mitchell & Peyton
+Jones, ICFP 2018) — [experiments/orchestrator2-experiments/01-reentry.py](../../experiments/orchestrator2-experiments/01-reentry.py),
+[the pressure dispatcher preempts into seeks](../findings/2026.08.30-the-pressure-dispatcher-preempts-into-seeks.md),
+[a second cursor makes preemption free](../findings/2026.08.30-a-second-cursor-makes-preemption-free.md).
+Each ranks by facts a declaration carried before the work it ranks began.
+
+## Rejected
 
 Suspending scheduler cautionary tale: a coroutine reveals its dependencies
 lazily, one await at a time, so nothing can rank a fetch queue or compute

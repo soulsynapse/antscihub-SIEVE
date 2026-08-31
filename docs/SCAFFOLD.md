@@ -9,7 +9,7 @@
   - 📄 `adr0010.py` — ADR-0010 tripwire: hash per top-level def, static on purpose — a tool
   - 📄 `vocab.py` — Vocab convention check: an entry is its frontmatter, and nothing else.
 - 📁 `docs/`
-  - 📁 `adr/` (17 files)
+  - 📁 `adr/` (22 files)
   - 📁 `decode/`
     - 📄 `ideas.md`
   - 📁 `findings/` (26 files)

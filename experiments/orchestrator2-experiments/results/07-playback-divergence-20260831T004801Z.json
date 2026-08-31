@@ -1,0 +1,363 @@
+{
+ "experiment": "07-playback-divergence",
+ "question": "Does the fill fall progressively further behind a playhead, and does a cursor per band break the loop?",
+ "when": "2026-08-31T00:48:01.125218+00:00",
+ "sieve_rev": "2542ee9",
+ "machine": {
+  "platform": "Windows-11-10.0.26200-SP0",
+  "processor": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
+  "logical_cpus": 32,
+  "python": "3.13.5"
+ },
+ "versions": {
+  "av": "18.1.0",
+  "cv2": "5.0.0",
+  "numpy": "2.5.2",
+  "ffmpeg": "ffmpeg version 2025-02-06-git-6da82b4485-full_build-www.gyan.dev Copyright (c) 2000-2025 the FFmpeg developers"
+ },
+ "footage": [
+  {
+   "path": "C:\\Users\\khnakam1\\Documents\\Code\\antscihub-SIEVE-v4\\video-tests\\GX010047c2_02_17_26.MP4",
+   "name": "GX010047c2_02_17_26.MP4",
+   "bytes": 3546062144,
+   "mtime": "2026-07-14T18:50:16.126370+00:00",
+   "codec_name": "hevc",
+   "profile": "Main",
+   "width": 5312,
+   "height": 2988,
+   "pix_fmt": "yuvj420p",
+   "r_frame_rate": "24000/1001",
+   "nb_frames": "11328",
+   "duration": "471.651625",
+   "size": "3546062144",
+   "bit_rate": "60147141"
+  }
+ ],
+ "notes": [
+  "topology: source -> pool -> {sweep declaring a 480-row window from its start; a playhead advancing one row per frame period at 23.976 fps, wrapping, superseding its own previous request}. The reader count is the arm. 30.0 s per arm, bucketed at 5.0 s.",
+  "the playhead advances by one rather than scrubbing, which is the cheap case: a smooth transport is what the fetcher can step for, so trouble here is not the hand being erratic.",
+  "this measures a trajectory and not a wall. A hit rate that falls across buckets is a feedback loop; one that is merely low is a fill too slow for the frame rate, which is a different problem with a different fix.",
+  "rep0 readers=1: covered 480/480 at the end; per bucket 0s hit=0.0 ahead=0; 5s hit=0.0 ahead=0; 10s hit=0.0 ahead=0; 15s hit=0.0 ahead=0; 20s hit=0.95 ahead=241; 25s hit=1.0 ahead=309; seeks 58, stale 64.",
+  "rep0 readers=2: covered 480/480 at the end; per bucket 0s hit=0.924 ahead=215; 5s hit=1.0 ahead=303; 10s hit=1.0 ahead=184; 15s hit=1.0 ahead=65; 20s hit=1.0 ahead=422; 25s hit=1.0 ahead=309; seeks 2, stale 1.",
+  "rep1 readers=1: covered 480/480 at the end; per bucket 0s hit=0.0 ahead=0; 5s hit=0.0 ahead=0; 10s hit=0.0 ahead=0; 15s hit=0.0 ahead=0; 20s hit=0.958 ahead=195; 25s hit=1.0 ahead=307; seeks 58, stale 63.",
+  "rep1 readers=2: covered 480/480 at the end; per bucket 0s hit=0.916 ahead=213; 5s hit=1.0 ahead=303; 10s hit=1.0 ahead=184; 15s hit=1.0 ahead=65; 20s hit=1.0 ahead=422; 25s hit=1.0 ahead=308; seeks 2, stale 2."
+ ],
+ "cases": [
+  {
+   "name": "rep0-readers1",
+   "params": {
+    "readers": 1,
+    "buckets": [
+     {
+      "bucket_s": 0.0,
+      "ticks": 119,
+      "hit_rate": 0.0,
+      "ahead_p50": 0
+     },
+     {
+      "bucket_s": 5.0,
+      "ticks": 119,
+      "hit_rate": 0.0,
+      "ahead_p50": 0
+     },
+     {
+      "bucket_s": 10.0,
+      "ticks": 118,
+      "hit_rate": 0.0,
+      "ahead_p50": 0
+     },
+     {
+      "bucket_s": 15.0,
+      "ticks": 118,
+      "hit_rate": 0.0,
+      "ahead_p50": 0
+     },
+     {
+      "bucket_s": 20.0,
+      "ticks": 119,
+      "hit_rate": 0.95,
+      "ahead_p50": 241
+     },
+     {
+      "bucket_s": 25.0,
+      "ticks": 118,
+      "hit_rate": 1.0,
+      "ahead_p50": 309
+     }
+    ],
+    "covered_at_end": 480,
+    "window": 480,
+    "dispatcher": {
+     "threads": {
+      "fetch": 1,
+      "recorders": 2
+     },
+     "served": 480,
+     "seeks": 58,
+     "steps": 422,
+     "failures": 0,
+     "stale": 64,
+     "blocked": 142,
+     "blocked_s": 5.891,
+     "deadline_s": 2.0,
+     "expiry_batch": 16,
+     "expired_picks": 0,
+     "by_pressure": {
+      "gui/INTERACTIVE": 95,
+      "fill/DEFERRED": 385
+     },
+     "activations": 711,
+     "reentries": 262,
+     "immediate": 231,
+     "superseded": 710,
+     "pending_waits": 0,
+     "ready_depth": 0,
+     "wait_ms_p50": 0.05,
+     "wait_ms_p95": 30.06
+    }
+   },
+   "unit": "see params",
+   "note": "hit_rate per bucket is the result; a falling series is the feedback loop",
+   "truncated": false,
+   "n": 0,
+   "samples_ms": []
+  },
+  {
+   "name": "rep0-readers2",
+   "params": {
+    "readers": 2,
+    "buckets": [
+     {
+      "bucket_s": 0.0,
+      "ticks": 119,
+      "hit_rate": 0.924,
+      "ahead_p50": 215
+     },
+     {
+      "bucket_s": 5.0,
+      "ticks": 118,
+      "hit_rate": 1.0,
+      "ahead_p50": 303
+     },
+     {
+      "bucket_s": 10.0,
+      "ticks": 119,
+      "hit_rate": 1.0,
+      "ahead_p50": 184
+     },
+     {
+      "bucket_s": 15.0,
+      "ticks": 119,
+      "hit_rate": 1.0,
+      "ahead_p50": 65
+     },
+     {
+      "bucket_s": 20.0,
+      "ticks": 118,
+      "hit_rate": 1.0,
+      "ahead_p50": 422
+     },
+     {
+      "bucket_s": 25.0,
+      "ticks": 118,
+      "hit_rate": 1.0,
+      "ahead_p50": 309
+     }
+    ],
+    "covered_at_end": 480,
+    "window": 480,
+    "dispatcher": {
+     "threads": {
+      "fetch": 2,
+      "recorders": 2
+     },
+     "served": 480,
+     "seeks": 2,
+     "steps": 478,
+     "failures": 0,
+     "stale": 1,
+     "blocked": 1317,
+     "blocked_s": 55.134,
+     "deadline_s": 2.0,
+     "expiry_batch": 16,
+     "expired_picks": 0,
+     "by_pressure": {
+      "fill/DEFERRED": 479,
+      "gui/INTERACTIVE": 1
+     },
+     "activations": 711,
+     "reentries": 703,
+     "immediate": 702,
+     "superseded": 710,
+     "pending_waits": 0,
+     "ready_depth": 0,
+     "wait_ms_p50": 0.04,
+     "wait_ms_p95": 0.08
+    }
+   },
+   "unit": "see params",
+   "note": "hit_rate per bucket is the result; a falling series is the feedback loop",
+   "truncated": false,
+   "n": 0,
+   "samples_ms": []
+  },
+  {
+   "name": "rep1-readers1",
+   "params": {
+    "readers": 1,
+    "buckets": [
+     {
+      "bucket_s": 0.0,
+      "ticks": 119,
+      "hit_rate": 0.0,
+      "ahead_p50": 0
+     },
+     {
+      "bucket_s": 5.0,
+      "ticks": 119,
+      "hit_rate": 0.0,
+      "ahead_p50": 0
+     },
+     {
+      "bucket_s": 10.0,
+      "ticks": 119,
+      "hit_rate": 0.0,
+      "ahead_p50": 0
+     },
+     {
+      "bucket_s": 15.0,
+      "ticks": 118,
+      "hit_rate": 0.0,
+      "ahead_p50": 0
+     },
+     {
+      "bucket_s": 20.0,
+      "ticks": 119,
+      "hit_rate": 0.958,
+      "ahead_p50": 195
+     },
+     {
+      "bucket_s": 25.0,
+      "ticks": 119,
+      "hit_rate": 1.0,
+      "ahead_p50": 307
+     }
+    ],
+    "covered_at_end": 480,
+    "window": 480,
+    "dispatcher": {
+     "threads": {
+      "fetch": 1,
+      "recorders": 2
+     },
+     "served": 480,
+     "seeks": 58,
+     "steps": 422,
+     "failures": 0,
+     "stale": 63,
+     "blocked": 135,
+     "blocked_s": 5.592,
+     "deadline_s": 2.0,
+     "expiry_batch": 16,
+     "expired_picks": 0,
+     "by_pressure": {
+      "gui/INTERACTIVE": 93,
+      "fill/DEFERRED": 387
+     },
+     "activations": 713,
+     "reentries": 263,
+     "immediate": 233,
+     "superseded": 712,
+     "pending_waits": 0,
+     "ready_depth": 0,
+     "wait_ms_p50": 0.04,
+     "wait_ms_p95": 25.08
+    }
+   },
+   "unit": "see params",
+   "note": "hit_rate per bucket is the result; a falling series is the feedback loop",
+   "truncated": false,
+   "n": 0,
+   "samples_ms": []
+  },
+  {
+   "name": "rep1-readers2",
+   "params": {
+    "readers": 2,
+    "buckets": [
+     {
+      "bucket_s": 0.0,
+      "ticks": 119,
+      "hit_rate": 0.916,
+      "ahead_p50": 213
+     },
+     {
+      "bucket_s": 5.0,
+      "ticks": 118,
+      "hit_rate": 1.0,
+      "ahead_p50": 303
+     },
+     {
+      "bucket_s": 10.0,
+      "ticks": 119,
+      "hit_rate": 1.0,
+      "ahead_p50": 184
+     },
+     {
+      "bucket_s": 15.0,
+      "ticks": 119,
+      "hit_rate": 1.0,
+      "ahead_p50": 65
+     },
+     {
+      "bucket_s": 20.0,
+      "ticks": 118,
+      "hit_rate": 1.0,
+      "ahead_p50": 422
+     },
+     {
+      "bucket_s": 25.0,
+      "ticks": 119,
+      "hit_rate": 1.0,
+      "ahead_p50": 308
+     }
+    ],
+    "covered_at_end": 480,
+    "window": 480,
+    "dispatcher": {
+     "threads": {
+      "fetch": 2,
+      "recorders": 2
+     },
+     "served": 480,
+     "seeks": 2,
+     "steps": 478,
+     "failures": 0,
+     "stale": 2,
+     "blocked": 1315,
+     "blocked_s": 54.999,
+     "deadline_s": 2.0,
+     "expiry_batch": 16,
+     "expired_picks": 0,
+     "by_pressure": {
+      "fill/DEFERRED": 478,
+      "gui/INTERACTIVE": 2
+     },
+     "activations": 712,
+     "reentries": 702,
+     "immediate": 702,
+     "superseded": 711,
+     "pending_waits": 0,
+     "ready_depth": 0,
+     "wait_ms_p50": 0.04,
+     "wait_ms_p95": 0.07
+    }
+   },
+   "unit": "see params",
+   "note": "hit_rate per bucket is the result; a falling series is the feedback loop",
+   "truncated": false,
+   "n": 0,
+   "samples_ms": []
+  }
+ ]
+}

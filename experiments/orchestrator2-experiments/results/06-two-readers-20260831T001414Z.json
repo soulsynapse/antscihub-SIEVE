@@ -1,0 +1,356 @@
+{
+ "experiment": "06-two-readers",
+ "question": "Does a second cursor let the fill and the person overlap, or only stop them fighting?",
+ "when": "2026-08-31T00:14:14.274541+00:00",
+ "sieve_rev": "06abb4e",
+ "machine": {
+  "platform": "Windows-11-10.0.26200-SP0",
+  "processor": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
+  "logical_cpus": 32,
+  "python": "3.13.5"
+ },
+ "versions": {
+  "av": "18.1.0",
+  "cv2": "5.0.0",
+  "numpy": "2.5.2",
+  "ffmpeg": "ffmpeg version 2025-02-06-git-6da82b4485-full_build-www.gyan.dev Copyright (c) 2000-2025 the FFmpeg developers"
+ },
+ "footage": [
+  {
+   "path": "C:\\Users\\khnakam1\\Documents\\Code\\antscihub-SIEVE-v4\\video-tests\\GX010047c2_02_17_26.MP4",
+   "name": "GX010047c2_02_17_26.MP4",
+   "bytes": 3546062144,
+   "mtime": "2026-07-14T18:50:16.126370+00:00",
+   "codec_name": "hevc",
+   "profile": "Main",
+   "width": 5312,
+   "height": 2988,
+   "pix_fmt": "yuvj420p",
+   "r_frame_rate": "24000/1001",
+   "nb_frames": "11328",
+   "duration": "471.651625",
+   "size": "3546062144",
+   "bit_rate": "60147141"
+  }
+ ],
+ "notes": [
+  "topology: source -> pool -> {sweep declaring rows 3768..3928 attention-first from the midpoint at DEFERRED; a playhead declaring one INTERACTIVE row at a time on a gaussian random walk (sigma 8.0 rows, 12% chance of re-anchoring) every 50 ms, superseding its own previous request}. Seed 7, so the person is the same in every arm.",
+  "core shape: the reader count is the arm; 2 recorder threads, request depth not used (no step), DropAll replacement. With two readers the bands partition \u2014 reader 0 never takes an INTERACTIVE pick, so the sequential cursor is never moved by a person.",
+  "a parked arm at each reader count gives the floor: what the fill costs with nobody declaring, which is what the second cursor is trying to get back to.",
+  "3 interleaved repeats; this machine drifts by more than small differences and one run per arm has misread that twice in this folder.",
+  "arm readers1-parked: fill wall [1.589, 1.761, 1.863] s; decodes [160, 160, 160]; seeks by role [{'fill': 2}, {'fill': 2}, {'fill': 2}]; GUI wait p50 [None, None, None] ms p95 [None, None, None] ms over [0, 0, 0] shown; stale [0, 0, 0], superseded [0, 0, 0].",
+  "arm readers2-parked: fill wall [1.638, 1.777, 1.761] s; decodes [160, 160, 160]; seeks by role [{'fill': 2}, {'fill': 2}, {'fill': 2}]; GUI wait p50 [None, None, None] ms p95 [None, None, None] ms over [0, 0, 0] shown; stale [0, 0, 0], superseded [0, 0, 0].",
+  "arm readers1-live: fill wall [9.418, 11.353, 15.05] s; decodes [160, 160, 160]; seeks by role [{'gui': 18, 'fill': 6}, {'gui': 18, 'fill': 5}, {'gui': 25, 'fill': 12}]; GUI wait p50 [0.05, 0.04, 0.05] ms p95 [0.07, 0.06, 0.07] ms over [52, 64, 90] shown; stale [23, 29, 38], superseded [185, 222, 296].",
+  "arm readers2-live: fill wall [2.155, 1.908, 1.992] s; decodes [160, 160, 160]; seeks by role [{'fill': 2, 'gui': 5}, {'fill': 2, 'gui': 4}, {'gui': 4, 'fill': 2}]; GUI wait p50 [0.05, 0.06, 0.06] ms p95 [15.2, 1.23, 46.97] ms over [15, 14, 17] shown; stale [7, 6, 6], superseded [39, 37, 39]."
+ ],
+ "cases": [
+  {
+   "name": "readers1-parked",
+   "params": {
+    "repeats": 3,
+    "runs": [
+     {
+      "readers": 1,
+      "parked": true,
+      "covered": true,
+      "fill_wall_s": 1.589,
+      "decodes": 160,
+      "seeks_total": 2,
+      "seeks_by_role": {
+       "fill": 2
+      },
+      "by_pressure": {
+       "fill/DEFERRED": 160
+      },
+      "stale": 0,
+      "superseded": 0,
+      "gui_shown": 0,
+      "gui_wait_ms_p50": null,
+      "gui_wait_ms_p95": null,
+      "expired_picks": 0
+     },
+     {
+      "readers": 1,
+      "parked": true,
+      "covered": true,
+      "fill_wall_s": 1.761,
+      "decodes": 160,
+      "seeks_total": 2,
+      "seeks_by_role": {
+       "fill": 2
+      },
+      "by_pressure": {
+       "fill/DEFERRED": 160
+      },
+      "stale": 0,
+      "superseded": 0,
+      "gui_shown": 0,
+      "gui_wait_ms_p50": null,
+      "gui_wait_ms_p95": null,
+      "expired_picks": 0
+     },
+     {
+      "readers": 1,
+      "parked": true,
+      "covered": true,
+      "fill_wall_s": 1.863,
+      "decodes": 160,
+      "seeks_total": 2,
+      "seeks_by_role": {
+       "fill": 2
+      },
+      "by_pressure": {
+       "fill/DEFERRED": 160
+      },
+      "stale": 0,
+      "superseded": 0,
+      "gui_shown": 0,
+      "gui_wait_ms_p50": null,
+      "gui_wait_ms_p95": null,
+      "expired_picks": 0
+     }
+    ],
+    "window": 160
+   },
+   "unit": "see params",
+   "note": "fill wall is the headline; the GUI wait is what distinguishes a latency win from a throughput one",
+   "truncated": false,
+   "n": 0,
+   "samples_ms": []
+  },
+  {
+   "name": "readers2-parked",
+   "params": {
+    "repeats": 3,
+    "runs": [
+     {
+      "readers": 2,
+      "parked": true,
+      "covered": true,
+      "fill_wall_s": 1.638,
+      "decodes": 160,
+      "seeks_total": 2,
+      "seeks_by_role": {
+       "fill": 2
+      },
+      "by_pressure": {
+       "fill/DEFERRED": 160
+      },
+      "stale": 0,
+      "superseded": 0,
+      "gui_shown": 0,
+      "gui_wait_ms_p50": null,
+      "gui_wait_ms_p95": null,
+      "expired_picks": 0
+     },
+     {
+      "readers": 2,
+      "parked": true,
+      "covered": true,
+      "fill_wall_s": 1.777,
+      "decodes": 160,
+      "seeks_total": 2,
+      "seeks_by_role": {
+       "fill": 2
+      },
+      "by_pressure": {
+       "fill/DEFERRED": 160
+      },
+      "stale": 0,
+      "superseded": 0,
+      "gui_shown": 0,
+      "gui_wait_ms_p50": null,
+      "gui_wait_ms_p95": null,
+      "expired_picks": 0
+     },
+     {
+      "readers": 2,
+      "parked": true,
+      "covered": true,
+      "fill_wall_s": 1.761,
+      "decodes": 160,
+      "seeks_total": 2,
+      "seeks_by_role": {
+       "fill": 2
+      },
+      "by_pressure": {
+       "fill/DEFERRED": 160
+      },
+      "stale": 0,
+      "superseded": 0,
+      "gui_shown": 0,
+      "gui_wait_ms_p50": null,
+      "gui_wait_ms_p95": null,
+      "expired_picks": 0
+     }
+    ],
+    "window": 160
+   },
+   "unit": "see params",
+   "note": "fill wall is the headline; the GUI wait is what distinguishes a latency win from a throughput one",
+   "truncated": false,
+   "n": 0,
+   "samples_ms": []
+  },
+  {
+   "name": "readers1-live",
+   "params": {
+    "repeats": 3,
+    "runs": [
+     {
+      "readers": 1,
+      "parked": false,
+      "covered": true,
+      "fill_wall_s": 9.418,
+      "decodes": 160,
+      "seeks_total": 24,
+      "seeks_by_role": {
+       "gui": 18,
+       "fill": 6
+      },
+      "by_pressure": {
+       "gui/INTERACTIVE": 24,
+       "fill/DEFERRED": 136
+      },
+      "stale": 23,
+      "superseded": 185,
+      "gui_shown": 52,
+      "gui_wait_ms_p50": 0.05,
+      "gui_wait_ms_p95": 0.07,
+      "expired_picks": 16
+     },
+     {
+      "readers": 1,
+      "parked": false,
+      "covered": true,
+      "fill_wall_s": 11.353,
+      "decodes": 160,
+      "seeks_total": 23,
+      "seeks_by_role": {
+       "gui": 18,
+       "fill": 5
+      },
+      "by_pressure": {
+       "gui/INTERACTIVE": 31,
+       "fill/DEFERRED": 129
+      },
+      "stale": 29,
+      "superseded": 222,
+      "gui_shown": 64,
+      "gui_wait_ms_p50": 0.04,
+      "gui_wait_ms_p95": 0.06,
+      "expired_picks": 32
+     },
+     {
+      "readers": 1,
+      "parked": false,
+      "covered": true,
+      "fill_wall_s": 15.05,
+      "decodes": 160,
+      "seeks_total": 37,
+      "seeks_by_role": {
+       "gui": 25,
+       "fill": 12
+      },
+      "by_pressure": {
+       "gui/INTERACTIVE": 39,
+       "fill/DEFERRED": 121
+      },
+      "stale": 38,
+      "superseded": 296,
+      "gui_shown": 90,
+      "gui_wait_ms_p50": 0.05,
+      "gui_wait_ms_p95": 0.07,
+      "expired_picks": 32
+     }
+    ],
+    "window": 160
+   },
+   "unit": "see params",
+   "note": "fill wall is the headline; the GUI wait is what distinguishes a latency win from a throughput one",
+   "truncated": false,
+   "n": 0,
+   "samples_ms": []
+  },
+  {
+   "name": "readers2-live",
+   "params": {
+    "repeats": 3,
+    "runs": [
+     {
+      "readers": 2,
+      "parked": false,
+      "covered": true,
+      "fill_wall_s": 2.155,
+      "decodes": 160,
+      "seeks_total": 7,
+      "seeks_by_role": {
+       "fill": 2,
+       "gui": 5
+      },
+      "by_pressure": {
+       "fill/DEFERRED": 153,
+       "gui/INTERACTIVE": 7
+      },
+      "stale": 7,
+      "superseded": 39,
+      "gui_shown": 15,
+      "gui_wait_ms_p50": 0.05,
+      "gui_wait_ms_p95": 15.2,
+      "expired_picks": 0
+     },
+     {
+      "readers": 2,
+      "parked": false,
+      "covered": true,
+      "fill_wall_s": 1.908,
+      "decodes": 160,
+      "seeks_total": 6,
+      "seeks_by_role": {
+       "fill": 2,
+       "gui": 4
+      },
+      "by_pressure": {
+       "fill/DEFERRED": 154,
+       "gui/INTERACTIVE": 6
+      },
+      "stale": 6,
+      "superseded": 37,
+      "gui_shown": 14,
+      "gui_wait_ms_p50": 0.06,
+      "gui_wait_ms_p95": 1.23,
+      "expired_picks": 0
+     },
+     {
+      "readers": 2,
+      "parked": false,
+      "covered": true,
+      "fill_wall_s": 1.992,
+      "decodes": 160,
+      "seeks_total": 6,
+      "seeks_by_role": {
+       "gui": 4,
+       "fill": 2
+      },
+      "by_pressure": {
+       "gui/INTERACTIVE": 8,
+       "fill/DEFERRED": 152
+      },
+      "stale": 6,
+      "superseded": 39,
+      "gui_shown": 17,
+      "gui_wait_ms_p50": 0.06,
+      "gui_wait_ms_p95": 46.97,
+      "expired_picks": 0
+     }
+    ],
+    "window": 160
+   },
+   "unit": "see params",
+   "note": "fill wall is the headline; the GUI wait is what distinguishes a latency win from a throughput one",
+   "truncated": false,
+   "n": 0,
+   "samples_ms": []
+  }
+ ]
+}

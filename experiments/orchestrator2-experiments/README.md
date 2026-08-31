@@ -30,6 +30,16 @@ and *re-enters the same call* with `arAllFramesReady` once they are resident.
 A filter never waits on anything, because a filter is never running while
 it would have to.
 
+**The reproduction is done, and V1 is retirable.**
+`docs/findings/2026.08.30-v2-reproduces-the-walk-and-a-second-cursor-makes-a-live-playhead-free`:
+at one reader with the playhead parked — V1's shape — this folder's walk lands
+at 6.576 / 6.777 / 6.361 against V1's published 6.6 / 6.6 / 6.3, with per-leg
+seeks 8 / 7 / 6 against 9 / 7 / 6. One walk per cell, so the condition is met
+on a single run rather than on a distribution; repeating it is the honest next
+step before anything is deleted. Retiring V1 is Kendrick's call and not this
+folder's, and until it is made the four `docs/solutions/` entries stay pointing
+at V1.
+
 V1's explorer stays runnable, and **this folder does not edit it** — which
 is not the same as it being frozen. Other sessions are still working in it:
 it has since grown three preemption policies behind flags, and the two
@@ -71,15 +81,58 @@ naming a scheduler is a homonym nobody asked for. VapourSynth's vocabulary is
 borrowed one level down, where this tree has no words at all: activation
 reason, request, filter mode.
 
+### Why two phases, and what the real alternative is
+
+The obvious defence of this design is that nothing sleeps, and it is the
+wrong one. It only distinguishes V2 from V1. **The competitor that matters is
+a suspending scheduler** — a consumer written as a coroutine that awaits each
+input as it needs it:
+
+```
+    async def activate(row):
+        frames = {n: await pool.get(n) for n in tool.needs(row)}
+        record(tool.reduce(tool.field(frames, row)))
+```
+
+That has no polling, no interval, no deadline and no `starved` counter
+either, and the consumer is plainly nicer to write than a two-call callback
+with a context object. Against it, "nothing sleeps" argues for nothing, and
+any measurement of re-entry against *polling* — including this folder's
+question 1 — is a measurement about V1 rather than about the design space.
+
+What earns the split is that **INITIAL's output is a scheduling input.**
+`Graph.pressure_queue` cannot rank a need it has not seen whole: subsumption
+asks whether one declaration's rows sit inside a wider one's, urgency ranks
+across every node in flight, and ADR-0006 makes the declaration itself the
+hold, so a refcount needs the complete set at the moment it is taken. A
+coroutine reveals its demand lazily, one `await` at a time. At the moment the
+dispatcher chose what to serve it would know the consumer wanted row *n* and
+not that it also wanted *n−30*, *n−20* and *n−10* — so it would serve *n*,
+learn the rest, and seek back for them. That is not a hypothetical failure:
+it is the shape `2026.08.30-the-pressure-dispatcher-preempts-into-seeks`
+measured, a consumer buying by seek what was already arriving sequentially.
+
+So the honest statement of the design is **the declaration is complete before
+anything is served**, and the two phases are where that completeness is
+enforced. The corollary is worth stating because it bounds how much the shape
+matters: *a coroutine that gathers its whole demand set in one await has
+re-invented INITIAL.* The split is a constraint on when demand becomes known,
+not a commitment to callbacks, and an implementation is free to become
+`async` later without giving anything up — as long as the first thing a
+consumer does is hand over the whole set. What could not be kept is a
+consumer that discovers its inputs by running.
+
 Three consequences follow, and each is one of the questions below:
 
 - Nothing sleeps. The fetch thread blocks on a condition the graph notifies
   when a declaration changes; the recorder threads block on a condition the
-  pool notifies when a key lands. There is no interval anywhere.
-- A step's output is requestable. A field or a value is a thing the core can
-  be asked for and can hold, wired to `sieve/pipeline/binding.py`'s `Held`
-  and `sieve/series.py`'s `Sinks`, rather than to a local `derived` dict and
-  a `self.values` that die with the thread that made them.
+  pool notifies when a key lands. There is no interval anywhere. This is a
+  property of V2 and not an argument for it — see above.
+- A step's output is requestable. A field or a value is a thing the
+  dispatcher can be asked for and can hold, wired to
+  `sieve/pipeline/binding.py`'s `Held` and `sieve/series.py`'s `Sinks`,
+  rather than to a local `derived` dict and a `self.values` that die with the
+  thread that made them.
 - Ordering is the dispatcher's to enforce, so a step that cannot be reordered
   has to say so. In V1 sequentiality was implicit in there being one thread
   per tool walking a range upward; there was nothing to declare because the
@@ -192,7 +245,17 @@ against.
 3. **The `refetched` / `predicted` pair.** `refetched` alone is not an
    accusation — coming back to a window is a fetch. `predicted` is the number
    ADR-0008 targets at zero.
-4. **`closeEvent` releases the sweep before the log is saved**, which is why
+4. **The deadline under `pressure_queue`.** Ranking for locality is what
+   starves whoever ranks last, and the queue's subsumption rule is
+   anticipatory scheduling (prior art: Iyer & Druschel, SOSP 2001) carried
+   without the anti-starvation half that literature always pairs it with. An
+   ORDERED node behind a person scrubbing without pause computed 1 of 60
+   armed rows; with an expiry queue keyed on last service and drained in a
+   batch it computed 60, taking 5.6% of picks to do it. `05-starvation.py`,
+   and `expired_picks` is the counter — zero means the ranking never starved
+   anybody over that run, and it is zero in every uncontended experiment
+   here.
+5. **`closeEvent` releases the sweep before the log is saved**, which is why
    `graph_holds` reads 1 in a V1 log while a window is live. The
    derived-eviction finding documents it under "how to recreate"; a V2 log
    that repeats it without saying so is a log that will be misread the same
@@ -208,7 +271,13 @@ Two axes, and they are not the same result.
 timed out, should both go to zero: there is no `starved` counter to keep
 because there is no deadline to exceed, and no `idle_polls` because there is
 no interval. Consumer threads go from one per tool plus one dispatcher to a
-fixed core pool that does not grow with the graph.
+fixed pool that does not grow with the graph.
+
+**This question compares V2 against V1, not against the alternatives.** A
+suspending scheduler would remove the same interval, so whatever this
+measures is the cost of the arrangement V1 actually had rather than evidence
+for two-phase activation. The argument for the split is the one above, and it
+is about `pressure_queue` seeing a whole declaration, not about sleep.
 
 *Felt.* Foreground latency during a scrub is the real question. Preemption
 granularity in V1 was already one decode, and the pressure-dispatcher finding
@@ -334,6 +403,143 @@ inherently sequential. **This folder should reach for that literature first
 rather than re-deriving it**: filter graphs, stream operators and prefix scans
 are old, and SIEVE's novelty is the seek cost, not the scheduling.
 
+### 4. Does a victim cache beat dropping everything unreferenced?
+
+**The diagnosis.** `pool.py` is a database buffer pool with the pinning half
+done and the replacement half missing. Pinning is the refcount — a key some
+declaration still names may not be stolen, which is ADR-0006 and is correct.
+Replacement is what ranks victims among the *unpinned*, and there is none:
+`_sweep_locked` drops every unreferenced key unconditionally. Unreferenced
+means deleted, so a 16 MB frame that cost a 300 ms seek and is about to be
+scrubbed back onto is discarded on the same terms as one that cost a 10 ms
+step and will never be asked for again.
+
+**What replaces it.** Unreferenced entries stop being garbage and become a
+victim cache (prior art: Jouppi 1990) ranked by GreedyDual-Size (prior art:
+Cao & Irani 1997), which is the standard policy when items differ in *both*
+cost and size — the case SIEVE is in and LRU is not built for. Each key
+carries `H = L + cost/size`; eviction takes the minimum `H` and raises the
+aging clock `L` to what it evicted, so age falls out of the arithmetic rather
+than needing timestamps. Both inputs already exist and are currently thrown
+away: `Envelope` records what a decode cost in milliseconds and the route it
+took, and `_bytes` already tracks size.
+
+Eviction stops being "drop everything unreferenced" and becomes "drop the
+least valuable unreferenced keys until under the ceiling", which also makes
+the byte ceiling load-bearing for the first time — the derived-eviction
+finding records that it never fired in any V1 run.
+
+**Where this is falsified.** The instrument exists already and nothing acts on
+what it reports: `refetched` and `refetched_predicted`, the latter targeted at
+zero by ADR-0008. The scenario exists too — the walk's leg 5 is *"returning to
+A: the graph released it when B declared, so this is a cold refill"*. So the
+test is that shape headlessly: land A, land B, return to A, with a ceiling
+above one window and below two.
+
+- **If leg 5's decode count falls**, the hand-rolled policy was leaving reuse
+  on the floor, `victim_hits` says how much, and the byte ceiling becomes a
+  policy knob rather than a backstop.
+- **If it does not**, there are three ways that can happen and they are
+  different results. The ceiling may be too small to hold a useful remnant of
+  A, which is about sizing rather than ranking. A returning consumer may
+  re-declare its whole window anyway, which would be the derived-eviction
+  result again — a scrubbable consumer declaring its whole span — and would
+  say the pool's problem is not its replacement policy. Or **fragmentation**,
+  below, which is the one worth naming in advance because it is a defect in
+  the policy rather than in the setup.
+
+**Fragmentation is the specific way this is expected to fail, and it is
+pre-registered because it is a known limitation rather than a surprise.**
+GreedyDual-Size ranks every item independently, which assumes an item's
+refetch cost does not depend on which other items are resident. That
+assumption is false here and its falsity is measured:
+`2026.08.30-the-pressure-dispatcher-preempts-into-seeks` gives the wall as a
+sequential term plus about a third of a second per seek, so a frame costs a
+step if its neighbour is on hand and a seek if it is not. A policy that
+retains a *scattered* half of window A therefore hands the sweep a window it
+must seek through, and fewer decodes can cost more wall than more decodes in
+one run. So the decode count is not the metric on its own — the return leg's
+**seek count** is reported beside it, and a result where decodes fall while
+seeks rise is the policy being wrong for this workload rather than the idea
+being wrong.
+
+If that is what happens, the prior art has the next move and it is not a
+better ranking: it is that items are not independent, so the unit being
+ranked should be a run of contiguous rows rather than a row. That is a
+different algorithm and it is not being written on speculation.
+
+**Answered, and it is fragmentation.**
+`docs/findings/2026.08.30-retention-pays-only-when-what-survives-is-contiguous`.
+Retention halves the return leg — but only when the survivors form one band.
+GreedyDual-Size keeps the same sixty rows scattered over thirty runs and takes
+the same wall as having kept nothing, so a fragmented remnant is worth zero
+rather than worth less. The ranking proposed here is refused, and the cost
+turned out to bill as wasted stepping rather than as seeks, because
+`STEP_WITHIN` is wider than the gaps: `runs_on_arrival` predicts the wall and
+the seek count does not.
+
+The larger result is that **the lever is not the ranking at all.** On the
+realistic return — offset by half a window, which is what a person does —
+every implementable policy is at or below break-even against dropping
+everything, and only the oracle wins, by knowing which rows the next landing
+wants. That is a gap in information rather than in algorithm: the next landing
+has not been declared when the eviction happens. Whatever closes it is a
+prediction about a person, which the application has and a replacement policy
+does not.
+
+The default stays `DropAll`, because nothing beat it across both shapes and
+changing it would be choosing one workload over the other on no evidence.
+
+**What this deliberately does not do.** No scan resistance. The sweep is a
+sequential scan that would flush an interactive consumer's frames under a
+naive policy, which is the problem ARC (Megiddo & Modha 2003) and 2Q (Johnson
+& Shasha 1994) exist for; the refcount currently sidesteps it, and if it ever
+needs solving, 2Q or CLOCK is the thing to reach for rather than ARC, which is
+patented. No min-cut partitioning of the graph (prior art:
+`torch/_functorch/partitioners.py`), which is the right formulation for
+recompute-versus-store across a deep chain and is premature at depth two.
+
+### 5. Does the recorded set depend on what the machine had time to draw?
+
+Not one of the three this folder opened with, and the second question to
+arrive after them. It is ADR-0005's acceptance
+test, which that ADR stated in a line and never took, and it lands here
+because the apparatus for it is the dispatcher and a window fill.
+
+**Answered.** `08-cadence.py` and
+`docs/findings/2026.08.31-drawing-selects-the-recorded-set-and-landing-does-not`:
+recording on the landing cadence produced the identical set of rows under
+every load; recording on a display cadence produced a different set every
+time, in *both directions* — load slowed the fetch more than the paint, so the
+frontier advanced more slowly and the renderer caught rows it would otherwise
+have passed. The set is a race between fill rate and paint rate and neither is
+a property of the work. Values never disagreed where both arms had a row,
+which is why cost instrumentation could not see any of it.
+
+What it leaves open is what the ADR now names: an input admitted after its row
+was decided has no answer here, and watermarks proper are the part of the
+Dataflow model this tree did not adopt.
+
+## Settled outside the questions
+
+**A reader per band, and it overlaps.**
+`docs/findings/2026.08.30-a-second-cursor-that-overlaps-costs-a-scrub-nothing`.
+A scrubbing person costs a window fill 6.4x with one cursor and 13% with two,
+and the fill's seek count under a partition is what it is with nobody
+scrubbing at all. The second reader costs nothing idle. This is the term
+`the-remaining-wall-is-decode-and-a-reader-that-does-not-overlap` priced and
+called a lead; V2 is the first thing in this tree that could collect it,
+because V1 has one dispatcher thread that blocks in `exact()` whichever
+container it holds.
+
+So **`readers=2` is V2's core shape for anything with a person in it**, and
+`readers=1` stays the default only because every other number in this folder
+was taken at it. An experiment that reports a wall names its reader count.
+
+**The pressure queue needed a deadline.** `05-starvation.py` and the
+do-not-regress list below: ranking for locality starves whoever ranks last,
+which is the half of anticipatory scheduling this folder had carried without.
+
 ## What has not moved, and why the shelf still points at V1
 
 `docs/solutions/INDEX.md` has four entries pointing into
@@ -351,26 +557,6 @@ for, because that stopped being a matter of taste when question 2 measured it.
 
 When V2's walk reproduces V1's numbers leg for leg and V1 retires, all four
 move together, in the commit that retires it.
-
-### 4. Does the recorded set depend on what the machine had time to draw?
-
-Not one of the three this folder opened with. It is ADR-0005's acceptance
-test, which that ADR stated in a line and never took, and it lands here
-because the apparatus for it is the dispatcher and a window fill.
-
-**Answered.** `04-cadence.py` and
-`docs/findings/2026.08.31-drawing-selects-the-recorded-set-and-landing-does-not`:
-recording on the landing cadence produced the identical set of rows under
-every load; recording on a display cadence produced a different set every
-time, in *both directions* — load slowed the fetch more than the paint, so the
-frontier advanced more slowly and the renderer caught rows it would otherwise
-have passed. The set is a race between fill rate and paint rate and neither is
-a property of the work. Values never disagreed where both arms had a row,
-which is why cost instrumentation could not see any of it.
-
-What it leaves open is what the ADR now names: an input admitted after its row
-was decided has no answer here, and watermarks proper are the part of the
-Dataflow model this tree did not adopt.
 
 ## The rule for a result
 

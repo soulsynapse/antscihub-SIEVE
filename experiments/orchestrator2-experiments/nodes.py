@@ -247,7 +247,12 @@ class StepNode:
         self.held.keep_from(ctx.row - self.tool.reach)
 
         if self.offers_field:
-            self.pool.put(ctx.row, self.field_key, field, by=self.node_id)
+            #: what this row's arithmetic cost, for the same reason the fetch
+            #: thread reports its decode: a field that took 30 ms to make is
+            #: worth more to keep than one that took 0.2 ms, and the pool
+            #: cannot know which unless the producer says.
+            self.pool.put(ctx.row, self.field_key, field, by=self.node_id,
+                          cost_ms=env.ms)
         if self.series is not None:
             self.series.put(ctx.row, value)
         with self._lock:

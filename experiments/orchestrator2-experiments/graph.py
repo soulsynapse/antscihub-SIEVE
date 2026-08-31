@@ -30,7 +30,8 @@ that the graph *announces* a change rather than being asked about one on an
 interval. V1's dispatcher slept 4 ms whenever nothing was pickable, and the
 only thing that could make something pickable was a declaration arriving
 here; a store of shared state that knows precisely when it changed, polled by
-the one thread that cares, is the arrangement `core.py` exists to remove.
+the one thread that cares, is the arrangement `dispatcher.py` exists
+to remove.
 
 **Listeners fire outside the lock, and that is a rule rather than a
 detail.** A listener takes the core's lock and the core's `_arm` takes this
@@ -191,6 +192,11 @@ class Graph:
         #: needs a way to tell "the declaration named this" from "somebody
         #: jumped". The generation is that way.
         self._gen: dict[str, int] = {}
+        #: when each node's current declaration arrived. Kept here rather
+        #: than on `Need`, so `Need` stays what V1 measured; a scheduler that
+        #: wants to age a declaration needs the clock and the declarer does
+        #: not.
+        self._declared_at: dict[str, float] = {}
         self._last_release: dict[tuple[int, str], tuple[str, int]] = {}
         #: called after any change to what is declared, never under the lock
         self._listeners: list[Callable[[], None]] = []
@@ -244,13 +250,28 @@ class Graph:
 
             self._needs[need.node_id] = need
             self._gen[need.node_id] = self._gen.get(need.node_id, 0) + 1
+            self._declared_at.setdefault(need.node_id, time.perf_counter())
         self._announce()
         return added
+
+    def by_age(self) -> list[tuple[float, "Need"]]:
+        """Every declaration with the time it arrived, oldest first.
+
+        What a deadline needs and `pressure_queue` deliberately does not
+        supply: that one ranks by urgency, subsumption and span, none of
+        which knows how long anything has been waiting.
+        """
+        with self._lock:
+            return sorted(
+                ((self._declared_at.get(node_id, 0.0), need)
+                 for node_id, need in self._needs.items()),
+                key=lambda pair: pair[0])
 
     def release(self, node_id: str) -> None:
         """A node is done — release all its holds."""
         with self._lock:
             old = self._needs.pop(node_id, None)
+            self._declared_at.pop(node_id, None)
             if old is None:
                 return
             for pos in old.needed_rows():
@@ -325,6 +346,17 @@ class Graph:
         with self._lock:
             return self._gen.get(node_id, 0) != generation
 
+    def is_held(self, key: tuple[int, str]) -> bool:
+        """Does any node still need this one key?
+
+        A dict membership rather than `key in held()`, which builds a set of
+        every held pair. The pool asks this on every serve to tell a victim
+        hit from an ordinary one, and a serve that allocated a set the size of
+        the window would be an instrument costing more than what it measures.
+        """
+        with self._lock:
+            return key in self._refs
+
     def held(self) -> set[tuple[int, str]]:
         """Every (row, form_key) pair that at least one node still needs."""
         with self._lock:
@@ -349,6 +381,25 @@ class Graph:
            the producer that was about to hand it over. An INTERACTIVE need
            is never subsumed — a person waiting is the case preemption is
            for.
+
+           This is **anticipatory scheduling** (prior art: Iyer & Druschel,
+           SOSP 2001) and was arrived at here the long way round. Their
+           result is the stronger one and it is measured: a scheduler should
+           be willing to *idle the device* rather than seek away, because the
+           next request from a sequential stream is probably about to
+           arrive — "deceptive idleness" being the scheduler mistaking a
+           gap between requests for the absence of them. SIEVE has no
+           deceptive idleness to overcome, because a declaration states a
+           whole window up front and the gap the disk scheduler cannot see
+           through is exactly what a declaration removes. What SIEVE has
+           instead is the same trade with a worse ratio: a seek is thirty
+           times a sequential read here, where on a disk it is a few.
+
+           What that literature pairs this with, and this queue has no
+           equivalent of, is a **deadline** — the guarantee that a subsumed
+           need eventually runs however much INTERACTIVE traffic keeps
+           arriving. Ranking for locality is precisely what starves whoever
+           ranks last. `dispatcher.DEADLINE_S` is that half.
         3. **Span, widest first.** Among equals, the declaration that
            covers the most ground goes first, because it is the one whose
            order the others are riding on.

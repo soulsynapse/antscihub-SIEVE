@@ -385,7 +385,7 @@ def main() -> None:
     end = min(start + WINDOW_FRAMES, total)
 
     run = harness.Run(
-        experiment="04-cadence",
+        experiment="08-cadence",
         question=("Does the set of recorded values depend on what the machine "
                   "had time to draw? ADR-0005's acceptance test."))
     run.add_footage(BIG)

@@ -1,5 +1,5 @@
 {
- "experiment": "04-cadence",
+ "experiment": "08-cadence",
  "question": "Does the set of recorded values depend on what the machine had time to draw? ADR-0005's acceptance test.",
  "when": "2026-08-31T00:40:07.766606+00:00",
  "sieve_rev": "dedef17",

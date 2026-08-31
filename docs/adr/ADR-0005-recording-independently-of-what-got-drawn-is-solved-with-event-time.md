@@ -20,7 +20,7 @@ The Dataflow model's event time against processing time (Akidau et al., VLDB
 2015; *Streaming Systems*) — a result is defined by when the data says a thing
 happened, never by when a machine got round to it, and a pane fires when its
 inputs are complete rather than on a clock. Settled by
-[experiments/orchestrator2-experiments/04-cadence.py](../../experiments/orchestrator2-experiments/04-cadence.py)
+[experiments/orchestrator2-experiments/08-cadence.py](../../experiments/orchestrator2-experiments/08-cadence.py)
 and [drawing selects the recorded set and landing does not](../findings/2026.08.31-drawing-selects-the-recorded-set-and-landing-does-not.md):
 recording on the landing cadence produced the identical set of rows in every
 repeat under both loads, and recording on a display cadence produced a
@@ -36,7 +36,7 @@ is the neighbouring case for a parameter rather than a late input.
 The test is not whether a renderer serves the user; a background fill is
 machine-dependent too, and that is fine, because it varies in *when* rows are
 produced and not in *which*. The test is whether the set of recorded values
-would differ on a slower machine, and 04-cadence is that test made runnable.
+would differ on a slower machine, and 08-cadence is that test made runnable.
 
 What it buys is coverage as a property of the work rather than of the session.
 The accepted cost is felt rather than reasoned about: a step selected after its
@@ -51,7 +51,7 @@ did not notice, and the reasoning was not obviously wrong — a tool's field has
 to be recomputed to be drawn, the frame was already decoded, and the number
 that falls out is the number a background pass would have written at full
 price. Every clause is true; the conclusion inverts the dependency. Measured in
-04-cadence at 25 to 31 rows present in a quiet run and absent from a loaded
+08-cadence at 25 to 31 rows present in a quiet run and absent from a loaded
 one, and 43 to 53 the other way, with every shared value in exact agreement —
 the defect is entirely in which rows exist afterwards and never in what one
 says, which is why a checksum over the values would not find it either.

@@ -30,6 +30,16 @@ and *re-enters the same call* with `arAllFramesReady` once they are resident.
 A filter never waits on anything, because a filter is never running while
 it would have to.
 
+**The reproduction is done, and V1 is retirable.**
+`docs/findings/2026.08.30-v2-reproduces-the-walk-and-a-second-cursor-makes-a-live-playhead-free`:
+at one reader with the playhead parked — V1's shape — this folder's walk lands
+at 6.576 / 6.777 / 6.361 against V1's published 6.6 / 6.6 / 6.3, with per-leg
+seeks 8 / 7 / 6 against 9 / 7 / 6. One walk per cell, so the condition is met
+on a single run rather than on a distribution; repeating it is the honest next
+step before anything is deleted. Retiring V1 is Kendrick's call and not this
+folder's, and until it is made the four `docs/solutions/` entries stay pointing
+at V1.
+
 V1's explorer stays runnable, and **this folder does not edit it** — which
 is not the same as it being frozen. Other sessions are still working in it:
 it has since grown three preemption policies behind flags, and the two

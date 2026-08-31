@@ -12,7 +12,7 @@
   - 📁 `adr/` (10 files)
   - 📁 `decode/`
     - 📄 `ideas.md`
-  - 📁 `findings/` (23 files)
+  - 📁 `findings/` (24 files)
   - 📁 `solutions/` (14 files)
   - 📁 `vocab/` (38 files)
   - 📄 `ADR.md`
@@ -59,7 +59,7 @@
     - 📄 `graph.py` — The declaration graph: what every consumer of frames says it needs.
     - 📄 `pool.py` — The graph-managed frame pool: hold, reserve, release, evict, and say who shared.
   - 📁 `orchestrator2-experiments/`
-    - 📁 `explorer-logs/` (6 files)
+    - 📁 `explorer-logs/` (8 files)
     - 📁 `results/` (16 files)
     - 📄 `01-reentry.py` — Does re-entry beat polling, on a window fill with one step riding along?
     - 📄 `02-requestable.py` — Does routing a chained field through the dispatcher cost more than holding it in a dict?

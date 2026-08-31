@@ -41,6 +41,9 @@ Run:
                        what a leg-for-leg comparison against V1 is run at;
                        above one the bands partition and the sweep's cursor
                        is never taken by a person
+    ... --no-snap      serve a drag the exact row rather than the keyframe at
+                       or before it, which is what ADR-0018 rejects; here so
+                       the arm can be measured rather than asserted
     ... --live-playhead
                        leave the transport running through every leg, so each
                        window fills against a moving playhead. The A/B for
@@ -95,7 +98,7 @@ from harness import FOOTAGE
 import forms as forms_mod
 import tools as tools_mod
 from dispatcher import Dispatcher, Reason
-from fetch import Fetcher
+from fetch import Fetcher, keyframe_rows, snap_back
 from graph import Graph, Urgency
 from nodes import Pass, StepNode, Sweep
 from pool import Pool
@@ -128,7 +131,6 @@ DEPTH = int(_argf("--depth", 1))
 GOP = 24
 CROP_RECT = [2144, 982, 1024, 1024]
 POOL_BUDGET = 12 << 30
-NEAR_RADIUS = 12
 EVENT_CAP = 20_000
 WALK = "--walk" in sys.argv
 #: keep unpinned frames until the byte ceiling forces a choice, instead of
@@ -144,6 +146,9 @@ KEEP_VICTIMS = "--keep-victims" in sys.argv
 #: reader-count comparison run without this measures nothing, because there
 #: is nothing for the second cursor to overlap with.
 LIVE_PLAYHEAD = "--live-playhead" in sys.argv
+#: turn ADR-0018 off, so a walk can measure what it is worth on this footage
+#: rather than assert it. The decision is settled; the arm is for the log.
+NO_SNAP = "--no-snap" in sys.argv
 SMOKE = "--smoke" in sys.argv
 QUICK = "--quick" in sys.argv
 
@@ -216,6 +221,11 @@ class Explorer(QMainWindow):
         self.total -= GOP
         self.window_frames = round(WINDOW_SECONDS * self.fps)
 
+        #: ADR-0018. Demux-only and paid once at open, beside the frame count
+        #: above, which is the property that makes it the answer: every other
+        #: way of making a jump cheap has to produce something first.
+        self.keyframes = keyframe_rows(BIG)
+
         self.t0 = time.perf_counter()
         self.graph = Graph()
         self.pool = Pool(self.graph, budget_bytes=POOL_BUDGET)
@@ -240,7 +250,8 @@ class Explorer(QMainWindow):
         self._transport = 0
         self._scrubbing = False
         self._last_task = ""
-        self.near_serves = 0
+        self._last_target = -1
+        self.snapped = 0
         self._paint_ms: list[float] = []
         self._recent: deque[float] = deque(maxlen=30)
         self._last_image: np.ndarray | None = None
@@ -352,64 +363,49 @@ class Explorer(QMainWindow):
         is the second half of the activation: the row lands, a recorder is
         re-entered, and the frame crosses back by signal.
 
-        **What replaces the waiting is not nothing, and the first version of
-        this made that mistake.** Not waiting is only half of what V1 did.
-        The other half was `NEAR_RADIUS`: while dragging, serve the nearest
-        held frame rather than the exact one, so the picture tracks the
-        cursor. Without it a drag shows *nothing at all* — every tick
-        supersedes the one before, a seek is some hundreds of milliseconds
-        against drag events every few, so no request survives long enough to
-        land and the image sits frozen until the hand stops. That reads
-        exactly as lag, and it is a missing feature rather than a slow one.
-        The stand-in is a dict lookup against what is already resident: no
-        decode, no declaration, nothing scheduled.
+        **A drag asks for the keyframe, not the frame** (ADR-0018). Not
+        waiting is only half of what a drag needs: every tick supersedes the
+        one before, and a seek to an arbitrary row replays the group of
+        pictures leading to it, so no request survives long enough to land and
+        the image sits frozen until the hand stops. Snapping back to the
+        keyframe at or before the target makes each of those requests one
+        frame's decode instead, so they land while the hand is still moving.
+
+        The snapped row is an ordinary row — declared, ranked and served like
+        any other — so none of this reaches the dispatcher. What the person
+        sees is the right instant coarsened in time by at most a GOP, and the
+        exact frame arrives when they stop.
         """
         row = max(0, min(self.total - 1, row))
+        self._transport = row
+        #: the row actually asked for. A drag lands on the keyframe at or
+        #: before where the hand is, and only what is asked for is worth
+        #: coalescing on: consecutive pixels inside one GOP snap to the same
+        #: keyframe and are the same request.
+        target = row
+        if (self._scrubbing and not NO_SNAP
+                and not self.pool.has(row, self.form_key)):
+            target = snap_back(self.keyframes, row)
+            if target != row:
+                task = "snap"
+                self.snapped += 1
+
         #: coalesce. `sliderMoved` and `valueChanged` both fire on a drag, so
         #: this used to issue two activations per pixel, each taking the
         #: graph's lock and the dispatcher's and waking the fetch thread. V1
-        #: coalesced with a one-slot queue and a `_busy` flag; asking twice
-        #: for the row already asked for is the same request.
-        if row == self._transport and task == self._last_task:
+        #: coalesced with a one-slot queue and a `_busy` flag.
+        if target == self._last_target and task == self._last_task:
             return
-        self._transport = row
+        self._last_target = target
         self._last_task = task
         label = self._label_for(row)
         if label not in self.runs:
             self.runs[label] = RunLog(label, self.t0)
         self.run = self.runs[label]
 
-        #: gated on residency, not on whether a mouse button is down. If the
-        #: exact row is on hand the activation paints it within a
-        #: millisecond and a stand-in would be a wasted paint; if it is not,
-        #: the stand-in is the only thing that will appear for as long as a
-        #: seek takes. Gating on `_scrubbing` instead — the first version —
-        #: made this dead code in the walk, which sets no mouse state, so the
-        #: one path a felt report is about was the one path never exercised.
-        if not self.pool.has(row, self.form_key):
-            self._show_near(row)
-        self.dispatcher.get_frame("gui", row, self._activation_for(task),
+        self.dispatcher.get_frame("gui", target, self._activation_for(task),
                                   Urgency.INTERACTIVE, self.form_key,
                                   supersedes=True)
-
-    def _show_near(self, row: int) -> None:
-        """Paint the closest resident frame within `NEAR_RADIUS`, if any.
-
-        A stand-in while the exact one is fetched, and never a substitute for
-        it: the activation is still issued and still replaces this when it
-        lands. Counted under its own route so a log can say how much of a
-        drag the person actually saw approximately — V1 recorded 83 of these
-        a run, which is how much of a scrub is carried by frames nobody asked
-        for.
-        """
-        near = self.pool.nearest(row, self.form_key, NEAR_RADIUS)
-        if near is None:
-            return
-        at, frame = near
-        self._show(frame)
-        self.near_serves += 1
-        if self.run is not None:
-            self.run.log(self._last_task, row, f"near d{row - at}", 0.0)
 
     def _activation_for(self, task: str):
         """One activation per request, closing over which task asked.
@@ -449,9 +445,13 @@ class Explorer(QMainWindow):
         self.hud.setText(
             f"frame {row:>6} . waited {wait_ms:7.1f} ms . last "
             f"{len(self._recent)} mean {mean:6.1f} ms")
-        self.slider.blockSignals(True)
-        self.slider.setValue(row)
-        self.slider.blockSignals(False)
+        if not self._scrubbing:
+            #: never while the hand is on it: a snapped row is behind where
+            #: the person is pointing, and moving the handle to it would drag
+            #: their cursor backwards.
+            self.slider.blockSignals(True)
+            self.slider.setValue(row)
+            self.slider.blockSignals(False)
 
     def _show(self, image) -> None:
         if image is None:
@@ -639,15 +639,28 @@ class Explorer(QMainWindow):
         return False
 
     def _scrub(self, n: int, seed: int, pace_s: float = 0.03) -> None:
+        """A scripted scrub, with the hand-down state a real one has.
+
+        `_scrubbing` gates the keyframe snap, and setting it here is what
+        keeps the walk on the path a person takes. Leaving it unset made the
+        snap dead code in every scripted run — the same mistake the stand-in
+        this replaced was caught by, which is twice for one cause and the
+        reason it is written down rather than just fixed.
+        """
         lo, hi = self.active if self.active else (0, self.total)
         rng = random.Random(seed)
         anchor = rng.randrange(lo, hi)
-        for _ in range(n):
-            if rng.random() < 0.12:
-                anchor = rng.randrange(lo, hi)
-            self.want(max(lo, min(hi - 1, round(rng.gauss(anchor, 8)))),
-                      "scrub")
-            self._wait(pace_s)
+        was = self._scrubbing
+        self._scrubbing = True
+        try:
+            for _ in range(n):
+                if rng.random() < 0.12:
+                    anchor = rng.randrange(lo, hi)
+                self.want(max(lo, min(hi - 1, round(rng.gauss(anchor, 8)))),
+                          "scrub")
+                self._wait(pace_s)
+        finally:
+            self._scrubbing = was
 
     def _walk(self) -> None:
         """The five legs, same shape and names as V1's."""
@@ -729,6 +742,7 @@ class Explorer(QMainWindow):
                 "replacement": self.pool.policy.name,
                 "drops_unreferenced_at_landing": not KEEP_VICTIMS,
                 "live_playhead": LIVE_PLAYHEAD,
+                "kf_snap": not NO_SNAP,
                 "crop": CROP_RECT,
                 "form": self.form_key,
                 "total_rows": self.total,
@@ -738,7 +752,8 @@ class Explorer(QMainWindow):
             "dispatcher": stats,
             "pool": self.pool.stats(),
             "gui": {
-                "near_serves": self.near_serves,
+                "snapped": self.snapped,
+                "keyframes": len(self.keyframes),
                 "painted": len(painted),
                 "paint_ms_p50": (round(painted[len(painted) // 2], 3)
                                  if painted else None),

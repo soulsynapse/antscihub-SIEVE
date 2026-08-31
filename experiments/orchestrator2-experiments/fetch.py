@@ -19,16 +19,18 @@ was given, silently pinning the frame it was supposed to release.
 Callers that want a crop derive one through `forms`, which stays the
 authority on what a form's bytes are. Nothing here knows about forms.
 
-**Copied byte for byte from `orchestrator-experiments/fetch.py`, and it is
-the one file here that is.** The decode leaf is not what V2 changes, and a
-rewritten one would put a second variable under every wall this folder
-measures against V1's. It carries the same warning its original does, now
-about three copies rather than two: anything learned about the seek/step
-rule belongs in all of them or in none, and `diff` against V1 is the check.
+**Was copied byte for byte from `orchestrator-experiments/fetch.py`, and has
+since gained the keyframe index below and nothing else.** The decode leaf is
+not what V2 changes and a rewritten one would put a second variable under
+every wall this folder measures against V1's, so `Fetcher` is still V1's
+class and `diff` against V1 is still the check — it is now a check with one
+known answer rather than none. Anything learned about the seek/step rule
+belongs in all three copies or in none.
 """
 
 from __future__ import annotations
 
+import bisect
 from fractions import Fraction
 from pathlib import Path
 
@@ -45,6 +47,65 @@ def _pts_helpers(stream):
     base = stream.start_time or 0
     step = Fraction(1, 1) / (rate * tb)
     return (lambda i: base + int(step * i)), step
+
+
+#: keyframe rows per file, so two readers on one address demux once. Keyed by
+#: the path because that is what the index is about; a second open of the same
+#: file gets the same answer and there is nothing per-cursor in it.
+_KEYFRAMES: dict[str, tuple[int, ...]] = {}
+
+
+def keyframe_rows(path: Path) -> tuple[int, ...]:
+    """Every row whose packet is a keyframe, ascending. Demuxes, decodes nothing.
+
+    Priced in `docs/findings/2026.08.21-keyframe-index-is-cheap-and-the-gop-is-fixed.md`
+    at open-the-file cost for the whole 5.3K source, which is what makes
+    ADR-0018 the answer that builds nothing: a proxy or a cut has to be
+    produced before it serves, and this has to be read.
+
+    Rows and not packet ordinals. The same finding records this footage
+    answering "how many frames" three ways, so counting packets and counting
+    decodable images are different numbers; the row is derived from the
+    packet's pts through the same mapping `Fetcher` seeks with, which is the
+    only coordinate the two agree in (ADR-0004).
+    """
+    key = str(path)
+    cached = _KEYFRAMES.get(key)
+    if cached is not None:
+        return cached
+    with av.open(key) as container:
+        stream = container.streams.video[0]
+        _pts_of, step = _pts_helpers(stream)
+        base = stream.start_time or 0
+        rows = {
+            int(round((packet.pts - base) / step))
+            for packet in container.demux(stream)
+            if packet.pts is not None and packet.is_keyframe
+        }
+    #: negatives dropped. This footage was cut mid-GOP before SIEVE saw it, so
+    #: its leading packets carry timestamps before the first decodable image
+    #: and demux to rows below zero — the same twenty that make its metadata,
+    #: packet and decoded-frame counts three different numbers (ADR-0004).
+    #: Snapping onto one would target a row nothing can produce, which
+    #: `dispatcher` would then park a placeholder for; a row with no keyframe
+    #: at or before it falls back to itself instead.
+    rows = {row for row in rows if row >= 0}
+    found = tuple(sorted(rows))
+    _KEYFRAMES[key] = found
+    return found
+
+
+def snap_back(keyframes: tuple[int, ...], row: int) -> int:
+    """The keyframe at or before *row*, or *row* itself if there is none.
+
+    ffmpeg's `AVSEEK_FLAG_BACKWARD` expressed as a choice of row rather than a
+    seek mode, which is what lets it need nothing from the dispatcher: the
+    snapped row is an ordinary row, declared and served like any other, and it
+    is cheap because a seek to a keyframe lands on it and stops rather than
+    replaying a group of pictures to reach something after it.
+    """
+    index = bisect.bisect_right(keyframes, row) - 1
+    return keyframes[index] if index >= 0 else row
 
 
 def luma(frame) -> np.ndarray:

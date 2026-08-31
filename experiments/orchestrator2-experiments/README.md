@@ -198,7 +198,7 @@ against.
    that repeats it without saying so is a log that will be misread the same
    way.
 
-## The three questions, both outcomes pre-registered
+## The questions, both outcomes pre-registered
 
 ### 1. Does re-entry beat polling, and on what axis?
 
@@ -351,6 +351,26 @@ for, because that stopped being a matter of taste when question 2 measured it.
 
 When V2's walk reproduces V1's numbers leg for leg and V1 retires, all four
 move together, in the commit that retires it.
+
+### 4. Does the recorded set depend on what the machine had time to draw?
+
+Not one of the three this folder opened with. It is ADR-0005's acceptance
+test, which that ADR stated in a line and never took, and it lands here
+because the apparatus for it is the dispatcher and a window fill.
+
+**Answered.** `04-cadence.py` and
+`docs/findings/2026.08.31-drawing-selects-the-recorded-set-and-landing-does-not`:
+recording on the landing cadence produced the identical set of rows under
+every load; recording on a display cadence produced a different set every
+time, in *both directions* — load slowed the fetch more than the paint, so the
+frontier advanced more slowly and the renderer caught rows it would otherwise
+have passed. The set is a race between fill rate and paint rate and neither is
+a property of the work. Values never disagreed where both arms had a row,
+which is why cost instrumentation could not see any of it.
+
+What it leaves open is what the ADR now names: an input admitted after its row
+was decided has no answer here, and watermarks proper are the part of the
+Dataflow model this tree did not adopt.
 
 ## The rule for a result
 

@@ -67,6 +67,11 @@ this index cannot drift from it. The shelf an ADR sits on is `group` and its
 order along that shelf is `position`, both placement only — an ADR that drops
 its group leaves this index while keeping its number and its file.""",
         tally="*{count} settled.*",
+        pending_title="## Open",
+        pending_preamble="""An ADR whose title still reads `solved by TBD`: the problem is named and the
+candidates are listed in the file, and no experiment has settled which one
+wins. Read as a brief for the experiment, never as a decision.""",
+        pending_tally="*{count} open.*",
     ),
     Shelf(
         directory="docs/vocab/",

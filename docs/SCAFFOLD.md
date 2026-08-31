@@ -9,10 +9,10 @@
   - 📄 `adr0010.py` — ADR-0010 tripwire: hash per top-level def, static on purpose — a tool
   - 📄 `vocab.py` — Vocab convention check: an entry is its frontmatter, and nothing else.
 - 📁 `docs/`
-  - 📁 `adr/` (10 files)
+  - 📁 `adr/` (17 files)
   - 📁 `decode/`
     - 📄 `ideas.md`
-  - 📁 `findings/` (25 files)
+  - 📁 `findings/` (26 files)
   - 📁 `solutions/` (14 files)
   - 📁 `vocab/` (38 files)
   - 📄 `ADR.md`
@@ -60,7 +60,7 @@
     - 📄 `pool.py` — The graph-managed frame pool: hold, reserve, release, evict, and say who shared.
   - 📁 `orchestrator2-experiments/`
     - 📁 `explorer-logs/` (13 files)
-    - 📁 `results/` (17 files)
+    - 📁 `results/` (18 files)
     - 📄 `01-reentry.py` — Does re-entry beat polling, on a window fill with one step riding along?
     - 📄 `02-requestable.py` — Does routing a chained field through the dispatcher cost more than holding it in a dict?
     - 📄 `03-sequential.py` — Is `sequential` load-bearing, or does the bounded-reach contract already cover it?
@@ -68,6 +68,7 @@
     - 📄 `05-starvation.py` — Does ranking for locality starve the node it ranks last, and does a deadline fix it?
     - 📄 `06-two-readers.py` — Does a second cursor let the fill and the person overlap, or only stop them fighting?
     - 📄 `07-playback-divergence.py` — Does the fill fall progressively further behind a playhead, and does a second cursor break the loop?
+    - 📄 `08-cadence.py` — Does the recorded set depend on what the machine had time to draw?
     - 📄 `README.md`
     - 📄 `dispatcher.py` — The dispatcher, re-entrant: it calls consumers back instead of being polled.
     - 📄 `explorer.py` — Feel the activation model: nothing polls, and the GUI is a node like any other.

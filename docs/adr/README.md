@@ -73,11 +73,14 @@ what keeps it off the index it describes.
 
 ## The three sections
 
-**Accepted** holds exactly one entry and only in the accepted state. Its
-entry links an experiment. A solution with no experiment behind it is a
-candidate however obvious it looks, and moving it up without one is the
-failure this shape exists to prevent — a later reader takes an untested guess
-for a decision somebody made.
+**Accepted** holds exactly one entry and only in the accepted state, and that
+entry says what settled it. Normally that is a link to an experiment in this
+tree; a solution with no experiment behind it is a candidate however obvious
+it looks, and moving it up without one is the failure this shape exists to
+prevent — a later reader takes an untested guess for a decision somebody made.
+The exception is a decision settled by adopting a solved thing where the
+evidence is the alternatives' own record rather than a measurement here, and
+that line says so in as many words, so nobody reads a citation as a result.
 
 **Candidates** holds the solutions in the running, one line each, in the same
 `[prior art]'s [solution]` grammar the title will use. More than one is the

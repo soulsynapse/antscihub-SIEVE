@@ -25,3 +25,12 @@ trade — a strip draggable until it swallowed the core would stop being the
 smaller pane anchored to a side, which is the whole of what a subpane is. See
 [ADR-0001](ADR-0001-panes-house-any-view.md): a subpane is a pane, so it houses
 any view on the same terms, clipping included.
+
+## Rejected
+
+`QMainWindow::setCorner(Qt::Corner, Qt::DockWidgetArea)` cautionary tale: Qt
+lets all four sides dock everywhere, meets the corner problem this refuses,
+and answers it by making corner ownership a setting — so the arbitrary
+decision is not avoided, it is deferred onto every application and then
+frozen there. A layout that never lets two strips meet has no corner to
+assign.

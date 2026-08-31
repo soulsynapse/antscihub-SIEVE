@@ -193,7 +193,7 @@ The name is what a human picks out of a list. The version is what makes "v2
 dropped a parameter" sayable, so a take that recorded what it bound against is
 checkable when it is opened rather than discovered wrong on a cluster node an
 hour into a queue. Content hashing is refused for the reason
-[ADR-0010](adr/ADR-0010-a-key-carries-a-version.md) refuses it in a key: every
+[ADR-0010](adr/ADR-0010-reusing-an-answer-is-solved-with-luigis-version-parameter.md) refuses it in a key: every
 edit would mint a new identity, and *the same pipeline, corrected* is exactly
 what must stay expressible.
 

@@ -1,0 +1,33 @@
+{
+ "TCLASOL-C3KSW54-AMD64-Windows|hevc-5312x2988": {
+  "pairings": [
+   {
+    "sweep_route": "software",
+    "interactive_route": "software",
+    "seek_ms_p50": 303.17,
+    "sweep_steps": 160
+   },
+   {
+    "sweep_route": "software",
+    "interactive_route": "cuda",
+    "seek_ms_p50": 135.63,
+    "sweep_steps": 154
+   },
+   {
+    "sweep_route": "cuda",
+    "interactive_route": "software",
+    "seek_ms_p50": 307.65,
+    "sweep_steps": 160
+   },
+   {
+    "sweep_route": "cuda",
+    "interactive_route": "cuda",
+    "seek_ms_p50": 165.92,
+    "sweep_steps": 153
+   }
+  ],
+  "sweep": null,
+  "interactive": "cuda",
+  "probed": "2026-08-31T02:25:17Z"
+ }
+}

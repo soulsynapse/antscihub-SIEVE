@@ -14,7 +14,8 @@ the target, and the exact frame is decoded when the hand stops.
 ffmpeg's `AVSEEK_FLAG_BACKWARD` over avformat's `AVIndexEntry` — PyAV's
 `seek(..., backward=True)`; alone among the candidates it builds nothing, the
 index being demux-only at open cost
-([an uncut seek costs a GOP](../findings/2026.08.21-uncut-seek-costs-a-gop-not-a-frame.md),
+([snapping a drag delivers frames instead of one](../findings/2026.08.31-snapping-a-drag-to-a-keyframe-delivers-frames-instead-of-one.md),
+[an uncut seek costs a GOP](../findings/2026.08.21-uncut-seek-costs-a-gop-not-a-frame.md),
 [the keyframe index is cheap](../findings/2026.08.21-keyframe-index-is-cheap-and-the-gop-is-fixed.md),
 [what froze the felt loop](../findings/2026.08.22-what-froze-the-felt-loop.md)).
 

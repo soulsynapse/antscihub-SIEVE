@@ -19,6 +19,12 @@ dependencies = [
 ]
 
 [dependency-groups]
+# The proof of concept under poc/: a player package, standalone tools, one window.
+poc = [
+    "scipy>=1.14",
+    "pyqtgraph>=0.13",
+    "opencv-python-headless>=4.10",
+]
 dev = [
     "import-linter>=2.1",
 ]

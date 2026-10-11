@@ -111,6 +111,31 @@
   - 📄 `mockup.py` — The GUI as the tree has it, copied into one runnable file with mock data.
   - 📄 `paper_cards.py` — The Paper card, in the toolkit that has to draw it.
   - 📄 `paper_primitives.py` — The rest of the interface in the card's dress, in the toolkit that draws it.
+- 📁 `poc/`
+  - 📁 `sieve_app/`
+    - 📄 `main.py` — SIEVE, one window: a folder of videos, the tools it found, and the player.
+  - 📁 `sieve_tool/` — The player a tool's standalone.py imports. See poc/PLAN.md for the rules.
+    - 📄 `chain.py` — A chain of tools over one source: memoized per stage, keyed by params.
+    - 📄 `player.py` — The player: one video, one chain, the tools' own widgets, and a loop window.
+    - 📄 `source.py` — Decode one video with OpenCV, holding recently decoded frames in memory.
+  - 📁 `tools/`
+    - 📁 `background_ema/`
+      - 📄 `standalone.py` — Run this tool on its own, after rescale and normalize.
+      - 📄 `tool.py` — EMA background model, emitting the absolute difference from it. v2's `background_ema`.
+    - 📁 `block_signal/`
+      - 📄 `standalone.py` — Run this tool on its own, after rescale, normalize and background ema.
+      - 📄 `tool.py` — Per-block change energy from consecutive frames. v2's `block_signal`, change_energy only.
+    - 📁 `detect/`
+      - 📄 `standalone.py` — Run the detector on its own, with the v2 chain in front of it producing its series.
+      - 📄 `tool.py` — Detection over a block-signal series. v2's detector, as one series tool.
+    - 📁 `normalize/`
+      - 📄 `standalone.py` — Run this tool on its own, after rescale: `uv run python poc/tools/normalize/standalone.py [video]`.
+      - 📄 `tool.py` — Per-frame contrast normalization to mean 128, sd 32. v2's `normalize`.
+    - 📁 `rescale/`
+      - 📄 `standalone.py` — Run this tool on its own: `uv run python poc/tools/rescale/standalone.py [video]`.
+      - 📄 `tool.py` — Reduce resolution by a linear scale factor. v2's `rescale`, as a tool.
+    - 📄 `__init__.py`
+  - 📄 `PLAN.md`
 - 📁 `scripts/`
   - 📄 `doc_index.py` — Regenerate the generated docs — `SCAFFOLD.md` and the shelf indexes — from the index.
 - 📁 `src/`

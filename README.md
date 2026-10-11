@@ -75,7 +75,7 @@ Space, Left and Right are bound.
 
 ## STATUS
 
-**2026-10-11** — first cut. `sieve_player` is 788 lines over seven modules. Numbers from
+**2026-10-11** — first cut. `sieve_player` is 796 lines over seven modules. Numbers from
 `bench.py` (headless, chain only, no Qt) on `video-tests/rep3_intermittent_crop.MP4`
 (462×456, 59.94 fps), chain rescale 0.5 → threshold → motion, 600-row window, one run:
 

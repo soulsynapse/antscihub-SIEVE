@@ -83,8 +83,9 @@ class PlayerWindow(QMainWindow):
         split = QSplitter(Qt.Horizontal)
         split.addWidget(self.display)
         split.addWidget(scroll)
-        split.setStretchFactor(0, 3)
+        split.setStretchFactor(0, 1)
         split.setStretchFactor(1, 1)
+        self.split = split
         central = QWidget()
         lay = QVBoxLayout(central)
         lay.setContentsMargins(0, 0, 0, 0)
@@ -191,6 +192,13 @@ class PlayerWindow(QMainWindow):
         gate = self.result.get("gate") if isinstance(self.result, dict) else None
         i = self.row - self.result_start
         self.display.set_gate(gate is not None and 0 <= i < len(gate) and bool(gate[i]))
+
+    def showEvent(self, e):
+        super().showEvent(e)
+        if not getattr(self, "_split_done", False):  # sizes set before show get reshaped by hints
+            self._split_done = True
+            half = self.split.width() // 2
+            self.split.setSizes([half, half])
 
     def closeEvent(self, e):
         self.timer.stop()

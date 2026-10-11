@@ -16,7 +16,7 @@ class Strip(QWidget):
     dragged = Signal(int)
     released = Signal(int)
     windowChanged = Signal(int, int)  # start, length (rows)
-    H, GRAB = 30, 6
+    H, GRAB = 60, 6
 
     def __init__(self, parent=None):
         super().__init__(parent)

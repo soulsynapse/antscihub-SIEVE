@@ -1,11 +1,6 @@
 """Series tool: mean |frame-to-frame difference| over the loop window, gated by a threshold."""
 import cv2
 import numpy as np
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor, QPainter, QPen
-from PySide6.QtWidgets import QWidget
-
-from sieve_player import ParamWidget
 
 NAME, KIND, EXPECTS = "motion", "series", "gray"
 DEFAULTS = {"gate": 2.0}
@@ -28,51 +23,58 @@ def run(series, params):
     return {"activity": act, "gate": act > params["gate"]}
 
 
-class _Plot(QWidget):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.act, self.gate, self.start, self.playhead = None, None, 0, 0
-        self.setMinimumHeight(120)
-
-    def paintEvent(self, _):
-        p = QPainter(self)
-        p.fillRect(self.rect(), QColor(30, 30, 30))
-        if self.act is None or not len(self.act):
-            return
-        n, w, h = len(self.act), self.width(), self.height()
-        top = max(float(self.act.max()), 1e-6)
-        xs = np.arange(n) * (w / n)
-        p.setPen(Qt.NoPen)
-        p.setBrush(QColor(120, 40, 40))
-        for i in np.flatnonzero(self.gate):
-            p.drawRect(int(xs[i]), 0, max(1, int(w / n) + 1), h)
-        p.setPen(QPen(QColor(120, 200, 120), 1))
-        pts = [(int(xs[i]), int(h - 1 - self.act[i] / top * (h - 2))) for i in range(n)]
-        for a, b in zip(pts, pts[1:]):
-            p.drawLine(*a, *b)
-        i = self.playhead - self.start
-        if 0 <= i < n:
-            p.setPen(QPen(QColor(255, 200, 60), 2))
-            p.drawLine(int(xs[i]), 0, int(xs[i]), h)
-
-
-class _Widget(ParamWidget):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.add_float("gate", 0.0, 30.0, DEFAULTS["gate"])
-        self.plot = _Plot()
-        self.layout().addWidget(self.plot)
-
-    def show_result(self, result, start, fps):
-        self.plot.act, self.plot.gate, self.plot.start = result["activity"], result["gate"], start
-        self.plot.update()
-
-    def set_playhead(self, row):
-        self.plot.playhead = row
-        self.plot.update()
-
-
 def settings(parent=None):
+    # Qt and the player are imported here, not at module top, so a batch script can import run()
+    # without either installed.
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QColor, QPainter, QPen
+    from PySide6.QtWidgets import QWidget
+
+    from sieve_player import ParamWidget
+
+    class _Plot(QWidget):
+        def __init__(self, parent=None):
+            super().__init__(parent)
+            self.act, self.gate, self.start, self.playhead = None, None, 0, 0
+            self.setMinimumHeight(120)
+
+        def paintEvent(self, _):
+            p = QPainter(self)
+            p.fillRect(self.rect(), QColor(30, 30, 30))
+            if self.act is None or not len(self.act):
+                return
+            n, w, h = len(self.act), self.width(), self.height()
+            top = max(float(self.act.max()), 1e-6)
+            xs = np.arange(n) * (w / n)
+            p.setPen(Qt.NoPen)
+            p.setBrush(QColor(120, 40, 40))
+            for i in np.flatnonzero(self.gate):
+                p.drawRect(int(xs[i]), 0, max(1, int(w / n) + 1), h)
+            p.setPen(QPen(QColor(120, 200, 120), 1))
+            pts = [(int(xs[i]), int(h - 1 - self.act[i] / top * (h - 2))) for i in range(n)]
+            for a, b in zip(pts, pts[1:]):
+                p.drawLine(*a, *b)
+            i = self.playhead - self.start
+            if 0 <= i < n:
+                p.setPen(QPen(QColor(255, 200, 60), 2))
+                p.drawLine(int(xs[i]), 0, int(xs[i]), h)
+
+
+    class _Widget(ParamWidget):
+        def __init__(self, parent=None):
+            super().__init__(parent)
+            self.add_float("gate", 0.0, 30.0, DEFAULTS["gate"])
+            self.plot = _Plot()
+            self.layout().addWidget(self.plot)
+
+        def show_result(self, result, start, fps):
+            self.plot.act, self.plot.gate, self.plot.start = result["activity"], result["gate"], start
+            self.plot.update()
+
+        def set_playhead(self, row):
+            self.plot.playhead = row
+            self.plot.update()
+
     return _Widget(parent)
 
 

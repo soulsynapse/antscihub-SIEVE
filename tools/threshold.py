@@ -1,8 +1,6 @@
 """Frame tool: binarize gray frames."""
 import cv2
 
-from sieve_player import ParamWidget
-
 NAME, KIND, EXPECTS, PRODUCES = "threshold", "frame", "gray", "gray"
 DEFAULTS = {"thresh": 128, "invert": False}
 
@@ -14,6 +12,8 @@ def run(frames, row, params):
 
 
 def settings(parent=None):
+    from sieve_player import ParamWidget  # only the GUI needs the player
+
     w = ParamWidget(parent)
     w.add_int("thresh", 0, 255, DEFAULTS["thresh"])
     w.add_bool("invert", DEFAULTS["invert"])

@@ -45,8 +45,10 @@ player compares for equality and never looks inside; stage one must expect `"gra
 called from a worker thread and the GUI thread at the same time, for any row in any order. A tool
 that caches must key on `frames.key` (or `series.key`) and on every one of its own params. A
 `"gate"` bool array in a series result is drawn on the frame as a red border while the playhead is
-inside a gated row. `sieve_player.ParamWidget` is an optional base for `settings()` with
-`add_int` / `add_float` / `add_bool`; `tools/` holds three examples.
+inside a gated row. `run` must need only cv2 and numpy: import Qt and `sieve_player` inside
+`settings()` (and inside the `__main__` block), never at module top, so a batch script can import
+the tool on a machine with neither installed. `sieve_player.ParamWidget` is an optional base for
+`settings()` with `add_int` / `add_float` / `add_bool`; `tools/` holds three examples.
 
 ## The player
 

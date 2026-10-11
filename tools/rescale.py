@@ -1,8 +1,6 @@
 """Frame tool: resize gray frames by a factor."""
 import cv2
 
-from sieve_player import ParamWidget
-
 NAME, KIND, EXPECTS, PRODUCES = "rescale", "frame", "gray", "gray"
 DEFAULTS = {"scale": 0.5}
 
@@ -14,6 +12,8 @@ def run(frames, row, params):
 
 
 def settings(parent=None):
+    from sieve_player import ParamWidget  # only the GUI needs the player
+
     w = ParamWidget(parent)
     w.add_float("scale", 0.1, 1.0, DEFAULTS["scale"])
     return w

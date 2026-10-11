@@ -74,3 +74,11 @@ class _Widget(ParamWidget):
 
 def settings(parent=None):
     return _Widget(parent)
+
+
+if __name__ == "__main__":
+    import sys
+
+    from sieve_player import play
+
+    sys.exit(play([sys.modules[__name__]], sys.argv[1] if len(sys.argv) > 1 else None))

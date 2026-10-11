@@ -1,0 +1,13 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sieve-player"
+version = "0.1.0"
+description = "The shared PySide6 window SIEVE tools run inside"
+requires-python = ">=3.11"
+dependencies = ["PySide6", "opencv-python-headless", "numpy"]
+
+[tool.setuptools]
+packages = ["sieve_player"]

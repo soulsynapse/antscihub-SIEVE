@@ -6,14 +6,16 @@ the left, the script's own settings widget on the right, and a timeline across t
 imports it and runs standalone:
 
 ```python
-from sieve_player import play
-play([tool])          # or play([rescale, threshold, motion]); the player knows no tool by name
+if __name__ == "__main__":
+    from sieve_player import play
+    play([sys.modules[__name__]])   # or play([rescale, threshold, motion]); the player knows no tool by name
 ```
 
 ```
 py -3.13 -m venv .venv            # not the Anaconda python: its Qt DLLs shadow PySide6's
-.venv\Scripts\python -m pip install -r requirements.txt
+.venv\Scripts\python -m pip install -r requirements.txt     # editable install of sieve_player
 .venv\Scripts\python main.py video-tests\rep3_intermittent_crop.MP4
+.venv\Scripts\python tools\motion.py video-tests\rep3_intermittent_crop.MP4   # any tool runs alone, from any cwd
 ```
 
 ## What a tool is

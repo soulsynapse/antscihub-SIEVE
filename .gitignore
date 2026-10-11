@@ -1,0 +1,3 @@
+video-tests/
+.venv/
+__pycache__/

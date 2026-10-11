@@ -12,6 +12,7 @@ class Worker(QThread):
     rowReady = Signal(int)                    # a requested row is now in the memo
     walked = Signal(int, int)                 # rows done, rows in window
     seriesReady = Signal(object, int, float)  # result, start, fps
+    failed = Signal(int)                      # a tool raised at this row; the walk is abandoned
 
     def __init__(self, chain, every=30):
         super().__init__()
@@ -96,6 +97,9 @@ class Worker(QThread):
                 self._emit_series()
             except Exception:
                 traceback.print_exc()
+                if want is None:
+                    self.failed.emit(self._start + self._i)
+                    self._i = self._length  # abandon this walk; the next gen bump restarts it
 
     def _emit_series(self):
         tool = self.chain.series_tool

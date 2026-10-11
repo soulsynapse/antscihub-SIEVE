@@ -108,6 +108,7 @@ class PlayerWindow(QMainWindow):
         worker.rowReady.connect(self._row_ready)
         worker.seriesReady.connect(self._series_ready)
         worker.walked.connect(ct.set_progress)
+        worker.failed.connect(lambda r: ct.progress.setText(f"tool raised at row {r}, see console"))
         QShortcut(QKeySequence(Qt.Key_Space), self, self.toggle_play)
         QShortcut(QKeySequence(Qt.Key_Left), self, lambda: self.goto(self.row - 1, commit=True))
         QShortcut(QKeySequence(Qt.Key_Right), self, lambda: self.goto(self.row + 1, commit=True))

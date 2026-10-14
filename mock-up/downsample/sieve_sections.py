@@ -24,11 +24,11 @@ from sieve_player.window import Display
 
 # section name -> (background, label ink, label corner). Inputs is a cool grey, outputs a warm one,
 # a luminance step apart so they still separate in monochrome. Config is white and carries no
-# label (None ink). The words sit at the panel's outer corners: inputs top-right, outputs bottom-right.
+# label (None ink). The word sits top-right of its section; this is the rule for the main app too.
 SECTIONS = {
     "inputs": ("#E2E6EC", "#C4CBD5", Qt.AlignRight | Qt.AlignTop),
     "config": ("#FFFFFF", None, None),
-    "outputs": ("#F3EEE6", "#D9D0C2", Qt.AlignRight | Qt.AlignBottom),
+    "outputs": ("#F3EEE6", "#D9D0C2", Qt.AlignRight | Qt.AlignTop),
 }
 # The watermark: one style for every labelled section, drawn behind the content. The corner comes
 # from SECTIONS; `vertical` turns the word to read bottom-to-top; `outline` strokes instead of fills.

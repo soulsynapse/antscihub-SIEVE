@@ -139,12 +139,11 @@ class PlayerWindow(QMainWindow):
         st.released.connect(lambda r: self.seek(r, commit=True))
         st.windowChanged.connect(self.set_window)
         ct.playToggled.connect(self.toggle_play)
-        ct.step.connect(lambda d: self.goto(self.row + d, commit=True))
+        ct.step.connect(lambda d: self.seek(self.row + d, commit=True))
         ct.windowEdited.connect(lambda s, n: self.set_window(round(s * self.fps), round(n * self.fps)))
-        ct.windowEdited.connect(lambda s, n: self.goto(round(s * self.fps), commit=True))
         QShortcut(QKeySequence(Qt.Key_Space), self, self.toggle_play)
-        QShortcut(QKeySequence(Qt.Key_Left), self, lambda: self.goto(self.row - 1, commit=True))
-        QShortcut(QKeySequence(Qt.Key_Right), self, lambda: self.goto(self.row + 1, commit=True))
+        QShortcut(QKeySequence(Qt.Key_Left), self, lambda: self.seek(self.row - 1, commit=True))
+        QShortcut(QKeySequence(Qt.Key_Right), self, lambda: self.seek(self.row + 1, commit=True))
 
         self.timer = QTimer(self)
         self.timer.setTimerType(Qt.PreciseTimer)
@@ -203,20 +202,23 @@ class PlayerWindow(QMainWindow):
         self.decoder.close()
         self.decoder = self.chain = self.worker = None
         self.result = None
+        self.row, self.window_ = 0, (0, 0)
         self.display.clear()
 
     # -- state (every entry is a no-op until something is loaded) --------
     def set_window(self, start, length):
+        """Move or resize the window. The playhead keeps its offset from the start, clamped inside."""
         if self.chain is None:
             return
         start = max(0, min(self.count - 1, int(start)))
         length = max(1, min(self.count - start, int(length)))
+        offset = max(0, min(length - 1, self.row - self.window_[0]))
         self.window_ = (start, length)
         self.timeline.strip.set_window(start, length)
         self.timeline.controls.set_window(start, length)
         self.worker.set_window(start, length)
-        if self.playing and not start <= self.row < start + length:
-            self.goto(start, commit=True)
+        if self.row != start + offset:
+            self.goto(start + offset, commit=True)
 
     def goto(self, row, commit):
         """Show `row`. A commit may ask the worker; a guess is served from the memo or not at all."""
@@ -235,7 +237,7 @@ class PlayerWindow(QMainWindow):
         self._update_gate()
 
     def seek(self, row, commit):
-        """A playhead gesture on the strip. Dragged out of the window, it pulls the front along.
+        """Move the playhead; moved out of the window, it pulls the front along.
 
         A drag only paints the moved window; the worker gets it on release, as with the strip's
         own window drag, so a long scrub does not restart the walk on every mouse move.

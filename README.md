@@ -93,8 +93,10 @@ loop window. The strip owns neither; it paints what it's told and reports gestur
 release are three signals with three meanings: press and release are commitments and may cost a
 decode, a drag is a guess served from the memo or not at all. A handle along the window's top
 edge moves it; its length is set only in the control row. The strip paints from a local draft
-during the drag and writes through once, on release. A click anywhere else moves the playhead, and if it lands outside the window the front comes with it,
-length kept; a playhead drag paints the moved window and writes it through on release. A bubble
+during the drag and writes through once, on release. A click anywhere else moves the playhead. The playhead is never outside the window: a move that
+would leave it (click, drag, step, arrow key) pulls the window's front along, length kept, and a
+window move or resize carries the playhead with its offset from the start. A playhead drag paints
+the moved window and writes it through on release. A bubble
 above the cursor shows row and timecode throughout any drag. The control row above the strip has
 play/pause, step ±1, loop start and length in seconds, and a row / timecode / fps readout. A load
 starts playback, which loops inside the window. Space, Left and Right are bound.

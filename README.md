@@ -54,6 +54,13 @@ inside a gated row. `run` must need only cv2 and numpy: import Qt and `sieve_pla
 the tool on a machine with neither installed. `sieve_player.ParamWidget` is an optional base for
 `settings()` with `add_int` / `add_float` / `add_bool`; `tools/` holds the examples.
 
+Any tool may draw on the frame by defining `draw(painter, row, result, start)`. The player calls
+it after painting the frame and the gate border, with a `QPainter` whose coordinates are the
+pixels of the displayed array, so a pen of width 0 stays one screen pixel and any other width is
+in frame pixels. `result` is the series result or None, `start` the row it begins at, `row` the
+row on screen. A `draw` that raises is reported once and dropped for the session. Qt is imported
+inside `draw`, like `settings()`. `mock-up/lk_flow/lk_flow.py` draws its tracks this way.
+
 The last tool in a chain may also export. It does so by defining `output_name(src, params) -> path`
 and `export_command(src, dst, params, fps) -> argv`; the Outputs section then shows the target and
 an Export button that runs the argv in a subprocess, and may show a line from an optional

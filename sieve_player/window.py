@@ -4,6 +4,7 @@ It opens with no video and never prompts. `load(path)` builds the decoder, chain
 replaces them on the next load. Until then the transport is disabled and the frame is black.
 """
 import os
+import traceback
 
 import numpy as np
 from PySide6.QtCore import Qt, QTimer
@@ -36,11 +37,18 @@ def to_qimage(a):
 
 
 class Display(QWidget):
+    """The frame, the gate border, and each tool's draw() on top, in chain order."""
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self._pix, self.gate = None, False
+        self.drawers, self.row, self.result, self.start = [], 0, None, 0
         self.setMinimumSize(160, 120)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+
+    def set_state(self, row, result, start):
+        self.row, self.result, self.start = row, result, start
+        self.update()
 
     def set_frame(self, a):
         self._pix = QPixmap.fromImage(to_qimage(a))
@@ -66,6 +74,18 @@ class Display(QWidget):
         if self.gate:
             p.setPen(QPen(QColor(230, 60, 60), 6))
             p.drawRect(x + 3, y + 3, pix.width() - 6, pix.height() - 6)
+        if not self.drawers:
+            return
+        p.save()
+        p.translate(x, y)
+        p.scale(pix.width() / self._pix.width(), pix.height() / self._pix.height())
+        for tool in self.drawers:
+            try:
+                tool.draw(p, self.row, self.result, self.start)
+            except Exception:
+                traceback.print_exc()
+                self.drawers = [t for t in self.drawers if t is not tool]  # once, not every repaint
+        p.restore()
 
 
 class PlayerWindow(QMainWindow):
@@ -81,6 +101,7 @@ class PlayerWindow(QMainWindow):
         self.result, self.result_start = None, 0
 
         self.display = Display()
+        self.display.drawers = [t for t in self.tools if hasattr(t, "draw")]
         self.timeline = Timeline()
         self.sections = {n: Section(n) for n in ("inputs", "config", "outputs")}
 
@@ -308,6 +329,7 @@ class PlayerWindow(QMainWindow):
         gate = self.result.get("gate") if isinstance(self.result, dict) else None
         i = self.row - self.result_start
         self.display.set_gate(gate is not None and 0 <= i < len(gate) and bool(gate[i]))
+        self.display.set_state(self.row, self.result, self.result_start)
 
     def showEvent(self, e):
         super().showEvent(e)

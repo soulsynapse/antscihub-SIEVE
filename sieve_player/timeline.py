@@ -15,14 +15,15 @@ class Strip(QWidget):
     pressed = Signal(int)
     dragged = Signal(int)
     released = Signal(int)
-    windowChanged = Signal(int, int)  # start, length (rows)
+    windowChanged = Signal(int, int)  # start, length (rows): the handle moved it
+    windowPlaced = Signal(int, int)   # start, length (rows): a click in the black put it here
     H, GRAB = 60, 10  # GRAB: height of the handle along the window's top edge
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.count, self.fps = 1, 30.0
         self.playhead, self.window = 0, (0, 0)
-        self._mode = None        # "head" | "body"
+        self._mode = None        # "head" | "body" | "place"
         self._draft = None       # (start, length) while a window drag is live
         self._grab = 0           # row offset of the grab point inside the body
         self.setFixedHeight(self.H)
@@ -50,12 +51,14 @@ class Strip(QWidget):
         return max(0, min(self.count - 1, int(x / max(1, self.width()) * self.count)))
 
     def _hit(self, x, y):
-        """The handle along the window's top moves it; anywhere else is the playhead.
-        Lengths are edited in the control row, not here."""
+        """The handle along the window's top moves it, the black outside it places it, the rest
+        of the band is the playhead. Lengths are edited in the control row, not here."""
         s, n = self.window
-        if n > 0 and y <= self.GRAB and self._x(s) <= x < self._x(s + n):
-            return "body"
-        return "head"
+        if n <= 0:
+            return "head"
+        if not self._x(s) <= x < self._x(s + n):
+            return "place"
+        return "body" if y <= self.GRAB else "head"
 
     def paintEvent(self, _):
         p = QPainter(self)
@@ -75,9 +78,13 @@ class Strip(QWidget):
         self._mode = self._hit(e.position().x(), e.position().y())
         if self._mode == "head":
             self.pressed.emit(row)
-        else:
+        elif self._mode == "body":
             self._draft = self.window
             self._grab = row - self.window[0]
+        else:  # the window's front jumps to the click and the press goes on as a drag
+            n = self.window[1]
+            self._draft, self._grab = (max(0, min(self.count - n, row)), n), 0
+            self.update()
         self._show_bubble(e)
 
     def mouseMoveEvent(self, e):
@@ -101,7 +108,7 @@ class Strip(QWidget):
         if self._mode == "head":
             self.released.emit(row)
         elif self._draft:
-            self.windowChanged.emit(*self._draft)
+            (self.windowPlaced if self._mode == "place" else self.windowChanged).emit(*self._draft)
         self._mode, self._draft = None, None
         self._bubble.hide()
         self.update()

@@ -138,6 +138,7 @@ class PlayerWindow(QMainWindow):
         st.dragged.connect(lambda r: self.seek(r, commit=False))
         st.released.connect(lambda r: self.seek(r, commit=True))
         st.windowChanged.connect(self.set_window)
+        st.windowPlaced.connect(lambda s, n: self.set_window(s, n, playhead=s))
         ct.playToggled.connect(self.toggle_play)
         ct.step.connect(lambda d: self.seek(self.row + d, commit=True))
         ct.windowEdited.connect(lambda s, n: self.set_window(round(s * self.fps), round(n * self.fps)))
@@ -206,13 +207,15 @@ class PlayerWindow(QMainWindow):
         self.display.clear()
 
     # -- state (every entry is a no-op until something is loaded) --------
-    def set_window(self, start, length):
-        """Move or resize the window. The playhead keeps its offset from the start, clamped inside."""
+    def set_window(self, start, length, playhead=None):
+        """Move or resize the window. The playhead keeps its offset from the start, clamped inside,
+        unless `playhead` names the row to show instead."""
         if self.chain is None:
             return
         start = max(0, min(self.count - 1, int(start)))
         length = max(1, min(self.count - start, int(length)))
-        offset = max(0, min(length - 1, self.row - self.window_[0]))
+        offset = self.row - self.window_[0] if playhead is None else int(playhead) - start
+        offset = max(0, min(length - 1, offset))
         self.window_ = (start, length)
         self.timeline.strip.set_window(start, length)
         self.timeline.controls.set_window(start, length)

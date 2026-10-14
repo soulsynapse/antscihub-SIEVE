@@ -16,13 +16,13 @@ class Strip(QWidget):
     dragged = Signal(int)
     released = Signal(int)
     windowChanged = Signal(int, int)  # start, length (rows)
-    H, GRAB = 60, 6
+    H, GRAB = 60, 10  # GRAB: height of the handle along the window's top edge
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.count, self.fps = 1, 30.0
         self.playhead, self.window = 0, (0, 0)
-        self._mode = None        # "head" | "left" | "right" | "body"
+        self._mode = None        # "head" | "body"
         self._draft = None       # (start, length) while a window drag is live
         self._grab = 0           # row offset of the grab point inside the body
         self.setFixedHeight(self.H)
@@ -49,15 +49,11 @@ class Strip(QWidget):
     def _row(self, x):
         return max(0, min(self.count - 1, int(x / max(1, self.width()) * self.count)))
 
-    def _hit(self, x):
+    def _hit(self, x, y):
+        """The handle along the window's top moves it; anywhere else is the playhead.
+        Lengths are edited in the control row, not here."""
         s, n = self.window
-        if n <= 0:
-            return "head"
-        if abs(x - self._x(s)) <= self.GRAB:
-            return "left"
-        if abs(x - self._x(s + n)) <= self.GRAB:
-            return "right"
-        if self._x(s) < x < self._x(s + n):
+        if n > 0 and y <= self.GRAB and self._x(s) <= x < self._x(s + n):
             return "body"
         return "head"
 
@@ -67,9 +63,7 @@ class Strip(QWidget):
         s, n = self._draft or self.window
         if n > 0:
             p.fillRect(QRectF(self._x(s), 0, self._x(s + n) - self._x(s), self.height()), QColor(70, 110, 160))
-            p.setPen(QPen(QColor(120, 170, 230), 2))
-            for r in (s, s + n):
-                p.drawLine(int(self._x(r)), 0, int(self._x(r)), self.height())
+            p.fillRect(QRectF(self._x(s), 0, self._x(s + n) - self._x(s), self.GRAB), QColor(120, 170, 230))
         p.setPen(QPen(QColor(255, 200, 60), 2))
         x = int(self._x(self.playhead))
         p.drawLine(x, 0, x, self.height())
@@ -77,8 +71,8 @@ class Strip(QWidget):
     def mousePressEvent(self, e):
         if e.button() != Qt.LeftButton:
             return
-        x, row = e.position().x(), self._row(e.position().x())
-        self._mode = self._hit(x)
+        row = self._row(e.position().x())
+        self._mode = self._hit(e.position().x(), e.position().y())
         if self._mode == "head":
             self.pressed.emit(row)
         else:
@@ -87,25 +81,16 @@ class Strip(QWidget):
         self._show_bubble(e)
 
     def mouseMoveEvent(self, e):
-        x, row = e.position().x(), self._row(e.position().x())
+        row = self._row(e.position().x())
         if self._mode is None:
-            hit = self._hit(x)
-            self.setCursor({"left": Qt.SizeHorCursor, "right": Qt.SizeHorCursor,
-                            "body": Qt.OpenHandCursor}.get(hit, Qt.ArrowCursor))
+            hit = self._hit(e.position().x(), e.position().y())
+            self.setCursor(Qt.OpenHandCursor if hit == "body" else Qt.ArrowCursor)
             return
         if self._mode == "head":
             self.dragged.emit(row)
         else:
-            s, n = self.window
-            end = s + n
-            if self._mode == "left":
-                s = min(row, end - 1)
-            elif self._mode == "right":
-                end = max(row + 1, s + 1)
-            else:
-                s = max(0, min(self.count - n, row - self._grab))
-                end = s + n
-            self._draft = (s, end - s)
+            n = self.window[1]
+            self._draft = (max(0, min(self.count - n, row - self._grab)), n)
             self.update()
         self._show_bubble(e)
 

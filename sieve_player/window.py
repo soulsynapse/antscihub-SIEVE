@@ -193,6 +193,7 @@ class PlayerWindow(QMainWindow):
         self.ends = ends
         self.column = column = Column()
         self.focused = None   # a stage number while a tool is open alone
+        self._laid = None     # the mode the column is laid out for (see _populate)
         self._kept = None     # (params, source) to put back on Cancel
         self.source_card, self.source_pick = self._source_card()
         self.sink_card, self.sink_line = self._sink_card()
@@ -295,23 +296,33 @@ class PlayerWindow(QMainWindow):
         return f"{self.links.produces(src)} from {self._name(src)}"
 
     def _populate(self):
-        """Lay the column out for the mode: every card, or Input, one tool, Output."""
-        links, dead = [], []
+        """Lay the column out for the mode, every card or Input, one tool, Output, then refresh.
+        Only a change of mode rebuilds the column; a rewire within one refreshes it in place."""
         if self.focused is None:
-            cards = [self.ends["inputs"], *self.cards, self.ends["outputs"]]
             for card in self.cards:
                 card.set_link(True)
                 card.buttons.hide()
-            self.column.show(cards)
+            self.column.show([self.ends["inputs"], *self.cards, self.ends["outputs"]])
+        else:
+            stage, card = self.focused, self.cards[self.focused]
+            card.set_link(False)
+            card.buttons.show()
+            self._fill_source_pick(stage)
+            self._fill_sink(stage)
+            self.column.show([self.source_card, card, self.sink_card])
+        self._laid = self.focused
+        self._refresh()
+
+    def _refresh(self):
+        """The strips' texts, the pickers' states and the rail follow the wiring."""
+        links, dead = [], []
+        if self.focused is None:
             at = {VIDEO: self.ends["inputs"], **{i: c for i, c in enumerate(self.cards)}}
             for stage, card in enumerate(self.cards):
                 self.column.strips[stage].set_text(self._receives(stage))
                 links.append((at[self.links.source(stage)], card))
             sink = self._sink()
-            if sink == VIDEO:
-                self.column.strips[-1].set_text("bgr from video")
-            else:
-                self.column.strips[-1].set_text(f"{self.links.produces(sink)} from {self._name(sink)}")
+            self.column.strips[-1].set_text(f"{self.links.produces(sink)} from {self._name(sink)}")
             links.append((at[sink], self.ends["outputs"]))
             for stage in range(len(self.cards)):
                 if self._dead(stage):
@@ -321,11 +332,14 @@ class PlayerWindow(QMainWindow):
                         strip.set_text(strip.text, f"{self.links.produces(stage)} unread")
         else:
             stage, card = self.focused, self.cards[self.focused]
-            card.set_link(False)
-            card.buttons.show()
-            self._fill_source_pick(stage)
-            self._fill_sink(stage)
-            self.column.show([self.source_card, card, self.sink_card])
+            pick = self.source_pick
+            pick.blockSignals(True)
+            pick.setCurrentIndex(pick.findData(self.links.source(stage)))
+            pick.blockSignals(False)
+            for reader, (_, box) in zip(self.links.readers(stage), self.sink_card.form.rows):
+                box.blockSignals(True)
+                box.setChecked(self.links.source(reader) == stage)
+                box.blockSignals(False)
             self.column.strips[0].set_text(self._receives(stage))
             links.append((self.source_card, card))
             out = self.links.produces(stage)
@@ -367,6 +381,8 @@ class PlayerWindow(QMainWindow):
         card = self.sink_card
         if card.form is not None:
             card.body.removeWidget(card.form)
+            card.form.hide()
+            card.form.setParent(None)
             card.form.deleteLater()
         card.form = Form()
         card.body.insertWidget(card.body.indexOf(self.sink_line), card.form)
@@ -386,9 +402,9 @@ class PlayerWindow(QMainWindow):
             else:
                 self.links.detach(reader, stage)
         except ValueError as e:
+            self._refresh()
             self.sink_line.setText(str(e))
             self.sink_line.setStyleSheet(f"color: {theme.RED.name()};")
-            self._fill_sink(stage)
             return
         self._rewired()
 
@@ -408,14 +424,18 @@ class PlayerWindow(QMainWindow):
         try:
             self.links.set_source(self.focused, src)
         except ValueError as e:
+            self._refresh()
             self.sink_line.setText(str(e))
-            self._fill_source_pick(self.focused)
+            self.sink_line.setStyleSheet(f"color: {theme.RED.name()};")
             return
         self._rewired()
 
     def _rewired(self):
         """The links or the shown stage changed: keys, the walk and the frame follow."""
-        self._populate()
+        if self._laid == self.focused:
+            self._refresh()
+        else:
+            self._populate()
         if self.chain is None:
             return
         self.chain.relink()

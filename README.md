@@ -71,14 +71,25 @@ example; it also runs headless with `--out`.
 
 ## The player
 
-The right panel is one column: Inputs (cool grey), the tools' settings boxes (white), Outputs
-(warm grey). Inputs and Outputs are the player's and look the same in every tool; their names are
-drawn top-right as a watermark behind the content, Arial Black where it exists, and take no
-layout space. The two greys sit a luminance step apart so they still separate in monochrome.
-Until a video is loaded the transport is disabled and the frame is black; load builds the decoder,
-chain and worker, and the next load replaces them. A path that won't open is reported in Inputs
-and leaves whatever was open alone. `sieve_player/sections.py` holds the sections and the two
-widgets; the colours and the watermark style are constants at its top.
+The window follows the design language settled in `mock-up/design-language` and carried by
+`sieve_player/theme.py`: everything sits on a dark ground, each box on it is one fixed step
+lighter, nothing is inset past the third step, and the only white is a section's name. The right
+column is the chain: the Inputs terminal on the ground, the pipeline, one surface holding a
+section per tool a step deeper, and the Outputs terminal on the ground, with the accent arrow
+running from Inputs through every section into Outputs. A terminal carries no surface and no
+tint; a small-caps name top-right and its place in the flow are what say what it is. The
+transport across the bottom is a second surface. Inside
+a surface a form is a table, descriptions left-aligned in a column sized to the widest, every
+control one width and one height in the next. Editable controls are wells the ground shows
+through; what the pipeline measured is a flat field lifted above the surface, so depth alone
+says what can be touched. The accent marks the flow and what is viewed: the arrow, the loop window on the
+strip, the trace; amber marks the gate. `ParamWidget` builds such a form and `Trace` draws a series in
+it: the trace in the accent, the playhead white, the gate amber. Inter is bundled and loaded
+first so Mac and Windows render alike; on Windows the player asks for FreeType, since DirectWrite
+ignores the hinting preference and fringes on a dark ground. Until a video is loaded the transport
+is disabled and the frame is empty; load builds the decoder, chain and worker, and the next load
+replaces them. A path that won't open is reported in Inputs and leaves whatever was open alone.
+`sieve_player/sections.py` holds the Inputs and Outputs widgets.
 
 Decoding is cv2 to gray with one cursor: sequential reads step it, anything else seeks. Recently
 decoded rows sit in a dict bounded by count. Each stage's output per row is memoized under a key
@@ -100,7 +111,7 @@ loop window. The strip owns neither; it paints what it's told and reports gestur
 release are three signals with three meanings: press and release are commitments and may cost a
 decode, a drag is a guess served from the memo or not at all. A handle along the window's top edge
 moves it; its length is set only in the control row. The strip paints from a local draft during the
-drag and writes through once, on release. A press in the black outside the window puts the window's
+drag and writes through once, on release. A press in the field outside the window puts the window's
 front at the click, playhead at the front, and goes on as a drag. A click in the band below the
 handle moves the playhead; playback pauses while it is held and resumes on release. The playhead is
 never outside the window: a drag, step or arrow key that would leave it is clamped to the nearer

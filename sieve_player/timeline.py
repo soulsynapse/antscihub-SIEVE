@@ -1,8 +1,11 @@
-"""Full-width strip (playhead + loop window) and the control row above it."""
+"""The transport: a layer-1 box across the bottom, the control row over the full-width strip
+(playhead + loop window), which is a layer-2 field inside it."""
 from PySide6.QtCore import QPoint, QRectF, Qt, Signal
 from PySide6.QtGui import QColor, QPainter, QPen
-from PySide6.QtWidgets import (QDoubleSpinBox, QHBoxLayout, QLabel, QPushButton, QSizePolicy,
-                               QVBoxLayout, QWidget)
+from PySide6.QtWidgets import QDoubleSpinBox, QHBoxLayout, QLabel, QPushButton, QSizePolicy, QWidget
+
+from . import theme
+from .theme import GAP, ROW_H, Layer, desc_label, gray, mono_font, qgray, readout
 
 
 def timecode(row, fps):
@@ -30,7 +33,10 @@ class Strip(QWidget):
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.setMouseTracking(True)
         self._bubble = QLabel(None, Qt.ToolTip | Qt.FramelessWindowHint)
-        self._bubble.setStyleSheet("background:#222;color:#eee;padding:2px 6px;border:1px solid #666")
+        self._bubble.setFont(mono_font())
+        self._bubble.setStyleSheet(
+            f"background:{gray(theme.layer(2))};color:{gray(theme.INK)};padding:2px 6px;"
+            f"border:1px solid {gray(theme.layer(2) + theme.LINE_LIFT)}")
 
     def set_count(self, count, fps):
         self.count, self.fps = max(1, count), fps
@@ -51,7 +57,7 @@ class Strip(QWidget):
         return max(0, min(self.count - 1, int(x / max(1, self.width()) * self.count)))
 
     def _hit(self, x, y):
-        """The handle along the window's top moves it, the black outside it places it, the rest
+        """The handle along the window's top moves it, the field outside it places it, the rest
         of the band is the playhead. Lengths are edited in the control row, not here."""
         s, n = self.window
         if n <= 0:
@@ -62,14 +68,21 @@ class Strip(QWidget):
 
     def paintEvent(self, _):
         p = QPainter(self)
-        p.fillRect(self.rect(), QColor(40, 40, 40))
+        p.setRenderHint(QPainter.Antialiasing, True)
+        box = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
+        p.setPen(QPen(qgray(theme.layer(2) + theme.LINE_LIFT), 1))
+        p.setBrush(qgray(theme.layer(2)))
+        p.drawRoundedRect(box, theme.RADIUS, theme.RADIUS)
+        p.setRenderHint(QPainter.Antialiasing, False)
         s, n = self._draft or self.window
         if n > 0:
-            p.fillRect(QRectF(self._x(s), 0, self._x(s + n) - self._x(s), self.height()), QColor(70, 110, 160))
-            p.fillRect(QRectF(self._x(s), 0, self._x(s + n) - self._x(s), self.GRAB), QColor(120, 170, 230))
-        p.setPen(QPen(QColor(255, 200, 60), 2))
+            x0, x1 = self._x(s), self._x(s + n)   # the viewed stretch: accent wash, accent handle
+            a = theme.ACCENT
+            p.fillRect(QRectF(x0, 1, x1 - x0, self.height() - 2), QColor(a.red(), a.green(), a.blue(), 40))
+            p.fillRect(QRectF(x0, 1, x1 - x0, self.GRAB), a)
+        p.setPen(QPen(qgray(theme.HEAD), 1.5))
         x = int(self._x(self.playhead))
-        p.drawLine(x, 0, x, self.height())
+        p.drawLine(x, 1, x, self.height() - 2)
 
     def mousePressEvent(self, e):
         if e.button() != Qt.LeftButton:
@@ -139,7 +152,8 @@ class Controls(QWidget):
         super().__init__(parent)
         self.fps = 30.0
         lay = QHBoxLayout(self)
-        lay.setContentsMargins(4, 2, 4, 2)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(GAP)
         self.play = QPushButton("Play")
         self.play.setFixedWidth(60)
         back, fwd = QPushButton("−1"), QPushButton("+1")
@@ -149,14 +163,15 @@ class Controls(QWidget):
         self.length = QDoubleSpinBox(decimals=3, suffix=" s")
         for sb in (self.start, self.length):
             sb.setKeyboardTracking(False)
-        self.readout = QLabel("")
-        self.progress = QLabel("")
-        for w, t in ((self.play, None), (back, None), (fwd, None), (QLabel("loop start"), None),
-                     (self.start, None), (QLabel("length"), None), (self.length, None)):
+            sb.setFixedWidth(90)   # not a form: room for mmm.mmm s, no more
+        self.readout = readout(mono=True, wrap=False)
+        self.progress = readout(mono=True, wrap=False)
+        for w in (self.play, back, fwd, desc_label("loop start"), self.start, desc_label("length"), self.length):
+            w.setFixedHeight(ROW_H)
             lay.addWidget(w)
         lay.addStretch(1)
         lay.addWidget(self.progress)
-        lay.addSpacing(12)
+        lay.addSpacing(GAP)
         lay.addWidget(self.readout)
         self.play.clicked.connect(self.playToggled)
         back.clicked.connect(lambda: self.step.emit(-1))
@@ -191,15 +206,13 @@ class Controls(QWidget):
         self.progress.setText(f"window {done}/{total}" if done < total else "")
 
 
-class Timeline(QWidget):
-    """Controls over Strip. Fixed height; never negotiates with the layout above."""
+class Timeline(Layer):
+    """Controls over Strip in one unnamed layer-1 box. Fixed height; never negotiates with the
+    layout above."""
 
     def __init__(self, parent=None):
-        super().__init__(parent)
+        super().__init__(1, parent=parent)
         self.controls, self.strip = Controls(self), Strip(self)
-        lay = QVBoxLayout(self)
-        lay.setContentsMargins(0, 0, 0, 0)
-        lay.setSpacing(0)
-        lay.addWidget(self.controls)
-        lay.addWidget(self.strip)
+        self.add(self.controls)
+        self.add(self.strip)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)

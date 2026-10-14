@@ -1,34 +1,27 @@
-"""The right panel's three sections and the two SIEVE owns: Inputs over config over Outputs.
+"""The chain's two terminals, the parts of the column SIEVE owns: Inputs above the pipeline,
+Outputs below it.
 
-Inputs and Outputs look the same in every tool. Inputs is a picker plus what cv2 says about the
-file; Outputs is the target a tool would write, an Export button that runs the tool's argv in a
-QProcess, and the process's last line. A tool takes part in Outputs by defining
-`output_name(src, params) -> path` and `export_command(src, dst, params, fps) -> argv`, and may add
-`describe_output(src, params, fps) -> str` for the line under the target. Without them the
-Outputs section says so and has no button.
+A terminal sits on the ground, not in the pipeline's surface, named in small caps top-right; the
+accent arrow runs from Inputs into the first tool and out of the last into Outputs, so the two
+read as the chain's source and sink. Both look the same in every tool. Inputs is a picker, the
+chosen path, and one line of what cv2 says about the file; Outputs is the target a tool would
+write, an Export button that runs the tool's argv in a QProcess, and the process's last line. A
+tool takes part in Outputs by defining `output_name(src, params) -> path` and
+`export_command(src, dst, params, fps) -> argv`, and may add `describe_output(src, params, fps)
+-> str` for the line under the target. Without them the sink says so and has no button.
 """
 import os
 import re
 from functools import lru_cache
 
 import cv2
-from PySide6.QtCore import QProcess, QRect, Qt, Signal
-from PySide6.QtGui import QColor, QFont, QPainter
-from PySide6.QtWidgets import QFileDialog, QFrame, QLabel, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtCore import QProcess, Qt, Signal
+from PySide6.QtGui import QFontMetrics, QPainter
+from PySide6.QtWidgets import QFileDialog, QPushButton, QVBoxLayout, QWidget
 
-# section name -> (background, label ink, label corner). Inputs is a cool grey, outputs a warm one,
-# a luminance step apart so they still separate in monochrome. Config is white and carries no
-# label (None ink). The word sits top-right of its section.
-SECTIONS = {
-    "inputs": ("#E2E6EC", "#C4CBD5", Qt.AlignRight | Qt.AlignTop),
-    "config": ("#FFFFFF", None, None),
-    "outputs": ("#F3EEE6", "#D9D0C2", Qt.AlignRight | Qt.AlignTop),
-}
-# The watermark: one style for every labelled section, drawn behind the content.
-WATERMARK = dict(
-    families=["Arial Black", "Arial", "Helvetica", "DejaVu Sans"],  # Windows and macOS ship the first
-    px=34, squeeze=-0.12, inset=(8, 4),
-)
+from . import theme
+from .theme import GAP, PAD, Form, measured, qgray, readout
+
 VIDEO_FILTER = "Video (*.mp4 *.MP4 *.avi *.mov *.mkv);;All (*)"
 
 
@@ -63,35 +56,31 @@ def free_name(dst):
     return f"{root}-{n}{ext}"
 
 
-class Section(QFrame):
-    """A tinted frame with its name drawn behind the content as a watermark (see WATERMARK)."""
+def _column(parent):
+    lay = QVBoxLayout(parent)
+    lay.setContentsMargins(0, 0, 0, 0)
+    lay.setSpacing(GAP)
+    return lay
 
-    def __init__(self, name, parent=None):
+
+class Terminal(QWidget):
+    """An end of the chain on the ground: the widget handed in, padded, with its name in small caps
+    top-right and no surface of its own. Controls inside a terminal are layer-1 wells, since the
+    ground is what they would otherwise vanish into (see theme.sheet)."""
+
+    def __init__(self, name, w, parent=None):
         super().__init__(parent)
         self.name = name
-        bg, ink, self.corner = SECTIONS[name]
-        self.bg, self.ink = QColor(bg), (QColor(ink) if ink else None)
-        self.setAutoFillBackground(False)
-        self.lay = QVBoxLayout(self)
-        self.lay.setContentsMargins(12, 10, 12, 10)
-
-    def add(self, w):
-        self.lay.addWidget(w)
+        lay = QVBoxLayout(self)
+        tag = QFontMetrics(theme.eyebrow_font()).horizontalAdvance(name.upper())
+        lay.setContentsMargins(PAD, PAD, PAD + tag + GAP, PAD)   # the name's column stays clear
+        lay.addWidget(w)
 
     def paintEvent(self, _):
         p = QPainter(self)
-        p.fillRect(self.rect(), self.bg)
-        if self.ink is not None:
-            w = WATERMARK
-            f = QFont()
-            f.setFamilies(w["families"])
-            f.setPixelSize(w["px"])
-            f.setWeight(QFont.Black)
-            f.setLetterSpacing(QFont.AbsoluteSpacing, w["squeeze"] * w["px"])
-            p.setFont(f)
-            p.setPen(self.ink)
-            dx, dy = w["inset"]
-            p.drawText(self.rect().adjusted(dx, dy, -dx, -dy), self.corner, self.name.upper())
+        p.setFont(theme.eyebrow_font())
+        p.setPen(qgray(theme.INK_2))
+        p.drawText(self.rect().adjusted(PAD, PAD, -PAD, -PAD), Qt.AlignRight | Qt.AlignTop, self.name.upper())
 
 
 class Inputs(QWidget):
@@ -100,14 +89,13 @@ class Inputs(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        lay = QVBoxLayout(self)
-        lay.setContentsMargins(0, 0, 0, 0)
-        self.button, self.path, self.info = QPushButton("Choose video…"), QLabel("no video"), QLabel("")
-        for w in (self.path, self.info):
-            w.setWordWrap(True)
-        lay.addWidget(self.button, 0, Qt.AlignLeft)  # hugs its text; the corner stays clear for the label
-        lay.addWidget(self.path)
-        lay.addWidget(self.info)
+        lay = _column(self)
+        self.button = QPushButton("Choose…")
+        self.path, self.info = readout("no video"), readout()   # info: the file's facts, or the error
+        form = Form([("video", self.button)])
+        form.add_line(self.path)
+        form.add_line(self.info)
+        lay.addWidget(form)
         self.button.clicked.connect(self._pick)
 
     def _pick(self):
@@ -118,7 +106,7 @@ class Inputs(QWidget):
     def show_source(self, path):
         w, h, fps, n = probe(path)
         self.path.setText(path)
-        self.info.setText(f"{w}×{h}   {fps:.2f} fps   {n} frames   {n / fps:.1f} s")
+        self.info.setText(f"{w}×{h} · {fps:.2f} fps · {n} frames · {n / fps:.1f} s")
 
     def show_error(self, path, err):
         self.path.setText(path)
@@ -131,20 +119,21 @@ class Outputs(QWidget):
     def __init__(self, tool=None, parent=None):
         super().__init__(parent)
         self.tool = tool if tool is not None and hasattr(tool, "export_command") else None
-        lay = QVBoxLayout(self)
-        lay.setContentsMargins(0, 0, 0, 0)
-        self.target, self.button, self.status = QLabel(""), QPushButton("Export"), QLabel("")
-        for w in (self.target, self.status):
-            w.setWordWrap(True)
-        lay.addWidget(self.target)
-        lay.addWidget(self.button, 0, Qt.AlignLeft)
-        lay.addWidget(self.status)
+        lay = _column(self)
+        self.target, self.detail = measured(wide=True), readout()
+        self.button, self.status = QPushButton("Export"), readout()
+        self.form = Form([("target", self.target)])
+        self.form.add_line(self.detail)
+        self.form.add_row("export", self.button)
+        self.form.add_line(self.status)
+        lay.addWidget(self.form)
         self.button.clicked.connect(self._export)
         self.button.setEnabled(False)
         self.proc, self.src, self.fps, self.params = None, None, None, {}
         if self.tool is None:
-            self.button.hide()
-            self.target.setText("this chain has nothing to export")
+            self.form.set_row_visible(0, False)   # target
+            self.form.set_row_visible(2, False)   # export
+            self.detail.setText("this chain has nothing to export")
 
     def set_source(self, path, fps):
         self.src, self.fps = path, fps
@@ -162,13 +151,26 @@ class Outputs(QWidget):
         if self.tool is None:
             return
         if self.src is None:
-            self.target.setText("pick a video in Inputs")
+            self.target.setText("")
+            self.detail.setText("pick a video in Inputs")
             return
-        text = os.path.basename(self._target())
+        dst = self._target()
+        self._name = os.path.basename(dst)
+        self._elide()
+        self.target.setToolTip(dst)
         describe = getattr(self.tool, "describe_output", None)
-        if describe:
-            text += "\n" + describe(self.src, self.params, self.fps)
-        self.target.setText(text)
+        self.detail.setText(describe(self.src, self.params, self.fps) if describe else "")
+
+    _name = ""
+
+    def _elide(self):
+        metrics = QFontMetrics(self.target.font())
+        self.target.setText(metrics.elidedText(self._name, Qt.ElideMiddle, self.target.width() - 12))
+
+    def resizeEvent(self, e):
+        super().resizeEvent(e)
+        if self._name:
+            self._elide()
 
     def _export(self):
         if self.proc is not None:

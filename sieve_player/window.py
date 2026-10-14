@@ -1,20 +1,25 @@
-"""The window: frame left, the sectioned panel right, timeline across the bottom.
+"""The window: frame left, the chain right, the transport across the bottom.
 
-It opens with no video and never prompts. `load(path)` builds the decoder, chain and worker, and
-replaces them on the next load. Until then the transport is disabled and the frame is black.
+Everything sits on the ground gray. The chain is a column: the Inputs terminal on the ground, the
+pipeline, a layer-1 surface holding one layer-2 section per tool, and the Outputs terminal on the
+ground, with the accent arrow running from Inputs through every section into Outputs. The
+transport is a second layer-1 surface. It opens with no video and never prompts.
+`load(path)` builds the decoder, chain and worker, and replaces them on the next load. Until then
+the transport is disabled and the frame is empty ground.
 """
 import os
 import traceback
 
 import numpy as np
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QColor, QImage, QKeySequence, QPainter, QPen, QPixmap, QShortcut
-from PySide6.QtWidgets import (QFrame, QGroupBox, QMainWindow, QScrollArea, QSizePolicy, QSplitter,
-                               QVBoxLayout, QWidget)
+from PySide6.QtGui import QImage, QKeySequence, QPainter, QPen, QPixmap, QShortcut
+from PySide6.QtWidgets import QFrame, QMainWindow, QScrollArea, QSizePolicy, QSplitter, QVBoxLayout, QWidget
 
+from . import theme
 from .chain import Chain
 from .decoder import Decoder
-from .sections import Inputs, Outputs, Section
+from .sections import Inputs, Outputs, Terminal
+from .theme import GAP, PAD, Arrow, Layer
 from .timeline import Timeline
 from .worker import Worker
 
@@ -65,15 +70,15 @@ class Display(QWidget):
 
     def paintEvent(self, _):
         p = QPainter(self)
-        p.fillRect(self.rect(), Qt.black)
+        p.fillRect(self.rect(), theme.qgray(theme.GROUND))
         if self._pix is None:
             return
         pix = self._pix.scaled(self.size(), Qt.KeepAspectRatio, Qt.FastTransformation)
         x, y = (self.width() - pix.width()) // 2, (self.height() - pix.height()) // 2
         p.drawPixmap(x, y, pix)
         if self.gate:
-            p.setPen(QPen(QColor(230, 60, 60), 6))
-            p.drawRect(x + 3, y + 3, pix.width() - 6, pix.height() - 6)
+            p.setPen(QPen(theme.AMBER, 4))
+            p.drawRect(x + 2, y + 2, pix.width() - 4, pix.height() - 4)
         if not self.drawers:
             return
         p.save()
@@ -93,6 +98,7 @@ class PlayerWindow(QMainWindow):
         super().__init__()
         self.title = title
         self.setWindowTitle(title)
+        self.setStyleSheet(theme.sheet())
         self.tools = list(tools)
         self.decoder = self.chain = self.worker = None
         self.fps, self.count = 30.0, 0
@@ -103,45 +109,53 @@ class PlayerWindow(QMainWindow):
         self.display = Display()
         self.display.drawers = [t for t in self.tools if hasattr(t, "draw")]
         self.timeline = Timeline()
-        self.sections = {n: Section(n) for n in ("inputs", "config", "outputs")}
+        self.sections = []   # one layer-2 section per tool, in chain order; placed once the panel exists
 
         self.inputs = Inputs()
         self.inputs.sourceChanged.connect(self.load)
-        self.sections["inputs"].add(self.inputs)
 
-        # config: one group box per tool, as before; widgets are built once and outlive loads
+        # one section per tool; widgets are built once and outlive loads
         self.frame_widgets, self.series_widget = [], None
         frame_tools = [t for t in self.tools if getattr(t, "KIND", "frame") == "frame"]
         series_tools = [t for t in self.tools if getattr(t, "KIND", "frame") == "series"]
         for i, t in enumerate(frame_tools):
-            w = self._boxed(self.sections["config"], t)
+            w = self._section(t.NAME, t.settings())
             w.changed.connect(lambda i=i, w=w: self._frame_tool_changed(i, w))
             self.frame_widgets.append(w)
         if series_tools:
-            w = self.series_widget = self._boxed(self.sections["config"], series_tools[0])
+            w = self.series_widget = self._section(series_tools[0].NAME, series_tools[0].settings())
             w.changed.connect(lambda w=w: self._series_tool_changed(w))
-        self.sections["config"].lay.addStretch(1)
 
         # outputs: the chain's last tool exports, if it can
         self.export_tool = self.tools[-1] if self.tools else None
         self.export_widget = self.frame_widgets[-1] if self.export_tool in frame_tools else self.series_widget
         self.outputs = Outputs(self.export_tool)
-        self.sections["outputs"].add(self.outputs)
         if self.export_widget is not None:
             self.export_widget.changed.connect(lambda: self.outputs.set_params(self.export_widget.params()))
             self.outputs.set_params(self.export_widget.params())
 
+        self.pipeline = Layer(1)
+        for i, section in enumerate(self.sections):
+            if i:
+                self.pipeline.add(Arrow())
+            self.pipeline.add(section)
+        self.pipeline.body.addStretch(1)
         column = QWidget()
         cl = QVBoxLayout(column)
         cl.setContentsMargins(0, 0, 0, 0)
         cl.setSpacing(0)
-        for name, s in self.sections.items():
-            cl.addWidget(s, 1 if name == "config" else 0)  # inputs and outputs hug their content
+        cl.addWidget(Terminal("inputs", self.inputs))
+        cl.addWidget(Arrow())
+        cl.addWidget(self.pipeline, 1)   # the pipeline takes the height, so Outputs sits at the foot
+        cl.addWidget(Arrow())
+        cl.addWidget(Terminal("outputs", self.outputs))
         scroll = QScrollArea()
         scroll.setWidget(column)
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         split = QSplitter(Qt.Horizontal)
+        split.setHandleWidth(GAP)
         split.addWidget(self.display)
         split.addWidget(scroll)
         split.setStretchFactor(0, 1)
@@ -149,8 +163,8 @@ class PlayerWindow(QMainWindow):
         self.split = split
         central = QWidget()
         lay = QVBoxLayout(central)
-        lay.setContentsMargins(0, 0, 0, 0)
-        lay.setSpacing(0)
+        lay.setContentsMargins(PAD, PAD, PAD, PAD)
+        lay.setSpacing(GAP)
         lay.addWidget(split, 1)
         lay.addWidget(self.timeline, 0)
         self.setCentralWidget(central)
@@ -174,12 +188,11 @@ class PlayerWindow(QMainWindow):
         self.timeline.setEnabled(False)
         ct.progress.setText("no video")
 
-    @staticmethod
-    def _boxed(section, tool):
-        w = tool.settings()
-        box = QGroupBox(tool.NAME)
-        QVBoxLayout(box).addWidget(w)
-        section.add(box)
+    def _section(self, name, w):
+        """A named layer-2 section holding `w`, queued for the panel; returns `w`."""
+        section = Layer(2, name)
+        section.add(w)
+        self.sections.append(section)
         return w
 
     # -- loading ---------------------------------------------------------

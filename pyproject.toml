@@ -11,3 +11,6 @@ dependencies = ["PySide6", "opencv-python-headless", "numpy"]
 
 [tool.setuptools]
 packages = ["sieve_player"]
+
+[tool.setuptools.package-data]
+sieve_player = ["fonts/*", "glyphs/*"]

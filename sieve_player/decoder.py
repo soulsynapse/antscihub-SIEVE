@@ -1,4 +1,4 @@
-"""cv2 gray decoder: one cursor, sequential reads step it, anything else seeks."""
+"""cv2 BGR decoder: one cursor, sequential reads step it, anything else seeks."""
 import threading
 from collections import OrderedDict
 
@@ -45,11 +45,10 @@ class Decoder:
                     self.count = row  # container header lied; trust the stream
                 raise IndexError(f"row {row} past end of {self.path}")
             self._cursor = row + 1
-            g = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
-            self._cache[row] = g
+            self._cache[row] = bgr
             while len(self._cache) > self._cache_rows:
                 self._cache.popitem(last=False)
-            return g
+            return bgr
 
     def close(self):
         self.cap.release()

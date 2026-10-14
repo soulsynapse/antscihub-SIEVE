@@ -43,8 +43,8 @@ VALUE_W = 36       # a slider's mono readout
 ACCENT = QColor(88, 146, 255)   # what is viewed: the arrow, the loop window, the trace
 AMBER = QColor(222, 160, 56)    # the gate
 # The chain's two end cards are told from the tool cards by their hairline alone: Inputs teal,
-# Outputs salmon, each about as bright as the gray hairline it replaces.
-EDGE_TINTS = {"inputs": QColor(30, 66, 68), "outputs": QColor(92, 52, 48)}
+# Outputs orange, both bright enough to read as colour at a glance.
+EDGE_TINTS = {"inputs": QColor(40, 180, 172), "outputs": QColor(240, 120, 80)}
 MONO = ["Cascadia Mono", "Consolas", "Menlo", "DejaVu Sans Mono", "monospace"]
 FAMILIES = ["Inter", "Segoe UI Variable Text", "Segoe UI", "SF Pro Text", "Helvetica Neue", "Helvetica", "Arial"]
 HERE = Path(__file__).parent

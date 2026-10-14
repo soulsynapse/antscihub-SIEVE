@@ -18,7 +18,7 @@ import sys
 
 import cv2
 
-NAME, KIND, EXPECTS, PRODUCES = "downsample", "frame", "gray", "gray"
+NAME, KIND, EXPECTS, PRODUCES = "downsample", "frame", ("bgr", "gray"), None
 DEFAULTS = {"scale": 0.5, "every": 2}
 
 

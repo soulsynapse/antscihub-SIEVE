@@ -31,11 +31,12 @@ def settings(parent=None):
     class _Widget(ParamWidget):
         def __init__(self, parent=None):
             super().__init__(parent)
-            self.add_float("gate", 0.0, 30.0, DEFAULTS["gate"])
+            self.gate = self.add_float("gate", 0.0, 30.0, DEFAULTS["gate"])
             self.plot = Trace(rows=5)
             self.layout().addWidget(self.plot)
             self.result = None
             self.changed.connect(self._relevel)   # the gate line moves with the slider, before the rerun lands
+            self.plot.levelDragged.connect(lambda v: self.gate.setValue(round(v * 100)))   # and the slider with the line
 
         def _relevel(self):
             if self.result is not None:
@@ -56,5 +57,6 @@ if __name__ == "__main__":
     import sys
 
     from sieve_player import play
+    from tools import gray
 
-    sys.exit(play([sys.modules[__name__]], sys.argv[1] if len(sys.argv) > 1 else None))
+    sys.exit(play([gray, sys.modules[__name__]], sys.argv[1] if len(sys.argv) > 1 else None))

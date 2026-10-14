@@ -2,7 +2,7 @@
 
     .venv\\Scripts\\python smoke.py [video]
 
-Runs the example chain (rescale -> threshold -> motion) and tools/downsample.
+Runs the example chain (gray -> rescale -> threshold -> motion) and tools/downsample.
 Asserts on state at each step and exits non-zero on the first failure. Text renders as boxes
 under the offscreen platform, so there is nothing to look at; this checks wiring, not looks.
 """
@@ -15,7 +15,7 @@ from PySide6.QtCore import QTimer  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from sieve_player.window import PlayerWindow  # noqa: E402
-from tools import downsample as ds, motion, rescale, threshold  # noqa: E402
+from tools import downsample as ds, gray, motion, rescale, threshold  # noqa: E402
 
 path = sys.argv[1] if len(sys.argv) > 1 else "video-tests/rep3_intermittent_crop.MP4"
 app = QApplication.instance() or QApplication(sys.argv)
@@ -29,7 +29,7 @@ def check(cond, msg):
 
 
 def run_chain():
-    win = PlayerWindow([rescale, threshold, motion], "smoke")
+    win = PlayerWindow([gray, rescale, threshold, motion], "smoke")
     win.resize(1200, 700)
     win.show()
     check(not win.timeline.isEnabled(), "transport enabled before load")

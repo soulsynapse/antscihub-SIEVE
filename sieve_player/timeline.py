@@ -20,12 +20,14 @@ class Strip(QWidget):
     released = Signal(int)
     windowChanged = Signal(int, int)  # start, length (rows): the handle moved it
     windowPlaced = Signal(int, int)   # start, length (rows): a click in the black put it here
+    hovered = Signal(int)             # the row under the cursor, -1 on leave
     H, GRAB = 60, 10  # GRAB: height of the handle along the window's top edge
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.count, self.fps = 1, 30.0
         self.playhead, self.window = 0, (0, 0)
+        self.hover = -1
         self._mode = None        # "head" | "body" | "place"
         self._draft = None       # (start, length) while a window drag is live
         self._grab = 0           # row offset of the grab point inside the body
@@ -48,6 +50,10 @@ class Strip(QWidget):
 
     def set_window(self, start, length):
         self.window = (start, length)
+        self.update()
+
+    def set_hover(self, row):
+        self.hover = row
         self.update()
 
     def _x(self, row):
@@ -80,6 +86,10 @@ class Strip(QWidget):
             a = theme.ACCENT
             p.fillRect(QRectF(x0, 1, x1 - x0, self.height() - 2), QColor(a.red(), a.green(), a.blue(), 40))
             p.fillRect(QRectF(x0, 1, x1 - x0, self.GRAB), a)
+        if self.hover >= 0:
+            p.setPen(QPen(qgray(theme.INK_2), 1))
+            x = int(self._x(self.hover))
+            p.drawLine(x, 1, x, self.height() - 2)
         p.setPen(QPen(qgray(theme.HEAD), 1.5))
         x = int(self._x(self.playhead))
         p.drawLine(x, 1, x, self.height() - 2)
@@ -105,6 +115,10 @@ class Strip(QWidget):
         if self._mode is None:
             hit = self._hit(e.position().x(), e.position().y())
             self.setCursor(Qt.OpenHandCursor if hit == "body" else Qt.ArrowCursor)
+            if row != self.hover:
+                self.hover = row
+                self.update()
+                self.hovered.emit(row)
             return
         if self._mode == "head":
             self.dragged.emit(row)
@@ -129,6 +143,10 @@ class Strip(QWidget):
     def leaveEvent(self, _):
         if self._mode is None:
             self._bubble.hide()
+        if self.hover != -1:
+            self.hover = -1
+            self.update()
+            self.hovered.emit(-1)
 
     def _show_bubble(self, e):
         row = self._row(e.position().x())

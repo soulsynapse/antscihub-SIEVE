@@ -78,16 +78,17 @@ class Chain:
         if len(series) > 1:
             raise ValueError("at most one series tool")
         self.series_tool = series[0] if series else None
-        produces = "gray"
+        produces = "bgr"   # what the decoder hands out
         for t in self.frame_tools + series:
-            if t.EXPECTS != produces:
+            expects = t.EXPECTS if isinstance(t.EXPECTS, (tuple, list, set)) else (t.EXPECTS,)
+            if produces not in expects:
                 raise ValueError(f"{t.NAME} EXPECTS {t.EXPECTS!r} but upstream PRODUCES {produces!r}")
-            produces = getattr(t, "PRODUCES", produces)
+            produces = getattr(t, "PRODUCES", None) or produces   # PRODUCES None: same type as its input
         self.params = [dict(t.DEFAULTS) for t in self.frame_tools]
         self.series_params = dict(self.series_tool.DEFAULTS) if self.series_tool else {}
         self.memo = Memo(memo_bytes)
         self._lock = threading.Lock()
-        self._base = _key("video", decoder.path, "gray")
+        self._base = _key("video", decoder.path, "bgr")
         self._keys = []
         self._rekey()
 

@@ -29,7 +29,7 @@ A tool is one file. Two kinds.
 A **frame tool** maps one row to one array:
 
 ```python
-NAME = "rescale"; KIND = "frame"; EXPECTS = "gray"; PRODUCES = "gray"
+NAME = "threshold"; KIND = "frame"; EXPECTS = "gray"; PRODUCES = "gray"
 DEFAULTS = {...}                              # plain JSON-able dict
 def run(frames, row, params) -> np.ndarray    # frames(r) is the upstream output at row r
 def settings(parent=None) -> QWidget          # has .changed (Signal) and .params() -> dict
@@ -45,7 +45,9 @@ def settings(parent=None) -> QWidget          # .changed, .params(), .show_resul
 
 `frames.key` / `series.key` names the input and changes whenever anything upstream changes;
 `frames.fps`, `frames.count`, `series.start` are facts. `EXPECTS` / `PRODUCES` are strings the
-player compares for equality and never looks inside; stage one must expect `"gray"`. `run` may be
+player compares for equality and never looks inside. The decoder produces `"bgr"`, so stage one
+must expect it; `tools/gray.py` turns it into `"gray"` for the tools that want luma. `EXPECTS`
+may be a tuple of types, and `PRODUCES = None` means out as in (rescale, downsample). `run` may be
 called from a worker thread and the GUI thread at the same time, for any row in any order. A tool
 that caches must key on `frames.key` (or `series.key`) and on every one of its own params. A
 `"gate"` bool array in a series result is drawn on the frame as a red border while the playhead is
@@ -90,7 +92,7 @@ is disabled and the frame is empty; load builds the decoder, chain and worker, a
 replaces them. A path that won't open is reported in Inputs and leaves whatever was open alone.
 `sieve_player/sections.py` holds the Inputs and Outputs widgets.
 
-Decoding is cv2 to gray with one cursor: sequential reads step it, anything else seeks. Recently
+Decoding is cv2 to BGR with one cursor: sequential reads step it, anything else seeks. Recently
 decoded rows sit in a dict bounded by count. Each stage's output per row is memoized under a key
 that hashes the tool's params and the upstream key, so a slider change at stage 3 invalidates
 stage 3 onward and nothing before. The memo is bounded by bytes and drops image-shaped entries

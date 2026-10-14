@@ -1,8 +1,11 @@
 """The window: frame left, the chain right, the transport across the bottom.
 
 Everything sits on the ground gray. The chain is a column of layer-1 cards: Inputs, one per tool,
-Outputs, with the accent arrow running from each into the next. The transport is one more
-surface. It opens with no video and never prompts.
+Outputs, with the accent arrow running from each into the next; the frame and the column open
+at equal widths and the column never shrinks below one form. The transport is one more surface. Every trace in
+the column and the strip share one cursor: hovering any of them marks the row in all of them, and
+a press in a trace moves the playhead as a press in the strip does. It opens with no video and
+never prompts.
 `load(path)` builds the decoder, chain and worker, and replaces them on the next load. Until then
 the transport is disabled and the frame is empty ground.
 """
@@ -20,6 +23,7 @@ from .decoder import Decoder
 from .sections import Inputs, Outputs
 from .theme import GAP, PAD, Arrow, Layer
 from .timeline import Timeline
+from .widgets import Trace
 from .worker import Worker
 
 
@@ -150,6 +154,7 @@ class PlayerWindow(QMainWindow):
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.NoFrame)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setMinimumWidth(theme.WIDE_W + 2 * PAD + GAP)   # one form and the scrollbar's gutter
         split = QSplitter(Qt.Horizontal)
         split.setHandleWidth(GAP)
         split.addWidget(self.display)
@@ -157,6 +162,8 @@ class PlayerWindow(QMainWindow):
         split.setStretchFactor(0, 1)
         split.setStretchFactor(1, 1)
         self.split = split
+        self._split_moved = False
+        split.splitterMoved.connect(lambda *_: setattr(self, "_split_moved", True))
         central = QWidget()
         lay = QVBoxLayout(central)
         lay.setContentsMargins(PAD, PAD, PAD, PAD)
@@ -171,6 +178,13 @@ class PlayerWindow(QMainWindow):
         st.released.connect(self._scrub_end)
         st.windowChanged.connect(self.set_window)
         st.windowPlaced.connect(lambda s, n: self.set_window(s, n, playhead=s))
+        st.hovered.connect(self._hover)
+        self.traces = column.findChildren(Trace)
+        for tr in self.traces:
+            tr.pressed.connect(self._scrub_begin)
+            tr.dragged.connect(lambda r: self.seek(r, commit=False))
+            tr.released.connect(self._scrub_end)
+            tr.hovered.connect(self._hover)
         ct.playToggled.connect(self.toggle_play)
         ct.step.connect(lambda d: self.seek(self.row + d, commit=True))
         ct.windowEdited.connect(lambda s, n: self.set_window(round(s * self.fps), round(n * self.fps)))
@@ -334,18 +348,29 @@ class PlayerWindow(QMainWindow):
             self.series_widget.show_result(result, start, fps)
         self._update_gate()
 
+    def _hover(self, row):
+        """One cursor for the strip and every trace; -1 clears it."""
+        for tr in self.traces:
+            tr.set_hover(row)
+        self.timeline.strip.set_hover(row)
+
     def _update_gate(self):
         gate = self.result.get("gate") if isinstance(self.result, dict) else None
         i = self.row - self.result_start
         self.display.set_gate(gate is not None and 0 <= i < len(gate) and bool(gate[i]))
         self.display.set_state(self.row, self.result, self.result_start)
 
-    def showEvent(self, e):
-        super().showEvent(e)
-        if not getattr(self, "_split_done", False):  # sizes set before show get reshaped by hints
-            self._split_done = True
-            half = self.split.width() // 2
-            self.split.setSizes([half, half])
+    SPLIT = 0.5   # the frame's share of the width until the handle is dragged
+
+    def resizeEvent(self, e):
+        super().resizeEvent(e)
+        if not self._split_moved:
+            QTimer.singleShot(0, self._split_default)   # after the layout has given the splitter its width
+
+    def _split_default(self):
+        if not self._split_moved:
+            w = self.split.width()
+            self.split.setSizes([int(w * self.SPLIT), w - int(w * self.SPLIT)])
 
     def closeEvent(self, e):
         self.timer.stop()

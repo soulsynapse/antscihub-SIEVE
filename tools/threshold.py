@@ -1,4 +1,4 @@
-"""Frame tool: binarize gray frames."""
+"""Frame tool: binarize gray frames with one cut. For a color band use tools/inrange."""
 import cv2
 
 NAME, KIND, EXPECTS, PRODUCES = "threshold", "frame", "gray", "gray"
@@ -24,5 +24,6 @@ if __name__ == "__main__":
     import sys
 
     from sieve_player import play
+    from tools import gray
 
-    sys.exit(play([sys.modules[__name__]], sys.argv[1] if len(sys.argv) > 1 else None))
+    sys.exit(play([gray, sys.modules[__name__]], sys.argv[1] if len(sys.argv) > 1 else None))

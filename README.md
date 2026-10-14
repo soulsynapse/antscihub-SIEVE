@@ -91,15 +91,16 @@ it asks the worker and keeps showing the last frame until it lands.
 One full-width strip across the bottom spans the whole recording and carries the playhead and the
 loop window. The strip owns neither; it paints what it's told and reports gestures. Press, drag and
 release are three signals with three meanings: press and release are commitments and may cost a
-decode, a drag is a guess served from the memo or not at all. A handle along the window's top
-edge moves it; its length is set only in the control row. The strip paints from a local draft
-during the drag and writes through once, on release. A press in the black outside the window puts the window's front at the click, playhead at the
-front, and goes on as a drag. A click in the band below the handle moves the playhead; playback pauses while it is held and resumes on release. The playhead
-is never outside the window: a drag, step or arrow key that would leave it is clamped to the nearer
-edge, and a handle move or spinbox edit carries the playhead with its offset from the start. A bubble
-above the cursor shows row and timecode throughout any drag. The control row above the strip has
-play/pause, step ±1, loop start and length in seconds, and a row / timecode / fps readout. A load
-starts playback, which loops inside the window. Space, Left and Right are bound.
+decode, a drag is a guess served from the memo or not at all. A handle along the window's top edge
+moves it; its length is set only in the control row. The strip paints from a local draft during the
+drag and writes through once, on release. A press in the black outside the window puts the window's
+front at the click, playhead at the front, and goes on as a drag. A click in the band below the
+handle moves the playhead; playback pauses while it is held and resumes on release. The playhead is
+never outside the window: a drag, step or arrow key that would leave it is clamped to the nearer
+edge, and a handle move or spinbox edit carries the playhead with its offset from the start. A
+bubble above the cursor shows row and timecode throughout any drag. The control row above the strip
+has play/pause, step ±1, loop start and length in seconds, and a row / timecode / fps readout. A
+load starts playback, which loops inside the window. Space, Left and Right are bound.
 
 ## STATUS
 

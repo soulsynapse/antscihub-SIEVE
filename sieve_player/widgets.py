@@ -16,7 +16,7 @@ class ParamWidget(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._get = {}
+        self._get, self._set = {}, {}
         self._lay = QVBoxLayout(self)
         self._lay.setContentsMargins(0, 0, 0, 0)
         self._lay.setSpacing(GAP)
@@ -25,6 +25,12 @@ class ParamWidget(QWidget):
 
     def params(self):
         return {k: g() for k, g in self._get.items()}
+
+    def set_params(self, params):
+        """Move the knobs to `params`; each one that moves emits changed."""
+        for k, v in params.items():
+            if k in self._set:
+                self._set[k](v)
 
     def _slider(self, name, lo, hi, value, fmt):
         w = QWidget()
@@ -48,13 +54,13 @@ class ParamWidget(QWidget):
 
     def add_int(self, name, lo, hi, value):
         s = self._slider(name, lo, hi, int(value), str)
-        self._get[name] = s.value
+        self._get[name], self._set[name] = s.value, lambda v: s.setValue(int(v))
         return s
 
     def add_float(self, name, lo, hi, value, decimals=2):
         k = 10 ** decimals
         s = self._slider(name, round(lo * k), round(hi * k), round(value * k), lambda v: f"{v / k:.{decimals}f}")
-        self._get[name] = lambda: s.value() / k
+        self._get[name], self._set[name] = lambda: s.value() / k, lambda v: s.setValue(round(v * k))
         return s
 
     def add_bool(self, name, value):
@@ -62,7 +68,7 @@ class ParamWidget(QWidget):
         c.setChecked(bool(value))
         c.toggled.connect(lambda _: self.changed.emit())
         self.form.add_row(name, c)
-        self._get[name] = c.isChecked
+        self._get[name], self._set[name] = c.isChecked, lambda v: c.setChecked(bool(v))
 
 
 class Trace(QWidget):

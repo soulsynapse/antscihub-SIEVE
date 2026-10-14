@@ -15,7 +15,7 @@ rows = int(sys.argv[2]) if len(sys.argv) > 2 else 600
 def fill(chain, n):
     t = time.perf_counter()
     for r in range(n):
-        chain.compute(chain.last, r)
+        chain.compute(chain.walk, r)
     return time.perf_counter() - t
 
 

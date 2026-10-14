@@ -1,11 +1,17 @@
 """The window: frame left, the chain right, the transport across the bottom.
 
 Everything sits on the ground gray. The chain is a column of layer-1 cards: Inputs, one per tool,
-Outputs, with the accent arrow running from each into the next; the frame and the column open
-at equal widths and the column never shrinks below one form. The transport is one more surface. Every trace in
-the column and the strip share one cursor: hovering any of them marks the row in all of them, and
-a press in a trace moves the playhead as a press in the strip does. It opens with no video and
+Outputs. The links between them run in a rail left of the cards: each leaves the card it reads
+and turns into the card that reads it, and the strip above a card names what it receives. An
+output nothing reads, and no file takes, ends in red. The frame and the column open at equal
+widths and the column never shrinks below one form. The transport is one more surface. Every trace
+in the column and the strip share one cursor: hovering any of them marks the row in all of them,
+and a press in a trace moves the playhead as a press in the strip does. It opens with no video and
 never prompts.
+
+A tool's name is a link. It, or a double-click on the card, opens the tool alone: Input above it,
+a picker of the stages it may read; Output below, what reads it; the frame shows this stage. Knobs
+and the picker act at once; Save keeps them, Cancel (or Escape) puts them back.
 `load(path)` builds the decoder, chain and worker, and replaces them on the next load. Until then
 the transport is disabled and the frame is empty ground.
 """
@@ -13,15 +19,16 @@ import os
 import traceback
 
 import numpy as np
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import QEvent, Qt, QTimer
 from PySide6.QtGui import QImage, QKeySequence, QPainter, QPen, QPixmap, QShortcut
-from PySide6.QtWidgets import QFrame, QMainWindow, QScrollArea, QSizePolicy, QSplitter, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (QComboBox, QFrame, QHBoxLayout, QLabel, QMainWindow, QPushButton, QScrollArea,
+                               QSizePolicy, QSplitter, QVBoxLayout, QWidget)
 
 from . import theme
-from .chain import Chain
+from .chain import VIDEO, Chain, Links
 from .decoder import Decoder
 from .sections import Inputs, Outputs
-from .theme import GAP, PAD, Arrow, Layer
+from .theme import GAP, PAD, RAIL, Form, Layer, Link, Rail, readout
 from .timeline import Timeline
 from .widgets import Trace
 from .worker import Worker
@@ -96,6 +103,47 @@ class Display(QWidget):
         p.restore()
 
 
+class Column(QWidget):
+    """The chain's cards in a stack with a rail down the left. `show(cards)` lays out exactly those
+    widgets, a Link strip between each pair; the rail is told its links separately."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.lay = QVBoxLayout(self)
+        self.lay.setContentsMargins(RAIL, 0, GAP, 0)   # the rail, and room for the scrollbar
+        self.lay.setSpacing(0)
+        self.rail = Rail(self)
+        self.strips = []   # Link strips in order, one above each card but the first
+
+    def show(self, cards):
+        while self.lay.count():
+            item = self.lay.takeAt(0)
+            if item.widget() is not None:
+                item.widget().hide()
+        for strip in self.strips:
+            strip.deleteLater()
+        self.strips = []
+        for i, card in enumerate(cards):
+            if i:
+                strip = Link()
+                self.strips.append(strip)
+                self.lay.addWidget(strip)
+            self.lay.addWidget(card)
+            card.show()
+        self.lay.addStretch(1)
+        self.rail.raise_()
+        QTimer.singleShot(0, self.rail.update)
+
+    def resizeEvent(self, e):
+        super().resizeEvent(e)
+        self.rail.setGeometry(self.rect())
+
+    def event(self, e):
+        if e.type() == QEvent.Type.LayoutRequest:
+            QTimer.singleShot(0, self.rail.update)   # after the children have their geometry
+        return super().event(e)
+
+
 class PlayerWindow(QMainWindow):
     def __init__(self, tools, title="SIEVE"):
         super().__init__()
@@ -103,6 +151,7 @@ class PlayerWindow(QMainWindow):
         self.setWindowTitle(title)
         self.setStyleSheet(theme.sheet())
         self.tools = list(tools)
+        self.links = Links(self.tools)   # the wiring outlives every load
         self.decoder = self.chain = self.worker = None
         self.fps, self.count = 30.0, 0
         self.row, self.playing, self.window_ = 0, False, (0, 0)
@@ -112,7 +161,7 @@ class PlayerWindow(QMainWindow):
         self.display = Display()
         self.display.drawers = [t for t in self.tools if hasattr(t, "draw")]
         self.timeline = Timeline()
-        self.cards = []   # one layer-1 card per tool, in chain order; placed once Outputs exists
+        self.cards = []   # one layer-1 card per tool, in chain order: its index is its stage
 
         self.inputs = Inputs()
         self.inputs.sourceChanged.connect(self.load)
@@ -140,15 +189,13 @@ class PlayerWindow(QMainWindow):
         ends = {n: Layer(1, n, edge=theme.EDGE_TINTS[n]) for n in ("inputs", "outputs")}
         ends["inputs"].add(self.inputs)
         ends["outputs"].add(self.outputs)
-        column = QWidget()
-        cl = QVBoxLayout(column)
-        cl.setContentsMargins(0, 0, GAP, 0)   # room for the scrollbar; the cards keep their edge
-        cl.setSpacing(0)
-        for i, card in enumerate([ends["inputs"], *self.cards, ends["outputs"]]):
-            if i:
-                cl.addWidget(Arrow())
-            cl.addWidget(card)
-        cl.addStretch(1)
+        self.ends = ends
+        self.column = column = Column()
+        self.focused = None   # a stage number while a tool is open alone
+        self._kept = None     # (params, source) to put back on Cancel
+        self.source_card, self.source_pick = self._source_card()
+        self.sink_card, self.sink_line = self._sink_card()
+        self._populate()
         scroll = QScrollArea()
         scroll.setWidget(column)
         scroll.setWidgetResizable(True)
@@ -191,6 +238,7 @@ class PlayerWindow(QMainWindow):
         QShortcut(QKeySequence(Qt.Key_Space), self, self.toggle_play)
         QShortcut(QKeySequence(Qt.Key_Left), self, lambda: self.seek(self.row - 1, commit=True))
         QShortcut(QKeySequence(Qt.Key_Right), self, lambda: self.seek(self.row + 1, commit=True))
+        QShortcut(QKeySequence(Qt.Key_Escape), self, self.cancel)
 
         self.timer = QTimer(self)
         self.timer.setTimerType(Qt.PreciseTimer)
@@ -199,11 +247,174 @@ class PlayerWindow(QMainWindow):
         ct.progress.setText("no video")
 
     def _card(self, name, w):
-        """A named layer-1 card holding `w`, queued for the column; returns `w`."""
-        card = Layer(1, name)
+        """A named layer-1 card holding `w`, queued for the column; returns `w`. The card's number
+        in self.cards is its stage: frame stages in order, then the series stage."""
+        card = Layer(1, name, link=True)
         card.add(w)
+        stage = len(self.cards)
+        card.activated.connect(lambda: self.focus(stage))
+        buttons = QWidget()
+        h = QHBoxLayout(buttons)
+        h.setContentsMargins(0, 0, 0, 0)
+        h.setSpacing(GAP)
+        cancel, save = QPushButton("Cancel"), QPushButton("Save")
+        cancel.clicked.connect(self.cancel)
+        save.clicked.connect(self.save)
+        for b in (cancel, save):
+            b.setFixedHeight(theme.ROW_H)
+            b.setFixedWidth(theme.CONTROL_W // 2 - GAP // 2)
+            h.addWidget(b)
+        h.addStretch(1)
+        card.add(buttons)
+        card.buttons = buttons
+        buttons.hide()
         self.cards.append(card)
         return w
+
+    # -- the column: pipeline or one tool ---------------------------------
+    def _name(self, stage):
+        return "video" if stage == VIDEO else self.links.tool(stage).NAME
+
+    def _exports(self, stage):
+        """Whether Outputs writes this stage to a file."""
+        return (self.outputs.tool is not None and stage == self._sink())
+
+    def _sink(self):
+        """The stage Outputs belongs to: the series stage, else the last frame stage, else the video."""
+        if self.links.series is not None:
+            return self.links.series
+        return len(self.links.frame_tools) - 1
+
+    def _dead(self, stage):
+        """A frame stage nothing reads and no file takes. The series stage's output is its trace."""
+        return stage != self.links.series and not self.links.consumers(stage) and not self._exports(stage)
+
+    def _receives(self, stage):
+        src = self.links.source(stage)
+        return f"{self.links.produces(src)} from {self._name(src)}"
+
+    def _populate(self):
+        """Lay the column out for the mode: every card, or Input, one tool, Output."""
+        links, dead = [], []
+        if self.focused is None:
+            cards = [self.ends["inputs"], *self.cards, self.ends["outputs"]]
+            for card in self.cards:
+                card.set_link(True)
+                card.buttons.hide()
+            self.column.show(cards)
+            at = {VIDEO: self.ends["inputs"], **{i: c for i, c in enumerate(self.cards)}}
+            for stage, card in enumerate(self.cards):
+                self.column.strips[stage].set_text(self._receives(stage))
+                links.append((at[self.links.source(stage)], card))
+            sink = self._sink()
+            if sink == VIDEO:
+                self.column.strips[-1].set_text("bgr from video")
+            else:
+                self.column.strips[-1].set_text(f"{self.links.produces(sink)} from {self._name(sink)}")
+            links.append((at[sink], self.ends["outputs"]))
+            for stage in range(len(self.cards)):
+                if self._dead(stage):
+                    dead.append(at[stage])
+                    strip = self.column.strips[stage + 1] if stage + 1 < len(self.column.strips) else None
+                    if strip is not None:
+                        strip.set_text(strip.text, f"{self.links.produces(stage)} unread")
+        else:
+            stage, card = self.focused, self.cards[self.focused]
+            card.set_link(False)
+            card.buttons.show()
+            self._fill_source_pick(stage)
+            self.column.show([self.source_card, card, self.sink_card])
+            self.column.strips[0].set_text(self._receives(stage))
+            links.append((self.source_card, card))
+            out = self.links.produces(stage)
+            readers = [self._name(c) for c in self.links.consumers(stage)]
+            if self._exports(stage):
+                readers.append("Outputs")
+            if stage == self.links.series:
+                text, red = f"{out}: the trace", False
+            elif readers:
+                text, red = f"{out} read by {', '.join(readers)}", False
+            else:
+                text, red = f"{out}: nothing reads this and no file takes it", True
+            self.column.strips[1].set_text(f"{out} from {self._name(stage)}", "" if not red else f"{out} unread")
+            self.sink_line.setText(text)
+            self.sink_line.setStyleSheet(f"color: {theme.RED.name()};" if red else "")
+            links.append((card, self.sink_card))
+            if red:
+                dead.append(card)
+        self.column.rail.set_links(links, dead)
+
+    def _source_card(self):
+        card = Layer(1, "input", edge=theme.EDGE_TINTS["inputs"])
+        pick = QComboBox()
+        pick.currentIndexChanged.connect(self._source_picked)
+        form = Form([("from", pick)])
+        card.add(form)
+        return card, pick
+
+    def _sink_card(self):
+        card = Layer(1, "output", edge=theme.EDGE_TINTS["outputs"])
+        line = readout()
+        card.add(line)
+        return card, line
+
+    def _fill_source_pick(self, stage):
+        pick = self.source_pick
+        pick.blockSignals(True)
+        pick.clear()
+        for j in self.links.compatible(stage):
+            pick.addItem(f"{self._name(j)} · {self.links.produces(j)}", j)
+        pick.setCurrentIndex(pick.findData(self.links.source(stage)))
+        pick.blockSignals(False)
+
+    def _source_picked(self, index):
+        if self.focused is None or index < 0:
+            return
+        src = self.source_pick.itemData(index)
+        try:
+            self.links.set_source(self.focused, src)
+        except ValueError as e:
+            self.sink_line.setText(str(e))
+            self._fill_source_pick(self.focused)
+            return
+        self._rewired()
+
+    def _rewired(self):
+        """The links or the shown stage changed: keys, the walk and the frame follow."""
+        self._populate()
+        if self.chain is None:
+            return
+        self.chain.relink()
+        self.worker.invalidate()
+        self.goto(self.row, commit=True)
+
+    def focus(self, stage):
+        """Open one tool alone."""
+        if self.focused is not None:
+            self.save()
+        w = self.frame_widgets[stage] if stage < len(self.frame_widgets) else self.series_widget
+        self._kept = (dict(w.params()), self.links.source(stage))
+        self.focused = stage
+        self.links.shown = self.links.series_source if stage == self.links.series else stage
+        self._rewired()
+
+    def save(self):
+        if self.focused is None:
+            return
+        self.focused, self._kept = None, None
+        self.links.shown = len(self.links.frame_tools) - 1
+        self._rewired()
+
+    def cancel(self):
+        if self.focused is None:
+            return
+        stage, (params, src) = self.focused, self._kept
+        w = self.frame_widgets[stage] if stage < len(self.frame_widgets) else self.series_widget
+        if src != self.links.source(stage):
+            self.links.set_source(stage, src)   # was valid when kept; a later stage may re-default
+        if hasattr(w, "set_params"):
+            w.set_params(params)
+        self.save()
 
     # -- loading ---------------------------------------------------------
     def load(self, path):
@@ -215,7 +426,7 @@ class PlayerWindow(QMainWindow):
             return
         self._unload()
         self.decoder = decoder
-        self.chain = Chain(decoder, self.tools)
+        self.chain = Chain(decoder, self.links)
         for i, w in enumerate(self.frame_widgets):
             self.chain.set_params(i, w.params())
         if self.series_widget is not None:
@@ -237,7 +448,7 @@ class PlayerWindow(QMainWindow):
         self.toggle_play()  # _unload left it paused
         self.inputs.show_source(path)
         self.outputs.set_source(path, self.fps)
-        self.setWindowTitle(f"{self.title} — {os.path.basename(path)}")
+        self.setWindowTitle(f"{self.title} â€” {os.path.basename(path)}")
 
     def _unload(self):
         if self.worker is None:

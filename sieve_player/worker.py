@@ -73,7 +73,7 @@ class Worker(QThread):
                 dirty, self._series_dirty = self._series_dirty, False
             try:
                 if want is not None:
-                    self.chain.compute(self.chain.last, want)
+                    self.chain.compute(self.chain.shown, want)
                     self.rowReady.emit(want)
                     continue
                 if gen != self._walk_gen:
@@ -84,7 +84,10 @@ class Worker(QThread):
                     self._emit_series()
                     continue
                 if self._i < self._length:
-                    out = np.asarray(self.chain.compute(self.chain.last, self._start + self._i))
+                    out = np.asarray(self.chain.compute(self.chain.walk, self._start + self._i))
+                    if self._stack is not None and (self._stack.shape[1:] != out.shape or self._stack.dtype != out.dtype):
+                        self._stack, self._i = None, 0   # the stage or its shape changed under the walk; start over
+                        continue
                     if self._stack is None:
                         self._stack = np.empty((self._length,) + out.shape, dtype=out.dtype)
                     self._stack[self._i] = out
@@ -105,6 +108,6 @@ class Worker(QThread):
         tool = self.chain.series_tool
         if tool is None or not self._i:
             return
-        series = Series(self._stack[: self._i], self.chain.key(self.chain.last), self._start, self.chain.fps)
+        series = Series(self._stack[: self._i], self.chain.key(self.chain.walk), self._start, self.chain.fps)
         result = tool.run(series, self.chain.get_series_params())
         self.seriesReady.emit(result, self._start, self.chain.fps)

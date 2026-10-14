@@ -43,8 +43,34 @@ def run_chain():
 
     def after():
         check(win.result is not None and "gate" in win.result, "series result never arrived")
-        win.load(path)  # reload replaces decoder and worker
-        check(win.chain is not None, "reload failed")
+        check(win.links.sources == [-1, 0, 1] and win.links.series_source == 2, f"default wiring {win.links.sources}")
+        check(len(win.column.strips) == 5 and win.column.strips[2].text == "gray from rescale", "strip text")
+        check(not win.column.rail.dead, "a fully read chain reports an unread stage")
+        # open threshold alone: the frame shows its stage, Input offers the video's gray stages
+        win.focus(2)
+        check(win.focused == 2 and win.links.shown == 2, "focus did not open")
+        check(win.cards[2].buttons.isVisible() and win.source_card.isVisible(), "focus column not shown")
+        check([win.source_pick.itemData(i) for i in range(win.source_pick.count())] == [0, 1], "source picker")
+        thresh = win.frame_widgets[2]
+        before = dict(thresh.params())
+        thresh.set_params({"thresh": 200})
+        win.source_pick.setCurrentIndex(0)   # read gray directly, skipping rescale
+        check(win.links.sources[2] == 0, "rewire did not land")
+        check(win.chain.links is win.links, "chain holds a different wiring")
+        win.cancel()
+        check(win.focused is None and win.links.sources[2] == 1 and thresh.params() == before, "cancel did not restore")
+        win.focus(2)
+        win.source_pick.setCurrentIndex(0)
+        win.save()
+        check(win.links.sources[2] == 0 and win.links.shown == 2, "save did not keep")
+        check(win.cards[1] in win.column.rail.dead and win.column.strips[2].unused == "gray unread",
+              "rescale not flagged unread")
+        # pointing rescale at the video makes it hand out bgr; threshold reads gray, so it is re-pointed
+        win.links.set_source(2, 1)
+        win.links.set_source(1, -1)
+        check(win.links.produces(1) == "bgr" and win.links.sources[2] == 0, f"re-default {win.links.sources}")
+        win.load(path)  # reload replaces decoder and worker, keeps the wiring
+        check(win.chain is not None and win.chain.links.sources == [-1, -1, 0], "reload lost the wiring")
         win.close()
         app.quit()
 

@@ -1,9 +1,8 @@
 """The window: frame left, the chain right, the transport across the bottom.
 
-Everything sits on the ground gray. The chain is a column: the Inputs terminal on the ground, the
-pipeline, a layer-1 surface holding one layer-2 section per tool, and the Outputs terminal on the
-ground, with the accent arrow running from Inputs through every section into Outputs. The
-transport is a second layer-1 surface. It opens with no video and never prompts.
+Everything sits on the ground gray. The chain is a column of layer-1 cards: Inputs, one per tool,
+Outputs, with the accent arrow running from each into the next. The transport is one more
+surface. It opens with no video and never prompts.
 `load(path)` builds the decoder, chain and worker, and replaces them on the next load. Until then
 the transport is disabled and the frame is empty ground.
 """
@@ -18,7 +17,7 @@ from PySide6.QtWidgets import QFrame, QMainWindow, QScrollArea, QSizePolicy, QSp
 from . import theme
 from .chain import Chain
 from .decoder import Decoder
-from .sections import Inputs, Outputs, Terminal
+from .sections import Inputs, Outputs
 from .theme import GAP, PAD, Arrow, Layer
 from .timeline import Timeline
 from .worker import Worker
@@ -109,7 +108,7 @@ class PlayerWindow(QMainWindow):
         self.display = Display()
         self.display.drawers = [t for t in self.tools if hasattr(t, "draw")]
         self.timeline = Timeline()
-        self.sections = []   # one layer-2 section per tool, in chain order; placed once the panel exists
+        self.cards = []   # one layer-1 card per tool, in chain order; placed once Outputs exists
 
         self.inputs = Inputs()
         self.inputs.sourceChanged.connect(self.load)
@@ -119,11 +118,11 @@ class PlayerWindow(QMainWindow):
         frame_tools = [t for t in self.tools if getattr(t, "KIND", "frame") == "frame"]
         series_tools = [t for t in self.tools if getattr(t, "KIND", "frame") == "series"]
         for i, t in enumerate(frame_tools):
-            w = self._section(t.NAME, t.settings())
+            w = self._card(t.NAME, t.settings())
             w.changed.connect(lambda i=i, w=w: self._frame_tool_changed(i, w))
             self.frame_widgets.append(w)
         if series_tools:
-            w = self.series_widget = self._section(series_tools[0].NAME, series_tools[0].settings())
+            w = self.series_widget = self._card(series_tools[0].NAME, series_tools[0].settings())
             w.changed.connect(lambda w=w: self._series_tool_changed(w))
 
         # outputs: the chain's last tool exports, if it can
@@ -134,21 +133,18 @@ class PlayerWindow(QMainWindow):
             self.export_widget.changed.connect(lambda: self.outputs.set_params(self.export_widget.params()))
             self.outputs.set_params(self.export_widget.params())
 
-        self.pipeline = Layer(1)
-        for i, section in enumerate(self.sections):
-            if i:
-                self.pipeline.add(Arrow())
-            self.pipeline.add(section)
-        self.pipeline.body.addStretch(1)
+        ends = {n: Layer(1, n, edge=theme.EDGE_TINTS[n]) for n in ("inputs", "outputs")}
+        ends["inputs"].add(self.inputs)
+        ends["outputs"].add(self.outputs)
         column = QWidget()
         cl = QVBoxLayout(column)
-        cl.setContentsMargins(0, 0, 0, 0)
+        cl.setContentsMargins(0, 0, GAP, 0)   # room for the scrollbar; the cards keep their edge
         cl.setSpacing(0)
-        cl.addWidget(Terminal("inputs", self.inputs))
-        cl.addWidget(Arrow())
-        cl.addWidget(self.pipeline, 1)   # the pipeline takes the height, so Outputs sits at the foot
-        cl.addWidget(Arrow())
-        cl.addWidget(Terminal("outputs", self.outputs))
+        for i, card in enumerate([ends["inputs"], *self.cards, ends["outputs"]]):
+            if i:
+                cl.addWidget(Arrow())
+            cl.addWidget(card)
+        cl.addStretch(1)
         scroll = QScrollArea()
         scroll.setWidget(column)
         scroll.setWidgetResizable(True)
@@ -188,11 +184,11 @@ class PlayerWindow(QMainWindow):
         self.timeline.setEnabled(False)
         ct.progress.setText("no video")
 
-    def _section(self, name, w):
-        """A named layer-2 section holding `w`, queued for the panel; returns `w`."""
-        section = Layer(2, name)
-        section.add(w)
-        self.sections.append(section)
+    def _card(self, name, w):
+        """A named layer-1 card holding `w`, queued for the column; returns `w`."""
+        card = Layer(1, name)
+        card.add(w)
+        self.cards.append(card)
         return w
 
     # -- loading ---------------------------------------------------------

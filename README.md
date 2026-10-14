@@ -74,11 +74,10 @@ example; it also runs headless with `--out`.
 The window follows the design language settled in `mock-up/design-language` and carried by
 `sieve_player/theme.py`: everything sits on a dark ground, each box on it is one fixed step
 lighter, nothing is inset past the third step, and the only white is a section's name. The right
-column is the chain: the Inputs terminal on the ground, the pipeline, one surface holding a
-section per tool a step deeper, and the Outputs terminal on the ground, with the accent arrow
-running from Inputs through every section into Outputs. A terminal carries no surface and no
-tint; a small-caps name top-right and its place in the flow are what say what it is. The
-transport across the bottom is a second surface. Inside
+column is the chain, a stack of such cards: Inputs, one per tool, Outputs, with the accent arrow
+running from each into the next. The two end cards are told from the tool cards only by their
+hairline, teal for Inputs and salmon for Outputs, about as bright as the gray it replaces. The
+transport across the bottom is one more surface. Inside
 a surface a form is a table, descriptions left-aligned in a column sized to the widest, every
 control one width and one height in the next. Editable controls are wells the ground shows
 through; what the pipeline measured is a flat field lifted above the surface, so depth alone

@@ -42,9 +42,9 @@ HINTING = 3        # QFont.HintingPreference: full. DirectWrite ignores it; see 
 VALUE_W = 36       # a slider's mono readout
 ACCENT = QColor(88, 146, 255)   # what is viewed: the arrow, the loop window, the trace
 AMBER = QColor(222, 160, 56)    # the gate
-EYEBROW_PX = 10         # a terminal's name, small caps top-right in the dimmer ink
-EYEBROW_WEIGHT = 600
-EYEBROW_TRACK = 1.2     # letter spacing, px
+# The chain's two end cards are told from the tool cards by their hairline alone: Inputs teal,
+# Outputs salmon, each about as bright as the gray hairline it replaces.
+EDGE_TINTS = {"inputs": QColor(30, 66, 68), "outputs": QColor(92, 52, 48)}
 MONO = ["Cascadia Mono", "Consolas", "Menlo", "DejaVu Sans Mono", "monospace"]
 FAMILIES = ["Inter", "Segoe UI Variable Text", "Segoe UI", "SF Pro Text", "Helvetica Neue", "Helvetica", "Arial"]
 HERE = Path(__file__).parent
@@ -73,14 +73,6 @@ def install_font(app: QApplication) -> str:
     family = next((f for f in FAMILIES if f in have), app.font().family())
     app.setFont(ui_font(family))
     return family
-
-
-def eyebrow_font() -> QFont:
-    font = ui_font()
-    font.setPixelSize(EYEBROW_PX)
-    font.setWeight(QFont.Weight(EYEBROW_WEIGHT))
-    font.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, EYEBROW_TRACK)
-    return font
 
 
 def ui_font(family: str | None = None) -> QFont:
@@ -127,9 +119,6 @@ def sheet() -> str:
     QLabel[role="readout"] {{ color: {gray(INK_2)}; }}
     QLabel[role="measured"] {{ border: none; border-radius: {RADIUS}px; padding: 0px 6px;
                                background: {gray(layer(1) + MEASURED_LIFT)}; }}
-    Terminal QLabel[role="measured"] {{ background: {gray(GROUND + MEASURED_LIFT)}; }}
-    Terminal QComboBox, Terminal QSpinBox, Terminal QDoubleSpinBox, Terminal QLineEdit, Terminal QPushButton,
-    Terminal QCheckBox::indicator {{ background: {gray(layer(1))}; }}
     """ + "".join(
         f'Layer[depth="{d}"] QLabel[role="measured"] {{ background: {gray(layer(d) + MEASURED_LIFT)}; }} '
         for d in range(MAX_DEPTH + 1)   # deepest rule last, so the nearest layer wins
@@ -177,11 +166,12 @@ def sheet() -> str:
 
 
 class Layer(QFrame):
-    """A surface one step lighter than whatever it sits on, named in white if it has a name."""
+    """A surface one step lighter than whatever it sits on, named in white if it has a name. `edge`
+    replaces the gray hairline with a colour (see EDGE_TINTS)."""
 
-    def __init__(self, depth: int, name: str = "", parent=None) -> None:
+    def __init__(self, depth: int, name: str = "", parent=None, edge: QColor | None = None) -> None:
         super().__init__(parent)
-        self.depth = depth
+        self.depth, self.edge = depth, edge
         self.setProperty("depth", str(depth))
         self.body = QVBoxLayout(self)
         self.body.setContentsMargins(PAD, PAD, PAD, PAD)
@@ -200,7 +190,7 @@ class Layer(QFrame):
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing, True)
         box = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
-        p.setPen(QPen(qgray(layer(self.depth) + LINE_LIFT), 1) if self.depth else Qt.PenStyle.NoPen)
+        p.setPen(QPen(self.edge or qgray(layer(self.depth) + LINE_LIFT), 1) if self.depth else Qt.PenStyle.NoPen)
         p.setBrush(qgray(layer(self.depth)))
         p.drawRoundedRect(box, RADIUS, RADIUS)
         p.end()
@@ -316,3 +306,4 @@ class Form(QWidget):
         for w in self.rows[r]:
             if w is not None:
                 w.setVisible(on)
+        self._grid.setRowMinimumHeight(r, ROW_H if on else 0)   # a hidden row leaves no gap

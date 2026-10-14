@@ -1,9 +1,9 @@
-"""The chain's two terminals, the parts of the column SIEVE owns: Inputs above the pipeline,
-Outputs below it.
+"""The chain's two end cards, the parts of the column SIEVE owns: Inputs above the tools, Outputs
+below them.
 
-A terminal sits on the ground, not in the pipeline's surface, named in small caps top-right; the
-accent arrow runs from Inputs into the first tool and out of the last into Outputs, so the two
-read as the chain's source and sink. Both look the same in every tool. Inputs is a picker, the
+Each is a card like a tool's, told from them only by its hairline, teal or salmon (theme.EDGE_TINTS);
+the accent arrow runs from Inputs through every tool into Outputs, so the two read as the chain's
+source and sink. Both look the same in every tool. Inputs is a picker, the
 chosen path, and one line of what cv2 says about the file; Outputs is the target a tool would
 write, an Export button that runs the tool's argv in a QProcess, and the process's last line. A
 tool takes part in Outputs by defining `output_name(src, params) -> path` and
@@ -16,11 +16,10 @@ from functools import lru_cache
 
 import cv2
 from PySide6.QtCore import QProcess, Qt, Signal
-from PySide6.QtGui import QFontMetrics, QPainter
+from PySide6.QtGui import QFontMetrics
 from PySide6.QtWidgets import QFileDialog, QPushButton, QVBoxLayout, QWidget
 
-from . import theme
-from .theme import GAP, PAD, Form, measured, qgray, readout
+from .theme import GAP, Form, measured, readout
 
 VIDEO_FILTER = "Video (*.mp4 *.MP4 *.avi *.mov *.mkv);;All (*)"
 
@@ -61,26 +60,6 @@ def _column(parent):
     lay.setContentsMargins(0, 0, 0, 0)
     lay.setSpacing(GAP)
     return lay
-
-
-class Terminal(QWidget):
-    """An end of the chain on the ground: the widget handed in, padded, with its name in small caps
-    top-right and no surface of its own. Controls inside a terminal are layer-1 wells, since the
-    ground is what they would otherwise vanish into (see theme.sheet)."""
-
-    def __init__(self, name, w, parent=None):
-        super().__init__(parent)
-        self.name = name
-        lay = QVBoxLayout(self)
-        tag = QFontMetrics(theme.eyebrow_font()).horizontalAdvance(name.upper())
-        lay.setContentsMargins(PAD, PAD, PAD + tag + GAP, PAD)   # the name's column stays clear
-        lay.addWidget(w)
-
-    def paintEvent(self, _):
-        p = QPainter(self)
-        p.setFont(theme.eyebrow_font())
-        p.setPen(qgray(theme.INK_2))
-        p.drawText(self.rect().adjusted(PAD, PAD, -PAD, -PAD), Qt.AlignRight | Qt.AlignTop, self.name.upper())
 
 
 class Inputs(QWidget):

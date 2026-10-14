@@ -5,9 +5,9 @@ hold the last kept one so playback at source fps looks like playback at fps/N. T
 index; the export's `fps=` filter resamples by timestamp, so on a variable-rate source the two can
 differ by a frame here and there.
 
-    python mock-up/downsample/downsample.py                 # opens empty; pick a video in Inputs
-    python mock-up/downsample/downsample.py video.mp4       # preloads it
-    python mock-up/downsample/downsample.py video.mp4 --scale 0.5 --every 2 --out small.mp4   # no Qt
+    python tools/downsample.py                 # opens empty; pick a video in Inputs
+    python tools/downsample.py video.mp4       # preloads it
+    python tools/downsample.py video.mp4 --scale 0.5 --every 2 --out small.mp4   # no Qt
 
 run() needs only cv2 and numpy; Qt and sieve_player are imported inside settings().
 """

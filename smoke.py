@@ -2,11 +2,10 @@
 
     .venv\\Scripts\\python smoke.py [video]
 
-Runs the example chain (rescale -> threshold -> motion) and, if present, mock-up/downsample.
+Runs the example chain (rescale -> threshold -> motion) and tools/downsample.
 Asserts on state at each step and exits non-zero on the first failure. Text renders as boxes
 under the offscreen platform, so there is nothing to look at; this checks wiring, not looks.
 """
-import importlib.util
 import os
 import sys
 
@@ -16,7 +15,7 @@ from PySide6.QtCore import QTimer  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from sieve_player.window import PlayerWindow  # noqa: E402
-from tools import motion, rescale, threshold  # noqa: E402
+from tools import downsample as ds, motion, rescale, threshold  # noqa: E402
 
 path = sys.argv[1] if len(sys.argv) > 1 else "video-tests/rep3_intermittent_crop.MP4"
 app = QApplication.instance() or QApplication(sys.argv)
@@ -54,11 +53,6 @@ def run_chain():
 
 
 def run_downsample():
-    spec = importlib.util.spec_from_file_location("downsample", "mock-up/downsample/downsample.py")
-    if spec is None or not os.path.exists(spec.origin):
-        return
-    ds = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(ds)
     win = PlayerWindow([ds], "smoke")
     win.resize(1200, 700)
     win.show()

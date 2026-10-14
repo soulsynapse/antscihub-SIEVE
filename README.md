@@ -52,15 +52,15 @@ that caches must key on `frames.key` (or `series.key`) and on every one of its o
 inside a gated row. `run` must need only cv2 and numpy: import Qt and `sieve_player` inside
 `settings()` (and inside the `__main__` block), never at module top, so a batch script can import
 the tool on a machine with neither installed. `sieve_player.ParamWidget` is an optional base for
-`settings()` with `add_int` / `add_float` / `add_bool`; `tools/` holds three examples.
+`settings()` with `add_int` / `add_float` / `add_bool`; `tools/` holds the examples.
 
 The last tool in a chain may also export. It does so by defining `output_name(src, params) -> path`
 and `export_command(src, dst, params, fps) -> argv`; the Outputs section then shows the target and
 an Export button that runs the argv in a subprocess, and may show a line from an optional
 `describe_output(src, params, fps) -> str`. If the target exists the player writes `name-2.ext`,
 `name-3.ext`, and so on; a cancelled or failed run leaves no partial file. A chain whose last tool
-has no `export_command` has an Outputs section that says so. `mock-up/downsample/downsample.py`
-is the example; it also runs headless with `--out`.
+has no `export_command` has an Outputs section that says so. `tools/downsample.py` is the
+example; it also runs headless with `--out`.
 
 ## The player
 

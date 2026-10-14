@@ -77,6 +77,7 @@ class PlayerWindow(QMainWindow):
         self.decoder = self.chain = self.worker = None
         self.fps, self.count = 30.0, 0
         self.row, self.playing, self.window_ = 0, False, (0, 0)
+        self._resume = False  # playback to restore when a playhead drag ends
         self.result, self.result_start = None, 0
 
         self.display = Display()
@@ -134,9 +135,9 @@ class PlayerWindow(QMainWindow):
         self.setCentralWidget(central)
 
         st, ct = self.timeline.strip, self.timeline.controls
-        st.pressed.connect(lambda r: self.seek(r, commit=True))
+        st.pressed.connect(self._scrub_begin)
         st.dragged.connect(lambda r: self.seek(r, commit=False))
-        st.released.connect(lambda r: self.seek(r, commit=True))
+        st.released.connect(self._scrub_end)
         st.windowChanged.connect(self.set_window)
         st.windowPlaced.connect(lambda s, n: self.set_window(s, n, playhead=s))
         ct.playToggled.connect(self.toggle_play)
@@ -238,6 +239,19 @@ class PlayerWindow(QMainWindow):
         if self.series_widget is not None:
             self.series_widget.set_playhead(row)
         self._update_gate()
+
+    def _scrub_begin(self, row):
+        """The playhead is held: pause so the loop doesn't run away under the cursor."""
+        self._resume = self.playing
+        if self.playing:
+            self.toggle_play()
+        self.seek(row, commit=True)
+
+    def _scrub_end(self, row):
+        self.seek(row, commit=True)
+        if self._resume:
+            self.toggle_play()
+        self._resume = False
 
     def seek(self, row, commit):
         """Move the playhead, clamped to the loop window. Only the handle and the spinboxes move

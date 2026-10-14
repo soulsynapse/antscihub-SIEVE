@@ -134,9 +134,9 @@ class PlayerWindow(QMainWindow):
         self.setCentralWidget(central)
 
         st, ct = self.timeline.strip, self.timeline.controls
-        st.pressed.connect(lambda r: self.goto(r, commit=True))
-        st.dragged.connect(lambda r: self.goto(r, commit=False))
-        st.released.connect(lambda r: self.goto(r, commit=True))
+        st.pressed.connect(lambda r: self.seek(r, commit=True))
+        st.dragged.connect(lambda r: self.seek(r, commit=False))
+        st.released.connect(lambda r: self.seek(r, commit=True))
         st.windowChanged.connect(self.set_window)
         ct.playToggled.connect(self.toggle_play)
         ct.step.connect(lambda d: self.goto(self.row + d, commit=True))
@@ -189,6 +189,7 @@ class PlayerWindow(QMainWindow):
         self.worker.start()
         self.set_window(0, min(self.count, round(10 * self.fps)))
         self.goto(0, commit=True)
+        self.toggle_play()  # _unload left it paused
         self.inputs.show_source(path)
         self.outputs.set_source(path, self.fps)
         self.setWindowTitle(f"{self.title} — {os.path.basename(path)}")
@@ -232,6 +233,25 @@ class PlayerWindow(QMainWindow):
         if self.series_widget is not None:
             self.series_widget.set_playhead(row)
         self._update_gate()
+
+    def seek(self, row, commit):
+        """A playhead gesture on the strip. Dragged out of the window, it pulls the front along.
+
+        A drag only paints the moved window; the worker gets it on release, as with the strip's
+        own window drag, so a long scrub does not restart the walk on every mouse move.
+        """
+        if self.chain is None:
+            return
+        row = max(0, min(self.count - 1, int(row)))
+        s, n = self.window_
+        if not s <= row < s + n:
+            s = max(0, min(self.count - n, row))
+        self.goto(row, commit)
+        if commit and (s, n) != self.window_:
+            self.set_window(s, n)
+        else:
+            self.timeline.strip.set_window(s, n)  # paint the draft, or undo one the drag left behind
+            self.timeline.controls.set_window(s, n)
 
     def toggle_play(self):
         if self.chain is None:

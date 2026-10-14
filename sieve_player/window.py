@@ -237,23 +237,12 @@ class PlayerWindow(QMainWindow):
         self._update_gate()
 
     def seek(self, row, commit):
-        """Move the playhead; moved out of the window, it pulls the front along.
-
-        A drag only paints the moved window; the worker gets it on release, as with the strip's
-        own window drag, so a long scrub does not restart the walk on every mouse move.
-        """
+        """Move the playhead, clamped to the loop window. Only the handle and the spinboxes move
+        the window; a gesture on the playhead never does."""
         if self.chain is None:
             return
-        row = max(0, min(self.count - 1, int(row)))
         s, n = self.window_
-        if not s <= row < s + n:
-            s = max(0, min(self.count - n, row))
-        self.goto(row, commit)
-        if commit and (s, n) != self.window_:
-            self.set_window(s, n)
-        else:
-            self.timeline.strip.set_window(s, n)  # paint the draft, or undo one the drag left behind
-            self.timeline.controls.set_window(s, n)
+        self.goto(max(s, min(s + n - 1, int(row))), commit)
 
     def toggle_play(self):
         if self.chain is None:

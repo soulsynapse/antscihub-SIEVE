@@ -92,7 +92,7 @@ picker of the stages it may read, the tool, an Output card below with a checkbox
 that expects what this one hands out (checked if it reads it; unchecking points it at its nearest
 other stage, or is refused if it has none) and a line saying what reads it, red if nothing, and
 the frame showing this stage's output rather than the chain's last. Knobs and both pickers act at
-once; Save keeps them, Cancel or Escape puts them back. Pointing a pass-through
+once; Save or a right-click anywhere keeps them, Cancel or Escape puts them back. Pointing a pass-through
 tool at a stage of another type can change what later tools receive; each one left with a type it
 does not expect is re-pointed at its nearest compatible stage, and if some tool would be left with
 none the change is refused and the Output card says why. The

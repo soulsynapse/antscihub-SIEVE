@@ -12,7 +12,7 @@ never prompts.
 A tool's name is a link. It, or a double-click on the card, opens the tool alone: Input above it,
 a picker of the stages it may read; Output below, a checkbox per later stage that expects what it
 hands out, checked if that stage reads it; the frame shows this stage. Knobs and both pickers act
-at once; Save keeps them, Cancel (or Escape) puts them back.
+at once; Save or a right-click anywhere keeps them, Cancel (or Escape) puts them back.
 `load(path)` builds the decoder, chain and worker, and replaces them on the next load. Until then
 the transport is disabled and the frame is empty ground.
 """
@@ -22,7 +22,7 @@ import traceback
 import numpy as np
 from PySide6.QtCore import QEvent, Qt, QTimer
 from PySide6.QtGui import QImage, QKeySequence, QPainter, QPen, QPixmap, QShortcut
-from PySide6.QtWidgets import (QCheckBox, QComboBox, QFrame, QHBoxLayout, QLabel, QMainWindow, QPushButton, QScrollArea,
+from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QFrame, QHBoxLayout, QLabel, QMainWindow, QPushButton, QScrollArea,
                                QSizePolicy, QSplitter, QVBoxLayout, QWidget)
 
 from . import theme
@@ -241,6 +241,7 @@ class PlayerWindow(QMainWindow):
         QShortcut(QKeySequence(Qt.Key_Left), self, lambda: self.seek(self.row - 1, commit=True))
         QShortcut(QKeySequence(Qt.Key_Right), self, lambda: self.seek(self.row + 1, commit=True))
         QShortcut(QKeySequence(Qt.Key_Escape), self, self.cancel)
+        QApplication.instance().installEventFilter(self)   # a right-click anywhere leaves the open tool
 
         self.timer = QTimer(self)
         self.timer.setTimerType(Qt.PreciseTimer)
@@ -451,6 +452,13 @@ class PlayerWindow(QMainWindow):
         self.focused = stage
         self.links.shown = self.links.series_source if stage == self.links.series else stage
         self._rewired()
+
+    def eventFilter(self, obj, e):
+        if (self.focused is not None and e.type() == QEvent.Type.MouseButtonPress
+                and e.button() == Qt.MouseButton.RightButton and isinstance(obj, QWidget) and obj.window() is self):
+            self.save()
+            return True
+        return super().eventFilter(obj, e)
 
     def save(self):
         if self.focused is None:

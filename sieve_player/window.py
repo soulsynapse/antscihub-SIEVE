@@ -1,11 +1,21 @@
-"""The window: frame left, tool settings right, timeline across the bottom."""
+"""The window: frame left, the sectioned panel right, timeline across the bottom.
+
+It opens with no video and never prompts. `load(path)` builds the decoder, chain and worker, and
+replaces them on the next load. Until then the transport is disabled and the frame is black.
+"""
+import os
+
 import numpy as np
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QColor, QImage, QKeySequence, QPainter, QPen, QPixmap, QShortcut
-from PySide6.QtWidgets import (QGroupBox, QMainWindow, QScrollArea, QSizePolicy, QSplitter,
+from PySide6.QtWidgets import (QFrame, QGroupBox, QMainWindow, QScrollArea, QSizePolicy, QSplitter,
                                QVBoxLayout, QWidget)
 
+from .chain import Chain
+from .decoder import Decoder
+from .sections import Inputs, Outputs, Section
 from .timeline import Timeline
+from .worker import Worker
 
 
 def to_qimage(a):
@@ -36,6 +46,10 @@ class Display(QWidget):
         self._pix = QPixmap.fromImage(to_qimage(a))
         self.update()
 
+    def clear(self):
+        self._pix = None
+        self.update()
+
     def set_gate(self, on):
         if on != self.gate:
             self.gate = on
@@ -55,31 +69,56 @@ class Display(QWidget):
 
 
 class PlayerWindow(QMainWindow):
-    def __init__(self, decoder, chain, worker, title="SIEVE"):
+    def __init__(self, tools, title="SIEVE"):
         super().__init__()
+        self.title = title
         self.setWindowTitle(title)
-        self.decoder, self.chain, self.worker = decoder, chain, worker
-        self.fps, self.count = chain.fps, chain.count
+        self.tools = list(tools)
+        self.decoder = self.chain = self.worker = None
+        self.fps, self.count = 30.0, 0
         self.row, self.playing, self.window_ = 0, False, (0, 0)
         self.result, self.result_start = None, 0
 
         self.display = Display()
         self.timeline = Timeline()
-        panel, pl = QWidget(), None
-        pl = QVBoxLayout(panel)
-        self.series_widget = None
-        for i, t in enumerate(chain.frame_tools):
-            w = self._boxed(pl, t)
+        self.sections = {n: Section(n) for n in ("inputs", "config", "outputs")}
+
+        self.inputs = Inputs()
+        self.inputs.sourceChanged.connect(self.load)
+        self.sections["inputs"].add(self.inputs)
+
+        # config: one group box per tool, as before; widgets are built once and outlive loads
+        self.frame_widgets, self.series_widget = [], None
+        frame_tools = [t for t in self.tools if getattr(t, "KIND", "frame") == "frame"]
+        series_tools = [t for t in self.tools if getattr(t, "KIND", "frame") == "series"]
+        for i, t in enumerate(frame_tools):
+            w = self._boxed(self.sections["config"], t)
             w.changed.connect(lambda i=i, w=w: self._frame_tool_changed(i, w))
-            chain.set_params(i, w.params())
-        if chain.series_tool:
-            w = self.series_widget = self._boxed(pl, chain.series_tool)
+            self.frame_widgets.append(w)
+        if series_tools:
+            w = self.series_widget = self._boxed(self.sections["config"], series_tools[0])
             w.changed.connect(lambda w=w: self._series_tool_changed(w))
-            chain.set_series_params(w.params())
-        pl.addStretch(1)
+        self.sections["config"].lay.addStretch(1)
+
+        # outputs: the chain's last tool exports, if it can
+        self.export_tool = self.tools[-1] if self.tools else None
+        self.export_widget = self.frame_widgets[-1] if self.export_tool in frame_tools else self.series_widget
+        self.outputs = Outputs(self.export_tool)
+        self.sections["outputs"].add(self.outputs)
+        if self.export_widget is not None:
+            self.export_widget.changed.connect(lambda: self.outputs.set_params(self.export_widget.params()))
+            self.outputs.set_params(self.export_widget.params())
+
+        column = QWidget()
+        cl = QVBoxLayout(column)
+        cl.setContentsMargins(0, 0, 0, 0)
+        cl.setSpacing(0)
+        for name, s in self.sections.items():
+            cl.addWidget(s, 1 if name == "config" else 0)  # inputs and outputs hug their content
         scroll = QScrollArea()
-        scroll.setWidget(panel)
+        scroll.setWidget(column)
         scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
         split = QSplitter(Qt.Horizontal)
         split.addWidget(self.display)
         split.addWidget(scroll)
@@ -95,8 +134,6 @@ class PlayerWindow(QMainWindow):
         self.setCentralWidget(central)
 
         st, ct = self.timeline.strip, self.timeline.controls
-        st.set_count(self.count, self.fps)
-        ct.set_count(self.count, self.fps)
         st.pressed.connect(lambda r: self.goto(r, commit=True))
         st.dragged.connect(lambda r: self.goto(r, commit=False))
         st.released.connect(lambda r: self.goto(r, commit=True))
@@ -105,10 +142,6 @@ class PlayerWindow(QMainWindow):
         ct.step.connect(lambda d: self.goto(self.row + d, commit=True))
         ct.windowEdited.connect(lambda s, n: self.set_window(round(s * self.fps), round(n * self.fps)))
         ct.windowEdited.connect(lambda s, n: self.goto(round(s * self.fps), commit=True))
-        worker.rowReady.connect(self._row_ready)
-        worker.seriesReady.connect(self._series_ready)
-        worker.walked.connect(ct.set_progress)
-        worker.failed.connect(lambda r: ct.progress.setText(f"tool raised at row {r}, see console"))
         QShortcut(QKeySequence(Qt.Key_Space), self, self.toggle_play)
         QShortcut(QKeySequence(Qt.Key_Left), self, lambda: self.goto(self.row - 1, commit=True))
         QShortcut(QKeySequence(Qt.Key_Right), self, lambda: self.goto(self.row + 1, commit=True))
@@ -116,19 +149,65 @@ class PlayerWindow(QMainWindow):
         self.timer = QTimer(self)
         self.timer.setTimerType(Qt.PreciseTimer)
         self.timer.timeout.connect(self._tick)
-        self.set_window(0, min(self.count, round(10 * self.fps)))
-        self.goto(0, commit=True)
+        self.timeline.setEnabled(False)
+        ct.progress.setText("no video")
 
     @staticmethod
-    def _boxed(layout, tool):
+    def _boxed(section, tool):
         w = tool.settings()
         box = QGroupBox(tool.NAME)
         QVBoxLayout(box).addWidget(w)
-        layout.addWidget(box)
+        section.add(box)
         return w
 
-    # -- state ----------------------------------------------------------
+    # -- loading ---------------------------------------------------------
+    def load(self, path):
+        """Open `path`, replacing whatever was open. A file that won't open leaves the old one."""
+        try:
+            decoder = Decoder(path)
+        except IOError as e:
+            self.inputs.show_error(path, e)
+            return
+        self._unload()
+        self.decoder = decoder
+        self.chain = Chain(decoder, self.tools)
+        for i, w in enumerate(self.frame_widgets):
+            self.chain.set_params(i, w.params())
+        if self.series_widget is not None:
+            self.chain.set_series_params(self.series_widget.params())
+        self.worker = Worker(self.chain)
+        self.fps, self.count = self.chain.fps, self.chain.count
+        ct = self.timeline.controls
+        self.worker.rowReady.connect(self._row_ready)
+        self.worker.seriesReady.connect(self._series_ready)
+        self.worker.walked.connect(ct.set_progress)
+        self.worker.failed.connect(lambda r: ct.progress.setText(f"tool raised at row {r}, see console"))
+        self.timeline.strip.set_count(self.count, self.fps)
+        ct.set_count(self.count, self.fps)
+        ct.progress.setText("")
+        self.timeline.setEnabled(True)
+        self.worker.start()
+        self.set_window(0, min(self.count, round(10 * self.fps)))
+        self.goto(0, commit=True)
+        self.inputs.show_source(path)
+        self.outputs.set_source(path, self.fps)
+        self.setWindowTitle(f"{self.title} — {os.path.basename(path)}")
+
+    def _unload(self):
+        if self.worker is None:
+            return
+        if self.playing:
+            self.toggle_play()
+        self.worker.stop()
+        self.decoder.close()
+        self.decoder = self.chain = self.worker = None
+        self.result = None
+        self.display.clear()
+
+    # -- state (every entry is a no-op until something is loaded) --------
     def set_window(self, start, length):
+        if self.chain is None:
+            return
         start = max(0, min(self.count - 1, int(start)))
         length = max(1, min(self.count - start, int(length)))
         self.window_ = (start, length)
@@ -140,6 +219,8 @@ class PlayerWindow(QMainWindow):
 
     def goto(self, row, commit):
         """Show `row`. A commit may ask the worker; a guess is served from the memo or not at all."""
+        if self.chain is None:
+            return
         self.row = row = max(0, min(self.count - 1, int(row)))
         frame = self.chain.peek(row)
         if frame is not None:
@@ -153,6 +234,8 @@ class PlayerWindow(QMainWindow):
         self._update_gate()
 
     def toggle_play(self):
+        if self.chain is None:
+            return
         self.playing = not self.playing
         if self.playing:
             self.timer.start(max(1, int(round(1000 / self.fps))))
@@ -169,16 +252,20 @@ class PlayerWindow(QMainWindow):
 
     # -- slots ----------------------------------------------------------
     def _frame_tool_changed(self, i, w):
+        if self.chain is None:
+            return
         self.chain.set_params(i, w.params())
         self.worker.invalidate()
         self.goto(self.row, commit=True)
 
     def _series_tool_changed(self, w):
+        if self.chain is None:
+            return
         self.chain.set_series_params(w.params())
         self.worker.rerun_series()
 
     def _row_ready(self, row):
-        if row == self.row:
+        if row == self.row and self.chain is not None:
             frame = self.chain.peek(row)
             if frame is not None:
                 self.display.set_frame(frame)
@@ -203,6 +290,5 @@ class PlayerWindow(QMainWindow):
 
     def closeEvent(self, e):
         self.timer.stop()
-        self.worker.stop()
-        self.decoder.close()
+        self._unload()
         super().closeEvent(e)

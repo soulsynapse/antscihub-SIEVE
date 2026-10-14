@@ -1,29 +1,24 @@
 """sieve_player: the shared window SIEVE tools run inside. `play([tool, ...])` is the whole API."""
-import os
 import sys
 
 from .chain import Chain, Frames, Memo, Series
 from .decoder import Decoder
+from .sections import Inputs, Outputs, Section, probe
 from .widgets import ParamWidget
 from .worker import Worker
 
-__all__ = ["play", "Chain", "Decoder", "Frames", "Memo", "ParamWidget", "Series", "Worker"]
+__all__ = ["play", "Chain", "Decoder", "Frames", "Inputs", "Memo", "Outputs", "ParamWidget", "Section", "Series", "Worker", "probe"]
 
 
 def play(tools, path=None, title="SIEVE"):
-    from PySide6.QtWidgets import QApplication, QFileDialog
+    """Open the player on `tools`. With a path it loads it; without, it opens empty and never prompts."""
+    from PySide6.QtWidgets import QApplication
 
     from .window import PlayerWindow
 
     app = QApplication.instance() or QApplication(sys.argv)
-    if path is None:
-        path, _ = QFileDialog.getOpenFileName(None, "Open video", "", "Video (*.mp4 *.MP4 *.avi *.mov *.mkv);;All (*)")
-        if not path:
-            return 0
-    decoder = Decoder(path)
-    chain = Chain(decoder, tools)
-    worker = Worker(chain)
-    win = PlayerWindow(decoder, chain, worker, f"{title} — {os.path.basename(path)}")
-    worker.start()
+    win = PlayerWindow(tools, title)
     win.showMaximized()
+    if path:
+        win.load(path)
     return app.exec()

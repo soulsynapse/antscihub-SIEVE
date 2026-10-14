@@ -2,8 +2,8 @@
 
 SIEVE chains independent video-analysis scripts and gives them one shared, polished UI so each
 script doesn't need its own GUI. The scaffold is `sieve_player`: a PySide6 window with the video on
-the left, the script's own settings widget on the right, and a timeline across the bottom. A script
-imports it and runs standalone:
+the left, a three-section panel on the right (inputs, the script's own settings, outputs), and a
+timeline across the bottom. A script imports it and runs standalone:
 
 ```python
 if __name__ == "__main__":
@@ -11,11 +11,15 @@ if __name__ == "__main__":
     play([sys.modules[__name__]])   # or play([rescale, threshold, motion]); the player knows no tool by name
 ```
 
+`play` opens empty and never prompts; the video is picked in the Inputs section, or passed as the
+second argument. Picking again replaces it.
+
 ```
 py -3.13 -m venv .venv            # not the Anaconda python: its Qt DLLs shadow PySide6's
 .venv\Scripts\python -m pip install -r requirements.txt     # editable install of sieve_player
 .venv\Scripts\python main.py video-tests\rep3_intermittent_crop.MP4
 .venv\Scripts\python tools\motion.py video-tests\rep3_intermittent_crop.MP4   # any tool runs alone, from any cwd
+.venv\Scripts\python smoke.py video-tests\rep3_intermittent_crop.MP4          # offscreen: open, load, export, reload
 ```
 
 ## What a tool is
@@ -50,7 +54,24 @@ inside a gated row. `run` must need only cv2 and numpy: import Qt and `sieve_pla
 the tool on a machine with neither installed. `sieve_player.ParamWidget` is an optional base for
 `settings()` with `add_int` / `add_float` / `add_bool`; `tools/` holds three examples.
 
+The last tool in a chain may also export. It does so by defining `output_name(src, params) -> path`
+and `export_command(src, dst, params, fps) -> argv`; the Outputs section then shows the target and
+an Export button that runs the argv in a subprocess, and may show a line from an optional
+`describe_output(src, params, fps) -> str`. If the target exists the player writes `name-2.ext`,
+`name-3.ext`, and so on; a cancelled or failed run leaves no partial file. A chain whose last tool
+has no `export_command` has an Outputs section that says so. `mock-up/downsample/downsample.py`
+is the example; it also runs headless with `--out`.
+
 ## The player
+
+The right panel is one column: Inputs (cool grey), the tools' settings boxes (white), Outputs
+(warm grey). Inputs and Outputs are the player's and look the same in every tool; their names are
+drawn top-right as a watermark behind the content, Arial Black where it exists, and take no
+layout space. The two greys sit a luminance step apart so they still separate in monochrome.
+Until a video is loaded the transport is disabled and the frame is black; load builds the decoder,
+chain and worker, and the next load replaces them. A path that won't open is reported in Inputs
+and leaves whatever was open alone. `sieve_player/sections.py` holds the sections and the two
+widgets; the colours and the watermark style are constants at its top.
 
 Decoding is cv2 to gray with one cursor: sequential reads step it, anything else seeks. Recently
 decoded rows sit in a dict bounded by count. Each stage's output per row is memoized under a key

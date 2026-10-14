@@ -1,8 +1,9 @@
 """Frame tool: downsample a video in space (scale) and time (keep every Nth frame).
 
 Inside the player the loop window previews the result: the frame is resized, and dropped rows
-hold the last kept one so playback at source fps looks like playback at fps/N. The panel on the
-right is SIEVE's: inputs (pick the video), config (this tool's scale and every), outputs (export).
+hold the last kept one so playback at source fps looks like playback at fps/N. The hold is by row
+index; the export's `fps=` filter resamples by timestamp, so on a variable-rate source the two can
+differ by a frame here and there.
 
     python mock-up/downsample/downsample.py                 # opens empty; pick a video in Inputs
     python mock-up/downsample/downsample.py video.mp4       # preloads it
@@ -39,19 +40,12 @@ def ffmpeg_command(src, dst, scale, every, fps):
             "-pix_fmt", "yuv420p", "-an", str(dst)]
 
 
-def probe(src):
-    """(width, height, fps, count) via cv2, so the GUI needs no ffprobe."""
-    cap = cv2.VideoCapture(str(src))
-    try:
-        return (int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)),
-                cap.get(cv2.CAP_PROP_FPS) or 30.0, int(cap.get(cv2.CAP_PROP_FRAME_COUNT)))
-    finally:
-        cap.release()
-
-
 def export(src, dst, scale, every):
     """Headless export; blocks until ffmpeg is done. Raises CalledProcessError on failure."""
-    subprocess.run(ffmpeg_command(src, dst, scale, every, probe(src)[2]), check=True)
+    cap = cv2.VideoCapture(str(src))
+    fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+    cap.release()
+    subprocess.run(ffmpeg_command(src, dst, scale, every, fps), check=True)
 
 
 def settings(parent=None):
@@ -74,6 +68,8 @@ def export_command(src, dst, params, fps):
 
 
 def describe_output(src, params, fps):
+    from sieve_player import probe  # GUI side only
+
     w, h, _, n = probe(src)
     s, k = params["scale"], params["every"]
     return f"{int(w * s) // 2 * 2}×{int(h * s) // 2 * 2}   {fps / k:.2f} fps   ~{n // k} frames"
@@ -93,7 +89,6 @@ if __name__ == "__main__":
             ap.error("--out needs a video")
         export(a.video, a.out, a.scale, a.every)
         sys.exit(0)
-    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-    from sieve_sections import play
+    from sieve_player import play
 
-    sys.exit(play(sys.modules[__name__], a.video))
+    sys.exit(play([sys.modules[__name__]], a.video))

@@ -70,7 +70,8 @@ class Links:
     list order, the video is VIDEO, and the series tool (at most one) is `series`, numbered n.
     `sources[i]` is what frame stage i reads; `series_source` what the series tool stacks. Each
     defaults to the nearest earlier stage whose product the tool EXPECTS and raises if there is
-    none. `shown` is the stage the display asks for, the last frame stage until the player says
+    none. A source may later be None: the stage has no input, hands out nothing, and is computed
+    as None. `shown` is the stage the display asks for, the last frame stage until the player says
     otherwise."""
 
     def __init__(self, tools):
@@ -105,7 +106,17 @@ class Links:
         if stage == self.series:
             return "series"
         t = self.frame_tools[stage]
+        if self.sources[stage] is None:
+            return None
         return getattr(t, "PRODUCES", None) or self.produces(self.sources[stage])
+
+    def fed(self, stage):
+        """Whether `stage` reaches the video through its sources."""
+        while stage != VIDEO:
+            stage = self.source(stage)
+            if stage is None:
+                return False
+        return True
 
     def source(self, stage):
         return self.series_source if stage == self.series else self.sources[stage]
@@ -117,26 +128,20 @@ class Links:
         return [j for j in range(VIDEO, upto) if self.produces(j) in want]
 
     def set_source(self, stage, src):
-        """Point `stage` at `src`. A pass-through tool hands out what it reads, so this can change
-        what later stages receive: each one left reading a type it does not EXPECT is pointed at
-        its nearest compatible stage again. If some stage would have none, nothing changes and
-        ValueError says which."""
-        if src not in self.compatible(stage):
+        """Point `stage` at `src`, or at nothing (None). A pass-through tool hands out what it
+        reads, so this can change what later stages receive: each one left reading a type it does
+        not EXPECT loses its input."""
+        if src is not None and src not in self.compatible(stage):
             raise ValueError(f"{self.tool(stage).NAME} cannot read stage {src}")
-        before = (list(self.sources), self.series_source)
-        try:
-            if stage == self.series:
-                self.series_source = src
-                return
-            self.sources[stage] = src
-            for i in range(stage + 1, len(self.frame_tools)):
-                if self.sources[i] not in self.compatible(i):
-                    self.sources[i] = self._nearest(self.frame_tools[i], i)
-            if self.series_tool and self.series_source not in self.compatible(self.series):
-                self.series_source = self._nearest(self.series_tool, self.series)
-        except ValueError:
-            self.sources, self.series_source = before
-            raise
+        if stage == self.series:
+            self.series_source = src
+            return
+        self.sources[stage] = src
+        for i in range(stage + 1, len(self.frame_tools)):
+            if self.sources[i] is not None and self.sources[i] not in self.compatible(i):
+                self.sources[i] = None
+        if self.series_tool and self.series_source is not None and self.series_source not in self.compatible(self.series):
+            self.series_source = None
 
     def readers(self, stage):
         """The stages that may read `stage`: every later one that EXPECTS its product."""
@@ -146,12 +151,9 @@ class Links:
         return out
 
     def detach(self, reader, stage):
-        """Stop `reader` reading `stage`: point it at its nearest other compatible stage. Refused
-        (ValueError) if `stage` is the only one."""
-        others = [j for j in self.compatible(reader) if j != stage]
-        if not others:
-            raise ValueError(f"{self.tool(reader).NAME} has nothing else to read")
-        self.set_source(reader, others[-1])
+        """Stop `reader` reading `stage`: it then reads nothing."""
+        if self.source(reader) == stage:
+            self.set_source(reader, None)
 
     def consumers(self, stage):
         """The stages that read `stage`, in order; the series tool last if it does."""
@@ -209,7 +211,7 @@ class Chain:
         keys = []
         for i, (t, p) in enumerate(zip(self.frame_tools, self.params)):
             src = self.links.sources[i]
-            k = self._base if src == VIDEO else keys[src]
+            k = "none" if src is None else self._base if src == VIDEO else keys[src]
             keys.append(_key(k, t.NAME, json.dumps(p, sort_keys=True)))
         self._keys = keys
 
@@ -236,10 +238,13 @@ class Chain:
             return dict(self.series_params)
 
     def compute(self, stage, row):
-        """Output of `stage` at `row`, memoized. Called from worker threads only."""
+        """Output of `stage` at `row`, memoized; None for a stage the video does not reach.
+        Called from worker threads only."""
         if stage == VIDEO:
             return self.decoder.read(row)
         with self._lock:
+            if not self.links.fed(stage):
+                return None
             key, tool, params = self._keys[stage], self.frame_tools[stage], dict(self.params[stage])
             src = self.links.sources[stage]
             src_key = self.key(src)
@@ -254,4 +259,6 @@ class Chain:
         """Memo-only read of the shown stage at `row`; None if it isn't there. GUI-safe."""
         if self.shown == VIDEO:
             return self.decoder.cached(row)
+        if not self.links.fed(self.shown):
+            return None
         return self.memo.get((self.key(self.shown), row))

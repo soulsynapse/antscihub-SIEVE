@@ -51,7 +51,8 @@ turns it into `"gray"` for the tools that want luma. `EXPECTS` may be a tuple of
 default the nearest one whose product it expects, the video counting as a stage; a chain in which
 some tool can read nothing before it is refused. The player lets you point a tool at any earlier
 stage of the right type (`sieve_player.chain.Links`), so a chain is a list that reads as a graph:
-a stage nobody reads is still computed when shown, and nothing else. `run` may be
+a stage nobody reads is still computed when shown, and nothing else; a stage with no input is
+computed as None. `run` may be
 called from a worker thread and the GUI thread at the same time, for any row in any order. A tool
 that caches must key on `frames.key` (or `series.key`) and on every one of its own params. A
 `"gate"` bool array in a series result is drawn on the frame as a red border while the playhead is
@@ -88,14 +89,15 @@ that nothing reads and no file takes ends in a red bar instead, with "unread" be
 end cards are told from the tool cards only by their hairline, teal for Inputs and salmon for
 Outputs, about as bright as the gray it replaces. A tool's name is dotted-underlined: it is a
 link. Clicking it, or double-clicking the card, opens the tool alone: an Input card above with a
-picker of the stages it may read, the tool, an Output card below with a checkbox per later stage
-that expects what this one hands out (checked if it reads it; unchecking points it at its nearest
-other stage, or is refused if it has none) and a line saying what reads it, red if nothing, and
-the frame showing this stage's output rather than the chain's last. Knobs and both pickers act at
+picker of the stages it may read, or nothing; the tool; an Output card below with a checkbox per
+later stage that expects what this one hands out, checked if it reads it, and a line saying what
+reads it, red if nothing; and the frame showing this stage's output rather than the chain's
+last. Input and Output are one wiring seen from both ends: unchecking a reader leaves it with no
+input, and a stage with no input is computed as nothing, says "no input" in red above it, and
+blanks the frame when shown. Knobs and both pickers act at
 once; Save or a right-click anywhere keeps them, Cancel or Escape puts them back. Pointing a pass-through
 tool at a stage of another type can change what later tools receive; each one left with a type it
-does not expect is re-pointed at its nearest compatible stage, and if some tool would be left with
-none the change is refused and the Output card says why. The
+does not expect loses its input. The
 transport across the bottom is one more surface. Inside
 a surface a form is a table, descriptions left-aligned in a column sized to the widest, every
 control one width and one height in the next. Editable controls are wells the ground shows

@@ -50,32 +50,36 @@ def run_chain():
         win.focus(2)
         check(win.focused == 2 and win.links.shown == 2, "focus did not open")
         check(win.cards[2].buttons.isVisible() and win.source_card.isVisible(), "focus column not shown")
-        check([win.source_pick.itemData(i) for i in range(win.source_pick.count())] == [0, 1], "source picker")
+        check([win.source_pick.itemData(i) for i in range(win.source_pick.count())] == [-2, 0, 1], "source picker")
         thresh = win.frame_widgets[2]
         before = dict(thresh.params())
         thresh.set_params({"thresh": 200})
-        win.source_pick.setCurrentIndex(0)   # read gray directly, skipping rescale
+        win.source_pick.setCurrentIndex(1)   # read gray directly, skipping rescale
         check(win.links.sources[2] == 0, "rewire did not land")
         check(win.chain.links is win.links, "chain holds a different wiring")
         boxes = [c for _, c in win.sink_card.form.rows]
         check(len(boxes) == 1 and boxes[0].isChecked(), "Output should list motion, reading threshold")
-        boxes[0].setChecked(False)   # motion reads rescale instead; threshold is now unread
-        check(win.links.series_source == 1 and win.cards[2] in win.column.rail.dead, "detach did not land")
+        boxes[0].setChecked(False)   # motion reads nothing; threshold is now unread
+        check(win.links.series_source is None and win.cards[2] in win.column.rail.dead, "detach did not land")
         win.cancel()
         check(win.focused is None and win.links.sources[2] == 1 and win.links.series_source == 2
               and thresh.params() == before, "cancel did not restore")
         win.focus(2)
-        win.source_pick.setCurrentIndex(0)
+        win.source_pick.setCurrentIndex(1)
         win.save()
         check(win.links.sources[2] == 0 and win.links.shown == 2, "save did not keep")
         check(win.cards[1] in win.column.rail.dead and win.column.strips[2].unused == "gray unread",
               "rescale not flagged unread")
-        # pointing rescale at the video makes it hand out bgr; threshold reads gray, so it is re-pointed
+        # pointing rescale at the video makes it hand out bgr; threshold reads gray, so it loses its input
         win.links.set_source(2, 1)
         win.links.set_source(1, -1)
-        check(win.links.produces(1) == "bgr" and win.links.sources[2] == 0, f"re-default {win.links.sources}")
+        check(win.links.produces(1) == "bgr" and win.links.sources[2] is None, f"unhook {win.links.sources}")
+        check(not win.links.fed(2) and not win.links.fed(3) and win.links.fed(1), "fed")
+        win._refresh()
+        check(win.column.strips[2].bad and win.column.strips[2].text == "no input", "unfed strip not red")
         win.load(path)  # reload replaces decoder and worker, keeps the wiring
-        check(win.chain is not None and win.chain.links.sources == [-1, -1, 0], "reload lost the wiring")
+        check(win.chain is not None and win.chain.links.sources == [-1, -1, None], "reload lost the wiring")
+        check(win.chain.peek(0) is None, "an unfed stage peeked a frame")
         win.close()
         app.quit()
 

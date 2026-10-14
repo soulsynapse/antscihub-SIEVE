@@ -259,11 +259,12 @@ class Link(QWidget):
         super().__init__(parent)
         self.setFixedHeight(LINK_H)
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
-        self.text, self.unused = "", ""
+        self.text, self.unused, self.bad = "", "", False
         self.setFont(mono_font())
 
-    def set_text(self, text: str, unused: str = "") -> None:
-        self.text, self.unused = text, unused
+    def set_text(self, text: str, unused: str = "", bad: bool = False) -> None:
+        """`bad`: the text itself is the problem (no input), drawn red."""
+        self.text, self.unused, self.bad = text, unused, bad
         self.update()
 
     def paintEvent(self, event) -> None:
@@ -271,7 +272,7 @@ class Link(QWidget):
         p = QPainter(self)
         p.setFont(self.font())
         r = self.rect().adjusted(RAIL + ARROW_X + 2 * PAD, 0, 0, 0)
-        p.setPen(qgray(INK_2))
+        p.setPen(RED if self.bad else qgray(INK_2))
         p.drawText(r, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, self.text)
         if self.unused:
             p.setPen(RED)

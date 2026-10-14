@@ -76,6 +76,9 @@ class Worker(QThread):
                     self.chain.compute(self.chain.shown, want)
                     self.rowReady.emit(want)
                     continue
+                if self.chain.walk is None or not self.chain.links.fed(self.chain.walk):
+                    self._i = self._length   # nothing reaches the walked stage; nothing to walk
+                    continue
                 if gen != self._walk_gen:
                     self._walk_gen, self._i, self._stack = gen, 0, None
                     self._start = max(0, min(start, self.chain.count - 1))

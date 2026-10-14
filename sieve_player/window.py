@@ -10,8 +10,10 @@ and a press in a trace moves the playhead as a press in the strip does. It opens
 never prompts.
 
 A tool's name is a link. It, or a double-click on the card, opens the tool alone: Input above it,
-a picker of the stages it may read; Output below, a checkbox per later stage that expects what it
-hands out, checked if that stage reads it; the frame shows this stage. Knobs and both pickers act
+a picker of the stages it may read, or nothing; Output below, a checkbox per later stage that
+expects what it hands out, checked if that stage reads it. The two are one wiring seen from both
+ends: unchecking a reader leaves it with no input, and a stage with no input is computed as
+nothing, red in the strip above it. The frame shows this stage. Knobs and both pickers act
 at once; Save or a right-click anywhere keeps them, Cancel (or Escape) puts them back.
 `load(path)` builds the decoder, chain and worker, and replaces them on the next load. Until then
 the transport is disabled and the frame is empty ground.
@@ -27,6 +29,8 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QFrame, QHBox
 
 from . import theme
 from .chain import VIDEO, Chain, Links
+
+NOTHING = -2   # the Input picker's entry for no source; a combo box cannot find None
 from .decoder import Decoder
 from .sections import Inputs, Outputs
 from .theme import GAP, PAD, RAIL, Form, Layer, Link, Rail, readout
@@ -289,12 +293,16 @@ class PlayerWindow(QMainWindow):
         return len(self.links.frame_tools) - 1
 
     def _dead(self, stage):
-        """A frame stage nothing reads and no file takes. The series stage's output is its trace."""
-        return stage != self.links.series and not self.links.consumers(stage) and not self._exports(stage)
+        """A frame stage nothing reads and no file takes. The series stage's output is its trace;
+        a stage with no input hands out nothing, so there is nothing to be unread."""
+        return (stage != self.links.series and self.links.produces(stage) is not None
+                and not self.links.consumers(stage) and not self._exports(stage))
 
     def _receives(self, stage):
         src = self.links.source(stage)
-        return f"{self.links.produces(src)} from {self._name(src)}"
+        if src is None:
+            return "no input"
+        return f"{self.links.produces(src) or 'nothing'} from {self._name(src)}"
 
     def _populate(self):
         """Lay the column out for the mode, every card or Input, one tool, Output, then refresh.
@@ -320,30 +328,34 @@ class PlayerWindow(QMainWindow):
         if self.focused is None:
             at = {VIDEO: self.ends["inputs"], **{i: c for i, c in enumerate(self.cards)}}
             for stage, card in enumerate(self.cards):
-                self.column.strips[stage].set_text(self._receives(stage))
-                links.append((at[self.links.source(stage)], card))
+                src = self.links.source(stage)
+                self.column.strips[stage].set_text(self._receives(stage), bad=src is None)
+                if src is not None:
+                    links.append((at[src], card))
             sink = self._sink()
-            self.column.strips[-1].set_text(f"{self.links.produces(sink)} from {self._name(sink)}")
+            self.column.strips[-1].set_text(f"{self.links.produces(sink) or 'nothing'} from {self._name(sink)}")
             links.append((at[sink], self.ends["outputs"]))
             for stage in range(len(self.cards)):
                 if self._dead(stage):
                     dead.append(at[stage])
                     strip = self.column.strips[stage + 1] if stage + 1 < len(self.column.strips) else None
                     if strip is not None:
-                        strip.set_text(strip.text, f"{self.links.produces(stage)} unread")
+                        strip.set_text(strip.text, f"{self.links.produces(stage)} unread", bad=strip.bad)
         else:
             stage, card = self.focused, self.cards[self.focused]
             pick = self.source_pick
             pick.blockSignals(True)
-            pick.setCurrentIndex(pick.findData(self.links.source(stage)))
+            src = self.links.source(stage)
+            pick.setCurrentIndex(pick.findData(NOTHING if src is None else src))
             pick.blockSignals(False)
             for reader, (_, box) in zip(self.links.readers(stage), self.sink_card.form.rows):
                 box.blockSignals(True)
                 box.setChecked(self.links.source(reader) == stage)
                 box.blockSignals(False)
-            self.column.strips[0].set_text(self._receives(stage))
-            links.append((self.source_card, card))
-            out = self.links.produces(stage)
+            self.column.strips[0].set_text(self._receives(stage), bad=src is None)
+            if src is not None:
+                links.append((self.source_card, card))
+            out = self.links.produces(stage) or "nothing"
             readers = [self._name(c) for c in self.links.consumers(stage)]
             if self._exports(stage):
                 readers.append("Outputs")
@@ -413,15 +425,18 @@ class PlayerWindow(QMainWindow):
         pick = self.source_pick
         pick.blockSignals(True)
         pick.clear()
+        pick.addItem("nothing", NOTHING)
         for j in self.links.compatible(stage):
             pick.addItem(f"{self._name(j)} · {self.links.produces(j)}", j)
-        pick.setCurrentIndex(pick.findData(self.links.source(stage)))
+        src = self.links.source(stage)
+        pick.setCurrentIndex(pick.findData(NOTHING if src is None else src))
         pick.blockSignals(False)
 
     def _source_picked(self, index):
         if self.focused is None or index < 0:
             return
         src = self.source_pick.itemData(index)
+        src = None if src == NOTHING else src
         try:
             self.links.set_source(self.focused, src)
         except ValueError as e:
@@ -441,6 +456,8 @@ class PlayerWindow(QMainWindow):
             return
         self.chain.relink()
         self.worker.invalidate()
+        if not self.links.fed(self.links.shown):
+            self.display.clear()   # nothing reaches the shown stage; the frame says so
         self.goto(self.row, commit=True)
 
     def focus(self, stage):

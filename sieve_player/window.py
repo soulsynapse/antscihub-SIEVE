@@ -10,8 +10,9 @@ and a press in a trace moves the playhead as a press in the strip does. It opens
 never prompts.
 
 A tool's name is a link. It, or a double-click on the card, opens the tool alone: Input above it,
-a picker of the stages it may read; Output below, what reads it; the frame shows this stage. Knobs
-and the picker act at once; Save keeps them, Cancel (or Escape) puts them back.
+a picker of the stages it may read; Output below, a checkbox per later stage that expects what it
+hands out, checked if that stage reads it; the frame shows this stage. Knobs and both pickers act
+at once; Save keeps them, Cancel (or Escape) puts them back.
 `load(path)` builds the decoder, chain and worker, and replaces them on the next load. Until then
 the transport is disabled and the frame is empty ground.
 """
@@ -21,7 +22,7 @@ import traceback
 import numpy as np
 from PySide6.QtCore import QEvent, Qt, QTimer
 from PySide6.QtGui import QImage, QKeySequence, QPainter, QPen, QPixmap, QShortcut
-from PySide6.QtWidgets import (QComboBox, QFrame, QHBoxLayout, QLabel, QMainWindow, QPushButton, QScrollArea,
+from PySide6.QtWidgets import (QCheckBox, QComboBox, QFrame, QHBoxLayout, QLabel, QMainWindow, QPushButton, QScrollArea,
                                QSizePolicy, QSplitter, QVBoxLayout, QWidget)
 
 from . import theme
@@ -323,6 +324,7 @@ class PlayerWindow(QMainWindow):
             card.set_link(False)
             card.buttons.show()
             self._fill_source_pick(stage)
+            self._fill_sink(stage)
             self.column.show([self.source_card, card, self.sink_card])
             self.column.strips[0].set_text(self._receives(stage))
             links.append((self.source_card, card))
@@ -356,7 +358,39 @@ class PlayerWindow(QMainWindow):
         card = Layer(1, "output", edge=theme.EDGE_TINTS["outputs"])
         line = readout()
         card.add(line)
+        card.form = None   # one checkbox per stage that may read this one; rebuilt per focus
         return card, line
+
+    def _fill_sink(self, stage):
+        """The Output card: a checkbox per later stage that expects this stage's product, checked
+        if it reads it now, and the line saying what reads it."""
+        card = self.sink_card
+        if card.form is not None:
+            card.body.removeWidget(card.form)
+            card.form.deleteLater()
+        card.form = Form()
+        card.body.insertWidget(card.body.indexOf(self.sink_line), card.form)
+        for reader in self.links.readers(stage):
+            box = QCheckBox()
+            box.setChecked(self.links.source(reader) == stage)
+            box.toggled.connect(lambda on, r=reader: self._reader_toggled(r, on))
+            card.form.add_row(self._name(reader), box)
+
+    def _reader_toggled(self, reader, on):
+        stage = self.focused
+        if stage is None:
+            return
+        try:
+            if on:
+                self.links.set_source(reader, stage)
+            else:
+                self.links.detach(reader, stage)
+        except ValueError as e:
+            self.sink_line.setText(str(e))
+            self.sink_line.setStyleSheet(f"color: {theme.RED.name()};")
+            self._fill_sink(stage)
+            return
+        self._rewired()
 
     def _fill_source_pick(self, stage):
         pick = self.source_pick
@@ -393,7 +427,7 @@ class PlayerWindow(QMainWindow):
         if self.focused is not None:
             self.save()
         w = self.frame_widgets[stage] if stage < len(self.frame_widgets) else self.series_widget
-        self._kept = (dict(w.params()), self.links.source(stage))
+        self._kept = (dict(w.params()), list(self.links.sources), self.links.series_source)
         self.focused = stage
         self.links.shown = self.links.series_source if stage == self.links.series else stage
         self._rewired()
@@ -408,10 +442,9 @@ class PlayerWindow(QMainWindow):
     def cancel(self):
         if self.focused is None:
             return
-        stage, (params, src) = self.focused, self._kept
+        stage, (params, sources, series_source) = self.focused, self._kept
         w = self.frame_widgets[stage] if stage < len(self.frame_widgets) else self.series_widget
-        if src != self.links.source(stage):
-            self.links.set_source(stage, src)   # was valid when kept; a later stage may re-default
+        self.links.sources, self.links.series_source = sources, series_source   # valid when kept
         if hasattr(w, "set_params"):
             w.set_params(params)
         self.save()

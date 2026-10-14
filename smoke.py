@@ -57,8 +57,13 @@ def run_chain():
         win.source_pick.setCurrentIndex(0)   # read gray directly, skipping rescale
         check(win.links.sources[2] == 0, "rewire did not land")
         check(win.chain.links is win.links, "chain holds a different wiring")
+        boxes = [c for _, c in win.sink_card.form.rows]
+        check(len(boxes) == 1 and boxes[0].isChecked(), "Output should list motion, reading threshold")
+        boxes[0].setChecked(False)   # motion reads rescale instead; threshold is now unread
+        check(win.links.series_source == 1 and win.cards[2] in win.column.rail.dead, "detach did not land")
         win.cancel()
-        check(win.focused is None and win.links.sources[2] == 1 and thresh.params() == before, "cancel did not restore")
+        check(win.focused is None and win.links.sources[2] == 1 and win.links.series_source == 2
+              and thresh.params() == before, "cancel did not restore")
         win.focus(2)
         win.source_pick.setCurrentIndex(0)
         win.save()

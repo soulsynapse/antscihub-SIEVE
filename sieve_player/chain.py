@@ -138,6 +138,21 @@ class Links:
             self.sources, self.series_source = before
             raise
 
+    def readers(self, stage):
+        """The stages that may read `stage`: every later one that EXPECTS its product."""
+        out = [j for j in range(stage + 1, len(self.frame_tools)) if stage in self.compatible(j)]
+        if self.series_tool and stage in self.compatible(self.series):
+            out.append(self.series)
+        return out
+
+    def detach(self, reader, stage):
+        """Stop `reader` reading `stage`: point it at its nearest other compatible stage. Refused
+        (ValueError) if `stage` is the only one."""
+        others = [j for j in self.compatible(reader) if j != stage]
+        if not others:
+            raise ValueError(f"{self.tool(reader).NAME} has nothing else to read")
+        self.set_source(reader, others[-1])
+
     def consumers(self, stage):
         """The stages that read `stage`, in order; the series tool last if it does."""
         out = [i for i, s in enumerate(self.sources) if s == stage]

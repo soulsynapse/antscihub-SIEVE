@@ -88,9 +88,11 @@ that nothing reads and no file takes ends in a red bar instead, with "unread" be
 end cards are told from the tool cards only by their hairline, teal for Inputs and salmon for
 Outputs, about as bright as the gray it replaces. A tool's name is dotted-underlined: it is a
 link. Clicking it, or double-clicking the card, opens the tool alone: an Input card above with a
-picker of the stages it may read, the tool, an Output card below saying what reads it (in red if
-nothing does), and the frame showing this stage's output rather than the chain's last. Knobs and
-the picker act at once; Save keeps them, Cancel or Escape puts them back. Pointing a pass-through
+picker of the stages it may read, the tool, an Output card below with a checkbox per later stage
+that expects what this one hands out (checked if it reads it; unchecking points it at its nearest
+other stage, or is refused if it has none) and a line saying what reads it, red if nothing, and
+the frame showing this stage's output rather than the chain's last. Knobs and both pickers act at
+once; Save keeps them, Cancel or Escape puts them back. Pointing a pass-through
 tool at a stage of another type can change what later tools receive; each one left with a type it
 does not expect is re-pointed at its nearest compatible stage, and if some tool would be left with
 none the change is refused and the Output card says why. The

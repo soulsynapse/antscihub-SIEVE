@@ -72,11 +72,10 @@
   .cap { color: var(--label); font-size: 11px; }
   .cap em { font-style: normal; color: var(--select); font-weight: 600; }
 
-  /* ---- inline numbers beside the name: the same alternatives as the outlets, as buttons ---- */
+  /* ---- beside the name: + to split, x to drop the viewed alternative ---- */
   .seg { display: inline-flex; gap: 1px; margin-left: 4px; }
   .seg span { padding: 0 5px; border-radius: 2px; font-family: var(--mono); font-size: 11px; color: var(--ink-2); cursor: pointer; }
   .seg span:hover { background: var(--track); color: var(--ink); }
-  .seg span.pick { background: var(--select-soft); color: var(--select); font-weight: 600; }
   .seg span.add { color: var(--faint); }
   .seg span.drop { display: inline-flex; align-items: center; color: var(--faint); opacity: .5; margin-left: 6px; padding: 0 4px; }
   .seg span.drop:hover { opacity: 1; color: var(--ink); background: var(--track); }
@@ -102,7 +101,7 @@
 </style>
 </head>
 <body>
-<div id="chooser"><b>SIEVE chain · outlets</b><span class="hint">click a number or outlet to view that line · + splits · drag a slider to see downstream go stale</span></div>
+<div id="chooser"><b>SIEVE chain · outlets</b><span class="hint">click an outlet to view that line · + splits · drag a slider to see downstream go stale</span></div>
 <div id="note">Each alternative is a numbered outlet on the step's bottom edge. One arrow leaves the outlet the canvas is viewing and enters the next step; the count beside it is how many lines Run would send down that arrow.</div>
 <div id="root"></div>
 
@@ -167,7 +166,7 @@ function stageHTML(s, i) {
   const n = s.alts.length;
   const pane = s.src ? paramsHTML(s, i, 0)
     : paramsHTML(s, i, s.pick);
-  const seg = s.src ? "" : `<span class="seg">${n > 1 ? s.alts.map((_, k) => `<span class="${k === s.pick ? "pick" : ""}" data-pick="${i}:${k}" title="View the line through alternative ${k + 1}">${k + 1}</span>`).join("") : ""}<span class="add" data-split="${i}" title="Split off an alternative: a copy of the viewed one, to change">+</span>${n > 1 ? `<span class="drop" data-drop="${i}:${s.pick}" title="Drop alternative ${s.pick + 1}">${X}</span>` : ""}</span>`;
+  const seg = s.src ? "" : `<span class="seg"><span class="add" data-split="${i}" title="Split off an alternative: a copy of the viewed one, to change">+</span>${n > 1 ? `<span class="drop" data-drop="${i}:${s.pick}" title="Drop alternative ${s.pick + 1}">${X}</span>` : ""}</span>`;
   const outlets = n > 1 ? `<div class="outlets">${s.alts.map((_, k) => `<span class="badge ${k === s.pick ? "pick" : ""}" data-pick="${i}:${k}" style="left:${ox(k, n) * 100}%" title="View the line through alternative ${k + 1}">${k + 1}</span>`).join("")}</div>` : "";
   return `<div class="stage ${i === selected ? "sel" : ""}" data-i="${i}"><div class="card ${s.src ? "src" : ""} ${n > 1 ? "outs" : ""}">${headHTML(s, i, seg)}<div class="body">${pane}</div></div>${outlets}</div>`;
 }

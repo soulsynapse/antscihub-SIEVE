@@ -1,4 +1,4 @@
-"""Alternatives as numbers beside the name and outlets on the foot; one curved arrow from the viewed outlet; line counts in the gap."""
+"""Alternatives as outlets on the foot, + and x beside the name; one curved arrow from the viewed outlet; line counts in the gap."""
 from __future__ import annotations
 
 import sys
@@ -158,15 +158,15 @@ def fmt(knob: Knob) -> str:
 
 # ---- small widgets -------------------------------------------------------------
 class TextButton(QAbstractButton):
-    """A number, a +, or an x beside the name: text on a tint when it is the viewed one."""
+    """A + beside the name."""
 
-    def __init__(self, text: str, tip: str, on_click, *, picked: bool = False, faint: bool = False) -> None:
+    def __init__(self, text: str, tip: str, on_click, *, faint: bool = False) -> None:
         super().__init__()
-        self._text, self._picked, self._faint, self._hover = text, picked, faint, False
+        self._text, self._faint, self._hover = text, faint, False
         self.setToolTip(tip)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
-        self.setFont(font(NUM_PX, mono=True, weight=QFont.Weight.DemiBold if picked else QFont.Weight.Normal))
+        self.setFont(font(NUM_PX, mono=True))
         width = self.fontMetrics().horizontalAdvance(text) + 10
         self.setFixedSize(max(width, 18), 18)
         self.clicked.connect(on_click)
@@ -186,11 +186,9 @@ class TextButton(QAbstractButton):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         box = QRectF(self.rect())
-        if self._picked:
-            painter.fillRect(box, SELECT_SOFT)
-        elif self._hover:
+        if self._hover:
             painter.fillRect(box, TRACK)
-        colour = SELECT if self._picked else (INK if self._hover else (FAINT if self._faint else INK_2))
+        colour = INK if self._hover else (FAINT if self._faint else INK_2)
         painter.setPen(QPen(colour))
         painter.setFont(self.font())
         painter.drawText(box, Qt.AlignmentFlag.AlignCenter, self._text)
@@ -301,7 +299,7 @@ def _slider(knob: Knob, on_change) -> QSlider:
 
 # ---- the card ------------------------------------------------------------------
 class StepCard(QFrame):
-    """Name, the alternatives as numbers beside it, the remove x, then the viewed alternative's knobs."""
+    """Name, + and x beside it, the remove x, then the viewed alternative's knobs."""
 
     def __init__(self, index: int, stage: Stage, column: "ChainColumn") -> None:
         super().__init__()
@@ -323,10 +321,6 @@ class StepCard(QFrame):
         row.addWidget(name)
         if not stage.src:
             n = len(stage.alts)
-            if n > 1:
-                for k in range(n):
-                    row.addWidget(TextButton(str(k + 1), f"View the line through alternative {k + 1}",
-                                             lambda _=False, k=k: column.pick(index, k), picked=k == stage.pick))
             row.addWidget(TextButton("+", "Split off an alternative: a copy of the viewed one, to change",
                                      lambda _=False: column.split(index), faint=True))
             if n > 1:

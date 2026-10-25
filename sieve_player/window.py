@@ -14,8 +14,9 @@ a picker of the stages it may read, or nothing; Output below, a checkbox per lat
 expects what it hands out, checked if that stage reads it. The two are one wiring seen from both
 ends: unchecking a reader leaves it with no input, and a stage with no input is computed as
 nothing, red in the strip above it. The frame shows this stage, and keeps showing it after the
-tool is closed: the card whose name is in the accent is the one on the frame. Only a wiring that
-leaves that stage with no input moves the frame, to the last stage the video reaches. Knobs and
+tool is closed: the card whose name is in the accent is the one on the frame. A click on a card
+(Inputs, or a tool the video reaches) puts its stage on the frame without opening it. Only a wiring
+that leaves the shown stage with no input moves the frame, to the last stage the video reaches. Knobs and
 both pickers act at once; Save or a right-click anywhere keeps them, Cancel (or Escape) puts them
 back.
 `load(path)` builds the decoder, chain and worker, and replaces them on the next load. Until then
@@ -202,6 +203,7 @@ class PlayerWindow(QMainWindow):
 
         ends = {n: Layer(1, n, edge=theme.EDGE_TINTS[n]) for n in ("inputs", "outputs")}
         ends["inputs"].add(self.inputs)
+        ends["inputs"].pressed.connect(lambda: self.show_stage(VIDEO))
         ends["outputs"].add(self.outputs)
         self.ends = ends
         self.column = column = Column()
@@ -269,6 +271,7 @@ class PlayerWindow(QMainWindow):
         card.add(w)
         stage = len(self.cards)
         card.activated.connect(lambda: self.focus(stage))
+        card.pressed.connect(lambda: self.show_stage(stage))
         buttons = QWidget()
         h = QHBoxLayout(buttons)
         h.setContentsMargins(0, 0, 0, 0)
@@ -479,6 +482,15 @@ class PlayerWindow(QMainWindow):
         """In the pipeline view an unfed shown stage gives way to the last one the video reaches."""
         if self.focused is None and not self.links.fed(self.links.shown):
             self.links.shown = self.links.last_fed()
+
+    def show_stage(self, stage):
+        """Put `stage` on the frame, in the pipeline view, if it has a frame to show: the video or
+        a frame stage the video reaches. The series stage and an unfed stage are left alone."""
+        if (self.focused is not None or stage == self.links.series or not self.links.fed(stage)
+                or stage == self.links.shown):
+            return
+        self.links.shown = stage
+        self._rewired()
 
     def focus(self, stage):
         """Open one tool alone; the frame shows its stage from now on (the series card: what it

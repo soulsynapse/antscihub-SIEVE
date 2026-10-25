@@ -222,9 +222,11 @@ class Title(QLabel):
 
 class Layer(QFrame):
     """A surface one step lighter than whatever it sits on, named in white if it has a name. `edge`
-    replaces the gray hairline with a colour (see EDGE_TINTS). A named layer may be `link`ed: its
-    name is a Title and `activated` fires on the name's click or a double-click anywhere in it."""
+    replaces the gray hairline with a colour (see EDGE_TINTS). `pressed` fires on a left click that
+    lands on the layer itself rather than a control in it. A named layer may be `link`ed: its name
+    is a Title and `activated` fires on the name's click or a double-click anywhere in it."""
     activated = Signal()
+    pressed = Signal()
 
     def __init__(self, depth: int, name: str = "", parent=None, edge: QColor | None = None,
                  link: bool = False) -> None:
@@ -253,6 +255,11 @@ class Layer(QFrame):
         """Name the card in the accent: its output is what is viewed."""
         if self.head is not None:
             self.head.setStyleSheet(f"color: {ACCENT.name()};" if on else "")
+
+    def mousePressEvent(self, e) -> None:
+        if e.button() == Qt.MouseButton.LeftButton:
+            self.pressed.emit()
+        super().mousePressEvent(e)
 
     def mouseDoubleClickEvent(self, e) -> None:
         if isinstance(self.head, Title) and self.head._link and e.button() == Qt.MouseButton.LeftButton:

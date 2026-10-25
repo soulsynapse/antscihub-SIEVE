@@ -95,8 +95,10 @@ class Display(QWidget):
                 p.setPen(theme.qgray(theme.INK_2))
                 p.drawText(self.rect(), Qt.AlignCenter, self.reason)
             return
-        pix = self._pix.scaled(self.size(), Qt.KeepAspectRatio, Qt.FastTransformation)
-        x, y = (self.width() - pix.width()) // 2, (self.height() - pix.height()) // 2
+        # The frame stops RAIL short of the splitter so it sits as far from the grip as the cards do.
+        room = self.rect().adjusted(0, 0, -RAIL, 0)
+        pix = self._pix.scaled(room.size(), Qt.KeepAspectRatio, Qt.FastTransformation)
+        x, y = (room.width() - pix.width()) // 2, (room.height() - pix.height()) // 2
         p.drawPixmap(x, y, pix)
         if self.gate:
             p.setPen(QPen(theme.AMBER, 4))

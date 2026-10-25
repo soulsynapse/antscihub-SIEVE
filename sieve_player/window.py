@@ -526,7 +526,7 @@ class PlayerWindow(QMainWindow):
         self.toggle_play()  # _unload left it paused
         self.inputs.show_source(path)
         self.outputs.set_source(path, self.fps)
-        self.setWindowTitle(f"{self.title} â€” {os.path.basename(path)}")
+        self.setWindowTitle(f"{self.title} — {os.path.basename(path)}")
 
     def _unload(self):
         if self.worker is None:

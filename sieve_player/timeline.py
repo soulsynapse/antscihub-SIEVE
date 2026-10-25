@@ -187,10 +187,10 @@ class Controls(QWidget):
         for w in (self.play, back, fwd, desc_label("loop start"), self.start, desc_label("length"), self.length):
             w.setFixedHeight(ROW_H)
             lay.addWidget(w)
-        lay.addStretch(1)
-        lay.addWidget(self.progress)
         lay.addSpacing(GAP)
         lay.addWidget(self.readout)
+        lay.addStretch(1)
+        lay.addWidget(self.progress)
         self.play.clicked.connect(self.playToggled)
         back.clicked.connect(lambda: self.step.emit(-1))
         fwd.clicked.connect(lambda: self.step.emit(1))
@@ -218,7 +218,7 @@ class Controls(QWidget):
         self.play.setText("Pause" if on else "Play")
 
     def set_readout(self, row):
-        self.readout.setText(f"row {row}   {timecode(row, self.fps)}   {self.fps:.2f} fps")
+        self.readout.setText(f"{timecode(row, self.fps)}   {self.fps:.2f} fps   row {row}")
 
     def set_progress(self, done, total):
         self.progress.setText(f"window {done}/{total}" if done < total else "")

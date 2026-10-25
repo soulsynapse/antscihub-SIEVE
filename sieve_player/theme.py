@@ -178,12 +178,14 @@ class Title(QLabel):
     def __init__(self, text: str, parent=None) -> None:
         super().__init__(text, parent)
         self.setProperty("role", "name")
+        self.setMouseTracking(True)
         self._link = False
         self.set_link(True)
 
     def set_link(self, on: bool) -> None:
         self._link = on
-        self.setCursor(Qt.CursorShape.PointingHandCursor if on else Qt.CursorShape.ArrowCursor)
+        if not on:
+            self.setCursor(Qt.CursorShape.ArrowCursor)
         self.update()
 
     def paintEvent(self, event) -> None:
@@ -198,10 +200,21 @@ class Title(QLabel):
         p.drawLine(QPointF(0, y), QPointF(w, y))
         p.end()
 
+    def _text_rect(self):
+        """The glyphs, not the label: a label in a column is as wide as the column."""
+        r = self.rect()
+        r.setWidth(QFontMetrics(self.font()).horizontalAdvance(self.text()))
+        return r
+
     def mouseReleaseEvent(self, e) -> None:
-        if self._link and e.button() == Qt.MouseButton.LeftButton and self.rect().contains(e.position().toPoint()):
+        if self._link and e.button() == Qt.MouseButton.LeftButton and self._text_rect().contains(e.position().toPoint()):
             self.clicked.emit()
         super().mouseReleaseEvent(e)
+
+    def mouseMoveEvent(self, e) -> None:
+        on = self._link and self._text_rect().contains(e.position().toPoint())
+        self.setCursor(Qt.CursorShape.PointingHandCursor if on else Qt.CursorShape.ArrowCursor)
+        super().mouseMoveEvent(e)
 
 
 class Layer(QFrame):

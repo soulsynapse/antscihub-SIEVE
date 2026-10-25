@@ -40,15 +40,16 @@ FONT_PX = 12       # integer pixels, never points, so glyphs sit on the grid und
 FONT_WEIGHT = 500  # regular Inter reads thin on dark; 500 fills the stroke without reading bold
 HINTING = 3        # QFont.HintingPreference: full. DirectWrite ignores it; see play()
 VALUE_W = 36       # a slider's mono readout
-ACCENT = QColor(88, 146, 255)   # what is viewed: the arrow, the loop window, the trace
+ACCENT = QColor(88, 146, 255)   # what is viewed: the loop window, the trace
 AMBER = QColor(222, 160, 56)    # the gate
 RED = QColor(232, 72, 72)       # an output nothing reads
 RAIL = 6           # the gutter left of the chain's cards; a link that skips cards runs down it, px
-ARROW_X = PAD      # a link's stroke, from the cards' left edge: under the names, px
+ARROW_X = PAD + 30 # a link's stroke, from the cards' left edge: in from the names, px
 LINK_H = 20        # between two cards: the strip that names what the lower one receives, px
 # The chain's two end cards are told from the tool cards by their hairline alone: Inputs teal,
 # Outputs orange, both bright enough to read as colour at a glance.
 EDGE_TINTS = {"inputs": QColor(40, 180, 172), "outputs": QColor(240, 120, 80)}
+LINK = EDGE_TINTS["inputs"]   # a chain link and its head: the same teal as the Inputs card's edge
 MONO = ["Cascadia Mono", "Consolas", "Menlo", "DejaVu Sans Mono", "monospace"]
 FAMILIES = ["Inter", "Segoe UI Variable Text", "Segoe UI", "SF Pro Text", "Helvetica Neue", "Helvetica", "Arial"]
 HERE = Path(__file__).parent
@@ -231,6 +232,11 @@ class Layer(QFrame):
         if isinstance(self.head, Title):
             self.head.set_link(on)
 
+    def set_shown(self, on: bool) -> None:
+        """Name the card in the accent: its output is what is viewed."""
+        if self.head is not None:
+            self.head.setStyleSheet(f"color: {ACCENT.name()};" if on else "")
+
     def mouseDoubleClickEvent(self, e) -> None:
         if isinstance(self.head, Title) and self.head._link and e.button() == Qt.MouseButton.LeftButton:
             self.activated.emit()
@@ -304,7 +310,7 @@ class Rail(QWidget):
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing, True)
         x, gx, h = RAIL + ARROW_X + 0.5, RAIL / 2, self.HEAD
-        p.setPen(QPen(ACCENT, 1.5))
+        p.setPen(QPen(LINK, 1.5))
         for src, dst in self.links:
             top, bottom = src.geometry().bottom() + 1.0, dst.geometry().top() - 1.0
             path = QPainterPath(QPointF(x, top))
@@ -316,7 +322,7 @@ class Rail(QWidget):
             path.lineTo(x, bottom - h - 1)
             p.drawPath(path)
         p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(ACCENT)
+        p.setBrush(LINK)
         for _, dst in self.links:
             end = dst.geometry().top() - 1.0
             p.drawPolygon(QPolygonF([QPointF(x - h, end - h - 1.5), QPointF(x + h, end - h - 1.5), QPointF(x, end)]))

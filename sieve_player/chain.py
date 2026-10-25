@@ -71,8 +71,8 @@ class Links:
     `sources[i]` is what frame stage i reads; `series_source` what the series tool stacks. Each
     defaults to the nearest earlier stage whose product the tool EXPECTS and raises if there is
     none. A source may later be None: the stage has no input, hands out nothing, and is computed
-    as None. `shown` is the stage the display asks for, the last frame stage until the player says
-    otherwise."""
+    as None. `shown` is the stage the display asks for: the last fed frame stage until the player
+    says otherwise (see `last_fed`)."""
 
     def __init__(self, tools):
         self.frame_tools = [t for t in tools if getattr(t, "KIND", "frame") == "frame"]
@@ -84,7 +84,7 @@ class Links:
         for i, t in enumerate(self.frame_tools):
             self.sources.append(self._nearest(t, i))
         self.series_source = self._nearest(self.series_tool, len(self.frame_tools)) if self.series_tool else None
-        self.shown = len(self.frame_tools) - 1
+        self.shown = self.last_fed()
 
     @property
     def series(self):
@@ -111,12 +111,19 @@ class Links:
         return getattr(t, "PRODUCES", None) or self.produces(self.sources[stage])
 
     def fed(self, stage):
-        """Whether `stage` reaches the video through its sources."""
+        """Whether `stage` reaches the video through its sources; None (no stage) does not."""
         while stage != VIDEO:
-            stage = self.source(stage)
             if stage is None:
                 return False
+            stage = self.source(stage)
         return True
+
+    def last_fed(self):
+        """The last frame stage the video reaches, else the video: what the display falls back to."""
+        for i in reversed(range(len(self.frame_tools))):
+            if self.fed(i):
+                return i
+        return VIDEO
 
     def source(self, stage):
         return self.series_source if stage == self.series else self.sources[stage]

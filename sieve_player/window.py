@@ -13,8 +13,11 @@ A tool's name is a link. It, or a double-click on the card, opens the tool alone
 a picker of the stages it may read, or nothing; Output below, a checkbox per later stage that
 expects what it hands out, checked if that stage reads it. The two are one wiring seen from both
 ends: unchecking a reader leaves it with no input, and a stage with no input is computed as
-nothing, red in the strip above it. The frame shows this stage. Knobs and both pickers act
-at once; Save or a right-click anywhere keeps them, Cancel (or Escape) puts them back.
+nothing, red in the strip above it. The frame shows this stage, and keeps showing it after the
+tool is closed: the card whose name is in the accent is the one on the frame. Only a wiring that
+leaves that stage with no input moves the frame, to the last stage the video reaches. Knobs and
+both pickers act at once; Save or a right-click anywhere keeps them, Cancel (or Escape) puts them
+back.
 `load(path)` builds the decoder, chain and worker, and replaces them on the next load. Until then
 the transport is disabled and the frame is empty ground.
 """
@@ -61,7 +64,7 @@ class Display(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._pix, self.gate = None, False
+        self._pix, self.gate, self.reason = None, False, ""
         self.drawers, self.row, self.result, self.start = [], 0, None, 0
         self.setMinimumSize(160, 120)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
@@ -71,11 +74,12 @@ class Display(QWidget):
         self.update()
 
     def set_frame(self, a):
-        self._pix = QPixmap.fromImage(to_qimage(a))
+        self._pix, self.reason = QPixmap.fromImage(to_qimage(a)), ""
         self.update()
 
-    def clear(self):
-        self._pix = None
+    def clear(self, reason=""):
+        """No frame; `reason` is the one line that says why, so an empty frame never reads as a stall."""
+        self._pix, self.reason = None, reason
         self.update()
 
     def set_gate(self, on):
@@ -87,6 +91,9 @@ class Display(QWidget):
         p = QPainter(self)
         p.fillRect(self.rect(), theme.qgray(theme.GROUND))
         if self._pix is None:
+            if self.reason:
+                p.setPen(theme.qgray(theme.INK_2))
+                p.drawText(self.rect(), Qt.AlignCenter, self.reason)
             return
         pix = self._pix.scaled(self.size(), Qt.KeepAspectRatio, Qt.FastTransformation)
         x, y = (self.width() - pix.width()) // 2, (self.height() - pix.height()) // 2
@@ -315,6 +322,7 @@ class PlayerWindow(QMainWindow):
         else:
             stage, card = self.focused, self.cards[self.focused]
             card.set_link(False)
+            card.set_shown(False)
             card.buttons.show()
             self._fill_source_pick(stage)
             self._fill_sink(stage)
@@ -327,6 +335,8 @@ class PlayerWindow(QMainWindow):
         links, dead = [], []
         if self.focused is None:
             at = {VIDEO: self.ends["inputs"], **{i: c for i, c in enumerate(self.cards)}}
+            for stage, card in at.items():
+                card.set_shown(stage == self.links.shown)   # the accent names what the frame is
             for stage, card in enumerate(self.cards):
                 src = self.links.source(stage)
                 self.column.strips[stage].set_text(self._receives(stage), bad=src is None)
@@ -447,7 +457,10 @@ class PlayerWindow(QMainWindow):
         self._rewired()
 
     def _rewired(self):
-        """The links or the shown stage changed: keys, the walk and the frame follow."""
+        """The links or the shown stage changed: keys, the walk and the frame follow. An open tool
+        is shown even with no input; in the pipeline view an unfed shown stage gives way to the
+        last one the video reaches."""
+        self._settle_shown()
         if self._laid == self.focused:
             self._refresh()
         else:
@@ -457,11 +470,17 @@ class PlayerWindow(QMainWindow):
         self.chain.relink()
         self.worker.invalidate()
         if not self.links.fed(self.links.shown):
-            self.display.clear()   # nothing reaches the shown stage; the frame says so
+            self.display.clear(f"{self._name(self.focused)}: no input")
         self.goto(self.row, commit=True)
 
+    def _settle_shown(self):
+        """In the pipeline view an unfed shown stage gives way to the last one the video reaches."""
+        if self.focused is None and not self.links.fed(self.links.shown):
+            self.links.shown = self.links.last_fed()
+
     def focus(self, stage):
-        """Open one tool alone."""
+        """Open one tool alone; the frame shows its stage from now on (the series card: what it
+        stacks)."""
         if self.focused is not None:
             self.save()
         w = self.frame_widgets[stage] if stage < len(self.frame_widgets) else self.series_widget
@@ -481,7 +500,6 @@ class PlayerWindow(QMainWindow):
         if self.focused is None:
             return
         self.focused, self._kept = None, None
-        self.links.shown = len(self.links.frame_tools) - 1
         self._rewired()
 
     def cancel(self):
@@ -521,6 +539,10 @@ class PlayerWindow(QMainWindow):
         ct.progress.setText("")
         self.timeline.setEnabled(True)
         self.worker.start()
+        self._settle_shown()   # the wiring outlives the load; what it showed may no longer be fed
+        self._refresh()
+        if not self.links.fed(self.links.shown):
+            self.display.clear(f"{self._name(self.focused)}: no input")
         self.set_window(0, min(self.count, round(10 * self.fps)))
         self.goto(0, commit=True)
         self.toggle_play()  # _unload left it paused

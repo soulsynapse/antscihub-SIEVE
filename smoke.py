@@ -77,9 +77,23 @@ def run_chain():
         check(not win.links.fed(2) and not win.links.fed(3) and win.links.fed(1), "fed")
         win._refresh()
         check(win.column.strips[2].bad and win.column.strips[2].text == "no input", "unfed strip not red")
-        win.load(path)  # reload replaces decoder and worker, keeps the wiring
-        check(win.chain is not None and win.chain.links.sources == [-1, -1, None], "reload lost the wiring")
-        check(win.chain.peek(0) is None, "an unfed stage peeked a frame")
+        # gray straight into motion: rescale and threshold lose their input, and the frame, which was
+        # left on threshold, falls back to gray rather than going dark
+        win.links.sources, win.links.series_source = [-1, 0, 1], 2
+        win.focus(0)
+        boxes = dict(zip(win.links.readers(0), (c for _, c in win.sink_card.form.rows)))
+        boxes[1].setChecked(False)
+        boxes[3].setChecked(True)
+        check(win.links.sources == [-1, None, None] and win.links.series_source == 0, f"rewire {win.links.sources}")
+        win.focus(2)   # an unfed tool opened alone: the frame says so
+        check(win.links.shown == 2 and win.display.reason == "threshold: no input", f"unfed focus {win.display.reason!r}")
+        win.save()
+        check(win.links.shown == 0 and win.cards[0].head.styleSheet() and not win.cards[2].head.styleSheet(),
+              f"shown fell back to {win.links.shown}")
+        check(win.chain.peek(win.row) is not None and win.display.reason == "", "fallback stage not on the frame")
+        win.load(path)  # reload replaces decoder and worker, keeps the wiring and the shown stage
+        check(win.chain is not None and win.chain.links.sources == [-1, None, None], "reload lost the wiring")
+        check(win.links.shown == 0, f"reload moved the frame ({win.links.shown})")
         win.close()
         app.quit()
 

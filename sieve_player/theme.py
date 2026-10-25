@@ -37,6 +37,8 @@ INK = 200          # everything inside a section: descriptions and values alike
 INK_2 = 140        # tertiary: readouts, slider handles, unchecked boxes
 LINE_LIFT = 20     # a layer's hairline edge is this much lighter than the layer
 MEASURED_LIFT = 18 # a measured result is a flat field this much lighter than the surface it sits on
+HOVER_LIFT = 4     # a card under the pointer is this much lighter, its edge brightened to match
+HOVER_EDGE = 125   # QColor.lighter() factor for that card's edge, percent
 FONT_PX = 12       # integer pixels, never points, so glyphs sit on the grid under display scaling
 FONT_WEIGHT = 500  # regular Inter reads thin on dark; 500 fills the stroke without reading bold
 HINTING = 3        # QFont.HintingPreference: full. DirectWrite ignores it; see play()
@@ -229,6 +231,7 @@ class Layer(QFrame):
         super().__init__(parent)
         self.depth, self.edge = depth, edge
         self.setProperty("depth", str(depth))
+        self.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
         self.body = QVBoxLayout(self)
         self.body.setContentsMargins(PAD, PAD, PAD, PAD)
         self.body.setSpacing(GAP)
@@ -259,13 +262,21 @@ class Layer(QFrame):
     def add(self, w: QWidget, stretch: int = 0) -> None:
         self.body.addWidget(w, stretch)
 
+    def event(self, e):
+        if e.type() in (e.Type.HoverEnter, e.Type.HoverLeave):
+            self.update()
+        return super().event(e)
+
     def paintEvent(self, event) -> None:
         del event
+        hot = self.depth and self.underMouse()
+        fill = layer(self.depth) + (HOVER_LIFT if hot else 0)
+        edge = self.edge or qgray(layer(self.depth) + LINE_LIFT)
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing, True)
         box = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
-        p.setPen(QPen(self.edge or qgray(layer(self.depth) + LINE_LIFT), 1) if self.depth else Qt.PenStyle.NoPen)
-        p.setBrush(qgray(layer(self.depth)))
+        p.setPen(QPen(edge.lighter(HOVER_EDGE) if hot else edge, 1) if self.depth else Qt.PenStyle.NoPen)
+        p.setBrush(qgray(fill))
         p.drawRoundedRect(box, RADIUS, RADIUS)
         p.end()
 

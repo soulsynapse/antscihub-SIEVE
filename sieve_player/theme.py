@@ -44,7 +44,7 @@ ACCENT = QColor(88, 146, 255)   # what is viewed: the loop window, the trace
 AMBER = QColor(222, 160, 56)    # the gate
 RED = QColor(232, 72, 72)       # an output nothing reads
 RAIL = 6           # the gutter left of the chain's cards; a link that skips cards runs down it, px
-ARROW_X = PAD + 30 # a link's stroke, from the cards' left edge: in from the names, px
+ARROW_X = PAD + 15 # a link's stroke, from the cards' left edge: in from the names, px
 LINK_H = 20        # between two cards: the strip that names what the lower one receives, px
 # The chain's two end cards are told from the tool cards by their hairline alone: Inputs teal,
 # Outputs orange, both bright enough to read as colour at a glance.

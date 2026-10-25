@@ -16,6 +16,7 @@ from pathlib import Path
 from PySide6.QtCore import QPointF, QRectF, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QFontDatabase, QFontMetrics, QPainter, QPainterPath, QPen, QPolygonF
 from PySide6.QtWidgets import (QAbstractSpinBox, QApplication, QComboBox, QFrame, QGridLayout, QLabel,
+                               QSplitter, QSplitterHandle,
                                QLineEdit, QPushButton, QVBoxLayout, QWidget)
 
 GROUND = 22        # ground gray, 0-255
@@ -267,6 +268,42 @@ class Layer(QFrame):
         p.setBrush(qgray(layer(self.depth)))
         p.drawRoundedRect(box, RADIUS, RADIUS)
         p.end()
+
+
+class Grip(QSplitterHandle):
+    """A splitter handle that says it can be dragged: five dots down its middle, tertiary ink,
+    white under the pointer."""
+    DOT, STEP = 2, 6   # a dot's diameter and the pitch between dots, px
+
+    def __init__(self, orientation, parent) -> None:
+        super().__init__(orientation, parent)
+        self.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
+
+    def paintEvent(self, event) -> None:
+        super().paintEvent(event)
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing, True)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(qgray(HEAD if self.underMouse() else INK_2))
+        cx, cy, r = self.width() / 2, self.height() / 2, self.DOT / 2
+        for i in range(-2, 3):
+            if self.orientation() == Qt.Orientation.Horizontal:
+                p.drawEllipse(QPointF(cx, cy + i * self.STEP), r, r)
+            else:
+                p.drawEllipse(QPointF(cx + i * self.STEP, cy), r, r)
+        p.end()
+
+    def event(self, e):
+        if e.type() in (e.Type.HoverEnter, e.Type.HoverLeave):
+            self.update()
+        return super().event(e)
+
+
+class Splitter(QSplitter):
+    """A QSplitter whose handles are Grips."""
+
+    def createHandle(self) -> QSplitterHandle:
+        return Grip(self.orientation(), self)
 
 
 class Link(QWidget):

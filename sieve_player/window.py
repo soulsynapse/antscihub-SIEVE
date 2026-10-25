@@ -28,7 +28,7 @@ import numpy as np
 from PySide6.QtCore import QEvent, Qt, QTimer
 from PySide6.QtGui import QImage, QKeySequence, QPainter, QPen, QPixmap, QShortcut
 from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QFrame, QHBoxLayout, QLabel, QMainWindow, QPushButton, QScrollArea,
-                               QSizePolicy, QSplitter, QVBoxLayout, QWidget)
+                               QSizePolicy, QVBoxLayout, QWidget)
 
 from . import theme
 from .chain import VIDEO, Chain, Links
@@ -215,7 +215,7 @@ class PlayerWindow(QMainWindow):
         scroll.setFrameShape(QFrame.NoFrame)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         scroll.setMinimumWidth(theme.WIDE_W + 2 * PAD + GAP)   # one form and the scrollbar's gutter
-        split = QSplitter(Qt.Horizontal)
+        split = theme.Splitter(Qt.Horizontal)
         split.setHandleWidth(GAP)
         split.addWidget(self.display)
         split.addWidget(scroll)

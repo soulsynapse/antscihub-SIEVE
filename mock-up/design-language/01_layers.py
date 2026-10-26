@@ -40,7 +40,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-GROUND = 22        # ground gray, 0-255
+GROUND = 31        # ground gray, 0-255
 STEP = 9           # how much lighter each layer is
 MAX_DEPTH = 3      # layers above ground
 LABEL_MIN = 40     # a form's description column is its widest label, clamped to these, px
@@ -815,6 +815,7 @@ class Window(QWidget):
         k.body.addLayout(g)
         self.readout = QLabel()
         self.readout.setProperty("role", "readout")
+        self.readout.setWordWrap(True)
         specs = [("GROUND", 4, 60), ("STEP", 2, 24), ("LABEL_MIN", 0, 120), ("LABEL_MAX", 60, 240),
                  ("SELECTOR_W", 90, 260), ("ROW_H", 16, 32), ("PAD", 2, 24), ("GAP", 2, 24), ("ROW_GAP", 0, 12), ("HEAD_GAP", 0, 32), ("RADIUS", 0, 12),
                  ("INK", 140, 255), ("INK_2", 90, 200), ("LINE_LIFT", 0, 40), ("MEASURED_LIFT", 0, 60),
@@ -829,9 +830,9 @@ class Window(QWidget):
             s.setFixedHeight(ROW_H)
             s.valueChanged.connect(lambda v, n=name: self.retune(n, v))
             s.sliderReleased.connect(self.rebuild)
-            g.addWidget(desc_label(name.lower().replace("_", " "), col), i % 3, (i // 3) * 2)
-            g.addWidget(s, i % 3, (i // 3) * 2 + 1)
-        g.setColumnStretch(18, 1)
+            g.addWidget(desc_label(name.lower().replace("_", " "), col), i % 6, (i // 6) * 2)
+            g.addWidget(s, i % 6, (i // 6) * 2 + 1)
+        g.setColumnStretch(8, 1)
         k.body.addWidget(self.readout)
         self.show_values()
         return k
@@ -869,7 +870,7 @@ if __name__ == "__main__":
     app = QApplication(sys.argv)
     install_font(app)
     _live = Window()
-    _live.resize(1320, 800)
+    _live.resize(1100, 760)
     _live.show()
     paint_caption(_live)
     sys.exit(app.exec())

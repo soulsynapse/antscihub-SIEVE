@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (QAbstractSpinBox, QApplication, QComboBox, QFrame
                                QSplitter, QSplitterHandle,
                                QLineEdit, QPushButton, QVBoxLayout, QWidget)
 
-GROUND = 22        # ground gray, 0-255
+GROUND = 31        # ground gray, 0-255
 STEP = 9           # how much lighter each layer is
 MAX_DEPTH = 3      # layers above ground
 LABEL_MIN = 40     # a form's description column is its widest label, clamped to these, px

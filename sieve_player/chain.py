@@ -100,7 +100,7 @@ class Links:
         return self.series_tool if stage == self.series else self.frame_tools[stage]
 
     def produces(self, stage):
-        """The type a stage hands out; a frame tool with PRODUCES None hands out what it reads."""
+        """The type a stage hands out; a frame tool with PRODUCES "same" hands out what it reads."""
         if stage == VIDEO:
             return "bgr"
         if stage == self.series:
@@ -108,7 +108,8 @@ class Links:
         t = self.frame_tools[stage]
         if self.sources[stage] is None:
             return None
-        return getattr(t, "PRODUCES", None) or self.produces(self.sources[stage])
+        p = t.PRODUCES
+        return self.produces(self.sources[stage]) if p == "same" else p
 
     def fed(self, stage):
         """Whether `stage` reaches the video through its sources; None (no stage) does not."""

@@ -2,3 +2,4 @@ video-tests/
 .venv/
 __pycache__/
 *.egg-info/
+uv.lock

@@ -13,6 +13,7 @@ cold-to-hot by value with the window's running maximum at full heat.
 import cv2
 import numpy as np
 
+SIEVE_TOOL = True
 NAME, KIND, EXPECTS = "lk_flow", "series", "gray"
 DEFAULTS = {"flow": False, "block": 16}
 SIGMA, DET_EPS = 2.0, 1e-6  # v2's constants; every v2 threshold was tuned against this blur

@@ -2,6 +2,7 @@
 import cv2
 import numpy as np
 
+SIEVE_TOOL = True
 NAME, KIND, EXPECTS = "motion", "series", "gray"
 DEFAULTS = {"gate": 2.0}
 

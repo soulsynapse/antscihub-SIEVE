@@ -1,6 +1,7 @@
 """Frame tool: BGR to gray by luma (cv2's Rec. 601 weights). The step the decoder used to take."""
 import cv2
 
+SIEVE_TOOL = True
 NAME, KIND, EXPECTS, PRODUCES = "gray", "frame", "bgr", "gray"
 DEFAULTS = {}
 

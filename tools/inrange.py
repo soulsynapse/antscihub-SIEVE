@@ -11,6 +11,7 @@ import json
 import cv2
 import numpy as np
 
+SIEVE_TOOL = True
 NAME, KIND, EXPECTS, PRODUCES = "inrange", "frame", "bgr", "gray"
 H_MAX, SV_MAX = 179, 255
 DEFAULTS = {"h_lo": 0, "h_hi": H_MAX, "s_lo": 0, "s_hi": SV_MAX, "v_lo": 0, "v_hi": SV_MAX}

@@ -24,7 +24,9 @@ py -3.13 -m venv .venv            # not the Anaconda python: its Qt DLLs shadow 
 
 ## What a tool is
 
-A tool is one file. Two kinds.
+A tool is one file, marked `SIEVE_TOOL = True` and named by `NAME`; nothing else is required for
+`sieve_player.registry` to list it, and everything else below is a facet it may or may not have yet.
+The registry's own README is the spec for how tools are found and probed. Two kinds.
 
 A **frame tool** maps one row to one array:
 
@@ -47,7 +49,7 @@ def settings(parent=None) -> QWidget          # .changed, .params(), .show_resul
 `frames.fps`, `frames.count`, `series.start` are facts. `EXPECTS` / `PRODUCES` are strings the
 player compares for equality and never looks inside. The decoder produces `"bgr"`; `tools/gray.py`
 turns it into `"gray"` for the tools that want luma. `EXPECTS` may be a tuple of types, and
-`PRODUCES = None` means out as in (rescale, downsample). A tool reads one earlier stage, by
+`PRODUCES = "same"` means out as in (rescale, downsample). A tool reads one earlier stage, by
 default the nearest one whose product it expects, the video counting as a stage; a chain in which
 some tool can read nothing before it is refused. The player lets you point a tool at any earlier
 stage of the right type (`sieve_player.chain.Links`), so a chain is a list that reads as a graph:

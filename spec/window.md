@@ -63,6 +63,13 @@ Assumes: Window shell.
 - [ ] An unresolved node's pane says which tool name was not found and shows its stored params
   read-only.
   Check: Kendrick opens a document naming a missing tool.
+- [ ] The video node's pane, with a selector wired in, shows the path the selector answered and
+  greys the picker with the reason; a selector that answers nothing is reported there as a path
+  that will not open is. Unwiring the selector gives the picker back and leaves the video open.
+  Check: Kendrick wires a selector, breaks its rule, fixes it, unwires it.
+- [ ] A selector node's pane shows its settings and how many files its rule matched, and a change
+  there re-asks the selector: if the answer is a different file, that file opens.
+  Check: Kendrick widens a glob from one match to several and watches the count and the frame.
 
 ## Display flag
 

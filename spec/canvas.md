@@ -30,6 +30,10 @@ Assumes: Window shell.
   Check: Kendrick opens a document naming a missing tool.
 - [x] A node whose input is unfed is marked, and the mark follows the wiring at once.
   Check: Kendrick unwires and rewires.
+- [ ] The video node shows one input connector, of type `"path"`, and is not marked unfed while
+  nothing is wired to it. A selector node shows no input and one output of that type, and the
+  type has a colour of its own.
+  Check: a test reads the canvas's inputs on the video node and on a selector; Kendrick hovers.
 
 ## Navigation
 

@@ -13,7 +13,7 @@ _HINTS = {
     MARKER: "SIEVE_TOOL = True",
     "NAME": 'NAME = "mytool"',
     "KIND": 'KIND = "frame"  # or "series"',
-    "EXPECTS": 'EXPECTS = "gray"  # or a tuple of types',
+    "EXPECTS": 'EXPECTS = "gray"  # or a tuple; the report lists the types in use',
     "PRODUCES": 'PRODUCES = "gray"  # or "same": out as in',
     "DEFAULTS": "DEFAULTS = {}",
     "run": "def run(frames, row, params): ...",
@@ -90,4 +90,17 @@ def discover(*roots):
     return out
 
 
-__all__ = ["MARKER", "FACETS", "Entry", "is_tool", "probe", "hint", "discover"]
+def types(entries, extra=()):
+    """{type: (producers, expecters)} over the tools that imported, plus `extra` (name, produces,
+    expects) rows for nodes that are not tools. "same" is not a type; a PATHS key expects "path"."""
+    out = {}
+    rows = [(e.name, e.get("PRODUCES"), e.get("EXPECTS"), e.get("PATHS")) for e in entries if e.ok]
+    for name, p, ex, paths in rows + [(*r, None) for r in extra]:
+        if isinstance(p, str) and p != "same":
+            out.setdefault(p, (set(), set()))[0].add(name)
+        for t in ((ex,) if isinstance(ex, str) else ex or ()) + (("path",) if paths else ()):
+            out.setdefault(t, (set(), set()))[1].add(name)
+    return out
+
+
+__all__ = ["MARKER", "FACETS", "Entry", "is_tool", "probe", "hint", "discover", "types"]

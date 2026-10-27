@@ -1,14 +1,24 @@
-"""`python -m sieve_player.registry [root ...]` reports; `--check` holds the package to its README."""
+"""`python -m sieve_player.registry [root ...]` reports; `--check` holds the package to its README
+and fails on a type nothing produces or nothing expects."""
 import os
 import re
 import sys
 
-from . import FACETS, MARKER, __all__, discover, hint, is_tool
+from . import FACETS, MARKER, __all__, discover, hint, is_tool, types
+
+VIDEO = ("video", "bgr", "path")   # the one node that is not a tool: what it produces and expects
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 
+def orphans(roots):
+    """[(type, producers, expecters)] with an empty side, over the tools under `roots` and the video node."""
+    return [(t, *pe) for t, pe in sorted(types(discover(*roots), [VIDEO]).items()) if not all(pe)]
+
+
 def report(roots):
+    for t, (p, ex) in sorted(types(discover(*roots), [VIDEO]).items()):
+        print(f"{t:<8} from {', '.join(sorted(p)) or 'nothing'}  to {', '.join(sorted(ex)) or 'nothing'}")
     for e in discover(*roots):
         print(f"{e.name}  ({e.path})")
         if not e.ok:
@@ -55,6 +65,8 @@ def check():
             continue  # read here, by discovery; nothing else needs to
         if not re.search(rf"""[.\"']{facet}\b""", sources):
             failures.append(f"facet {facet!r} is probed but nothing in sieve_player reads it")
+    for t, p, ex in orphans(["tools"]):
+        failures.append(f"type {t!r} is {'produced' if p else 'expected'} by {', '.join(sorted(p or ex))} and {'expected' if p else 'produced'} by nothing")
     for msg in failures:
         print("FAIL", msg)
     print("registry check:", "ok" if not failures else f"{len(failures)} failure(s)")

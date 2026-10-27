@@ -12,7 +12,9 @@ feeds; the value is called with the picked file and answers the params to merge.
 to import is still an `Entry`, with the exception in `error`, so a broken tool shows up instead
 of vanishing.
 
-`--check` fails if this list and `__all__` differ, or if a facet is read by nothing.
+The types are whatever the tools say: `types(entries)` maps each to who produces and who expects it,
+and the report prints that first. `--check` fails if this list and `__all__` differ, if a facet is
+read by nothing, or if a type under `tools/` is produced or expected by nothing.
 
 ## Exports
 
@@ -23,6 +25,7 @@ of vanishing.
 - `probe(tool, facet)`
 - `hint(facet)`
 - `discover(*roots)` -- imports each `.py` under `roots` as `<dirname>.<stem>`
+- `types(entries, extra=())` -- type -> (producers, expecters)
 
 ```
 python -m sieve_player.registry [root ...]   # report; default root is tools/

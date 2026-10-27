@@ -30,6 +30,11 @@ from .worker import Worker
 DOCUMENT_FILTER = "SIEVE document (*.json);;All (*)"
 
 
+def _same(a, b):
+    """Whether two paths name one file, as far as their text says."""
+    return os.path.normcase(os.path.abspath(str(a))) == os.path.normcase(os.path.abspath(str(b)))
+
+
 def to_qimage(a):
     a = np.asarray(a)
     if a.dtype == bool:
@@ -228,9 +233,7 @@ class PlayerWindow(QMainWindow):
         self.pane.set_document(doc)
         self._hook_traces()
         self._retitle()
-        video = doc.video_path()
-        if video:
-            self._open_video(video)
+        self._pick_video()
 
     def open_document(self, path):
         """Open a saved document; a file that will not read is reported in the transport and leaves
@@ -284,9 +287,10 @@ class PlayerWindow(QMainWindow):
     # -- the graph changed ------------------------------------------------
     def sync(self):
         """The document's wiring, nodes or flag changed: the pane, the runtime, the canvas and the
-        frame follow."""
+        frame follow, and the video, if a selector now picks a different file."""
         self.pane.sync()
         self._hook_traces()
+        self._pick_video()
         self.display.drawers = [self.tools[n.tool] for n in self.doc.nodes
                                 if n.tool in self.tools and hasattr(self.tools[n.tool], "draw")]
         self.canvas.update()
@@ -297,6 +301,10 @@ class PlayerWindow(QMainWindow):
         self.goto(self.row, commit=True)
 
     def _params_changed(self, nid):
+        sel = self.doc.selector()
+        if sel is not None and nid == sel.id:
+            self._pick_video()
+            return
         if self.graph is None:
             return
         self.graph.sync()
@@ -307,6 +315,50 @@ class PlayerWindow(QMainWindow):
             self.goto(self.row, commit=True)
 
     # -- loading ---------------------------------------------------------
+    def _pick_video(self):
+        """Ask the document which file it means (its selector's answer, else its written path) and
+        open that file if it is not the one open. A selector that answers nothing, or a file that
+        will not open, is said on the video node and the canvas, and leaves what was open alone."""
+        if self.doc is None:
+            return False
+        sel = self.doc.selector()
+        path, why = document.pick_video(self.doc, self.tools)
+        vid = self.doc.video_node()
+        if self.pane.video is not None:
+            self.pane.video.set_picker(sel is None, None if sel is None else sel.id)
+        if sel is not None:
+            self.pane.note(sel.id, self._match_note(sel, path))
+        if vid is not None:
+            self.canvas.errors.pop(vid.id, None)
+        if path is None:
+            if why:
+                if self.pane.video is not None:
+                    self.pane.video.show_none(why)
+                if vid is not None:
+                    self.canvas.errors[vid.id] = why
+                    self.canvas.update()
+            return False
+        if self.decoder is not None and _same(self.decoder.path, path):
+            return True
+        opened = self._open_video(path)
+        if not opened and vid is not None:
+            self.canvas.errors[vid.id] = f"could not open {os.path.basename(str(path))}"
+            self.canvas.update()
+        return opened
+
+    def _match_note(self, sel, path):
+        """What a selector's rule covered, for the line under its settings."""
+        tool = self.tools.get(sel.tool)
+        matches = getattr(tool, "matches", None)
+        picked = "" if path is None else f", picked {os.path.basename(path)}"
+        if matches is None:
+            return "matched nothing" if path is None else picked[2:]
+        try:
+            n = len(matches(self.doc.folder(), dict(sel.params)))
+        except Exception as e:
+            return f"{type(e).__name__}: {e}"
+        return f"{n} match{'es' if n != 1 else ''}{picked}"
+
     def load(self, path):
         """Open the video at `path` and record it in the document as written. A file that won't
         open is reported on the video node and leaves what was open alone."""

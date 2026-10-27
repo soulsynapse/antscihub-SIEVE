@@ -2,16 +2,18 @@
 import numpy as np
 from PySide6.QtCore import QPointF, QRectF, Qt, Signal
 from PySide6.QtGui import QColor, QPainter, QPen, QPolygonF
-from PySide6.QtWidgets import QCheckBox, QHBoxLayout, QLabel, QSlider, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QCheckBox, QComboBox, QHBoxLayout, QLabel, QLineEdit, QSlider, QVBoxLayout, QWidget
 
 from . import theme
 from .theme import CONTROL_W, GAP, ROW_H, VALUE_W, Form, mono_font, qgray
 
 
 class ParamWidget(QWidget):
-    """Has .changed and .params(). Add rows with add_int / add_float / add_bool; each is one line of
-    the form, a knob: slider and its mono readout together fill the one control width. The int and
-    float rows return their slider, for a tool that also sets the value from elsewhere."""
+    """Has .changed and .params(). Add rows with add_int / add_float / add_bool / add_text /
+    add_choice; each is one line of the form, a knob: slider and its mono readout together fill the
+    one control width. The int and float rows return their slider, for a tool that also sets the
+    value from elsewhere. A text row commits on Enter or focus loss, as a Houdini field does, so a
+    half-typed pattern is never a change."""
     changed = Signal()
 
     def __init__(self, parent=None):
@@ -69,6 +71,35 @@ class ParamWidget(QWidget):
         c.toggled.connect(lambda _: self.changed.emit())
         self.form.add_row(name, c)
         self._get[name], self._set[name] = c.isChecked, lambda v: c.setChecked(bool(v))
+
+    def add_text(self, name, value):
+        e = QLineEdit(str(value))
+        e.setFont(mono_font())
+        e.setFixedWidth(CONTROL_W)
+        last = [e.text()]
+
+        def commit():
+            if e.text() != last[0]:
+                last[0] = e.text()
+                self.changed.emit()
+        e.editingFinished.connect(commit)
+        self.form.add_row(name, e)
+
+        def set_(v):
+            e.setText(str(v))
+            commit()
+        self._get[name], self._set[name] = e.text, set_
+        return e
+
+    def add_choice(self, name, options, value):
+        c = QComboBox()
+        c.addItems([str(o) for o in options])
+        c.setCurrentText(str(value))
+        c.setFixedWidth(CONTROL_W)
+        c.currentTextChanged.connect(lambda _: self.changed.emit())
+        self.form.add_row(name, c)
+        self._get[name], self._set[name] = c.currentText, lambda v: c.setCurrentText(str(v))
+        return c
 
 
 class Trace(QWidget):

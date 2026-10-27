@@ -27,7 +27,7 @@ from PySide6.QtWidgets import (QAbstractSpinBox, QApplication, QLineEdit, QListW
                                QPlainTextEdit, QSizePolicy, QTextEdit, QToolTip, QWidget)
 
 from . import theme
-from .document import INPUT, VIDEO_PRODUCES, VIDEO_TOOL, expects, fed, fits, produces
+from .document import INPUT, PATH, VIDEO_PRODUCES, VIDEO_TOOL, expects, fed, fits, is_selector, produces
 from .theme import GAP, PAD, qgray
 
 NODE_W, NODE_H = 140, 28   # a node's box, canvas px
@@ -165,6 +165,7 @@ class Canvas(QWidget):
         self.tools = tools
         self.broken = dict(broken or {})
         self.doc = None
+        self.errors = {}                        # node id -> the one line wrong with it, set by the window
         self.selected = []
         self.hover = None                       # the node id under the pointer
         self._drag = None                       # ("move", start, {id: pos}) | ("box", start, shift, base)
@@ -233,8 +234,11 @@ class Canvas(QWidget):
 
     # -- what the document and the tools say of a node -----------------------
     def inputs(self, node):
-        """(name, expected types or None) per input: none on the video node, one on every other."""
+        """(name, expected types or None) per input: PATH on the video node, none on a selector, one
+        on every other."""
         if node.tool == VIDEO_TOOL:
+            return [(INPUT, (PATH,))]
+        if not node.unresolved and is_selector(self.tools.get(node.tool)):
             return []
         return [(INPUT, None if node.unresolved else expects(self.tools.get(node.tool)))]
 
@@ -250,8 +254,10 @@ class Canvas(QWidget):
         return None if node.unresolved else produces(self.doc, self.tools, node.id)
 
     def unfed(self, node):
-        """The mark: a resolved node the video does not reach through wires whose types fit."""
-        return not node.unresolved and node.tool != VIDEO_TOOL and not fed(self.doc, node.id, self.tools)
+        """The mark: a resolved node the video does not reach through wires whose types fit. The
+        video node's input is optional and a selector has none, so neither is ever marked."""
+        return bool(self.inputs(node)) and not node.unresolved and node.tool != VIDEO_TOOL \
+            and not fed(self.doc, node.id, self.tools)
 
     # -- the view ----------------------------------------------------------
     def to_doc(self, v):
@@ -468,8 +474,9 @@ class Canvas(QWidget):
         end, nid, iname = self._pending
         node = self.doc.node(nid)
         if name == VIDEO_TOOL:
-            # no inputs, so only an input's loose end can reach it
-            return end != "out" and self.compatible(VIDEO_PRODUCES, dict(self.inputs(node))[iname])
+            if end == "out":
+                return self.compatible(self.output_type(node), (PATH,))
+            return self.compatible(VIDEO_PRODUCES, dict(self.inputs(node))[iname])
         tool = self.tools[name]
         if end == "out":
             return self.compatible(self.output_type(node), expects(tool))
@@ -620,7 +627,7 @@ class Canvas(QWidget):
         p.setPen(self.hairline(edge))
         p.setBrush(qgray(fill))
         p.drawRoundedRect(box, theme.RADIUS, theme.RADIUS)
-        p.setPen(theme.RED if n.unresolved else qgray(theme.INK))
+        p.setPen(theme.RED if n.unresolved or n.id in self.errors else qgray(theme.INK))
         text = box.adjusted(PAD, 0, -(3 * PAD + 2 * FLAG_R), 0)
         p.drawText(text, Qt.AlignLeft | Qt.AlignVCenter, f"{n.id} ?" if n.unresolved else n.id)
         if n.id == self.doc.display:
@@ -833,4 +840,6 @@ class Canvas(QWidget):
         node = self.node_at(pos)
         if node is not None and node.unresolved:
             return f"tool {node.tool!r} not found"
+        if node is not None and node.id in self.errors:
+            return self.errors[node.id]
         return ""

@@ -22,6 +22,8 @@ _HINTS = {
     "output_name": "def output_name(src, params): ...",
     "export_command": "def export_command(src, dst, params, fps): ...",
     "describe_output": "def describe_output(src, params, fps): ...",
+    "select": "def select(folder, params): ...  # a selector: the path it picks under folder, or None",
+    "matches": "def matches(folder, params): ...  # a selector: every path its rule matches, picked first",
 }
 FACETS = tuple(_HINTS)
 

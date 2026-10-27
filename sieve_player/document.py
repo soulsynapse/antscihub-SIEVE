@@ -8,6 +8,11 @@ or as the modules themselves; the document stores only names.
 The video is a node like any other, with the reserved tool name VIDEO_TOOL, so that wires can name
 it. Its path is kept on the document, not in the node's params, so it can be stored as written and
 resolved against the document's folder on load.
+
+The video node has one input, of type PATH. A selector is a tool that produces PATH and expects
+nothing; wired into the video node, its `select(folder, params)` answers which file the document
+means, from the document's folder, and the answer is written into `video` so a reader without the
+selector's tool opens the same file (see `pick_video`).
 """
 import json
 import os
@@ -16,6 +21,7 @@ from dataclasses import dataclass, field
 VERSION = 1
 VIDEO_TOOL = "video"        # the reserved tool name of the node the decoder is
 VIDEO_PRODUCES = "bgr"
+PATH = "path"               # the type the video node's input expects and a selector produces
 INPUT = "in"                # every tool today has one input; wires name it so fan-in costs nothing later
 LAYOUT_STEP = 100.0         # vertical spacing of a list-built document
 
@@ -101,11 +107,21 @@ class Document:
         for n in self.nodes:
             n.unresolved = n.tool != VIDEO_TOOL and n.tool not in known
 
+    def folder(self):
+        """Where relative paths resolve: the document's folder, else the working directory."""
+        return os.path.dirname(os.path.abspath(self.path)) if self.path else os.getcwd()
+
     def video_path(self):
         """The path to open: relative paths resolve against the document's folder."""
         if self.video is None or os.path.isabs(self.video) or self.path is None:
             return self.video
-        return os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(self.path)), self.video))
+        return os.path.normpath(os.path.join(self.folder(), self.video))
+
+    def selector(self):
+        """The node wired into the video node's input, or None."""
+        v = self.video_node()
+        w = None if v is None else self.source(v.id)
+        return None if w is None else self.node(w.src)
 
     def to_dict(self):
         return {
@@ -170,6 +186,46 @@ def expects(tool):
     return tuple(e) if isinstance(e, (tuple, list, set)) else (e,)
 
 
+def wants(doc, tools, nid):
+    """What `nid`'s input expects: PATH on the video node, else its tool's EXPECTS."""
+    node = doc.node(nid)
+    return (PATH,) if node.tool == VIDEO_TOOL else expects(_by_name(tools).get(node.tool))
+
+
+def is_selector(tool):
+    return getattr(tool, "PRODUCES", None) == PATH and expects(tool) is None
+
+
+def as_written(path, folder):
+    """`path` relative to `folder` when it is under it, so a moved folder still finds it; else absolute."""
+    try:
+        rel = os.path.relpath(path, folder)
+    except ValueError:      # another drive on Windows
+        return os.path.abspath(path)
+    return rel if not rel.startswith(os.pardir) else os.path.abspath(path)
+
+
+def pick_video(doc, tools):
+    """Asks the selector wired into the video node which file the document means and records the
+    answer in `video` as written. Returns (path, reason): the path, or None and why there is none.
+    Without a selector the answer is `video_path()` and the reason is empty."""
+    sel = doc.selector()
+    if sel is None:
+        return doc.video_path(), ""
+    tool = _by_name(tools).get(sel.tool)
+    if tool is None or not is_selector(tool):
+        return None, f"{sel.id} is not a selector"
+    try:
+        path = tool.select(doc.folder(), dict(sel.params))
+    except Exception as e:  # a tool's rule is user code; its failure is a report, not a crash
+        return None, f"{sel.id} raised {type(e).__name__}: {e}"
+    if path is None:
+        return None, f"{sel.id} matched nothing"
+    path = os.path.normpath(os.path.join(doc.folder(), path))
+    doc.video = as_written(path, doc.folder())
+    return path, ""
+
+
 def produces(doc, tools, nid, _seen=()):
     """The type `nid` hands out, or None: unresolved, a pass-through nothing feeds, or in a cycle."""
     node = doc.node(nid)
@@ -192,6 +248,9 @@ def from_tools(tools, video=None):
     doc.add_node(VIDEO_TOOL)
     for i, t in enumerate(tools, 1):
         n = doc.add_node(t.NAME, (0.0, i * LAYOUT_STEP), getattr(t, "DEFAULTS", {}))
+        if is_selector(t):
+            doc.connect(n.id, VIDEO_TOOL)      # a selector reads nothing and feeds the video
+            continue
         want = expects(t) or ()
         for earlier in reversed(doc.nodes[:-1]):
             if produces(doc, tools, earlier.id) in want:
@@ -199,7 +258,8 @@ def from_tools(tools, video=None):
                 break
     doc.display = doc.nodes[0].id
     for n in doc.nodes[1:]:
-        if getattr(_by_name(tools)[n.tool], "KIND", "frame") == "frame" and fed(doc, n.id):
+        t = _by_name(tools)[n.tool]
+        if not is_selector(t) and getattr(t, "KIND", "frame") == "frame" and fed(doc, n.id):
             doc.display = n.id
     return doc
 
@@ -229,18 +289,19 @@ def fits(doc, tools, wire):
     """Whether the wire's source hands out something its destination expects; a source that hands
     out nothing (unresolved, an unfed pass-through) does not fit."""
     tools = _by_name(tools)
-    got, want = produces(doc, tools, wire.src), expects(tools.get(doc.node(wire.dst).tool))
+    got, want = produces(doc, tools, wire.src), wants(doc, tools, wire.dst)
     return got is not None and (want is None or got in want)
 
 
 def validate(doc, tools):
     """Every wire whose destination does not expect what its source produces, every cycle, and every
-    node with an input nothing feeds. Reports; never refuses. Needs the tools for the types; the
+    node with an input nothing feeds; the video node's input and a selector, which has none, are
+    never unfed. Reports; never refuses. Needs the tools for the types; the
     other two checks read the document alone."""
     tools = _by_name(tools)
     out = []
     for w in doc.wires:
-        got, want = produces(doc, tools, w.src), expects(tools.get(doc.node(w.dst).tool))
+        got, want = produces(doc, tools, w.src), wants(doc, tools, w.dst)
         if got is not None and want is not None and got not in want:
             out.append(Problem("type", f"{w.src} -> {w.dst}", f"{w.dst} expects {want!r} but {w.src} produces {got!r}"))
     state = {}      # id -> 1 on the stack, 2 finished
@@ -260,6 +321,6 @@ def validate(doc, tools):
         if n.id not in state:
             walk(n.id, [n.id])
     for n in doc.nodes:
-        if n.tool != VIDEO_TOOL and doc.source(n.id) is None:
+        if n.tool != VIDEO_TOOL and not is_selector(tools.get(n.tool)) and doc.source(n.id) is None:
             out.append(Problem("unfed", n.id, f"{n.id} has no input"))
     return out

@@ -5,7 +5,9 @@ One surface per node, built once per document and shown one at a time: the widge
 widget a view over it, as a Houdini parameter pane is over its node: the widget must take the
 stored values (`set_params`) and its knobs are the node's whole param set, so a tool whose
 `settings()` returns anything less is shown as a defect, not as its own defaults. Two parts are SIEVE's own. The
-video node's is a picker, the chosen path and what cv2 says about the file. Under a tool that
+video node's is a picker, the chosen path and what cv2 says about the file; while a selector is
+wired in, the picker is greyed and the selector picks. A selector's card is its settings and a
+note of what its rule matched, which the window writes. Under a tool that
 exports sits the target it would write, an Export button that runs the tool's argv in a QProcess,
 and the process's last line; a tool takes part by defining `output_name(src, params) -> path` and
 `export_command(src, dst, params, fps) -> argv`, and may add `describe_output(src, params, fps)
@@ -22,7 +24,7 @@ from PySide6.QtCore import QProcess, QSize, Qt, Signal
 from PySide6.QtGui import QFontMetrics
 from PySide6.QtWidgets import QFileDialog, QFrame, QPushButton, QScrollArea, QVBoxLayout, QWidget
 
-from .document import VIDEO_TOOL
+from .document import VIDEO_TOOL, is_selector
 from .theme import GAP, PAD, WIDE_W, Form, Layer, measured, readout
 
 VIDEO_FILTER = "Video (*.mp4 *.MP4 *.avi *.mov *.mkv);;All (*)"
@@ -94,6 +96,16 @@ class Video(QWidget):
     def show_error(self, path, err):
         self.path.setText(str(path))
         self.info.setText(f"could not open: {err}")
+
+    def show_none(self, why):
+        """The selector answered nothing: the one line that says why, under whatever path is still open."""
+        self.info.setText(why)
+
+    def set_picker(self, free, by=None):
+        """The picker is live while nothing is wired into the video node; wired, `by` names the
+        node that picks instead, and the button says so."""
+        self.button.setEnabled(free)
+        self.button.setToolTip("" if free else f"{by} picks the video; unwire it to choose by hand")
 
 
 class Export(QWidget):
@@ -194,7 +206,7 @@ class Pane(QWidget):
         super().__init__(parent)
         self.tools = tools
         self.doc = None
-        self.cards, self.widgets, self.exports = {}, {}, {}
+        self.cards, self.widgets, self.exports, self.notes = {}, {}, {}, {}
         self.video = None
         self.current = None
         self._src, self._fps = None, None
@@ -236,6 +248,7 @@ class Pane(QWidget):
         card = self.cards.pop(nid)
         self.widgets.pop(nid, None)
         self.exports.pop(nid, None)
+        self.notes.pop(nid, None)
         if self.video is not None and self.video.parent() is card:
             self.video = None
         self._lay.removeWidget(card)
@@ -268,6 +281,9 @@ class Pane(QWidget):
                 w.changed.connect(lambda nid=node.id: self._changed(nid))
                 card.add(w)
                 self.widgets[node.id] = w
+                if is_selector(tool):
+                    self.notes[node.id] = readout()
+                    card.add(self.notes[node.id])
             if w is not None and getattr(tool, "export_command", None) is not None:
                 ex = Export(tool)
                 ex.set_params(node.params)
@@ -317,6 +333,11 @@ class Pane(QWidget):
 
     def widget(self, nid):
         return self.widgets.get(nid)
+
+    def note(self, nid, text):
+        """The line under a selector's settings: what its rule matched."""
+        if nid in self.notes:
+            self.notes[nid].setText(text)
 
     def set_source(self, path, fps):
         """The video every Export writes from; None when nothing is loaded."""

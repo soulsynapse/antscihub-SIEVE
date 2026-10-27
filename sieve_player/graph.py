@@ -14,7 +14,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from .document import VIDEO_PRODUCES, VIDEO_TOOL, fed
+from .document import VIDEO_PRODUCES, VIDEO_TOOL, fed, is_selector
 
 
 def _key(*parts):
@@ -85,7 +85,7 @@ class Series:
 class _Entry:
     """One node as the plan saw it at sync()."""
     tool: object
-    kind: str           # "video" | "frame" | "series"
+    kind: str           # "video" | "frame" | "series" | "selector"
     params: dict
     src: str | None     # the node its input wire names
     key: str
@@ -125,7 +125,12 @@ class Graph:
         plan, series = {}, []
         for n in doc.nodes:
             tool = tools.get(n.tool)
-            kind = "video" if n.tool == VIDEO_TOOL else getattr(tool, "KIND", "frame")
+            if n.tool == VIDEO_TOOL:
+                kind = "video"
+            elif is_selector(tool):
+                kind = "selector"       # answers a path, once, before the decoder; never a row
+            else:
+                kind = getattr(tool, "KIND", "frame")
             w = doc.source(n.id)
             src = w.src if w else None
             plan[n.id] = _Entry(tool, kind, dict(n.params), src, key_of(n.id),
@@ -174,7 +179,7 @@ class Graph:
 
     def _compute(self, plan, nid, row):
         e = plan.get(nid)
-        if e is None or e.kind == "series" or not e.fed:
+        if e is None or e.kind in ("series", "selector") or not e.fed:
             return None
         if e.kind == "video":
             return self.decoder.read(row)

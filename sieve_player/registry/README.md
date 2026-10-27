@@ -5,7 +5,9 @@ nothing else is required, and the registry never rejects one. Everything else is
 with `probe(tool, facet)`, which is `getattr(tool, facet, None)` and never calls the tool. None
 means the tool did not say; consumers degrade and may show `hint(facet)`, the line that would
 supply it. No facet has a meaningful None (pass-through is `PRODUCES = "same"`). A facet is in
-`FACETS` only if something in `sieve_player` outside this package reads it. A module that fails
+`FACETS` only if something in `sieve_player` outside this package reads it. A selector, a tool
+whose `PRODUCES` is `"path"` with no `EXPECTS`, says `select` instead of `run`, and `matches` if
+it can count what its rule covers. A module that fails
 to import is still an `Entry`, with the exception in `error`, so a broken tool shows up instead
 of vanishing.
 

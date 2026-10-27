@@ -28,7 +28,7 @@ Assumes: Graph runtime, Dummy tools.
 - [x] Save and Open of the document are reachable from the window and from Ctrl+S and Ctrl+O,
   and a saved document reopened shows the same nodes in the same places with the same params.
   Check: Kendrick saves, reopens, compares.
-- [ ] A dummy still runs alone with `play([self])`, as a tool's `__main__` block does today.
+- [x] A dummy still runs alone with `play([self])`, as a tool's `__main__` block does today.
   Check: Kendrick launches one.
 
 ## Seams

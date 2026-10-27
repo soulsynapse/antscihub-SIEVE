@@ -49,7 +49,7 @@ Assumes: Window shell.
 
 Assumes: Window shell.
 
-- [ ] The pane shows the last selected node's settings widget, the one its tool's `settings()`
+- [x] The pane shows the last selected node's settings widget, the one its tool's `settings()`
   returns, and keeps it when the selection empties, so a click on empty canvas never blanks the
   pane; it shows nothing once that node is deleted. Selection, not the display flag, drives the
   pane, so a node upstream can be tuned while a node downstream is on the frame.

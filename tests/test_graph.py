@@ -114,3 +114,25 @@ def test_two_series_nodes_one_runs():
     doc = D.from_tools([gray, s1, s2])
     g = Graph(doc, Dec(), {**TOOLS, "s1": s1, "s2": s2})
     assert g.series == "s1" and g.unrun_series == ["s2"] and g.walk == "gray"
+
+
+def test_one_compute_sees_one_plan():
+    """A sync between a node's run() starting and its frames(row) call: the value memoized under the
+    old key is the old graph's, so flipping the param back serves the right frame."""
+    doc = fan_out()
+    g = Graph(doc, Dec(), TOOLS)
+
+    def run(frames, row, params):
+        doc.node("gray").params["k"] = 50       # upstream changes while this node is mid-run
+        g.sync()
+        return frames(row) + params["k"]
+    add.run, old = run, add.run
+    try:
+        k_old = g.key("add")
+        v = g.compute("add", 0)
+        assert (v == 0 + 1 + 1).all()                            # gray's k was 1 when this compute began
+        doc.node("gray").params["k"] = 1
+        g.sync()
+        assert g.key("add") == k_old and (g.memo.get((k_old, 0)) == v).all()
+    finally:
+        add.run = old

@@ -62,14 +62,16 @@ class Memo:
 
 
 class Frames:
-    """What a frame tool's run() gets: frames(r) is the output of the node it reads, at row r."""
+    """What a frame tool's run() gets: frames(r) is the output of the node it reads, at row r. It
+    reads through the plan the computation began in, so one run() sees one graph even if the
+    document is synced under it."""
 
-    def __init__(self, graph, source, key):
-        self._graph, self._source = graph, source
+    def __init__(self, graph, plan, source, key):
+        self._graph, self._plan, self._source = graph, plan, source
         self.key, self.fps, self.count = key, graph.fps, graph.count
 
     def __call__(self, row):
-        return self._graph.compute(self._source, row)
+        return self._graph._compute(self._plan, self._source, row)
 
 
 class Series:
@@ -163,9 +165,15 @@ class Graph:
         return e is not None and e.fed
 
     def compute(self, nid, row):
-        """Output of `nid` at `row`, memoized; None for a node nothing reaches. Worker threads only."""
+        """Output of `nid` at `row`, memoized; None for a node nothing reaches. Worker threads only.
+        The whole recursion runs in the plan current at the call, so what lands in the memo under a
+        key was computed from the graph that key describes."""
         with self._lock:
-            e = self._plan.get(nid)
+            plan = self._plan
+        return self._compute(plan, nid, row)
+
+    def _compute(self, plan, nid, row):
+        e = plan.get(nid)
         if e is None or e.kind == "series" or not e.fed:
             return None
         if e.kind == "video":
@@ -173,7 +181,7 @@ class Graph:
         mk = (e.key, row)
         v = self.memo.get(mk)
         if v is None:
-            v = e.tool.run(Frames(self, e.src, e.src_key), row, e.params)
+            v = e.tool.run(Frames(self, plan, e.src, e.src_key), row, e.params)
             self.memo.put(mk, v)
         return v
 

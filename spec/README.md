@@ -27,9 +27,10 @@ list of **done-when** assertions, each a checkbox:
 The `Check:` line says how the assertion is verified: a test, or something Kendrick does with the
 running program. An assertion without a `Check:` line is a defect in the spec, not a license.
 
-A deliverable is **done** when every box under it is ticked. Only Kendrick ticks a box. A session
-never ticks, unticks, or rewrites an assertion. When a session believes an assertion now holds, it
-says so in its handoff, naming the test or the thing to try, and leaves the box alone. A box can
+A deliverable is **done** when every box under it is ticked. A session ticks a box whose `Check:`
+is a test, once that test passes in the tree. A box whose `Check:` is something Kendrick does with
+the running program is ticked by Kendrick alone; the session says in its handoff that it believes
+the assertion holds and what to try. A session never unticks or rewrites an assertion. A box can
 therefore lag the code: before building toward an unticked assertion, check whether the tree
 already meets it, and if it does, report that instead of rebuilding.
 

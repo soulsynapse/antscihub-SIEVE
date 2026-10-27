@@ -2,8 +2,9 @@
 
 SIEVE chains independent video-analysis scripts and gives them one shared, polished UI so each
 script doesn't need its own GUI. The scaffold is `sieve_player`: a PySide6 window with the video on
-the left, a three-section panel on the right (inputs, the script's own settings, outputs), and a
-timeline across the bottom. A script imports it and runs standalone:
+the left, a node canvas over a parameter pane on the right, and a timeline across the bottom. The
+pipeline is a document of nodes and wires (`spec/` is the specification, as done-when assertions;
+`spec/README.md` says how to read it). A script imports the player and runs standalone:
 
 ```python
 if __name__ == "__main__":
@@ -11,15 +12,18 @@ if __name__ == "__main__":
     play([sys.modules[__name__]])   # or play([rescale, threshold, motion]); the player knows no tool by name
 ```
 
-`play` opens empty and never prompts; the video is picked in the Inputs section, or passed as the
-second argument. Picking again replaces it.
+`play` opens empty and never prompts; the video is picked on the video node, or passed as the
+second argument. Picking again replaces it. `play` also takes the path of a saved document, with
+`tools=` the modules its nodes may name; `python -m sieve_player doc.json [root ...]` does the
+same with the tools the registry finds.
 
 ```
 py -3.13 -m venv .venv            # not the Anaconda python: its Qt DLLs shadow PySide6's
 .venv\Scripts\python -m pip install -r requirements.txt     # editable install of sieve_player
 .venv\Scripts\python main.py video-tests\rep3_intermittent_crop.MP4
 .venv\Scripts\python tools\motion.py video-tests\rep3_intermittent_crop.MP4   # any tool runs alone, from any cwd
-.venv\Scripts\python smoke.py video-tests\rep3_intermittent_crop.MP4          # offscreen: open, load, export, reload
+.venv\Scripts\python smoke.py video-tests\rep3_intermittent_crop.MP4          # offscreen: open, load, rewire, save, export
+.venv\Scripts\python -m pytest                                                # one test per `Check: a test` line in spec/
 ```
 
 ## What a tool is
@@ -37,7 +41,7 @@ def run(frames, row, params) -> np.ndarray    # frames(r) is the upstream output
 def settings(parent=None) -> QWidget          # has .changed (Signal) and .params() -> dict
 ```
 
-A **series tool** sees the whole loop window at once, and there is at most one, last in the chain:
+A **series tool** sees the whole loop window at once, and at most one runs (see `spec/graph.md`):
 
 ```python
 KIND = "series"; EXPECTS = "gray"
@@ -49,13 +53,13 @@ def settings(parent=None) -> QWidget          # .changed, .params(), .show_resul
 `frames.fps`, `frames.count`, `series.start` are facts. `EXPECTS` / `PRODUCES` are strings the
 player compares for equality and never looks inside. The decoder produces `"bgr"`; `tools/gray.py`
 turns it into `"gray"` for the tools that want luma. `EXPECTS` may be a tuple of types, and
-`PRODUCES = "same"` means out as in (rescale, downsample). A tool reads one earlier stage, by
-default the nearest one whose product it expects, the video counting as a stage; a chain in which
-some tool can read nothing before it is refused. The player lets you point a tool at any earlier
-stage of the right type (`sieve_player.chain.Links`), so a chain is a list that reads as a graph:
-a stage nobody reads is still computed when shown, and nothing else; a stage with no input is
-computed as None. `run` may be
-called from a worker thread and the GUI thread at the same time, for any row in any order. A tool
+`PRODUCES = "same"` means out as in (rescale, downsample). A tool is a node that reads one other
+node through a wire, the video being a node like any other; a list of tools becomes a document in
+which each is wired to the nearest earlier node producing what it expects (`sieve_player.document`),
+and the runtime (`sieve_player.graph`) computes what the document says. A node nothing reads is
+computed only when shown; a node with no input, or one whose wire's types no longer fit, is
+computed as None, and so is everything downstream of it. `run` may be called from a worker thread
+and the GUI thread at the same time, for any row in any order. A tool
 that caches must key on `frames.key` (or `series.key`) and on every one of its own params. A
 `"gate"` bool array in a series result is drawn on the frame as a red border while the playhead is
 inside a gated row. `run` must need only cv2 and numpy: import Qt and `sieve_player` inside
@@ -70,60 +74,48 @@ in frame pixels. `result` is the series result or None, `start` the row it begin
 row on screen. A `draw` that raises is reported once and dropped for the session. Qt is imported
 inside `draw`, like `settings()`. `mock-up/lk_flow/lk_flow.py` draws its tracks this way.
 
-The last tool in a chain may also export. It does so by defining `output_name(src, params) -> path`
-and `export_command(src, dst, params, fps) -> argv`; the Outputs section then shows the target and
-an Export button that runs the argv in a subprocess, and may show a line from an optional
+A tool may also export. It does so by defining `output_name(src, params) -> path` and
+`export_command(src, dst, params, fps) -> argv`; its node's pane then shows the target and an
+Export button that runs the argv in a subprocess, and may show a line from an optional
 `describe_output(src, params, fps) -> str`. If the target exists the player writes `name-2.ext`,
-`name-3.ext`, and so on; a cancelled or failed run leaves no partial file. A chain whose last tool
-has no `export_command` has an Outputs section that says so. `tools/downsample.py` is the
-example; it also runs headless with `--out`.
+`name-3.ext`, and so on; a cancelled or failed run leaves no partial file. `tools/downsample.py`
+is the example; it also runs headless with `--out`.
 
 ## The player
 
 The window follows the design language settled in `mock-up/design-language` and carried by
 `sieve_player/theme.py`: everything sits on a dark ground, each box on it is one fixed step
-lighter, nothing is inset past the third step, and the only white is a section's name. The right
-column is the chain, a stack of such cards: Inputs, one per tool, Outputs, with the accent arrow
-running out of the bottom of each card into the top of the one that reads it, at the left under
-the names; the strip between them says what the lower card receives and from where. An arrow
-whose source is not the card above jogs out into the gutter and back. A frame tool's output
-that nothing reads and no file takes ends in a red bar instead, with "unread" beside it. The two
-end cards are told from the tool cards only by their hairline, teal for Inputs and salmon for
-Outputs, about as bright as the gray it replaces. A tool's name is dotted-underlined: it is a
-link. Clicking it, or double-clicking the card, opens the tool alone: an Input card above with a
-picker of the stages it may read, or nothing; the tool; an Output card below with a checkbox per
-later stage that expects what this one hands out, checked if it reads it, and a line saying what
-reads it, red if nothing; and the frame showing this stage's output, which it keeps showing after
-the tool is closed: the card named in the accent is the one on the frame, so clicking a card is
-also how the frame is pointed at a stage. Input and Output are one wiring seen from both ends:
-unchecking a reader leaves it with no input, and a stage with no input is computed as nothing,
-says "no input" in red above it, and blanks the frame, with that line, while the tool is open.
-Closing the tool with the shown stage unfed, or any wiring that leaves it so, moves the frame to
-the last stage the video reaches. Knobs and both pickers act at
-once; Save or a right-click anywhere keeps them, Cancel or Escape puts them back. Pointing a pass-through
-tool at a stage of another type can change what later tools receive; each one left with a type it
-does not expect loses its input. The
-transport across the bottom is one more surface. Inside
-a surface a form is a table, descriptions left-aligned in a column sized to the widest, every
-control one width and one height in the next. Editable controls are wells the ground shows
-through; what the pipeline measured is a flat field lifted above the surface, so depth alone
-says what can be touched. The accent marks the flow and what is viewed: the arrow, the loop window on the
-strip, the trace; amber marks the gate. `ParamWidget` builds such a form and `Trace` draws a series in
-it: the trace in the accent, the playhead white, the gate amber. Inter is bundled and loaded
-first so Mac and Windows render alike; on Windows the player asks for FreeType, since DirectWrite
-ignores the hinting preference and fringes on a dark ground. Until a video is loaded the transport
-is disabled and the frame is empty; load builds the decoder, chain and worker, and the next load
-replaces them. A path that won't open is reported in Inputs and leaves whatever was open alone.
-`sieve_player/sections.py` holds the Inputs and Outputs widgets.
+lighter, nothing is inset past the third step, and the only white is a section's name. Inside a
+surface a form is a table, descriptions left-aligned in a column sized to the widest, every control
+one width and one height in the next. Editable controls are wells the ground shows through; what
+the pipeline measured is a flat field lifted above the surface, so depth alone says what can be
+touched. The accent marks the flow and what is viewed: the loop window on the strip, the trace, the
+display flag; amber marks the gate. `ParamWidget` builds such a form and `Trace` draws a series in
+it: the trace in the accent, the playhead white, the gate amber. Inter is bundled and loaded first
+so Mac and Windows render alike; on Windows the player asks for FreeType, since DirectWrite ignores
+the hinting preference and fringes on a dark ground.
+
+The right side is the canvas over the parameter pane, in the manner of Houdini's network editor;
+`spec/canvas.md` and `spec/window.md` say what each does and what is built so far. The document
+(`sieve_player/document.py`, saved as JSON) is the one source of truth for the graph: the canvas
+and the pane read and write it and say what changed, and the window carries the change to the
+runtime. One node carries the display flag, drawn in the accent: the frame shows its output.
+Clicking a node selects it and the pane shows its settings; selection and the flag are
+independent, so a node upstream can be tuned while a node downstream is on the frame. A flagged
+node the video does not reach blanks the frame and says why; no flag is empty ground. The video
+node's pane holds the picker; a path that won't open is reported there and leaves whatever was
+open alone. Save and Open are under File and on Ctrl+S and Ctrl+O. Until a video is loaded the
+transport is disabled and the frame is empty; load builds the decoder, runtime and worker, and the
+next load replaces them.
 
 Decoding is cv2 to BGR with one cursor: sequential reads step it, anything else seeks. Recently
-decoded rows sit in a dict bounded by count. Each stage's output per row is memoized under a key
-that hashes the tool's params and the upstream key, so a slider change at stage 3 invalidates
-stage 3 onward and nothing before. The memo is bounded by bytes and drops image-shaped entries
+decoded rows sit in a dict bounded by count. Each node's output per row is memoized under a key
+that hashes the node's params and the key of the node it reads, so a slider change on one node
+invalidates it and what reads it, and nothing it does not reach. The memo is bounded by bytes and drops image-shaped entries
 before small ones.
 
-One worker thread walks the loop window through the chain, writes the series tool's source stage
-(or, without one, the shown stage) into a
+One worker thread walks the loop window through the graph, writes the node the series tool reads
+(or, without one, the flagged node) into a
 preallocated stack, and hands the growing stack to the series tool every 30 rows. Latest wins: a
 frame-tool change restarts the walk, a series-tool change reruns only the series tool on the stack
 it has. A display request for a row the memo doesn't hold jumps the queue. The GUI thread never

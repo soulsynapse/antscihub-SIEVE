@@ -41,7 +41,7 @@ Assumes: Nodes.
   Check: Kendrick zooms on a node.
 - [ ] H frames every node in the view; with a selection, H frames the selection.
   Check: Kendrick presses H.
-- [ ] Pan and zoom are not in the document.
+- [x] Pan and zoom are not in the document.
   Check: a saved file has no view keys.
 
 ## Wires

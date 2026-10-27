@@ -11,20 +11,20 @@ the worker and the frame view expect of their host.
 
 Assumes: Graph runtime, Dummy tools.
 
-- [ ] The window opens with the frame left, the canvas top-right, the parameter pane bottom-right,
+- [x] The window opens with the frame left, the canvas top-right, the parameter pane bottom-right,
   and the transport along the bottom, with a splitter between frame and right side and another
   between canvas and pane.
   Check: Kendrick opens it.
-- [ ] Decoder, worker, memo and timeline behave as before: load starts playback looping in the
+- [x] Decoder, worker, memo and timeline behave as before: load starts playback looping in the
   window, the display reads the memo and never waits on the decoder.
   Check: `smoke.py` passes.
-- [ ] The video is a node on the canvas; its pane shows the path picker that Inputs used to hold,
+- [x] The video is a node on the canvas; its pane shows the path picker that Inputs used to hold,
   and a path that will not open is reported there and leaves what was open alone.
   Check: Kendrick picks a bad path, then a good one.
-- [ ] Opening with a list of tools and opening with a document path both work; `play` accepts
+- [x] Opening with a list of tools and opening with a document path both work; `play` accepts
   either.
   Check: `main.py` and a saved document both open.
-- [ ] Save and Open of the document are reachable from the window and from Ctrl+S and Ctrl+O,
+- [x] Save and Open of the document are reachable from the window and from Ctrl+S and Ctrl+O,
   and a saved document reopened shows the same nodes in the same places with the same params.
   Check: Kendrick saves, reopens, compares.
 - [ ] A dummy still runs alone with `play([self])`, as a tool's `__main__` block does today.
@@ -34,12 +34,12 @@ Assumes: Graph runtime, Dummy tools.
 
 Assumes: Window shell.
 
-- [ ] The document, the runtime, the canvas, the pane and the window are each a module or
+- [x] The document, the runtime, the canvas, the pane and the window are each a module or
   package under `sieve_player`, and imports run one way: the document imports none of the others;
   the runtime imports the document; the canvas and the pane import the document and the theme
   and neither imports the runtime, the window, or each other; the window imports all of them.
   Check: a test in `tests/` walks each module's imports and fails on any edge not listed.
-- [ ] The canvas and the pane learn about a change in the graph through the document, and the
+- [x] The canvas and the pane learn about a change in the graph through the document, and the
   window carries the change to the runtime; neither widget holds a reference to the runtime.
   Check: the same import test, and a grep of the canvas and pane for the runtime's name finds
   nothing.

@@ -1,19 +1,30 @@
-"""sieve_player: the shared window SIEVE tools run inside. `play([tool, ...])` is the whole API."""
+"""sieve_player: the shared window SIEVE tools run inside. `play(...)` is the whole API.
+
+The names in `__all__` are imported on first use, so importing one submodule (the document, say)
+pulls in neither Qt nor cv2; see spec/document.md."""
+import importlib
 import os
 import sys
 
-from .chain import Chain, Frames, Memo, Series
-from .decoder import Decoder
-from .sections import Inputs, Outputs, probe
-from .widgets import ParamWidget, Trace
-from .worker import Worker
-
-__all__ = ["play", "Chain", "Decoder", "Frames", "Inputs", "Memo", "Outputs", "ParamWidget", "Series", "Trace",
-           "Worker", "probe", "theme"]
+_HOME = {"Frames": "graph", "Memo": "graph", "Series": "graph", "Decoder": "decoder", "probe": "pane",
+         "ParamWidget": "widgets", "Trace": "widgets", "Worker": "worker"}
+__all__ = ["play", *_HOME, "theme"]
 
 
-def play(tools, path=None, title="SIEVE"):
-    """Open the player on `tools`. With a path it loads it; without, it opens empty and never prompts."""
+def __getattr__(name):
+    if name == "theme":
+        return importlib.import_module(".theme", __name__)
+    if name in _HOME:
+        value = getattr(importlib.import_module("." + _HOME[name], __name__), name)
+        globals()[name] = value
+        return value
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+def play(source, path=None, title="SIEVE", tools=()):
+    """Open the player. `source` is a list of tool modules, or the path of a saved document, which
+    is opened against `tools`, the modules its nodes may name. With a video `path` it loads it;
+    without, it opens on whatever the document names, or empty, and never prompts."""
     if sys.platform == "win32":
         # DirectWrite ignores the hinting preference and draws ClearType colour fringes on a dark
         # ground; FreeType honours full hinting and renders grayscale. Must be set before the app.
@@ -30,7 +41,7 @@ def play(tools, path=None, title="SIEVE"):
             Qt.HighDpiScaleFactorRoundingPolicy.Round)  # 125% becomes 100%, 150% becomes 200%: no fractional blur
         app = QApplication(sys.argv)
     theme.install_font(app)
-    win = PlayerWindow(tools, title)
+    win = PlayerWindow(source, title, tools)
     win.showMaximized()
     theme.paint_caption(win)
     if path:

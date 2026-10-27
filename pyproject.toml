@@ -15,3 +15,9 @@ packages = ["sieve_player", "sieve_player.registry"]
 [tool.setuptools.package-data]
 sieve_player = ["fonts/*", "glyphs/*"]
 "sieve_player.registry" = ["README.md"]
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

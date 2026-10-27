@@ -13,8 +13,8 @@ import ctypes
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import QPointF, QRectF, Qt, Signal
-from PySide6.QtGui import QColor, QFont, QFontDatabase, QFontMetrics, QPainter, QPainterPath, QPen, QPolygonF
+from PySide6.QtCore import QPointF, QRectF, Qt
+from PySide6.QtGui import QColor, QFont, QFontDatabase, QFontMetrics, QPainter, QPen
 from PySide6.QtWidgets import (QAbstractSpinBox, QApplication, QComboBox, QFrame, QGridLayout, QLabel,
                                QSplitter, QSplitterHandle,
                                QLineEdit, QPushButton, QVBoxLayout, QWidget)
@@ -37,22 +37,17 @@ INK = 200          # everything inside a section: descriptions and values alike
 INK_2 = 140        # tertiary: readouts, slider handles, unchecked boxes
 LINE_LIFT = 20     # a layer's hairline edge is this much lighter than the layer
 MEASURED_LIFT = 18 # a measured result is a flat field this much lighter than the surface it sits on
-HOVER_LIFT = 4     # a card under the pointer is this much lighter, its edge brightened to match
-HOVER_EDGE = 125   # QColor.lighter() factor for that card's edge, percent
+HOVER_LIFT = 4     # a node under the pointer is this much lighter, its edge brightened to match
+HOVER_EDGE = 125   # QColor.lighter() factor for that node's edge, percent
 FONT_PX = 12       # integer pixels, never points, so glyphs sit on the grid under display scaling
 FONT_WEIGHT = 500  # regular Inter reads thin on dark; 500 fills the stroke without reading bold
 HINTING = 3        # QFont.HintingPreference: full. DirectWrite ignores it; see play()
 VALUE_W = 36       # a slider's mono readout
 ACCENT = QColor(88, 146, 255)   # what is viewed: the loop window, the trace
 AMBER = QColor(222, 160, 56)    # the gate
-RED = QColor(232, 72, 72)       # an output nothing reads
-RAIL = 6           # the gutter left of the chain's cards; a link that skips cards runs down it, px
-ARROW_X = PAD + 15 # a link's stroke, from the cards' left edge: in from the names, px
-LINK_H = 20        # between two cards: the strip that names what the lower one receives, px
-# The chain's two end cards are told from the tool cards by their hairline alone: Inputs teal,
-# Outputs orange, both bright enough to read as colour at a glance.
-EDGE_TINTS = {"inputs": QColor(40, 180, 172), "outputs": QColor(240, 120, 80)}
-LINK = EDGE_TINTS["inputs"]   # a chain link and its head: the same teal as the Inputs card's edge
+RED = QColor(232, 72, 72)       # an input nothing feeds, a wire whose types no longer fit
+TYPE_HUES = {"bgr": 30, "gray": 165}   # a connector's hue per product type; a type not here is hashed
+TYPE_SV = (150, 225)            # every connector's saturation and value, so the hue alone says the type
 MONO = ["Cascadia Mono", "Consolas", "Menlo", "DejaVu Sans Mono", "monospace"]
 FAMILIES = ["Inter", "Segoe UI Variable Text", "Segoe UI", "SF Pro Text", "Helvetica Neue", "Helvetica", "Arial"]
 HERE = Path(__file__).parent
@@ -122,6 +117,10 @@ def sheet() -> str:
     QMainWindow, QMainWindow > QWidget {{ background: {gray(GROUND)}; }}
     QScrollArea, QScrollArea > QWidget > QWidget {{ background: transparent; }}
     QSplitter::handle {{ background: {gray(GROUND)}; }}
+    QMenuBar {{ background: {gray(GROUND)}; }}
+    QMenuBar::item:selected {{ background: {gray(layer(1))}; }}
+    QMenu {{ background: {gray(layer(2))}; border: 1px solid {gray(layer(2) + LINE_LIFT)}; }}
+    QMenu::item:selected {{ background: {gray(layer(3))}; }}
     QLabel[role="desc"] {{ color: {gray(INK)}; }}
     QLabel[role="name"] {{ color: {gray(HEAD)}; }}
     QLabel[role="readout"] {{ color: {gray(INK_2)}; }}
@@ -173,117 +172,33 @@ def sheet() -> str:
     """
 
 
-class Title(QLabel):
-    """A section name that is also a link: dotted underline, hand cursor, `clicked` on release.
-    `set_link(False)` makes it a plain name again."""
-    clicked = Signal()
-
-    def __init__(self, text: str, parent=None) -> None:
-        super().__init__(text, parent)
-        self.setProperty("role", "name")
-        self.setMouseTracking(True)
-        self._link = False
-        self.set_link(True)
-
-    def set_link(self, on: bool) -> None:
-        self._link = on
-        if not on:
-            self.setCursor(Qt.CursorShape.ArrowCursor)
-        self.update()
-
-    def paintEvent(self, event) -> None:
-        super().paintEvent(event)
-        if not self._link:
-            return
-        p = QPainter(self)
-        pen = QPen(qgray(INK_2), 1, Qt.PenStyle.DotLine)
-        p.setPen(pen)
-        w = QFontMetrics(self.font()).horizontalAdvance(self.text())
-        y = self.height() - 1.5
-        p.drawLine(QPointF(0, y), QPointF(w, y))
-        p.end()
-
-    def _text_rect(self):
-        """The glyphs, not the label: a label in a column is as wide as the column."""
-        r = self.rect()
-        r.setWidth(QFontMetrics(self.font()).horizontalAdvance(self.text()))
-        return r
-
-    def mouseReleaseEvent(self, e) -> None:
-        if self._link and e.button() == Qt.MouseButton.LeftButton and self._text_rect().contains(e.position().toPoint()):
-            self.clicked.emit()
-        super().mouseReleaseEvent(e)
-
-    def mouseMoveEvent(self, e) -> None:
-        on = self._link and self._text_rect().contains(e.position().toPoint())
-        self.setCursor(Qt.CursorShape.PointingHandCursor if on else Qt.CursorShape.ArrowCursor)
-        super().mouseMoveEvent(e)
-
-
 class Layer(QFrame):
-    """A surface one step lighter than whatever it sits on, named in white if it has a name. `edge`
-    replaces the gray hairline with a colour (see EDGE_TINTS). `pressed` fires on a left click that
-    lands on the layer itself rather than a control in it. A named layer may be `link`ed: its name
-    is a Title and `activated` fires on the name's click or a double-click anywhere in it."""
-    activated = Signal()
-    pressed = Signal()
+    """A surface one step lighter than whatever it sits on, named in white if it has a name."""
 
-    def __init__(self, depth: int, name: str = "", parent=None, edge: QColor | None = None,
-                 link: bool = False) -> None:
+    def __init__(self, depth: int, name: str = "", parent=None) -> None:
         super().__init__(parent)
-        self.depth, self.edge = depth, edge
+        self.depth = depth
         self.setProperty("depth", str(depth))
-        self.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
         self.body = QVBoxLayout(self)
         self.body.setContentsMargins(PAD, PAD, PAD, PAD)
         self.body.setSpacing(GAP)
         self.head = None
         if name:
-            text = name[0].upper() + name[1:]
-            self.head = Title(text) if link else QLabel(text)
+            self.head = QLabel(name[0].upper() + name[1:])
             self.head.setProperty("role", "name")
-            if link:
-                self.head.clicked.connect(self.activated)
             self.body.addWidget(self.head)
             self.body.addSpacing(max(0, HEAD_GAP - GAP))
-
-    def set_link(self, on: bool) -> None:
-        if isinstance(self.head, Title):
-            self.head.set_link(on)
-
-    def set_shown(self, on: bool) -> None:
-        """Name the card in the accent: its output is what is viewed."""
-        if self.head is not None:
-            self.head.setStyleSheet(f"color: {ACCENT.name()};" if on else "")
-
-    def mousePressEvent(self, e) -> None:
-        if e.button() == Qt.MouseButton.LeftButton:
-            self.pressed.emit()
-        super().mousePressEvent(e)
-
-    def mouseDoubleClickEvent(self, e) -> None:
-        if isinstance(self.head, Title) and self.head._link and e.button() == Qt.MouseButton.LeftButton:
-            self.activated.emit()
-        super().mouseDoubleClickEvent(e)
 
     def add(self, w: QWidget, stretch: int = 0) -> None:
         self.body.addWidget(w, stretch)
 
-    def event(self, e):
-        if e.type() in (e.Type.HoverEnter, e.Type.HoverLeave):
-            self.update()
-        return super().event(e)
-
     def paintEvent(self, event) -> None:
         del event
-        hot = self.depth and self.underMouse()
-        fill = layer(self.depth) + (HOVER_LIFT if hot else 0)
-        edge = self.edge or qgray(layer(self.depth) + LINE_LIFT)
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing, True)
         box = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
-        p.setPen(QPen(edge.lighter(HOVER_EDGE) if hot else edge, 1) if self.depth else Qt.PenStyle.NoPen)
-        p.setBrush(qgray(fill))
+        p.setPen(QPen(qgray(layer(self.depth) + LINE_LIFT), 1) if self.depth else Qt.PenStyle.NoPen)
+        p.setBrush(qgray(layer(self.depth)))
         p.drawRoundedRect(box, RADIUS, RADIUS)
         p.end()
 
@@ -322,84 +237,6 @@ class Splitter(QSplitter):
 
     def createHandle(self) -> QSplitterHandle:
         return Grip(self.orientation(), self)
-
-
-class Link(QWidget):
-    """The strip between two cards of a chain. It is the room the link's turn into the lower card
-    needs, and it names what that card receives, in the dimmer ink beside the rail; `unused`
-    names, in red, what the card above hands out and nothing reads. The lines are the Rail's."""
-
-    def __init__(self, parent=None) -> None:
-        super().__init__(parent)
-        self.setFixedHeight(LINK_H)
-        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
-        self.text, self.unused, self.bad = "", "", False
-        self.setFont(mono_font())
-
-    def set_text(self, text: str, unused: str = "", bad: bool = False) -> None:
-        """`bad`: the text itself is the problem (no input), drawn red."""
-        self.text, self.unused, self.bad = text, unused, bad
-        self.update()
-
-    def paintEvent(self, event) -> None:
-        del event
-        p = QPainter(self)
-        p.setFont(self.font())
-        r = self.rect().adjusted(RAIL + ARROW_X + 2 * PAD, 0, 0, 0)
-        p.setPen(RED if self.bad else qgray(INK_2))
-        p.drawText(r, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, self.text)
-        if self.unused:
-            p.setPen(RED)
-            p.drawText(r, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, self.unused)
-        p.end()
-
-
-class Rail(QWidget):
-    """The links of a chain, drawn over its column. A link is the accent stroke out of the bottom
-    of the card it reads into the top of the card that reads it, under the names, with its head
-    at the lower card. One that skips cards jogs out into the gutter left of the cards and back.
-    A card's output that nothing reads ends in a red bar instead. Set with set_links(pairs, dead)
-    where a pair is (source card, reading card) and dead is the cards whose output is unread; all
-    are widgets of the column."""
-    HEAD = 4.5
-
-    def __init__(self, parent=None) -> None:
-        super().__init__(parent)
-        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
-        self.links: list[tuple[QWidget, QWidget]] = []
-        self.dead: list[QWidget] = []
-
-    def set_links(self, links, dead) -> None:
-        self.links, self.dead = list(links), list(dead)
-        self.update()
-
-    def paintEvent(self, event) -> None:
-        del event
-        p = QPainter(self)
-        p.setRenderHint(QPainter.Antialiasing, True)
-        x, gx, h = RAIL + ARROW_X + 0.5, RAIL / 2, self.HEAD
-        p.setPen(QPen(LINK, 1.5))
-        for src, dst in self.links:
-            top, bottom = src.geometry().bottom() + 1.0, dst.geometry().top() - 1.0
-            path = QPainterPath(QPointF(x, top))
-            if bottom - top > LINK_H + 1:   # cards lie between: out to the gutter and back
-                path.lineTo(x, top + LINK_H / 2)
-                path.lineTo(gx, top + LINK_H / 2)
-                path.lineTo(gx, bottom - LINK_H / 2)
-                path.lineTo(x, bottom - LINK_H / 2)
-            path.lineTo(x, bottom - h - 1)
-            p.drawPath(path)
-        p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(LINK)
-        for _, dst in self.links:
-            end = dst.geometry().top() - 1.0
-            p.drawPolygon(QPolygonF([QPointF(x - h, end - h - 1.5), QPointF(x + h, end - h - 1.5), QPointF(x, end)]))
-        p.setPen(QPen(RED, 1.5))
-        for card in self.dead:
-            top = card.geometry().bottom() + 1.0
-            p.drawLine(QPointF(x, top), QPointF(x, top + LINK_H / 2))
-            p.drawLine(QPointF(x - 3.5, top + LINK_H / 2), QPointF(x + 3.5, top + LINK_H / 2))
-        p.end()
 
 
 def label_col(texts: list[str]) -> int:

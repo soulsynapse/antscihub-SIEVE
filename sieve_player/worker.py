@@ -5,7 +5,7 @@ import traceback
 import numpy as np
 from PySide6.QtCore import QThread, Signal
 
-from .chain import Series
+from .graph import Series
 
 
 class Worker(QThread):
@@ -14,9 +14,9 @@ class Worker(QThread):
     seriesReady = Signal(object, int, float)  # result, start, fps
     failed = Signal(int)                      # a tool raised at this row; the walk is abandoned
 
-    def __init__(self, chain, every=30):
+    def __init__(self, graph, every=30):
         super().__init__()
-        self.chain, self.every = chain, every
+        self.graph, self.every = graph, every
         self._cv = threading.Condition()
         self._want = None
         self._stop = False
@@ -73,23 +73,23 @@ class Worker(QThread):
                 dirty, self._series_dirty = self._series_dirty, False
             try:
                 if want is not None:
-                    self.chain.compute(self.chain.shown, want)
+                    self.graph.compute(self.graph.shown, want)
                     self.rowReady.emit(want)
                     continue
-                if self.chain.walk is None or not self.chain.links.fed(self.chain.walk):
-                    self._i = self._length   # nothing reaches the walked stage; nothing to walk
+                if not self.graph.fed(self.graph.walk):
+                    self._walk_gen, self._i = gen, self._length   # nothing reaches the walked node; wait for the next change
                     continue
                 if gen != self._walk_gen:
                     self._walk_gen, self._i, self._stack = gen, 0, None
-                    self._start = max(0, min(start, self.chain.count - 1))
-                    self._length = max(0, min(length, self.chain.count - self._start))
+                    self._start = max(0, min(start, self.graph.count - 1))
+                    self._length = max(0, min(length, self.graph.count - self._start))
                 if dirty and self._i:
                     self._emit_series()
                     continue
                 if self._i < self._length:
-                    out = np.asarray(self.chain.compute(self.chain.walk, self._start + self._i))
+                    out = np.asarray(self.graph.compute(self.graph.walk, self._start + self._i))
                     if self._stack is not None and (self._stack.shape[1:] != out.shape or self._stack.dtype != out.dtype):
-                        self._stack, self._i = None, 0   # the stage or its shape changed under the walk; start over
+                        self._stack, self._i = None, 0   # the node or its shape changed under the walk; start over
                         continue
                     if self._stack is None:
                         self._stack = np.empty((self._length,) + out.shape, dtype=out.dtype)
@@ -108,9 +108,9 @@ class Worker(QThread):
                     self._i = self._length  # abandon this walk; the next gen bump restarts it
 
     def _emit_series(self):
-        tool = self.chain.series_tool
+        tool = self.graph.series_tool
         if tool is None or not self._i:
             return
-        series = Series(self._stack[: self._i], self.chain.key(self.chain.walk), self._start, self.chain.fps)
-        result = tool.run(series, self.chain.get_series_params())
-        self.seriesReady.emit(result, self._start, self.chain.fps)
+        series = Series(self._stack[: self._i], self.graph.key(self.graph.walk), self._start, self.graph.fps)
+        result = tool.run(series, self.graph.series_params())
+        self.seriesReady.emit(result, self._start, self.graph.fps)

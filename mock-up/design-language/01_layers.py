@@ -225,7 +225,7 @@ def form(rows: list[tuple[str, list[str] | QWidget]]) -> QWidget:
     return w
 
 
-# ---- the chain: the tool cards of mock-up/tool-card-mock-up, in this language ----------------
+# ---- the chain: the tool cards of the superseded card-column UI, in this language -------------
 # a knob is [name, lo, hi, value, unit, decimals]; a bool knob is [name, "bool", 0, value]
 Knob = list
 

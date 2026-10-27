@@ -39,7 +39,9 @@ Assumes: Nodes.
   Check: Kendrick pans.
 - [x] The wheel zooms about the cursor, so the thing under the cursor stays under it.
   Check: Kendrick zooms on a node.
-- [x] H frames every node in the view; with a selection, H frames the selection.
+- [x] H frames every node in the view; with a selection, H frames the selection. The framed
+  nodes sit centred across and at the top of the view, not its middle, since nodes flow top to
+  bottom and a short chain belongs at the top.
   Check: Kendrick presses H.
 - [x] Pan and zoom are not in the document.
   Check: a saved file has no view keys.

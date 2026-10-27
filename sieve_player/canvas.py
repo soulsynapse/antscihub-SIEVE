@@ -273,7 +273,8 @@ class Canvas(QWidget):
         self.update()
 
     def frame(self, ids=()):
-        """Fit the nodes `ids`, or every node, in the view; fitting never magnifies past 1:1."""
+        """Fit the nodes `ids`, or every node, in the view, centred across and FRAME_PAD down from
+        the view's top, since nodes flow top to bottom; fitting never magnifies past 1:1."""
         nodes = [n for n in (self.doc.nodes if self.doc else []) if not ids or n.id in ids]
         if not nodes:
             return
@@ -283,7 +284,7 @@ class Canvas(QWidget):
         r = r.adjusted(-PIN_R, -PIN_R, PIN_R, PIN_R)
         z = min((self.width() - 2 * FRAME_PAD) / r.width(), (self.height() - 2 * FRAME_PAD) / r.height(), 1.0)
         self.zoom = max(ZOOM_MIN, z)
-        self.pan = QPointF(self.width() / 2, self.height() / 2) - r.center() * self.zoom
+        self.pan = QPointF(self.width() / 2 - r.center().x() * self.zoom, FRAME_PAD - r.top() * self.zoom)
         self.update()
 
     # -- geometry, document space ------------------------------------------

@@ -133,6 +133,6 @@ def test_one_compute_sees_one_plan():
         assert (v == 0 + 1 + 1).all()                            # gray's k was 1 when this compute began
         doc.node("gray").params["k"] = 1
         g.sync()
-        assert g.key("add") == k_old and (g.memo.get((k_old, 0)) == v).all()
+        assert g.key("add") == k_old and g.compute("add", 0) is v        # served from the memo, not recomputed
     finally:
         add.run = old

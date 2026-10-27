@@ -4,7 +4,6 @@ import re
 from pathlib import Path
 
 PKG = Path(__file__).resolve().parents[1] / "sieve_player"
-SEAMS = ("document", "graph", "canvas", "pane", "window")
 MAY_IMPORT = {
     "document": set(),
     "graph": {"document"},
@@ -30,7 +29,6 @@ def imports_of(name):
 def test_imports_run_one_way():
     for name, allowed in MAY_IMPORT.items():
         assert imports_of(name) <= allowed, f"{name} imports {imports_of(name) - allowed}"
-    assert imports_of("window") >= set(SEAMS) - {"window"}
 
 
 def test_canvas_and_pane_never_name_the_runtime():

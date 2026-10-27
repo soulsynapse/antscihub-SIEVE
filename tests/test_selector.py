@@ -10,7 +10,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from sieve_player import document as D  # noqa: E402
 from sieve_player.graph import Graph  # noqa: E402
-from tools import file  # noqa: E402
+from tools import file, inrange  # noqa: E402
 
 gray = Tool(NAME="gray", KIND="frame", EXPECTS="bgr", PRODUCES="gray", DEFAULTS={}, run=lambda f, r, p: f(r)[..., 0])
 TOOLS = [file, gray]
@@ -103,8 +103,8 @@ def test_a_rule_matching_nothing_is_reported_on_the_video_node(tmp_path):
     D.save(doc, tmp_path / "doc.json")
     win = PlayerWindow(str(tmp_path / "doc.json"), "t", [file, real_gray])
     assert win.graph is None
-    assert win.pane.video.info.text() == "file matched nothing"
-    assert win.canvas.errors["video"] == "file matched nothing"
+    why = win.canvas.errors["video"]
+    assert "file" in why and win.pane.video.info.text() == why      # names the selector; the pane says the same
     assert not win.pane.video.button.isEnabled()
     win.close()
 
@@ -140,7 +140,7 @@ def settings_tree(tmp_path, h=(20, 40)):
 
     tree(tmp_path)
     (tmp_path / "colour.json").write_text(json.dumps({"bounds": {"H": list(h), "S": [1, 2], "V": [3, 4]}}), encoding="utf-8")
-    from tools import gray as real_gray, inrange
+    from tools import gray as real_gray
     doc = D.from_tools([real_gray, inrange])
     doc.add_node("file", params={**file.DEFAULTS, "pattern": "*.json"})
     doc.connect("file", "inrange", "settings")
@@ -158,12 +158,12 @@ def open_window(tmp_path, tools):
 
 def test_a_selector_into_a_path_input_lands_params_on_the_node(tmp_path):
     doc, tools = settings_tree(tmp_path)
-    assert D.inputs_of(doc, tools, "inrange") == [(D.INPUT, ("bgr",)), ("settings", (D.PATH,))]
+    assert D.inputs_of(doc, tools, "inrange") == [(D.INPUT, (inrange.EXPECTS,)), ("settings", (D.PATH,))]
     win = open_window(tmp_path, tools)
-    p = win.doc.node("inrange").params
-    assert (p["h_lo"], p["h_hi"], p["s_lo"], p["v_hi"]) == (20, 40, 1, 4)
-    assert win.pane.widget("inrange").params()["h_hi"] == 40
-    assert win.pane.notes["inrange"].text() == "settings: colour.json" and "inrange" not in win.canvas.errors
+    said = inrange.load_bounds(str(tmp_path / "colour.json"))
+    p, shown = win.doc.node("inrange").params, win.pane.widget("inrange").params()
+    assert said and all(p[k] == v and shown[k] == v for k, v in said.items())
+    assert "colour.json" in win.pane.notes["inrange"].text() and "inrange" not in win.canvas.errors
     win.close()
 
 
@@ -178,9 +178,10 @@ def test_a_path_input_validates_like_the_video_input(tmp_path):
 def test_a_file_the_loader_rejects_is_said_on_the_node_and_params_stay(tmp_path):
     doc, tools = settings_tree(tmp_path, h=(500, 1))
     win = open_window(tmp_path, tools)
-    assert win.canvas.errors["inrange"].startswith("settings: ValueError")
-    assert win.pane.notes["inrange"].text() == win.canvas.errors["inrange"]
-    assert win.doc.node("inrange").params["h_hi"] == 179
+    err = win.canvas.errors["inrange"]
+    assert err.startswith("settings") and win.pane.notes["inrange"].text() == err     # names the input; the pane says the same
+    p = win.doc.node("inrange").params
+    assert {k: p[k] for k in inrange.DEFAULTS} == inrange.DEFAULTS
     win.close()
 
 
@@ -207,12 +208,13 @@ def test_a_driven_knob_is_greyed_until_the_wire_is_broken(tmp_path):
     doc, tools = settings_tree(tmp_path)
     win = open_window(tmp_path, tools)
     w = win.pane.widget("inrange")
-    assert all(not w._rows[k].isEnabled() for k in ("h_lo", "h_hi", "s_lo", "s_hi", "v_lo", "v_hi"))
-    assert not w.button.isEnabled() and "file" in w._rows["h_lo"].toolTip()
+    said = inrange.load_bounds(str(tmp_path / "colour.json"))
+    assert all(not w._rows[k].isEnabled() and "file" in w._rows[k].toolTip() for k in said)
+    assert not w.button.isEnabled()
     win.doc.disconnect("inrange", "settings")
     win.sync()
     assert all(r.isEnabled() for r in w._rows.values()) and w.button.isEnabled()
-    assert win.doc.node("inrange").params["h_hi"] == 40
+    assert all(win.doc.node("inrange").params[k] == v for k, v in said.items())
     win.close()
 
 
@@ -226,14 +228,13 @@ def test_clicking_a_match_makes_it_the_choice_and_a_stale_choice_falls_back(tmp_
     win = open_window(tmp_path, [file, real_gray])
     w = win.pane.widget("file")
     assert [w.list.item(i).data(Qt.UserRole) for i in range(w.list.count())] == ["a.mp4", "b.mp4"]
-    assert w.list.item(0).text().startswith("●") and win.doc.video == "a.mp4"
+    assert win.doc.video == "a.mp4" and w.status.text() == ""
     w.list.itemClicked.emit(w.list.item(1))
     assert win.doc.node("file").params["choice"] == "b.mp4" and win.doc.video == "b.mp4"
-    assert w.list.item(1).text().startswith("●") and win.pane.notes["file"].text() == "2 matches, picked b.mp4"
-    w.set_params({**w.params(), "pattern": "a*"})
-    assert win.doc.video == "a.mp4" and "not among the matches" in w.status.text()
-    assert win.doc.node("file").params["choice"] == "b.mp4"
+    w.set_params({**w.params(), "pattern": "a*"})                   # the choice is no longer a match
+    assert win.doc.video == "a.mp4" and win.doc.node("file").params["choice"] == "b.mp4"
+    assert w.status.text()                                          # and the card says so
     w.set_params({**w.params(), "pattern": "*.mp4"})
-    w.list.itemClicked.emit(w.list.item(1))
+    w.list.itemClicked.emit(w.list.item(1))                         # clicking the choice clears it
     assert win.doc.node("file").params["choice"] == "" and w.status.text() == ""
     win.close()

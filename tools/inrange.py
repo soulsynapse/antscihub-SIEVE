@@ -2,9 +2,10 @@
 
 BGR in, 0/255 gray out. Bounds are on cv2's scale (H 0-179, S and V 0-255). Hue is circular, so
 h_lo above h_hi selects the two outer strips (reds); S and V do not wrap. A channel at its full
-range constrains nothing. `load_bounds(path)` reads the detector's settings JSON into params and
-the card's Load… button does the same. The file's min_area and merge_distance are contour
-settings, not pixel ones, and are left for a later tool.
+range constrains nothing. `load_bounds(path)` reads the detector's settings JSON into params; the
+card's Load… button does the same by hand, and the `settings` path input does it from whatever
+selector is wired into it. The file's min_area and merge_distance are contour settings, not pixel
+ones, and are left for a later tool.
 """
 import json
 
@@ -15,6 +16,7 @@ SIEVE_TOOL = True
 NAME, KIND, EXPECTS, PRODUCES = "inrange", "frame", "bgr", "gray"
 H_MAX, SV_MAX = 179, 255
 DEFAULTS = {"h_lo": 0, "h_hi": H_MAX, "s_lo": 0, "s_hi": SV_MAX, "v_lo": 0, "v_hi": SV_MAX}
+PATHS = {"settings": lambda path: load_bounds(path)}
 
 
 def run(frames, row, params):

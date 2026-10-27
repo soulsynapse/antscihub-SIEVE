@@ -160,6 +160,7 @@ class PlayerWindow(QMainWindow):
         self.row, self.playing, self.window_ = 0, False, (0, 0)
         self._resume = False  # playback to restore when a playhead drag ends
         self.result, self.result_start = None, 0
+        self._taken = {}       # (node id, path input) -> the file last handed to its loader
         self.traces = []
         self._hooked = set()   # ids of traces already wired to the strip's cursor
 
@@ -303,8 +304,7 @@ class PlayerWindow(QMainWindow):
         self.goto(self.row, commit=True)
 
     def _params_changed(self, nid):
-        sel = self.doc.selector()
-        if sel is not None and nid == sel.id:
+        if document.is_selector(self.tools.get(self.doc.node(nid).tool)):
             self._pick_video()
             return
         if self.graph is None:
@@ -323,6 +323,7 @@ class PlayerWindow(QMainWindow):
         will not open, is said on the video node and the canvas, and leaves what was open alone."""
         if self.doc is None:
             return False
+        self._pick_paths()
         sel = self.doc.selector()
         path, why = document.pick_video(self.doc, self.tools)
         vid = self.doc.video_node()
@@ -347,6 +348,44 @@ class PlayerWindow(QMainWindow):
             self.canvas.errors[vid.id] = f"could not open {os.path.basename(str(path))}"
             self.canvas.update()
         return opened
+
+    def _pick_paths(self):
+        """Every tool node's path inputs: what the selector wired into each picks goes through the
+        tool's loader into the node's params, once per file; a miss is said on the node."""
+        for n in self.doc.nodes:
+            tool = self.tools.get(n.tool)
+            loaders = document.paths(tool)
+            if not loaders:
+                continue
+            notes, errors = [], []
+            for name, loader in loaders.items():
+                path, why = document.pick_path(self.doc, self.tools, n.id, name)
+                if why:
+                    errors.append(f"{name}: {why}")
+                    continue
+                if path is None:
+                    continue
+                notes.append(f"{name}: {os.path.basename(path)}")
+                if self._taken.get((n.id, name)) == path:
+                    continue
+                try:
+                    params = loader(path)
+                except Exception as e:  # the file is the user's; say what was wrong with it
+                    errors.append(f"{name}: {type(e).__name__}: {e}")
+                    continue
+                self._taken[(n.id, name)] = path
+                n.params = {**n.params, **params}
+                w = self.pane.widget(n.id)
+                if w is not None:
+                    w.set_params(n.params)       # moves the knobs; each move is a change the pane reports
+                else:
+                    self._params_changed(n.id)
+            if errors:
+                self.canvas.errors[n.id] = "; ".join(errors)
+            else:
+                self.canvas.errors.pop(n.id, None)
+            self.pane.note(n.id, "; ".join(errors or notes))
+        self.canvas.update()
 
     def _match_note(self, sel, path):
         """What a selector's rule covered, for the line under its settings."""

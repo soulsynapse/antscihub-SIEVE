@@ -12,7 +12,9 @@ resolved against the document's folder on load.
 The video node has one input, of type PATH. A selector is a tool that produces PATH and expects
 nothing; wired into the video node, its `select(folder, params)` answers which file the document
 means, from the document's folder, and the answer is written into `video` so a reader without the
-selector's tool opens the same file (see `pick_video`).
+selector's tool opens the same file (see `pick_video`). Any tool may declare path inputs of its
+own in PATHS, name to a loader of params from the file; a selector wired into one answers the
+file (see `pick_path`) and the window hands it to the loader. A path input never reaches `run`.
 """
 import json
 import os
@@ -117,10 +119,14 @@ class Document:
             return self.video
         return os.path.normpath(os.path.join(self.folder(), self.video))
 
-    def selector(self):
-        """The node wired into the video node's input, or None."""
-        v = self.video_node()
-        w = None if v is None else self.source(v.id)
+    def selector(self, nid=None, input=INPUT):
+        """The node wired into `nid`'s `input`, by default the video node's, or None."""
+        if nid is None:
+            v = self.video_node()
+            if v is None:
+                return None
+            nid = v.id
+        w = self.source(nid, input)
         return None if w is None else self.node(w.src)
 
     def to_dict(self):
@@ -186,10 +192,28 @@ def expects(tool):
     return tuple(e) if isinstance(e, (tuple, list, set)) else (e,)
 
 
-def wants(doc, tools, nid):
-    """What `nid`'s input expects: PATH on the video node, else its tool's EXPECTS."""
+def paths(tool):
+    """A tool's path inputs: name to the loader that turns the file into params; empty if none."""
+    return dict(getattr(tool, "PATHS", None) or {})
+
+
+def inputs_of(doc, tools, nid):
+    """[(input name, types it expects or None)]: PATH on the video node, none on a selector, else
+    the frame input and then each path input."""
     node = doc.node(nid)
-    return (PATH,) if node.tool == VIDEO_TOOL else expects(_by_name(tools).get(node.tool))
+    if node.tool == VIDEO_TOOL:
+        return [(INPUT, (PATH,))]
+    tool = _by_name(tools).get(node.tool)
+    if tool is None:
+        return [(INPUT, None)]
+    if is_selector(tool):
+        return []
+    return [(INPUT, expects(tool))] + [(name, (PATH,)) for name in paths(tool)]
+
+
+def wants(doc, tools, nid, input=INPUT):
+    """What `nid`'s `input` expects; None for an input nothing declares."""
+    return dict(inputs_of(doc, tools, nid)).get(input)
 
 
 def is_selector(tool):
@@ -205,13 +229,12 @@ def as_written(path, folder):
     return rel if not rel.startswith(os.pardir) else os.path.abspath(path)
 
 
-def pick_video(doc, tools):
-    """Asks the selector wired into the video node which file the document means and records the
-    answer in `video` as written. Returns (path, reason): the path, or None and why there is none.
-    Without a selector the answer is `video_path()` and the reason is empty."""
-    sel = doc.selector()
+def pick_path(doc, tools, nid, input=INPUT):
+    """Asks the selector wired into `nid`'s `input` which file it means. Returns (path, reason):
+    the path, or None and why there is none; (None, "") when nothing is wired there."""
+    sel = doc.selector(nid, input)
     if sel is None:
-        return doc.video_path(), ""
+        return None, ""
     tool = _by_name(tools).get(sel.tool)
     if tool is None or not is_selector(tool):
         return None, f"{sel.id} is not a selector"
@@ -221,9 +244,19 @@ def pick_video(doc, tools):
         return None, f"{sel.id} raised {type(e).__name__}: {e}"
     if path is None:
         return None, f"{sel.id} matched nothing"
-    path = os.path.normpath(os.path.join(doc.folder(), path))
-    doc.video = as_written(path, doc.folder())
-    return path, ""
+    return os.path.normpath(os.path.join(doc.folder(), path)), ""
+
+
+def pick_video(doc, tools):
+    """`pick_path` on the video node, recording the answer in `video` as written. Without a
+    selector the answer is `video_path()` and the reason is empty."""
+    v = doc.video_node()
+    if v is None or doc.selector() is None:
+        return doc.video_path(), ""
+    path, why = pick_path(doc, tools, v.id)
+    if path is not None:
+        doc.video = as_written(path, doc.folder())
+    return path, why
 
 
 def produces(doc, tools, nid, _seen=()):
@@ -289,7 +322,7 @@ def fits(doc, tools, wire):
     """Whether the wire's source hands out something its destination expects; a source that hands
     out nothing (unresolved, an unfed pass-through) does not fit."""
     tools = _by_name(tools)
-    got, want = produces(doc, tools, wire.src), wants(doc, tools, wire.dst)
+    got, want = produces(doc, tools, wire.src), wants(doc, tools, wire.dst, wire.input)
     return got is not None and (want is None or got in want)
 
 
@@ -301,7 +334,7 @@ def validate(doc, tools):
     tools = _by_name(tools)
     out = []
     for w in doc.wires:
-        got, want = produces(doc, tools, w.src), wants(doc, tools, w.dst)
+        got, want = produces(doc, tools, w.src), wants(doc, tools, w.dst, w.input)
         if got is not None and want is not None and got not in want:
             out.append(Problem("type", f"{w.src} -> {w.dst}", f"{w.dst} expects {want!r} but {w.src} produces {got!r}"))
     state = {}      # id -> 1 on the stack, 2 finished

@@ -89,12 +89,33 @@ selector; it feeds the video node, which is the one node that reads a path and n
   each.
   Check: a test resolves it against a temporary tree; the registry lists it.
 
+## Path inputs
+
+Assumes: Selector nodes.
+
+A tool that reads a file beside its frames, as inrange reads a colour settings JSON, can take
+that file from a selector instead of a dialog, so a saved pipeline finds its own settings the
+way it finds its own video.
+
+- [x] A tool may declare `PATHS`, path-input name to a loader; each is an input of type `"path"`
+  beside its frame input, and `run` never sees it. A selector wired into one answers the file;
+  the loader turns the file into params, which land on the node once per picked file, so the
+  knobs show what the file said and the memo key follows.
+  Check: a test wires a selector into inrange's `settings` and reads the node's params.
+- [x] Validation treats a path input like the video node's: a `"path"` output fits it, nothing
+  else does, and an empty one is not unfed.
+  Check: a test validates a frame output wired into a path input and an empty path input.
+- [x] A selector that answers nothing, or a file the loader rejects, is said on that node in red
+  and under its settings, and the params it had stay.
+  Check: a test picks a settings file that is not one and reads the report.
+
 ## Non-goals
 
 - Fan-in: a node with more than one input. Every tool today reads one stage, and a second input
   changes `run`'s signature for every tool. It is the first thing to revisit after the canvas
   feels right, and the document already stores the destination's input name so it costs nothing
-  to admit later.
+  to admit later. Lifted on 2026-10-26 for path inputs alone, under Path inputs above: they
+  never reach `run`, so the reason does not apply to them.
 - Params as connectors (Blender style). Params stay on the pane; a param is never wired.
   Lifted on 2026-10-26 for the video node's source alone, under Selector nodes above. The fence
   kept the build-out off side quests; it was never a verdict on the finished graph, and the same

@@ -27,7 +27,7 @@ from PySide6.QtWidgets import (QAbstractSpinBox, QApplication, QLineEdit, QListW
                                QPlainTextEdit, QSizePolicy, QTextEdit, QToolTip, QWidget)
 
 from . import theme
-from .document import INPUT, PATH, VIDEO_PRODUCES, VIDEO_TOOL, expects, fed, fits, is_selector, produces
+from .document import INPUT, PATH, VIDEO_PRODUCES, VIDEO_TOOL, expects, fed, fits, inputs_of, is_selector, produces
 from .theme import GAP, PAD, qgray
 
 NODE_W, NODE_H = 140, 28   # a node's box, canvas px
@@ -234,13 +234,11 @@ class Canvas(QWidget):
 
     # -- what the document and the tools say of a node -----------------------
     def inputs(self, node):
-        """(name, expected types or None) per input: PATH on the video node, none on a selector, one
-        on every other."""
-        if node.tool == VIDEO_TOOL:
-            return [(INPUT, (PATH,))]
-        if not node.unresolved and is_selector(self.tools.get(node.tool)):
-            return []
-        return [(INPUT, None if node.unresolved else expects(self.tools.get(node.tool)))]
+        """(name, expected types or None) per input, as the document says; an unresolved node has
+        one that takes anything."""
+        if node.unresolved:
+            return [(INPUT, None)]
+        return inputs_of(self.doc, self.tools, node.id)
 
     def has_output(self, node):
         """Whether the node hands anything out: a series node does not; an unresolved node might."""
@@ -303,8 +301,11 @@ class Canvas(QWidget):
         return QRectF(b.right() - PAD - 2 * FLAG_R, b.center().y() - FLAG_R, 2 * FLAG_R, 2 * FLAG_R)
 
     def pin_in(self, node, name=INPUT):
+        """The input's disc on the top edge: one input is centred; several share the edge evenly."""
         b = self.box(node)
-        return QPointF(b.center().x(), b.top())
+        names = [n for n, _ in self.inputs(node)]
+        i, k = (names.index(name) if name in names else 0), max(1, len(names))
+        return QPointF(b.left() + b.width() * (i + 1) / (k + 1), b.top())
 
     def pin_out(self, node):
         b = self.box(node)
@@ -479,9 +480,22 @@ class Canvas(QWidget):
             return self.compatible(VIDEO_PRODUCES, dict(self.inputs(node))[iname])
         tool = self.tools[name]
         if end == "out":
-            return self.compatible(self.output_type(node), expects(tool))
+            return self._landing(name, self.output_type(node)) is not None
         p = getattr(tool, "PRODUCES", None)
         return p is not None and self.compatible(None if p == "same" else p, dict(self.inputs(node))[iname])
+
+    def _landing(self, name, got):
+        """The input a fresh node of tool `name` offers an output handing out `got`: its frame
+        input if that fits, else its first path input that does; None if none."""
+        if name == VIDEO_TOOL:
+            return INPUT if self.compatible(got, (PATH,)) else None
+        tool = self.tools[name]
+        if is_selector(tool):
+            return None
+        for iname, want in [(INPUT, expects(tool))] + [(k, (PATH,)) for k in getattr(tool, "PATHS", None) or {}]:
+            if self.compatible(got, want):
+                return iname
+        return None
 
     def open_menu(self, at, place_at=None):
         """The Tab menu at view point `at`, kept inside the canvas; the chosen tool lands at view
@@ -523,7 +537,7 @@ class Canvas(QWidget):
         if pending is not None:
             end, nid, iname = pending
             if end == "out":
-                self.doc.connect(nid, node.id)
+                self.doc.connect(nid, node.id, self._landing(name, self.output_type(self.doc.node(nid))) or INPUT)
             else:
                 self.doc.connect(node.id, nid, iname)
         self.changed.emit()
@@ -639,7 +653,7 @@ class Canvas(QWidget):
         p.drawEllipse(self.flag(n))
         unfed = self.unfed(n)
         for name, types in self.inputs(n):
-            self._paint_pin(p, self.pin_in(n, name), types, ring=theme.RED if unfed else None,
+            self._paint_pin(p, self.pin_in(n, name), types, ring=theme.RED if unfed and name == INPUT else None,
                             lit=None if lit is None else (n.id, name) in lit)
         if self.has_output(n):
             self._paint_pin(p, self.pin_out(n), self.output_type(n), lit=None if lit is None else (n.id, None) in lit)

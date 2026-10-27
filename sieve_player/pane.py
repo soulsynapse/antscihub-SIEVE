@@ -24,7 +24,7 @@ from PySide6.QtCore import QProcess, QSize, Qt, Signal
 from PySide6.QtGui import QFontMetrics
 from PySide6.QtWidgets import QFileDialog, QFrame, QPushButton, QScrollArea, QVBoxLayout, QWidget
 
-from .document import VIDEO_TOOL, is_selector
+from .document import VIDEO_TOOL, is_selector, paths
 from .theme import GAP, PAD, WIDE_W, Form, Layer, measured, readout
 
 VIDEO_FILTER = "Video (*.mp4 *.MP4 *.avi *.mov *.mkv);;All (*)"
@@ -281,7 +281,7 @@ class Pane(QWidget):
                 w.changed.connect(lambda nid=node.id: self._changed(nid))
                 card.add(w)
                 self.widgets[node.id] = w
-                if is_selector(tool):
+                if is_selector(tool) or paths(tool):
                     self.notes[node.id] = readout()
                     card.add(self.notes[node.id])
             if w is not None and getattr(tool, "export_command", None) is not None:
@@ -335,7 +335,8 @@ class Pane(QWidget):
         return self.widgets.get(nid)
 
     def note(self, nid, text):
-        """The line under a selector's settings: what its rule matched."""
+        """The line under a selector's settings, what its rule matched, or under a tool with path
+        inputs, which files were picked for them."""
         if nid in self.notes:
             self.notes[nid].setText(text)
 

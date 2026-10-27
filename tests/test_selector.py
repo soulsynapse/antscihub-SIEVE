@@ -132,3 +132,72 @@ def test_canvas_inputs_on_the_video_node_and_a_selector(tmp_path):
     assert canvas.inputs(doc.node("pick")) == [] and canvas.output_type(doc.node("pick")) == D.PATH
     doc.disconnect("video")
     assert not canvas.unfed(doc.node("video")) and not canvas.unfed(doc.node("pick"))
+
+
+# -- Path inputs, spec/graph.md, and the path-input connector line in spec/canvas.md -----------
+def settings_tree(tmp_path, h=(20, 40)):
+    import json
+
+    tree(tmp_path)
+    (tmp_path / "colour.json").write_text(json.dumps({"bounds": {"H": list(h), "S": [1, 2], "V": [3, 4]}}), encoding="utf-8")
+    from tools import gray as real_gray, inrange
+    doc = D.from_tools([real_gray, inrange])
+    doc.add_node("pick", params={**pick.DEFAULTS, "pattern": "*.json"})
+    doc.connect("pick", "inrange", "settings")
+    D.save(doc, tmp_path / "doc.json")
+    return doc, [pick, real_gray, inrange]
+
+
+def open_window(tmp_path, tools):
+    from PySide6.QtWidgets import QApplication
+    from sieve_player.window import PlayerWindow
+
+    QApplication.instance() or QApplication([])
+    return PlayerWindow(str(tmp_path / "doc.json"), "t", tools)
+
+
+def test_a_selector_into_a_path_input_lands_params_on_the_node(tmp_path):
+    doc, tools = settings_tree(tmp_path)
+    assert D.inputs_of(doc, tools, "inrange") == [(D.INPUT, ("bgr",)), ("settings", (D.PATH,))]
+    win = open_window(tmp_path, tools)
+    p = win.doc.node("inrange").params
+    assert (p["h_lo"], p["h_hi"], p["s_lo"], p["v_hi"]) == (20, 40, 1, 4)
+    assert win.pane.widget("inrange").params()["h_hi"] == 40
+    assert win.pane.notes["inrange"].text() == "settings: colour.json" and "inrange" not in win.canvas.errors
+    win.close()
+
+
+def test_a_path_input_validates_like_the_video_input(tmp_path):
+    doc, tools = settings_tree(tmp_path)
+    doc.disconnect("inrange", "settings")
+    assert D.validate(doc, tools) == []
+    doc.connect("gray", "inrange", "settings")
+    assert [(p.kind, p.where) for p in D.validate(doc, tools)] == [("type", "gray -> inrange")]
+
+
+def test_a_file_the_loader_rejects_is_said_on_the_node_and_params_stay(tmp_path):
+    doc, tools = settings_tree(tmp_path, h=(500, 1))
+    win = open_window(tmp_path, tools)
+    assert win.canvas.errors["inrange"].startswith("settings: ValueError")
+    assert win.pane.notes["inrange"].text() == win.canvas.errors["inrange"]
+    assert win.doc.node("inrange").params["h_hi"] == 179
+    win.close()
+
+
+def test_canvas_pins_and_placing_from_a_pending_path_wire(tmp_path):
+    from PySide6.QtCore import QPointF
+    from PySide6.QtWidgets import QApplication
+    from sieve_player.canvas import Canvas
+
+    QApplication.instance() or QApplication([])
+    doc, tools = settings_tree(tmp_path)
+    canvas = Canvas({t.NAME: t for t in tools})
+    canvas.set_document(doc)
+    node = doc.node("inrange")
+    a, b = canvas.pin_in(node, D.INPUT), canvas.pin_in(node, "settings")
+    assert a.y() == b.y() and a.x() < b.x()
+    doc.disconnect("inrange", "settings")
+    canvas._pending = ("out", "pick", None)
+    assert ("inrange", "") in canvas.menu_entries() and ("gray", "") not in canvas.menu_entries()
+    new = canvas.place("inrange", QPointF(0, 0))
+    assert doc.source(new.id, "settings").src == "pick" and doc.source(new.id) is None

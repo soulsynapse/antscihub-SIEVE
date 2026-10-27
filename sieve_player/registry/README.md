@@ -7,7 +7,8 @@ means the tool did not say; consumers degrade and may show `hint(facet)`, the li
 supply it. No facet has a meaningful None (pass-through is `PRODUCES = "same"`). A facet is in
 `FACETS` only if something in `sieve_player` outside this package reads it. A selector, a tool
 whose `PRODUCES` is `"path"` with no `EXPECTS`, says `select` instead of `run`, and `matches` if
-it can count what its rule covers. A module that fails
+it can count what its rule covers. A tool with `PATHS` has a path input per key, which a selector
+feeds; the value is called with the picked file and answers the params to merge. A module that fails
 to import is still an `Entry`, with the exception in `error`, so a broken tool shows up instead
 of vanishing.
 

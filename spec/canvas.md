@@ -34,6 +34,10 @@ Assumes: Window shell.
   nothing is wired to it. A selector node shows no input and one output of that type, and the
   type has a colour of its own.
   Check: a test reads the canvas's inputs on the video node and on a selector; Kendrick hovers.
+- [ ] A node with path inputs shows them as further connectors along its top edge after the
+  frame input, and only the frame input carries the unfed ring. A wire let go in space from a
+  `"path"` output offers such tools in the menu and lands on their path input.
+  Check: a test reads the pins and places from a pending path wire; Kendrick wires pick into inrange.
 
 ## Navigation
 

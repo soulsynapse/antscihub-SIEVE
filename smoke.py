@@ -23,7 +23,7 @@ from sieve_player import document  # noqa: E402
 from sieve_player.decoder import Decoder  # noqa: E402
 from sieve_player.graph import Graph, Series  # noqa: E402
 from sieve_player.window import PlayerWindow  # noqa: E402
-from tools import downsample as ds, gray, motion, pick, rescale, threshold  # noqa: E402
+from tools import downsample as ds, gray, motion, file, rescale, threshold  # noqa: E402
 
 path = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else "video-tests/rep3_intermittent_crop.MP4")
 app = QApplication.instance() or QApplication(sys.argv)
@@ -39,19 +39,19 @@ def check(cond, msg):
 def run_graph():
     """The chain, wired by from_tools with the selector into the video, computed through the graph
     the way the worker will."""
-    tools = [pick, gray, rescale, threshold, motion]
+    tools = [file, gray, rescale, threshold, motion]
     doc = document.from_tools(tools)
-    doc.node("pick").params.update(folder=os.path.dirname(path), pattern=os.path.basename(path))
-    check([(w.src, w.dst) for w in doc.wires] == [("pick", "video"), ("video", "gray"), ("gray", "rescale"),
+    doc.node("file").params.update(folder=os.path.dirname(path), pattern=os.path.basename(path))
+    check([(w.src, w.dst) for w in doc.wires] == [("file", "video"), ("video", "gray"), ("gray", "rescale"),
                                                   ("rescale", "threshold"), ("threshold", "motion")],
           f"wiring {[(w.src, w.dst) for w in doc.wires]}")
     check(not document.validate(doc, tools), f"document invalid: {document.validate(doc, tools)}")
     picked, why = document.pick_video(doc, tools)
-    check(picked is not None and os.path.samefile(picked, path), f"pick answered {picked!r} {why}")
+    check(picked is not None and os.path.samefile(picked, path), f"file answered {picked!r} {why}")
     dec = Decoder(picked)
     g = Graph(doc, dec, tools)
     check(g.shown == "threshold" and g.walk == "threshold" and g.series == "motion", f"flag/walk/series {g.shown} {g.walk} {g.series}")
-    check(g.compute("pick", 0) is None, "a selector computed a row")
+    check(g.compute("file", 0) is None, "a selector computed a row")
     out = g.compute("threshold", 0)
     check(out is not None and out.ndim == 2 and out.dtype == np.uint8, "threshold output")
     check(g.peek(0) is out, "peek did not find the shown row")

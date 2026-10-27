@@ -13,12 +13,13 @@ class ParamWidget(QWidget):
     add_choice; each is one line of the form, a knob: slider and its mono readout together fill the
     one control width. The int and float rows return their slider, for a tool that also sets the
     value from elsewhere. A text row commits on Enter or focus loss, as a Houdini field does, so a
-    half-typed pattern is never a change."""
+    half-typed pattern is never a change. `set_driven(names, by)` greys the rows a wire drives, as
+    Blender does a driven property: they take no typed value until the wire is broken."""
     changed = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._get, self._set = {}, {}
+        self._get, self._set, self._rows = {}, {}, {}
         self._lay = QVBoxLayout(self)
         self._lay.setContentsMargins(0, 0, 0, 0)
         self._lay.setSpacing(GAP)
@@ -33,6 +34,13 @@ class ParamWidget(QWidget):
         for k, v in params.items():
             if k in self._set:
                 self._set[k](v)
+
+    def set_driven(self, names, by=None):
+        """Grey the rows in `names`, which node `by` drives, and free every other."""
+        names = set(names)
+        for name, row in self._rows.items():
+            row.setEnabled(name not in names)
+            row.setToolTip(f"driven by {by}; break the wire to edit" if name in names else "")
 
     def _slider(self, name, lo, hi, value, fmt):
         w = QWidget()
@@ -52,6 +60,7 @@ class ParamWidget(QWidget):
         h.addWidget(out)
         w.setFixedWidth(CONTROL_W)
         self.form.add_row(name, w)
+        self._rows[name] = w
         return s
 
     def add_int(self, name, lo, hi, value):
@@ -70,6 +79,7 @@ class ParamWidget(QWidget):
         c.setChecked(bool(value))
         c.toggled.connect(lambda _: self.changed.emit())
         self.form.add_row(name, c)
+        self._rows[name] = c
         self._get[name], self._set[name] = c.isChecked, lambda v: c.setChecked(bool(v))
 
     def add_text(self, name, value):
@@ -84,6 +94,7 @@ class ParamWidget(QWidget):
                 self.changed.emit()
         e.editingFinished.connect(commit)
         self.form.add_row(name, e)
+        self._rows[name] = e
 
         def set_(v):
             e.setText(str(v))
@@ -98,6 +109,7 @@ class ParamWidget(QWidget):
         c.setFixedWidth(CONTROL_W)
         c.currentTextChanged.connect(lambda _: self.changed.emit())
         self.form.add_row(name, c)
+        self._rows[name] = c
         self._get[name], self._set[name] = c.currentText, lambda v: c.setCurrentText(str(v))
         return c
 

@@ -37,7 +37,7 @@ Assumes: Window shell.
 - [ ] A node with path inputs shows them as further connectors along its top edge after the
   frame input, and only the frame input carries the unfed ring. A wire let go in space from a
   `"path"` output offers such tools in the menu and lands on their path input.
-  Check: a test reads the pins and places from a pending path wire; Kendrick wires pick into inrange.
+  Check: a test reads the pins and places from a pending path wire; Kendrick wires file into inrange.
 
 ## Navigation
 

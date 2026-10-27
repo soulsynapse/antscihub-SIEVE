@@ -161,6 +161,7 @@ class PlayerWindow(QMainWindow):
         self._resume = False  # playback to restore when a playhead drag ends
         self.result, self.result_start = None, 0
         self._taken = {}       # (node id, path input) -> the file last handed to its loader
+        self._driven = {}      # (node id, path input) -> (the keys its loader set, the selector's id)
         self.traces = []
         self._hooked = set()   # ids of traces already wired to the strip's cursor
 
@@ -358,12 +359,16 @@ class PlayerWindow(QMainWindow):
             if not loaders:
                 continue
             notes, errors = [], []
+            w = self.pane.widget(n.id)
             for name, loader in loaders.items():
+                sel = self.doc.selector(n.id, name)
+                if sel is None:
+                    self._taken.pop((n.id, name), None)
+                    self._driven.pop((n.id, name), None)
+                    continue
                 path, why = document.pick_path(self.doc, self.tools, n.id, name)
                 if why:
                     errors.append(f"{name}: {why}")
-                    continue
-                if path is None:
                     continue
                 notes.append(f"{name}: {os.path.basename(path)}")
                 if self._taken.get((n.id, name)) == path:
@@ -374,12 +379,15 @@ class PlayerWindow(QMainWindow):
                     errors.append(f"{name}: {type(e).__name__}: {e}")
                     continue
                 self._taken[(n.id, name)] = path
+                self._driven[(n.id, name)] = (tuple(params), sel.id)
                 n.params = {**n.params, **params}
-                w = self.pane.widget(n.id)
                 if w is not None:
                     w.set_params(n.params)       # moves the knobs; each move is a change the pane reports
                 else:
                     self._params_changed(n.id)
+            if w is not None and hasattr(w, "set_driven"):
+                held = [(keys, by) for (nid, _), (keys, by) in self._driven.items() if nid == n.id]
+                w.set_driven({k for keys, _ in held for k in keys}, held[0][1] if held else None)
             if errors:
                 self.canvas.errors[n.id] = "; ".join(errors)
             else:

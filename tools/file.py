@@ -6,7 +6,7 @@ import glob
 import os
 
 SIEVE_TOOL = True
-NAME, KIND, PRODUCES = "pick", "selector", "path"
+NAME, KIND, PRODUCES = "file", "selector", "path"
 DEFAULTS = {"folder": ".", "pattern": "*.mp4", "recurse": False, "order": "name"}
 ORDERS = ("name", "newest")
 

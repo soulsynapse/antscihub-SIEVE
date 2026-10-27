@@ -69,6 +69,11 @@ def settings(parent=None):
             if path:
                 self.load(path)
 
+        def set_driven(self, names, by=None):
+            super().set_driven(names, by)
+            self.button.setEnabled(not names)      # Load… sets the same knobs, so it is held with them
+            self.button.setToolTip(f"driven by {by}; break the wire to load by hand" if names else "")
+
         def load(self, path):
             try:
                 params = load_bounds(path)

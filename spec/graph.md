@@ -40,7 +40,7 @@ Assumes: nothing.
 
 Retired on 2026-10-26: Kendrick removed the dummies once the graph ran the real tools, so the
 boxes below describe a root that no longer exists. Nothing assumes them that is not already met by
-`tools/`; `smoke.py` runs the real chain, and the selector of the next deliverable is `tools/pick.py`.
+`tools/`; `smoke.py` runs the real chain, and the selector of the next deliverable is `tools/file.py`.
 
 - [x] A root the registry discovers holds tools whose `run` returns its input, zeros of the right
   shape, or a constant series, covering: a `"bgr"` to `"gray"` tool, a `"gray"` to `"gray"` tool,

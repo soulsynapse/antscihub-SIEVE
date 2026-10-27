@@ -1,5 +1,5 @@
 """Run the player with the example chain: gray -> rescale -> threshold -> motion. Every tool under
-tools/ is in the Tab menu; pick, the selector, is there to wire into the video node.
+tools/ is in the Tab menu; file, the selector, is there to wire into the video node.
 
     .venv\\Scripts\\python main.py [video]
 """

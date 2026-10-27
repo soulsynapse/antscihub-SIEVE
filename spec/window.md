@@ -49,9 +49,10 @@ Assumes: Window shell.
 
 Assumes: Window shell.
 
-- [ ] The pane shows the selected node's settings widget, the one its tool's `settings()` returns,
-  and nothing when nothing is selected. Selection, not the display flag, drives the pane, so a
-  node upstream can be tuned while a node downstream is on the frame.
+- [ ] The pane shows the last selected node's settings widget, the one its tool's `settings()`
+  returns, and keeps it when the selection empties, so a click on empty canvas never blanks the
+  pane; it shows nothing once that node is deleted. Selection, not the display flag, drives the
+  pane, so a node upstream can be tuned while a node downstream is on the frame.
   Check: Kendrick selects a node other than the flagged one.
 - [ ] A change in the pane reaches the runtime at once, as a knob did in the card.
   Check: Kendrick drags a dummy's control with the frame on that node.

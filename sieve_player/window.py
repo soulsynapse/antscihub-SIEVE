@@ -160,7 +160,8 @@ class PlayerWindow(QMainWindow):
         self.canvas = Canvas(self.tools, broken)
         self.pane = Pane(self.tools)
         self.timeline = Timeline()
-        self.canvas.selectionChanged.connect(lambda ids: self.pane.select(ids[-1] if ids else None))
+        # an empty selection leaves the pane on its last node, so a click on empty canvas never blanks it
+        self.canvas.selectionChanged.connect(lambda ids: ids and self.pane.select(ids[-1]))
         self.canvas.changed.connect(self.sync)
         self.pane.paramsChanged.connect(self._params_changed)
         self.pane.videoPicked.connect(self.load)

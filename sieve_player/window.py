@@ -119,6 +119,24 @@ def catalogue(items):
     return modules, {t.NAME: t for t in modules}, broken
 
 
+class Column(QWidget):
+    """The right side: the canvas over the pane. The pane takes the height its content asks for, up
+    to `SHARE` of the column, and the canvas the rest; nothing is dragged between them."""
+    SHARE = 0.5
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.lay = QVBoxLayout(self)
+        self.lay.setContentsMargins(0, 0, 0, 0)
+        self.lay.setSpacing(GAP)
+        self.capped = None
+
+    def resizeEvent(self, e):
+        super().resizeEvent(e)
+        if self.capped is not None:
+            self.capped.setMaximumHeight(int(self.height() * self.SHARE))
+
+
 class PlayerWindow(QMainWindow):
     def __init__(self, source, title="SIEVE", tools=()):
         """`source` is a list of tools, which become the document and the catalogue, or the path of
@@ -147,12 +165,10 @@ class PlayerWindow(QMainWindow):
         self.pane.paramsChanged.connect(self._params_changed)
         self.pane.videoPicked.connect(self.load)
 
-        right = theme.Splitter(Qt.Vertical)
-        right.setHandleWidth(GAP)
-        right.addWidget(self.canvas)
-        right.addWidget(self.pane)
-        right.setStretchFactor(0, 1)
-        right.setStretchFactor(1, 1)
+        right = Column()
+        right.lay.addWidget(self.canvas, 1)
+        right.lay.addWidget(self.pane, 0)
+        right.capped = self.pane
         split = theme.Splitter(Qt.Horizontal)
         split.setHandleWidth(GAP)
         split.addWidget(self.display)

@@ -15,7 +15,7 @@ import re
 from functools import lru_cache
 
 import cv2
-from PySide6.QtCore import QProcess, Qt, Signal
+from PySide6.QtCore import QProcess, QSize, Qt, Signal
 from PySide6.QtGui import QFontMetrics
 from PySide6.QtWidgets import QFileDialog, QFrame, QPushButton, QScrollArea, QVBoxLayout, QWidget
 
@@ -182,7 +182,8 @@ class Export(QWidget):
 class Pane(QWidget):
     """`tools` is the catalogue, name to module. `select(nid)` shows that node's surface, None
     shows nothing. `video` is the video node's widget, `widget(nid)` a tool node's settings widget,
-    `exports[nid]` the Export under a node whose tool exports."""
+    `exports[nid]` the Export under a node whose tool exports. Its size hint is the shown card's
+    height, so a host that stacks it under the canvas gives it only the room its content needs."""
     paramsChanged = Signal(str)   # this node's params in the document changed here
     videoPicked = Signal(str)
 
@@ -204,6 +205,7 @@ class Pane(QWidget):
         self._lay.setContentsMargins(0, 0, GAP, 0)   # room for the scrollbar
         self._lay.addStretch(1)
         scroll.setWidget(self._host)
+        self._host.installEventFilter(self)
         lay.addWidget(scroll)
         self.setMinimumWidth(WIDE_W + 2 * PAD + GAP)   # one form and the scrollbar's gutter
 
@@ -277,6 +279,31 @@ class Pane(QWidget):
         self.current = nid if nid in self.cards else None
         for i, card in self.cards.items():
             card.setVisible(i == self.current)
+        self.updateGeometry()
+
+    def sizeHint(self):
+        """As tall as the shown card at the pane's width; the host caps it and the scroll area takes
+        the overflow. A wrapping label's plain hint guesses a width, so the card is asked at the real one."""
+        card = self.cards.get(self.current)
+        if card is None:
+            return QSize(super().sizeHint().width(), 0)
+        m = self._lay.contentsMargins()
+        w = self.width() - m.left() - m.right()
+        h = card.heightForWidth(w) if card.hasHeightForWidth() and w > 0 else card.sizeHint().height()
+        return QSize(super().sizeHint().width(), h + m.top() + m.bottom())
+
+    def eventFilter(self, obj, e):
+        if obj is self._host and e.type() == e.Type.LayoutRequest:
+            self.updateGeometry()   # a card's content changed; the scroll area would not pass it on
+        return super().eventFilter(obj, e)
+
+    def resizeEvent(self, e):
+        super().resizeEvent(e)
+        if e.oldSize().width() != e.size().width():
+            self.updateGeometry()   # wrapping labels need a different height at a different width
+
+    def minimumSizeHint(self):
+        return QSize(super().minimumSizeHint().width(), 0)
 
     def widget(self, nid):
         return self.widgets.get(nid)

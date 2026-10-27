@@ -12,9 +12,10 @@ the worker and the frame view expect of their host.
 Assumes: Graph runtime, Dummy tools.
 
 - [x] The window opens with the frame left, the canvas top-right, the parameter pane bottom-right,
-  and the transport along the bottom, with a splitter between frame and right side and another
-  between canvas and pane.
-  Check: Kendrick opens it.
+  and the transport along the bottom, with a splitter between frame and right side. The pane is as
+  tall as the selected node's settings need, up to half the right side, and the canvas takes the
+  rest; nothing is dragged between them.
+  Check: Kendrick opens it and selects a node with a long path under one with two knobs.
 - [x] Decoder, worker, memo and timeline behave as before: load starts playback looping in the
   window, the display reads the memo and never waits on the decoder.
   Check: `smoke.py` passes.

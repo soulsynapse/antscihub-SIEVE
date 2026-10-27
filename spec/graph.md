@@ -2,8 +2,8 @@
 
 The runtime computes what the graph says. It takes a document and a decoder and answers, for a
 node and a row, what that node's output is, memoized under a key that changes whenever anything
-upstream changes. The module to read before touching this is `sieve_player/chain.py`: its memo,
-keys, `Frames` and `Series` are the parts that survive; `Links`, which assumed a list, does not.
+upstream changes. The module to read before touching this is `sieve_player/graph.py`; its memo,
+keys, `Frames` and `Series` carried over from the list-shaped runtime it replaced.
 
 ## Graph runtime
 

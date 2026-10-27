@@ -1,19 +1,23 @@
-"""The network editor. `spec/canvas.md` is the spec; this is its Nodes and Navigation share, with
-the wires the document already holds drawn so that a chain can be seen and cut by deleting a node:
+"""The network editor. `spec/canvas.md` is the spec; this is its Nodes, Navigation and Wires share:
 a node one layer above the ground with its connectors and its display flag, select, box-select,
 drag, Delete, the mark on a node whose tool was not found and on an input nothing feeds; pan, zoom
-about the cursor, H to frame. It reads and writes the document and nothing else. The tools'
-declared types reach it as data, for the connectors' colours and the unfed mark; what the runtime
-makes of the graph never does.
+about the cursor, H to frame; wires dragged from either end, picked up, cut with Y, and a node
+dropped onto a wire inserted in it. It reads and writes the document and nothing else. The tools'
+declared types reach it as data, for the connectors' colours, the unfed mark and which connectors a
+dragged wire may land on; what the runtime makes of the graph never does.
 
 Geometry is in document space; the view is a pan and a zoom applied to the painter, never written
 to the document. A key pressed with the cursor over the canvas is the canvas's, as in Houdini's
 panes, unless something is being typed into: Space held pans with the left button instead of
-toggling play, H frames.
+toggling play, Y held cuts with it, H frames.
+
+A type nobody declared matches every type: an unresolved node and an unfed pass-through can be
+wired like any other, and the red wire says afterwards whether the types fit. Only a node's own
+connectors are refused; a longer cycle is the document's to report and the runtime's to starve.
 """
 import zlib
 
-from PySide6.QtCore import QCoreApplication, QEvent, QPointF, QRectF, Qt, Signal
+from PySide6.QtCore import QCoreApplication, QEvent, QLineF, QPointF, QRectF, Qt, Signal
 from PySide6.QtGui import QColor, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import (QAbstractSpinBox, QApplication, QLineEdit, QPlainTextEdit, QSizePolicy, QTextEdit,
                                QToolTip, QWidget)
@@ -28,6 +32,9 @@ PIN_R = 4                  # a connector: a disc on the node's top or bottom edg
 HIT = 3                    # slack around a flag or a connector, px
 WIRE_W = 1.5
 WIRE_BEND = 24             # the least a wire runs vertically out of a connector before it turns
+SNAP = 10                  # a dragged wire's loose end lands on a connector within this, view px
+LIT = 2                    # the halo on a connector a dragged wire may land on, px beyond the disc
+DIM = 70                   # alpha of a connector it may not
 ZOOM_MIN, ZOOM_MAX = 0.25, 4.0
 ZOOM_STEP = 1.15           # per wheel notch
 FRAME_PAD = 2 * PAD        # view px kept clear around what H frames
@@ -59,8 +66,15 @@ class Canvas(QWidget):
         self.selected = []
         self.hover = None                       # the node id under the pointer
         self._drag = None                       # ("move", start, {id: pos}) | ("box", start, shift, base)
-                                                # | ("pan", start, pan) | None; starts in document space but pan's
+                                                # | ("pan", start, pan) | ("wire", end, id, input) | ("cut", start)
+                                                # | None; starts in document space but pan's. A wire drag holds
+                                                # its fixed end: "out" of node `id`, or "in" `input` of node `id`
         self._box = None                        # the rubber band, while one is drawn, document space
+        self._loose = None                      # the dragged wire's free end, document space
+        self._wires0 = None                     # the document's wires when a wire drag began
+        self._cut = None                        # the cut line, while one is drawn, document space
+        self._insert = None                     # the wire the single node being moved would drop into
+        self._y = False                         # Y is held with the cursor here
         self.pan = QPointF(2 * PAD, 2 * PAD)    # where the document's (0, 0) sits, view px
         self.zoom = 1.0
         self._space = False                     # Space is held with the cursor here
@@ -72,7 +86,7 @@ class Canvas(QWidget):
 
     def set_document(self, doc):
         self.doc = doc
-        self.hover = self._drag = self._box = None
+        self.hover = self._drag = self._box = self._loose = self._cut = self._insert = None
         self.select([])
         self.update()
 
@@ -180,9 +194,10 @@ class Canvas(QWidget):
                 return n
         return None
 
-    def pin_at(self, pos):
-        """(node, input name) for an input connector, (node, None) for an output, else None."""
-        r = PIN_R + HIT / self.zoom
+    def pin_at(self, pos, slack=HIT):
+        """(node, input name) for an input connector, (node, None) for an output, else None; `slack`
+        is view px around the disc."""
+        r = PIN_R + slack / self.zoom
         for n in reversed(self.doc.nodes if self.doc else []):
             for name, _ in self.inputs(n):
                 if (self.pin_in(n, name) - pos).manhattanLength() <= r:
@@ -200,6 +215,113 @@ class Canvas(QWidget):
         path.cubicTo(QPointF(a.x(), a.y() + k), QPointF(b.x(), b.y() - k), b)
         return path
 
+    def path_of(self, w):
+        return self.wire_path(self.pin_out(self.doc.node(w.src)), self.pin_in(self.doc.node(w.dst), w.input))
+
+    @staticmethod
+    def segments(path):
+        for poly in path.toSubpathPolygons():
+            for i in range(1, len(poly)):
+                yield QLineF(poly[i - 1], poly[i])
+
+    @classmethod
+    def crosses(cls, path, line):
+        return any(s.intersects(line)[0] == QLineF.BoundedIntersection for s in cls.segments(path))
+
+    @classmethod
+    def touches(cls, path, rect):
+        edges = (QLineF(rect.topLeft(), rect.topRight()), QLineF(rect.topRight(), rect.bottomRight()),
+                 QLineF(rect.bottomRight(), rect.bottomLeft()), QLineF(rect.bottomLeft(), rect.topLeft()))
+        return any(rect.contains(s.p1()) or any(s.intersects(e)[0] == QLineF.BoundedIntersection for e in edges)
+                   for s in cls.segments(path))
+
+    # -- wiring ------------------------------------------------------------
+    @staticmethod
+    def compatible(got, want):
+        """Whether an output handing out `got` may feed an input expecting `want`; a type nobody
+        declared matches every type."""
+        return got is None or want is None or got in want
+
+    def targets(self):
+        """The connectors the dragged wire may land on: (node, input) for inputs, (node, None) for
+        outputs; empty when no wire is being dragged."""
+        if self._drag is None or self._drag[0] != "wire":
+            return []
+        _, end, nid, name = self._drag
+        node, out = self.doc.node(nid), []
+        if end == "out":
+            got = self.output_type(node)
+            for n in self.doc.nodes:
+                if n.id != nid:
+                    out += [(n, iname) for iname, want in self.inputs(n) if self.compatible(got, want)]
+        else:
+            want = dict(self.inputs(node))[name]
+            out = [(n, None) for n in self.doc.nodes
+                   if n.id != nid and self.has_output(n) and self.compatible(self.output_type(n), want)]
+        return out
+
+    def insertable(self, node):
+        """The wire `node` would drop into: one its box crosses that it is not an end of, whose
+        source fits its input and whose output, once so fed, fits the wire's destination."""
+        ins = self.inputs(node)
+        if not ins or not self.has_output(node):
+            return None
+        want, box = ins[0][1], self.box(node)
+        passthru = getattr(self.tools.get(node.tool), "PRODUCES", None) == "same"
+        for w in self.doc.wires:
+            if node.id in (w.src, w.dst) or not self.touches(self.path_of(w), box):
+                continue
+            got = self.output_type(self.doc.node(w.src))
+            down = dict(self.inputs(self.doc.node(w.dst)))[w.input]
+            if self.compatible(got, want) and self.compatible(got if passthru else self.output_type(node), down):
+                return w
+        return None
+
+    def _begin_wire(self, node, name, pos):
+        """A drag from a connector: from an output, or from an unfed input, the wire grows from
+        there; from a fed input, that wire is picked up and stays on its source."""
+        self._wires0 = list(self.doc.wires)
+        if name is None:
+            self._drag = ("wire", "out", node.id, None)
+        elif (w := self.doc.source(node.id, name)) is None:
+            self._drag = ("wire", "in", node.id, name)
+        else:
+            self.doc.disconnect(node.id, name)
+            self._drag = ("wire", "out", w.src, None)
+        self._loose = pos
+
+    def _end_wire(self, pos):
+        _, end, nid, name = self._drag
+        pin = self.pin_at(pos, SNAP)
+        if pin is not None and any(n.id == pin[0].id and iname == pin[1] for n, iname in self.targets()):
+            if end == "out":
+                self.doc.connect(nid, pin[0].id, pin[1])
+            else:
+                self.doc.connect(pin[0].id, nid, name)
+        changed = self.doc.wires != self._wires0
+        self._loose = self._wires0 = None
+        self.update()
+        if changed:
+            self.changed.emit()
+
+    def _end_cut(self):
+        line, self._cut = self._cut, None
+        keep = [w for w in self.doc.wires if not self.crosses(self.path_of(w), line)]
+        cut = len(keep) != len(self.doc.wires)
+        self.doc.wires = keep
+        self.update()
+        if cut:
+            self.changed.emit()
+
+    def _end_move(self):
+        w, self._insert = self._insert, None
+        if w is not None:
+            nid = self.selected[0]
+            self.doc.connect(w.src, nid)
+            self.doc.connect(nid, w.dst, w.input)
+            self.changed.emit()
+        self.update()
+
     # -- painting ----------------------------------------------------------
     def paintEvent(self, _):
         p = QPainter(self)
@@ -210,21 +332,36 @@ class Canvas(QWidget):
         p.setRenderHint(QPainter.Antialiasing, True)
         p.translate(self.pan)
         p.scale(self.zoom, self.zoom)
+        p.setBrush(Qt.NoBrush)
         for w in self.doc.wires:
             src, dst = self.doc.node(w.src), self.doc.node(w.dst)
             ok = dst.unresolved or src.unresolved or fits(self.doc, self.tools, w)
-            p.setPen(QPen(theme.ACCENT if ok else theme.RED, WIRE_W))
-            p.setBrush(Qt.NoBrush)
-            p.drawPath(self.wire_path(self.pin_out(src), self.pin_in(dst, w.input)))
+            if w is self._insert:
+                p.setPen(QPen(qgray(theme.HEAD), WIRE_W + 1))
+            else:
+                p.setPen(QPen(theme.ACCENT if ok else theme.RED, WIRE_W))
+            p.drawPath(self.path_of(w))
+        if self._loose is not None:
+            _, end, nid, name = self._drag
+            node = self.doc.node(nid)
+            p.setPen(QPen(theme.ACCENT, WIRE_W))
+            p.drawPath(self.wire_path(self.pin_out(node), self._loose) if end == "out"
+                       else self.wire_path(self._loose, self.pin_in(node, name)))
+        lit = {(n.id, name) for n, name in self.targets()} if self._loose is not None else None
         for n in self.doc.nodes:
-            self._paint_node(p, n)
+            self._paint_node(p, n, lit)
         if self._box is not None:
             p.setPen(self.hairline(qgray(theme.INK_2), Qt.DashLine))
             p.setBrush(qgray(theme.HEAD, 16))
             p.drawRect(self._box)
+        if self._cut is not None:
+            p.setPen(self.hairline(theme.RED, Qt.DashLine))
+            p.drawLine(self._cut)
         p.end()
 
-    def _paint_node(self, p, n):
+    def _paint_node(self, p, n, lit=None):
+        """`lit`, while a wire is dragged, is the set of (node id, input name or None) it may land
+        on; every other connector is dimmed."""
         box = self.box(n).adjusted(0.5, 0.5, -0.5, -0.5)
         fill = theme.layer(1) + (theme.HOVER_LIFT if n.id == self.hover else 0)
         edge = qgray(theme.HEAD) if n.id in self.selected else qgray(theme.layer(1) + theme.LINE_LIFT)
@@ -245,9 +382,10 @@ class Canvas(QWidget):
         p.drawEllipse(self.flag(n))
         unfed = self.unfed(n)
         for name, types in self.inputs(n):
-            self._paint_pin(p, self.pin_in(n, name), types, ring=theme.RED if unfed else None)
+            self._paint_pin(p, self.pin_in(n, name), types, ring=theme.RED if unfed else None,
+                            lit=None if lit is None else (n.id, name) in lit)
         if self.has_output(n):
-            self._paint_pin(p, self.pin_out(n), self.output_type(n))
+            self._paint_pin(p, self.pin_out(n), self.output_type(n), lit=None if lit is None else (n.id, None) in lit)
 
     @staticmethod
     def hairline(color, style=Qt.SolidLine):
@@ -257,19 +395,26 @@ class Canvas(QWidget):
         return pen
 
     @staticmethod
-    def _paint_pin(p, c, types, ring=None):
+    def _paint_pin(p, c, types, ring=None, lit=None):
         """A disc in the type's colour; a tuple of types is a pie, one slice each. `ring` is the
-        unfed mark, drawn around it."""
+        unfed mark, drawn around it. `lit` True adds the halo a dragged wire may land on; False
+        dims the disc; None is rest."""
         r = QRectF(c.x() - PIN_R, c.y() - PIN_R, 2 * PIN_R, 2 * PIN_R)
         types = (types,) if types is None or isinstance(types, str) else tuple(types)
         p.setPen(Qt.NoPen)
         span = 360 * 16 // len(types)
         for i, t in enumerate(types):
-            p.setBrush(type_color(t))
+            color = type_color(t)
+            if lit is False:
+                color.setAlpha(DIM)
+            p.setBrush(color)
             p.drawPie(r, 90 * 16 - i * span, -span)
-        if ring is not None:
+        p.setBrush(Qt.NoBrush)
+        if lit:
+            p.setPen(QPen(qgray(theme.HEAD), 1.5))
+            p.drawEllipse(r.adjusted(-LIT, -LIT, LIT, LIT))
+        elif ring is not None:
             p.setPen(QPen(ring, 1.5))
-            p.setBrush(Qt.NoBrush)
             p.drawEllipse(r.adjusted(-2, -2, 2, 2))
 
     # -- gestures ----------------------------------------------------------
@@ -283,6 +428,14 @@ class Canvas(QWidget):
         if e.button() != Qt.LeftButton:
             return
         pos, shift = self.to_doc(e.position()), bool(e.modifiers() & Qt.ShiftModifier)
+        if self._y:
+            self._drag, self._cut = ("cut", pos), QLineF(pos, pos)
+            return
+        pin = self.pin_at(pos)
+        if pin is not None:
+            self._begin_wire(*pin, pos)
+            self.update()
+            return
         node = self.node_at(pos)
         if node is None:
             if not shift:
@@ -314,6 +467,11 @@ class Canvas(QWidget):
             d = self.to_doc(e.position()) - start
             for nid, (x, y) in rest[0].items():
                 self.doc.node(nid).pos = (x + d.x(), y + d.y())
+            self._insert = self.insertable(self.doc.node(self.selected[0])) if len(self.selected) == 1 else None
+        elif kind == "wire":
+            self._loose = self.to_doc(e.position())
+        elif kind == "cut":
+            self._cut.setP2(self.to_doc(e.position()))
         else:
             self._box = QRectF(start, self.to_doc(e.position())).normalized()
         self.update()
@@ -322,9 +480,15 @@ class Canvas(QWidget):
         if self._drag is None or e.button() not in (Qt.LeftButton, Qt.MiddleButton):
             return
         kind, start, *rest = self._drag
+        if kind == "wire":
+            self._end_wire(self.to_doc(e.position()))
         self._drag = None
         if kind == "pan":
             self._cursor()
+        elif kind == "cut":
+            self._end_cut()
+        elif kind == "move":
+            self._end_move()
         elif kind == "box":
             shift, base = rest
             inside = [n.id for n in self.doc.nodes if self._box is not None and self._box.contains(self.box(n))]
@@ -341,13 +505,13 @@ class Canvas(QWidget):
         if self.hover is not None:
             self.hover = None
             self.update()
-        if self._space:
-            self._space = False
+        if self._space or self._y:
+            self._space = self._y = False
             self._cursor()
         super().leaveEvent(e)
 
     def _cursor(self):
-        self.setCursor(Qt.OpenHandCursor if self._space else Qt.ArrowCursor)
+        self.setCursor(Qt.OpenHandCursor if self._space else Qt.CrossCursor if self._y else Qt.ArrowCursor)
 
     def takes_keys(self):
         """A key goes to the canvas when the cursor is over it and nothing is being typed into."""
@@ -356,11 +520,15 @@ class Canvas(QWidget):
     def eventFilter(self, obj, e):
         t = e.type()
         if t in (QEvent.ShortcutOverride, QEvent.KeyPress, QEvent.KeyRelease) and self.doc is not None and self.takes_keys():
-            if e.key() == Qt.Key_Space:
+            if e.key() in (Qt.Key_Space, Qt.Key_Y):
                 if t == QEvent.ShortcutOverride:
                     e.accept()   # the window's Space would toggle play; over the canvas it is a pan modifier
                 elif not e.isAutoRepeat():
-                    self._space = t == QEvent.KeyPress
+                    held = t == QEvent.KeyPress
+                    if e.key() == Qt.Key_Space:
+                        self._space = held
+                    else:
+                        self._y = held
                     self._cursor()
                 return True
             if e.key() == Qt.Key_H and t == QEvent.KeyPress:

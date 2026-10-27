@@ -1,11 +1,12 @@
-"""Dev > Reference > Icons: every icon in the Tabler catalogue, drawn by Qt the way the window would
+"""Dev > Icon reference: every icon in the Tabler catalogue, drawn by Qt the way the window would
 draw it, with the knobs that decide how a vendored one will look: size, stroke, ink, filled.
 
 The catalogue is tabler.zip beside this file, written by build_icons.py beside it; it is not in
 the repo, so the sheet offers the download when it is missing. The sheet paints its own tiles, so five thousand icons cost one widget
 and one pixmap each per knob setting. Tabler draws its filled style as separate icons, so the filled
-knob shows those and only those. The filter matches names and Tabler's tags; a click puts the name
-on the clipboard; the tooltip is the tags.
+knob shows those and only those. The filter matches names and Tabler's tags; a click picks an icon, which
+puts its name on the clipboard and its name, tags and category in the knobs layer, so the names and
+tooltips knobs are for scanning, never needed to identify one.
 
 Two marks record Kendrick's judgement and persist in marks.json beside this file, which is in the
 repo: a double-click makes an icon a favourite (accent outline), a right-click marks it no use
@@ -21,7 +22,7 @@ from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
 
-from PySide6.QtCore import QRect, QRectF, Qt
+from PySide6.QtCore import QRect, QRectF, Qt, Signal
 from PySide6.QtGui import QColor, QPainter, QPixmap
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (QApplication, QHBoxLayout, QLineEdit, QPushButton, QScrollArea, QToolTip,
@@ -121,9 +122,12 @@ def _pixmap(svg: bytes, size: int, ratio: float) -> QPixmap:
 class Sheet(QWidget):
     """The grid, painted: only the rows in view are drawn, each icon rendered once per knob setting."""
 
+    picked = Signal(object)     # the Icon a click chose, or None when the sheet no longer shows it
+
     def __init__(self, icons: list[Icon], marks: Marks, parent=None):
         super().__init__(parent)
         self.all, self.shown, self.marks = icons, icons, marks
+        self.pick: Icon | None = None
         self.size, self.stroke, self.ink, self.filled = SIZE, STROKE, INK, False
         self.names, self.tips = False, False
         self.show = {"unmarked", "favorites"}
@@ -150,6 +154,9 @@ class Sheet(QWidget):
         self.shown = [i for i in self.all if (not q or q in i.name or any(q in t for t in i.tags))
                       and (i.filled or not self.filled)
                       and m.kind(i.name) in self.show]
+        if self.pick is not None and self.pick not in self.shown:
+            self.pick = None
+            self.picked.emit(None)
         self._relayout()
         return len(self.shown)
 
@@ -184,7 +191,7 @@ class Sheet(QWidget):
                 icon = self.shown[k]
                 box = QRect(c * tw, r * th, tw, th).adjusted(1, 1, -1, -1)
                 p.setPen(ACCENT if icon.name in m.favorites else Qt.PenStyle.NoPen)
-                p.setBrush(qgray(layer(2 if icon is under else 1)))
+                p.setBrush(qgray(layer(3 if icon is self.pick else 2 if icon is under else 1)))
                 p.drawRoundedRect(box, RADIUS, RADIUS)
                 pm = _pixmap(icon.svg(dim if icon.name in m.no_use else ink, self.stroke, self.filled), s, ratio)
                 p.drawPixmap(box.center().x() - s // 2, box.top() + 7, pm)
@@ -213,6 +220,9 @@ class Sheet(QWidget):
             self.filter(self.query)
         else:
             QApplication.clipboard().setText(icon.name)
+            self.pick = icon
+            self.picked.emit(icon)
+            self.update()
 
     def mouseDoubleClickEvent(self, e):
         icon = self._at(e.position().toPoint())
@@ -249,6 +259,10 @@ class Icons(QWidget):
         knobs.add(self.params)
         self.count = theme.readout(mono=True)
         knobs.add(self.count)
+        self.pick_name = theme.readout(mono=True)
+        self.pick_info = theme.readout()
+        knobs.add(self.pick_name)
+        knobs.add(self.pick_info)
         knobs.body.addStretch(1)
         self.note = theme.readout()
         knobs.add(self.note)
@@ -275,7 +289,7 @@ class Icons(QWidget):
         self.fetch.hide()
         self.params.setEnabled(True)
         self.setWindowTitle(f"Tabler Icons {version}")
-        self.note.setText("click copies the name; double-click marks a favourite; right-click marks no use; "
+        self.note.setText("click picks an icon and copies its name; double-click marks a favourite; right-click marks no use; "
                           "tooltips show the name and Tabler's tags; filled shows only the icons Tabler also draws filled")
         self.sheet = Sheet(icons, Marks())
         scroll = QScrollArea()
@@ -286,6 +300,7 @@ class Icons(QWidget):
         self.layout().addWidget(scroll, 1)
         self.find.textChanged.connect(self._filter)
         self.params.changed.connect(self._knobs)
+        self.sheet.picked.connect(self._picked)
         self._filter("")
         self.find.setFocus()
 
@@ -310,6 +325,20 @@ class Icons(QWidget):
     def _filter(self, text):
         self.sheet.filter(text)
         self._count()
+
+    def _picked(self, icon: Icon | None):
+        if icon is None:
+            self.pick_name.setText("")
+            self.pick_info.setText("")
+            return
+        self.pick_name.setText(icon.name)
+        lines = [f"category: {', '.join(icon.cats) or '—'}", f"tags: {', '.join(icon.tags) or '—'}"]
+        if icon.filled:
+            lines.append("has a filled style")
+        kind = self.sheet.marks.kind(icon.name)
+        if kind != "unmarked":
+            lines.append(kind)
+        self.pick_info.setText("\n".join(lines))
 
     def _count(self):
         self.count.setText(f"{len(self.sheet.shown)} of {len(self.sheet.all)}")

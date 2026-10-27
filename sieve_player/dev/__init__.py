@@ -11,8 +11,7 @@ from PySide6.QtWidgets import QMainWindow
 
 def install(window: QMainWindow) -> None:
     menu = window.menuBar().addMenu("Dev")
-    reference = menu.addMenu("Reference")
-    reference.addAction("Icons…", lambda: _show(window, "icons"))
+    menu.addAction("Icon reference…", lambda: _show(window, "icons"))
 
 
 def _show(window: QMainWindow, key: str) -> None:

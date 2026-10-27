@@ -1,5 +1,18 @@
 {
- "favorites": [],
+ "favorites": [
+  "chart-area",
+  "chart-area-line",
+  "chart-arrows",
+  "chart-arrows-vertical",
+  "chart-bar",
+  "chart-bar-off",
+  "chart-bar-popular",
+  "chart-candle",
+  "chart-scatter",
+  "checkbox",
+  "checklist",
+  "checks"
+ ],
  "no_use": [
   "brand-4chan",
   "brand-arc",

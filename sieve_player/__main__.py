@@ -11,7 +11,7 @@ def main(argv):
         print(__doc__)
         return 2
     doc, roots = argv[0], argv[1:] or ["tools"]
-    return play(doc, tools=[e.module for e in discover(*roots) if e.ok])
+    return play(doc, tools=discover(*roots))
 
 
 if __name__ == "__main__":

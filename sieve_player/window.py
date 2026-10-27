@@ -21,6 +21,7 @@ from .canvas import Canvas
 from .decoder import Decoder
 from .graph import Graph
 from .pane import Pane
+from .registry import Entry
 from .theme import GAP, PAD
 from .timeline import Timeline
 from .widgets import Trace
@@ -102,16 +103,32 @@ class Display(QWidget):
         p.restore()
 
 
+def catalogue(items):
+    """`items` are tool modules or registry entries. Returns (modules, name to module, name to
+    error): the tools, the catalogue the document's names index, and the tools the registry listed
+    but could not import, which the canvas's menu shows greyed."""
+    modules, broken = [], {}
+    for t in items:
+        if isinstance(t, Entry):
+            if t.ok:
+                modules.append(t.module)
+            else:
+                broken[t.name] = t.error
+        else:
+            modules.append(t)
+    return modules, {t.NAME: t for t in modules}, broken
+
+
 class PlayerWindow(QMainWindow):
     def __init__(self, source, title="SIEVE", tools=()):
-        """`source` is a list of tool modules, which become the document and the catalogue, or the
-        path of a saved document, opened against the catalogue `tools`."""
+        """`source` is a list of tools, which become the document and the catalogue, or the path of
+        a saved document, opened against the catalogue `tools`. Either list holds tool modules or
+        registry entries; see `catalogue`."""
         super().__init__()
         self.title = title
         self.setStyleSheet(theme.sheet())
         from_file = isinstance(source, (str, os.PathLike))
-        modules = list(tools) if from_file else list(source)
-        self.tools = {t.NAME: t for t in modules}
+        modules, self.tools, broken = catalogue(tools if from_file else source)
         self.doc = None
         self.decoder = self.graph = self.worker = None
         self.fps, self.count = 30.0, 0
@@ -122,7 +139,7 @@ class PlayerWindow(QMainWindow):
         self._hooked = set()   # ids of traces already wired to the strip's cursor
 
         self.display = Display()
-        self.canvas = Canvas(self.tools)
+        self.canvas = Canvas(self.tools, broken)
         self.pane = Pane(self.tools)
         self.timeline = Timeline()
         self.canvas.selectionChanged.connect(lambda ids: self.pane.select(ids[-1] if ids else None))

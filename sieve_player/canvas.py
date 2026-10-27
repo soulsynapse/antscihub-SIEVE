@@ -1,10 +1,13 @@
-"""The network editor. `spec/canvas.md` is the spec; this is its Nodes, Navigation and Wires share:
-a node one layer above the ground with its connectors and its display flag, select, box-select,
-drag, Delete, the mark on a node whose tool was not found and on an input nothing feeds; pan, zoom
-about the cursor, H to frame; wires dragged from either end, picked up, cut with Y, and a node
-dropped onto a wire inserted in it. It reads and writes the document and nothing else. The tools'
-declared types reach it as data, for the connectors' colours, the unfed mark and which connectors a
-dragged wire may land on; what the runtime makes of the graph never does.
+"""The network editor. `spec/canvas.md` is the spec: a node one layer above the ground with its
+connectors and its display flag, select, box-select, drag, Delete, the mark on a node whose tool was
+not found and on an input nothing feeds; pan, zoom about the cursor, H to frame; wires dragged from
+either end, picked up, cut with Y, and a node dropped onto a wire inserted in it; Tab for the menu
+that places a tool, which a wire grown into empty canvas also opens, filtered to what the wire may
+feed or be fed by. It reads and writes the document and nothing else. The tools' declared types
+reach it as data, for the connectors' colours, the unfed mark, which connectors a dragged wire may
+land on and which tools the menu offers it; what the runtime makes of the graph never does. A tool
+the registry listed but could not import reaches it as its name and the error, for the menu to
+show greyed.
 
 Geometry is in document space; the view is a pan and a zoom applied to the painter, never written
 to the document. A key pressed with the cursor over the canvas is the canvas's, as in Houdini's
@@ -18,13 +21,13 @@ connectors are refused; a longer cycle is the document's to report and the runti
 import zlib
 
 from PySide6.QtCore import QCoreApplication, QEvent, QLineF, QPointF, QRectF, Qt, Signal
-from PySide6.QtGui import QColor, QPainter, QPainterPath, QPen
-from PySide6.QtWidgets import (QAbstractSpinBox, QApplication, QLineEdit, QPlainTextEdit, QSizePolicy, QTextEdit,
-                               QToolTip, QWidget)
+from PySide6.QtGui import QColor, QCursor, QPainter, QPainterPath, QPen
+from PySide6.QtWidgets import (QAbstractSpinBox, QApplication, QLineEdit, QListWidget, QListWidgetItem,
+                               QPlainTextEdit, QSizePolicy, QTextEdit, QToolTip, QWidget)
 
 from . import theme
 from .document import INPUT, VIDEO_PRODUCES, VIDEO_TOOL, expects, fed, fits, produces
-from .theme import PAD, qgray
+from .theme import GAP, PAD, qgray
 
 NODE_W, NODE_H = 140, 28   # a node's box, canvas px
 FLAG_R = 5                 # the display flag: a disc at the node's right end
@@ -38,6 +41,8 @@ DIM = 70                   # alpha of a connector it may not
 ZOOM_MIN, ZOOM_MAX = 0.25, 4.0
 ZOOM_STEP = 1.15           # per wheel notch
 FRAME_PAD = 2 * PAD        # view px kept clear around what H frames
+MENU_W = 200               # the Tab menu's width, view px
+MENU_ROWS = 10             # the most tools the Tab menu shows before it scrolls
 TYPING = (QLineEdit, QAbstractSpinBox, QTextEdit, QPlainTextEdit)   # focus here keeps its keys
 
 
@@ -54,14 +59,97 @@ def type_color(t):
     return QColor.fromHsv(h, *theme.TYPE_SV)
 
 
+class TabMenu(theme.Layer):
+    """Houdini's Tab menu: a filter line over the tools, at the cursor. `entries` is [(name, error)],
+    error "" for a tool that imported; one that did not is greyed, says its error on hover and
+    cannot be chosen. `chosen` carries the name; `closed` follows every way out."""
+    chosen = Signal(str)
+    closed = Signal()
+
+    def __init__(self, entries, parent):
+        super().__init__(2, "", parent)
+        self.entries = entries
+        self.setFixedWidth(MENU_W)
+        self.setStyleSheet(f"""
+            QListWidget {{ background: transparent; border: none; outline: none; }}
+            QListWidget::item {{ padding: 2px 6px; border-radius: {theme.RADIUS}px; }}
+            QListWidget::item:selected {{ background: {theme.gray(theme.layer(3))}; }}
+            """)
+        self.edit = QLineEdit()
+        self.edit.setPlaceholderText("tool")
+        self.edit.setFixedHeight(theme.ROW_H)
+        self.edit.installEventFilter(self)
+        self.list = QListWidget()
+        self.list.setFocusPolicy(Qt.NoFocus)
+        self.list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.list.setMouseTracking(True)
+        self.body.setSpacing(GAP // 2)
+        self.add(self.edit)
+        self.add(self.list)
+        self.edit.textChanged.connect(self.refill)
+        self.list.itemClicked.connect(self._pick)
+        self.refill("")
+
+    def refill(self, text):
+        text = text.strip().lower()
+        self.list.clear()
+        for name, err in self.entries:
+            if text not in name.lower():
+                continue
+            item = QListWidgetItem(name)
+            if err:
+                item.setFlags(Qt.NoItemFlags)
+                item.setForeground(qgray(theme.INK_2 - 50))
+                item.setToolTip(err)
+            self.list.addItem(item)
+        for i in range(self.list.count()):
+            if self.list.item(i).flags() & Qt.ItemIsEnabled:
+                self.list.setCurrentRow(i)
+                break
+        rows = max(1, min(MENU_ROWS, self.list.count()))
+        self.list.setFixedHeight(rows * self.list.sizeHintForRow(0) + 2 if self.list.count() else theme.ROW_H)
+        self.adjustSize()
+
+    def _step(self, d):
+        rows = [i for i in range(self.list.count()) if self.list.item(i).flags() & Qt.ItemIsEnabled]
+        if not rows:
+            return
+        cur = self.list.currentRow()
+        at = rows.index(cur) if cur in rows else -1
+        self.list.setCurrentRow(rows[max(0, min(len(rows) - 1, at + d))])
+
+    def _pick(self, item):
+        if item is not None and item.flags() & Qt.ItemIsEnabled:
+            self.chosen.emit(item.text())
+            self.closed.emit()
+
+    def eventFilter(self, obj, e):
+        if obj is self.edit and e.type() == QEvent.KeyPress:
+            k = e.key()
+            if k == Qt.Key_Escape:
+                self.closed.emit()
+            elif k in (Qt.Key_Return, Qt.Key_Enter):
+                self._pick(self.list.currentItem())
+            elif k in (Qt.Key_Up, Qt.Key_Down):
+                self._step(-1 if k == Qt.Key_Up else 1)
+            elif k in (Qt.Key_Tab, Qt.Key_Backtab):
+                pass   # the key that opened it does nothing inside it
+            else:
+                return False
+            return True
+        return super().eventFilter(obj, e)
+
+
 class Canvas(QWidget):
-    """`tools` is the catalogue, name to module; the document's node names index it."""
+    """`tools` is the catalogue, name to module; the document's node names index it. `broken` is
+    name to error for every tool the registry listed but could not import."""
     selectionChanged = Signal(list)   # the selected node ids, in selection order
     changed = Signal()                # the document's nodes, wires or flag changed here
 
-    def __init__(self, tools, parent=None):
+    def __init__(self, tools, broken=None, parent=None):
         super().__init__(parent)
         self.tools = tools
+        self.broken = dict(broken or {})
         self.doc = None
         self.selected = []
         self.hover = None                       # the node id under the pointer
@@ -74,6 +162,9 @@ class Canvas(QWidget):
         self._wires0 = None                     # the document's wires when a wire drag began
         self._cut = None                        # the cut line, while one is drawn, document space
         self._insert = None                     # the wire the single node being moved would drop into
+        self._pending = None                    # (end, id, input) of a wire grown into space, while the menu
+                                                # it opened is up; the loose end stays drawn at the menu
+        self._menu = None                       # the Tab menu, while one is open
         self._y = False                         # Y is held with the cursor here
         self.pan = QPointF(2 * PAD, 2 * PAD)    # where the document's (0, 0) sits, view px
         self.zoom = 1.0
@@ -85,6 +176,7 @@ class Canvas(QWidget):
         QCoreApplication.instance().installEventFilter(self)
 
     def set_document(self, doc):
+        self.close_menu()
         self.doc = doc
         self.hover = self._drag = self._box = self._loose = self._cut = self._insert = None
         self.select([])
@@ -298,6 +390,11 @@ class Canvas(QWidget):
                 self.doc.connect(nid, pin[0].id, pin[1])
             else:
                 self.doc.connect(pin[0].id, nid, name)
+        elif self.doc.wires == self._wires0 and self.node_at(pos) is None:
+            # grown, not picked up, and let go in space: the menu offers what it may join to
+            self._pending, self._wires0 = (end, nid, name), None
+            self.open_menu(self.to_view(pos))
+            return
         changed = self.doc.wires != self._wires0
         self._loose = self._wires0 = None
         self.update()
@@ -322,6 +419,73 @@ class Canvas(QWidget):
             self.changed.emit()
         self.update()
 
+    # -- the Tab menu --------------------------------------------------------
+    def menu_entries(self):
+        """[(name, error)] the menu offers, by name: every tool, or with a wire pending, those its
+        loose end may join; a tool that did not import is offered greyed either way, since what it
+        expects is unknown."""
+        out = []
+        for name in sorted(set(self.tools) | set(self.broken)):
+            if name not in self.tools:
+                out.append((name, self.broken[name]))
+            elif self._pending is None or self._joins(self.tools[name]):
+                out.append((name, ""))
+        return out
+
+    def _joins(self, tool):
+        """Whether a fresh node of `tool` may take the pending wire."""
+        end, nid, name = self._pending
+        node = self.doc.node(nid)
+        if end == "out":
+            return self.compatible(self.output_type(node), expects(tool))
+        p = getattr(tool, "PRODUCES", None)
+        return p is not None and self.compatible(None if p == "same" else p, dict(self.inputs(node))[name])
+
+    def open_menu(self, at):
+        """The Tab menu at view point `at`, kept inside the canvas."""
+        if self._menu is not None:
+            self.close_menu()
+        self._menu = TabMenu(self.menu_entries(), self)
+        self._menu.chosen.connect(lambda name: self.place(name, self.to_doc(at)))
+        self._menu.closed.connect(self.close_menu)
+        self._menu.adjustSize()
+        x = max(0, min(self.width() - self._menu.width(), int(at.x())))
+        y = max(0, min(self.height() - self._menu.height(), int(at.y())))
+        self._menu.move(x, y)
+        self._menu.show()
+        self._menu.edit.setFocus()
+        self.update()
+
+    def close_menu(self):
+        """Closes the menu if one is open; a wire pending on it is let go."""
+        if self._menu is not None:
+            menu, self._menu = self._menu, None
+            menu.hide()
+            menu.setParent(None)
+            menu.deleteLater()
+            self.setFocus()
+        self._pending = self._loose = None
+        self.update()
+
+    def place(self, name, pos):
+        """A new node of tool `name` centred on document point `pos`; with a wire pending, the node
+        sits so the connector the wire reaches is at `pos`, and the wire is made."""
+        tool = self.tools[name]
+        pending, self._pending = self._pending, None
+        x, y = pos.x() - NODE_W / 2, pos.y() - NODE_H / 2
+        if pending is not None:
+            y = pos.y() if pending[0] == "out" else pos.y() - NODE_H
+        node = self.doc.add_node(name, (x, y), getattr(tool, "DEFAULTS", {}))
+        if pending is not None:
+            end, nid, iname = pending
+            if end == "out":
+                self.doc.connect(nid, node.id)
+            else:
+                self.doc.connect(node.id, nid, iname)
+        self.changed.emit()
+        self.select([node.id])
+        return node
+
     # -- painting ----------------------------------------------------------
     def paintEvent(self, _):
         p = QPainter(self)
@@ -342,12 +506,12 @@ class Canvas(QWidget):
                 p.setPen(QPen(theme.ACCENT if ok else theme.RED, WIRE_W))
             p.drawPath(self.path_of(w))
         if self._loose is not None:
-            _, end, nid, name = self._drag
+            end, nid, name = self._pending or self._drag[1:]
             node = self.doc.node(nid)
             p.setPen(QPen(theme.ACCENT, WIRE_W))
             p.drawPath(self.wire_path(self.pin_out(node), self._loose) if end == "out"
                        else self.wire_path(self._loose, self.pin_in(node, name)))
-        lit = {(n.id, name) for n, name in self.targets()} if self._loose is not None else None
+        lit = {(n.id, name) for n, name in self.targets()} if self._drag and self._drag[0] == "wire" else None
         for n in self.doc.nodes:
             self._paint_node(p, n, lit)
         if self._box is not None:
@@ -420,6 +584,9 @@ class Canvas(QWidget):
     # -- gestures ----------------------------------------------------------
     def mousePressEvent(self, e):
         if self.doc is None or self._drag is not None:
+            return
+        if self._menu is not None:
+            self.close_menu()   # a click anywhere else is the way out, and does nothing more
             return
         if e.button() == Qt.MiddleButton or (e.button() == Qt.LeftButton and self._space):
             self._drag = ("pan", e.position(), QPointF(self.pan))
@@ -533,6 +700,9 @@ class Canvas(QWidget):
                 return True
             if e.key() == Qt.Key_H and t == QEvent.KeyPress:
                 self.frame(self.selected)
+                return True
+            if e.key() == Qt.Key_Tab and t == QEvent.KeyPress and self._menu is None:
+                self.open_menu(QPointF(self.mapFromGlobal(QCursor.pos())))
                 return True
         return super().eventFilter(obj, e)
 

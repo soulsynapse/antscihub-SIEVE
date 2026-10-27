@@ -22,8 +22,9 @@ def __getattr__(name):
 
 
 def play(source, path=None, title="SIEVE", tools=()):
-    """Open the player. `source` is a list of tool modules, or the path of a saved document, which
-    is opened against `tools`, the modules its nodes may name. With a video `path` it loads it;
+    """Open the player. `source` is a list of tools, or the path of a saved document, which is
+    opened against `tools`, the tools its nodes may name. A tool is its module, or the registry's
+    entry for it, so one that failed to import is still listed. With a video `path` it loads it;
     without, it opens on whatever the document names, or empty, and never prompts."""
     if sys.platform == "win32":
         # DirectWrite ignores the hinting preference and draws ClearType colour fringes on a dark

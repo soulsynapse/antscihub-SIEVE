@@ -1,17 +1,16 @@
-"""Write lucide-icons.html: every icon in a Lucide release, drawn the way sieve_player draws its glyphs.
+"""Fetch a Lucide release into lucide.zip beside this file, and write lucide-icons.html from it.
 
 Lucide is the line-icon set SIEVE vendors from (sieve_player/glyphs, and src/sieve/gui/icons/lucide on
-v4). This page is the catalogue to pick from: one tile per icon, tinted to the theme's inks on the
-theme's ground, searchable by name and by Lucide's own tags. Run with a release tag to rebuild:
+v4). lucide.zip is the catalogue the window's Dev > Reference > Icons sheet scrolls
+(sieve_player/dev/reference/icons.py); the html is the same catalogue for a browser: one tile per
+icon, tinted to the theme's inks on the theme's ground, searchable by name and by Lucide's own tags.
+Rebuild both with a release tag; with no tag, the html is rebuilt from the zip already here:
 
-    python -X utf8 mock-up/reference/build_icons.py 1.61.0
-
-The release zip is fetched from GitHub into a temp folder; nothing but the html lands here.
+    .venv/Scripts/python -X utf8 mock-up/reference/build_icons.py 1.61.0
 """
 from __future__ import annotations
 
 import io
-import json
 import sys
 import urllib.request
 import zipfile
@@ -19,13 +18,13 @@ from html import escape
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from sieve_player.theme import ACCENT, GROUND, HEAD, INK, INK_2, STEP, FONT_PX  # noqa: E402
+from sieve_player.dev.reference.icons import STROKE, read_icons  # noqa: E402
+from sieve_player.theme import ACCENT, FONT_PX, GROUND, HEAD, INK, INK_2, STEP  # noqa: E402
 
 HERE = Path(__file__).parent
-OUT = HERE / "lucide-icons.html"
-ZIP = "https://github.com/lucide-icons/lucide/releases/download/{v}/lucide-icons-{v}.zip"
+ZIP, OUT = HERE / "lucide.zip", HERE / "lucide-icons.html"
+RELEASE = "https://github.com/lucide-icons/lucide/releases/download/{v}/lucide-icons-{v}.zip"
 LICENSE = "https://raw.githubusercontent.com/lucide-icons/lucide/{v}/LICENSE"
-STROKE = 2.25   # Lucide's 2 reads thin at 16px; v4's icons module widened it to this
 
 
 def fetch(url: str) -> bytes:
@@ -33,33 +32,26 @@ def fetch(url: str) -> bytes:
         return r.read()
 
 
-def build(version: str) -> None:
-    z = zipfile.ZipFile(io.BytesIO(fetch(ZIP.format(v=version))))
-    icons: dict[str, dict] = {}
-    for info in z.infolist():
-        p = Path(info.filename)
-        if p.suffix == ".svg":
-            icons.setdefault(p.stem, {})["svg"] = z.read(info).decode("utf-8")
-        elif p.suffix == ".json" and p.stem in icons or p.suffix == ".json":
-            meta = json.loads(z.read(info))
-            icons.setdefault(p.stem, {})["tags"] = meta.get("tags", [])
-            icons[p.stem]["cats"] = meta.get("categories", [])
-    icons = {k: v for k, v in sorted(icons.items()) if "svg" in v}
-    try:
-        licence = fetch(LICENSE.format(v=version)).decode("utf-8")
-    except Exception:  # a tag without the file at that path; the ISC text is in every release
-        licence = "ISC License — see https://github.com/lucide-icons/lucide/blob/main/LICENSE"
+def download(version: str) -> None:
+    """lucide.zip: the release's icons/ folder, its LICENSE, and a VERSION file naming the tag."""
+    src = zipfile.ZipFile(io.BytesIO(fetch(RELEASE.format(v=version))))
+    with zipfile.ZipFile(ZIP, "w", zipfile.ZIP_DEFLATED) as dst:
+        for info in src.infolist():
+            if info.filename.startswith("icons/") and info.filename.endswith((".svg", ".json")):
+                dst.writestr(info.filename, src.read(info))
+        dst.writestr("LICENSE", fetch(LICENSE.format(v=version)))
+        dst.writestr("VERSION", version)
 
-    cats = sorted({c for v in icons.values() for c in v.get("cats", [])})
+
+def build() -> None:
+    icons, version, licence = read_icons(ZIP)
+    cats = sorted({c for i in icons for c in i.cats})
     tiles = []
-    for name, v in icons.items():
-        body = v["svg"].split(">", 1)[1].rsplit("</svg>", 1)[0].strip()
-        body = " ".join(body.split())
-        tags = " ".join(v.get("tags", []))
+    for i in icons:
         tiles.append(
-            f'<figure data-n="{name}" data-t="{escape(tags)}" data-c="{escape(" ".join(v.get("cats", [])))}" '
-            f'title="{escape(name)}\n{escape(", ".join(v.get("tags", [])))}">'
-            f'<svg viewBox="0 0 24 24">{body}</svg><figcaption>{name}</figcaption></figure>'
+            f'<figure data-n="{i.name}" data-t="{escape(" ".join(i.tags))}" data-c="{escape(" ".join(i.cats))}" '
+            f'title="{escape(i.name)}\n{escape(", ".join(i.tags))}">'
+            f'<svg viewBox="0 0 24 24">{i.body}</svg><figcaption>{i.name}</figcaption></figure>'
         )
 
     g = lambda n: f"rgb({n},{n},{n})"
@@ -95,7 +87,7 @@ footer {{ padding:16px 24px 32px; color:var(--ink2); white-space:pre-wrap; font-
 </header>
 <main>{"".join(tiles)}</main>
 <footer>Stroke shown at {STROKE} (Lucide ships 2; too thin at 16px). Inks and grays come from sieve_player/theme.py at build time.
-Rebuild: python -X utf8 mock-up/reference/build_icons.py &lt;release&gt;
+Rebuild: python -X utf8 mock-up/reference/build_icons.py [release]
 
 {escape(licence)}</footer>
 <script>
@@ -115,8 +107,10 @@ document.getElementById('ink').onchange=e=>document.documentElement.style.setPro
 for (const f of tiles) f.onclick=()=>{{ navigator.clipboard.writeText(f.dataset.n); f.classList.add('copied'); setTimeout(()=>f.classList.remove('copied'), 600); }};
 </script></body></html>"""
     OUT.write_text(html, encoding="utf-8")
-    print(f"{OUT}: {len(icons)} icons, {OUT.stat().st_size // 1024} KB")
+    print(f"{OUT.name}: Lucide {version}, {len(icons)} icons, {OUT.stat().st_size // 1024} KB")
 
 
 if __name__ == "__main__":
-    build(sys.argv[1] if len(sys.argv) > 1 else "1.61.0")
+    if len(sys.argv) > 1:
+        download(sys.argv[1])
+    build()

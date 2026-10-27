@@ -10,7 +10,7 @@ requires-python = ">=3.11"
 dependencies = ["PySide6", "opencv-python-headless", "numpy"]
 
 [tool.setuptools]
-packages = ["sieve_player", "sieve_player.registry"]
+packages = ["sieve_player", "sieve_player.registry", "sieve_player.dev", "sieve_player.dev.reference"]
 
 [tool.setuptools.package-data]
 sieve_player = ["fonts/*", "glyphs/*"]

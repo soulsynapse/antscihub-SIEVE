@@ -16,7 +16,7 @@ from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QImage, QKeySequence, QPainter, QPen, QPixmap, QShortcut
 from PySide6.QtWidgets import QFileDialog, QMainWindow, QSizePolicy, QVBoxLayout, QWidget
 
-from . import document, theme
+from . import dev, document, theme
 from .canvas import Canvas
 from .decoder import Decoder
 from .graph import Graph
@@ -191,6 +191,7 @@ class PlayerWindow(QMainWindow):
         menu.addAction("Open…", QKeySequence.Open, self._open_dialog)
         menu.addAction("Save", QKeySequence.Save, self.save_document)
         menu.addAction("Save As…", QKeySequence.SaveAs, self._save_as)
+        dev.install(self)
 
         st, ct = self.timeline.strip, self.timeline.controls
         st.pressed.connect(self._scrub_begin)

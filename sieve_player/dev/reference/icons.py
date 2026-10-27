@@ -25,9 +25,9 @@ from ...theme import GAP, HEAD, INK, INK_2, PAD, RADIUS, layer, qgray
 from ...widgets import ParamWidget
 
 ZIP = Path(__file__).resolve().parents[3] / "mock-up" / "reference" / "lucide.zip"
-SIZE = 16       # the icon beside 12px text; Lucide's box is 24
+SIZE = 20       # the sheet opens at this; the window's glyphs sit at 16 beside 12px text
 STROKE = 2.25   # Lucide ships 2, which reads thin at SIZE; widened here, never in the files
-TILE_W = 128
+TILE_W = 128    # a tile with its name under the icon; nameless tiles are square
 
 
 @dataclass
@@ -85,15 +85,20 @@ class Sheet(QWidget):
         super().__init__(parent)
         self.all, self.shown = icons, icons
         self.size, self.stroke, self.ink, self.filled = SIZE, STROKE, INK, False
+        self.names, self.tips = False, False
         self.cols = 1
         self.setMouseTracking(True)
         self.setMinimumWidth(TILE_W)
 
-    def tile_h(self) -> int:
-        return self.size + 32
+    def tile_w(self) -> int:
+        return TILE_W if self.names else self.size + 16
 
-    def set_knobs(self, size: int, stroke: float, ink: int, filled: bool) -> None:
+    def tile_h(self) -> int:
+        return self.size + (32 if self.names else 16)
+
+    def set_knobs(self, size: int, stroke: float, ink: int, filled: bool, names: bool, tips: bool) -> None:
         self.size, self.stroke, self.ink, self.filled = size, stroke, ink, filled
+        self.names, self.tips = names, tips
         self._relayout()
 
     def filter(self, text: str) -> int:
@@ -107,13 +112,13 @@ class Sheet(QWidget):
         self._relayout()
 
     def _relayout(self):
-        self.cols = max(1, self.width() // TILE_W)
+        self.cols = max(1, self.width() // self.tile_w())
         rows = math.ceil(len(self.shown) / self.cols)
         self.setMinimumHeight(rows * self.tile_h())
         self.update()
 
     def _at(self, pos) -> Icon | None:
-        c, r = pos.x() // TILE_W, pos.y() // self.tile_h()
+        c, r = pos.x() // self.tile_w(), pos.y() // self.tile_h()
         k = r * self.cols + c
         return self.shown[k] if c < self.cols and 0 <= k < len(self.shown) else None
 
@@ -121,7 +126,7 @@ class Sheet(QWidget):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         p.setFont(theme.mono_font())
-        ratio, th, s = self.devicePixelRatioF(), self.tile_h(), self.size
+        ratio, tw, th, s = self.devicePixelRatioF(), self.tile_w(), self.tile_h(), self.size
         ink, under = qgray(self.ink), self._at(self.mapFromGlobal(self.cursor().pos()))
         clip = e.rect()
         for r in range(clip.top() // th, clip.bottom() // th + 1):
@@ -130,20 +135,22 @@ class Sheet(QWidget):
                 if k >= len(self.shown):
                     break
                 icon = self.shown[k]
-                box = QRect(c * TILE_W, r * th, TILE_W, th).adjusted(1, 1, -1, -1)
+                box = QRect(c * tw, r * th, tw, th).adjusted(1, 1, -1, -1)
                 p.setPen(Qt.PenStyle.NoPen)
                 p.setBrush(qgray(layer(2 if icon is under else 1)))
                 p.drawRoundedRect(box, RADIUS, RADIUS)
                 pm = _pixmap(icon.svg(ink, self.stroke, self.filled), s, ratio)
                 p.drawPixmap(box.center().x() - s // 2, box.top() + 7, pm)
-                p.setPen(qgray(INK_2))
-                name = p.fontMetrics().elidedText(icon.name, Qt.TextElideMode.ElideMiddle, box.width() - 6)
-                p.drawText(box.adjusted(3, s + 9, -3, -3), Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop, name)
+                if self.names:
+                    p.setPen(qgray(INK_2))
+                    name = p.fontMetrics().elidedText(icon.name, Qt.TextElideMode.ElideMiddle, box.width() - 6)
+                    p.drawText(box.adjusted(3, s + 9, -3, -3), Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop, name)
         p.end()
 
     def mouseMoveEvent(self, e):
         icon = self._at(e.position().toPoint())
-        QToolTip.showText(e.globalPosition().toPoint(), f"{icon.name}\n{', '.join(icon.tags)}" if icon else "", self)
+        if self.tips:
+            QToolTip.showText(e.globalPosition().toPoint(), f"{icon.name}\n{', '.join(icon.tags)}" if icon else "", self)
         self.update()
 
     def leaveEvent(self, e):
@@ -177,6 +184,8 @@ class Icons(QWidget):
         self.params.add_float("stroke", 1.0, 4.0, STROKE, decimals=2)
         self.params.add_int("ink", INK_2 - 60, HEAD, INK)
         self.params.add_bool("filled", False)
+        self.params.add_bool("names", False)
+        self.params.add_bool("tooltips", False)
         knobs.add(self.params)
         self.count = theme.readout(mono=True)
         knobs.add(self.count)
@@ -194,7 +203,7 @@ class Icons(QWidget):
             self.params.setEnabled(False)
             return
         self.setWindowTitle(f"Lucide {version}")
-        self.note.setText("click a tile to copy its name; the tooltip is Lucide's tags")
+        self.note.setText("click a tile to copy its name; tooltips show the name and Lucide's tags")
         self.sheet = Sheet(icons)
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -209,7 +218,8 @@ class Icons(QWidget):
 
     def _knobs(self):
         p = self.params.params()
-        self.sheet.set_knobs(int(p["size"]), float(p["stroke"]), int(p["ink"]), bool(p["filled"]))
+        self.sheet.set_knobs(int(p["size"]), float(p["stroke"]), int(p["ink"]), bool(p["filled"]),
+                             bool(p["names"]), bool(p["tooltips"]))
 
     def _filter(self, text):
         n = self.sheet.filter(text)

@@ -38,7 +38,7 @@ A **frame tool** maps one row to one array:
 NAME = "threshold"; KIND = "frame"; EXPECTS = "gray"; PRODUCES = "gray"
 DEFAULTS = {...}                              # plain JSON-able dict
 def run(frames, row, params) -> np.ndarray    # frames(r) is the upstream output at row r
-def settings(parent=None) -> QWidget          # has .changed (Signal) and .params() -> dict
+def settings(parent=None) -> ParamWidget     # or any widget with .changed, .params() and .set_params()
 ```
 
 A **series tool** sees the whole loop window at once, and at most one runs (see `spec/graph.md`):
@@ -46,7 +46,7 @@ A **series tool** sees the whole loop window at once, and at most one runs (see 
 ```python
 KIND = "series"; EXPECTS = "gray"
 def run(series, params) -> dict               # series.data is (T, ...), the upstream outputs stacked
-def settings(parent=None) -> QWidget          # .changed, .params(), .show_result(result, start, fps), .set_playhead(row)
+def settings(parent=None) -> ParamWidget     # plus .show_result(result, start, fps) and .set_playhead(row)
 ```
 
 `frames.key` / `series.key` names the input and changes whenever anything upstream changes;
@@ -64,8 +64,13 @@ that caches must key on `frames.key` (or `series.key`) and on every one of its o
 `"gate"` bool array in a series result is drawn on the frame as a red border while the playhead is
 inside a gated row. `run` must need only cv2 and numpy: import Qt and `sieve_player` inside
 `settings()` (and inside the `__main__` block), never at module top, so a batch script can import
-the tool on a machine with neither installed. `sieve_player.ParamWidget` is an optional base for
-`settings()` with `add_int` / `add_float` / `add_bool`; `tools/` holds the examples.
+the tool on a machine with neither installed. `settings()` returns a `sieve_player.ParamWidget`,
+built with `add_int` / `add_float` / `add_bool`, or a subclass that adds non-param UI (a trace, a
+Load button that moves the knobs); `tools/` holds the examples. The document owns the values and
+the widget only shows them: the pane moves its knobs to the stored params on load and writes
+`params()` back as the whole set on every change, so a param a tool no longer declares leaves the
+document the first time a knob moves, and a widget that cannot be told the stored values is shown
+as a defect rather than as its own defaults.
 
 Any tool may draw on the frame by defining `draw(painter, row, result, start)`. The player calls
 it after painting the frame and the gate border, with a `QPainter` whose coordinates are the

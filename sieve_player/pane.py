@@ -1,7 +1,10 @@
 """The parameter pane: the selected node's settings. `spec/window.md` (Parameter pane) is the spec.
 
 One surface per node, built once per document and shown one at a time: the widget the tool's
-`settings()` returns, with its knobs moved to the node's params. Two parts are SIEVE's own. The
+`settings()` returns, with its knobs moved to the node's params. The document is the store and the
+widget a view over it, as a Houdini parameter pane is over its node: the widget must take the
+stored values (`set_params`) and its knobs are the node's whole param set, so a tool whose
+`settings()` returns anything less is shown as a defect, not as its own defaults. Two parts are SIEVE's own. The
 video node's is a picker, the chosen path and what cv2 says about the file. Under a tool that
 exports sits the target it would write, an Export button that runs the tool's argv in a QProcess,
 and the process's last line; a tool takes part by defining `output_name(src, params) -> path` and
@@ -253,12 +256,19 @@ class Pane(QWidget):
         else:
             tool = self.tools[node.tool]
             w = tool.settings()
-            if hasattr(w, "set_params"):
-                w.set_params(node.params)
-            w.changed.connect(lambda nid=node.id: self._changed(nid))
-            card.add(w)
-            self.widgets[node.id] = w
-            if getattr(tool, "export_command", None) is not None:
+            if not all(hasattr(w, a) for a in ("changed", "params", "set_params")):
+                # the document is the store and the widget a view over it; one that cannot be told
+                # the stored values would show its own, so it is not shown at all
+                card.add(readout(f"{node.tool}.settings() must return a ParamWidget (or one with "
+                                 f"changed, params() and set_params()); got {type(w).__name__}"))
+                w.deleteLater()
+                w = None
+            else:
+                w.set_params(node.params)     # before changed is connected: moving the knobs is not a change
+                w.changed.connect(lambda nid=node.id: self._changed(nid))
+                card.add(w)
+                self.widgets[node.id] = w
+            if w is not None and getattr(tool, "export_command", None) is not None:
                 ex = Export(tool)
                 ex.set_params(node.params)
                 ex.set_source(self._src, self._fps)
@@ -270,7 +280,7 @@ class Pane(QWidget):
 
     def _changed(self, nid):
         node = self.doc.node(nid)
-        node.params = {**node.params, **self.widgets[nid].params()}
+        node.params = self.widgets[nid].params()   # the knobs are the whole set; a param a tool dropped goes with it
         if nid in self.exports:
             self.exports[nid].set_params(node.params)
         self.paramsChanged.emit(nid)

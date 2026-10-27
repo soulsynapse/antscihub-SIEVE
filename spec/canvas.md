@@ -30,11 +30,11 @@ Assumes: Window shell.
   Check: Kendrick opens a document naming a missing tool.
 - [x] A node whose input is unfed is marked, and the mark follows the wiring at once.
   Check: Kendrick unwires and rewires.
-- [ ] The video node shows one input connector, of type `"path"`, and is not marked unfed while
+- [x] The video node shows one input connector, of type `"path"`, and is not marked unfed while
   nothing is wired to it. A selector node shows no input and one output of that type, and the
   type has a colour of its own.
   Check: a test reads the canvas's inputs on the video node and on a selector; Kendrick hovers.
-- [ ] A node with path inputs shows them as further connectors along its top edge after the
+- [x] A node with path inputs shows them as further connectors along its top edge after the
   frame input, and only the frame input carries the unfed ring. A wire let go in space from a
   `"path"` output offers such tools in the menu and lands on their path input.
   Check: a test reads the pins and places from a pending path wire; Kendrick wires file into inrange.
@@ -93,7 +93,7 @@ Assumes: Wires.
   the chosen tool as a new node at the cursor; Escape closes it with nothing placed. A right-click
   on a node, connector or wire does nothing.
   Check: Kendrick places a node each way.
-- [ ] Releasing a wire grown into empty canvas opens the same menu, filtered to what the loose
+- [x] Releasing a wire grown into empty canvas opens the same menu, filtered to what the loose
   end may join: grown from an output, the tools with an input that takes what it hands out; grown
   from an unfed input, the tools that produce what it expects. A pass-through produces what it
   expects and nothing else, so from an input end it is offered only where those overlap, never on
@@ -113,7 +113,7 @@ Assumes: Wires.
 
 Assumes: Tab menu.
 
-- [ ] A column of small buttons sits at the canvas's top right, one per key that is an action:
+- [x] A column of small buttons sits at the canvas's top right, one per key that is an action:
   frame (H), the Tab menu (Tab), delete (Delete); none for Space or Y, which are held. Each says
   its key on hover, and one with nothing to do is drawn dim.
   Check: Kendrick looks and hovers.

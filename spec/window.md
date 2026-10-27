@@ -54,20 +54,20 @@ Assumes: Window shell.
   pane; it shows nothing once that node is deleted. Selection, not the display flag, drives the
   pane, so a node upstream can be tuned while a node downstream is on the frame.
   Check: Kendrick selects a node other than the flagged one.
-- [ ] A change in the pane reaches the runtime at once, as a knob did in the card.
+- [x] A change in the pane reaches the runtime at once, as a knob did in the card.
   Check: Kendrick drags a dummy's control with the frame on that node.
-- [ ] A series node's pane shows its trace, with the shared cursor and playhead as the card did.
+- [x] A series node's pane shows its trace, with the shared cursor and playhead as the card did.
   Check: Kendrick hovers the trace and the strip.
-- [ ] A node whose tool exports shows its export target and button in the pane, as Outputs did.
+- [x] A node whose tool exports shows its export target and button in the pane, as Outputs did.
   Check: Kendrick exports from the exporting dummy.
-- [ ] An unresolved node's pane says which tool name was not found and shows its stored params
+- [x] An unresolved node's pane says which tool name was not found and shows its stored params
   read-only.
   Check: Kendrick opens a document naming a missing tool.
-- [ ] The video node's pane, with a selector wired in, shows the path the selector answered and
+- [x] The video node's pane, with a selector wired in, shows the path the selector answered and
   greys the picker with the reason; a selector that answers nothing is reported there as a path
   that will not open is. Unwiring the selector gives the picker back and leaves the video open.
   Check: Kendrick wires a selector, breaks its rule, fixes it, unwires it.
-- [ ] A selector node's pane shows its settings and how many files its rule matched, and a change
+- [x] A selector node's pane shows its settings and how many files its rule matched, and a change
   there re-asks the selector: if the answer is a different file, that file opens.
   Check: Kendrick widens a glob from one match to several and watches the count and the frame.
 - [x] A selector's card lists the files its rule matched with the picked one marked. Clicking one
@@ -86,16 +86,16 @@ Assumes: Window shell.
 
 Assumes: Window shell.
 
-- [ ] Exactly one node, or none, carries the display flag; the frame shows that node's output, and
+- [x] Exactly one node, or none, carries the display flag; the frame shows that node's output, and
   the flag is drawn in the accent on the node.
   Check: Kendrick clicks flags.
-- [ ] Clicking a node's flag moves the flag there. Clicking a node's body selects it and does not
+- [x] Clicking a node's flag moves the flag there. Clicking a node's body selects it and does not
   move the flag.
   Check: Kendrick does both.
-- [ ] A flagged node that the video does not reach blanks the frame and says why on it, as
+- [x] A flagged node that the video does not reach blanks the frame and says why on it, as
   "no input" did; the flag stays where it was put.
   Check: Kendrick unwires upstream of the flagged node.
-- [ ] Deleting the flagged node leaves no flag, and the frame is empty ground.
+- [x] Deleting the flagged node leaves no flag, and the frame is empty ground.
   Check: Kendrick deletes it.
 
 ## Non-goals

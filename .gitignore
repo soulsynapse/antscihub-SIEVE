@@ -3,3 +3,7 @@ video-tests/
 __pycache__/
 *.egg-info/
 uv.lock
+
+# Dev > Reference > Icons downloads its catalogue into place (sieve_player/dev/reference/build_icons.py)
+sieve_player/dev/reference/tabler.zip
+sieve_player/dev/reference/LICENSE.tabler

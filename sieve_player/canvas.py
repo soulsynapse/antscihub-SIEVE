@@ -179,7 +179,16 @@ class Canvas(QWidget):
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.setMouseTracking(True)
         self.setFocusPolicy(Qt.ClickFocus)
+
+    # the key filter is application-wide, so it is installed only while the canvas is on screen;
+    # a second window's canvas, or one being torn down, must not keep filtering every event
+    def showEvent(self, e):
         QCoreApplication.instance().installEventFilter(self)
+        super().showEvent(e)
+
+    def hideEvent(self, e):
+        QCoreApplication.instance().removeEventFilter(self)
+        super().hideEvent(e)
 
     def set_document(self, doc):
         self.close_menu()

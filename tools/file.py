@@ -61,6 +61,8 @@ def settings(parent=None):
             self.list = QListWidget()
             self.list.setFixedHeight(ROW_H * 4)
             self.list.setSelectionMode(QListWidget.NoSelection)
+            self.list.setFocusPolicy(Qt.NoFocus)
+            self.list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
             self.list.itemClicked.connect(self._clicked)
             self.status = readout()
             self.form.add_line(self.list)

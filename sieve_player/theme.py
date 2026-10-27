@@ -156,6 +156,10 @@ def sheet() -> str:
         border-radius: {RADIUS}px;
         padding: 0px 6px;
     }}
+    QListWidget {{ background: {gray(ctl)}; border: none; border-radius: {RADIUS}px; outline: none; padding: 2px; }}
+    QListWidget::item {{ padding: 1px 4px; border-radius: {RADIUS}px; }}
+    QListWidget::item:hover {{ background: {gray(layer(2))}; }}
+    QListWidget::item:selected {{ background: {gray(layer(3))}; }}
     QPushButton:hover {{ background: {gray(layer(2))}; }}
     QPushButton:pressed {{ background: {gray(layer(3))}; }}
     QPushButton:disabled, QSpinBox:disabled, QDoubleSpinBox:disabled {{ color: {gray(INK_2 - 50)}; }}

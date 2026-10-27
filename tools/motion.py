@@ -1,9 +1,9 @@
-"""Series tool: mean |frame-to-frame difference| over the loop window, gated by a threshold."""
+"""Series tool: mean |frame-to-frame difference| over the loop window, gated by a threshold; gray or mask in."""
 import cv2
 import numpy as np
 
 SIEVE_TOOL = True
-NAME, KIND, EXPECTS = "motion", "series", "gray"
+NAME, KIND, EXPECTS = "motion", "series", ("gray", "mask")
 DEFAULTS = {"gate": 2.0}
 
 _cache = {}  # series.key -> activity computed so far; the stack only grows under one key

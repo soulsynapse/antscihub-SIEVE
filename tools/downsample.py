@@ -19,7 +19,7 @@ import sys
 import cv2
 
 SIEVE_TOOL = True
-NAME, KIND, EXPECTS, PRODUCES = "downsample", "frame", ("bgr", "gray"), "same"
+NAME, KIND, EXPECTS, PRODUCES = "downsample", "frame", ("bgr", "gray", "mask"), "same"
 DEFAULTS = {"scale": 0.5, "every": 2}
 
 

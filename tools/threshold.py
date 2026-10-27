@@ -1,8 +1,8 @@
-"""Frame tool: binarize gray frames with one cut. For a color band use tools/inrange."""
+"""Frame tool: binarize gray frames with one cut, out as a 0/255 mask. For a color band use tools/inrange."""
 import cv2
 
 SIEVE_TOOL = True
-NAME, KIND, EXPECTS, PRODUCES = "threshold", "frame", "gray", "gray"
+NAME, KIND, EXPECTS, PRODUCES = "threshold", "frame", "gray", "mask"
 DEFAULTS = {"thresh": 128, "invert": False}
 
 

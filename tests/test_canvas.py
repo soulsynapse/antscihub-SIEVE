@@ -103,7 +103,7 @@ def test_a_wire_let_go_in_space_offers_what_its_loose_end_may_join():
     canvas._pending = ("out", "gray", None)             # a gray output: takers of gray, so not gray itself
     assert {"threshold", "rescale"} <= live() and "gray" not in live()
     canvas._pending = ("in", "threshold", D.INPUT)      # a gray input: producers of gray, a pass-through among them
-    assert {"gray", "rescale"} <= live() and "file" not in live()
+    assert {"gray", "rescale"} <= live() and not {"threshold", "inrange", "file"} & live()   # masks are not gray
     canvas._pending = ("in", "inrange", "settings")     # a path input: a selector, never a pass-through
     assert "file" in live() and "rescale" not in live()
     canvas._pending = None

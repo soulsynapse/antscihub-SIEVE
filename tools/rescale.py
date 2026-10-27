@@ -1,8 +1,8 @@
-"""Frame tool: resize frames by a factor; gray or BGR, out as in."""
+"""Frame tool: resize frames by a factor; BGR, gray or mask, out as in."""
 import cv2
 
 SIEVE_TOOL = True
-NAME, KIND, EXPECTS, PRODUCES = "rescale", "frame", ("bgr", "gray"), "same"
+NAME, KIND, EXPECTS, PRODUCES = "rescale", "frame", ("bgr", "gray", "mask"), "same"
 DEFAULTS = {"scale": 0.5}
 
 

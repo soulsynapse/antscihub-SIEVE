@@ -1,13 +1,13 @@
 """The network editor. `spec/canvas.md` is the spec: a node one layer above the ground with its
 connectors and its display flag, select, box-select, drag, Delete, the mark on a node whose tool was
 not found and on an input nothing feeds; pan, zoom about the cursor, H to frame; wires dragged from
-either end, picked up, cut with Y, and a node dropped onto a wire inserted in it; Tab for the menu
-that places a tool, which a wire grown into empty canvas also opens, filtered to what the wire may
-feed or be fed by. It reads and writes the document and nothing else. The tools' declared types
-reach it as data, for the connectors' colours, the unfed mark, which connectors a dragged wire may
-land on and which tools the menu offers it; what the runtime makes of the graph never does. A tool
-the registry listed but could not import reaches it as its name and the error, for the menu to
-show greyed.
+either end, picked up, cut with Y, and a node dropped onto a wire inserted in it; Tab or a
+right-click on empty canvas for the menu that places a tool, which a wire grown into empty canvas
+also opens, filtered to what the wire may feed or be fed by. It reads and writes the document and
+nothing else. The tools' declared types reach it as data, for the connectors' colours, the unfed
+mark, which connectors a dragged wire may land on and which tools the menu offers it; what the
+runtime makes of the graph never does. A tool the registry listed but could not import reaches it
+as its name and the error, for the menu to show greyed.
 
 Geometry is in document space; the view is a pan and a zoom applied to the painter, never written
 to the document. A key pressed with the cursor over the canvas is the canvas's, as in Houdini's
@@ -88,6 +88,7 @@ class TabMenu(theme.Layer):
         self.add(self.list)
         self.edit.textChanged.connect(self.refill)
         self.list.itemClicked.connect(self._pick)
+        self.list.itemEntered.connect(self._hover)
         self.refill("")
 
     def refill(self, text):
@@ -117,6 +118,11 @@ class TabMenu(theme.Layer):
         cur = self.list.currentRow()
         at = rows.index(cur) if cur in rows else -1
         self.list.setCurrentRow(rows[max(0, min(len(rows) - 1, at + d))])
+
+    def _hover(self, item):
+        """The pointer moves the highlight, so Enter and a click agree on what is chosen."""
+        if item.flags() & Qt.ItemIsEnabled:
+            self.list.setCurrentItem(item)
 
     def _pick(self, item):
         if item is not None and item.flags() & Qt.ItemIsEnabled:
@@ -592,9 +598,13 @@ class Canvas(QWidget):
             self._drag = ("pan", e.position(), QPointF(self.pan))
             self.setCursor(Qt.ClosedHandCursor)
             return
+        pos, shift = self.to_doc(e.position()), bool(e.modifiers() & Qt.ShiftModifier)
+        if e.button() == Qt.RightButton:
+            if not self._y and self.pin_at(pos) is None and self.node_at(pos) is None:
+                self.open_menu(e.position())     # the Tab menu, for the mouse hand
+            return
         if e.button() != Qt.LeftButton:
             return
-        pos, shift = self.to_doc(e.position()), bool(e.modifiers() & Qt.ShiftModifier)
         if self._y:
             self._drag, self._cut = ("cut", pos), QLineF(pos, pos)
             return

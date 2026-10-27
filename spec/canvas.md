@@ -78,10 +78,11 @@ Assumes: Nodes.
 
 Assumes: Wires.
 
-- [ ] Tab with the cursor over the canvas opens a menu at the cursor listing every tool the
-  registry found; typing filters the list; Enter or a click places the chosen tool as a new node
-  at the cursor; Escape closes it with nothing placed.
-  Check: Kendrick places a node.
+- [ ] Tab with the cursor over the canvas, or a right-click on empty canvas, opens a menu at the
+  cursor listing every tool the registry found; typing filters the list; Enter or a click places
+  the chosen tool as a new node at the cursor; Escape closes it with nothing placed. A right-click
+  on a node, connector or wire does nothing.
+  Check: Kendrick places a node each way.
 - [ ] Releasing a dragged wire on empty canvas opens the same menu, filtered to tools that expect
   the wire's type; the placed node arrives wired.
   Check: Kendrick drags a wire into space and picks a tool.
@@ -94,7 +95,8 @@ Assumes: Wires.
 - Subnetworks, diving into a node, or more than one canvas.
 - Alt-drag to duplicate, copy and paste. Wanted later; nothing in the feel work needs them.
 - Node colours, comments, stickies, or renaming a node. A node is its tool's name.
-- Right-click menus. Every action here has a gesture or a key; a menu is a later convenience.
+- Right-click menus on a node or wire. Every action on one has a gesture or a key; a menu is a
+  later convenience. Right-click on empty canvas is the Tab menu, not a context menu.
 - Snapping and auto-layout beyond the top-to-bottom layout a list-built document gets.
 - Other wire shapes. Straight and Houdini's rounded stubs were considered; the S-curve was chosen
   by Kendrick as the starting point and can be revisited by looking at it.

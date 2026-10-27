@@ -90,6 +90,18 @@ Assumes: Wires.
   on hover, and cannot be placed.
   Check: Kendrick breaks a dummy's import.
 
+## Buttons
+
+Assumes: Tab menu.
+
+- [ ] A column of small buttons sits at the canvas's top right, one per key that is an action:
+  frame (H), the Tab menu (Tab), delete (Delete); none for Space or Y, which are held. Each says
+  its key on hover, and one with nothing to do is drawn dim.
+  Check: Kendrick looks and hovers.
+- [x] A click on a button does what its key does, and a press on the column starts no gesture on
+  the canvas beneath it.
+  Check: a test in `tests/`.
+
 ## Non-goals
 
 - Subnetworks, diving into a node, or more than one canvas.

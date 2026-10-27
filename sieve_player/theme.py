@@ -11,10 +11,12 @@ from __future__ import annotations
 
 import ctypes
 import sys
+from functools import lru_cache
 from pathlib import Path
 
 from PySide6.QtCore import QPointF, QRectF, Qt
-from PySide6.QtGui import QColor, QFont, QFontDatabase, QFontMetrics, QPainter, QPen
+from PySide6.QtGui import QColor, QFont, QFontDatabase, QFontMetrics, QPainter, QPen, QPixmap
+from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (QAbstractSpinBox, QApplication, QComboBox, QFrame, QGridLayout, QLabel,
                                QSplitter, QSplitterHandle,
                                QLineEdit, QPushButton, QVBoxLayout, QWidget)
@@ -43,6 +45,8 @@ FONT_PX = 12       # integer pixels, never points, so glyphs sit on the grid und
 FONT_WEIGHT = 500  # regular Inter reads thin on dark; 500 fills the stroke without reading bold
 HINTING = 3        # QFont.HintingPreference: full. DirectWrite ignores it; see play()
 VALUE_W = 36       # a slider's mono readout
+GLYPH = 16         # a line icon beside 12px text, px
+GLYPH_STROKE = 2.25  # Tabler ships 2, which reads thin at GLYPH; widened at render, never in the files
 ACCENT = QColor(88, 146, 255)   # what is viewed: the loop window, the trace
 AMBER = QColor(222, 160, 56)    # the gate
 RED = QColor(232, 72, 72)       # an input nothing feeds, a wire whose types no longer fit
@@ -66,6 +70,22 @@ def qgray(v: int, alpha: int = 255) -> QColor:
 
 def layer(depth: int) -> int:
     return GROUND + STEP * depth
+
+
+@lru_cache(maxsize=None)
+def glyph(name: str, ink: int, size: int = GLYPH, ratio: float = 1.0) -> QPixmap:
+    """GLYPHS/<name>.svg drawn in the gray `ink` at `size` px, for a screen of pixel `ratio`. The
+    files keep Tabler's `currentColor` and 2-unit stroke; both are set here."""
+    src = (GLYPHS / f"{name}.svg").read_text(encoding="utf-8")
+    src = src.replace("currentColor", qgray(ink).name()).replace('stroke-width="2"', f'stroke-width="{GLYPH_STROKE}"')
+    pm = QPixmap(round(size * ratio), round(size * ratio))
+    pm.setDevicePixelRatio(ratio)
+    pm.fill(Qt.GlobalColor.transparent)
+    p = QPainter(pm)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+    QSvgRenderer(src.encode()).render(p, QRectF(0, 0, size, size))
+    p.end()
+    return pm
 
 
 def install_font(app: QApplication) -> str:

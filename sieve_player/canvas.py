@@ -3,8 +3,9 @@ connectors and its display flag, select, box-select, drag, Delete, the mark on a
 not found and on an input nothing feeds; pan, zoom about the cursor, H to frame; wires dragged from
 either end, picked up, cut with Y, and a node dropped onto a wire inserted in it; Tab or a
 right-click on empty canvas for the menu that places a tool, which a wire grown into empty canvas
-also opens, filtered to what the wire may feed or be fed by. It reads and writes the document and
-nothing else. The tools' declared types reach it as data, for the connectors' colours, the unfed
+also opens, filtered to what the wire may feed or be fed by; a column of buttons at the top right,
+one per key that is an action, for the mouse hand. It reads and writes the document and nothing
+else. The tools' declared types reach it as data, for the connectors' colours, the unfed
 mark, which connectors a dragged wire may land on and which tools the menu offers it; what the
 runtime makes of the graph never does. A tool the registry listed but could not import reaches it
 as its name and the error, for the menu to show greyed.
@@ -43,6 +44,13 @@ ZOOM_STEP = 1.15           # per wheel notch
 FRAME_PAD = 2 * PAD        # view px kept clear around what H frames
 MENU_W = 200               # the Tab menu's width, view px
 MENU_ROWS = 10             # the most tools the Tab menu shows before it scrolls
+BUTTON = theme.ROW_H       # a button in the column: a square this wide, its glyph centred
+# the column, top to bottom: (glyph, tooltip, the key it stands in for). The key is the gesture and
+# the button the same action for the mouse hand, so there is one per key that is an action and
+# none for Space or Y, which are held
+BUTTONS = (("focus-centered", "frame (H)", Qt.Key_H),
+           ("plus", "add tool (Tab)", Qt.Key_Tab),
+           ("trash", "delete selected (Delete)", Qt.Key_Delete))
 TYPING = (QLineEdit, QAbstractSpinBox, QTextEdit, QPlainTextEdit)   # focus here keeps its keys
 
 
@@ -171,6 +179,7 @@ class Canvas(QWidget):
         self._pending = None                    # (end, id, input) of a wire grown into space, while the menu
                                                 # it opened is up; the loose end stays drawn at the menu
         self._menu = None                       # the Tab menu, while one is open
+        self._hot = None                        # the index of the button under the pointer
         self._y = False                         # Y is held with the cursor here
         self.pan = QPointF(2 * PAD, 2 * PAD)    # where the document's (0, 0) sits, view px
         self.zoom = 1.0
@@ -456,12 +465,14 @@ class Canvas(QWidget):
         p = getattr(tool, "PRODUCES", None)
         return p is not None and self.compatible(None if p == "same" else p, dict(self.inputs(node))[name])
 
-    def open_menu(self, at):
-        """The Tab menu at view point `at`, kept inside the canvas."""
+    def open_menu(self, at, place_at=None):
+        """The Tab menu at view point `at`, kept inside the canvas; the chosen tool lands at view
+        point `place_at`, by default `at` itself."""
         if self._menu is not None:
             self.close_menu()
+        where = self.to_doc(at if place_at is None else place_at)
         self._menu = TabMenu(self.menu_entries(), self)
-        self._menu.chosen.connect(lambda name: self.place(name, self.to_doc(at)))
+        self._menu.chosen.connect(lambda name: self.place(name, where))
         self._menu.closed.connect(self.close_menu)
         self._menu.adjustSize()
         x = max(0, min(self.width() - self._menu.width(), int(at.x())))
@@ -501,6 +512,53 @@ class Canvas(QWidget):
         self.select([node.id])
         return node
 
+    # -- the buttons, view space -------------------------------------------
+    def button_rect(self, i):
+        """The i-th button's square, view px: the column sits PAD in from the top right corner."""
+        return QRectF(self.width() - PAD - BUTTON, PAD + i * (BUTTON + GAP // 2), BUTTON, BUTTON)
+
+    def button_at(self, v):
+        for i in range(len(BUTTONS)):
+            if self.button_rect(i).contains(v):
+                return i
+        return None
+
+    def button_enabled(self, i):
+        """Delete has nothing to do without a selection; frame, nothing without nodes."""
+        key = BUTTONS[i][2]
+        if key == Qt.Key_Delete:
+            return bool(self.selected)
+        if key == Qt.Key_H:
+            return bool(self.doc.nodes)
+        return True
+
+    def press_button(self, i):
+        """What the button's key does. The menu opens beside its button and places at the view's
+        centre, since the cursor, which the key places at, is on the button."""
+        if not self.button_enabled(i):
+            return
+        key = BUTTONS[i][2]
+        if key == Qt.Key_H:
+            self.frame(self.selected)
+        elif key == Qt.Key_Tab:
+            r = self.button_rect(i)
+            self.open_menu(QPointF(r.left() - MENU_W - GAP // 2, r.top()),
+                           place_at=QPointF(self.width() / 2, self.height() / 2))
+        elif key == Qt.Key_Delete:
+            self.delete_selected()
+
+    def _paint_buttons(self, p):
+        ratio = self.devicePixelRatioF()
+        for i, (name, _, _) in enumerate(BUTTONS):
+            r = self.button_rect(i)
+            on = self.button_enabled(i)
+            if i == self._hot and on:
+                p.setPen(self.hairline(qgray(theme.layer(1) + theme.LINE_LIFT).lighter(theme.HOVER_EDGE)))
+                p.setBrush(qgray(theme.layer(1) + theme.HOVER_LIFT))
+                p.drawRoundedRect(r.adjusted(0.5, 0.5, -0.5, -0.5), theme.RADIUS, theme.RADIUS)
+            pm = theme.glyph(name, theme.INK if on else theme.INK_2 - 50, theme.GLYPH, ratio)
+            p.drawPixmap(r.center() - QPointF(theme.GLYPH / 2, theme.GLYPH / 2), pm)
+
     # -- painting ----------------------------------------------------------
     def paintEvent(self, _):
         p = QPainter(self)
@@ -536,6 +594,8 @@ class Canvas(QWidget):
         if self._cut is not None:
             p.setPen(self.hairline(theme.RED, Qt.DashLine))
             p.drawLine(self._cut)
+        p.resetTransform()
+        self._paint_buttons(p)
         p.end()
 
     def _paint_node(self, p, n, lit=None):
@@ -603,6 +663,11 @@ class Canvas(QWidget):
         if self._menu is not None:
             self.close_menu()   # a click anywhere else is the way out, and does nothing more
             return
+        hot = self.button_at(e.position())
+        if hot is not None:
+            if e.button() == Qt.LeftButton:
+                self.press_button(hot)
+            return              # the column covers the canvas: no gesture starts under it
         if e.button() == Qt.MiddleButton or (e.button() == Qt.LeftButton and self._space):
             self._drag = ("pan", e.position(), QPointF(self.pan))
             self.setCursor(Qt.ClosedHandCursor)
@@ -640,10 +705,11 @@ class Canvas(QWidget):
 
     def mouseMoveEvent(self, e):
         if self._drag is None:
-            node = self.node_at(self.to_doc(e.position())) if self.doc else None
+            hot = self.button_at(e.position()) if self.doc else None
+            node = self.node_at(self.to_doc(e.position())) if self.doc and hot is None else None
             nid = node.id if node else None
-            if nid != self.hover:
-                self.hover = nid
+            if (nid, hot) != (self.hover, self._hot):
+                self.hover, self._hot = nid, hot
                 self.update()
             return
         kind, start, *rest = self._drag
@@ -688,8 +754,8 @@ class Canvas(QWidget):
             self.set_zoom(self.zoom * ZOOM_STEP ** notches, e.position())
 
     def leaveEvent(self, e):
-        if self.hover is not None:
-            self.hover = None
+        if self.hover is not None or self._hot is not None:
+            self.hover = self._hot = None
             self.update()
         if self._space or self._y:
             self._space = self._y = False
@@ -742,6 +808,9 @@ class Canvas(QWidget):
         return super().event(e)
 
     def _tip(self, pos):
+        i = self.button_at(self.to_view(pos))
+        if i is not None:
+            return BUTTONS[i][1]
         pin = self.pin_at(pos)
         if pin is not None:
             node, name = pin

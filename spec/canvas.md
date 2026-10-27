@@ -93,9 +93,14 @@ Assumes: Wires.
   the chosen tool as a new node at the cursor; Escape closes it with nothing placed. A right-click
   on a node, connector or wire does nothing.
   Check: Kendrick places a node each way.
-- [x] Releasing a dragged wire on empty canvas opens the same menu, filtered to tools that expect
-  the wire's type; the placed node arrives wired.
-  Check: Kendrick drags a wire into space and picks a tool.
+- [ ] Releasing a wire grown into empty canvas opens the same menu, filtered to what the loose
+  end may join: grown from an output, the tools with an input that takes what it hands out; grown
+  from an unfed input, the tools that produce what it expects. A pass-through produces what it
+  expects and nothing else, so from an input end it is offered only where those overlap, never on
+  a `"path"` input. The placed node arrives wired. A wire picked up from a fed input and let go in
+  space is the unplug gesture under Wires and opens nothing.
+  Check: a test in `tests/` reads the menu from a pending output end, a pending frame input and a
+  pending path input; Kendrick drags a wire into space each way and picks a tool.
 - [x] A tool the registry listed but could not import appears in the menu greyed, with its error
   on hover, and cannot be placed.
   Check: Kendrick breaks a dummy's import.

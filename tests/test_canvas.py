@@ -87,3 +87,38 @@ def test_the_video_node_is_in_the_menu_only_while_the_document_lacks_one():
     node = canvas.place(D.VIDEO_TOOL, QPointF(10, 10))
     assert doc.video_node() is node
     assert dict(canvas.menu_entries())[D.VIDEO_TOOL]
+
+
+def test_a_wire_let_go_in_space_offers_what_its_loose_end_may_join():
+    """One pass-through and one typed tool per direction: a pass-through hands out what it is fed,
+    so it is offered from an input end only where its expects meet the input's, never on a path."""
+    QApplication.instance() or QApplication([])
+    import types
+    gray = types.SimpleNamespace(NAME="gray", EXPECTS="bgr", PRODUCES="gray", DEFAULTS={})
+    thresh = types.SimpleNamespace(NAME="thresh", EXPECTS="gray", PRODUCES="gray", DEFAULTS={})
+    passthru = types.SimpleNamespace(NAME="passthru", EXPECTS=("bgr", "gray"), PRODUCES="same", DEFAULTS={})
+    reader = types.SimpleNamespace(NAME="reader", EXPECTS="bgr", PRODUCES="gray", DEFAULTS={},
+                                   PATHS={"settings": lambda path: {}})
+    picker = types.SimpleNamespace(NAME="picker", PRODUCES="path", DEFAULTS={}, select=lambda folder, p: None)
+    tools = {t.NAME: t for t in (gray, thresh, passthru, reader, picker)}
+    doc = D.Document()
+    doc.add_node(D.VIDEO_TOOL, (0, 0))
+    doc.add_node("gray", (0, 100))
+    doc.add_node("thresh", (0, 200))
+    doc.add_node("reader", (100, 100))
+    canvas = Canvas(tools)
+    canvas.resize(400, 300)
+    canvas.set_document(doc)
+
+    def live():
+        return [n for n, err in canvas.menu_entries() if not err]
+
+    canvas._pending = ("out", "gray", None)                      # a gray output: takers of gray
+    assert live() == ["passthru", "thresh"]
+    canvas._pending = ("in", "thresh", D.INPUT)                  # a gray input: producers of gray
+    assert live() == ["gray", "passthru", "reader", "thresh"]
+    canvas._pending = ("in", "reader", "settings")               # a path input: a selector alone
+    assert live() == ["picker"]
+    canvas._pending = ("in", D.VIDEO_TOOL, D.INPUT)
+    assert live() == ["picker"]
+    canvas._pending = None

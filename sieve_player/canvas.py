@@ -481,8 +481,11 @@ class Canvas(QWidget):
         tool = self.tools[name]
         if end == "out":
             return self._landing(name, self.output_type(node)) is not None
-        p = getattr(tool, "PRODUCES", None)
-        return p is not None and self.compatible(None if p == "same" else p, dict(self.inputs(node))[iname])
+        p, want = getattr(tool, "PRODUCES", None), dict(self.inputs(node))[iname]
+        if p == "same":   # hands out what it is fed, so only what it expects can ever reach the input
+            e = expects(tool)
+            return want is None or e is None or any(self.compatible(t, want) for t in e)
+        return p is not None and self.compatible(p, want)
 
     def _landing(self, name, got):
         """The input a fresh node of tool `name` offers an output handing out `got`: its frame

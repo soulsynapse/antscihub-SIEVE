@@ -89,6 +89,10 @@ Assumes: Wires.
 - [x] A tool the registry listed but could not import appears in the menu greyed, with its error
   on hover, and cannot be placed.
   Check: Kendrick breaks a dummy's import.
+- [x] The video node is in the menu beside the tools, since Delete removes it like any other
+  node: live while the document has no video node, greyed with the reason while it has one,
+  since a document names one video. A dragged input's loose end may land on it.
+  Check: a test in `tests/` deletes the video node, reads the menu, places one, reads it again.
 
 ## Buttons
 

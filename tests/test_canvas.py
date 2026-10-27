@@ -70,3 +70,20 @@ def test_a_button_does_what_its_key_does_and_starts_no_gesture():
     assert [n.id for n in doc.nodes] == ["video"]
     _press(canvas, canvas.button_rect(by_key[Qt.Key_Delete]).center())
     assert [n.id for n in doc.nodes] == ["video"]
+
+
+def test_the_video_node_is_in_the_menu_only_while_the_document_lacks_one():
+    QApplication.instance() or QApplication([])
+    doc = D.Document()
+    doc.add_node(D.VIDEO_TOOL, (0, 0))
+    canvas = Canvas({})
+    canvas.resize(400, 300)
+    canvas.set_document(doc)
+    assert dict(canvas.menu_entries())[D.VIDEO_TOOL]      # greyed, with a reason
+    canvas.select([D.VIDEO_TOOL])
+    canvas.delete_selected()
+    assert doc.video_node() is None
+    assert dict(canvas.menu_entries())[D.VIDEO_TOOL] == ""
+    node = canvas.place(D.VIDEO_TOOL, QPointF(10, 10))
+    assert doc.video_node() is node
+    assert dict(canvas.menu_entries())[D.VIDEO_TOOL]

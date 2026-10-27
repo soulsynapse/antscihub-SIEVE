@@ -445,25 +445,35 @@ class Canvas(QWidget):
 
     # -- the Tab menu --------------------------------------------------------
     def menu_entries(self):
-        """[(name, error)] the menu offers, by name: every tool, or with a wire pending, those its
-        loose end may join; a tool that did not import is offered greyed either way, since what it
-        expects is unknown."""
+        """[(name, error)] the menu offers, by name: the video node and every tool, or with a wire
+        pending, those its loose end may join; a tool that did not import is offered greyed either
+        way, since what it expects is unknown, and the video node is greyed while the document
+        has one, since a document names one video."""
         out = []
-        for name in sorted(set(self.tools) | set(self.broken)):
-            if name not in self.tools:
+        for name in sorted(set(self.tools) | set(self.broken) | {VIDEO_TOOL}):
+            if name == VIDEO_TOOL:
+                if self.doc.video_node() is not None:
+                    out.append((name, "the document has a video node"))
+                elif self._pending is None or self._joins(name):
+                    out.append((name, ""))
+            elif name not in self.tools:
                 out.append((name, self.broken[name]))
-            elif self._pending is None or self._joins(self.tools[name]):
+            elif self._pending is None or self._joins(name):
                 out.append((name, ""))
         return out
 
-    def _joins(self, tool):
-        """Whether a fresh node of `tool` may take the pending wire."""
-        end, nid, name = self._pending
+    def _joins(self, name):
+        """Whether a fresh node of tool `name` may take the pending wire."""
+        end, nid, iname = self._pending
         node = self.doc.node(nid)
+        if name == VIDEO_TOOL:
+            # no inputs, so only an input's loose end can reach it
+            return end != "out" and self.compatible(VIDEO_PRODUCES, dict(self.inputs(node))[iname])
+        tool = self.tools[name]
         if end == "out":
             return self.compatible(self.output_type(node), expects(tool))
         p = getattr(tool, "PRODUCES", None)
-        return p is not None and self.compatible(None if p == "same" else p, dict(self.inputs(node))[name])
+        return p is not None and self.compatible(None if p == "same" else p, dict(self.inputs(node))[iname])
 
     def open_menu(self, at, place_at=None):
         """The Tab menu at view point `at`, kept inside the canvas; the chosen tool lands at view
@@ -496,7 +506,7 @@ class Canvas(QWidget):
     def place(self, name, pos):
         """A new node of tool `name` centred on document point `pos`; with a wire pending, the node
         sits so the connector the wire reaches is at `pos`, and the wire is made."""
-        tool = self.tools[name]
+        tool = self.tools.get(name)      # None for the video node
         pending, self._pending = self._pending, None
         x, y = pos.x() - NODE_W / 2, pos.y() - NODE_H / 2
         if pending is not None:

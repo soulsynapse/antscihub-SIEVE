@@ -1,6 +1,7 @@
-"""Dummy selector: which video the document means, by rule rather than by name. The first file
-under `folder` (relative to the document, as Houdini's $HIP is to the hip file) whose name matches
-`pattern`, by name or newest first, looking into subfolders if `recurse`."""
+"""Selector: which video the document means, by rule rather than by name. The first file under
+`folder` (relative to the document, as Houdini's $HIP is to the hip file) whose name matches
+`pattern`, by name or newest first, looking into subfolders if `recurse`. Wire it into the video
+node; the video node's pane then shows what it picked."""
 import glob
 import os
 
@@ -42,6 +43,6 @@ if __name__ == "__main__":
     import sys
 
     from sieve_player import play
-    from dummies import to_gray
+    from tools import gray
 
-    sys.exit(play([sys.modules[__name__], to_gray]))
+    sys.exit(play([sys.modules[__name__], gray]))

@@ -10,7 +10,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from sieve_player import document as D  # noqa: E402
 from sieve_player.graph import Graph  # noqa: E402
-from dummies import pick  # noqa: E402
+from tools import pick  # noqa: E402
 
 gray = Tool(NAME="gray", KIND="frame", EXPECTS="bgr", PRODUCES="gray", DEFAULTS={}, run=lambda f, r, p: f(r)[..., 0])
 TOOLS = [pick, gray]
@@ -94,14 +94,14 @@ def test_a_rule_matching_nothing_is_reported_on_the_video_node(tmp_path):
     from PySide6.QtWidgets import QApplication
     from sieve_player.window import PlayerWindow
 
-    from dummies import to_gray
+    from tools import gray as real_gray
 
     QApplication.instance() or QApplication([])
     tree(tmp_path)
-    doc = D.from_tools([pick, to_gray])          # a window asks each tool for its settings widget
+    doc = D.from_tools([pick, real_gray])        # a window asks each tool for its settings widget
     doc.node("pick").params["pattern"] = "*.nothing"
     D.save(doc, tmp_path / "doc.json")
-    win = PlayerWindow(str(tmp_path / "doc.json"), "t", [pick, to_gray])
+    win = PlayerWindow(str(tmp_path / "doc.json"), "t", [pick, real_gray])
     assert win.graph is None
     assert win.pane.video.info.text() == "pick matched nothing"
     assert win.canvas.errors["video"] == "pick matched nothing"
@@ -109,14 +109,14 @@ def test_a_rule_matching_nothing_is_reported_on_the_video_node(tmp_path):
     win.close()
 
 
-def test_dummy_selector_resolves_against_a_tree(tmp_path):
+def test_pick_resolves_against_a_tree(tmp_path):
     tree(tmp_path)
     folder = str(tmp_path)
     assert [os.path.basename(p) for p in pick.matches(folder, pick.DEFAULTS)] == ["a.mp4", "b.mp4"]
     assert os.path.basename(pick.select(folder, {**pick.DEFAULTS, "order": "newest"})) == "b.mp4"
     assert len(pick.matches(folder, {**pick.DEFAULTS, "recurse": True})) == 3
     assert pick.select(folder, {**pick.DEFAULTS, "folder": "sub", "pattern": "a*"}) is None
-    out = subprocess.check_output([sys.executable, "-m", "sieve_player.registry", "dummies"], text=True)
+    out = subprocess.check_output([sys.executable, "-m", "sieve_player.registry", "tools"], text=True)
     assert "pick " in out
 
 

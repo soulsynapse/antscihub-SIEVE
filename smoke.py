@@ -3,8 +3,8 @@ display needed.
 
     .venv\\Scripts\\python smoke.py [video]
 
-Runs the dummies in a graph built from a list, then the example chain (gray -> rescale ->
-threshold -> motion) and tools/downsample in the window.
+Runs the example chain (gray -> rescale -> threshold -> motion) in a graph built from a list,
+then the same chain and tools/downsample in the window.
 Asserts on state at each step and exits non-zero on the first failure. Text renders as boxes
 under the offscreen platform, so there is nothing to look at; this checks wiring, not looks.
 """
@@ -23,8 +23,7 @@ from sieve_player import document  # noqa: E402
 from sieve_player.decoder import Decoder  # noqa: E402
 from sieve_player.graph import Graph, Series  # noqa: E402
 from sieve_player.window import PlayerWindow  # noqa: E402
-from dummies import either, flat, keep_gray, passthru, to_gray, writer  # noqa: E402
-from tools import downsample as ds, gray, motion, rescale, threshold  # noqa: E402
+from tools import downsample as ds, gray, motion, pick, rescale, threshold  # noqa: E402
 
 path = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else "video-tests/rep3_intermittent_crop.MP4")
 app = QApplication.instance() or QApplication(sys.argv)
@@ -38,28 +37,34 @@ def check(cond, msg):
 
 
 def run_graph():
-    """The dummies, wired by from_tools, computed through the graph the way the worker will."""
-    dummies = [to_gray, passthru, keep_gray, either, writer, flat]
-    doc = document.from_tools(dummies, path)
-    check([(w.src, w.dst) for w in doc.wires] == [("video", "to_gray"), ("to_gray", "passthru"), ("passthru", "keep_gray"),
-                                                  ("keep_gray", "either"), ("either", "writer"), ("writer", "flat")],
-          f"dummy wiring {[(w.src, w.dst) for w in doc.wires]}")
-    check(not document.validate(doc, dummies), f"dummy document invalid: {document.validate(doc, dummies)}")
-    dec = Decoder(path)
-    g = Graph(doc, dec, dummies)
-    check(g.shown == "writer" and g.walk == "writer" and g.series == "flat", f"flag/walk/series {g.shown} {g.walk} {g.series}")
-    out = g.compute("writer", 0)
-    check(out is not None and out.shape == (dec.height, dec.width) and out.dtype == np.uint8, "writer output")
+    """The chain, wired by from_tools with the selector into the video, computed through the graph
+    the way the worker will."""
+    tools = [pick, gray, rescale, threshold, motion]
+    doc = document.from_tools(tools)
+    doc.node("pick").params.update(folder=os.path.dirname(path), pattern=os.path.basename(path))
+    check([(w.src, w.dst) for w in doc.wires] == [("pick", "video"), ("video", "gray"), ("gray", "rescale"),
+                                                  ("rescale", "threshold"), ("threshold", "motion")],
+          f"wiring {[(w.src, w.dst) for w in doc.wires]}")
+    check(not document.validate(doc, tools), f"document invalid: {document.validate(doc, tools)}")
+    picked, why = document.pick_video(doc, tools)
+    check(picked is not None and os.path.samefile(picked, path), f"pick answered {picked!r} {why}")
+    dec = Decoder(picked)
+    g = Graph(doc, dec, tools)
+    check(g.shown == "threshold" and g.walk == "threshold" and g.series == "motion", f"flag/walk/series {g.shown} {g.walk} {g.series}")
+    check(g.compute("pick", 0) is None, "a selector computed a row")
+    out = g.compute("threshold", 0)
+    check(out is not None and out.ndim == 2 and out.dtype == np.uint8, "threshold output")
     check(g.peek(0) is out, "peek did not find the shown row")
     stack = np.stack([g.compute(g.walk, r) for r in range(5)])
     result = g.series_tool.run(Series(stack, g.key(g.walk), 0, g.fps), g.series_params())
-    check(len(result["value"]) == 5 and result["gate"].all(), "flat series")
-    doc.node("to_gray").params["level"] = 7
+    check(len(result["activity"]) == 5 and "gate" in result, "motion series")
+    key = g.key("threshold")
+    doc.node("threshold").params["thresh"] = 200
     g.sync()
-    check(g.compute("keep_gray", 0).max() == 7 and g.compute("writer", 0).max() == 0, "param change did not reach the graph")
-    doc.disconnect("either")
+    check(g.key("threshold") != key and g.compute("threshold", 0) is not out, "param change did not reach the graph")
+    doc.disconnect("rescale")
     g.sync()
-    check(g.compute("writer", 0) is None and g.peek(0) is None, "unwired node still computed")
+    check(g.compute("threshold", 0) is None and g.peek(0) is None, "unwired node still computed")
     dec.close()
 
 

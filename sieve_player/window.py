@@ -144,14 +144,16 @@ class Column(QWidget):
 
 class PlayerWindow(QMainWindow):
     def __init__(self, source, title="SIEVE", tools=()):
-        """`source` is a list of tools, which become the document and the catalogue, or the path of
-        a saved document, opened against the catalogue `tools`. Either list holds tool modules or
-        registry entries; see `catalogue`."""
+        """`source` is a list of tools, which become the document, or the path of a saved document.
+        The catalogue the Tab menu offers and the document's names index is `tools`, plus the list
+        when `source` is one. Either list holds tool modules or registry entries; see `catalogue`."""
         super().__init__()
         self.title = title
         self.setStyleSheet(theme.sheet())
         from_file = isinstance(source, (str, os.PathLike))
-        modules, self.tools, broken = catalogue(tools if from_file else source)
+        modules, self.tools, broken = catalogue(list(tools) if from_file else [*source, *tools])
+        if not from_file:
+            modules = catalogue(source)[0]
         self.doc = None
         self.decoder = self.graph = self.worker = None
         self.fps, self.count = 30.0, 0
@@ -361,7 +363,13 @@ class PlayerWindow(QMainWindow):
 
     def load(self, path):
         """Open the video at `path` and record it in the document as written. A file that won't
-        open is reported on the video node and leaves what was open alone."""
+        open is reported on the video node and leaves what was open alone; so does a path given
+        while a selector is wired in, since the selector picks until it is unwired."""
+        sel = self.doc.selector()
+        if sel is not None:
+            if self.pane.video is not None:
+                self.pane.video.show_none(f"{sel.id} picks the video; unwire it to choose by hand")
+            return
         if self._open_video(path):
             self.doc.video = os.fspath(path)
 

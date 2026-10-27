@@ -9,11 +9,11 @@ true of the running program or not yet. Nothing here says how.
 The work spans sessions. A session that opens this directory cold should be able to tell what is
 built, what is next, and what it must not decide.
 
-The final deliverable is the wire-node system working as these files describe, driven by dummy
-tools, with the document, the runtime, the canvas, the pane and the window as separate modules
-whose imports run one way (see Seams in `window.md`). The tools under `tools/` and `mock-up/` are
-referents for what a tool looks like, not a compatibility target: a session may rewrite or drop
-one when the graph needs it to, and nothing here asserts that they keep running.
+The final deliverable is the wire-node system working as these files describe, with the
+document, the runtime, the canvas, the pane and the window as separate modules whose imports run
+one way (see Seams in `window.md`). It was developed against dummy tools until Kendrick retired
+them on 2026-10-26; the tools under `tools/` are the referents now, and a `Check:` that names a
+dummy is done with one of them. `mock-up/` is reference only.
 
 ## How to read a spec file
 

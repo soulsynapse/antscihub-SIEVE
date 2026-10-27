@@ -70,6 +70,11 @@ Assumes: Window shell.
 - [ ] A selector node's pane shows its settings and how many files its rule matched, and a change
   there re-asks the selector: if the answer is a different file, that file opens.
   Check: Kendrick widens a glob from one match to several and watches the count and the frame.
+- [x] A selector's card lists the files its rule matched with the picked one marked. Clicking one
+  makes it the choice, stored on the node, and clicking it again clears it; a choice no longer
+  among the matches falls back to the rule's order and the card says so.
+  Check: a test clicks a match and reads the node's params and what the selector picks, then
+  breaks the choice; Kendrick clicks.
 - [x] A parameter a wire drives is greyed, says what drives it, and takes no typed value until
   the wire is broken, whatever its kind: the video's picker, the knobs a path input's file set,
   and a control that sets those same knobs by hand. Breaking the wire frees them with the values

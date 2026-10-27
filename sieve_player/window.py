@@ -330,8 +330,7 @@ class PlayerWindow(QMainWindow):
         vid = self.doc.video_node()
         if self.pane.video is not None:
             self.pane.video.set_picker(sel is None, None if sel is None else sel.id)
-        if sel is not None:
-            self.pane.note(sel.id, self._match_note(sel, path))
+        self._note_selectors()
         if vid is not None:
             self.canvas.errors.pop(vid.id, None)
         if path is None:
@@ -395,18 +394,30 @@ class PlayerWindow(QMainWindow):
             self.pane.note(n.id, "; ".join(errors or notes))
         self.canvas.update()
 
-    def _match_note(self, sel, path):
-        """What a selector's rule covered, for the line under its settings."""
-        tool = self.tools.get(sel.tool)
-        matches = getattr(tool, "matches", None)
-        picked = "" if path is None else f", picked {os.path.basename(path)}"
-        if matches is None:
-            return "matched nothing" if path is None else picked[2:]
-        try:
-            n = len(matches(self.doc.folder(), dict(sel.params)))
-        except Exception as e:
-            return f"{type(e).__name__}: {e}"
-        return f"{n} match{'es' if n != 1 else ''}{picked}"
+    def _note_selectors(self):
+        """Every selector node's card: the count line, and the match list if its widget shows one."""
+        folder = self.doc.folder()
+        for n in self.doc.nodes:
+            tool = self.tools.get(n.tool)
+            if not document.is_selector(tool):
+                continue
+            matches = getattr(tool, "matches", None)
+            try:
+                picked = tool.select(folder, dict(n.params))
+                found = matches(folder, dict(n.params)) if matches else None
+            except Exception as e:
+                self.pane.note(n.id, f"{type(e).__name__}: {e}")
+                continue
+            if picked is not None:
+                picked = os.path.normpath(os.path.join(folder, picked))
+            w = self.pane.widget(n.id)
+            if found is not None and hasattr(w, "show_matches"):
+                w.show_matches(folder, [os.path.normpath(p) for p in found], picked)
+            picked_text = "" if picked is None else f", picked {os.path.basename(picked)}"
+            if found is None:
+                self.pane.note(n.id, "matched nothing" if picked is None else picked_text[2:])
+            else:
+                self.pane.note(n.id, f"{len(found)} match{'es' if len(found) != 1 else ''}{picked_text}")
 
     def load(self, path):
         """Open the video at `path` and record it in the document as written. A file that won't

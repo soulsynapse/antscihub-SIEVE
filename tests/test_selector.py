@@ -214,3 +214,26 @@ def test_a_driven_knob_is_greyed_until_the_wire_is_broken(tmp_path):
     assert all(r.isEnabled() for r in w._rows.values()) and w.button.isEnabled()
     assert win.doc.node("inrange").params["h_hi"] == 40
     win.close()
+
+
+def test_clicking_a_match_makes_it_the_choice_and_a_stale_choice_falls_back(tmp_path):
+    from PySide6.QtCore import Qt
+
+    tree(tmp_path)
+    from tools import gray as real_gray
+    doc = D.from_tools([file, real_gray])
+    D.save(doc, tmp_path / "doc.json")
+    win = open_window(tmp_path, [file, real_gray])
+    w = win.pane.widget("file")
+    assert [w.list.item(i).data(Qt.UserRole) for i in range(w.list.count())] == ["a.mp4", "b.mp4"]
+    assert w.list.item(0).text().startswith("●") and win.doc.video == "a.mp4"
+    w.list.itemClicked.emit(w.list.item(1))
+    assert win.doc.node("file").params["choice"] == "b.mp4" and win.doc.video == "b.mp4"
+    assert w.list.item(1).text().startswith("●") and win.pane.notes["file"].text() == "2 matches, picked b.mp4"
+    w.set_params({**w.params(), "pattern": "a*"})
+    assert win.doc.video == "a.mp4" and "not among the matches" in w.status.text()
+    assert win.doc.node("file").params["choice"] == "b.mp4"
+    w.set_params({**w.params(), "pattern": "*.mp4"})
+    w.list.itemClicked.emit(w.list.item(1))
+    assert win.doc.node("file").params["choice"] == "" and w.status.text() == ""
+    win.close()

@@ -42,6 +42,14 @@ def test_holds_nodes_wires_flags_video():
     assert doc.display is None and doc.overlay is None
 
 
+def test_band_rides_with_its_node_and_is_absent_until_set():
+    doc = two_nodes()
+    assert "band" not in doc.to_dict()["nodes"][1]
+    doc.node("gray").band = (40, 200.5)
+    back = D.Document.from_dict(json.loads(json.dumps(doc.to_dict())))
+    assert back.node("gray").band == (40.0, 200.5) and back.node("video").band is None
+
+
 def test_round_trip(tmp_path):
     doc = two_nodes()
     D.save(doc, tmp_path / "a.sieve")

@@ -1,7 +1,9 @@
 """The saved form of a pipeline.
 
 Nodes, wires, the display and overlay flags and the video path; nothing of the canvas's view or the runtime's
-memo. This module imports neither Qt nor cv2 nor any other part of the player. Where a function
+memo. A node may carry a band, two values in its output's units: the runtime zeroes every pixel of
+a plane outside it (inside it when lo is above hi) before anything downstream reads the node, and
+the pane's density handles are its control. It changes results, so it is saved with the node. This module imports neither Qt nor cv2 nor any other part of the player. Where a function
 needs a tool's facets (EXPECTS, PRODUCES) it is handed the tools, as a mapping of name to module
 or as the modules themselves; the document stores only names.
 
@@ -39,6 +41,7 @@ class Node:
     tool: str
     params: dict = field(default_factory=dict)
     pos: tuple = (0.0, 0.0)
+    band: tuple | None = None                                       # (lo, hi) kept, or None for every value
     extra: dict = field(default_factory=dict, repr=False)            # keys this module does not know
     unresolved: bool = field(default=False, compare=False)          # set by resolve(); not saved
 
@@ -139,7 +142,8 @@ class Document:
             "video": self.video,
             "display": self.display,
             "overlay": self.overlay,
-            "nodes": [{"id": n.id, "tool": n.tool, "params": n.params, "pos": list(n.pos), **n.extra} for n in self.nodes],
+            "nodes": [{"id": n.id, "tool": n.tool, "params": n.params, "pos": list(n.pos),
+                       **({"band": list(n.band)} if n.band is not None else {}), **n.extra} for n in self.nodes],
             "wires": [{"from": w.src, "to": w.dst, "input": w.input} for w in self.wires],
             **self.extra,
         }
@@ -150,13 +154,14 @@ class Document:
         if not isinstance(v, int) or v > VERSION:
             raise FormatError(f"document is format version {v!r}; this module reads up to {VERSION}")
         top = {"version", "video", "display", "overlay", "nodes", "wires"}
-        node_keys = {"id", "tool", "params", "pos"}
+        node_keys = {"id", "tool", "params", "pos", "band"}
         doc = cls(video=d.get("video"), display=d.get("display"), overlay=d.get("overlay"), extra={k: v for k, v in d.items() if k not in top})
         for nd in d.get("nodes", []):
             if any(n.id == nd["id"] for n in doc.nodes):
                 raise FormatError(f"node id {nd['id']!r} appears twice")
             doc.nodes.append(Node(nd["id"], nd["tool"], dict(nd.get("params", {})),
                                   tuple(float(x) for x in nd.get("pos", (0, 0))),
+                                  None if nd.get("band") is None else tuple(float(x) for x in nd["band"]),
                                   {k: v for k, v in nd.items() if k not in node_keys}))
         ids = {n.id for n in doc.nodes}
         for wd in d.get("wires", []):

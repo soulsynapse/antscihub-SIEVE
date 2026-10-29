@@ -94,7 +94,7 @@ class Worker(QThread):
                 if self._i < self._length:
                     row = self._start + self._i
                     out = np.asarray(self.graph.walk_row(row))
-                    planes = {nid: v for nid in self.graph.frame_nodes() if density.is_plane(v := self.graph.compute(nid, row))}
+                    planes = {nid: v for nid in self.graph.frame_nodes() if density.is_plane(v := self.graph.compute(nid, row, raw=True))}
                     if self._stack is not None and (self._stack.shape[1:] != out.shape or self._stack.dtype != out.dtype
                                                     or planes.keys() != self._dens.keys()):
                         self._stack, self._dens, self._i = None, {}, 0   # the nodes or the shape changed under the walk; start over

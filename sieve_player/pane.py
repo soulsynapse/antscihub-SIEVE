@@ -14,7 +14,7 @@ and the process's last line; a tool takes part by defining `output_name(src, par
 -> str` for the line under the target. Under a frame node's settings sits its density, the
 population its plane's values make per row of the loop window, which the window hands the pane for
 every fed frame node; a node whose output is a mask or a field, or that the video does not
-reach, shows none. A node whose tool the catalogue lacks shows which name was
+reach, shows none; its handles are the node's band (see `document`), written like a param. A node whose tool the catalogue lacks shows which name was
 not found and its params read-only. The pane writes params into the document and says which node
 changed; it knows nothing of the runtime.
 """
@@ -291,9 +291,13 @@ class Pane(QWidget):
                     self.notes[node.id] = readout()
                     card.add(self.notes[node.id])
                 elif getattr(tool, "KIND", "frame") == "frame":
-                    self.densities[node.id] = Density()
-                    self.densities[node.id].hide()
-                    card.add(self.densities[node.id])
+                    plot = Density()
+                    if node.band is not None:
+                        plot.levels = [float(v) for v in node.band]
+                    plot.levelReleased.connect(lambda _i, _v, nid=node.id: self._banded(nid))   # the picture crops as it moves; the data when let go
+                    plot.hide()
+                    card.add(plot)
+                    self.densities[node.id] = plot
             if w is not None and getattr(tool, "export_command", None) is not None:
                 ex = Export(tool)
                 ex.set_params(node.params)
@@ -303,6 +307,11 @@ class Pane(QWidget):
         card.hide()
         self._lay.insertWidget(self._lay.count() - 1, card)
         self.cards[node.id] = card
+
+    def _banded(self, nid):
+        """A density handle was let go: the band is the node's, saved and keyed like a param."""
+        self.doc.node(nid).band = tuple(self.densities[nid].levels)
+        self.paramsChanged.emit(nid)
 
     def _changed(self, nid):
         node = self.doc.node(nid)

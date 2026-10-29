@@ -21,6 +21,16 @@ def _key(*parts):
     return hashlib.sha1("|".join(map(str, parts)).encode()).hexdigest()[:16]
 
 
+def banded(v, band):
+    """`v` with every value outside `band` set to zero, inside it when lo is above hi, as rangegate reads
+    crossed handles. Only a plane of values is banded; a mask, a field or None passes through."""
+    if not isinstance(v, np.ndarray) or v.ndim != 2 or v.dtype == bool:
+        return v
+    lo, hi = band
+    keep = (v >= lo) & (v <= hi) if lo <= hi else (v >= lo) | (v <= hi)
+    return np.where(keep, v, np.zeros((), v.dtype))
+
+
 class Memo:
     """LRU bounded by bytes. Image-shaped entries (ndim >= 2) are evicted before small ones."""
 
@@ -88,8 +98,10 @@ class _Entry:
     tool: object
     kind: str           # "video" | "frame" | "series" | "selector"
     params: dict
+    band: tuple | None  # (lo, hi): what the node's plane keeps, see document
     src: str | None     # the node its input wire names
     key: str
+    raw_key: str         # the key without the band: what the memo holds
     src_key: str | None
     fed: bool
 
@@ -110,17 +122,20 @@ class Graph:
     def sync(self):
         """Re-read the document: wiring, params, the flag, which series node runs."""
         doc, tools = self.doc, self.tools
-        keys = {}
+        keys, raw_keys = {}, {}
 
         def key_of(nid, stack=()):
+            # The raw key names what the tool computes and the memo holds; the key adds the band, which
+            # is applied on read, so what downstream sees is keyed by it and the node's own run is not.
             if nid not in keys:
                 node = doc.node(nid)
                 if node.tool == VIDEO_TOOL:
-                    keys[nid] = self._base
+                    keys[nid] = raw_keys[nid] = self._base
                 else:
                     w = doc.source(nid)
                     up = "none" if w is None or w.src in stack else key_of(w.src, (*stack, nid))
-                    keys[nid] = _key(up, node.tool, json.dumps(node.params, sort_keys=True))
+                    raw_keys[nid] = _key(up, node.tool, json.dumps(node.params, sort_keys=True))
+                    keys[nid] = raw_keys[nid] if node.band is None else _key(raw_keys[nid], node.band)
             return keys[nid]
 
         plan, series = {}, []
@@ -134,7 +149,7 @@ class Graph:
                 kind = getattr(tool, "KIND", "frame")
             w = doc.source(n.id)
             src = w.src if w else None
-            plan[n.id] = _Entry(tool, kind, dict(n.params), src, key_of(n.id),
+            plan[n.id] = _Entry(tool, kind, dict(n.params), n.band, src, key_of(n.id), raw_keys[n.id],
                                 key_of(src) if src else None, fed(doc, n.id, tools))
             if kind == "series":
                 series.append(n.id)
@@ -208,26 +223,27 @@ class Graph:
             e = self._plan.get(nid)
         return e is not None and e.fed
 
-    def compute(self, nid, row):
+    def compute(self, nid, row, raw=False):
         """Output of `nid` at `row`, memoized; None for a node nothing reaches. Worker threads only.
         The whole recursion runs in the plan current at the call, so what lands in the memo under a
-        key was computed from the graph that key describes."""
+        key was computed from the graph that key describes. `raw` is the plane before the node's band,
+        what its density counts, so the axis holds while a handle moves."""
         with self._lock:
             plan = self._plan
-        return self._compute(plan, nid, row)
+        return self._compute(plan, nid, row, raw)
 
-    def _compute(self, plan, nid, row):
+    def _compute(self, plan, nid, row, raw=False):
         e = plan.get(nid)
         if e is None or e.kind in ("series", "selector") or not e.fed:
             return None
         if e.kind == "video":
             return self.decoder.read(row)
-        mk = (e.key, row)
+        mk = (e.raw_key, row)
         v = self.memo.get(mk)
         if v is None:
             v = e.tool.run(Frames(self, plan, e.src, e.src_key), row, e.params)
             self.memo.put(mk, v)
-        return v
+        return v if raw or e.band is None else banded(v, e.band)
 
     def peek(self, row, nid=None):
         """Memo-only read of the shown node, or of `nid`, at `row`; None if it isn't there. GUI-safe."""
@@ -237,4 +253,5 @@ class Graph:
             return None
         if e.kind == "video":
             return self.decoder.cached(row)
-        return self.memo.get((e.key, row))
+        v = self.memo.get((e.raw_key, row))
+        return v if v is None or e.band is None else banded(v, e.band)

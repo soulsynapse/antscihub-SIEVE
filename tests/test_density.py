@@ -48,6 +48,9 @@ def test_every_fed_frame_node_is_counted_a_branch_too():
 def test_plot_crops_to_the_occupied_bins_and_paints():
     from PySide6.QtWidgets import QApplication
 
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
     from sieve_player.widgets import Density
 
     QApplication.instance() or QApplication([])
@@ -61,3 +64,19 @@ def test_plot_crops_to_the_occupied_bins_and_paints():
     assert not w.grab().isNull()
     assert (w.lo, w.hi) == (40 - w.MARGIN, 120 + w.MARGIN)
     assert w._row(w._inner().left()) == 7
+    # the handles start at the axis's ends and keep every shown bin; dragged in, they drop the bins outside
+    assert w._kept().all()
+    got, let_go = [], []
+    w.levelDragged.connect(lambda i, v: got.append((i, v)))
+    w.levelReleased.connect(lambda i, v: let_go.append((i, v)))
+    w._drag_level(1, w._y(density.value_of(100)))
+    assert got and got[0][0] == 1 and abs(density.pos_of(got[0][1]) - 100) < 0.5
+    w._mode = 1
+    QTest.mouseRelease(w, Qt.LeftButton)
+    assert let_go == [got[-1]]                                      # released once, with the handle's final value
+    kept = w._kept()
+    assert kept[40 - w.lo] and not kept[120 - w.lo]
+    w._drag_level(0, w._y(density.value_of(110)))             # lo above hi: inside out
+    kept = w._kept()
+    assert kept[40 - w.lo] and kept[120 - w.lo] and not kept[105 - w.lo]
+    assert not w.grab().isNull()

@@ -48,6 +48,25 @@ def test_built_from_document_and_decoder():
     assert g.shown == "add" and g.walk == "add" and g.over is None
 
 
+def test_a_band_zeroes_the_plane_outside_it_after_run_and_keys_the_node():
+    doc = fan_out()
+    g = Graph(doc, Dec(), TOOLS)
+    kg, k = g.key("gray"), g.key("add")
+    g.compute("gray", 6)
+    runs = gray.runs
+    doc.node("gray").band = (3.0, 5.0)        # gray is row + 1
+    g.sync()
+    assert g.key("gray") != kg and g.key("add") != k
+    assert (g.compute("gray", 6) == 0).all() and (g.compute("gray", 2) == 3).all()   # zeroed, kept
+    runs += 1                                                                          # row 2 is new; row 6 was not rerun
+    assert (g.compute("gray", 6, raw=True) == 7).all() and gray.runs == runs         # the memo holds the raw plane; the band is on read
+    assert (g.compute("add", 6) == 1).all()                                           # downstream reads the banded plane
+    assert (g.peek(6, "gray") == 0).all()
+    doc.node("gray").band = (5.0, 3.0)        # inside out: the middle goes
+    g.sync()
+    assert (g.compute("gray", 3) == 0).all() and (g.compute("gray", 6) == 7).all()
+
+
 def test_overlay_is_a_one_plane_node_the_display_peeks_beside_the_shown():
     doc = fan_out()
     doc.overlay = "same"

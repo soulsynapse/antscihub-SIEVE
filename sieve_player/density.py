@@ -29,6 +29,12 @@ def value_of(b):
     return float(b) if b < KNEE else float(np.expm1(np.log1p(KNEE) + (b - KNEE) * STEP))
 
 
+def pos_of(v):
+    """A value's place on the axis, in bins, unrounded: value_of's inverse."""
+    v = max(float(v), 0.0)
+    return v if v < KNEE else KNEE + (np.log1p(v) - np.log1p(KNEE)) / STEP
+
+
 def bin_of(v):
     """The bin a value lands in."""
     return int(round(v)) if v < KNEE - 0.5 else min(BINS - 1, KNEE + int(round((np.log1p(v) - np.log1p(KNEE)) / STEP)))

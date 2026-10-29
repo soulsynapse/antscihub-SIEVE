@@ -77,7 +77,7 @@ Facets the player reads when a tool has them:
 | a `"gate"` bool array in a series result | a green border on the frame while the playhead is in a row any chain node gates |
 | `output_name`, `export_command`, `describe_output` | an Export button on the node; an existing target gets a numbered sibling, and a failed run leaves no partial file |
 | `PATHS = {input: loader}` | a path input a selector feeds; the loader turns the file into params |
-| a plane as output | the node's density, v2's plot: its pixels per row counted on a fixed log axis, under its settings, for every fed frame node; a mask or a field has none |
+| a plane as output | the node's density, v2's plot: its pixels per row counted on a fixed log axis, under its settings, for every fed frame node; a mask or a field has none. Its two handles are the node's band, saved with the node: the player zeroes every pixel outside it (inside it when lo is above hi) before anything downstream reads the node |
 
 `tools/` holds a working example of each.
 

@@ -127,7 +127,7 @@ class Trace(QWidget):
     inset by the dots' room, handles or not, so stacked traces share their x. Two handles are a
     band (lo, hi) as rangegate reads it, and the values it shuts out are darkened: outside the
     band, or inside it when lo is above hi. A press on a handle's line or dots drags it up or down (levelDragged(index,
-    value)); any other press is the playhead (pressed/dragged/released, rows). The cursor's row is
+    value) as it moves, levelReleased(index, value) once, when it is let go); any other press is the playhead (pressed/dragged/released, rows). The cursor's row is
     reported as hovered(row), -1 on leave; set_hover(row) draws another widget's cursor here. The
     corner readout is the value under the cursor, else at the playhead."""
     pressed = Signal(int)
@@ -135,6 +135,7 @@ class Trace(QWidget):
     released = Signal(int)
     hovered = Signal(int)
     levelDragged = Signal(int, float)
+    levelReleased = Signal(int, float)
     GRAB = 4   # px either side of a handle's line that takes the drag
     STUB = 6   # px: a handle's line runs this far past the plot's edge
     DOT = 3.2  # px: the radius of the dot it ends in
@@ -220,12 +221,7 @@ class Trace(QWidget):
             xs, w = inner.left() + step * np.arange(n), step
             gated = None if self.gate is None else self.gate[:n]
         p.setPen(Qt.NoPen)
-        if len(self.levels) == 2:
-            y_lo, y_hi = self._y(self.levels[0]), self._y(self.levels[1])
-            shut = ([(y_lo, inner.bottom()), (inner.top(), y_hi)] if y_lo >= y_hi else [(y_lo, y_hi)])
-            p.setBrush(theme.EXCLUDED)
-            for y0, y1 in shut:
-                p.drawRect(QRectF(inner.left(), y0, inner.width(), y1 - y0))
+        self._paint_shut(p, inner)
         if gated is not None and gated.any():
             # one rect per run, so the translucent wash has no seams between rows
             edges = np.flatnonzero(np.diff(np.concatenate(([0], gated.astype(np.int8), [0]))))
@@ -246,15 +242,7 @@ class Trace(QWidget):
             p.setPen(QPen(line, 1.6))
             p.setBrush(Qt.NoBrush)
             p.drawPolyline(QPolygonF([QPointF(x, self._y(v)) for x, v in zip(xs, self.values)]))
-        for v in self.levels:
-            # on a pixel's center: a 1px line between two rows antialiases to half strength in each
-            y, x0, x1 = round(self._y(v) - 0.5) + 0.5, inner.left() - self.STUB, inner.right() + self.STUB
-            p.setPen(QPen(theme.LEVEL, 1))
-            p.setBrush(theme.LEVEL)
-            p.drawLine(QPointF(x0, y), QPointF(x1, y))
-            for x in (x0, x1):
-                p.drawEllipse(QPointF(x, y), self.DOT, self.DOT)
-            p.setBrush(Qt.NoBrush)
+        self._paint_levels(p, inner)
         for row, color, w in ((self.hover, qgray(theme.INK_2), 1.0), (self.playhead, qgray(theme.HEAD), 1.5)):
             i = row - self.start
             if 0 <= i < n:
@@ -268,6 +256,28 @@ class Trace(QWidget):
             p.setPen(qgray(theme.INK_2))
             p.drawText(inner.adjusted(0, 2, -6, 0), Qt.AlignRight | Qt.AlignTop, f"{float(self.values[i]):.4g}")
         p.end()
+
+    def _paint_shut(self, p, inner):
+        """Darken what two handles shut out: outside the band, or inside it when lo is above hi."""
+        if len(self.levels) != 2:
+            return
+        y_lo, y_hi = self._y(self.levels[0]), self._y(self.levels[1])
+        shut = ([(y_lo, inner.bottom()), (inner.top(), y_hi)] if y_lo >= y_hi else [(y_lo, y_hi)])
+        p.setPen(Qt.NoPen)
+        p.setBrush(theme.EXCLUDED)
+        for y0, y1 in shut:
+            p.drawRect(QRectF(inner.left(), y0, inner.width(), y1 - y0))
+
+    def _paint_levels(self, p, inner):
+        for v in self.levels:
+            # on a pixel's center: a 1px line between two rows antialiases to half strength in each
+            y, x0, x1 = round(self._y(v) - 0.5) + 0.5, inner.left() - self.STUB, inner.right() + self.STUB
+            p.setPen(QPen(theme.LEVEL, 1))
+            p.setBrush(theme.LEVEL)
+            p.drawLine(QPointF(x0, y), QPointF(x1, y))
+            for x in (x0, x1):
+                p.drawEllipse(QPointF(x, y), self.DOT, self.DOT)
+            p.setBrush(Qt.NoBrush)
 
     # -- gestures --------------------------------------------------------
     def _hit(self, pos):
@@ -310,6 +320,8 @@ class Trace(QWidget):
     def mouseReleaseEvent(self, e):
         if self._mode == "head":
             self.released.emit(self._row(e.position().x()))
+        elif self._mode is not None:
+            self.levelReleased.emit(self._mode, self.levels[self._mode])
         self._mode = None
 
     def leaveEvent(self, _):
@@ -326,12 +338,16 @@ class Density(Trace):
     names another; the readout is the value of the bin under the cursor. The field is cropped to the bins any
     row occupies, plus a margin, so the window fills it. Where there are more rows than columns a
     column is the sum of the histograms it covers: counts add, so nothing is hidden and nothing is
-    added. The playhead, cursor and gestures are the Trace's; there are no handles."""
+    added. The playhead, cursor and gestures are the Trace's. Its two handles are a band of
+    values, in the plane's units: the bins outside it, or inside it once lo is above hi, are dropped
+    from the picture and from the column's total, so the ramp spends its whole range on the values
+    kept; they start at the axis's ends, dropping nothing. The band is the view's and is not saved."""
     MARGIN = 2   # bins of room past the occupied ones
 
     def __init__(self, parent=None, rows=6, value_of=None):
-        super().__init__(parent, rows=rows)
+        super().__init__(parent, rows=rows, levels=2)
         self.value_of = value_of or density.value_of
+        self.levels = [0.0, self.value_of(density.BINS - 1)]
         self.lo = self.hi = 0   # the bins shown, inclusive
         self._y_hover = None
 
@@ -339,6 +355,27 @@ class Density(Trace):
         self.values = None if counts is None else np.asarray(counts)
         self.start = start
         self.update()
+
+    def _pos(self, v):
+        """A value's place on the shown axis, in bins from the first shown, clipped to its ends."""
+        return min(max(density.pos_of(v) - self.lo, 0.0), self.hi - self.lo + 1.0)
+
+    def _y(self, v):
+        inner = self._inner()
+        return inner.bottom() - inner.height() * self._pos(v) / (self.hi - self.lo + 1)
+
+    def _drag_level(self, i, y):
+        inner = self._inner()
+        frac = min(max((inner.bottom() - y) / inner.height(), 0.0), 1.0)
+        self.levels[i] = self.value_of(self.lo + frac * (self.hi - self.lo + 1))
+        self.update()
+        self.levelDragged.emit(i, self.levels[i])
+
+    def _kept(self):
+        """Which of the shown bins the band keeps, (shown bins,) bool, by each bin's centre."""
+        centres = np.arange(self.lo, self.hi + 1) + 0.5 - self.lo
+        a, b = self._pos(self.levels[0]), self._pos(self.levels[1])
+        return (centres >= a) & (centres <= b) if a <= b else (centres >= a) | (centres <= b)
 
     def _ramp(self):
         base = theme.layer(self._depth()) + theme.MEASURED_LIFT
@@ -371,8 +408,9 @@ class Density(Trace):
             self.lo, self.hi = max(0, occupied[0] - self.MARGIN), min(bins - 1, occupied[-1] + self.MARGIN)
         else:
             self.lo, self.hi = 0, bins - 1
+        c = c[:, self.lo:self.hi + 1] * self._kept()                                    # dropped bins count for nothing
         total = np.maximum(c.sum(axis=1, keepdims=True), 1.0)
-        lit = np.log1p(c[:, self.lo:self.hi + 1]) / np.log1p(total)                  # (cols, shown bins)
+        lit = np.log1p(c) / np.log1p(total)                                             # (cols, shown bins)
         rgb = self._ramp()[(np.clip(lit, 0, 1) * 255).astype(np.uint8)]                 # (cols, shown bins, 3)
         rgb = np.ascontiguousarray(np.transpose(rgb, (1, 0, 2))[::-1])                  # (bins, cols, 3), top bin first
         h, w = rgb.shape[:2]
@@ -385,6 +423,7 @@ class Density(Trace):
             target = QRectF(inner.left() - step / 2, inner.top(), step * n, inner.height())
         p.drawImage(target, img)
         p.restore()
+        self._paint_levels(p, inner)
         for row, color, lw in ((self.hover, qgray(theme.INK_2), 1.0), (self.playhead, qgray(theme.HEAD), 1.5)):
             i = row - self.start
             if 0 <= i < n:

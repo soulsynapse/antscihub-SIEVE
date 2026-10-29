@@ -120,6 +120,35 @@ def test_a_wire_let_go_in_space_offers_what_its_loose_end_may_join():
     canvas._pending = None
 
 
+def test_a_pulled_wire_offers_what_may_sit_in_it_and_splices_the_choice():
+    doc = D.from_tools([gray, thresh])
+    canvas = canvas_with(doc)
+    w = doc.source("gray")
+    mid = canvas.path_of(w).pointAtPercent(0.5)
+    assert canvas.wire_at(mid) is w and canvas.wire_at(mid + QPointF(40, 0)) is None
+    at = canvas.to_view(mid)
+    e = QMouseEvent(QEvent.MouseButtonPress, at, canvas.mapToGlobal(at.toPoint()), Qt.LeftButton, Qt.LeftButton, Qt.NoModifier)
+    canvas.mousePressEvent(e)
+    to = at + QPointF(60, 0)
+    e = QMouseEvent(QEvent.MouseMove, to, canvas.mapToGlobal(to.toPoint()), Qt.NoButton, Qt.LeftButton, Qt.NoModifier)
+    canvas.mouseMoveEvent(e)
+    e = QMouseEvent(QEvent.MouseButtonRelease, to, canvas.mapToGlobal(to.toPoint()), Qt.LeftButton, Qt.NoButton, Qt.NoModifier)
+    canvas.mouseReleaseEvent(e)
+    assert canvas.findChildren(canvas_mod.TabMenu) and canvas._pull[0] is w
+    # between a bgr output and a bgr input only a pass-through fits; gray, thresh and reader hand out something else
+    assert {n for n, err in canvas.menu_entries() if not err} == {"passthru"}
+    # closing the menu leaves the wire as it was
+    canvas.close_menu()
+    assert doc.source("gray") is w and canvas._pull is None
+    canvas.mousePressEvent(QMouseEvent(QEvent.MouseButtonPress, at, canvas.mapToGlobal(at.toPoint()), Qt.LeftButton, Qt.LeftButton, Qt.NoModifier))
+    canvas.mouseReleaseEvent(QMouseEvent(QEvent.MouseButtonRelease, to, canvas.mapToGlobal(to.toPoint()), Qt.LeftButton, Qt.NoButton, Qt.NoModifier))
+    menu = canvas.findChildren(canvas_mod.TabMenu)[0]
+    menu._pick(menu.list.findItems("passthru", Qt.MatchExactly)[0])
+    assert [(x.src, x.dst) for x in doc.wires] == [("gray", "thresh"), ("video", "passthru"), ("passthru", "gray")]
+    assert canvas.box(doc.node("passthru")).center() == canvas.to_doc(to)
+    assert not canvas.findChildren(canvas_mod.TabMenu) and canvas._pull is None
+
+
 def test_the_overlay_flag_toggles_and_is_offered_only_on_one_plane_nodes():
     doc = D.from_tools([gray, thresh])
     canvas = canvas_with(doc)

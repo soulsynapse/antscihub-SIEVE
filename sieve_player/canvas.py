@@ -3,7 +3,8 @@ connectors, its display flag and, on a node producing one plane, its overlay fla
 not found and on an input nothing feeds; pan, zoom about the cursor, H to frame; wires dragged from
 either end, picked up, cut with Y, and a node dropped onto a wire inserted in it; Tab or a
 right-click on empty canvas for the menu that places a tool, which a wire grown into empty canvas
-also opens, filtered to what the wire may feed or be fed by; a column of buttons at the top right,
+also opens, filtered to what the wire may feed or be fed by, and a wire pulled by its body opens,
+filtered to what may sit in it, the chosen tool spliced in where it was let go; a column of buttons at the top right,
 one per key that is an action, for the mouse hand. It reads and writes the document and nothing
 else. The tools' declared types reach it as data, for the connectors' colours, the unfed
 mark, which connectors a dragged wire may land on and which tools the menu offers it; what the
@@ -172,8 +173,9 @@ class Canvas(QWidget):
         self.hover = None                       # the node id under the pointer
         self._drag = None                       # ("move", start, {id: pos}) | ("box", start, shift, base)
                                                 # | ("pan", start, pan) | ("wire", end, id, input) | ("cut", start)
-                                                # | None; starts in document space but pan's. A wire drag holds
-                                                # its fixed end: "out" of node `id`, or "in" `input` of node `id`
+                                                # | ("pull", start) | None; starts in document space but pan's. A
+                                                # wire drag holds its fixed end: "out" of node `id`, or "in" `input`
+                                                # of node `id`
         self._box = None                        # the rubber band, while one is drawn, document space
         self._loose = None                      # the dragged wire's free end, document space
         self._wires0 = None                     # the document's wires when a wire drag began
@@ -181,8 +183,11 @@ class Canvas(QWidget):
         self._insert = None                     # the wire the single node being moved would drop into
         self._pending = None                    # (end, id, input) of a wire grown into space, while the menu
                                                 # it opened is up; the loose end stays drawn at the menu
+        self._pull = None                       # (wire, point) of a wire pulled by its body, from the press
+                                                # until the menu it opened closes; drawn bent through the point
         self._menu = None                       # the Tab menu, while one is open
         self._hot = None                        # the index of the button under the pointer
+        self._over = None                       # the wire under the pointer, when no node or connector is
         self._y = False                         # Y is held with the cursor here
         self.pan = QPointF(2 * PAD, 2 * PAD)    # where the document's (0, 0) sits, view px
         self.zoom = 1.0
@@ -205,7 +210,7 @@ class Canvas(QWidget):
     def set_document(self, doc):
         self.close_menu()
         self.doc = doc
-        self.hover = self._drag = self._box = self._loose = self._cut = self._insert = None
+        self.hover = self._over = self._drag = self._box = self._loose = self._cut = self._insert = None
         self.select([])
         self.update()
 
@@ -370,6 +375,23 @@ class Canvas(QWidget):
     def crosses(cls, path, line):
         return any(s.intersects(line)[0] == QLineF.BoundedIntersection for s in cls.segments(path))
 
+    @staticmethod
+    def distance(seg, pt):
+        """From `pt` to the nearest point of segment `seg`."""
+        a, ab = seg.p1(), seg.p2() - seg.p1()
+        l2 = ab.x() ** 2 + ab.y() ** 2
+        t = 0.0 if l2 == 0 else max(0.0, min(1.0, QPointF.dotProduct(pt - a, ab) / l2))
+        return QLineF(a + ab * t, pt).length()
+
+    def wire_at(self, pos):
+        """The wire whose line runs within HIT view px of `pos`, the last drawn first; the caller asks
+        for connectors and nodes before wires, as they are drawn over them."""
+        r = (HIT + WIRE_W) / self.zoom
+        for w in reversed(self.doc.wires if self.doc else []):
+            if any(self.distance(s, pos) <= r for s in self.segments(self.path_of(w))):
+                return w
+        return None
+
     @classmethod
     def touches(cls, path, rect):
         edges = (QLineF(rect.topLeft(), rect.topRight()), QLineF(rect.topRight(), rect.bottomRight()),
@@ -463,30 +485,60 @@ class Canvas(QWidget):
     def _end_move(self):
         w, self._insert = self._insert, None
         if w is not None:
-            nid = self.selected[0]
-            self.doc.connect(w.src, nid)
-            self.doc.connect(nid, w.dst, w.input)
+            self.splice(w, self.selected[0])
             self.changed.emit()
         self.update()
+
+    def _end_pull(self, pos):
+        """The menu where the wire was let go; the wire stays bent there until the menu closes."""
+        self._pull = (self._pull[0], pos)
+        self.open_menu(self.to_view(pos))
+
+    def splice(self, w, nid, input=INPUT):
+        """Node `nid` into wire `w`: its `input` fed by the source, its output feeding the destination,
+        which drops the wire."""
+        self.doc.connect(w.src, nid, input)
+        self.doc.connect(nid, w.dst, w.input)
 
     # -- the Tab menu --------------------------------------------------------
     def menu_entries(self):
         """[(name, error)] the menu offers, by name: the video node and every tool, or with a wire
-        pending, those its loose end may join; a tool that did not import is offered greyed either
-        way, since what it expects is unknown, and the video node is greyed while the document
-        has one, since a document names one video."""
+        pending, those its loose end may join, or with one pulled, those that may sit in it; a tool
+        that did not import is offered greyed either way, since what it expects is unknown, and the
+        video node is greyed while the document has one, since a document names one video."""
         out = []
         for name in sorted(set(self.tools) | set(self.broken) | {VIDEO_TOOL}):
             if name == VIDEO_TOOL:
                 if self.doc.video_node() is not None:
                     out.append((name, "the document has a video node"))
-                elif self._pending is None or self._joins(name):
+                elif self._offers(name):
                     out.append((name, ""))
             elif name not in self.tools:
                 out.append((name, self.broken[name]))
-            elif self._pending is None or self._joins(name):
+            elif self._offers(name):
                 out.append((name, ""))
         return out
+
+    def _offers(self, name):
+        if self._pending is not None:
+            return self._joins(name)
+        if self._pull is not None:
+            return self._splices(name)
+        return True
+
+    def _splices(self, name):
+        """Whether a fresh node of tool `name` may sit in the pulled wire: an input its source feeds,
+        and an output that, so fed, fits the destination."""
+        w = self._pull[0]
+        got = self.output_type(self.doc.node(w.src))
+        if self._landing(name, got) is None:
+            return False
+        if name == VIDEO_TOOL:
+            p = VIDEO_PRODUCES
+        else:
+            p = getattr(self.tools[name], "PRODUCES", None)
+            p = got if p == "same" else p
+        return p is not None and self.compatible(p, dict(self.inputs(self.doc.node(w.dst)))[w.input])
 
     def _joins(self, name):
         """Whether a fresh node of tool `name` may take the pending wire."""
@@ -536,21 +588,23 @@ class Canvas(QWidget):
         self.update()
 
     def close_menu(self):
-        """Closes the menu if one is open; a wire pending on it is let go."""
+        """Closes the menu if one is open; a wire pending on it is let go, a pulled one springs back."""
         if self._menu is not None:
             menu, self._menu = self._menu, None
             menu.hide()
             menu.setParent(None)
             menu.deleteLater()
             self.setFocus()
-        self._pending = self._loose = None
+        self._pending = self._loose = self._pull = None
         self.update()
 
     def place(self, name, pos):
         """A new node of tool `name` centred on document point `pos`; with a wire pending, the node
-        sits so the connector the wire reaches is at `pos`, and the wire is made."""
+        sits so the connector the wire reaches is at `pos`, and the wire is made; with one pulled,
+        the node is spliced into it."""
         tool = self.tools.get(name)      # None for the video node
         pending, self._pending = self._pending, None
+        pull, self._pull = self._pull, None
         x, y = pos.x() - NODE_W / 2, pos.y() - NODE_H / 2
         if pending is not None:
             y = pos.y() if pending[0] == "out" else pos.y() - NODE_H
@@ -561,6 +615,9 @@ class Canvas(QWidget):
                 self.doc.connect(nid, node.id, self._landing(name, self.output_type(self.doc.node(nid))) or INPUT)
             else:
                 self.doc.connect(node.id, nid, iname)
+        elif pull is not None:
+            w = pull[0]
+            self.splice(w, node.id, self._landing(name, self.output_type(self.doc.node(w.src))) or INPUT)
         self.changed.emit()
         self.select([node.id])
         return node
@@ -626,7 +683,13 @@ class Canvas(QWidget):
         for w in self.doc.wires:
             src, dst = self.doc.node(w.src), self.doc.node(w.dst)
             ok = dst.unresolved or src.unresolved or fits(self.doc, self.tools, w)
-            if w is self._insert:
+            if self._pull is not None and w is self._pull[0]:
+                # bent through the pulled point, an end of each half: the gap the node will fill
+                p.setPen(QPen(qgray(theme.HEAD), WIRE_W))
+                p.drawPath(self.wire_path(self.pin_out(src), self._pull[1]))
+                p.drawPath(self.wire_path(self._pull[1], self.pin_in(dst, w.input)))
+                continue
+            if w is self._insert or w is self._over:
                 p.setPen(QPen(qgray(theme.HEAD), WIRE_W + 1))
             else:
                 p.setPen(QPen(theme.ACCENT if ok else theme.RED, WIRE_W))
@@ -746,6 +809,10 @@ class Canvas(QWidget):
             return
         node = self.node_at(pos)
         if node is None:
+            if (w := self.wire_at(pos)) is not None:
+                self._drag, self._pull, self._over = ("pull", pos), (w, pos), None
+                self.update()
+                return
             if not shift:
                 self.select([])
             self._drag = ("box", pos, shift, list(self.selected))
@@ -766,10 +833,13 @@ class Canvas(QWidget):
     def mouseMoveEvent(self, e):
         if self._drag is None:
             hot = self.button_at(e.position()) if self.doc else None
-            node = self.node_at(self.to_doc(e.position())) if self.doc and hot is None else None
+            pos = self.to_doc(e.position())
+            node = self.node_at(pos) if self.doc and hot is None else None
             nid = node.id if node else None
-            if (nid, hot) != (self.hover, self._hot):
-                self.hover, self._hot = nid, hot
+            over = self.wire_at(pos) if self.doc and hot is None and node is None and self._menu is None \
+                and self.pin_at(pos) is None else None
+            if (nid, hot, over) != (self.hover, self._hot, self._over):
+                self.hover, self._hot, self._over = nid, hot, over
                 self.update()
             return
         kind, start, *rest = self._drag
@@ -782,6 +852,8 @@ class Canvas(QWidget):
             self._insert = self.insertable(self.doc.node(self.selected[0])) if len(self.selected) == 1 else None
         elif kind == "wire":
             self._loose = self.to_doc(e.position())
+        elif kind == "pull":
+            self._pull = (self._pull[0], self.to_doc(e.position()))
         elif kind == "cut":
             self._cut.setP2(self.to_doc(e.position()))
         else:
@@ -795,7 +867,9 @@ class Canvas(QWidget):
         if kind == "wire":
             self._end_wire(self.to_doc(e.position()))
         self._drag = None
-        if kind == "pan":
+        if kind == "pull":
+            self._end_pull(self.to_doc(e.position()))
+        elif kind == "pan":
             self._cursor()
         elif kind == "cut":
             self._end_cut()
@@ -814,8 +888,8 @@ class Canvas(QWidget):
             self.set_zoom(self.zoom * ZOOM_STEP ** notches, e.position())
 
     def leaveEvent(self, e):
-        if self.hover is not None or self._hot is not None:
-            self.hover = self._hot = None
+        if self.hover is not None or self._hot is not None or self._over is not None:
+            self.hover = self._hot = self._over = None
             self.update()
         if self._space or self._y:
             self._space = self._y = False

@@ -1,5 +1,5 @@
 """The network editor: a node one layer above the ground with its
-connectors, its display flag and, on a node producing one plane, its overlay flag; select, box-select, drag, Delete, the mark on a node whose tool was
+connectors, on a node with a frame to show its display flag and, on one producing one plane, its overlay flag; select, box-select, drag, Delete, the mark on a node whose tool was
 not found and on an input nothing feeds; pan, zoom about the cursor, H to frame; wires dragged from
 either end, picked up, cut with Y, and a node dropped onto a wire inserted in it; Tab or a
 right-click on empty canvas for the menu that places a tool, which a wire grown into empty canvas
@@ -223,7 +223,7 @@ class Canvas(QWidget):
             self.selectionChanged.emit(list(ids))
 
     def set_flag(self, nid):
-        if self.doc is not None and nid != self.doc.display:
+        if self.doc is not None and nid != self.doc.display and self.can_display(self.doc.node(nid)):
             self.doc.display = nid
             self.update()
             self.flagged.emit()
@@ -266,6 +266,14 @@ class Canvas(QWidget):
         if node.tool == VIDEO_TOOL:
             return VIDEO_PRODUCES
         return None if node.unresolved else produces(self.doc, self.tools, node.id)
+
+    def can_display(self, node):
+        """Whether the display flag is offered: a node with a frame to show. A series node's output
+        is a signal in the Trace and a selector's a path, so neither takes it; an unresolved node
+        does, its kind unknown until its tool is found."""
+        tool = self.tools.get(node.tool)
+        return node.tool == VIDEO_TOOL or tool is None \
+            or (not is_selector(tool) and getattr(tool, "KIND", "frame") == "frame")
 
     def can_overlay(self, node):
         """Whether the overlay flag is offered: a resolved node producing one plane (an OVERLAYABLE type)."""
@@ -728,7 +736,7 @@ class Canvas(QWidget):
         p.setPen(theme.RED if n.unresolved or n.id in self.errors else qgray(theme.INK))
         text = box.adjusted(PAD, 0, -(4 * PAD + 4 * FLAG_R), 0)
         p.drawText(text, Qt.AlignLeft | Qt.AlignVCenter, f"{n.id} ?" if n.unresolved else n.id)
-        flags = [(self.flag(n), n.id == self.doc.display, theme.ACCENT)]
+        flags = [(self.flag(n), n.id == self.doc.display, theme.ACCENT)] if self.can_display(n) else []
         if self.can_overlay(n):
             flags.append((self.overlay_flag(n), n.id == self.doc.overlay, theme.OVERLAY))
         for rect, on, color in flags:
@@ -817,7 +825,7 @@ class Canvas(QWidget):
                 self.select([])
             self._drag = ("box", pos, shift, list(self.selected))
             return
-        if self.flag(node).adjusted(-HIT, -HIT, HIT, HIT).contains(pos):
+        if self.can_display(node) and self.flag(node).adjusted(-HIT, -HIT, HIT, HIT).contains(pos):
             self.set_flag(node.id)
             return
         if self.can_overlay(node) and self.overlay_flag(node).adjusted(-HIT, -HIT, HIT, HIT).contains(pos):

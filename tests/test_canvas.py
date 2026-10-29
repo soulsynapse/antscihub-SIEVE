@@ -23,7 +23,8 @@ thresh = Tool(NAME="thresh", KIND="frame", EXPECTS="gray", PRODUCES="mask", DEFA
 passthru = Tool(NAME="passthru", KIND="frame", EXPECTS=("bgr", "gray"), PRODUCES="same", DEFAULTS={})
 sel = Tool(NAME="sel", KIND="frame", EXPECTS=None, PRODUCES=D.PATH, DEFAULTS={}, select=lambda folder, p: None)
 reader = Tool(NAME="reader", KIND="frame", EXPECTS="bgr", PRODUCES="mask", DEFAULTS={}, PATHS={"settings": lambda p: {}})
-TOOLS = {t.NAME: t for t in (gray, thresh, passthru, sel, reader)}
+reduce = Tool(NAME="reduce", KIND="series", EXPECTS=("gray", "mask"), PRODUCES="signal", DEFAULTS={})
+TOOLS = {t.NAME: t for t in (gray, thresh, passthru, sel, reader, reduce)}
 
 
 def canvas_with(doc):
@@ -109,7 +110,7 @@ def test_a_wire_let_go_in_space_offers_what_its_loose_end_may_join():
         return {n for n, err in canvas.menu_entries() if not err}
 
     canvas._pending = ("out", "gray", None)             # a gray output: takers of gray, a pass-through among them
-    assert live() == {"thresh", "passthru"}
+    assert live() == {"thresh", "passthru", "reduce"}
     canvas._pending = ("in", "thresh", D.INPUT)         # a gray input: producers of gray, a pass-through among them
     assert live() == {"gray", "passthru"}
     canvas._pending = ("in", "reader", "settings")      # a path input: a selector, never a pass-through
@@ -163,3 +164,12 @@ def test_the_overlay_flag_toggles_and_is_offered_only_on_one_plane_nodes():
     canvas.set_overlay("gray")
     doc.remove_node("gray")
     assert doc.overlay is None
+
+
+def test_the_display_flag_is_not_offered_on_a_node_without_a_frame():
+    doc = D.from_tools([gray, reduce])
+    canvas = canvas_with(doc)
+    assert canvas.can_display(doc.node("gray")) and not canvas.can_display(doc.node("reduce"))
+    _press(canvas, canvas.to_view(canvas.flag(doc.node("reduce")).center()))
+    canvas.set_flag("reduce")
+    assert doc.display == "gray"

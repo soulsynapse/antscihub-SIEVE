@@ -8,7 +8,8 @@ MAY_IMPORT = {
     "document": set(),
     "graph": {"document"},
     "canvas": {"document", "theme"},
-    "pane": {"document", "theme"},
+    "pane": {"document", "theme", "widgets"},
+    "widgets": {"density", "theme"},
 }
 
 

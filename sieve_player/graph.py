@@ -75,7 +75,8 @@ class Frames:
 
 
 class Series:
-    """What a series tool's run() gets: data is (T, ...), the read node stacked over the window."""
+    """What a series tool's run() gets: data is (T, ...), the read node stacked over the window, each
+    row through the tool's fold() first when it has one."""
 
     def __init__(self, data, key, start, fps):
         self.data, self.key, self.start, self.fps = data, key, start, fps
@@ -153,15 +154,33 @@ class Graph:
             self.chain, self.unrun_series = chain, [s for s in series if s not in chain]
 
     # -- what the worker and the display ask -------------------------------
+    def _walk(self):
+        if self.series is None:
+            return self.shown
+        e = self._plan[self.series]
+        return e.src if e.fed else None
+
     @property
     def walk(self):
         """The node the worker computes over the window: what the series node reads, else what is
         shown. None when the series node is not fed, so its tool never sees a type it does not expect."""
         with self._lock:
-            if self.series is None:
-                return self.shown
-            e = self._plan[self.series]
-            return e.src if e.fed else None
+            return self._walk()
+
+    def walk_row(self, row):
+        """The walked node at `row` as the worker stacks it: through the head's fold() when it has one,
+        so what the window holds is what the series tool asked for and never the frame. Worker threads only."""
+        with self._lock:
+            plan, nid = self._plan, self._walk()
+            fold = getattr(plan[self.series].tool, "fold", None) if self.series else None
+        out = self._compute(plan, nid, row)
+        return out if fold is None or out is None else fold(out)
+
+    def frame_nodes(self):
+        """Every fed frame node, in document order: what the walk computes at each row beside the
+        walked node, so every node's plane can be counted over the window, a branch's too."""
+        with self._lock:
+            return [nid for nid, e in self._plan.items() if e.kind == "frame" and e.fed]
 
     @property
     def series_tool(self):

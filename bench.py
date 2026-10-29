@@ -16,7 +16,7 @@ rows = int(sys.argv[2]) if len(sys.argv) > 2 else 600
 def fill(graph, n):
     t = time.perf_counter()
     for r in range(n):
-        graph.compute(graph.walk, r)
+        graph.walk_row(r)
     return time.perf_counter() - t
 
 

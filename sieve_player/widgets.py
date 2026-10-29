@@ -1,10 +1,10 @@
 """Optional bases so a tool file stays one screen long: a settings form and a series trace."""
 import numpy as np
 from PySide6.QtCore import QPointF, QRectF, Qt, Signal
-from PySide6.QtGui import QColor, QPainter, QPen, QPolygonF
+from PySide6.QtGui import QColor, QImage, QPainter, QPen, QPolygonF
 from PySide6.QtWidgets import QCheckBox, QComboBox, QHBoxLayout, QLabel, QLineEdit, QSlider, QVBoxLayout, QWidget
 
-from . import theme
+from . import density, theme
 from .theme import CONTROL_W, GAP, ROW_H, VALUE_W, Form, mono_font, qgray
 
 
@@ -317,3 +317,93 @@ class Trace(QWidget):
             self.hover = -1
             self.update()
             self.hovered.emit(-1)
+
+
+class Density(Trace):
+    """A per-row histogram over the window, drawn as a field: each column a row, each pixel-row a value
+    bin, lit by log1p(count) over log1p(the column's pixels) in theme.DENSITY, v2's ramp. Feed it with
+    set_series(counts, start), counts (T, bins) on sieve_player.density's axis unless `value_of(bin)`
+    names another; the readout is the value of the bin under the cursor. The field is cropped to the bins any
+    row occupies, plus a margin, so the window fills it. Where there are more rows than columns a
+    column is the sum of the histograms it covers: counts add, so nothing is hidden and nothing is
+    added. The playhead, cursor and gestures are the Trace's; there are no handles."""
+    MARGIN = 2   # bins of room past the occupied ones
+
+    def __init__(self, parent=None, rows=6, value_of=None):
+        super().__init__(parent, rows=rows)
+        self.value_of = value_of or density.value_of
+        self.lo = self.hi = 0   # the bins shown, inclusive
+        self._y_hover = None
+
+    def set_series(self, counts, start, gate=None, levels=()):
+        self.values = None if counts is None else np.asarray(counts)
+        self.start = start
+        self.update()
+
+    def _ramp(self):
+        base = theme.layer(self._depth()) + theme.MEASURED_LIFT
+        stops = ((base, base, base), *theme.DENSITY)
+        xs = np.linspace(0, 1, len(stops))
+        return np.stack([np.interp(np.linspace(0, 1, 256), xs, [c[k] for c in stops]) for k in range(3)], axis=1).astype(np.uint8)
+
+    def paintEvent(self, _):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing, True)
+        box = self._box()
+        p.setPen(Qt.NoPen)
+        p.setBrush(qgray(theme.layer(self._depth()) + theme.MEASURED_LIFT))
+        p.drawRoundedRect(box, theme.RADIUS, theme.RADIUS)
+        if self.values is None or len(self.values) < 2:
+            p.end()
+            return
+        inner, n, step = self._inner(), len(self.values), self._step()
+        width = int(inner.width())
+        dense = n - 1 >= width > 1
+        c = self.values
+        if dense:
+            col = np.arange(n) * (width - 1) // (n - 1)
+            starts = np.flatnonzero(np.diff(col, prepend=-1))
+            c = np.add.reduceat(c, starts, axis=0)
+        c = np.asarray(c, np.float64)
+        occupied = np.flatnonzero(c.sum(axis=0))
+        bins = c.shape[1]
+        if len(occupied):
+            self.lo, self.hi = max(0, occupied[0] - self.MARGIN), min(bins - 1, occupied[-1] + self.MARGIN)
+        else:
+            self.lo, self.hi = 0, bins - 1
+        total = np.maximum(c.sum(axis=1, keepdims=True), 1.0)
+        lit = np.log1p(c[:, self.lo:self.hi + 1]) / np.log1p(total)                  # (cols, shown bins)
+        rgb = self._ramp()[(np.clip(lit, 0, 1) * 255).astype(np.uint8)]                 # (cols, shown bins, 3)
+        rgb = np.ascontiguousarray(np.transpose(rgb, (1, 0, 2))[::-1])                  # (bins, cols, 3), top bin first
+        h, w = rgb.shape[:2]
+        img = QImage(rgb.data, w, h, rgb.strides[0], QImage.Format_RGB888).copy()
+        p.save()
+        p.setClipRect(inner)
+        if dense:
+            target = QRectF(inner.left(), inner.top(), float(w), inner.height())
+        else:
+            target = QRectF(inner.left() - step / 2, inner.top(), step * n, inner.height())
+        p.drawImage(target, img)
+        p.restore()
+        for row, color, lw in ((self.hover, qgray(theme.INK_2), 1.0), (self.playhead, qgray(theme.HEAD), 1.5)):
+            i = row - self.start
+            if 0 <= i < n:
+                p.setPen(QPen(color, lw))
+                x = inner.left() + (col[i] if dense else step * i)
+                p.drawLine(QPointF(x, inner.top()), QPointF(x, inner.bottom()))
+        if self._y_hover is not None:
+            frac = (inner.bottom() - self._y_hover) / inner.height()
+            b = self.lo + int(np.clip(frac, 0, 1) * (self.hi - self.lo + 1))
+            p.setPen(qgray(theme.INK_2))
+            p.drawText(inner.adjusted(0, 2, -6, 0), Qt.AlignRight | Qt.AlignTop, f"{self.value_of(min(b, self.hi)):.4g}")
+        p.end()
+
+    def mouseMoveEvent(self, e):
+        self._y_hover = e.position().y()
+        super().mouseMoveEvent(e)
+        self.update()
+
+    def leaveEvent(self, e):
+        self._y_hover = None
+        super().leaveEvent(e)
+        self.update()

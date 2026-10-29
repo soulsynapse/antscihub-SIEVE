@@ -520,6 +520,7 @@ class PlayerWindow(QMainWindow):
         ct = self.timeline.controls
         self.worker.rowReady.connect(self._row_ready)
         self.worker.seriesReady.connect(self._series_ready)
+        self.worker.densityReady.connect(self.pane.show_density)
         self.worker.walked.connect(ct.set_progress)
         self.worker.failed.connect(lambda r: ct.progress.setText(f"tool raised at row {r}, see console"))
         self.timeline.strip.set_count(self.count, self.fps)
@@ -585,6 +586,7 @@ class PlayerWindow(QMainWindow):
             w = self.pane.widget(nid)
             if w is not None and hasattr(w, "set_playhead"):
                 w.set_playhead(row)
+        self.pane.set_playhead(row)
         self._update_gate()
 
     def _scrub_begin(self, row):

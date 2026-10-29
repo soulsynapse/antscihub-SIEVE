@@ -11,7 +11,10 @@ note of what its rule matched, which the window writes. Under a tool that
 exports sits the target it would write, an Export button that runs the tool's argv in a QProcess,
 and the process's last line; a tool takes part by defining `output_name(src, params) -> path` and
 `export_command(src, dst, params, fps) -> argv`, and may add `describe_output(src, params, fps)
--> str` for the line under the target. A node whose tool the catalogue lacks shows which name was
+-> str` for the line under the target. Under a frame node's settings sits its density, the
+population its plane's values make per row of the loop window, which the window hands the pane for
+every fed frame node; a node whose output is a mask or a field, or that the video does not
+reach, shows none. A node whose tool the catalogue lacks shows which name was
 not found and its params read-only. The pane writes params into the document and says which node
 changed; it knows nothing of the runtime.
 """
@@ -26,6 +29,7 @@ from PySide6.QtWidgets import QFileDialog, QFrame, QPushButton, QScrollArea, QVB
 
 from .document import VIDEO_TOOL, is_selector, paths
 from .theme import GAP, PAD, WIDE_W, Form, Layer, measured, readout
+from .widgets import Density
 
 VIDEO_FILTER = "Video (*.mp4 *.MP4 *.avi *.mov *.mkv);;All (*)"
 
@@ -207,6 +211,7 @@ class Pane(QWidget):
         self.tools = tools
         self.doc = None
         self.cards, self.widgets, self.exports, self.notes = {}, {}, {}, {}
+        self.densities = {}   # frame node -> its Density plot, hidden until the window hands it counts
         self.video = None
         self.current = None
         self._src, self._fps = None, None
@@ -249,6 +254,7 @@ class Pane(QWidget):
         self.widgets.pop(nid, None)
         self.exports.pop(nid, None)
         self.notes.pop(nid, None)
+        self.densities.pop(nid, None)
         if self.video is not None and self.video.parent() is card:
             self.video = None
         self._lay.removeWidget(card)
@@ -284,6 +290,10 @@ class Pane(QWidget):
                 if is_selector(tool) or paths(tool):
                     self.notes[node.id] = readout()
                     card.add(self.notes[node.id])
+                elif getattr(tool, "KIND", "frame") == "frame":
+                    self.densities[node.id] = Density()
+                    self.densities[node.id].hide()
+                    card.add(self.densities[node.id])
             if w is not None and getattr(tool, "export_command", None) is not None:
                 ex = Export(tool)
                 ex.set_params(node.params)
@@ -333,6 +343,21 @@ class Pane(QWidget):
 
     def widget(self, nid):
         return self.widgets.get(nid)
+
+    def show_density(self, counts, start):
+        """`counts` is {frame node: (rows, bins)} for every plane the walk computed: a node in it shows
+        them, and one not in it, whose output is a mask or a field or that the video does not reach,
+        shows no plot."""
+        for nid, plot in self.densities.items():
+            if nid in counts:
+                plot.set_series(counts[nid], start)
+                plot.show()
+            else:
+                plot.hide()
+
+    def set_playhead(self, row):
+        for plot in self.densities.values():
+            plot.set_playhead(row)
 
     def note(self, nid, text):
         """The line under a selector's settings, what its rule matched, or under a tool with path

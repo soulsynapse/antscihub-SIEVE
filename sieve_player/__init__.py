@@ -7,7 +7,7 @@ import os
 import sys
 
 _HOME = {"Frames": "graph", "Memo": "graph", "Series": "graph", "Decoder": "decoder", "probe": "pane",
-         "ParamWidget": "widgets", "Trace": "widgets", "Worker": "worker"}
+         "ParamWidget": "widgets", "Trace": "widgets", "Density": "widgets", "Worker": "worker"}
 __all__ = ["play", *_HOME, "theme"]
 
 

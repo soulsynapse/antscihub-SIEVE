@@ -5,6 +5,7 @@ import traceback
 import numpy as np
 from PySide6.QtCore import QThread, Signal
 
+from . import density
 from .graph import Series
 
 
@@ -12,6 +13,7 @@ class Worker(QThread):
     rowReady = Signal(int)                    # a requested row is now in the memo
     walked = Signal(int, int)                 # rows done, rows in window
     seriesReady = Signal(object, int, float)  # {node: result} for the series chain, start, fps
+    densityReady = Signal(object, int)        # {node: (rows, BINS) counts} per plane the walk computes, start
     failed = Signal(int)                      # a tool raised at this row; the walk is abandoned
 
     def __init__(self, graph, every=30):
@@ -26,6 +28,7 @@ class Worker(QThread):
         self._walk_gen = -1
         self._start = self._length = self._i = 0
         self._stack = None
+        self._dens = {}                       # node -> (length, BINS) counts, for the planes the walk computes
 
     # -- GUI-side calls --------------------------------------------------
     def request_row(self, row):
@@ -82,20 +85,26 @@ class Worker(QThread):
                     self._walk_gen, self._i = gen, self._length   # nothing reaches the walked node; wait for the next change
                     continue
                 if gen != self._walk_gen:
-                    self._walk_gen, self._i, self._stack = gen, 0, None
+                    self._walk_gen, self._i, self._stack, self._dens = gen, 0, None, {}
                     self._start = max(0, min(start, self.graph.count - 1))
                     self._length = max(0, min(length, self.graph.count - self._start))
                 if dirty and self._i:
                     self._emit_series()
                     continue
                 if self._i < self._length:
-                    out = np.asarray(self.graph.compute(self.graph.walk, self._start + self._i))
-                    if self._stack is not None and (self._stack.shape[1:] != out.shape or self._stack.dtype != out.dtype):
-                        self._stack, self._i = None, 0   # the node or its shape changed under the walk; start over
+                    row = self._start + self._i
+                    out = np.asarray(self.graph.walk_row(row))
+                    planes = {nid: v for nid in self.graph.frame_nodes() if density.is_plane(v := self.graph.compute(nid, row))}
+                    if self._stack is not None and (self._stack.shape[1:] != out.shape or self._stack.dtype != out.dtype
+                                                    or planes.keys() != self._dens.keys()):
+                        self._stack, self._dens, self._i = None, {}, 0   # the nodes or the shape changed under the walk; start over
                         continue
                     if self._stack is None:
                         self._stack = np.empty((self._length,) + out.shape, dtype=out.dtype)
+                        self._dens = {nid: np.zeros((self._length, density.BINS), np.uint32) for nid in planes}
                     self._stack[self._i] = out
+                    for nid, v in planes.items():
+                        self._dens[nid][self._i] = density.fold(v)
                     self._i += 1
                     self.walked.emit(self._i, self._length)
                     if self._i % self.every == 0 or self._i == self._length:
@@ -110,8 +119,11 @@ class Worker(QThread):
                     self._i = self._length  # abandon this walk; the next gen bump restarts it
 
     def _emit_series(self):
+        if not self._i:
+            return
+        self.densityReady.emit({nid: d[: self._i] for nid, d in self._dens.items()}, self._start)
         chain = self.graph.series_chain()
-        if not chain or not self._i:
+        if not chain:
             return
         results, start, fps = {}, self._start, self.graph.fps
         for i, (nid, tool, params, src) in enumerate(chain):

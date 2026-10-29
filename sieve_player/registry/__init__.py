@@ -17,6 +17,7 @@ _HINTS = {
     "PRODUCES": 'PRODUCES = "gray"  # or "same": out as in',
     "DEFAULTS": "DEFAULTS = {}",
     "run": "def run(frames, row, params): ...",
+    "fold": "def fold(frame): ...  # a series tool: what the walk stacks per row in place of the frame",
     "settings": "def settings(parent=None): ...",
     "draw": "def draw(painter, row, result, start): ...",
     "output_name": "def output_name(src, params): ...",

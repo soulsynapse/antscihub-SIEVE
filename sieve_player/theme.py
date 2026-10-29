@@ -58,6 +58,7 @@ RED = QColor(232, 72, 72)       # an input nothing feeds, a wire whose types no 
 GATED = QColor(96, 210, 120, 72)  # GATE as a trace's wash over its gated rows
 LEVEL = QColor(240, 110, 100)   # a trace's handles: v2's band color, softer than RED, which is an error
 EXCLUDED = QColor(0, 0, 0, 72)  # the values a trace's band shuts out
+DENSITY = ((32, 110, 138), (70, 180, 200), (190, 240, 248))   # a density's ramp above its field: v2's cyan, never HEAT, which is a value not a count
 TYPE_HUES = {"bgr": 30, "gray": 165, "mask": 210, "path": 275}   # a connector's hue per product type; a type not here is hashed
 TYPE_SV = (150, 225)            # every connector's saturation and value, so the hue alone says the type
 MONO = ["Cascadia Mono", "Consolas", "Menlo", "DejaVu Sans Mono", "monospace"]

@@ -56,7 +56,7 @@ def run_graph():
     out = g.compute("motion", 0)
     check(out is not None and out.ndim == 2 and out.dtype == np.uint8, "motion output")
     check(g.peek(0) is out, "peek did not find the shown row")
-    stack = np.stack([g.compute(g.walk, r) for r in range(5)])
+    stack = np.stack([g.walk_row(r) for r in range(5)])   # through reduce's fold, as the worker does
     result = g.series_tool.run(Series(stack, g.key(g.walk), 0, g.fps), g.series_params())
     check(len(result["signal"]) == 5 and "gate" not in result, "reduce series")
     gated = rangegate.run(Series(result["signal"], g.key("reduce"), 0, g.fps), g.series_chain()[1][2])

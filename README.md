@@ -31,8 +31,11 @@ def settings(parent=None) -> ParamWidget
 
 # a series tool: the whole loop window at once
 NAME = "reduce"; KIND = "series"; EXPECTS = ("gray", "mask"); PRODUCES = "signal"
-def run(series, params) -> dict               # series.data is (T, ...), the read node stacked; the
-                                              # dict carries "signal", a (T,) array, if PRODUCES says so
+def fold(frame) -> np.ndarray                 # optional: what the walk stacks per row in place of the
+                                              # frame, so the window holds (T, small) and never the planes
+def run(series, params) -> dict               # series.data is (T, ...), the read node stacked, each row
+                                              # through fold() if there is one; the dict carries "signal",
+                                              # a (T,) array, if PRODUCES says so
 def settings(parent=None) -> ParamWidget      # plus show_result(result, start, fps), set_playhead(row)
 
 # a series tool reading another: series.data is the upstream result's "signal"
@@ -62,6 +65,9 @@ How the player treats a tool, as `sieve_player/graph.py`, `pane.py` and `window.
 - Series nodes run as a chain: the first one reading a frame node runs on the stacked window, and
   each fed series node wired on from a chain node runs after it on the upstream result's
   `"signal"`. A second series node reading a frame node does not run.
+- A series tool's `fold(frame)` runs on the worker as each row is computed and takes no params: a
+  change to the tool's params reruns `run` on the stack already folded, so a fold must hold every
+  number any params could ask for (reduce folds a row to its sum, max, count and size).
 
 Facets the player reads when a tool has them:
 
@@ -71,6 +77,7 @@ Facets the player reads when a tool has them:
 | a `"gate"` bool array in a series result | a green border on the frame while the playhead is in a row any chain node gates |
 | `output_name`, `export_command`, `describe_output` | an Export button on the node; an existing target gets a numbered sibling, and a failed run leaves no partial file |
 | `PATHS = {input: loader}` | a path input a selector feeds; the loader turns the file into params |
+| a plane as output | the node's density, v2's plot: its pixels per row counted on a fixed log axis, under its settings, for every fed frame node; a mask or a field has none |
 
 `tools/` holds a working example of each.
 

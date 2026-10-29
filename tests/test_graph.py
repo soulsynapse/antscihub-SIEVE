@@ -166,3 +166,18 @@ def test_one_compute_sees_one_plan():
         assert g.key("add") == k_old and g.compute("add", 0) is v        # served from the memo, not recomputed
     finally:
         add.run = old
+
+
+def test_walk_row_is_the_walked_node_through_the_heads_fold():
+    """The worker stacks what the series tool asked for: the row through fold() when it has one, the
+    frame itself when it has not, and None where nothing reaches the walked node."""
+    head = tool("head", kind="series", produces="signal")
+    head.fold = lambda f: np.array([f.sum(), f.size])
+    doc = D.from_tools([gray, head])
+    g = Graph(doc, Dec(), {**TOOLS, "head": head})
+    assert g.walk_row(3).tolist() == [(3 + 1) * 24, 24]
+    del head.fold
+    assert (g.walk_row(3) == g.compute("gray", 3)).all()
+    doc.connect("video", "head")
+    g.sync()
+    assert g.walk_row(3) is None

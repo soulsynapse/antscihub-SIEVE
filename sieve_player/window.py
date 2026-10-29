@@ -1,5 +1,5 @@
 """The window: the frame left, the canvas over the parameter pane right, the transport across the
-bottom. `spec/window.md` is the spec.
+bottom.
 
 The document is the one source of truth for the graph. The canvas and the pane read and write it
 and say what changed; the window carries the change to the runtime, which is built on every load

@@ -1,5 +1,4 @@
-"""One test per `Check: a test` line under "Selector nodes" in spec/graph.md, and the video node's
-connector line under "Nodes" in spec/canvas.md."""
+"""Selector nodes, the video node's path input, and path inputs on tools."""
 import os
 import subprocess
 import sys
@@ -134,7 +133,7 @@ def test_canvas_inputs_on_the_video_node_and_a_selector(tmp_path):
     assert not canvas.unfed(doc.node("video")) and not canvas.unfed(doc.node("file"))
 
 
-# -- Path inputs, spec/graph.md, and the path-input connector line in spec/canvas.md -----------
+# -- Path inputs ------------------------------------------------------------------------------
 def settings_tree(tmp_path, h=(20, 40)):
     import json
 

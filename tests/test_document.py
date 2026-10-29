@@ -1,4 +1,4 @@
-"""One test per `Check: a test` line under "Document module" in spec/document.md."""
+"""The document: its imports, round trips, versions, unresolved and foreign keys, list building, validation and paths."""
 import json
 import os
 import shutil

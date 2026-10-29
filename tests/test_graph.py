@@ -1,4 +1,4 @@
-"""One test per `Check: a test` line under "Graph runtime" in spec/graph.md."""
+"""The runtime: wiring, fan-out, keys, rewiring under a worker, and the series node."""
 import threading
 import time
 from types import SimpleNamespace as Tool
@@ -114,6 +114,9 @@ def test_two_series_nodes_one_runs():
     doc = D.from_tools([gray, s1, s2])
     g = Graph(doc, Dec(), {**TOOLS, "s1": s1, "s2": s2})
     assert g.series == "s1" and g.unrun_series == ["s2"] and g.walk == "gray"
+    doc.connect("video", "s1")                  # "bgr" into a series node that expects "gray"
+    g.sync()
+    assert g.walk is None
 
 
 def test_one_compute_sees_one_plan():

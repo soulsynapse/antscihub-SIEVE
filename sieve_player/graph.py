@@ -1,4 +1,4 @@
-"""The runtime: what the graph says, computed and memoized. `spec/graph.md` is the spec.
+"""The runtime: what the graph says, computed and memoized.
 
 A Graph is built from a document, a decoder and the tools the document's names resolve to. It
 snapshots the document on `sync()`, which the window calls after any change, so a worker thread
@@ -146,9 +146,12 @@ class Graph:
     @property
     def walk(self):
         """The node the worker computes over the window: what the series node reads, else what is
-        shown."""
+        shown. None when the series node is not fed, so its tool never sees a type it does not expect."""
         with self._lock:
-            return self._plan[self.series].src if self.series else self.shown
+            if self.series is None:
+                return self.shown
+            e = self._plan[self.series]
+            return e.src if e.fed else None
 
     @property
     def series_tool(self):

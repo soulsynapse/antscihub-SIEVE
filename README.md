@@ -1,165 +1,82 @@
 # SIEVE — Signal Isolation of Ethological Video Events
 
-SIEVE chains independent video-analysis scripts and gives them one shared, polished UI so each
-script doesn't need its own GUI. The scaffold is `sieve_player`: a PySide6 window with the video on
-the left, a node canvas over a parameter pane on the right, and a timeline across the bottom. The
-pipeline is a document of nodes and wires (`spec/` is the specification, as done-when assertions;
-`spec/README.md` says how to read it). A script imports the player and runs standalone:
-
-```python
-if __name__ == "__main__":
-    from sieve_player import play
-    play([sys.modules[__name__]])   # or play([rescale, threshold, motion]); the player knows no tool by name
-```
-
-`play` opens empty and never prompts; the video is picked on the video node, or passed as the
-second argument. Picking again replaces it. `play` also takes the path of a saved document, with
-`tools=` the modules its nodes may name; `python -m sieve_player doc.json [root ...]` does the
-same with the tools the registry finds.
+SIEVE runs independent video-analysis scripts as nodes in one graph, under one shared player, so no
+script needs a GUI of its own. A script is a **tool**; `sieve_player` is the player; a pipeline is a
+**document** of nodes and wires saved as JSON. The player knows no tool by name: everything it does
+with a tool, it learns from the attributes the tool declares.
 
 ```
 py -3.13 -m venv .venv            # not the Anaconda python: its Qt DLLs shadow PySide6's
-.venv\Scripts\python -m pip install -r requirements.txt     # editable install of sieve_player
-.venv\Scripts\python main.py video-tests\rep3_intermittent_crop.MP4
-.venv\Scripts\python tools\motion.py video-tests\rep3_intermittent_crop.MP4   # any tool runs alone, from any cwd
-.venv\Scripts\python smoke.py video-tests\rep3_intermittent_crop.MP4          # offscreen: open, load, rewire, save, export
-.venv\Scripts\python -m pytest                                                # one test per `Check: a test` line in spec/
+.venv\Scripts\python -m pip install -r requirements.txt
+.venv\Scripts\python main.py [video]                     # the example pipeline, every tool under tools/ placeable
+.venv\Scripts\python -m sieve_player doc.json [root ...] # a saved document, against the tools under the roots
+.venv\Scripts\python tools\motion.py [video]             # any tool runs alone
+.venv\Scripts\python smoke.py video                      # offscreen end-to-end check
+.venv\Scripts\python -m pytest
+.venv\Scripts\python -m sieve_player.registry --check    # the tools, their facets, the types they use
 ```
 
-## What a tool is
+## A tool
 
-A tool is one file, marked `SIEVE_TOOL = True` and named by `NAME`; nothing else is required for
-`sieve_player.registry` to list it, and everything else below is a facet it may or may not have yet.
-The registry's own README is the spec for how tools are found and probed. Two kinds.
-
-A **frame tool** maps one row to one array:
+A tool is one Python file with `SIEVE_TOOL = True` and a `NAME`. Everything else is a facet it may
+or may not declare; `sieve_player/registry/README.md` says how tools are found and what a missing
+facet means, and `python -m sieve_player.registry` lists the facets the player reads.
 
 ```python
-NAME = "threshold"; KIND = "frame"; EXPECTS = "gray"; PRODUCES = "gray"
-DEFAULTS = {...}                              # plain JSON-able dict
-def run(frames, row, params) -> np.ndarray    # frames(r) is the upstream output at row r
-def settings(parent=None) -> ParamWidget     # or any widget with .changed, .params() and .set_params()
+# a frame tool: one row in, one array out
+NAME = "threshold"; KIND = "frame"; EXPECTS = "gray"; PRODUCES = "mask"
+DEFAULTS = {...}                              # JSON-able
+def run(frames, row, params) -> np.ndarray    # frames(r) is the output of the node it reads, at row r
+def settings(parent=None) -> ParamWidget
+
+# a series tool: the whole loop window at once
+NAME = "motion"; KIND = "series"; EXPECTS = ("gray", "mask")
+def run(series, params) -> dict               # series.data is (T, ...), the read node stacked
+def settings(parent=None) -> ParamWidget      # plus show_result(result, start, fps), set_playhead(row)
+
+# a selector: which file, by rule
+NAME = "file"; KIND = "selector"; PRODUCES = "path"
+def select(folder, params) -> str | None      # folder is the document's
 ```
 
-A **series tool** sees the whole loop window at once, and at most one runs (see `spec/graph.md`):
+How the player treats a tool, as `sieve_player/graph.py`, `pane.py` and `window.py` currently do:
 
-```python
-KIND = "series"; EXPECTS = "gray"
-def run(series, params) -> dict               # series.data is (T, ...), the upstream outputs stacked
-def settings(parent=None) -> ParamWidget     # plus .show_result(result, start, fps) and .set_playhead(row)
-```
+- Types are strings the player compares for equality; it attaches no meaning to them beyond the
+  video node producing `"bgr"`. An `EXPECTS` tuple accepts any of its members, and
+  `PRODUCES = "same"` hands out whatever the tool reads.
+- Only the worker thread calls `run`, but for any row in any order, since a seek jumps its queue.
+  `frames.key` / `series.key` changes whenever anything upstream does; the tools that cache key on
+  it and on their own params.
+- The tools under `tools/` import Qt and `sieve_player` inside `settings()`, `draw()` and their
+  `__main__` block rather than at module top, which lets a script without Qt import them and call
+  `run`.
+- The document holds the params. The pane moves a settings widget's knobs to them with
+  `set_params()` and writes `params()` back on every change; `ParamWidget` provides both, and a
+  widget without them is shown as a defect.
+- Each node reads one node through a wire. A node the video does not reach, through wires whose
+  types fit, computes as None, and so does everything downstream of it.
 
-`frames.key` / `series.key` names the input and changes whenever anything upstream changes;
-`frames.fps`, `frames.count`, `series.start` are facts. `EXPECTS` / `PRODUCES` are strings the
-player compares for equality and never looks inside. The decoder produces `"bgr"`; `tools/gray.py`
-turns it into `"gray"` for the tools that want luma. `EXPECTS` may be a tuple of types, and
-`PRODUCES = "same"` means out as in (rescale, downsample). A tool is a node that reads one other
-node through a wire, the video being a node like any other; a list of tools becomes a document in
-which each is wired to the nearest earlier node producing what it expects (`sieve_player.document`),
-and the runtime (`sieve_player.graph`) computes what the document says. A node nothing reads is
-computed only when shown; a node with no input, or one whose wire's types no longer fit, is
-computed as None, and so is everything downstream of it. `run` may be called from a worker thread
-and the GUI thread at the same time, for any row in any order. A tool
-that caches must key on `frames.key` (or `series.key`) and on every one of its own params. A
-`"gate"` bool array in a series result is drawn on the frame as a red border while the playhead is
-inside a gated row. `run` must need only cv2 and numpy: import Qt and `sieve_player` inside
-`settings()` (and inside the `__main__` block), never at module top, so a batch script can import
-the tool on a machine with neither installed. `settings()` returns a `sieve_player.ParamWidget`,
-built with `add_int` / `add_float` / `add_bool`, or a subclass that adds non-param UI (a trace, a
-Load button that moves the knobs); `tools/` holds the examples. The document owns the values and
-the widget only shows them: the pane moves its knobs to the stored params on load and writes
-`params()` back as the whole set on every change, so a param a tool no longer declares leaves the
-document the first time a knob moves, and a widget that cannot be told the stored values is shown
-as a defect rather than as its own defaults.
+Facets the player reads when a tool has them:
 
-Any tool may draw on the frame by defining `draw(painter, row, result, start)`. The player calls
-it after painting the frame and the gate border, with a `QPainter` whose coordinates are the
-pixels of the displayed array, so a pen of width 0 stays one screen pixel and any other width is
-in frame pixels. `result` is the series result or None, `start` the row it begins at, `row` the
-row on screen. A `draw` that raises is reported once and dropped for the session. Qt is imported
-inside `draw`, like `settings()`. `mock-up/lk_flow/lk_flow.py` draws its tracks this way.
+| facet | what the player does with it |
+|---|---|
+| `draw(painter, row, result, start)` | paints on the frame, in frame-pixel coordinates; one that raises is dropped for the session |
+| a `"gate"` bool array in a series result | a red border on the frame while the playhead is in a gated row |
+| `output_name`, `export_command`, `describe_output` | an Export button on the node; an existing target gets a numbered sibling, and a failed run leaves no partial file |
+| `PATHS = {input: loader}` | a path input a selector feeds; the loader turns the file into params |
 
-A tool may also export. It does so by defining `output_name(src, params) -> path` and
-`export_command(src, dst, params, fps) -> argv`; its node's pane then shows the target and an
-Export button that runs the argv in a subprocess, and may show a line from an optional
-`describe_output(src, params, fps) -> str`. If the target exists the player writes `name-2.ext`,
-`name-3.ext`, and so on; a cancelled or failed run leaves no partial file. `tools/downsample.py`
-is the example; it also runs headless with `--out`.
+`tools/` holds a working example of each.
 
 ## The player
 
-The window follows the design language settled in `mock-up/design-language` and carried by
-`sieve_player/theme.py`: everything sits on a dark ground, each box on it is one fixed step
-lighter, nothing is inset past the third step, and the only white is a section's name. Inside a
-surface a form is a table, descriptions left-aligned in a column sized to the widest, every control
-one width and one height in the next. Editable controls are wells the ground shows through; what
-the pipeline measured is a flat field lifted above the surface, so depth alone says what can be
-touched. The accent marks the flow and what is viewed: the loop window on the strip, the trace, the
-display flag; amber marks the gate. `ParamWidget` builds such a form and `Trace` draws a series in
-it: the trace in the accent, the playhead white, the gate amber. Inter is bundled and loaded first
-so Mac and Windows render alike; on Windows the player asks for FreeType, since DirectWrite ignores
-the hinting preference and fringes on a dark ground.
+The frame is on the left, the node canvas over the selected node's parameters on the right, and
+the timeline across the bottom. The node with the display flag is what the frame shows; selection
+only chooses what the pane shows. A worker thread computes and the GUI thread
+reads: every node's output is memoized under a key built from its params and its
+upstream, and the display shows what the memo holds.
 
-The right side is the canvas over the parameter pane, in the manner of Houdini's network editor;
-`spec/canvas.md` and `spec/window.md` say what each does and what is built so far. The document
-(`sieve_player/document.py`, saved as JSON) is the one source of truth for the graph: the canvas
-and the pane read and write it and say what changed, and the window carries the change to the
-runtime. One node carries the display flag, drawn in the accent: the frame shows its output.
-Clicking a node selects it and the pane shows its settings; selection and the flag are
-independent, so a node upstream can be tuned while a node downstream is on the frame. A flagged
-node the video does not reach blanks the frame and says why; no flag is empty ground. The video
-node's pane holds the picker; a path that won't open is reported there and leaves whatever was
-open alone. Save and Open are under File and on Ctrl+S and Ctrl+O. Until a video is loaded the
-transport is disabled and the frame is empty; load builds the decoder, runtime and worker, and the
-next load replaces them.
+Each module's docstring says what it does: `document` (the saved form; imports no Qt or cv2),
+`graph` (the runtime), `worker`, `canvas`, `pane`, `window`, `timeline`, `theme` (the design
+language from `mock-up/design-language`). `tests/test_seams.py` checks which imports which.
 
-Decoding is cv2 to BGR with one cursor: sequential reads step it, anything else seeks. Recently
-decoded rows sit in a dict bounded by count. Each node's output per row is memoized under a key
-that hashes the node's params and the key of the node it reads, so a slider change on one node
-invalidates it and what reads it, and nothing it does not reach. The memo is bounded by bytes and drops image-shaped entries
-before small ones.
-
-One worker thread walks the loop window through the graph, writes the node the series tool reads
-(or, without one, the flagged node) into a
-preallocated stack, and hands the growing stack to the series tool every 30 rows. Latest wins: a
-frame-tool change restarts the walk, a series-tool change reruns only the series tool on the stack
-it has. A display request for a row the memo doesn't hold jumps the queue. The GUI thread never
-runs a tool and never waits on the decoder: the display reads the memo, and if the row isn't there
-it asks the worker and keeps showing the last frame until it lands.
-
-## The timeline
-
-One full-width strip across the bottom spans the whole recording and carries the playhead and the
-loop window. The strip owns neither; it paints what it's told and reports gestures. Press, drag and
-release are three signals with three meanings: press and release are commitments and may cost a
-decode, a drag is a guess served from the memo or not at all. A handle along the window's top edge
-moves it; its length is set only in the control row. The strip paints from a local draft during the
-drag and writes through once, on release. A press in the field outside the window puts the window's
-front at the click, playhead at the front, and goes on as a drag. A click in the band below the
-handle moves the playhead; playback pauses while it is held and resumes on release. The playhead is
-never outside the window: a drag, step or arrow key that would leave it is clamped to the nearer
-edge, and a handle move or spinbox edit carries the playhead with its offset from the start. A
-bubble above the cursor shows row and timecode throughout any drag. The control row above the strip
-has play/pause, step ±1, loop start and length in seconds, and a row / timecode / fps readout. A
-load starts playback, which loops inside the window. Space, Left and Right are bound.
-
-## STATUS
-
-**2026-10-11** — first cut. `sieve_player` is 796 lines over seven modules. Numbers from
-`bench.py` (headless, chain only, no Qt) on `video-tests/rep3_intermittent_crop.MP4`
-(462×456, 59.94 fps), chain rescale 0.5 → threshold → motion, 600-row window, one run:
-
-| measurement | result |
-|---|---|
-| fill 600 rows (decode + rescale + threshold) | 0.16 s, 600 decodes, 0 seeks, 60 MB memo |
-| re-walk with nothing changed | 0.6 ms |
-| threshold drag (stage 2 reruns on memoized rescale output) | 15.7 ms |
-| rescale drag (stages 1–2 rerun) | 0.25 s, 600 more decodes |
-| decodes equal rows walked on fill | yes (asserted) |
-
-The rescale drag re-decodes every row because the decoder cache holds 256 rows and the walk is
-forward LRU, so by the time the walk restarts the window's early rows are gone. That is the design
-as specified; raising `Decoder(cache_rows=...)` to the window length makes a rescale drag cost
-about what a threshold drag does. In the GUI, playback at 60 fps advanced 87 rows in 1.5 s while
-the worker was still filling; three scripted runs (strip drag, 1.5 s playback, screenshot) completed
-identically.
+This file describes the code; where the two disagree, the code is what SIEVE does.

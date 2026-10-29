@@ -1,4 +1,4 @@
-"""Headless numbers for README STATUS. Runs the graph directly, no Qt.
+"""Headless timings of the graph on one video. Runs the graph directly, no Qt.
 
     .venv\\Scripts\\python bench.py [video] [rows]
 """

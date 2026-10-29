@@ -1,4 +1,4 @@
-"""The network editor. `spec/canvas.md` is the spec: a node one layer above the ground with its
+"""The network editor: a node one layer above the ground with its
 connectors and its display flag, select, box-select, drag, Delete, the mark on a node whose tool was
 not found and on an input nothing feeds; pan, zoom about the cursor, H to frame; wires dragged from
 either end, picked up, cut with Y, and a node dropped onto a wire inserted in it; Tab or a

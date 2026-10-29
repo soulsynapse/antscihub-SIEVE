@@ -1,4 +1,4 @@
-"""The saved form of a pipeline. `spec/document.md` is the spec.
+"""The saved form of a pipeline.
 
 Nodes, wires, the display flag and the video path; nothing of the canvas's view or the runtime's
 memo. This module imports neither Qt nor cv2 nor any other part of the player. Where a function

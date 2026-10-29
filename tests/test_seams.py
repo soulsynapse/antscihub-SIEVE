@@ -1,4 +1,4 @@
-"""One test per `Check: a test` line under "Seams" in spec/window.md."""
+"""The seams: which modules under sieve_player may import which."""
 import ast
 import re
 from pathlib import Path

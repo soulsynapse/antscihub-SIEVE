@@ -1,4 +1,4 @@
-"""One test per `Check: a test` line under "Navigation", "Tab menu" and "Buttons" in spec/canvas.md.
+"""The canvas: navigation, the Tab menu and the buttons.
 
 The tools here are stand-ins with fixed types, as in test_document.py, so a change to a real
 tool's EXPECTS or PRODUCES is not a change to these tests: they check the canvas's logic, not the

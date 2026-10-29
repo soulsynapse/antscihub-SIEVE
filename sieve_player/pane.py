@@ -1,4 +1,4 @@
-"""The parameter pane: the selected node's settings. `spec/window.md` (Parameter pane) is the spec.
+"""The parameter pane: the selected node's settings.
 
 One surface per node, built once per document and shown one at a time: the widget the tool's
 `settings()` returns, with its knobs moved to the node's params. The document is the store and the

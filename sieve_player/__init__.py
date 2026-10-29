@@ -1,7 +1,7 @@
 """sieve_player: the shared window SIEVE tools run inside. `play(...)` is the whole API.
 
 The names in `__all__` are imported on first use, so importing one submodule (the document, say)
-pulls in neither Qt nor cv2; see spec/document.md."""
+pulls in neither Qt nor cv2."""
 import importlib
 import os
 import sys

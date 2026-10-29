@@ -1,5 +1,5 @@
 """The network editor: a node one layer above the ground with its
-connectors and its display flag, select, box-select, drag, Delete, the mark on a node whose tool was
+connectors, its display flag and, on a node producing one plane, its overlay flag; select, box-select, drag, Delete, the mark on a node whose tool was
 not found and on an input nothing feeds; pan, zoom about the cursor, H to frame; wires dragged from
 either end, picked up, cut with Y, and a node dropped onto a wire inserted in it; Tab or a
 right-click on empty canvas for the menu that places a tool, which a wire grown into empty canvas
@@ -27,11 +27,12 @@ from PySide6.QtWidgets import (QAbstractSpinBox, QApplication, QLineEdit, QListW
                                QPlainTextEdit, QSizePolicy, QTextEdit, QToolTip, QWidget)
 
 from . import theme
-from .document import INPUT, PATH, VIDEO_PRODUCES, VIDEO_TOOL, expects, fed, fits, inputs_of, is_selector, produces
+from .document import (INPUT, OVERLAYABLE, PATH, VIDEO_PRODUCES, VIDEO_TOOL, expects, fed, fits, inputs_of,
+                       is_selector, produces)
 from .theme import GAP, PAD, qgray
 
 NODE_W, NODE_H = 140, 28   # a node's box, canvas px
-FLAG_R = 5                 # the display flag: a disc at the node's right end
+FLAG_R = 5                 # the display flag: a disc at the node's right end; the overlay flag sits left of it
 PIN_R = 4                  # a connector: a disc on the node's top or bottom edge
 HIT = 3                    # slack around a flag or a connector, px
 WIRE_W = 1.5
@@ -158,7 +159,8 @@ class Canvas(QWidget):
     """`tools` is the catalogue, name to module; the document's node names index it. `broken` is
     name to error for every tool the registry listed but could not import."""
     selectionChanged = Signal(list)   # the selected node ids, in selection order
-    changed = Signal()                # the document's nodes, wires or flag changed here
+    changed = Signal()                # the document's nodes or wires changed here: what is computed
+    flagged = Signal()                # a flag moved: what is looked at, nothing to recompute
 
     def __init__(self, tools, broken=None, parent=None):
         super().__init__(parent)
@@ -219,7 +221,16 @@ class Canvas(QWidget):
         if self.doc is not None and nid != self.doc.display:
             self.doc.display = nid
             self.update()
-            self.changed.emit()
+            self.flagged.emit()
+
+    def set_overlay(self, nid):
+        """Toggles the overlay flag: on `nid` if it was elsewhere or off, off if `nid` carried it. Only a
+        node the flag is offered on (see can_overlay) takes it."""
+        if self.doc is None or (nid is not None and not self.can_overlay(self.doc.node(nid))):
+            return
+        self.doc.overlay = None if nid == self.doc.overlay else nid
+        self.update()
+        self.flagged.emit()
 
     def delete_selected(self):
         """Removes the selected nodes and every wire into or out of them; the flag goes with its node."""
@@ -250,6 +261,10 @@ class Canvas(QWidget):
         if node.tool == VIDEO_TOOL:
             return VIDEO_PRODUCES
         return None if node.unresolved else produces(self.doc, self.tools, node.id)
+
+    def can_overlay(self, node):
+        """Whether the overlay flag is offered: a resolved node producing one plane (an OVERLAYABLE type)."""
+        return self.output_type(node) in OVERLAYABLE
 
     def unfed(self, node):
         """The mark: a resolved node the video does not reach through wires whose types fit. The
@@ -299,6 +314,9 @@ class Canvas(QWidget):
     def flag(self, node):
         b = self.box(node)
         return QRectF(b.right() - PAD - 2 * FLAG_R, b.center().y() - FLAG_R, 2 * FLAG_R, 2 * FLAG_R)
+
+    def overlay_flag(self, node):
+        return self.flag(node).translated(-(PAD + 2 * FLAG_R), 0)
 
     def pin_in(self, node, name=INPUT):
         """The input's disc on the top edge: one input is centred; several share the edge evenly."""
@@ -645,15 +663,19 @@ class Canvas(QWidget):
         p.setBrush(qgray(fill))
         p.drawRoundedRect(box, theme.RADIUS, theme.RADIUS)
         p.setPen(theme.RED if n.unresolved or n.id in self.errors else qgray(theme.INK))
-        text = box.adjusted(PAD, 0, -(3 * PAD + 2 * FLAG_R), 0)
+        text = box.adjusted(PAD, 0, -(4 * PAD + 4 * FLAG_R), 0)
         p.drawText(text, Qt.AlignLeft | Qt.AlignVCenter, f"{n.id} ?" if n.unresolved else n.id)
-        if n.id == self.doc.display:
-            p.setPen(Qt.NoPen)
-            p.setBrush(theme.ACCENT)
-        else:
-            p.setPen(QPen(qgray(theme.INK_2), 1))
-            p.setBrush(Qt.NoBrush)
-        p.drawEllipse(self.flag(n))
+        flags = [(self.flag(n), n.id == self.doc.display, theme.ACCENT)]
+        if self.can_overlay(n):
+            flags.append((self.overlay_flag(n), n.id == self.doc.overlay, theme.OVERLAY))
+        for rect, on, color in flags:
+            if on:
+                p.setPen(Qt.NoPen)
+                p.setBrush(color)
+            else:
+                p.setPen(QPen(qgray(theme.INK_2), 1))
+                p.setBrush(Qt.NoBrush)
+            p.drawEllipse(rect)
         unfed = self.unfed(n)
         for name, types in self.inputs(n):
             self._paint_pin(p, self.pin_in(n, name), types, ring=theme.RED if unfed and name == INPUT else None,
@@ -730,6 +752,9 @@ class Canvas(QWidget):
             return
         if self.flag(node).adjusted(-HIT, -HIT, HIT, HIT).contains(pos):
             self.set_flag(node.id)
+            return
+        if self.can_overlay(node) and self.overlay_flag(node).adjusted(-HIT, -HIT, HIT, HIT).contains(pos):
+            self.set_overlay(node.id)
             return
         if shift:
             self.select([i for i in self.selected if i != node.id] if node.id in self.selected else [*self.selected, node.id])

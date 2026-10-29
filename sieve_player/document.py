@@ -1,6 +1,6 @@
 """The saved form of a pipeline.
 
-Nodes, wires, the display flag and the video path; nothing of the canvas's view or the runtime's
+Nodes, wires, the display and overlay flags and the video path; nothing of the canvas's view or the runtime's
 memo. This module imports neither Qt nor cv2 nor any other part of the player. Where a function
 needs a tool's facets (EXPECTS, PRODUCES) it is handed the tools, as a mapping of name to module
 or as the modules themselves; the document stores only names.
@@ -25,6 +25,7 @@ VIDEO_TOOL = "video"        # the reserved tool name of the node the decoder is
 VIDEO_PRODUCES = "bgr"
 PATH = "path"               # the type the video node's input expects and a selector produces
 INPUT = "in"                # every tool today has one input; wires name it so fan-in costs nothing later
+OVERLAYABLE = ("gray", "mask")  # the types the overlay flag is offered on: a single plane the frame can be heated with
 LAYOUT_STEP = 100.0         # vertical spacing of a list-built document
 
 
@@ -61,6 +62,7 @@ class Document:
     nodes: list = field(default_factory=list)
     wires: list = field(default_factory=list)
     display: str | None = None
+    overlay: str | None = None                                      # heated over the displayed frame; None is off
     video: str | None = None                                        # as written
     extra: dict = field(default_factory=dict, repr=False)
     path: str | None = field(default=None, compare=False)           # where it was loaded from or saved to
@@ -90,11 +92,13 @@ class Document:
         return node
 
     def remove_node(self, nid):
-        """Removes the node, every wire into or out of it, and the flag if it carried it."""
+        """Removes the node, every wire into or out of it, and either flag if it carried it."""
         self.nodes = [n for n in self.nodes if n.id != nid]
         self.wires = [w for w in self.wires if nid not in (w.src, w.dst)]
         if self.display == nid:
             self.display = None
+        if self.overlay == nid:
+            self.overlay = None
 
     def connect(self, src, dst, input=INPUT):
         """Wires `src` into `dst`'s input, replacing whatever fed it."""
@@ -134,6 +138,7 @@ class Document:
             "version": VERSION,
             "video": self.video,
             "display": self.display,
+            "overlay": self.overlay,
             "nodes": [{"id": n.id, "tool": n.tool, "params": n.params, "pos": list(n.pos), **n.extra} for n in self.nodes],
             "wires": [{"from": w.src, "to": w.dst, "input": w.input} for w in self.wires],
             **self.extra,
@@ -144,9 +149,9 @@ class Document:
         v = d.get("version")
         if not isinstance(v, int) or v > VERSION:
             raise FormatError(f"document is format version {v!r}; this module reads up to {VERSION}")
-        top = {"version", "video", "display", "nodes", "wires"}
+        top = {"version", "video", "display", "overlay", "nodes", "wires"}
         node_keys = {"id", "tool", "params", "pos"}
-        doc = cls(video=d.get("video"), display=d.get("display"), extra={k: v for k, v in d.items() if k not in top})
+        doc = cls(video=d.get("video"), display=d.get("display"), overlay=d.get("overlay"), extra={k: v for k, v in d.items() if k not in top})
         for nd in d.get("nodes", []):
             if any(n.id == nd["id"] for n in doc.nodes):
                 raise FormatError(f"node id {nd['id']!r} appears twice")

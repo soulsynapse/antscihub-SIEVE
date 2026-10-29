@@ -45,7 +45,19 @@ def fan_out():
 
 def test_built_from_document_and_decoder():
     g = Graph(fan_out(), Dec(), TOOLS)
-    assert g.shown == "add" and g.walk == "add"
+    assert g.shown == "add" and g.walk == "add" and g.over is None
+
+
+def test_overlay_is_a_one_plane_node_the_display_peeks_beside_the_shown():
+    doc = fan_out()
+    doc.overlay = "same"
+    g = Graph(doc, Dec(), TOOLS)
+    assert g.over == "same" and g.peek(3, "same") is None
+    g.compute("same", 3)
+    assert (g.peek(3, "same") == 4).all()
+    doc.overlay = "video"      # bgr: not a plane the frame can be heated with
+    g.sync()
+    assert g.over is None
 
 
 def test_reads_the_video_node():

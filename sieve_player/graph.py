@@ -14,7 +14,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from .document import VIDEO_PRODUCES, VIDEO_TOOL, fed, is_selector
+from .document import OVERLAYABLE, VIDEO_PRODUCES, VIDEO_TOOL, fed, is_selector, produces
 
 
 def _key(*parts):
@@ -102,7 +102,7 @@ class Graph:
         self._lock = threading.Lock()
         self._base = _key("video", decoder.path, VIDEO_PRODUCES)
         self._plan = {}
-        self.shown = self.series = None
+        self.shown = self.over = self.series = None
         self.chain, self.unrun_series = [], []
         self.sync()
 
@@ -147,6 +147,8 @@ class Graph:
         with self._lock:
             self._plan = plan
             self.shown = doc.display if doc.display in plan else None
+            # The overlay is a node the frame can be heated with: one plane, so only an OVERLAYABLE product.
+            self.over = doc.overlay if doc.overlay in plan and produces(doc, tools, doc.overlay) in OVERLAYABLE else None
             self.series = chain[0] if chain else None
             self.chain, self.unrun_series = chain, [s for s in series if s not in chain]
 
@@ -208,10 +210,10 @@ class Graph:
             self.memo.put(mk, v)
         return v
 
-    def peek(self, row):
-        """Memo-only read of the shown node at `row`; None if it isn't there. GUI-safe."""
+    def peek(self, row, nid=None):
+        """Memo-only read of the shown node, or of `nid`, at `row`; None if it isn't there. GUI-safe."""
         with self._lock:
-            e = self._plan.get(self.shown)
+            e = self._plan.get(self.shown if nid is None else nid)
         if e is None or not e.fed:
             return None
         if e.kind == "video":

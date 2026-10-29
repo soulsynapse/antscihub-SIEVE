@@ -92,6 +92,11 @@ def run_window():
         check([(w.src, w.dst) for w in doc.wires] == [("video", "gray"), ("gray", "rescale"), ("rescale", "threshold"),
                                                       ("threshold", "motion"), ("motion", "reduce"), ("reduce", "rangegate")], f"default wiring {doc.wires}")
         check(doc.display == "motion" and win.graph.shown == "motion", "the flag should start on the last fed frame node")
+        check(doc.overlay is None and win.graph.over is None and win.display._over is None, "the overlay should start off")
+        gen = win.worker._gen
+        win.canvas.set_overlay("threshold")
+        check(win.graph.over == "threshold", "the overlay flag did not reach the runtime")
+        check(win.worker._gen == gen, "a flag restarted the walk")
         check(win.display.reason == "" and win.graph.peek(win.row) is not None, "the flagged node is not on the frame")
         # selection drives the pane; the flag stays
         win.canvas.select(["gray", "rescale"])

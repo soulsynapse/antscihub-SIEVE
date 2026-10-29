@@ -50,6 +50,10 @@ GLYPH_STROKE = 2.25  # Tabler ships 2, which reads thin at GLYPH; widened at ren
 ACCENT = QColor(88, 146, 255)   # what is viewed: the loop window, a wire, a checked box
 SERIES = QColor(94, 200, 180)   # a trace's series: v2's plot accent
 GATE = QColor(96, 210, 120)     # the gate, and a detector trace's series: v2's detection green
+OVERLAY = QColor(254, 163, 49)  # the overlay flag: a stop near the hot end of HEAT, which the overlay is drawn in
+HEAT = ((48, 18, 59), (69, 91, 205), (62, 155, 254), (24, 214, 203), (72, 248, 130), (164, 252, 60),
+        (226, 220, 56), (254, 163, 49), (239, 89, 17), (194, 36, 3), (122, 4, 3))  # v2's cold-to-hot ramp, RGB
+HEAT_ALPHA = 0.6                # v2's overlay opacity, at full heat; a cold pixel is clear
 RED = QColor(232, 72, 72)       # an input nothing feeds, a wire whose types no longer fit
 GATED = QColor(96, 210, 120, 72)  # GATE as a trace's wash over its gated rows
 LEVEL = QColor(240, 110, 100)   # a trace's handles: v2's band color, softer than RED, which is an error

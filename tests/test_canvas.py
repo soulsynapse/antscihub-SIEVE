@@ -118,3 +118,19 @@ def test_a_wire_let_go_in_space_offers_what_its_loose_end_may_join():
     canvas._pending = ("out", "sel", None)              # a path output: path inputs; the video node is greyed while one exists
     assert live() == {"reader"}
     canvas._pending = None
+
+
+def test_the_overlay_flag_toggles_and_is_offered_only_on_one_plane_nodes():
+    doc = D.from_tools([gray, thresh])
+    canvas = canvas_with(doc)
+    assert not canvas.can_overlay(doc.node("video")) and canvas.can_overlay(doc.node("thresh"))
+    at = canvas.to_view(canvas.overlay_flag(doc.node("thresh")).center())
+    _press(canvas, at)
+    assert doc.overlay == "thresh" and doc.display == "thresh"
+    _press(canvas, at)
+    assert doc.overlay is None
+    canvas.set_overlay("video")
+    assert doc.overlay is None
+    canvas.set_overlay("gray")
+    doc.remove_node("gray")
+    assert doc.overlay is None

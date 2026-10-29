@@ -12,7 +12,7 @@ import os
 import traceback
 
 import numpy as np
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import QRectF, Qt, QTimer
 from PySide6.QtGui import QImage, QKeySequence, QPainter, QPen, QPixmap, QShortcut
 from PySide6.QtWidgets import QFileDialog, QMainWindow, QSizePolicy, QVBoxLayout, QWidget
 
@@ -52,13 +52,30 @@ def to_qimage(a):
     return QImage(a.data, a.shape[1], a.shape[0], a.strides[0], fmt).copy()
 
 
+_HEAT = np.stack([np.interp(np.linspace(0, 1, 256), np.linspace(0, 1, len(theme.HEAT)), [c[k] for c in theme.HEAT])
+                  for k in (2, 1, 0)], axis=1).astype(np.uint8)   # BGR LUT over theme.HEAT
+
+
+def heat(a, top):
+    """`a`, one plane, as a BGRA image: colour from _HEAT by value over `top`, alpha with it up to
+    theme.HEAT_ALPHA, so what is zero is clear. A bool plane is a mask: full heat where set."""
+    a = np.asarray(a)
+    if a.ndim != 2:
+        raise ValueError(f"cannot overlay array of shape {a.shape}")
+    v = np.where(a, 255, 0).astype(np.uint8) if a.dtype == bool         else np.clip(a.astype(np.float32) * (255.0 / max(float(top), 1e-6)), 0, 255).astype(np.uint8)
+    bgra = np.dstack([_HEAT[v], (v * theme.HEAT_ALPHA).astype(np.uint8)])
+    bgra = np.ascontiguousarray(bgra)
+    return QImage(bgra.data, a.shape[1], a.shape[0], bgra.strides[0], QImage.Format_ARGB32).copy()
+
+
 class Display(QWidget):
-    """The frame, the gate border, and each drawing node's draw() on top, in node order, each
-    handed its own node's series result."""
+    """The frame, the overlay heated over it, the gate border, and each drawing node's draw() on
+    top, in node order, each handed its own node's series result."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._pix, self.gate, self.reason = None, False, ""
+        self._over, self._over_key, self._top = None, None, 0.0   # the overlay image, whose node's key, its running max
         self.drawers, self.row, self.results, self.start = [], 0, {}, 0   # drawers: [(node id, tool)]
         self.setMinimumSize(160, 120)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
@@ -74,6 +91,20 @@ class Display(QWidget):
     def clear(self, reason=""):
         """No frame; `reason` is the one line that says why, so an empty frame never reads as a stall."""
         self._pix, self.reason = None, reason
+        self.set_overlay(None, None)
+
+    def set_overlay(self, a, key):
+        """`a` is the overlay node's plane at the shown row, or None for no overlay. `key` names the
+        node and its params: the running maximum a gray plane is heated against restarts when it changes."""
+        if key != self._over_key:
+            self._over_key, self._top = key, 0.0
+        if a is None:
+            self._over = None
+        else:
+            a = np.asarray(a)
+            if a.dtype != bool:
+                self._top = max(self._top, float(a.max()) if a.size else 0.0)
+            self._over = heat(a, self._top)
         self.update()
 
     def set_gate(self, on):
@@ -92,6 +123,8 @@ class Display(QWidget):
         pix = self._pix.scaled(self.size(), Qt.KeepAspectRatio, Qt.FastTransformation)
         x, y = (self.width() - pix.width()) // 2, (self.height() - pix.height()) // 2
         p.drawPixmap(x, y, pix)
+        if self._over is not None:
+            p.drawImage(QRectF(x, y, pix.width(), pix.height()), self._over)   # stretched to the frame, as draw() is
         if self.gate:
             p.setPen(QPen(theme.GATE, 4))
             p.drawRect(x + 2, y + 2, pix.width() - 4, pix.height() - 4)
@@ -175,6 +208,7 @@ class PlayerWindow(QMainWindow):
         # an empty selection leaves the pane on its last node, so a click on empty canvas never blanks it
         self.canvas.selectionChanged.connect(lambda ids: ids and self.pane.select(ids[-1]))
         self.canvas.changed.connect(self.sync)
+        self.canvas.flagged.connect(self.reflag)
         self.pane.paramsChanged.connect(self._params_changed)
         self.pane.videoPicked.connect(self.load)
 
@@ -305,6 +339,15 @@ class PlayerWindow(QMainWindow):
             return
         self.graph.sync()
         self.worker.invalidate()
+        self.goto(self.row, commit=True)
+
+    def reflag(self):
+        """A flag moved: the runtime's plan follows and the frame shows the new node at the same row.
+        The memo and the walk stand; nothing a flag names is computed differently."""
+        self.canvas.update()
+        if self.graph is None:
+            return
+        self.graph.sync()
         self.goto(self.row, commit=True)
 
     def _params_changed(self, nid):
@@ -506,12 +549,8 @@ class PlayerWindow(QMainWindow):
             self.display.clear()
         elif not self.graph.fed(shown):
             self.display.clear(f"{shown}: no input")
-        else:
-            frame = self.graph.peek(row)
-            if frame is not None:
-                self.display.set_frame(frame)
-            elif commit:
-                self.worker.request_row(row)
+        elif not self._show(row) and commit:
+            self.worker.request_row(row)
         self.timeline.strip.set_playhead(row)
         self.timeline.controls.set_readout(row)
         for nid in self.graph.chain:
@@ -559,11 +598,21 @@ class PlayerWindow(QMainWindow):
         self.goto(nxt, commit=True)
 
     # -- slots ----------------------------------------------------------
+    def _show(self, row):
+        """The shown node's frame at `row` from the memo, with the overlay node's plane over it if the
+        memo has that too; False when either is not there yet, so a commit asks the worker for both."""
+        frame = self.graph.peek(row)
+        if frame is None:
+            return False
+        self.display.set_frame(frame)
+        over = self.graph.over
+        plane = None if over is None else self.graph.peek(row, over)
+        self.display.set_overlay(plane, None if over is None else self.graph.key(over))
+        return over is None or plane is not None
+
     def _row_ready(self, row):
         if row == self.row and self.graph is not None:
-            frame = self.graph.peek(row)
-            if frame is not None:
-                self.display.set_frame(frame)
+            self._show(row)
 
     def _series_ready(self, results, start, fps):
         self.results, self.result_start = results, start

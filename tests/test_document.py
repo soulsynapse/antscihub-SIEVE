@@ -22,7 +22,7 @@ def two_nodes():
     doc.add_node(D.VIDEO_TOOL, (0, 0))
     doc.add_node("gray", (10.5, 120), {"k": 3})
     doc.connect("video", "gray")
-    doc.display = "gray"
+    doc.display = doc.overlay = "gray"
     return doc
 
 
@@ -33,11 +33,13 @@ def test_import_is_light():
     assert not [m for m in mods if m in ("sieve_player.canvas", "sieve_player.window")]
 
 
-def test_holds_nodes_wires_flag_video():
+def test_holds_nodes_wires_flags_video():
     doc = two_nodes()
     assert doc.node("gray") == D.Node("gray", "gray", {"k": 3}, (10.5, 120.0))
     assert doc.wires == [D.Wire("video", "gray", D.INPUT)]
-    assert doc.display == "gray" and doc.video == "clip.mp4"
+    assert doc.display == "gray" and doc.overlay == "gray" and doc.video == "clip.mp4"
+    doc.remove_node("gray")
+    assert doc.display is None and doc.overlay is None
 
 
 def test_round_trip(tmp_path):

@@ -74,6 +74,8 @@ class Worker(QThread):
             try:
                 if want is not None:
                     self.graph.compute(self.graph.shown, want)
+                    if self.graph.over is not None:
+                        self.graph.compute(self.graph.over, want)
                     self.rowReady.emit(want)
                     continue
                 if not self.graph.fed(self.graph.walk):

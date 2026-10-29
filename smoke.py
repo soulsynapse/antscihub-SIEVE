@@ -3,7 +3,7 @@ display needed.
 
     .venv\\Scripts\\python smoke.py [video]
 
-Runs the example chain (gray -> rescale -> threshold -> motion) in a graph built from a list,
+Runs the example chain (gray -> rescale -> threshold -> motion -> reduce -> rangegate) in a graph built from a list,
 then the same chain and tools/downsample in the window.
 Asserts on state at each step and exits non-zero on the first failure. Text renders as boxes
 under the offscreen platform, so there is nothing to look at; this checks wiring, not looks.
@@ -23,7 +23,7 @@ from sieve_player import document  # noqa: E402
 from sieve_player.decoder import Decoder  # noqa: E402
 from sieve_player.graph import Graph, Series  # noqa: E402
 from sieve_player.window import PlayerWindow  # noqa: E402
-from tools import downsample as ds, gray, motion, file, rescale, threshold  # noqa: E402
+from tools import downsample as ds, gray, motion, file, rangegate, reduce, rescale, threshold  # noqa: E402
 
 path = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else "video-tests/rep3_intermittent_crop.MP4")
 app = QApplication.instance() or QApplication(sys.argv)
@@ -39,37 +39,40 @@ def check(cond, msg):
 def run_graph():
     """The chain, wired by from_tools with the selector into the video, computed through the graph
     the way the worker will."""
-    tools = [file, gray, rescale, threshold, motion]
+    tools = [file, gray, rescale, threshold, motion, reduce, rangegate]
     doc = document.from_tools(tools)
     doc.node("file").params.update(folder=os.path.dirname(path), pattern=os.path.basename(path))
     check([(w.src, w.dst) for w in doc.wires] == [("file", "video"), ("video", "gray"), ("gray", "rescale"),
-                                                  ("rescale", "threshold"), ("threshold", "motion")],
+                                                  ("rescale", "threshold"), ("threshold", "motion"), ("motion", "reduce"), ("reduce", "rangegate")],
           f"wiring {[(w.src, w.dst) for w in doc.wires]}")
     check(not document.validate(doc, tools), f"document invalid: {document.validate(doc, tools)}")
     picked, why = document.pick_video(doc, tools)
     check(picked is not None and os.path.samefile(picked, path), f"file answered {picked!r} {why}")
     dec = Decoder(picked)
     g = Graph(doc, dec, tools)
-    check(g.shown == "threshold" and g.walk == "threshold" and g.series == "motion", f"flag/walk/series {g.shown} {g.walk} {g.series}")
+    check(g.shown == "motion" and g.walk == "motion" and g.chain == ["reduce", "rangegate"],
+          f"flag/walk/chain {g.shown} {g.walk} {g.chain}")
     check(g.compute("file", 0) is None, "a selector computed a row")
-    out = g.compute("threshold", 0)
-    check(out is not None and out.ndim == 2 and out.dtype == np.uint8, "threshold output")
+    out = g.compute("motion", 0)
+    check(out is not None and out.ndim == 2 and out.dtype == np.uint8, "motion output")
     check(g.peek(0) is out, "peek did not find the shown row")
     stack = np.stack([g.compute(g.walk, r) for r in range(5)])
     result = g.series_tool.run(Series(stack, g.key(g.walk), 0, g.fps), g.series_params())
-    check(len(result["activity"]) == 5 and "gate" in result, "motion series")
+    check(len(result["signal"]) == 5 and "gate" not in result, "reduce series")
+    gated = rangegate.run(Series(result["signal"], g.key("reduce"), 0, g.fps), g.series_chain()[1][2])
+    check(len(gated["gate"]) == 5, "rangegate series")
     key = g.key("threshold")
     doc.node("threshold").params["thresh"] = 200
     g.sync()
-    check(g.key("threshold") != key and g.compute("threshold", 0) is not out, "param change did not reach the graph")
+    check(g.key("threshold") != key and g.compute("motion", 0) is not out, "param change did not reach the graph")
     doc.disconnect("rescale")
     g.sync()
-    check(g.compute("threshold", 0) is None and g.peek(0) is None, "unwired node still computed")
+    check(g.compute("motion", 0) is None and g.peek(0) is None, "unwired node still computed")
     dec.close()
 
 
 def run_window():
-    tools = [gray, rescale, threshold, motion]
+    tools = [gray, rescale, threshold, motion, reduce, rangegate]
     win = PlayerWindow(tools, "smoke")
     win.resize(1200, 700)
     win.show()
@@ -85,15 +88,15 @@ def run_window():
 
     def after():
         doc = win.doc
-        check(win.result is not None and "gate" in win.result, "series result never arrived")
+        check(set(win.results) == {"reduce", "rangegate"} and "gate" in win.results["rangegate"], "series results never arrived")
         check([(w.src, w.dst) for w in doc.wires] == [("video", "gray"), ("gray", "rescale"), ("rescale", "threshold"),
-                                                      ("threshold", "motion")], f"default wiring {doc.wires}")
-        check(doc.display == "threshold" and win.graph.shown == "threshold", "the flag should start on the last fed frame node")
+                                                      ("threshold", "motion"), ("motion", "reduce"), ("reduce", "rangegate")], f"default wiring {doc.wires}")
+        check(doc.display == "motion" and win.graph.shown == "motion", "the flag should start on the last fed frame node")
         check(win.display.reason == "" and win.graph.peek(win.row) is not None, "the flagged node is not on the frame")
         # selection drives the pane; the flag stays
         win.canvas.select(["gray", "rescale"])
         check(win.pane.current == "rescale" and not win.pane.cards["threshold"].isVisible(), "pane does not follow selection")
-        check(win.graph.shown == "threshold", "selecting moved the flag")
+        check(win.graph.shown == "motion", "selecting moved the flag")
         # a knob writes to the document and reaches the runtime
         key = win.graph.key("threshold")
         win.pane.widget("threshold").set_params({"thresh": 200})
@@ -103,37 +106,38 @@ def run_window():
         win.canvas.set_flag("gray")
         check(doc.display == "gray" and win.graph.shown == "gray", "flag did not move")
         # unwiring upstream of the flagged node blanks the frame and says why; the flag stays put
-        win.canvas.set_flag("threshold")
+        win.canvas.set_flag("motion")
         doc.disconnect("rescale")
         win.sync()
-        check(not win.graph.fed("threshold") and win.display.reason == "threshold: no input" and doc.display == "threshold",
+        check(not win.graph.fed("motion") and win.display.reason == "motion: no input" and doc.display == "motion",
               f"unfed flag {win.display.reason!r}")
         doc.connect("gray", "rescale")
         win.sync()
-        win.graph.compute("threshold", win.row)   # what the worker would deliver; the frame clears on arrival
+        win.graph.compute("motion", win.row)   # what the worker would deliver; the frame clears on arrival
         win.goto(win.row, commit=True)
-        check(win.graph.fed("threshold") and win.display.reason == "", "rewire did not land")
+        check(win.graph.fed("motion") and win.display.reason == "", "rewire did not land")
         # save, then open the file in another window: same nodes, places, params, flag and video
         saved = os.path.join(tempfile.mkdtemp(), "smoke.json")
         win.save_document(saved)
         check(doc.path == saved, "save did not record where")
         again = PlayerWindow(saved, "smoke", tools)
-        check(again.doc.nodes == doc.nodes and again.doc.wires == doc.wires and again.doc.display == "threshold",
+        check(again.doc.nodes == doc.nodes and again.doc.wires == doc.wires and again.doc.display == "motion",
               "reopened document differs")
         check(again.graph is not None and again.doc.video == path, "reopened document did not open its video")
         check(again.pane.widget("threshold").params()["thresh"] == 200, "reopened knob not at the saved value")
         again.close()
         # reload replaces decoder and worker and keeps the document
         win.load(path)
-        check(win.graph is not None and win.doc is doc and win.graph.shown == "threshold", "reload lost the document")
+        check(win.graph is not None and win.doc is doc and win.graph.shown == "motion", "reload lost the document")
         # deleting a node in the middle of a chain takes its wires, its card, and what it fed
         win.canvas.select(["rescale"])
         win.canvas.delete_selected()
-        check([(w.src, w.dst) for w in doc.wires] == [("video", "gray"), ("threshold", "motion")], f"delete left {doc.wires}")
+        check([(w.src, w.dst) for w in doc.wires] == [("video", "gray"), ("threshold", "motion"), ("motion", "reduce"), ("reduce", "rangegate")],
+              f"delete left {doc.wires}")
         check("rescale" not in win.pane.cards and win.pane.current is None, "the deleted node's card stayed")
-        check(not win.graph.fed("threshold") and win.display.reason == "threshold: no input", "delete did not reach the runtime")
+        check(not win.graph.fed("motion") and win.display.reason == "motion: no input", "delete did not reach the runtime")
         # deleting the flagged node leaves no flag and empty ground
-        win.canvas.select(["threshold"])
+        win.canvas.select(["motion"])
         win.canvas.delete_selected()
         check(doc.display is None and win.graph.shown is None and win.display.reason == "" and win.display._pix is None,
               "deleting the flagged node did not clear the frame")

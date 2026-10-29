@@ -7,7 +7,7 @@ import time
 
 from sieve_player import Decoder, document
 from sieve_player.graph import Graph
-from tools import gray, motion, rescale, threshold
+from tools import gray, motion, reduce, rescale, threshold
 
 path = sys.argv[1] if len(sys.argv) > 1 else "video-tests/rep3_intermittent_crop.MP4"
 rows = int(sys.argv[2]) if len(sys.argv) > 2 else 600
@@ -21,13 +21,13 @@ def fill(graph, n):
 
 
 dec = Decoder(path)
-tools = [gray, rescale, threshold, motion]
+tools = [gray, rescale, threshold, motion, reduce]
 doc = document.from_tools(tools, path)
 graph = Graph(doc, dec, tools)
 print(f"{path}: {dec.width}x{dec.height} @ {dec.fps:.2f} fps, {dec.count} rows; window {rows} rows")
 
 t_fill = fill(graph, rows)
-print(f"fill {rows} rows (decode+gray+rescale+threshold): {t_fill:.2f} s  "
+print(f"fill {rows} rows (decode+gray+rescale+threshold+motion): {t_fill:.2f} s  "
       f"decodes={dec.decodes} seeks={dec.seeks} memo={graph.memo.bytes >> 20} MB")
 assert dec.decodes == rows, "decodes != rows walked"
 

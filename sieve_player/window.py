@@ -348,6 +348,7 @@ class PlayerWindow(QMainWindow):
             if id(tr) in self._hooked:
                 continue
             self._hooked.add(id(tr))
+            tr.set_length(self.window_[1])
             tr.pressed.connect(self._scrub_begin)
             tr.dragged.connect(lambda r: self.seek(r, commit=False))
             tr.released.connect(self._scrub_end)
@@ -522,6 +523,7 @@ class PlayerWindow(QMainWindow):
         self.worker.seriesReady.connect(self._series_ready)
         self.worker.densityReady.connect(self.pane.show_density)
         self.worker.walked.connect(ct.set_progress)
+        self.worker.walked.connect(lambda _, n: self._set_length(n))   # the walk's own length: clamped, or closed early
         self.worker.failed.connect(lambda r: ct.progress.setText(f"tool raised at row {r}, see console"))
         self.timeline.strip.set_count(self.count, self.fps)
         ct.set_count(self.count, self.fps)
@@ -561,6 +563,7 @@ class PlayerWindow(QMainWindow):
         offset = self.row - self.window_[0] if playhead is None else int(playhead) - start
         offset = max(0, min(length - 1, offset))
         self.window_ = (start, length)
+        self._set_length(length)
         self.timeline.strip.set_window(start, length)
         self.timeline.controls.set_window(start, length)
         self.worker.set_window(start, length)
@@ -650,6 +653,11 @@ class PlayerWindow(QMainWindow):
             if w is not None and hasattr(w, "show_result"):
                 w.show_result(result, start, fps)
         self._update_gate()
+
+    def _set_length(self, rows):
+        """Every trace's x axis is the window, so a walk fills in at its place instead of stretching."""
+        for tr in self.traces:
+            tr.set_length(rows)
 
     def _hover(self, row):
         """One cursor for the strip and every trace; -1 clears it."""

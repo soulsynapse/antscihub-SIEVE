@@ -111,6 +111,7 @@ class Worker(QThread):
                         self._emit_series()
             except IndexError:
                 self._length = self._i  # stream ended early; close the window there
+                self.walked.emit(self._i, self._length)
                 self._emit_series()
             except Exception:
                 traceback.print_exc()

@@ -120,7 +120,9 @@ class Trace(QWidget):
     full height: v2's plot colors. A trace with handles is a detector, as v2's count plot was,
     and draws its series green too; green is otherwise never a series. Where there are more samples than pixels each column shows the
     min and max of the samples it covers, so nothing is hidden and nothing is added. Feed it with
-    set_series(values, start, gate=None, levels=()) and set_playhead(row).
+    set_series(values, start, gate=None, levels=()) and set_playhead(row). The x axis is the window,
+    set_length(rows), not the values: a walk still filling in draws what it has at its place and
+    leaves the rest of the field empty, rather than stretching the part across the whole.
 
     A trace built with `levels=n` has n handles, in the units of `values`: each a red line
     across the plot, run out past either edge of the field to a dot. Every trace's field is
@@ -145,7 +147,7 @@ class Trace(QWidget):
     def __init__(self, parent=None, rows=3, levels=0):
         super().__init__(parent)
         self.values, self.gate, self.levels = None, None, [0.0] * levels
-        self.start, self.playhead, self.hover = 0, 0, -1
+        self.start, self.length, self.playhead, self.hover = 0, 0, 0, -1
         self._mode = None   # "head" | the index of the handle held
         self.setFixedHeight(ROW_H * rows)
         self.setMouseTracking(True)
@@ -159,6 +161,12 @@ class Trace(QWidget):
         self.levels[: len(levels)] = levels
         self.start = start
         self.update()
+
+    def set_length(self, rows):
+        """The window's rows: the x axis, whether or not the values fill it yet."""
+        if self.length != int(rows):
+            self.length = int(rows)
+            self.update()
 
     def set_playhead(self, row):
         self.playhead = row
@@ -183,8 +191,12 @@ class Trace(QWidget):
         inner = self._inner()
         return inner.bottom() - inner.height() * min(float(v) / self._top(), 1.0)
 
+    def _axis(self):
+        """Rows across the field: the window's, or the values' when they run past it."""
+        return max(self.length, len(self.values), 2)
+
     def _step(self):
-        return self._inner().width() / (len(self.values) - 1)
+        return self._inner().width() / (self._axis() - 1)
 
     def _row(self, x):
         if self.values is None or len(self.values) < 2:
@@ -211,11 +223,11 @@ class Trace(QWidget):
         if self.values is None or len(self.values) < 2:
             p.end()
             return
-        inner, n, step = self._inner(), len(self.values), self._step()
+        inner, n, N, step = self._inner(), len(self.values), self._axis(), self._step()
         width = int(inner.width())
-        dense = n - 1 >= width > 1   # more samples than columns: each column is the min..max of its samples
+        dense = N - 1 >= width > 1   # more rows than columns: each column is the min..max of its samples
         if dense:
-            col = np.arange(n) * (width - 1) // (n - 1)         # nondecreasing, steps of at most one
+            col = np.arange(n) * (width - 1) // (N - 1)         # nondecreasing, steps of at most one
             starts = np.flatnonzero(np.diff(col, prepend=-1))   # first sample of every column
             xs, w = inner.left() + np.arange(len(starts), dtype=np.float64), 1.0
             gated = None if self.gate is None else np.maximum.reduceat(self.gate[:n].astype(np.uint8), starts) > 0
@@ -247,7 +259,7 @@ class Trace(QWidget):
         self._paint_levels(p, inner)
         for row, color, w in ((self.hover, qgray(theme.INK_2), 1.0), (self.playhead, qgray(theme.HEAD), 1.5)):
             i = row - self.start
-            if 0 <= i < n:
+            if 0 <= i < N:
                 p.setPen(QPen(color, w))
                 x = inner.left() + step * i
                 p.drawLine(QPointF(x, inner.top()), QPointF(x, inner.bottom()))
@@ -395,12 +407,12 @@ class Density(Trace):
         if self.values is None or len(self.values) < 2:
             p.end()
             return
-        inner, n, step = self._inner(), len(self.values), self._step()
+        inner, n, N, step = self._inner(), len(self.values), self._axis(), self._step()
         width = int(inner.width())
-        dense = n - 1 >= width > 1
+        dense = N - 1 >= width > 1
         c = self.values
         if dense:
-            col = np.arange(n) * (width - 1) // (n - 1)
+            col = np.arange(n) * (width - 1) // (N - 1)
             starts = np.flatnonzero(np.diff(col, prepend=-1))
             c = np.add.reduceat(c, starts, axis=0)
         c = np.asarray(c, np.float64)
@@ -428,9 +440,9 @@ class Density(Trace):
         self._paint_levels(p, inner)
         for row, color, lw in ((self.hover, qgray(theme.INK_2), 1.0), (self.playhead, qgray(theme.HEAD), 1.5)):
             i = row - self.start
-            if 0 <= i < n:
+            if 0 <= i < N:
                 p.setPen(QPen(color, lw))
-                x = inner.left() + (col[i] if dense else step * i)
+                x = inner.left() + (i * (width - 1) // (N - 1) if dense else step * i)
                 p.drawLine(QPointF(x, inner.top()), QPointF(x, inner.bottom()))
         if self._y_hover is not None:
             frac = (inner.bottom() - self._y_hover) / inner.height()

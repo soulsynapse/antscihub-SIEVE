@@ -380,6 +380,7 @@ class PlayerWindow(QMainWindow):
         self.goto(self.row, commit=True)
 
     def _params_changed(self, nid):
+        self.canvas.update()   # a band moved recolours its node's dot
         if document.is_selector(self.tools.get(self.doc.node(nid).tool)):
             self._pick_video()
             return

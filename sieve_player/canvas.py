@@ -7,7 +7,7 @@ also opens, filtered to what the wire may feed or be fed by, and a wire pulled b
 filtered to what may sit in it, the chosen tool spliced in where it was let go; a column of buttons at the top right,
 one per key that is an action, for the mouse hand. It reads and writes the document and nothing
 else. The tools' declared types reach it as data, for the connectors' colours, the unfed
-mark, which connectors a dragged wire may land on and which tools the menu offers it; what the
+mark, the band dot on a node whose pane has handles, which connectors a dragged wire may land on and which tools the menu offers it; what the
 runtime makes of the graph never does. A tool the registry listed but could not import reaches it
 as its name and the error, for the menu to show greyed.
 
@@ -28,13 +28,15 @@ from PySide6.QtWidgets import (QAbstractSpinBox, QApplication, QLineEdit, QListW
                                QPlainTextEdit, QSizePolicy, QTextEdit, QToolTip, QWidget)
 
 from . import theme
-from .document import (INPUT, OVERLAYABLE, PATH, VIDEO_PRODUCES, VIDEO_TOOL, expects, fed, fits, inputs_of,
-                       is_selector, produces)
+from .document import (INPUT, OPEN, OVERLAYABLE, PATH, VIDEO_PRODUCES, VIDEO_TOOL, expects, fed, fits,
+                       inputs_of, is_selector, paths, produces)
 from .theme import GAP, PAD, qgray
 
 NODE_W, NODE_H = 140, 28   # a node's box, canvas px
 FLAG_R = 5                 # the display flag: a disc at the node's right end; the overlay flag sits left of it
 PIN_R = 4                  # a connector: a disc on the node's top or bottom edge
+BAND_STUB = 10             # the band dot: a disc this far out from the node's left edge, on a stub, as a
+                           # trace's handle runs past the plot to its dot; where a band will be wired in
 HIT = 3                    # slack around a flag or a connector, px
 WIRE_W = 1.5
 WIRE_BEND = 24             # the least a wire runs vertically out of a connector before it turns
@@ -279,6 +281,12 @@ class Canvas(QWidget):
         """Whether the overlay flag is offered: a resolved node producing one plane (an OVERLAYABLE type)."""
         return self.output_type(node) in OVERLAYABLE
 
+    def has_band(self, node):
+        """Whether the node has a band, the handles on its pane's density or trace: a resolved frame
+        or series node that is neither a selector nor a reader of paths, as the pane builds them."""
+        tool = self.tools.get(node.tool)
+        return node.tool != VIDEO_TOOL and tool is not None and not is_selector(tool) and not paths(tool)             and getattr(tool, "KIND", "frame") in ("frame", "series")
+
     def unfed(self, node):
         """The mark: a resolved node the video does not reach through wires whose types fit. The
         video node's input is optional and a selector has none, so neither is ever marked."""
@@ -337,6 +345,10 @@ class Canvas(QWidget):
         names = [n for n, _ in self.inputs(node)]
         i, k = (names.index(name) if name in names else 0), max(1, len(names))
         return QPointF(b.left() + b.width() * (i + 1) / (k + 1), b.top())
+
+    def band_pin(self, node):
+        b = self.box(node)
+        return QPointF(b.left() - BAND_STUB, b.center().y())
 
     def pin_out(self, node):
         b = self.box(node)
@@ -726,6 +738,15 @@ class Canvas(QWidget):
         """`lit`, while a wire is dragged, is the set of (node id, input name or None) it may land
         on; every other connector is dimmed."""
         box = self.box(n).adjusted(0.5, 0.5, -0.5, -0.5)
+        if self.has_band(n):
+            # gray while the band keeps everything, the handles' colour once it shuts something out
+            c = self.band_pin(n)
+            color = theme.LEVEL if n.band is not None and tuple(n.band) != OPEN                 else qgray(theme.layer(1) + theme.LINE_LIFT)
+            p.setPen(QPen(color, WIRE_W))
+            p.drawLine(c, QPointF(box.left(), c.y()))
+            p.setPen(Qt.NoPen)
+            p.setBrush(color)
+            p.drawEllipse(c, PIN_R, PIN_R)
         fill = theme.layer(1) + (theme.HOVER_LIFT if n.id == self.hover else 0)
         edge = qgray(theme.HEAD) if n.id in self.selected else qgray(theme.layer(1) + theme.LINE_LIFT)
         if n.id == self.hover and n.id not in self.selected:
@@ -961,6 +982,10 @@ class Canvas(QWidget):
             types = dict(self.inputs(node))[name]
             said = "any" if types is None else " | ".join(types)
             return f"{name}: {said}" + (" (nothing feeds it)" if self.unfed(node) else "")
+        for n in reversed(self.doc.nodes):
+            if self.has_band(n) and (self.band_pin(n) - pos).manhattanLength() <= PIN_R + HIT / self.zoom:
+                lo, hi = OPEN if n.band is None else n.band
+                return f"band: {lo:g} to {hi:g}" + (" (keeps every value)" if (lo, hi) == OPEN else "")
         node = self.node_at(pos)
         if node is not None and node.unresolved:
             return f"tool {node.tool!r} not found"

@@ -166,10 +166,21 @@ def test_the_overlay_flag_toggles_and_is_offered_only_on_one_plane_nodes():
     assert doc.overlay is None
 
 
+def test_the_band_dot_is_on_a_node_with_handles_and_says_its_band():
+    doc = D.from_tools([sel, reader, gray, reduce])
+    canvas = canvas_with(doc)
+    assert [n.id for n in doc.nodes if canvas.has_band(n)] == ["gray", "reduce"]
+    dot = canvas.band_pin(doc.node("reduce"))
+    assert canvas._tip(dot) == "band: 0 to inf (keeps every value)"
+    doc.node("reduce").band = (0.5, float("inf"))
+    assert canvas._tip(dot) == "band: 0.5 to inf"
+
+
 def test_the_display_flag_is_not_offered_on_a_node_without_a_frame():
     doc = D.from_tools([gray, reduce])
     canvas = canvas_with(doc)
     assert canvas.can_display(doc.node("gray")) and not canvas.can_display(doc.node("reduce"))
     _press(canvas, canvas.to_view(canvas.flag(doc.node("reduce")).center()))
+    assert canvas.has_band(doc.node("gray")) and canvas.has_band(doc.node("reduce"))
     canvas.set_flag("reduce")
     assert doc.display == "gray"

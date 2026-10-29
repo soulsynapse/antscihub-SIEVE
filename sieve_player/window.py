@@ -11,6 +11,7 @@ the memo and never waits on the decoder. It opens with no video and never prompt
 import os
 import traceback
 
+import cv2
 import numpy as np
 from PySide6.QtCore import QRectF, Qt, QTimer
 from PySide6.QtGui import QImage, QKeySequence, QPainter, QPen, QPixmap, QShortcut
@@ -35,13 +36,30 @@ def _same(a, b):
     return os.path.normcase(os.path.abspath(str(a))) == os.path.normcase(os.path.abspath(str(b)))
 
 
-def to_qimage(a):
+def flow_top(a):
+    """The largest magnitude in a flow field, or of a plane; what a non-uint8 array is shown against."""
+    a = np.asarray(a)
+    if not a.size:
+        return 0.0
+    return float(np.hypot(a[..., 0], a[..., 1]).max()) if a.ndim == 3 and a.shape[2] == 2 else float(a.max())
+
+
+def to_qimage(a, top=None):
+    """`a` as an image. uint8 and bool are shown as they are; any other plane is shown over `top`, its
+    own maximum when not given. A flow field, (H, W, 2), is the colour wheel: hue is direction and
+    brightness magnitude over `top`."""
     a = np.asarray(a)
     if a.dtype == bool:
         a = a.astype(np.uint8) * 255
+    elif a.ndim == 3 and a.shape[2] == 2:
+        mag = np.hypot(a[..., 0], a[..., 1])
+        top = max(flow_top(a) if top is None else float(top), 1e-6)
+        hsv = np.dstack([(np.degrees(np.arctan2(a[..., 1], a[..., 0])) % 360.0) / 2.0,
+                         np.full(mag.shape, 255.0), np.clip(mag * (255.0 / top), 0, 255)]).astype(np.uint8)
+        a = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
     elif a.dtype != np.uint8:
-        top = float(a.max()) if a.size else 1.0
-        a = np.clip(a * (255.0 if top <= 1.0 else 1.0), 0, 255).astype(np.uint8)
+        top = max(flow_top(a) if top is None else float(top), 1e-6)
+        a = np.clip(a.astype(np.float32) * (255.0 / top), 0, 255).astype(np.uint8)
     a = np.ascontiguousarray(a)
     if a.ndim == 2:
         fmt = QImage.Format_Grayscale8
@@ -76,6 +94,7 @@ class Display(QWidget):
         super().__init__(parent)
         self._pix, self.gate, self.reason = None, False, ""
         self._over, self._over_key, self._top = None, None, 0.0   # the overlay image, whose node's key, its running max
+        self._frame_key, self._frame_top = None, 0.0               # the shown node's key and running max, for a measured plane
         self.drawers, self.row, self.results, self.start = [], 0, {}, 0   # drawers: [(node id, tool)]
         self.setMinimumSize(160, 120)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
@@ -84,8 +103,17 @@ class Display(QWidget):
         self.row, self.results, self.start = row, results, start
         self.update()
 
-    def set_frame(self, a):
-        self._pix, self.reason = QPixmap.fromImage(to_qimage(a)), ""
+    def set_frame(self, a, key=None):
+        """`a` is the shown node's output at the row. `key` names the node and its params: a plane that
+        is a measure rather than an image is shown over a running maximum that restarts when it changes,
+        as the overlay is heated, so brightness means the same thing from one row to the next."""
+        if key != self._frame_key:
+            self._frame_key, self._frame_top = key, 0.0
+        a = np.asarray(a)
+        top = None
+        if a.dtype not in (np.uint8, bool):
+            self._frame_top = top = max(self._frame_top, flow_top(a))
+        self._pix, self.reason = QPixmap.fromImage(to_qimage(a, top)), ""
         self.update()
 
     def clear(self, reason=""):
@@ -604,7 +632,7 @@ class PlayerWindow(QMainWindow):
         frame = self.graph.peek(row)
         if frame is None:
             return False
-        self.display.set_frame(frame)
+        self.display.set_frame(frame, self.graph.key(self.graph.shown))
         over = self.graph.over
         plane = None if over is None else self.graph.peek(row, over)
         self.display.set_overlay(plane, None if over is None else self.graph.key(over))

@@ -36,7 +36,8 @@ def fold(frame) -> np.ndarray                 # optional: what the walk stacks p
 def run(series, params) -> dict               # series.data is (T, ...), the read node stacked, each row
                                               # through fold() if there is one; the dict carries "signal",
                                               # a (T,) array; the gate is the player's, never the tool's
-def settings(parent=None) -> ParamWidget      # optionally show_result(result, start, fps), set_playhead(row)
+def settings(parent=None) -> ParamWidget      # optionally show_result(result, start, fps), set_playhead(row),
+                                              # set_source(path, fps): the video, for a tool that writes a file (csv)
 
 # a series tool reading another: EXPECTS = "signal", and series.data is the upstream result's
 # "signal" with the rows its band shuts out zeroed (smooth).
@@ -74,7 +75,7 @@ Facets the player reads when a tool has them:
 | facet | what the player does with it |
 |---|---|
 | `draw(painter, row, result, start)` | paints on the frame, in frame-pixel coordinates (`painter.window()` is the frame's rect); one that raises is dropped for the session |
-| a `"signal"` array in a series result | the node's trace, drawn as a detector. Its two handles are the node's band, in the signal's units, saved with the node: the player adds `"gate"`, the rows inside it (outside when lo is above hi), washes them on the trace, zeroes the rest of the signal before a series node downstream reads it, and draws a green border on the frame while the playhead is in a row the last chain node gates |
+| a `"signal"` array in a series result | the node's trace, drawn as a detector. Its two handles are the node's band, in the signal's units, saved with the node: the player adds `"gate"`, the rows inside it (outside when lo is above hi), washes them on the trace, zeroes the rest of the signal before a series node downstream reads it, and draws a green border on the frame while the playhead is in a row the last chain node gates. Every chain node's result also gets `"key"`, the node's key (`graph`), which hashes its band and everything upstream: a tool that writes a file records it, and can read it back to say whether the file on disk is this graph's (csv) |
 | `output_name`, `export_command`, `describe_output` | an Export button on the node; an existing target gets a numbered sibling, and a failed run leaves no partial file |
 | `PATHS = {input: loader}` | a path input a selector feeds; the loader turns the file into params |
 | a plane as output | the node's density, v2's plot: its pixels per row counted on a fixed log axis, under its settings, for every fed frame node; a mask or a field has none. Its two handles are the node's band, saved with the node: the player zeroes every pixel outside it (inside it when lo is above hi) before anything downstream reads the node |

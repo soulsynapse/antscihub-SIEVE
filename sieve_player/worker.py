@@ -12,7 +12,7 @@ from .graph import Series, gated
 class Worker(QThread):
     rowReady = Signal(int)                    # a requested row is now in the memo
     walked = Signal(int, int)                 # rows done, rows in window
-    seriesReady = Signal(object, int, float)  # {node: result} for the series chain, each gated, start, fps
+    seriesReady = Signal(object, int, float)  # {node: result} for the series chain, each gated and keyed, start, fps
     densityReady = Signal(object, int)        # {node: (rows, BINS) counts} per plane the walk computes, start
     failed = Signal(int)                      # a tool raised at this row; the walk is abandoned
 
@@ -135,4 +135,6 @@ class Worker(QThread):
             else:
                 continue            # the upstream tool did not hand out the signal it declared, or was skipped itself
             results[nid], feeds[nid] = gated(tool.run(series, params), band)
+            if isinstance(results[nid], dict):
+                results[nid] = {**results[nid], "key": self.graph.key(nid)}   # the node's key beside its gate: what a tool that writes a file records
         self.seriesReady.emit(results, start, fps)

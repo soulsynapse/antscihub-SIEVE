@@ -11,7 +11,8 @@ note of what its rule matched, which the window writes. Under a tool that
 exports sits the target it would write, an Export button that runs the tool's argv in a QProcess,
 and the process's last line; a tool takes part by defining `output_name(src, params) -> path` and
 `export_command(src, dst, params, fps) -> argv`, and may add `describe_output(src, params, fps)
--> str` for the line under the target. Under a frame node's settings sits its density, the
+-> str` for the line under the target. A settings widget with `set_source(path, fps)` is told the
+video too, as the Export block is, for a tool that writes a file of its own (csv). Under a frame node's settings sits its density, the
 population its plane's values make per row of the loop window, which the window hands the pane for
 every fed frame node; a node whose output is a mask or a field, or that the video does not
 reach, shows none; its handles are the node's band (see `document`), written like a param. Under a
@@ -292,6 +293,8 @@ class Pane(QWidget):
                 w.changed.connect(lambda nid=node.id: self._changed(nid))
                 card.add(w)
                 self.widgets[node.id] = w
+                if hasattr(w, "set_source"):
+                    w.set_source(self._src, self._fps)
                 if is_selector(tool) or paths(tool):
                     self.notes[node.id] = readout()
                     card.add(self.notes[node.id])
@@ -400,7 +403,8 @@ class Pane(QWidget):
             self.notes[nid].setText(text)
 
     def set_source(self, path, fps):
-        """The video every Export writes from; None when nothing is loaded."""
+        """The video every Export, and every settings widget with a `set_source`, writes from; None
+        when nothing is loaded."""
         self._src, self._fps = path, fps
-        for ex in self.exports.values():
-            ex.set_source(path, fps)
+        for w in (*self.exports.values(), *[w for w in self.widgets.values() if hasattr(w, "set_source")]):
+            w.set_source(path, fps)

@@ -79,4 +79,6 @@ def test_plot_crops_to_the_occupied_bins_and_paints():
     w._drag_level(0, w._y(density.value_of(110)))             # lo above hi: inside out
     kept = w._kept()
     assert kept[40 - w.lo] and kept[120 - w.lo] and not kept[105 - w.lo]
+    w._drag_level(1, w._inner().top() - 20)                   # above the field: infinity
+    assert w.levels[1] == float("inf") and w._y(float("inf")) == w._inner().top()
     assert not w.grab().isNull()

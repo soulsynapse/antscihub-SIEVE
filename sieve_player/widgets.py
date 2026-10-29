@@ -124,9 +124,11 @@ class Trace(QWidget):
 
     A trace built with `levels=n` has n handles, in the units of `values`: each a red line
     across the plot, run out past either edge of the field to a dot. Every trace's field is
-    inset by the dots' room, handles or not, so stacked traces share their x. Two handles are a
-    band (lo, hi) as reduce reads it, and the values it shuts out are darkened: outside the
-    band, or inside it when lo is above hi. A press on a handle's line or dots drags it up or down (levelDragged(index,
+    inset by the dots' room, handles or not, so stacked traces share their x. The field's height
+    is the series' maximum, never a handle's: a handle dragged to the top of the field is
+    infinity, and one above the series sits at the top. Two handles are a band (lo, hi) as reduce
+    reads it, and the values it shuts out are darkened: outside the band, or inside it when lo is
+    above hi. A press on a handle's line or dots drags it up or down (levelDragged(index,
     value) as it moves, levelReleased(index, value) once, when it is let go); any other press is the playhead (pressed/dragged/released, rows). The cursor's row is
     reported as hovered(row), -1 on leave; set_hover(row) draws another widget's cursor here. The
     corner readout is the value under the cursor, else at the playhead."""
@@ -175,11 +177,11 @@ class Trace(QWidget):
         return self._box().adjusted(1, 1, -1, -1)
 
     def _top(self):
-        return max(float(self.values.max()), *self.levels, 1e-6)
+        return max(float(self.values.max()), 1e-6)
 
     def _y(self, v):
         inner = self._inner()
-        return inner.bottom() - inner.height() * float(v) / self._top()
+        return inner.bottom() - inner.height() * min(float(v) / self._top(), 1.0)
 
     def _step(self):
         return self._inner().width() / (len(self.values) - 1)
@@ -290,10 +292,10 @@ class Trace(QWidget):
 
     def _drag_level(self, i, y):
         inner = self._inner()
-        v = max(0.0, self._top() * (inner.bottom() - y) / inner.height())
-        self.levels[i] = v
+        frac = (inner.bottom() - y) / inner.height()
+        self.levels[i] = float("inf") if frac >= 1.0 else max(0.0, self._top() * frac)
         self.update()
-        self.levelDragged.emit(i, v)
+        self.levelDragged.emit(i, self.levels[i])
 
     def mousePressEvent(self, e):
         if e.button() != Qt.LeftButton or self.values is None or len(self.values) < 2:
@@ -341,13 +343,13 @@ class Density(Trace):
     added. The playhead, cursor and gestures are the Trace's. Its two handles are a band of
     values, in the plane's units: the bins outside it, or inside it once lo is above hi, are dropped
     from the picture and from the column's total, so the ramp spends its whole range on the values
-    kept; they start at the axis's ends, dropping nothing. The band is the view's and is not saved."""
+    kept; they start at the axis's ends, dropping nothing, and one dragged to the top is infinity."""
     MARGIN = 2   # bins of room past the occupied ones
 
     def __init__(self, parent=None, rows=6, value_of=None):
         super().__init__(parent, rows=rows, levels=2)
         self.value_of = value_of or density.value_of
-        self.levels = [0.0, self.value_of(density.BINS - 1)]
+        self.levels = [0.0, float("inf")]
         self.lo = self.hi = 0   # the bins shown, inclusive
         self._y_hover = None
 
@@ -366,8 +368,8 @@ class Density(Trace):
 
     def _drag_level(self, i, y):
         inner = self._inner()
-        frac = min(max((inner.bottom() - y) / inner.height(), 0.0), 1.0)
-        self.levels[i] = self.value_of(self.lo + frac * (self.hi - self.lo + 1))
+        frac = (inner.bottom() - y) / inner.height()
+        self.levels[i] = float("inf") if frac >= 1.0 else self.value_of(self.lo + max(frac, 0.0) * (self.hi - self.lo + 1))
         self.update()
         self.levelDragged.emit(i, self.levels[i])
 

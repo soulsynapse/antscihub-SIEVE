@@ -1,4 +1,4 @@
-"""reduce: each method over a row's pixels, one float per row, from the four numbers the fold keeps; the band between the handles gates it, inside out once they cross; the trace's handles move the knobs."""
+"""reduce: each method over a row's pixels, one float per row, from the four numbers the fold keeps; the band between the handles gates it, inside out once they cross; the handles are the only control and the top of the trace is infinity."""
 import os
 
 import numpy as np
@@ -37,23 +37,21 @@ def test_band_between_the_handles_and_outside_once_they_cross():
     s = folded([0.0, 2.0, 5.0, 9.0, 20.0])
     assert reduce.run(s, {"method": "max", "lo": 1.0, "hi": 10.0})["gate"].tolist() == [False, True, True, True, False]
     assert reduce.run(s, {"method": "max", "lo": 10.0, "hi": 1.0})["gate"].tolist() == [True, False, False, False, True]
+    assert reduce.run(s, {"method": "max", **reduce.DEFAULTS})["gate"].all()          # 0 to infinity: every row
 
 
-def test_dragging_a_handle_moves_its_knob():
+def test_the_handles_are_the_params_and_the_top_of_the_trace_is_infinity():
     QApplication.instance() or QApplication([])
     w = reduce.settings()
+    assert w.params() == {"method": "mean", "lo": 0.0, "hi": float("inf")}
+    changes = []
+    w.changed.connect(lambda: changes.append(w.params()))
     w.set_params({"method": "max", **BAND})
+    assert w.plot.levels == [1.0, 10.0] and changes[-1] == {"method": "max", **BAND}
+    w.resize(300, 200)
     w.show_result(reduce.run(folded(np.arange(5.0)), w.params()), 0, 30.0)
-    assert w.plot.levels == [1.0, 10.0]
-    w.plot.levelDragged.emit(0, 3.5)
-    assert w.params() == {"method": "max", "lo": 3.5, "hi": 10.0} and w.plot.levels == [3.5, 10.0]   # the knob, and the handle back from it
-
-
-def test_the_knobs_reach_the_signal_and_a_saved_value_whatever_their_units():
-    QApplication.instance() or QApplication([])
-    w = reduce.settings()
-    w.set_params({"method": "max", "lo": 1.0, "hi": 5000.0})
-    assert w.params() == {"method": "max", "lo": 1.0, "hi": 5000.0}                     # not clamped to the default reach
-    w.show_result(reduce.run(folded([0.0, 2.0e5, 1.0e5]), w.params()), 0, 30.0)
-    w.plot.levelDragged.emit(1, 1.5e5)
-    assert w.params()["hi"] == 1.5e5 and w.plot.levels == [1.0, 1.5e5]
+    inner = w.plot._inner()
+    w.plot._drag_level(1, inner.top() - 50)                  # above the field: infinity, drawn at the top
+    assert w.params()["hi"] == float("inf") and w.plot._y(float("inf")) == inner.top()
+    w.plot._drag_level(1, inner.bottom() - inner.height() / 2)   # the axis is the series' max, 4, not the old handle's
+    assert abs(w.params()["hi"] - 2.0) < 0.05

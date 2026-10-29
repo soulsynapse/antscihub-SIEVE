@@ -53,17 +53,18 @@ def to_qimage(a):
 
 
 class Display(QWidget):
-    """The frame, the gate border, and each tool's draw() on top, in node order."""
+    """The frame, the gate border, and each drawing node's draw() on top, in node order, each
+    handed its own node's series result."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._pix, self.gate, self.reason = None, False, ""
-        self.drawers, self.row, self.result, self.start = [], 0, None, 0
+        self.drawers, self.row, self.results, self.start = [], 0, {}, 0   # drawers: [(node id, tool)]
         self.setMinimumSize(160, 120)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
-    def set_state(self, row, result, start):
-        self.row, self.result, self.start = row, result, start
+    def set_state(self, row, results, start):
+        self.row, self.results, self.start = row, results, start
         self.update()
 
     def set_frame(self, a):
@@ -92,19 +93,21 @@ class Display(QWidget):
         x, y = (self.width() - pix.width()) // 2, (self.height() - pix.height()) // 2
         p.drawPixmap(x, y, pix)
         if self.gate:
-            p.setPen(QPen(theme.AMBER, 4))
+            p.setPen(QPen(theme.GATE, 4))
             p.drawRect(x + 2, y + 2, pix.width() - 4, pix.height() - 4)
         if not self.drawers:
             return
         p.save()
-        p.translate(x, y)
-        p.scale(pix.width() / self._pix.width(), pix.height() / self._pix.height())
-        for tool in self.drawers:
+        # Window/viewport rather than translate/scale: the same mapping, and a drawer can read the
+        # frame's rect back from painter.window() when its own data is another resolution.
+        p.setViewport(x, y, pix.width(), pix.height())
+        p.setWindow(0, 0, self._pix.width(), self._pix.height())
+        for nid, tool in self.drawers:
             try:
-                tool.draw(p, self.row, self.result, self.start)
+                tool.draw(p, self.row, self.results.get(nid), self.start)
             except Exception:
                 traceback.print_exc()
-                self.drawers = [t for t in self.drawers if t is not tool]  # once, not every repaint
+                self.drawers = [d for d in self.drawers if d[1] is not tool]  # once, not every repaint
         p.restore()
 
 
@@ -159,7 +162,7 @@ class PlayerWindow(QMainWindow):
         self.fps, self.count = 30.0, 0
         self.row, self.playing, self.window_ = 0, False, (0, 0)
         self._resume = False  # playback to restore when a playhead drag ends
-        self.result, self.result_start = None, 0
+        self.results, self.result_start = {}, 0   # node id -> the series chain's results, and the row they start at
         self._taken = {}       # (node id, path input) -> the file last handed to its loader
         self._driven = {}      # (node id, path input) -> (the keys its loader set, the selector's id)
         self.traces = []
@@ -295,7 +298,7 @@ class PlayerWindow(QMainWindow):
         self.pane.sync()
         self._hook_traces()
         self._pick_video()
-        self.display.drawers = [self.tools[n.tool] for n in self.doc.nodes
+        self.display.drawers = [(n.id, self.tools[n.tool]) for n in self.doc.nodes
                                 if n.tool in self.tools and hasattr(self.tools[n.tool], "draw")]
         self.canvas.update()
         if self.graph is None:
@@ -311,7 +314,7 @@ class PlayerWindow(QMainWindow):
         if self.graph is None:
             return
         self.graph.sync()
-        if nid == self.graph.series:
+        if nid in self.graph.chain:
             self.worker.rerun_series()
         else:
             self.worker.invalidate()
@@ -471,7 +474,7 @@ class PlayerWindow(QMainWindow):
         self.worker.stop()
         self.decoder.close()
         self.decoder = self.graph = self.worker = None
-        self.result = None
+        self.results = {}
         self.row, self.window_ = 0, (0, 0)
         self.display.clear()
 
@@ -511,9 +514,10 @@ class PlayerWindow(QMainWindow):
                 self.worker.request_row(row)
         self.timeline.strip.set_playhead(row)
         self.timeline.controls.set_readout(row)
-        w = self.pane.widget(self.graph.series)
-        if w is not None and hasattr(w, "set_playhead"):
-            w.set_playhead(row)
+        for nid in self.graph.chain:
+            w = self.pane.widget(nid)
+            if w is not None and hasattr(w, "set_playhead"):
+                w.set_playhead(row)
         self._update_gate()
 
     def _scrub_begin(self, row):
@@ -561,11 +565,12 @@ class PlayerWindow(QMainWindow):
             if frame is not None:
                 self.display.set_frame(frame)
 
-    def _series_ready(self, result, start, fps):
-        self.result, self.result_start = result, start
-        w = self.pane.widget(self.graph.series) if self.graph is not None else None
-        if w is not None and hasattr(w, "show_result"):
-            w.show_result(result, start, fps)
+    def _series_ready(self, results, start, fps):
+        self.results, self.result_start = results, start
+        for nid, result in results.items():
+            w = self.pane.widget(nid)
+            if w is not None and hasattr(w, "show_result"):
+                w.show_result(result, start, fps)
         self._update_gate()
 
     def _hover(self, row):
@@ -575,10 +580,11 @@ class PlayerWindow(QMainWindow):
         self.timeline.strip.set_hover(row)
 
     def _update_gate(self):
-        gate = self.result.get("gate") if isinstance(self.result, dict) else None
+        """The border is on while any chain node gates the playhead's row."""
         i = self.row - self.result_start
-        self.display.set_gate(gate is not None and 0 <= i < len(gate) and bool(gate[i]))
-        self.display.set_state(self.row, self.result, self.result_start)
+        gates = [r.get("gate") for r in self.results.values() if isinstance(r, dict)]
+        self.display.set_gate(any(g is not None and 0 <= i < len(g) and bool(g[i]) for g in gates))
+        self.display.set_state(self.row, self.results, self.result_start)
 
     SPLIT = 0.5   # the frame's share of the width until the handle is dragged
 

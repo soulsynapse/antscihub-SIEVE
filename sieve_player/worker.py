@@ -11,7 +11,7 @@ from .graph import Series
 class Worker(QThread):
     rowReady = Signal(int)                    # a requested row is now in the memo
     walked = Signal(int, int)                 # rows done, rows in window
-    seriesReady = Signal(object, int, float)  # result, start, fps
+    seriesReady = Signal(object, int, float)  # {node: result} for the series chain, start, fps
     failed = Signal(int)                      # a tool raised at this row; the walk is abandoned
 
     def __init__(self, graph, every=30):
@@ -108,9 +108,16 @@ class Worker(QThread):
                     self._i = self._length  # abandon this walk; the next gen bump restarts it
 
     def _emit_series(self):
-        tool = self.graph.series_tool
-        if tool is None or not self._i:
+        chain = self.graph.series_chain()
+        if not chain or not self._i:
             return
-        series = Series(self._stack[: self._i], self.graph.key(self.graph.walk), self._start, self.graph.fps)
-        result = tool.run(series, self.graph.series_params())
-        self.seriesReady.emit(result, self._start, self.graph.fps)
+        results, start, fps = {}, self._start, self.graph.fps
+        for i, (nid, tool, params, src) in enumerate(chain):
+            if i == 0:
+                series = Series(self._stack[: self._i], self.graph.key(src), start, fps)
+            elif isinstance(results.get(src), dict) and "signal" in results[src]:
+                series = Series(np.asarray(results[src]["signal"]), self.graph.key(src), start, fps)
+            else:
+                continue            # the upstream tool did not hand out the signal it declared, or was skipped itself
+            results[nid] = tool.run(series, params)
+        self.seriesReady.emit(results, start, fps)

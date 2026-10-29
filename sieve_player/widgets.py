@@ -116,37 +116,45 @@ class ParamWidget(QWidget):
 
 class Trace(QWidget):
     """A series over the loop window, drawn as a measured field on the layer it sits in: the
-    series in the accent, the playhead in white, and if there is a gate, its level as a dashed
-    amber line and the gated rows as an amber bar along the bottom edge. Where there are more
-    samples than pixels each column shows the min and max of the samples it covers, so nothing is
-    hidden and nothing is added. Feed it with set_series(values, start, gate=None, level=None) and
-    set_playhead(row); `level` is in the units of `values`.
+    series in teal, the playhead in white, and if there is a gate, the gated rows washed green
+    full height: v2's plot colors. A trace with handles is a detector, as v2's count plot was,
+    and draws its series green too; green is otherwise never a series. Where there are more samples than pixels each column shows the
+    min and max of the samples it covers, so nothing is hidden and nothing is added. Feed it with
+    set_series(values, start, gate=None, levels=()) and set_playhead(row).
 
-    A press is the playhead (pressed/dragged/released, rows), unless it lands on the level line,
-    which then follows the cursor (levelDragged, in the units of `values`). The cursor's row is
+    A trace built with `levels=n` has n handles, in the units of `values`: each a red line
+    across the plot, run out past either edge of the field to a dot. Every trace's field is
+    inset by the dots' room, handles or not, so stacked traces share their x. Two handles are a
+    band (lo, hi) as rangegate reads it, and the values it shuts out are darkened: outside the
+    band, or inside it when lo is above hi. A press on a handle's line or dots drags it up or down (levelDragged(index,
+    value)); any other press is the playhead (pressed/dragged/released, rows). The cursor's row is
     reported as hovered(row), -1 on leave; set_hover(row) draws another widget's cursor here. The
     corner readout is the value under the cursor, else at the playhead."""
     pressed = Signal(int)
     dragged = Signal(int)
     released = Signal(int)
     hovered = Signal(int)
-    levelDragged = Signal(float)
-    GRAB = 4   # px either side of the level line that takes the drag
-    BAR = 3    # px: the gate bar along the bottom edge
+    levelDragged = Signal(int, float)
+    GRAB = 4   # px either side of a handle's line that takes the drag
+    STUB = 6   # px: a handle's line runs this far past the plot's edge
+    DOT = 3.2  # px: the radius of the dot it ends in
 
-    def __init__(self, parent=None, rows=3):
+    def __init__(self, parent=None, rows=3, levels=0):
         super().__init__(parent)
-        self.values, self.gate, self.level = None, None, None
+        self.values, self.gate, self.levels = None, None, [0.0] * levels
         self.start, self.playhead, self.hover = 0, 0, -1
-        self._mode = None   # "head" | "level"
+        self._mode = None   # "head" | the index of the handle held
         self.setFixedHeight(ROW_H * rows)
         self.setMouseTracking(True)
         self.setFont(mono_font())
 
-    def set_series(self, values, start, gate=None, level=None):
+    def set_series(self, values, start, gate=None, levels=()):
+        """`levels` moves the handles; fewer than built leave the rest where they are."""
         self.values = None if values is None else np.asarray(values, np.float32)
         self.gate = None if gate is None else np.asarray(gate, bool)
-        self.level, self.start = level, start
+        levels = [float(v) for v in levels][: len(self.levels)]
+        self.levels[: len(levels)] = levels
+        self.start = start
         self.update()
 
     def set_playhead(self, row):
@@ -158,11 +166,15 @@ class Trace(QWidget):
         self.update()
 
     # -- geometry --------------------------------------------------------
+    def _box(self):
+        m = self.STUB + self.DOT
+        return QRectF(self.rect()).adjusted(m + 0.5, 0.5, -m - 0.5, -0.5)
+
     def _inner(self):
-        return QRectF(self.rect()).adjusted(1.5, 1.5, -1.5, -1.5)
+        return self._box().adjusted(1, 1, -1, -1)
 
     def _top(self):
-        return max(float(self.values.max()), float(self.level or 0.0), 1e-6)
+        return max(float(self.values.max()), *self.levels, 1e-6)
 
     def _y(self, v):
         inner = self._inner()
@@ -189,7 +201,7 @@ class Trace(QWidget):
     def paintEvent(self, _):
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing, True)
-        box = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
+        box = self._box()
         p.setPen(Qt.NoPen)
         p.setBrush(qgray(theme.layer(self._depth()) + theme.MEASURED_LIFT))
         p.drawRoundedRect(box, theme.RADIUS, theme.RADIUS)
@@ -198,36 +210,51 @@ class Trace(QWidget):
             return
         inner, n, step = self._inner(), len(self.values), self._step()
         width = int(inner.width())
-        if n - 1 >= width > 1:
-            # more samples than columns: each column is the min..max of the samples in it
+        dense = n - 1 >= width > 1   # more samples than columns: each column is the min..max of its samples
+        if dense:
             col = np.arange(n) * (width - 1) // (n - 1)         # nondecreasing, steps of at most one
             starts = np.flatnonzero(np.diff(col, prepend=-1))   # first sample of every column
+            xs, w = inner.left() + np.arange(len(starts), dtype=np.float64), 1.0
+            gated = None if self.gate is None else np.maximum.reduceat(self.gate[:n].astype(np.uint8), starts) > 0
+        else:
+            xs, w = inner.left() + step * np.arange(n), step
+            gated = None if self.gate is None else self.gate[:n]
+        p.setPen(Qt.NoPen)
+        if len(self.levels) == 2:
+            y_lo, y_hi = self._y(self.levels[0]), self._y(self.levels[1])
+            shut = ([(y_lo, inner.bottom()), (inner.top(), y_hi)] if y_lo >= y_hi else [(y_lo, y_hi)])
+            p.setBrush(theme.EXCLUDED)
+            for y0, y1 in shut:
+                p.drawRect(QRectF(inner.left(), y0, inner.width(), y1 - y0))
+        if gated is not None and gated.any():
+            # one rect per run, so the translucent wash has no seams between rows
+            edges = np.flatnonzero(np.diff(np.concatenate(([0], gated.astype(np.int8), [0]))))
+            p.setBrush(theme.GATED)
+            for a, b in zip(edges[0::2], edges[1::2] - 1):
+                x0, x1 = max(xs[a] - w / 2, inner.left()), min(xs[b] + w / 2, inner.right())
+                p.drawRect(QRectF(x0, inner.top(), x1 - x0, inner.height()))
+        line = theme.GATE if self.levels else theme.SERIES
+        if dense:
             lo = np.minimum.reduceat(self.values, starts)
             hi = np.maximum.reduceat(self.values, starts)
-            xs = inner.left() + np.arange(len(starts), dtype=np.float64)
             top = [QPointF(x, self._y(v)) for x, v in zip(xs, hi)]
             bottom = [QPointF(x, self._y(v)) for x, v in zip(xs[::-1], lo[::-1])]
-            p.setPen(QPen(theme.ACCENT, 1))
-            p.setBrush(theme.ACCENT)
+            p.setPen(QPen(line, 1))
+            p.setBrush(line)
             p.drawPolygon(QPolygonF(top + bottom))
-            gate_x = [] if self.gate is None else xs[np.maximum.reduceat(self.gate[:n].astype(np.uint8), starts) > 0]
-            bar_w = 1.0
         else:
-            p.setPen(QPen(theme.ACCENT, 1.4))
+            p.setPen(QPen(line, 1.6))
             p.setBrush(Qt.NoBrush)
-            p.drawPolyline(QPolygonF([QPointF(inner.left() + step * i, self._y(v)) for i, v in enumerate(self.values)]))
-            gate_x = [] if self.gate is None else inner.left() + step * np.flatnonzero(self.gate[:n])
-            bar_w = step
-        if len(gate_x):
-            p.setPen(Qt.NoPen)
-            p.setBrush(theme.AMBER)
-            for x in gate_x:
-                p.drawRect(QRectF(x - bar_w / 2, inner.bottom() - self.BAR, bar_w, self.BAR))
-        if self.level is not None:
-            pen = QPen(theme.AMBER, 1)
-            pen.setDashPattern([4, 3])
-            p.setPen(pen)
-            p.drawLine(QPointF(inner.left(), self._y(self.level)), QPointF(inner.right(), self._y(self.level)))
+            p.drawPolyline(QPolygonF([QPointF(x, self._y(v)) for x, v in zip(xs, self.values)]))
+        for v in self.levels:
+            # on a pixel's center: a 1px line between two rows antialiases to half strength in each
+            y, x0, x1 = round(self._y(v) - 0.5) + 0.5, inner.left() - self.STUB, inner.right() + self.STUB
+            p.setPen(QPen(theme.LEVEL, 1))
+            p.setBrush(theme.LEVEL)
+            p.drawLine(QPointF(x0, y), QPointF(x1, y))
+            for x in (x0, x1):
+                p.drawEllipse(QPointF(x, y), self.DOT, self.DOT)
+            p.setBrush(Qt.NoBrush)
         for row, color, w in ((self.hover, qgray(theme.INK_2), 1.0), (self.playhead, qgray(theme.HEAD), 1.5)):
             i = row - self.start
             if 0 <= i < n:
@@ -244,37 +271,39 @@ class Trace(QWidget):
 
     # -- gestures --------------------------------------------------------
     def _hit(self, pos):
-        if self.values is not None and len(self.values) >= 2 and self.level is not None \
-                and abs(pos.y() - self._y(self.level)) <= self.GRAB:
-            return "level"
-        return "head"
+        """The nearest handle within GRAB of the cursor, at any x, else the playhead."""
+        if self.values is None or len(self.values) < 2:
+            return "head"
+        near = [(abs(pos.y() - self._y(v)), i) for i, v in enumerate(self.levels)]
+        near = [(d, i) for d, i in near if d <= self.GRAB]
+        return min(near)[1] if near else "head"
 
-    def _drag_level(self, y):
+    def _drag_level(self, i, y):
         inner = self._inner()
         v = max(0.0, self._top() * (inner.bottom() - y) / inner.height())
-        self.level = v
+        self.levels[i] = v
         self.update()
-        self.levelDragged.emit(v)
+        self.levelDragged.emit(i, v)
 
     def mousePressEvent(self, e):
         if e.button() != Qt.LeftButton or self.values is None or len(self.values) < 2:
             return
         self._mode = self._hit(e.position())
-        if self._mode == "level":
-            self._drag_level(e.position().y())
+        if self._mode != "head":
+            self._drag_level(self._mode, e.position().y())
         else:
             self.pressed.emit(self._row(e.position().x()))
 
     def mouseMoveEvent(self, e):
         if self._mode is None:
-            self.setCursor(Qt.SizeVerCursor if self._hit(e.position()) == "level" else Qt.ArrowCursor)
+            self.setCursor(Qt.ArrowCursor if self._hit(e.position()) == "head" else Qt.SizeVerCursor)
             row = self._row(e.position().x())
             if row != self.hover:
                 self.hover = row
                 self.update()
                 self.hovered.emit(row)
-        elif self._mode == "level":
-            self._drag_level(e.position().y())
+        elif self._mode != "head":
+            self._drag_level(self._mode, e.position().y())
         else:
             self.dragged.emit(self._row(e.position().x()))
 

@@ -110,13 +110,28 @@ def test_rewire_during_walk():
 
 
 def test_two_series_nodes_one_runs():
-    s1, s2 = tool("s1", kind="series"), tool("s2", kind="series")
+    s1, s2 = tool("s1", kind="series", produces=None), tool("s2", kind="series", produces=None)
     doc = D.from_tools([gray, s1, s2])
     g = Graph(doc, Dec(), {**TOOLS, "s1": s1, "s2": s2})
-    assert g.series == "s1" and g.unrun_series == ["s2"] and g.walk == "gray"
+    assert g.series == "s1" and g.chain == ["s1"] and g.unrun_series == ["s2"] and g.walk == "gray"
     doc.connect("video", "s1")                  # "bgr" into a series node that expects "gray"
     g.sync()
     assert g.walk is None
+
+
+def test_series_chain_runs_on_from_the_head():
+    """A series node producing a signal feeds one expecting it; the chain is in run order, and a
+    wire whose types do not fit ends it."""
+    head = tool("head", kind="series", produces="signal")
+    gate, gate2 = tool("gate", kind="series", expects="signal", produces="signal"), tool("gate2", kind="series", expects="signal", produces="signal")
+    doc = D.from_tools([gray, head, gate, gate2])
+    tools = {**TOOLS, "head": head, "gate": gate, "gate2": gate2}
+    g = Graph(doc, Dec(), tools)
+    assert g.chain == ["head", "gate", "gate2"] and g.walk == "gray" and not g.unrun_series
+    assert [(nid, src) for nid, _, _, src in g.series_chain()] == [("head", "gray"), ("gate", "head"), ("gate2", "gate")]
+    doc.connect("gray", "gate2")                # "gray" into a node that expects "signal": off the chain, unrun
+    g.sync()
+    assert g.chain == ["head", "gate"] and g.unrun_series == ["gate2"]
 
 
 def test_one_compute_sees_one_plan():

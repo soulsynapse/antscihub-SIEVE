@@ -241,7 +241,7 @@ class Canvas(QWidget):
         return inputs_of(self.doc, self.tools, node.id)
 
     def has_output(self, node):
-        """Whether the node hands anything out: a series node does not; an unresolved node might."""
+        """Whether the node hands anything out: one without PRODUCES does not; an unresolved node might."""
         if node.tool == VIDEO_TOOL or node.unresolved:
             return True
         return getattr(self.tools.get(node.tool), "PRODUCES", None) is not None

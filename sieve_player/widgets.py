@@ -8,6 +8,16 @@ from . import density, theme
 from .theme import CONTROL_W, GAP, ROW_H, VALUE_W, Form, mono_font, qgray
 
 
+class Slider(QSlider):
+    """A wheel notch moves one step, in the slider's own units, where Qt would move three."""
+
+    def wheelEvent(self, e):
+        d = e.angleDelta().y() or e.angleDelta().x()
+        if d:
+            self.setValue(self.value() + (1 if d > 0 else -1))
+        e.accept()
+
+
 class ParamWidget(QWidget):
     """Has .changed and .params(). Add rows with add_int / add_float / add_bool / add_text /
     add_choice; each is one line of the form, a knob: slider and its mono readout together fill the
@@ -47,7 +57,7 @@ class ParamWidget(QWidget):
         h = QHBoxLayout(w)
         h.setContentsMargins(0, 0, 0, 0)
         h.setSpacing(GAP)
-        s = QSlider(Qt.Horizontal)
+        s = Slider(Qt.Horizontal)
         s.setRange(lo, hi)
         s.setValue(value)
         s.setFixedWidth(CONTROL_W - VALUE_W - GAP)

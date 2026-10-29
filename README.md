@@ -38,9 +38,6 @@ def run(series, params) -> dict               # series.data is (T, ...), the rea
                                               # a (T,) array, and may carry "gate", a (T,) bool array
 def settings(parent=None) -> ParamWidget      # plus show_result(result, start, fps), set_playhead(row)
 
-# a series tool reading another: PRODUCES = "signal" upstream, EXPECTS = "signal" here, and
-# series.data is the upstream result's "signal". None under tools/ today: reduce gates its own signal.
-
 # a selector: which file, by rule
 NAME = "file"; KIND = "selector"; PRODUCES = "path"
 def select(folder, params) -> str | None      # folder is the document's
@@ -62,9 +59,7 @@ How the player treats a tool, as `sieve_player/graph.py`, `pane.py` and `window.
   widget without them is shown as a defect.
 - Each node reads one node through a wire. A node the video does not reach, through wires whose
   types fit, computes as None, and so does everything downstream of it.
-- Series nodes run as a chain: the first one reading a frame node runs on the stacked window, and
-  each fed series node wired on from a chain node runs after it on the upstream result's
-  `"signal"`. A second series node reading a frame node does not run.
+- One series node runs, the first in the document, on the stacked window; a second does not.
 - A series tool's `fold(frame)` runs on the worker as each row is computed and takes no params: a
   change to the tool's params reruns `run` on the stack already folded, so a fold must hold every
   number any params could ask for (reduce folds a row to its sum, max, count and size).
@@ -74,12 +69,12 @@ Facets the player reads when a tool has them:
 | facet | what the player does with it |
 |---|---|
 | `draw(painter, row, result, start)` | paints on the frame, in frame-pixel coordinates (`painter.window()` is the frame's rect); one that raises is dropped for the session |
-| a `"gate"` bool array in a series result | a green border on the frame while the playhead is in a row any chain node gates |
+| a `"gate"` bool array in a series result | a green border on the frame while the playhead is in a row the series node gates |
 | `output_name`, `export_command`, `describe_output` | an Export button on the node; an existing target gets a numbered sibling, and a failed run leaves no partial file |
 | `PATHS = {input: loader}` | a path input a selector feeds; the loader turns the file into params |
 | a plane as output | the node's density, v2's plot: its pixels per row counted on a fixed log axis, under its settings, for every fed frame node; a mask or a field has none. Its two handles are the node's band, saved with the node: the player zeroes every pixel outside it (inside it when lo is above hi) before anything downstream reads the node |
 
-`tools/` holds a working example of each but the series tool reading another.
+`tools/` holds a working example of each.
 
 ## The player
 

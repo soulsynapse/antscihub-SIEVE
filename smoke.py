@@ -50,8 +50,8 @@ def run_graph():
     check(picked is not None and os.path.samefile(picked, path), f"file answered {picked!r} {why}")
     dec = Decoder(picked)
     g = Graph(doc, dec, tools)
-    check(g.shown == "motion" and g.walk == "motion" and g.chain == ["reduce"],
-          f"flag/walk/chain {g.shown} {g.walk} {g.chain}")
+    check(g.shown == "motion" and g.walk == "motion" and g.series == "reduce",
+          f"flag/walk/series {g.shown} {g.walk} {g.series}")
     check(g.compute("file", 0) is None, "a selector computed a row")
     out = g.compute("motion", 0)
     check(out is not None and out.ndim == 2 and out.dtype == np.uint8, "motion output")

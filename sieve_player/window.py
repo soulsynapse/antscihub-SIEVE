@@ -223,7 +223,7 @@ class PlayerWindow(QMainWindow):
         self.fps, self.count = 30.0, 0
         self.row, self.playing, self.window_ = 0, False, (0, 0)
         self._resume = False  # playback to restore when a playhead drag ends
-        self.results, self.result_start = {}, 0   # node id -> the series chain's results, and the row they start at
+        self.results, self.result_start = {}, 0   # node id -> the series node's result, and the row it starts at
         self._taken = {}       # (node id, path input) -> the file last handed to its loader
         self._driven = {}      # (node id, path input) -> (the keys its loader set, the selector's id)
         self.traces = []
@@ -385,7 +385,7 @@ class PlayerWindow(QMainWindow):
         if self.graph is None:
             return
         self.graph.sync()
-        if nid in self.graph.chain:
+        if nid == self.graph.series:
             self.worker.rerun_series()
         else:
             self.worker.invalidate()
@@ -582,10 +582,9 @@ class PlayerWindow(QMainWindow):
             self.worker.request_row(row)
         self.timeline.strip.set_playhead(row)
         self.timeline.controls.set_readout(row)
-        for nid in self.graph.chain:
-            w = self.pane.widget(nid)
-            if w is not None and hasattr(w, "set_playhead"):
-                w.set_playhead(row)
+        w = self.pane.widget(self.graph.series)
+        if w is not None and hasattr(w, "set_playhead"):
+            w.set_playhead(row)
         self.pane.set_playhead(row)
         self._update_gate()
 
@@ -659,7 +658,7 @@ class PlayerWindow(QMainWindow):
         self.timeline.strip.set_hover(row)
 
     def _update_gate(self):
-        """The border is on while any chain node gates the playhead's row."""
+        """The border is on while the series node gates the playhead's row."""
         i = self.row - self.result_start
         gates = [r.get("gate") for r in self.results.values() if isinstance(r, dict)]
         self.display.set_gate(any(g is not None and 0 <= i < len(g) and bool(g[i]) for g in gates))

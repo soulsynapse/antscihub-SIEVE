@@ -116,11 +116,10 @@ class Graph:
         self._base = _key("video", decoder.path, VIDEO_PRODUCES)
         self._plan = {}
         self.shown = self.over = self.series = None
-        self.chain, self.unrun_series = [], []
         self.sync()
 
     def sync(self):
-        """Re-read the document: wiring, params, the flag, which series node runs."""
+        """Re-read the document: wiring, params, the flags, which series node runs."""
         doc, tools = self.doc, self.tools
         keys, raw_keys = {}, {}
 
@@ -153,20 +152,13 @@ class Graph:
                                 key_of(src) if src else None, fed(doc, n.id, tools))
             if kind == "series":
                 series.append(n.id)
-        # The head is the first series node reading a frame node: it runs on the walked stack. The
-        # chain is it and every fed series node wired on from a chain node, which run on the
-        # upstream result's "signal" in this order. Any other series node is unrun.
-        heads = [s for s in series if plan[s].src is None or plan[plan[s].src].kind != "series"]
-        chain = heads[:1]
-        for nid in chain:
-            chain += [s for s in series if plan[s].src == nid and plan[s].fed and s not in chain]
+        # The first series node runs on the walked stack; any other is unrun.
         with self._lock:
             self._plan = plan
             self.shown = doc.display if doc.display in plan else None
             # The overlay is a node the frame can be heated with: one plane, so only an OVERLAYABLE product.
             self.over = doc.overlay if doc.overlay in plan and produces(doc, tools, doc.overlay) in OVERLAYABLE else None
-            self.series = chain[0] if chain else None
-            self.chain, self.unrun_series = chain, [s for s in series if s not in chain]
+            self.series = series[0] if series else None
 
     # -- what the worker and the display ask -------------------------------
     def _walk(self):
@@ -205,13 +197,6 @@ class Graph:
     def series_params(self):
         with self._lock:
             return dict(self._plan[self.series].params) if self.series else {}
-
-    def series_chain(self):
-        """[(node, tool, params, the node it reads)] in run order: the head first, then each series
-        node on from a chain node. The worker feeds the head the stack and the rest the upstream
-        result's "signal"."""
-        with self._lock:
-            return [(nid, self._plan[nid].tool, dict(self._plan[nid].params), self._plan[nid].src) for nid in self.chain]
 
     def key(self, nid):
         with self._lock:

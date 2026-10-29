@@ -30,16 +30,16 @@ def run(frames, row, params) -> np.ndarray    # frames(r) is the output of the n
 def settings(parent=None) -> ParamWidget
 
 # a series tool: the whole loop window at once
-NAME = "reduce"; KIND = "series"; EXPECTS = ("gray", "mask"); PRODUCES = "signal"
+NAME = "reduce"; KIND = "series"; EXPECTS = ("gray", "mask")   # no PRODUCES: nothing is wired on from it
 def fold(frame) -> np.ndarray                 # optional: what the walk stacks per row in place of the
                                               # frame, so the window holds (T, small) and never the planes
 def run(series, params) -> dict               # series.data is (T, ...), the read node stacked, each row
                                               # through fold() if there is one; the dict carries "signal",
-                                              # a (T,) array, if PRODUCES says so
+                                              # a (T,) array, and may carry "gate", a (T,) bool array
 def settings(parent=None) -> ParamWidget      # plus show_result(result, start, fps), set_playhead(row)
 
-# a series tool reading another: series.data is the upstream result's "signal"
-NAME = "rangegate"; KIND = "series"; EXPECTS = "signal"; PRODUCES = "signal"
+# a series tool reading another: PRODUCES = "signal" upstream, EXPECTS = "signal" here, and
+# series.data is the upstream result's "signal". None under tools/ today: reduce gates its own signal.
 
 # a selector: which file, by rule
 NAME = "file"; KIND = "selector"; PRODUCES = "path"
@@ -79,7 +79,7 @@ Facets the player reads when a tool has them:
 | `PATHS = {input: loader}` | a path input a selector feeds; the loader turns the file into params |
 | a plane as output | the node's density, v2's plot: its pixels per row counted on a fixed log axis, under its settings, for every fed frame node; a mask or a field has none. Its two handles are the node's band, saved with the node: the player zeroes every pixel outside it (inside it when lo is above hi) before anything downstream reads the node |
 
-`tools/` holds a working example of each.
+`tools/` holds a working example of each but the series tool reading another.
 
 ## The player
 

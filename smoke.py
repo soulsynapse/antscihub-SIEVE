@@ -3,7 +3,7 @@ display needed.
 
     .venv\\Scripts\\python smoke.py [video]
 
-Runs the example chain (gray -> rescale -> threshold -> motion -> reduce -> rangegate) in a graph built from a list,
+Runs the example chain (gray -> rescale -> threshold -> motion -> reduce) in a graph built from a list,
 then the same chain and tools/downsample in the window.
 Asserts on state at each step and exits non-zero on the first failure. Text renders as boxes
 under the offscreen platform, so there is nothing to look at; this checks wiring, not looks.
@@ -23,7 +23,7 @@ from sieve_player import document  # noqa: E402
 from sieve_player.decoder import Decoder  # noqa: E402
 from sieve_player.graph import Graph, Series  # noqa: E402
 from sieve_player.window import PlayerWindow  # noqa: E402
-from tools import downsample as ds, gray, motion, file, rangegate, reduce, rescale, threshold  # noqa: E402
+from tools import downsample as ds, gray, motion, file, reduce, rescale, threshold  # noqa: E402
 
 path = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else "video-tests/rep3_intermittent_crop.MP4")
 app = QApplication.instance() or QApplication(sys.argv)
@@ -39,18 +39,18 @@ def check(cond, msg):
 def run_graph():
     """The chain, wired by from_tools with the selector into the video, computed through the graph
     the way the worker will."""
-    tools = [file, gray, rescale, threshold, motion, reduce, rangegate]
+    tools = [file, gray, rescale, threshold, motion, reduce]
     doc = document.from_tools(tools)
     doc.node("file").params.update(folder=os.path.dirname(path), pattern=os.path.basename(path))
     check([(w.src, w.dst) for w in doc.wires] == [("file", "video"), ("video", "gray"), ("gray", "rescale"),
-                                                  ("rescale", "threshold"), ("threshold", "motion"), ("motion", "reduce"), ("reduce", "rangegate")],
+                                                  ("rescale", "threshold"), ("threshold", "motion"), ("motion", "reduce")],
           f"wiring {[(w.src, w.dst) for w in doc.wires]}")
     check(not document.validate(doc, tools), f"document invalid: {document.validate(doc, tools)}")
     picked, why = document.pick_video(doc, tools)
     check(picked is not None and os.path.samefile(picked, path), f"file answered {picked!r} {why}")
     dec = Decoder(picked)
     g = Graph(doc, dec, tools)
-    check(g.shown == "motion" and g.walk == "motion" and g.chain == ["reduce", "rangegate"],
+    check(g.shown == "motion" and g.walk == "motion" and g.chain == ["reduce"],
           f"flag/walk/chain {g.shown} {g.walk} {g.chain}")
     check(g.compute("file", 0) is None, "a selector computed a row")
     out = g.compute("motion", 0)
@@ -58,9 +58,7 @@ def run_graph():
     check(g.peek(0) is out, "peek did not find the shown row")
     stack = np.stack([g.walk_row(r) for r in range(5)])   # through reduce's fold, as the worker does
     result = g.series_tool.run(Series(stack, g.key(g.walk), 0, g.fps), g.series_params())
-    check(len(result["signal"]) == 5 and "gate" not in result, "reduce series")
-    gated = rangegate.run(Series(result["signal"], g.key("reduce"), 0, g.fps), g.series_chain()[1][2])
-    check(len(gated["gate"]) == 5, "rangegate series")
+    check(len(result["signal"]) == 5 and len(result["gate"]) == 5, "reduce series")
     key = g.key("threshold")
     doc.node("threshold").params["thresh"] = 200
     g.sync()
@@ -72,7 +70,7 @@ def run_graph():
 
 
 def run_window():
-    tools = [gray, rescale, threshold, motion, reduce, rangegate]
+    tools = [gray, rescale, threshold, motion, reduce]
     win = PlayerWindow(tools, "smoke")
     win.resize(1200, 700)
     win.show()
@@ -88,9 +86,9 @@ def run_window():
 
     def after():
         doc = win.doc
-        check(set(win.results) == {"reduce", "rangegate"} and "gate" in win.results["rangegate"], "series results never arrived")
+        check(set(win.results) == {"reduce"} and "gate" in win.results["reduce"], "series results never arrived")
         check([(w.src, w.dst) for w in doc.wires] == [("video", "gray"), ("gray", "rescale"), ("rescale", "threshold"),
-                                                      ("threshold", "motion"), ("motion", "reduce"), ("reduce", "rangegate")], f"default wiring {doc.wires}")
+                                                      ("threshold", "motion"), ("motion", "reduce")], f"default wiring {doc.wires}")
         check(doc.display == "motion" and win.graph.shown == "motion", "the flag should start on the last fed frame node")
         check(doc.overlay is None and win.graph.over is None and win.display._over is None, "the overlay should start off")
         gen = win.worker._gen
@@ -137,7 +135,7 @@ def run_window():
         # deleting a node in the middle of a chain takes its wires, its card, and what it fed
         win.canvas.select(["rescale"])
         win.canvas.delete_selected()
-        check([(w.src, w.dst) for w in doc.wires] == [("video", "gray"), ("threshold", "motion"), ("motion", "reduce"), ("reduce", "rangegate")],
+        check([(w.src, w.dst) for w in doc.wires] == [("video", "gray"), ("threshold", "motion"), ("motion", "reduce")],
               f"delete left {doc.wires}")
         check("rescale" not in win.pane.cards and win.pane.current is None, "the deleted node's card stayed")
         check(not win.graph.fed("motion") and win.display.reason == "motion: no input", "delete did not reach the runtime")

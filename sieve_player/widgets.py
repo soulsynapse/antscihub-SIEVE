@@ -125,7 +125,7 @@ class Trace(QWidget):
     A trace built with `levels=n` has n handles, in the units of `values`: each a red line
     across the plot, run out past either edge of the field to a dot. Every trace's field is
     inset by the dots' room, handles or not, so stacked traces share their x. Two handles are a
-    band (lo, hi) as rangegate reads it, and the values it shuts out are darkened: outside the
+    band (lo, hi) as reduce reads it, and the values it shuts out are darkened: outside the
     band, or inside it when lo is above hi. A press on a handle's line or dots drags it up or down (levelDragged(index,
     value) as it moves, levelReleased(index, value) once, when it is let go); any other press is the playhead (pressed/dragged/released, rows). The cursor's row is
     reported as hovered(row), -1 on leave; set_hover(row) draws another widget's cursor here. The

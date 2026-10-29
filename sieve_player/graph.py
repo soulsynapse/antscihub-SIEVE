@@ -22,7 +22,7 @@ def _key(*parts):
 
 
 def banded(v, band):
-    """`v` with every value outside `band` set to zero, inside it when lo is above hi, as rangegate reads
+    """`v` with every value outside `band` set to zero, inside it when lo is above hi, as reduce reads
     crossed handles. Only a plane of values is banded; a mask, a field or None passes through."""
     if not isinstance(v, np.ndarray) or v.ndim != 2 or v.dtype == bool:
         return v

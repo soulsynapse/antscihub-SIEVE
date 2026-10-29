@@ -30,7 +30,7 @@ def run(frames, row, params) -> np.ndarray    # frames(r) is the output of the n
 def settings(parent=None) -> ParamWidget
 
 # a series tool: the whole loop window at once
-NAME = "reduce"; KIND = "series"; EXPECTS = ("gray", "mask")   # PRODUCES = "signal" once something reads one
+NAME = "reduce"; KIND = "series"; EXPECTS = ("gray", "mask"); PRODUCES = "signal"
 def fold(frame) -> np.ndarray                 # optional: what the walk stacks per row in place of the
                                               # frame, so the window holds (T, small) and never the planes
 def run(series, params) -> dict               # series.data is (T, ...), the read node stacked, each row
@@ -39,7 +39,7 @@ def run(series, params) -> dict               # series.data is (T, ...), the rea
 def settings(parent=None) -> ParamWidget      # optionally show_result(result, start, fps), set_playhead(row)
 
 # a series tool reading another: EXPECTS = "signal", and series.data is the upstream result's
-# "signal" with the rows its band shuts out zeroed.
+# "signal" with the rows its band shuts out zeroed (smooth).
 
 # a selector: which file, by rule
 NAME = "file"; KIND = "selector"; PRODUCES = "path"

@@ -11,7 +11,7 @@ The gate is not this tool's: the handles on the node's trace are its band, which
 import numpy as np
 
 SIEVE_TOOL = True
-NAME, KIND, EXPECTS = "reduce", "series", ("gray", "mask")   # no PRODUCES yet: nothing under tools/ reads a signal
+NAME, KIND, EXPECTS, PRODUCES = "reduce", "series", ("gray", "mask"), "signal"
 METHODS = ("mean", "sum", "max", "count", "fraction")
 DEFAULTS = {"method": "mean"}
 

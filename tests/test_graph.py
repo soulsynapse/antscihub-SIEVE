@@ -6,7 +6,7 @@ from types import SimpleNamespace as Tool
 import numpy as np
 
 from sieve_player import document as D
-from sieve_player.graph import Graph
+from sieve_player.graph import Graph, gated
 
 
 class Dec:
@@ -144,10 +144,41 @@ def test_two_series_nodes_one_runs():
     s1, s2 = tool("s1", kind="series", produces=None), tool("s2", kind="series", produces=None)
     doc = D.from_tools([gray, s1, s2])
     g = Graph(doc, Dec(), {**TOOLS, "s1": s1, "s2": s2})
-    assert g.series == "s1" and g.walk == "gray"
+    assert g.series == "s1" and g.chain == ["s1"] and g.unrun_series == ["s2"] and g.walk == "gray"
     doc.connect("video", "s1")                  # "bgr" into a series node that expects "gray"
     g.sync()
     assert g.walk is None
+
+
+def test_series_chain_runs_on_from_the_head():
+    """A series node producing a signal feeds one expecting it; the chain is in run order, and a
+    wire whose types do not fit ends it."""
+    head = tool("head", kind="series", produces="signal")
+    s1, s2 = tool("s1", kind="series", expects="signal", produces="signal"), tool("s2", kind="series", expects="signal", produces="signal")
+    doc = D.from_tools([gray, head, s1, s2])
+    doc.node("s1").band = (1.0, 2.0)
+    tools = {**TOOLS, "head": head, "s1": s1, "s2": s2}
+    g = Graph(doc, Dec(), tools)
+    assert g.chain == ["head", "s1", "s2"] and g.walk == "gray" and not g.unrun_series
+    assert [(nid, band, src) for nid, _, _, band, src in g.series_chain()] == [("head", None, "gray"), ("s1", (1.0, 2.0), "head"), ("s2", None, "s1")]
+    doc.connect("gray", "s2")                   # "gray" into a node that expects "signal": off the chain, unrun
+    g.sync()
+    assert g.chain == ["head", "s1"] and g.unrun_series == ["s2"]
+
+
+def test_a_series_band_gates_the_signal_and_zeroes_what_the_next_reads():
+    """The gate is the player's, not the tool's: the result keeps the tool's signal whole and gains
+    the gate; the feed downstream is zeroed outside the band, inside it once lo is above hi; no
+    band keeps every row; a result without a signal feeds nothing."""
+    sig = np.array([0.0, 2.0, 5.0, 9.0, 20.0], np.float32)
+    r, feed = gated({"signal": sig}, (1.0, 10.0))
+    assert r["gate"].tolist() == [False, True, True, True, False] and r["signal"] is sig
+    assert feed.tolist() == [0.0, 2.0, 5.0, 9.0, 0.0]
+    r, feed = gated({"signal": sig}, (10.0, 1.0))
+    assert r["gate"].tolist() == [True, False, False, False, True] and feed.tolist() == [0.0, 0.0, 0.0, 0.0, 20.0]
+    r, feed = gated({"signal": sig}, None)
+    assert r["gate"].all() and feed.tolist() == sig.tolist()
+    assert gated({"other": 1}, (0.0, 1.0)) == ({"other": 1}, None)
 
 
 def test_one_compute_sees_one_plan():

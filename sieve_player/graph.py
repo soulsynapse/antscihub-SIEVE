@@ -14,21 +14,37 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from .document import OVERLAYABLE, VIDEO_PRODUCES, VIDEO_TOOL, fed, is_selector, produces
+from .document import OPEN, OVERLAYABLE, VIDEO_PRODUCES, VIDEO_TOOL, fed, is_selector, produces
 
 
 def _key(*parts):
     return hashlib.sha1("|".join(map(str, parts)).encode()).hexdigest()[:16]
 
 
+def inband(v, band):
+    """Where `v` lies between the band's lo and hi; outside them once lo is above hi, the band
+    inside out, as the handles are read in both domains."""
+    lo, hi = band
+    return (v >= lo) & (v <= hi) if lo <= hi else (v >= lo) | (v <= hi)
+
+
 def banded(v, band):
-    """`v` with every value outside `band` set to zero, inside it when lo is above hi, as reduce reads
-    crossed handles. Only a plane of values is banded; a mask, a field or None passes through."""
+    """`v` with every value outside `band` set to zero, inside it when lo is above hi. Only a plane
+    of values is banded; a mask, a field or None passes through."""
     if not isinstance(v, np.ndarray) or v.ndim != 2 or v.dtype == bool:
         return v
-    lo, hi = band
-    keep = (v >= lo) & (v <= hi) if lo <= hi else (v >= lo) | (v <= hi)
-    return np.where(keep, v, np.zeros((), v.dtype))
+    return np.where(inband(v, band), v, np.zeros((), v.dtype))
+
+
+def gated(result, band):
+    """A series node's result as the player hands it out: the tool's dict with "gate", the rows its
+    signal keeps under the node's band, and `fed`, the signal with the rest zeroed, which is what a
+    series node downstream reads. A result without a signal passes through ungated, and feeds nothing."""
+    if not isinstance(result, dict) or "signal" not in result:
+        return result, None
+    signal = np.asarray(result["signal"])
+    gate = inband(signal, OPEN if band is None else band)
+    return {**result, "gate": gate}, np.where(gate, signal, np.zeros((), signal.dtype))
 
 
 class Memo:
@@ -86,7 +102,8 @@ class Frames:
 
 class Series:
     """What a series tool's run() gets: data is (T, ...), the read node stacked over the window, each
-    row through the tool's fold() first when it has one."""
+    row through the tool's fold() first when it has one; or, for a series node reading another, the
+    upstream node's (T,) signal with the rows its band shuts out zeroed."""
 
     def __init__(self, data, key, start, fps):
         self.data, self.key, self.start, self.fps = data, key, start, fps
@@ -98,7 +115,7 @@ class _Entry:
     tool: object
     kind: str           # "video" | "frame" | "series" | "selector"
     params: dict
-    band: tuple | None  # (lo, hi): what the node's plane keeps, see document
+    band: tuple | None  # (lo, hi): what the node's plane, or signal, keeps; see document
     src: str | None     # the node its input wire names
     key: str
     raw_key: str         # the key without the band: what the memo holds
@@ -116,10 +133,11 @@ class Graph:
         self._base = _key("video", decoder.path, VIDEO_PRODUCES)
         self._plan = {}
         self.shown = self.over = self.series = None
+        self.chain, self.unrun_series = [], []
         self.sync()
 
     def sync(self):
-        """Re-read the document: wiring, params, the flags, which series node runs."""
+        """Re-read the document: wiring, params, the flags, which series nodes run."""
         doc, tools = self.doc, self.tools
         keys, raw_keys = {}, {}
 
@@ -152,13 +170,20 @@ class Graph:
                                 key_of(src) if src else None, fed(doc, n.id, tools))
             if kind == "series":
                 series.append(n.id)
-        # The first series node runs on the walked stack; any other is unrun.
+        # The head is the first series node reading a frame node: it runs on the walked stack. The
+        # chain is it and every fed series node wired on from a chain node, which run on the
+        # upstream result's signal in this order. Any other series node is unrun.
+        heads = [s for s in series if plan[s].src is None or plan[plan[s].src].kind != "series"]
+        chain = heads[:1]
+        for nid in chain:
+            chain += [s for s in series if plan[s].src == nid and plan[s].fed and s not in chain]
         with self._lock:
             self._plan = plan
             self.shown = doc.display if doc.display in plan else None
             # The overlay is a node the frame can be heated with: one plane, so only an OVERLAYABLE product.
             self.over = doc.overlay if doc.overlay in plan and produces(doc, tools, doc.overlay) in OVERLAYABLE else None
-            self.series = series[0] if series else None
+            self.series = chain[0] if chain else None
+            self.chain, self.unrun_series = chain, [s for s in series if s not in chain]
 
     # -- what the worker and the display ask -------------------------------
     def _walk(self):
@@ -197,6 +222,14 @@ class Graph:
     def series_params(self):
         with self._lock:
             return dict(self._plan[self.series].params) if self.series else {}
+
+    def series_chain(self):
+        """[(node, tool, params, band, the node it reads)] in run order: the head first, then each
+        series node on from a chain node. The worker feeds the head the stack and the rest the
+        upstream result's signal under its band (see `gated`)."""
+        with self._lock:
+            return [(nid, self._plan[nid].tool, dict(self._plan[nid].params), self._plan[nid].band, self._plan[nid].src)
+                    for nid in self.chain]
 
     def key(self, nid):
         with self._lock:

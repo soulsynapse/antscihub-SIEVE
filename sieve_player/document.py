@@ -2,8 +2,10 @@
 
 Nodes, wires, the display and overlay flags and the video path; nothing of the canvas's view or the runtime's
 memo. A node may carry a band, two values in its output's units: the runtime zeroes every pixel of
-a plane outside it (inside it when lo is above hi) before anything downstream reads the node, and
-the pane's density handles are its control. It changes results, so it is saved with the node. This module imports neither Qt nor cv2 nor any other part of the player. Where a function
+a plane, or every row of a series node's signal, outside it (inside it when lo is above hi) before
+anything downstream reads the node, and the handles on the pane's density or trace are its control.
+It changes results, so it is saved with the node; a series node without one keeps every row. This
+module imports neither Qt nor cv2 nor any other part of the player. Where a function
 needs a tool's facets (EXPECTS, PRODUCES) it is handed the tools, as a mapping of name to module
 or as the modules themselves; the document stores only names.
 
@@ -29,6 +31,7 @@ PATH = "path"               # the type the video node's input expects and a sele
 INPUT = "in"                # every tool today has one input; wires name it so fan-in costs nothing later
 OVERLAYABLE = ("gray", "mask")  # the types the overlay flag is offered on: a single plane the frame can be heated with
 LAYOUT_STEP = 100.0         # vertical spacing of a list-built document
+OPEN = (0.0, float("inf"))  # the band a series node without one is read under: every row kept, and gated
 
 
 class FormatError(ValueError):
@@ -41,7 +44,7 @@ class Node:
     tool: str
     params: dict = field(default_factory=dict)
     pos: tuple = (0.0, 0.0)
-    band: tuple | None = None                                       # (lo, hi) kept, or None for every value
+    band: tuple | None = None                                       # (lo, hi) kept, of a plane's pixels or a signal's rows; None keeps every value
     extra: dict = field(default_factory=dict, repr=False)            # keys this module does not know
     unresolved: bool = field(default=False, compare=False)          # set by resolve(); not saved
 

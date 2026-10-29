@@ -21,7 +21,7 @@ from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from sieve_player import document  # noqa: E402
 from sieve_player.decoder import Decoder  # noqa: E402
-from sieve_player.graph import Graph, Series  # noqa: E402
+from sieve_player.graph import Graph, Series, gated  # noqa: E402
 from sieve_player.window import PlayerWindow  # noqa: E402
 from tools import downsample as ds, gray, motion, file, reduce, rescale, threshold  # noqa: E402
 
@@ -50,15 +50,15 @@ def run_graph():
     check(picked is not None and os.path.samefile(picked, path), f"file answered {picked!r} {why}")
     dec = Decoder(picked)
     g = Graph(doc, dec, tools)
-    check(g.shown == "motion" and g.walk == "motion" and g.series == "reduce",
-          f"flag/walk/series {g.shown} {g.walk} {g.series}")
+    check(g.shown == "motion" and g.walk == "motion" and g.chain == ["reduce"],
+          f"flag/walk/chain {g.shown} {g.walk} {g.chain}")
     check(g.compute("file", 0) is None, "a selector computed a row")
     out = g.compute("motion", 0)
     check(out is not None and out.ndim == 2 and out.dtype == np.uint8, "motion output")
     check(g.peek(0) is out, "peek did not find the shown row")
     stack = np.stack([g.walk_row(r) for r in range(5)])   # through reduce's fold, as the worker does
-    result = g.series_tool.run(Series(stack, g.key(g.walk), 0, g.fps), g.series_params())
-    check(len(result["signal"]) == 5 and len(result["gate"]) == 5, "reduce series")
+    result, feed = gated(g.series_tool.run(Series(stack, g.key(g.walk), 0, g.fps), g.series_params()), None)
+    check(len(result["signal"]) == 5 and result["gate"].all() and len(feed) == 5, "reduce series, gated by the player")
     key = g.key("threshold")
     doc.node("threshold").params["thresh"] = 200
     g.sync()

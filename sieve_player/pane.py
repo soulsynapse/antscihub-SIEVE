@@ -14,7 +14,10 @@ and the process's last line; a tool takes part by defining `output_name(src, par
 -> str` for the line under the target. Under a frame node's settings sits its density, the
 population its plane's values make per row of the loop window, which the window hands the pane for
 every fed frame node; a node whose output is a mask or a field, or that the video does not
-reach, shows none; its handles are the node's band (see `document`), written like a param. A node whose tool the catalogue lacks shows which name was
+reach, shows none; its handles are the node's band (see `document`), written like a param. Under a
+series node's settings sits its trace, the result's signal over the window, which the window hands
+the pane for every chain node; its handles are the node's band the same way, in the signal's units,
+and the rows the band shuts out are washed. A node whose tool the catalogue lacks shows which name was
 not found and its params read-only. The pane writes params into the document and says which node
 changed; it knows nothing of the runtime.
 """
@@ -27,9 +30,9 @@ from PySide6.QtCore import QProcess, QSize, Qt, Signal
 from PySide6.QtGui import QFontMetrics
 from PySide6.QtWidgets import QFileDialog, QFrame, QPushButton, QScrollArea, QVBoxLayout, QWidget
 
-from .document import VIDEO_TOOL, is_selector, paths
+from .document import OPEN, VIDEO_TOOL, is_selector, paths
 from .theme import GAP, PAD, WIDE_W, Form, Layer, measured, readout
-from .widgets import Density
+from .widgets import Density, Trace
 
 VIDEO_FILTER = "Video (*.mp4 *.MP4 *.avi *.mov *.mkv);;All (*)"
 
@@ -212,6 +215,7 @@ class Pane(QWidget):
         self.doc = None
         self.cards, self.widgets, self.exports, self.notes = {}, {}, {}, {}
         self.densities = {}   # frame node -> its Density plot, hidden until the window hands it counts
+        self.traces = {}      # series node -> its Trace, hidden until the window hands it a result
         self.video = None
         self.current = None
         self._src, self._fps = None, None
@@ -255,6 +259,7 @@ class Pane(QWidget):
         self.exports.pop(nid, None)
         self.notes.pop(nid, None)
         self.densities.pop(nid, None)
+        self.traces.pop(nid, None)
         if self.video is not None and self.video.parent() is card:
             self.video = None
         self._lay.removeWidget(card)
@@ -298,6 +303,14 @@ class Pane(QWidget):
                     plot.hide()
                     card.add(plot)
                     self.densities[node.id] = plot
+                elif getattr(tool, "KIND", "frame") == "series":
+                    plot = Trace(rows=5, levels=2)
+                    plot.levels[:] = [float(v) for v in node.band] if node.band is not None else list(OPEN)
+                    plot.levelDragged.connect(lambda _i, _v, nid=node.id: self._banded(nid))    # the chain reruns on the folded stack, cheap enough to follow the drag
+                    plot.levelReleased.connect(lambda _i, _v, nid=node.id: self._banded(nid))
+                    plot.hide()
+                    card.add(plot)
+                    self.traces[node.id] = plot
             if w is not None and getattr(tool, "export_command", None) is not None:
                 ex = Export(tool)
                 ex.set_params(node.params)
@@ -309,8 +322,9 @@ class Pane(QWidget):
         self.cards[node.id] = card
 
     def _banded(self, nid):
-        """A density handle was let go: the band is the node's, saved and keyed like a param."""
-        self.doc.node(nid).band = tuple(self.densities[nid].levels)
+        """A density or trace handle moved: the band is the node's, saved and keyed like a param."""
+        plot = self.densities.get(nid) or self.traces[nid]
+        self.doc.node(nid).band = tuple(plot.levels)
         self.paramsChanged.emit(nid)
 
     def _changed(self, nid):
@@ -364,8 +378,19 @@ class Pane(QWidget):
             else:
                 plot.hide()
 
+    def show_series(self, results, start):
+        """`results` is {series node: result} for the chain the walk ran, each with "gate" (see
+        `graph.gated`): a node in it with a signal shows it, and any other series node shows no plot."""
+        for nid, plot in self.traces.items():
+            r = results.get(nid)
+            if isinstance(r, dict) and "signal" in r:
+                plot.set_series(r["signal"], start, r.get("gate"))
+                plot.show()
+            else:
+                plot.hide()
+
     def set_playhead(self, row):
-        for plot in self.densities.values():
+        for plot in (*self.densities.values(), *self.traces.values()):
             plot.set_playhead(row)
 
     def note(self, nid, text):

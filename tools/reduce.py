@@ -1,21 +1,19 @@
-"""Series tool: one number per row from a frame node's stack, by a chosen method, gated to a band; gray or mask in, signal and gate out.
+"""Series tool: one number per row from a frame node's stack, by a chosen method; gray or mask in, signal out.
 
 The reduction is a decision, so it is a knob here and not inside the tool that measured: `mean`, `sum` and
 `max` of the row's pixels, `count` of its nonzero pixels, or `fraction`, the count over the row's pixel count.
 The walk folds each row to the four numbers every method is made of, so the window holds (T, 4) and never
 the planes, and the method is picked at run() over that: changing it reruns on the folded stack.
 
-`lo` and `hi` are the handles on the trace, and only the handles: no knob. A row is gated when its
-value lies between them, and when `lo` has been dragged above `hi` the band is inside out: the rows
-outside instead, as a node's band and inrange's hue band wrap. No invert switch; the handles say it. A
-handle at the top of the trace is infinity, so the default band, 0 to infinity, gates every row.
+The gate is not this tool's: the handles on the node's trace are its band, which the player applies
+(see `sieve_player.graph.gated`), as it applies a frame node's.
 """
 import numpy as np
 
 SIEVE_TOOL = True
-NAME, KIND, EXPECTS = "reduce", "series", ("gray", "mask")   # no PRODUCES: the result is read by the player, never by a wire
+NAME, KIND, EXPECTS = "reduce", "series", ("gray", "mask")   # no PRODUCES yet: nothing under tools/ reads a signal
 METHODS = ("mean", "sum", "max", "count", "fraction")
-DEFAULTS = {"method": "mean", "lo": 0.0, "hi": float("inf")}
+DEFAULTS = {"method": "mean"}
 
 
 def fold(frame):
@@ -40,43 +38,15 @@ def run(series, params):
         s = count / np.maximum(n, 1)
     else:
         raise ValueError(f"reduce: no method {m!r}; one of {METHODS}")
-    s = np.asarray(s, np.float32)
-    lo, hi = params["lo"], params["hi"]
-    gate = (s >= lo) & (s <= hi) if lo <= hi else (s >= lo) | (s <= hi)
-    return {"signal": s, "gate": gate}
+    return {"signal": np.asarray(s, np.float32)}
 
 
 def settings(parent=None):
-    from sieve_player import ParamWidget, Trace  # only the GUI needs the player
+    from sieve_player import ParamWidget  # only the GUI needs the player
 
-    class _Widget(ParamWidget):
-        """`lo` and `hi` are params without a row: the trace's handles are their only control, and
-        the gate on the trace follows when the rerun lands."""
-
-        def __init__(self, parent=None):
-            super().__init__(parent)
-            self.add_choice("method", METHODS, DEFAULTS["method"])
-            self.plot = Trace(rows=5, levels=2)
-            self.plot.levels[:] = [DEFAULTS["lo"], DEFAULTS["hi"]]
-            self.layout().addWidget(self.plot)
-            for i, k in enumerate(("lo", "hi")):
-                self._get[k] = lambda i=i: self.plot.levels[i]
-                self._set[k] = lambda v, i=i: self._set_level(i, float(v))
-            self.plot.levelDragged.connect(lambda _i, _v: self.changed.emit())
-
-        def _set_level(self, i, v):
-            if v != self.plot.levels[i]:
-                self.plot.levels[i] = v
-                self.plot.update()
-                self.changed.emit()
-
-        def show_result(self, result, start, fps):
-            self.plot.set_series(result["signal"], start, result["gate"])
-
-        def set_playhead(self, row):
-            self.plot.set_playhead(row)
-
-    return _Widget(parent)
+    w = ParamWidget(parent)
+    w.add_choice("method", METHODS, DEFAULTS["method"])
+    return w
 
 
 if __name__ == "__main__":

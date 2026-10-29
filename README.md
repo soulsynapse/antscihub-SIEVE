@@ -30,13 +30,16 @@ def run(frames, row, params) -> np.ndarray    # frames(r) is the output of the n
 def settings(parent=None) -> ParamWidget
 
 # a series tool: the whole loop window at once
-NAME = "reduce"; KIND = "series"; EXPECTS = ("gray", "mask")   # no PRODUCES: nothing is wired on from it
+NAME = "reduce"; KIND = "series"; EXPECTS = ("gray", "mask")   # PRODUCES = "signal" once something reads one
 def fold(frame) -> np.ndarray                 # optional: what the walk stacks per row in place of the
                                               # frame, so the window holds (T, small) and never the planes
 def run(series, params) -> dict               # series.data is (T, ...), the read node stacked, each row
                                               # through fold() if there is one; the dict carries "signal",
-                                              # a (T,) array, and may carry "gate", a (T,) bool array
-def settings(parent=None) -> ParamWidget      # plus show_result(result, start, fps), set_playhead(row)
+                                              # a (T,) array; the gate is the player's, never the tool's
+def settings(parent=None) -> ParamWidget      # optionally show_result(result, start, fps), set_playhead(row)
+
+# a series tool reading another: EXPECTS = "signal", and series.data is the upstream result's
+# "signal" with the rows its band shuts out zeroed.
 
 # a selector: which file, by rule
 NAME = "file"; KIND = "selector"; PRODUCES = "path"
@@ -59,7 +62,9 @@ How the player treats a tool, as `sieve_player/graph.py`, `pane.py` and `window.
   widget without them is shown as a defect.
 - Each node reads one node through a wire. A node the video does not reach, through wires whose
   types fit, computes as None, and so does everything downstream of it.
-- One series node runs, the first in the document, on the stacked window; a second does not.
+- Series nodes run as a chain: the first one reading a frame node runs on the stacked window, and
+  each fed series node wired on from a chain node runs after it on the upstream result's
+  `"signal"`. A second series node reading a frame node does not run.
 - A series tool's `fold(frame)` runs on the worker as each row is computed and takes no params: a
   change to the tool's params reruns `run` on the stack already folded, so a fold must hold every
   number any params could ask for (reduce folds a row to its sum, max, count and size).
@@ -69,7 +74,7 @@ Facets the player reads when a tool has them:
 | facet | what the player does with it |
 |---|---|
 | `draw(painter, row, result, start)` | paints on the frame, in frame-pixel coordinates (`painter.window()` is the frame's rect); one that raises is dropped for the session |
-| a `"gate"` bool array in a series result | a green border on the frame while the playhead is in a row the series node gates |
+| a `"signal"` array in a series result | the node's trace, drawn as a detector. Its two handles are the node's band, in the signal's units, saved with the node: the player adds `"gate"`, the rows inside it (outside when lo is above hi), washes them on the trace, zeroes the rest of the signal before a series node downstream reads it, and draws a green border on the frame while the playhead is in a row the last chain node gates |
 | `output_name`, `export_command`, `describe_output` | an Export button on the node; an existing target gets a numbered sibling, and a failed run leaves no partial file |
 | `PATHS = {input: loader}` | a path input a selector feeds; the loader turns the file into params |
 | a plane as output | the node's density, v2's plot: its pixels per row counted on a fixed log axis, under its settings, for every fed frame node; a mask or a field has none. Its two handles are the node's band, saved with the node: the player zeroes every pixel outside it (inside it when lo is above hi) before anything downstream reads the node |

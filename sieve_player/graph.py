@@ -146,6 +146,7 @@ class Event:
     cpu_ms: float       # the thread's CPU time over the same span, exclusive likewise; wall far above it is a wait
     serves: str | None  # "scrub" | "walk": what the worker was doing; None off the worker (bench, tests)
     length: int | None  # progress only: rows in the window, `row` being the rows done
+    keys: dict | None   # sync only: every node's key under the new plan, band included; diff two to see what a drag changed
 
 
 @dataclass
@@ -229,7 +230,8 @@ class Graph:
             self.over = doc.overlay if doc.overlay in plan and produces(doc, tools, doc.overlay) in OVERLAYABLE else None
             self.series = chain[0] if chain else None
             self.chain, self.unrun_series = chain, [s for s in series if s not in chain]
-        self._emit("sync", None, None, None, 0)    # a boundary in the stream: what runs next ran under a new plan
+        # A boundary in the stream: what runs next ran under a new plan, whose keys it carries.
+        self._emit("sync", None, None, None, 0, keys={nid: e.key for nid, e in plan.items()})
 
     # -- what the worker and the display ask -------------------------------
     def _walk(self):
@@ -296,13 +298,13 @@ class Graph:
             plan = self._plan
         return self._compute(plan, nid, row, raw)
 
-    def _emit(self, kind, nid, row, key, nbytes, ms=0.0, t=None, cpu_ms=0.0, length=None):
+    def _emit(self, kind, nid, row, key, nbytes, ms=0.0, t=None, cpu_ms=0.0, length=None, keys=None):
         """One Event to `on_event`, stamped here with what every event carries: its start, the
         thread. The probe passes the times it measured; a boundary or an eviction has none and is
         stamped now."""
         if self.on_event is not None:
             self.on_event(Event(nid, row, key, kind, nbytes, ms, time.perf_counter() if t is None else t,
-                                threading.current_thread().name, cpu_ms, getattr(self._probing, "serves", None), length))
+                                threading.current_thread().name, cpu_ms, getattr(self._probing, "serves", None), length, keys))
 
     def progress(self, done, length):
         """The walk's progress, `done` rows of `length`, as an event; whoever drives the walk, the

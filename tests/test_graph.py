@@ -244,6 +244,10 @@ def test_probe_emits_once_per_run_exclusive_of_what_the_run_reads():
     assert [(ev.node, ev.kind) for ev in events[9:]] == [("video", "step")]   # a memo hit is not a run; the video's read is a read
     g.sync()
     assert events[-1].kind == "sync" and len(events) == 11                     # a boundary, between the runs either side
+    g.doc.node("add").params["k"] = 2
+    g.sync()
+    before, after = (ev.keys for ev in events if ev.kind == "sync")
+    assert [n for n in after if after[n] != before[n]] == ["add"]              # what the drag changed, derived from two boundaries
 
 
 def test_an_event_is_read_by_name_and_refused_short():

@@ -91,7 +91,7 @@ added, since the fields below triple the event's width.
   on Stats, `event`.
   Check: `bench.py` and the walk test no longer call `walked()`; the rate in the snapshot still
   reads.
-- [ ] The sync boundary carries the new plan's node-to-key map. `sync()` already computes every
+- [x] The sync boundary carries the new plan's node-to-key map. `sync()` already computes every
   key, so this costs nothing; a reader derives which nodes a drag changed as the nodes whose key
   differs from the previous boundary's, and the window never has to say what it edited.
   Check: a test changes one param, syncs, reads the two boundaries back, and derives that node

@@ -42,5 +42,5 @@ print(f"threshold drag (stage 3 only reruns): {t_thr * 1000:.1f} ms  decodes={de
 doc.node("rescale").params.update(scale=0.4)
 graph.sync()
 t_res = fill(graph, rows)
-print(f"rescale drag (stages 2+3 rerun; decoder cache holds {dec._cache_rows} rows): "
+print(f"rescale drag (stages 2+3 rerun; decoder cache holds {len(dec._cache)} rows): "
       f"{t_res:.2f} s  decodes={dec.decodes} seeks={dec.seeks}")

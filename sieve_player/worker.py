@@ -76,9 +76,10 @@ class Worker(QThread):
                 dirty, self._series_dirty = self._series_dirty, False
             try:
                 if want is not None:
-                    self.graph.compute(self.graph.shown, want)
-                    if self.graph.over is not None:
-                        self.graph.compute(self.graph.over, want)
+                    with self.graph.decoder.scrub():   # the display's jump lands on its own cursor, not the walk's
+                        self.graph.compute(self.graph.shown, want)
+                        if self.graph.over is not None:
+                            self.graph.compute(self.graph.over, want)
                     self.rowReady.emit(want)
                     continue
                 if not self.graph.fed(self.graph.walk):

@@ -244,12 +244,27 @@ def test_probe_emits_once_per_run_exclusive_of_what_the_run_reads():
 
 def test_an_event_is_read_by_name_and_refused_short():
     with pytest.raises(TypeError):
-        Event("add", 0, "k", "run", 24)                     # ms missing: no default fills it in
+        Event("add", 0, "k", "run", 24, 1.0, 0.0, "t")                   # cpu_ms missing: no default fills it in
     stats = Stats(Graph(fan_out(), Dec(), TOOLS))
     with pytest.raises(AttributeError):
-        stats.event(("add", 0, "k", "run", 24, 1.0))        # a tuple is not an event; nothing is read by position
-    stats.event(Event("add", 0, "k", "run", 24, 1.0))
+        stats.event(("add", 0, "k", "run", 24, 1.0, 0.0, "t", 1.0))      # a tuple is not an event; nothing is read by position
+    stats.event(Event("add", 0, "k", "run", 24, 1.0, 0.0, "t", 1.0))
     assert stats.snapshot()["nodes"]["add"]["n"] == 1
+
+
+def test_events_carry_start_thread_and_cpu_so_a_reader_sees_overlap_and_waiting():
+    """Two threads each run a tool that sleeps; the events' starts and durations alone show the
+    runs overlapped, the thread names say which was whose, and a sleep is wall time with no CPU."""
+    nap = tool("add", fn=lambda f, p: (time.sleep(0.03), f + 1)[1])
+    g = Graph(D.from_tools([gray, nap]), Dec(), {**TOOLS, "add": nap})
+    events = []
+    g.on_event = events.append
+    ts = [threading.Thread(target=g.compute, args=("add", r), name=f"t{r}") for r in range(2)]
+    [t.start() for t in ts], [t.join() for t in ts]
+    a, b = sorted((ev for ev in events if ev.node == "add"), key=lambda ev: ev.t)
+    assert {a.thread, b.thread} == {"t0", "t1"} and b.t < a.t + a.ms / 1000       # b began before a ended
+    assert a.cpu_ms < a.ms / 3 and 25 < a.ms < 100
+    assert all(ev.t >= a.t for ev in events if ev.thread == a.thread and ev.node != "add")   # its reads started inside it, not before
 
 
 def test_stats_counts_everything_over_a_short_walk(tmp_path):

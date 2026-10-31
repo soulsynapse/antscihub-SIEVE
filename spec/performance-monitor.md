@@ -62,7 +62,7 @@ added, since the fields below triple the event's width.
   The six fields the probe already carries keep their names and meanings.
   Check: Stats and the probe tests read by name; a test builds an event with one field missing
   and the consumers refuse it rather than misread it.
-- [ ] Each event also carries its start as a timestamp on the clock the probe already reads, the
+- [x] Each event also carries its start as a timestamp on the clock the probe already reads, the
   emitting thread's name, and the thread's CPU ms beside the wall ms, all read at the site where
   the wall time already is. A reader orders events across threads from the timestamp, sees two
   runs overlap, and reads wall far above CPU as a run that waited, on IO, the GIL or a lock,

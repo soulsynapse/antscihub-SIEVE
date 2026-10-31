@@ -134,6 +134,9 @@ class Event:
     kind: str           # "run" | "cache" | "step" | "seek" | "sync"
     bytes: int          # the result's
     ms: float           # wall, exclusive of the runs this one opened
+    t: float            # start, on the probe's clock (perf_counter); orders events across threads
+    thread: str         # the emitting thread's name
+    cpu_ms: float       # the thread's CPU time over the same span, exclusive likewise; wall far above it is a wait
 
 
 @dataclass
@@ -213,8 +216,7 @@ class Graph:
             self.over = doc.overlay if doc.overlay in plan and produces(doc, tools, doc.overlay) in OVERLAYABLE else None
             self.series = chain[0] if chain else None
             self.chain, self.unrun_series = chain, [s for s in series if s not in chain]
-        if self.on_event is not None:
-            self.on_event(Event(None, None, None, "sync", 0, 0.0))   # a boundary in the stream: what runs next ran under a new plan
+        self._emit("sync", None, None, None, 0)    # a boundary in the stream: what runs next ran under a new plan
 
     # -- what the worker and the display ask -------------------------------
     def _walk(self):
@@ -281,6 +283,13 @@ class Graph:
             plan = self._plan
         return self._compute(plan, nid, row, raw)
 
+    def _emit(self, kind, nid, row, key, nbytes, ms=0.0, t=None, cpu_ms=0.0):
+        """One Event to `on_event`, stamped here with what every event carries: its start, the
+        thread. The probe passes the times it measured; a boundary has none and is stamped now."""
+        if self.on_event is not None:
+            self.on_event(Event(nid, row, key, kind, nbytes, ms, time.perf_counter() if t is None else t,
+                                threading.current_thread().name, cpu_ms))
+
     @contextmanager
     def probe(self, nid, row, key):
         """Times the run inside and hands `on_event` one Event, its ms wall time exclusive of the
@@ -295,17 +304,18 @@ class Graph:
             yield [None, 0]
             return
         stack = self._probing.__dict__.setdefault("stack", [])
-        stack.append(0.0)
+        stack.append([0.0, 0.0])             # wall and CPU the runs opened inside this one took
         ev = ["run", 0]
-        t = time.perf_counter()
+        t, c = time.perf_counter(), time.thread_time()
         try:
             yield ev
         finally:
-            total = time.perf_counter() - t
-            inner = stack.pop()
+            total, cpu = time.perf_counter() - t, time.thread_time() - c
+            inner, inner_cpu = stack.pop()
             if stack:
-                stack[-1] += total
-            self.on_event(Event(nid, row, key, ev[0], ev[1], (total - inner) * 1000))
+                stack[-1][0] += total
+                stack[-1][1] += cpu
+            self._emit(ev[0], nid, row, key, ev[1], (total - inner) * 1000, t, (cpu - inner_cpu) * 1000)
 
     def _compute(self, plan, nid, row, raw=False):
         e = plan.get(nid)

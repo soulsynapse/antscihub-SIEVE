@@ -71,6 +71,29 @@ def test_the_trace_has_a_timestamp_duration_and_thread_on_every_event(tmp_path):
     assert total[id(first["video"])] == first["video"].ms                                 # a read opens nothing
 
 
+def test_two_threads_and_either_install_order_write_one_whole_dump(tmp_path):
+    """The worker and the GUI thread both emit; every line reads back whole. Stats installed after
+    the dump still passes events on to it, and a close under a thread mid-walk drops that event
+    without raising."""
+    import threading
+    g = Graph(D.from_tools([gray, add]), Dec(), TOOLS)
+    dump = Dump(g, tmp_path / "d.jsonl")
+    stats = Stats(g)
+    ts = [threading.Thread(target=walk, args=(g, range(10))) for _ in range(3)]
+    [t.start() for t in ts], [t.join() for t in ts]
+    for _ in range(50):
+        g.sync()
+    t = threading.Thread(target=walk, args=(g, range(10)))
+    t.start()
+    dump.close()
+    t.join()
+    header, events = read_dump(dump.path)
+    assert header["count"] == 10 and sum(ev.kind == "sync" for ev in events) == 50
+    assert 30 <= sum(ev.kind == "progress" for ev in events) <= 40 and stats.snapshot()["nodes"]["add"]["n"] >= 10   # the memo dedups the three walks
+    (tmp_path / "empty.jsonl").write_bytes(b"")
+    assert read_dump(tmp_path / "empty.jsonl") == ({}, [])
+
+
 def test_a_dump_cut_mid_line_reads_to_the_line_before(tmp_path):
     _, path = dump_of(tmp_path)
     _, whole = read_dump(path)

@@ -157,5 +157,13 @@ thing itself, and this list is a scope, not a prohibition.
   be chunked. No stream from a call site carries these: bytes is the result's size and not the
   tool's allocations, a leak's owner is tracemalloc's to name, and a row's dependence on the row
   before is the tool's contract. The stream shows the serial shape and the idle, and stops there.
+- A failed run's kind. The probe emits in its `finally`, so a tool that raises, or the video read
+  that runs off the stream's end, lands as a "run" with bytes 0 and its time in the node's mean, and
+  a reader cannot tell it from one that returned. Whether that is its own kind or no event is a
+  decision for the recorder's spec, which is where a reader first meets it.
+- Reads from two threads at once. The read's kind is read off the decoder's shared counters either
+  side of the call, so two readers at once can swap kinds. The app has one worker; the scrub cursor
+  is reached from it. If a second reader ever exists, the decoder reports the kind from under its
+  own lock instead.
 - A preference that persists anything, or a log written by anything but the dump. A number worth
   keeping goes in a finding, read off a dump.

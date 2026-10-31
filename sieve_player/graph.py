@@ -381,18 +381,22 @@ class Stats:
     """The probe's first consumer. Per node, the last figure and a running mean over the window the
     decoder's means use, blind to key, kind and bytes; beside them the series chain's time per emit,
     the walk's rate in rows per second, read off the progress events, and the decoder's and memo's
-    own counters. Making one installs it as the graph's `on_event`; `event` is its one entry point.
-    `snapshot()` is one plain dict, the only thing a reader gets: the window and bench.py read the
-    same and neither reaches into the runtime."""
+    own counters. Making one installs it as the graph's `on_event`, passing each event on to whatever
+    was there before, so consumers chain in any order; `event` is its one entry point. `snapshot()`
+    is one plain dict, the only thing a reader gets: the window and bench.py read the same and
+    neither reaches into the runtime."""
 
     def __init__(self, graph):
         self.graph = graph
         self._lock = threading.Lock()
         self._nodes = {}                    # nid -> [last ms, mean ms, runs]
         self._walk = deque(maxlen=WINDOW)   # (time, rows done) as the walk reports them
+        self._prev = graph.on_event
         graph.on_event = self.event
 
     def event(self, ev):
+        if self._prev is not None:
+            self._prev(ev)
         if ev.kind in ("sync", "evict", "uncache"):
             return
         with self._lock:

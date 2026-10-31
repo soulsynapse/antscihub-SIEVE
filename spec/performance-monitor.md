@@ -96,7 +96,7 @@ added, since the fields below triple the event's width.
   differs from the previous boundary's, and the window never has to say what it edited.
   Check: a test changes one param, syncs, reads the two boundaries back, and derives that node
   changed and no other.
-- [ ] The dump: a consumer that writes every event as one JSON line, appended as it arrives, with
+- [x] The dump: a consumer that writes every event as one JSON line, appended as it arrives, with
   a header line first carrying what a reader needs that no event has: the file's path, fps, row
   count and frame size, and the memo's and cache's limits. One line per event means a file closed
   by a crash reads back to its last complete line. A separate function converts a dump to the

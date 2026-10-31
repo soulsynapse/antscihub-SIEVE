@@ -66,6 +66,10 @@ class Decoder:
     def cache_bytes(self):
         return self._cache_bytes
 
+    @property
+    def cache_limit(self):
+        return self._cache_limit
+
     def read(self, row) -> np.ndarray:
         self.reads += 1
         f = self.cached(row)

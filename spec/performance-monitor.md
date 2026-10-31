@@ -76,7 +76,7 @@ added, since the fields below triple the event's width.
   it is a value the site has, and the rule gives it to the probe.
   Check: a test asks the worker for a display row during a walk and finds the scrub's events
   marked as such among the walk's.
-- [ ] Two new kinds from the sites where work is discarded: an eviction from the memo and an
+- [x] Two new kinds from the sites where work is discarded: an eviction from the memo and an
   eviction from the decoder cache, each with the node or row it dropped and the bytes freed, so a
   reader can draw either store's size over time or over rows walked, and can tell a redecode
   forced by eviction from one that was not. Both stores reach the same callable through the graph

@@ -307,18 +307,23 @@ def test_stats_counts_everything_over_a_short_walk(tmp_path):
         w.write(np.full((48, 64, 3), i, np.uint8))
     w.release()
     doc = D.from_tools([gray, add], path)
-    g = Graph(doc, Decoder(path), TOOLS, memo_bytes=40 << 10)   # room for a few rows, not the walk: evictions count
+    g = Graph(doc, Decoder(path, cache_bytes=40 << 10), TOOLS, memo_bytes=40 << 10)   # room for a few rows, not the walk: both stores evict
     stats = Stats(g)
+    events = []
+    g.on_event = lambda ev: (events.append(ev), stats.event(ev))
     g.compute("add", 30)                      # a jump: one seek
     for r in range(8):
         g.compute("add", r)
         stats.walked(r + 1)
     g.compute("add", 7)                       # a memo hit: the last row walked is still held
-    kinds = []
-    g.on_event = lambda ev: (kinds.append(ev.kind), stats.event(ev))
-    g.compute("video", 0)                     # a cache hit
+    n = len(events)
+    g.compute("video", 7)                     # a cache hit: the small cache still holds the last rows
     g.compute("video", 20)                    # a seek
-    assert kinds == ["cache", "seek"]
+    assert [ev.kind for ev in events[n:] if ev.kind != "uncache"] == ["cache", "seek"]
+    held = sum(ev.bytes for ev in events if ev.kind == "run") - sum(ev.bytes for ev in events if ev.kind == "evict")
+    assert held == g.memo.bytes and {(ev.node, ev.key) for ev in events if ev.kind == "evict"} == {(None, g.key("gray")), (None, g.key("add"))}
+    assert {ev.key for ev in events if ev.kind == "uncache"} == {g.key("video")} and len(events) > n + 2
+    assert sum(ev.bytes for ev in events if ev.kind == "uncache") == 9216 * (g.decoder.decodes - len(g.decoder._cache))
     s = stats.snapshot()
     assert {nid: v["n"] for nid, v in s["nodes"].items()} == {"video": 11, "gray": 9, "add": 9}
     assert s["walk_rows_s"] > 0 and s["step_ms"] > 0 and s["seek_ms"] > 0 and s["decodes"] and s["seeks"]

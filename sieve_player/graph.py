@@ -61,7 +61,8 @@ def gated(result, band):
 
 
 class Memo:
-    """LRU bounded by bytes. Image-shaped entries (ndim >= 2) are evicted before small ones."""
+    """LRU bounded by bytes. Image-shaped entries (ndim >= 2) are evicted before small ones. Each
+    eviction goes to `on_evict(key, bytes)` when set, after the lock is dropped."""
 
     def __init__(self, limit_bytes):
         self.limit = limit_bytes
@@ -69,6 +70,7 @@ class Memo:
         self._big, self._small = OrderedDict(), OrderedDict()
         self._lock = threading.Lock()
         self.hits = self.misses = self.evictions = 0
+        self.on_evict = None
 
     @staticmethod
     def _size(v):
@@ -87,6 +89,7 @@ class Memo:
 
     def put(self, k, v):
         d = self._big if isinstance(v, np.ndarray) and v.ndim >= 2 else self._small
+        gone = []
         with self._lock:
             if k in self._big or k in self._small:
                 return
@@ -96,9 +99,13 @@ class Memo:
                 src = self._big or self._small
                 if not src:
                     break
-                _, old = src.popitem(last=False)
+                ok, old = src.popitem(last=False)
                 self.bytes -= self._size(old)
                 self.evictions += 1
+                gone.append((ok, self._size(old)))
+        if self.on_evict is not None:
+            for ok, n in gone:
+                self.on_evict(ok, n)
 
 
 class Frames:
@@ -131,8 +138,8 @@ class Event:
     node: str | None    # the node that ran, or read; None on a boundary
     row: int | None
     key: str | None     # the node's raw key, what the memo holds under
-    kind: str           # "run" | "cache" | "step" | "seek" | "sync"
-    bytes: int          # the result's
+    kind: str           # "run" | "cache" | "step" | "seek" | "sync" | "evict" | "uncache"
+    bytes: int          # the result's; what an eviction freed
     ms: float           # wall, exclusive of the runs this one opened
     t: float            # start, on the probe's clock (perf_counter); orders events across threads
     thread: str         # the emitting thread's name
@@ -164,6 +171,10 @@ class Graph:
         self.on_event = None                # the probe's one consumer; see probe() for the event
         self._probing = threading.local()   # the runs open on this thread, so a run's time excludes its reads
         self._base = _key("video", decoder.path, VIDEO_PRODUCES)
+        # The two stores report what they discard into the same stream: the memo's entry by its key and
+        # row, the decoder cache's frame by its row under the video's key.
+        self.memo.on_evict = lambda k, n: self._emit("evict", None, k[1], k[0], n)
+        decoder.on_evict = lambda row, n: self._emit("uncache", None, row, self._base, n)
         self._plan = {}
         self.shown = self.over = self.series = None
         self.chain, self.unrun_series = [], []
@@ -286,7 +297,8 @@ class Graph:
 
     def _emit(self, kind, nid, row, key, nbytes, ms=0.0, t=None, cpu_ms=0.0):
         """One Event to `on_event`, stamped here with what every event carries: its start, the
-        thread. The probe passes the times it measured; a boundary has none and is stamped now."""
+        thread. The probe passes the times it measured; a boundary or an eviction has none and is
+        stamped now."""
         if self.on_event is not None:
             self.on_event(Event(nid, row, key, kind, nbytes, ms, time.perf_counter() if t is None else t,
                                 threading.current_thread().name, cpu_ms, getattr(self._probing, "serves", None)))
@@ -304,8 +316,9 @@ class Graph:
         list, what only the call site knows: a tool's kind is "run", since a memo hit is not a run
         and emits nothing; the video read's is "cache", "step" or "seek", read off the decoder's
         counters. Nothing when `on_event` is unset. `sync()` emits a "sync" event into the same
-        stream, a boundary with no node, row or time. The worker wraps a series tool's run in this;
-        `_compute` wraps a frame tool's and the video node's read."""
+        stream, a boundary with no node, row or time, and the memo and decoder cache emit "evict"
+        and "uncache" with the bytes freed. The worker wraps a series tool's run in this; `_compute`
+        wraps a frame tool's and the video node's read."""
         if self.on_event is None:
             yield [None, 0]
             return
@@ -372,7 +385,7 @@ class Stats:
         graph.on_event = self.event
 
     def event(self, ev):
-        if ev.kind == "sync":
+        if ev.kind in ("sync", "evict", "uncache"):
             return
         with self._lock:
             e = self._nodes.setdefault(ev.node, [0.0, None, 0])

@@ -6,13 +6,15 @@ from types import SimpleNamespace as Tool
 import numpy as np
 
 from sieve_player import document as D
-from sieve_player.graph import Graph, gated
+from sieve_player.graph import Graph, Stats, gated
 
 
 class Dec:
     path, fps, count = "fake.mp4", 30.0, 10
+    decodes = seeks = 0
 
     def read(self, row):
+        self.decodes += 1
         return np.full((4, 6, 3), row, np.uint8)
 
     def cached(self, row):
@@ -216,3 +218,52 @@ def test_walk_row_is_the_walked_node_through_the_heads_fold():
     doc.connect("video", "head")
     g.sync()
     assert g.walk_row(3) is None
+
+
+def test_probe_emits_once_per_run_exclusive_of_what_the_run_reads():
+    """gray and add each wait; add reads gray. The figure add gets is its own wait, not the pair's."""
+    slow_gray = tool("gray", "bgr", "gray", lambda f, p: (time.sleep(0.01), f[..., 0])[1])
+    slow_add = tool("add", fn=lambda f, p: (time.sleep(0.01), f + 1)[1])
+    g = Graph(D.from_tools([slow_gray, slow_add]), Dec(), {t.NAME: t for t in (slow_gray, slow_add)})
+    events = []
+    g.on_event = lambda *ev: events.append(ev)
+    for r in range(3):
+        g.compute("add", r)
+    assert sorted((nid, row) for nid, row, *_ in events) == sorted((n, r) for n in ("video", "gray", "add") for r in range(3))
+    ms = {nid: ev[-1] for nid, row, *ev in events if row == 0}
+    assert ms["add"] < ms["gray"] + ms["add"] and ms["add"] < 15
+    assert {(ev[3], ev[4]) for ev in events if ev[0] == "add"} == {("run", 4 * 6)} and events[0][2] == g.key("video")
+    g.compute("add", 0)
+    g.compute("video", 0)
+    assert [(ev[0], ev[3]) for ev in events[9:]] == [("video", "step")]   # a memo hit is not a run; the video's read is a read
+    g.sync()
+    assert events[-1][3] == "sync" and len(events) == 11                 # a boundary, between the runs either side
+
+
+def test_stats_counts_everything_over_a_short_walk(tmp_path):
+    import cv2
+    from sieve_player.decoder import Decoder
+    path = str(tmp_path / "v.avi")
+    w = cv2.VideoWriter(path, cv2.VideoWriter_fourcc(*"MJPG"), 30, (64, 48))
+    for i in range(40):
+        w.write(np.full((48, 64, 3), i, np.uint8))
+    w.release()
+    doc = D.from_tools([gray, add], path)
+    g = Graph(doc, Decoder(path), TOOLS)
+    stats = Stats(g)
+    g.compute("add", 30)                      # a jump: one seek
+    for r in range(8):
+        g.compute("add", r)
+        stats.walked(r + 1)
+    g.compute("add", 0)                       # a memo hit
+    kinds = []
+    g.on_event = lambda *ev: (kinds.append(ev[3]), stats.event(*ev))
+    g.compute("video", 0)                     # a cache hit
+    g.compute("video", 20)                    # a seek
+    assert kinds == ["cache", "seek"]
+    s = stats.snapshot()
+    assert {nid: v["n"] for nid, v in s["nodes"].items()} == {"video": 11, "gray": 9, "add": 9}
+    assert s["walk_rows_s"] > 0 and s["step_ms"] > 0 and s["seek_ms"] > 0 and s["decodes"] and s["seeks"]
+    assert s["memo_mb"] > 0 and s["cache_mb"] > 0 and 0 < s["memo_hit"] < 1 and 0 < s["cache_hit"] < 1
+    assert s["series_ms"] is None and s["evictions"] == 0   # no chain in this document; the memo had room
+    g.decoder.close()

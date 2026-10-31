@@ -135,7 +135,8 @@ class Worker(QThread):
                 series = Series(feeds[src], self.graph.key(src), start, fps)
             else:
                 continue            # the upstream tool did not hand out the signal it declared, or was skipped itself
-            results[nid], feeds[nid] = gated(tool.run(series, params), band)
+            with self.graph.probe(nid, start + self._i - 1, self.graph.key(nid)):
+                results[nid], feeds[nid] = gated(tool.run(series, params), band)
             if isinstance(results[nid], dict):
                 results[nid] = {**results[nid], "key": self.graph.key(nid)}   # the node's key beside its gate: what a tool that writes a file records
         self.seriesReady.emit(results, start, fps)

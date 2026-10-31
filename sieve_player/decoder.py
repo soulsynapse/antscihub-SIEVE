@@ -42,6 +42,7 @@ class Decoder:
         self._cache_lock = threading.Lock()     # the dict only: a GUI peek never waits on a decode
         self._cap_lock = threading.Lock()       # the captures and the cursor in use
         self.decodes = self.seeks = 0
+        self.reads = self.cache_hits = 0        # read() calls, and those the cache answered
         self.step_ms = self.seek_ms = None      # running means of what a step and a seek cost on this file
 
     @contextmanager
@@ -60,9 +61,15 @@ class Decoder:
         with self._cache_lock:
             return self._cache.get(row)
 
+    @property
+    def cache_bytes(self):
+        return self._cache_bytes
+
     def read(self, row) -> np.ndarray:
+        self.reads += 1
         f = self.cached(row)
         if f is not None:
+            self.cache_hits += 1
             return f
         with self._cap_lock:
             cur = self._cursors[self._use]

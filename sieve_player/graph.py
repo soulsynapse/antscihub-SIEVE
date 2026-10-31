@@ -9,7 +9,9 @@ when nothing reaches it: no wire, an unresolved tool, or a wire whose types do n
 import hashlib
 import json
 import threading
-from collections import OrderedDict
+import time
+from collections import OrderedDict, deque
+from contextlib import contextmanager
 from dataclasses import dataclass
 
 import numpy as np
@@ -19,6 +21,17 @@ from .document import OPEN, OVERLAYABLE, VIDEO_PRODUCES, VIDEO_TOOL, fed, is_sel
 
 def _key(*parts):
     return hashlib.sha1("|".join(map(str, parts)).encode()).hexdigest()[:16]
+
+
+WINDOW = 64     # rows a running mean spans; the decoder's step and seek means use the same
+
+
+def _mean(mean, x, n):
+    return x if mean is None else mean + (x - mean) / min(n, WINDOW)
+
+
+def _rate(hits, misses):
+    return hits / (hits + misses) if hits + misses else None
 
 
 def inband(v, band):
@@ -55,7 +68,7 @@ class Memo:
         self.bytes = 0
         self._big, self._small = OrderedDict(), OrderedDict()
         self._lock = threading.Lock()
-        self.hits = self.misses = 0
+        self.hits = self.misses = self.evictions = 0
 
     @staticmethod
     def _size(v):
@@ -85,6 +98,7 @@ class Memo:
                     break
                 _, old = src.popitem(last=False)
                 self.bytes -= self._size(old)
+                self.evictions += 1
 
 
 class Frames:
@@ -130,6 +144,8 @@ class Graph:
         self.fps, self.count = decoder.fps, decoder.count
         self.memo = Memo(memo_bytes)
         self._lock = threading.Lock()
+        self.on_event = None                # the probe's one consumer; see probe() for the event
+        self._probing = threading.local()   # the runs open on this thread, so a run's time excludes its reads
         self._base = _key("video", decoder.path, VIDEO_PRODUCES)
         self._plan = {}
         self.shown = self.over = self.series = None
@@ -184,6 +200,8 @@ class Graph:
             self.over = doc.overlay if doc.overlay in plan and produces(doc, tools, doc.overlay) in OVERLAYABLE else None
             self.series = chain[0] if chain else None
             self.chain, self.unrun_series = chain, [s for s in series if s not in chain]
+        if self.on_event is not None:
+            self.on_event(None, None, None, "sync", 0, 0.0)   # a boundary in the stream: what runs next ran under a new plan
 
     # -- what the worker and the display ask -------------------------------
     def _walk(self):
@@ -250,16 +268,50 @@ class Graph:
             plan = self._plan
         return self._compute(plan, nid, row, raw)
 
+    @contextmanager
+    def probe(self, nid, row, key):
+        """Times the run inside and hands `on_event` one event: (node, row, key, kind, bytes, ms),
+        the ms wall time exclusive of the runs it opened in turn, so a cold row charges the decode to
+        the video node and each tool its own work. The body sets `kind` and `bytes` on the yielded
+        list, what only the call site knows: a tool's kind is "run", since a memo hit is not a run
+        and emits nothing; the video read's is "cache", "step" or "seek", read off the decoder's
+        counters. Nothing when `on_event` is unset. `sync()` emits a "sync" event into the same
+        stream, a boundary with no node, row or time. The worker wraps a series tool's run in this;
+        `_compute` wraps a frame tool's and the video node's read."""
+        if self.on_event is None:
+            yield [None, 0]
+            return
+        stack = self._probing.__dict__.setdefault("stack", [])
+        stack.append(0.0)
+        ev = ["run", 0]
+        t = time.perf_counter()
+        try:
+            yield ev
+        finally:
+            total = time.perf_counter() - t
+            inner = stack.pop()
+            if stack:
+                stack[-1] += total
+            self.on_event(nid, row, key, ev[0], ev[1], (total - inner) * 1000)
+
     def _compute(self, plan, nid, row, raw=False):
         e = plan.get(nid)
         if e is None or e.kind in ("series", "selector") or not e.fed:
             return None
         if e.kind == "video":
-            return self.decoder.read(row)
+            d = self.decoder
+            with self.probe(nid, row, e.raw_key) as ev:
+                decodes, seeks = d.decodes, d.seeks
+                v = d.read(row)
+                ev[0] = "seek" if d.seeks != seeks else "step" if d.decodes != decodes else "cache"
+                ev[1] = v.nbytes
+            return v
         mk = (e.raw_key, row)
         v = self.memo.get(mk)
         if v is None:
-            v = e.tool.run(Frames(self, plan, e.src, e.src_key), row, e.params)
+            with self.probe(nid, row, e.raw_key) as ev:
+                v = e.tool.run(Frames(self, plan, e.src, e.src_key), row, e.params)
+                ev[1] = Memo._size(v)
             self.memo.put(mk, v)
         return v if raw or e.band is None else banded(v, e.band)
 
@@ -273,3 +325,51 @@ class Graph:
             return self.decoder.cached(row)
         v = self.memo.get((e.raw_key, row))
         return v if v is None or e.band is None else banded(v, e.band)
+
+
+class Stats:
+    """The probe's first consumer. Per node, the last figure and a running mean over the window the
+    decoder's means use, blind to key, kind and bytes; beside them the series chain's time per emit,
+    the walk's rate in rows per second, and the decoder's and memo's own counters. Making one
+    installs it as the graph's `on_event`. Whoever drives the walk calls `walked(rows)` as rows
+    land. `snapshot()` is one plain dict, the only thing a reader gets: the window and bench.py read
+    the same and neither reaches into the runtime."""
+
+    def __init__(self, graph):
+        self.graph = graph
+        self._lock = threading.Lock()
+        self._nodes = {}                    # nid -> [last ms, mean ms, runs]
+        self._walk = deque(maxlen=WINDOW)   # (time, rows done) as the walk reports them
+        graph.on_event = self.event
+
+    def event(self, nid, row, key, kind, nbytes, ms):
+        if kind == "sync":
+            return
+        with self._lock:
+            e = self._nodes.setdefault(nid, [0.0, None, 0])
+            e[2] += 1
+            e[0], e[1] = ms, _mean(e[1], ms, e[2])
+
+    def walked(self, rows):
+        with self._lock:
+            if self._walk and rows < self._walk[-1][1]:
+                self._walk.clear()          # a new walk; the rate is this one's
+            self._walk.append((time.perf_counter(), rows))
+
+    def snapshot(self):
+        g, d, m = self.graph, self.graph.decoder, self.graph.memo
+        with self._lock:
+            nodes = {nid: {"last": last, "mean": mean, "n": n} for nid, (last, mean, n) in self._nodes.items()}
+            rate = None
+            if len(self._walk) > 1 and self._walk[-1][0] > self._walk[0][0]:
+                (t0, r0), (t1, r1) = self._walk[0], self._walk[-1]
+                rate = (r1 - r0) / (t1 - t0)
+        chain = [nid for nid in g.chain if nid in nodes]
+        return {
+            "nodes": nodes,
+            "series_ms": sum(nodes[nid]["last"] for nid in chain) if chain else None,
+            "walk_rows_s": rate, "fps": g.fps,
+            "step_ms": d.step_ms, "seek_ms": d.seek_ms, "decodes": d.decodes, "seeks": d.seeks,
+            "memo_mb": m.bytes / 2**20, "memo_hit": _rate(m.hits, m.misses), "evictions": m.evictions,
+            "cache_mb": d.cache_bytes / 2**20, "cache_hit": _rate(d.cache_hits, d.reads - d.cache_hits),
+        }

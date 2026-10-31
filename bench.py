@@ -52,5 +52,5 @@ print(f"\n{'node':<12}{'last ms':>9}{'mean ms':>9}{'runs':>7}")
 for nid, v in sorted(s["nodes"].items(), key=lambda kv: -kv[1]["mean"]):
     print(f"{nid:<12}{v['last']:>9.2f}{v['mean']:>9.2f}{v['n']:>7}")
 print(f"walk {s['walk_rows_s']:.1f} rows/s of {s['fps']:.1f} fps; step {s['step_ms']:.1f} ms x{s['decodes']}, "
-      f"seek {s['seek_ms'] or 0:.0f} ms x{s['seeks']}; memo {s['memo_mb']:.0f} MB hit {s['memo_hit']:.0%}, "
+      f"seek {s['seek_ms'] or 0:.0f} ms x{s['seeks']}; memo {s['memo_mb']:.0f} MB hit {s['memo_hit']:.0%} evicted {s['evictions']}, "
       f"cache {s['cache_mb']:.0f} MB hit {s['cache_hit']:.0%}")

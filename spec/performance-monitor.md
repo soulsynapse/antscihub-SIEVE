@@ -19,7 +19,7 @@ nothing to read there. Anything a reader can derive from the stream, a redecode,
 a recompute after eviction, the worker's overhead per row, is the reader's to derive and never the
 probe's to detect. Nothing on this branch detects anything.
 
-- [ ] Every run of a tool, and the video node's read, emits one event: node, row, the node's raw
+- [x] Every run of a tool, and the video node's read, emits one event: node, row, the node's raw
   key, a kind, the result's bytes, and wall ms exclusive of the nodes it reads: a cold scrub row
   charges the decode to the video node and gray's work to gray, not to the node that asked for
   them. The kind is what the site knew for free: for a read, whether the decoder's cache answered,
@@ -30,19 +30,19 @@ probe's to detect. Nothing on this branch detects anything.
   Check: a test runs a two-node graph whose tools wait a known time, catches the events, and
   asserts the reader's figure is less than the pair's together, that each node emitted once per
   row, and that a cached read's kind says so.
-- [ ] A graph change is a boundary in the same stream: `sync()` emits one event of its own kind,
+- [x] A graph change is a boundary in the same stream: `sync()` emits one event of its own kind,
   with no row and no time, so a reader can say what one drag cost. This bends the rule above, a
   sync being no run, and is the one bend: the callable carries runs and the boundaries between
   them, nothing else.
   Check: a test syncs and finds the boundary between the runs before and after.
-- [ ] The first consumer keeps, per node, the last figure and a running mean over the window the
+- [x] The first consumer keeps, per node, the last figure and a running mean over the window the
   decoder uses, and ignores key, kind and bytes; beside them the series chain's time per emit and
   the walk's rate in rows per second, with the decoder's step and seek means and counts, the
   memo's and the decoder cache's bytes and hit rate, and the memo's evictions, the one count the
   stream cannot reconstruct.
   Check: a test walks a short window and asserts every counter has counted; no test asserts what
   a timing reads.
-- [ ] The numbers leave the runtime as one plain snapshot taken under a lock, the way results leave
+- [x] The numbers leave the runtime as one plain snapshot taken under a lock, the way results leave
   the worker, so the window and `bench.py` read the same thing and neither reaches into the graph's
   state.
   Check: `tests/test_seams.py` still passes; `bench.py` prints the snapshot as a table after its

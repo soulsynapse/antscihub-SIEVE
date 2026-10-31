@@ -249,13 +249,13 @@ def test_stats_counts_everything_over_a_short_walk(tmp_path):
         w.write(np.full((48, 64, 3), i, np.uint8))
     w.release()
     doc = D.from_tools([gray, add], path)
-    g = Graph(doc, Decoder(path), TOOLS)
+    g = Graph(doc, Decoder(path), TOOLS, memo_bytes=40 << 10)   # room for a few rows, not the walk: evictions count
     stats = Stats(g)
     g.compute("add", 30)                      # a jump: one seek
     for r in range(8):
         g.compute("add", r)
         stats.walked(r + 1)
-    g.compute("add", 0)                       # a memo hit
+    g.compute("add", 7)                       # a memo hit: the last row walked is still held
     kinds = []
     g.on_event = lambda *ev: (kinds.append(ev[3]), stats.event(*ev))
     g.compute("video", 0)                     # a cache hit
@@ -265,5 +265,5 @@ def test_stats_counts_everything_over_a_short_walk(tmp_path):
     assert {nid: v["n"] for nid, v in s["nodes"].items()} == {"video": 11, "gray": 9, "add": 9}
     assert s["walk_rows_s"] > 0 and s["step_ms"] > 0 and s["seek_ms"] > 0 and s["decodes"] and s["seeks"]
     assert s["memo_mb"] > 0 and s["cache_mb"] > 0 and 0 < s["memo_hit"] < 1 and 0 < s["cache_hit"] < 1
-    assert s["series_ms"] is None and s["evictions"] == 0   # no chain in this document; the memo had room
+    assert s["series_ms"] is None and s["evictions"] > 0    # no chain in this document
     g.decoder.close()

@@ -65,6 +65,7 @@ class Worker(QThread):
         return self._gen != self._walk_gen or self._i < self._length
 
     def run(self):
+        threading.current_thread().name = "worker"      # what the probe's events name as their thread
         while True:
             with self._cv:
                 while not (self._stop or self._want is not None or self._series_dirty or self._pending()):
@@ -76,12 +77,14 @@ class Worker(QThread):
                 dirty, self._series_dirty = self._series_dirty, False
             try:
                 if want is not None:
+                    self.graph.serving("scrub")
                     with self.graph.decoder.scrub():   # the display's jump lands on its own cursor, not the walk's
                         self.graph.compute(self.graph.shown, want)
                         if self.graph.over is not None:
                             self.graph.compute(self.graph.over, want)
                     self.rowReady.emit(want)
                     continue
+                self.graph.serving("walk")
                 if not self.graph.fed(self.graph.walk):
                     self._walk_gen, self._i = gen, self._length   # nothing reaches the walked node; wait for the next change
                     continue

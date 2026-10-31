@@ -137,6 +137,7 @@ class Event:
     t: float            # start, on the probe's clock (perf_counter); orders events across threads
     thread: str         # the emitting thread's name
     cpu_ms: float       # the thread's CPU time over the same span, exclusive likewise; wall far above it is a wait
+    serves: str | None  # "scrub" | "walk": what the worker was doing; None off the worker (bench, tests)
 
 
 @dataclass
@@ -288,7 +289,12 @@ class Graph:
         thread. The probe passes the times it measured; a boundary has none and is stamped now."""
         if self.on_event is not None:
             self.on_event(Event(nid, row, key, kind, nbytes, ms, time.perf_counter() if t is None else t,
-                                threading.current_thread().name, cpu_ms))
+                                threading.current_thread().name, cpu_ms, getattr(self._probing, "serves", None)))
+
+    def serving(self, what):
+        """What the events this thread emits from here on served, "scrub" or "walk"; the worker says
+        at the top of each loop, since only it knows, and nothing else sets it."""
+        self._probing.serves = what
 
     @contextmanager
     def probe(self, nid, row, key):

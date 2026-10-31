@@ -69,7 +69,7 @@ added, since the fields below triple the event's width.
   without the stream saying which.
   Check: a test runs tools on two threads, reads the events back, and finds the overlap from
   timestamps and durations alone; a tool that sleeps shows CPU ms well under wall ms.
-- [ ] Each event says what it served: the scrub or the walk. The worker knows this at the top of
+- [x] Each event says what it served: the scrub or the walk. The worker knows this at the top of
   each loop and sets it on the thread, in the same thread-local the probe keeps its stack, before
   computing; the probe reads it. Rows that reach the stream from outside the worker, `bench.py`
   and the tests, carry neither. The earlier plan to infer this from the row sequence is withdrawn:

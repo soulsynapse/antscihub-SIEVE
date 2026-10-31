@@ -1,6 +1,8 @@
 """The runtime: wiring, fan-out, keys, rewiring under a worker, and the series node."""
 import threading
 import time
+from contextlib import nullcontext
+from dataclasses import fields
 from types import SimpleNamespace as Tool
 
 import numpy as np
@@ -21,6 +23,8 @@ class Dec:
 
     def cached(self, row):
         return None
+
+    scrub = staticmethod(nullcontext)
 
 
 def tool(name, expects="gray", produces="gray", fn=None, kind="frame"):
@@ -243,12 +247,13 @@ def test_probe_emits_once_per_run_exclusive_of_what_the_run_reads():
 
 
 def test_an_event_is_read_by_name_and_refused_short():
+    full = {f.name: None for f in fields(Event)} | {"node": "add", "kind": "run", "ms": 1.0}
     with pytest.raises(TypeError):
-        Event("add", 0, "k", "run", 24, 1.0, 0.0, "t")                   # cpu_ms missing: no default fills it in
+        Event(**{k: v for k, v in full.items() if k != "ms"})       # a field missing: no default fills it in
     stats = Stats(Graph(fan_out(), Dec(), TOOLS))
     with pytest.raises(AttributeError):
-        stats.event(("add", 0, "k", "run", 24, 1.0, 0.0, "t", 1.0))      # a tuple is not an event; nothing is read by position
-    stats.event(Event("add", 0, "k", "run", 24, 1.0, 0.0, "t", 1.0))
+        stats.event(tuple(full.values()))                           # a tuple is not an event; nothing is read by position
+    stats.event(Event(**full))
     assert stats.snapshot()["nodes"]["add"]["n"] == 1
 
 
@@ -265,6 +270,32 @@ def test_events_carry_start_thread_and_cpu_so_a_reader_sees_overlap_and_waiting(
     assert {a.thread, b.thread} == {"t0", "t1"} and b.t < a.t + a.ms / 1000       # b began before a ended
     assert a.cpu_ms < a.ms / 3 and 25 < a.ms < 100
     assert all(ev.t >= a.t for ev in events if ev.thread == a.thread and ev.node != "add")   # its reads started inside it, not before
+
+
+def test_events_say_whether_they_served_the_scrub_or_the_walk():
+    """The worker marks what it is doing; a display row asked for mid-walk comes back marked the
+    scrub's among the walk's rows, on a thread named for the worker. Off the worker, nothing is marked."""
+    from PySide6.QtWidgets import QApplication
+    from sieve_player.worker import Worker
+    QApplication.instance() or QApplication([])
+    slow = tool("add", fn=lambda f, p: (time.sleep(0.005), f + 1)[1])
+    g = Graph(D.from_tools([gray, slow]), Dec(), {**TOOLS, "add": slow})
+    events = []
+    g.on_event = events.append
+    g.compute("add", 0)
+    w = Worker(g)
+    w.set_window(0, 10)
+    w.start()
+    time.sleep(0.015)
+    w.request_row(7)
+    for _ in range(500):
+        if any(ev.node == "add" and ev.row == 9 for ev in events):
+            break
+        time.sleep(0.01)
+    w.stop()
+    served = {(ev.row, ev.serves) for ev in events if ev.node == "add"}
+    assert (0, None) in served and (7, "scrub") in served and (9, "walk") in served
+    assert {ev.thread for ev in events if ev.serves} == {"worker"}
 
 
 def test_stats_counts_everything_over_a_short_walk(tmp_path):

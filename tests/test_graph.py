@@ -4,14 +4,16 @@ import time
 from types import SimpleNamespace as Tool
 
 import numpy as np
+import pytest
 
 from sieve_player import document as D
-from sieve_player.graph import Graph, Stats, gated
+from sieve_player.graph import Event, Graph, Stats, gated
 
 
 class Dec:
     path, fps, count = "fake.mp4", 30.0, 10
-    decodes = seeks = 0
+    decodes = seeks = reads = cache_hits = cache_bytes = 0
+    step_ms = seek_ms = None
 
     def read(self, row):
         self.decodes += 1
@@ -226,18 +228,28 @@ def test_probe_emits_once_per_run_exclusive_of_what_the_run_reads():
     slow_add = tool("add", fn=lambda f, p: (time.sleep(0.01), f + 1)[1])
     g = Graph(D.from_tools([slow_gray, slow_add]), Dec(), {t.NAME: t for t in (slow_gray, slow_add)})
     events = []
-    g.on_event = lambda *ev: events.append(ev)
+    g.on_event = events.append
     for r in range(3):
         g.compute("add", r)
-    assert sorted((nid, row) for nid, row, *_ in events) == sorted((n, r) for n in ("video", "gray", "add") for r in range(3))
-    ms = {nid: ev[-1] for nid, row, *ev in events if row == 0}
+    assert sorted((ev.node, ev.row) for ev in events) == sorted((n, r) for n in ("video", "gray", "add") for r in range(3))
+    ms = {ev.node: ev.ms for ev in events if ev.row == 0}
     assert ms["add"] < ms["gray"] + ms["add"] and ms["add"] < 15
-    assert {(ev[3], ev[4]) for ev in events if ev[0] == "add"} == {("run", 4 * 6)} and events[0][2] == g.key("video")
+    assert {(ev.kind, ev.bytes) for ev in events if ev.node == "add"} == {("run", 4 * 6)} and events[0].key == g.key("video")
     g.compute("add", 0)
     g.compute("video", 0)
-    assert [(ev[0], ev[3]) for ev in events[9:]] == [("video", "step")]   # a memo hit is not a run; the video's read is a read
+    assert [(ev.node, ev.kind) for ev in events[9:]] == [("video", "step")]   # a memo hit is not a run; the video's read is a read
     g.sync()
-    assert events[-1][3] == "sync" and len(events) == 11                 # a boundary, between the runs either side
+    assert events[-1].kind == "sync" and len(events) == 11                     # a boundary, between the runs either side
+
+
+def test_an_event_is_read_by_name_and_refused_short():
+    with pytest.raises(TypeError):
+        Event("add", 0, "k", "run", 24)                     # ms missing: no default fills it in
+    stats = Stats(Graph(fan_out(), Dec(), TOOLS))
+    with pytest.raises(AttributeError):
+        stats.event(("add", 0, "k", "run", 24, 1.0))        # a tuple is not an event; nothing is read by position
+    stats.event(Event("add", 0, "k", "run", 24, 1.0))
+    assert stats.snapshot()["nodes"]["add"]["n"] == 1
 
 
 def test_stats_counts_everything_over_a_short_walk(tmp_path):
@@ -257,7 +269,7 @@ def test_stats_counts_everything_over_a_short_walk(tmp_path):
         stats.walked(r + 1)
     g.compute("add", 7)                       # a memo hit: the last row walked is still held
     kinds = []
-    g.on_event = lambda *ev: (kinds.append(ev[3]), stats.event(*ev))
+    g.on_event = lambda ev: (kinds.append(ev.kind), stats.event(ev))
     g.compute("video", 0)                     # a cache hit
     g.compute("video", 20)                    # a seek
     assert kinds == ["cache", "seek"]

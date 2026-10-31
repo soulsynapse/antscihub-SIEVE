@@ -123,6 +123,19 @@ class Series:
         self.data, self.key, self.start, self.fps = data, key, start, fps
 
 
+@dataclass(frozen=True, slots=True)
+class Event:
+    """What the probe emits, one per run, read or boundary; see Graph.probe(). Every field is
+    required, so a consumer building or reading one by position, or one missing a field, fails
+    where it stands instead of misreading its neighbour."""
+    node: str | None    # the node that ran, or read; None on a boundary
+    row: int | None
+    key: str | None     # the node's raw key, what the memo holds under
+    kind: str           # "run" | "cache" | "step" | "seek" | "sync"
+    bytes: int          # the result's
+    ms: float           # wall, exclusive of the runs this one opened
+
+
 @dataclass
 class _Entry:
     """One node as the plan saw it at sync()."""
@@ -201,7 +214,7 @@ class Graph:
             self.series = chain[0] if chain else None
             self.chain, self.unrun_series = chain, [s for s in series if s not in chain]
         if self.on_event is not None:
-            self.on_event(None, None, None, "sync", 0, 0.0)   # a boundary in the stream: what runs next ran under a new plan
+            self.on_event(Event(None, None, None, "sync", 0, 0.0))   # a boundary in the stream: what runs next ran under a new plan
 
     # -- what the worker and the display ask -------------------------------
     def _walk(self):
@@ -270,9 +283,9 @@ class Graph:
 
     @contextmanager
     def probe(self, nid, row, key):
-        """Times the run inside and hands `on_event` one event: (node, row, key, kind, bytes, ms),
-        the ms wall time exclusive of the runs it opened in turn, so a cold row charges the decode to
-        the video node and each tool its own work. The body sets `kind` and `bytes` on the yielded
+        """Times the run inside and hands `on_event` one Event, its ms wall time exclusive of the
+        runs it opened in turn, so a cold row charges the decode to the video node and each tool its
+        own work. The body sets `kind` and `bytes` on the yielded
         list, what only the call site knows: a tool's kind is "run", since a memo hit is not a run
         and emits nothing; the video read's is "cache", "step" or "seek", read off the decoder's
         counters. Nothing when `on_event` is unset. `sync()` emits a "sync" event into the same
@@ -292,7 +305,7 @@ class Graph:
             inner = stack.pop()
             if stack:
                 stack[-1] += total
-            self.on_event(nid, row, key, ev[0], ev[1], (total - inner) * 1000)
+            self.on_event(Event(nid, row, key, ev[0], ev[1], (total - inner) * 1000))
 
     def _compute(self, plan, nid, row, raw=False):
         e = plan.get(nid)
@@ -342,13 +355,13 @@ class Stats:
         self._walk = deque(maxlen=WINDOW)   # (time, rows done) as the walk reports them
         graph.on_event = self.event
 
-    def event(self, nid, row, key, kind, nbytes, ms):
-        if kind == "sync":
+    def event(self, ev):
+        if ev.kind == "sync":
             return
         with self._lock:
-            e = self._nodes.setdefault(nid, [0.0, None, 0])
+            e = self._nodes.setdefault(ev.node, [0.0, None, 0])
             e[2] += 1
-            e[0], e[1] = ms, _mean(e[1], ms, e[2])
+            e[0], e[1] = ev.ms, _mean(e[1], ev.ms, e[2])
 
     def walked(self, rows):
         with self._lock:

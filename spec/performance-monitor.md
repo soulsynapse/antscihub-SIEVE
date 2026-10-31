@@ -57,7 +57,7 @@ Assumes: nothing new of the decoder and memo but the counters named below.
 Assumes: Probe. The boxes land in this order; the first on its own commit before any field is
 added, since the fields below triple the event's width.
 
-- [ ] The event is a record with named fields, not a positional tuple. Every consumer, Stats, the
+- [x] The event is a record with named fields, not a positional tuple. Every consumer, Stats, the
   dump below and the tests, reads fields by name, so a field added later fails nowhere silently.
   The six fields the probe already carries keep their names and meanings.
   Check: Stats and the probe tests read by name; a test builds an event with one field missing

@@ -110,21 +110,25 @@ added, since the fields below triple the event's width.
   the two boundaries, and the walk's rate from the progress events. The conversion of that dump
   parses as JSON and every event in it has a timestamp, a duration and a thread. A dump truncated
   mid-line reads back to the line before.
-- [ ] Two process samples, in the dump and not in the probe, since both measure rather than carry:
+- [x] Two process samples, in the dump and not in the probe, since both measure rather than carry:
   the process's resident memory, read once at each progress event, so a process growing while
   memo plus cache stays flat says something is held that neither store knows of; and the GUI
   thread's lateness, a timer the window runs only while a dump is attached, which emits how late
   it fired, so a reader sees when the main thread was blocked and for how long without a clock in
   the display path. The lateness sampler is the one piece of this branch that touches the window,
-  and it draws nothing.
+  and it draws nothing. A dump is attached to the player by the environment variable `window.py`
+  names, a file path, for every video the process opens; nothing in the window toggles it, since
+  the recorder's spec decides what a start and stop in the player look like.
   Check: a test attaches a dump, blocks the GUI thread for a known time, and finds a lateness
   event at least that long; the walk test finds a resident-memory figure on each progress event.
-- [ ] The probe is cheaper than what it measures, and `bench.py` says by how much: its fill runs
+- [x] The probe is cheaper than what it measures, and `bench.py` says by how much: its fill runs
   once with the callable unset and once with the dump attached, and prints both, and the dump's
   file size for the run. The two figures are a measurement, so they live in a commit message or a
   finding, never here; the standard is that the difference stays within the run-to-run noise the
-  bench already shows between its first and second fill.
-  Check: `bench.py` prints the three figures; the finding for this branch records them.
+  bench already shows between two cold fills with the callable unset, which is what it now runs,
+  each fill on a fresh decoder so all three decode.
+  Check: `bench.py` prints the three figures; the commit that ticks this box records them, on the
+  small fixture and the 5K file both, and whether the standard held on each.
 
 ## Not now
 

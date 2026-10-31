@@ -1,16 +1,24 @@
 """Headless timings of the graph on one video. Runs the graph directly, no Qt.
 
     .venv\\Scripts\\python bench.py [video] [rows]
+
+The first three lines are the probe's own cost: a cold fill with the callable unset, run twice for
+the noise between runs, then a cold fill with a dump attached and the dump's size, each on a fresh
+decoder and graph so all three decode. The rest is the player's story on the last graph.
 """
+import os
 import sys
+import tempfile
 import time
 
 from sieve_player import Decoder, document
 from sieve_player.graph import Graph, Stats
+from sieve_player.trace import Dump
 from tools import gray, motion, reduce, rescale, threshold
 
 path = sys.argv[1] if len(sys.argv) > 1 else "video-tests/rep3_intermittent_crop.MP4"
 rows = int(sys.argv[2]) if len(sys.argv) > 2 else 600
+tools = [gray, rescale, threshold, motion, reduce]
 
 
 def fill(graph, n):
@@ -21,16 +29,27 @@ def fill(graph, n):
     return time.perf_counter() - t
 
 
-dec = Decoder(path)
-tools = [gray, rescale, threshold, motion, reduce]
-doc = document.from_tools(tools, path)
-graph = Graph(doc, dec, tools)
-stats = Stats(graph)
-print(f"{path}: {dec.width}x{dec.height} @ {dec.fps:.2f} fps, {dec.count} rows; window {rows} rows")
+def fresh():
+    dec = Decoder(path)
+    doc = document.from_tools(tools, path)
+    return dec, doc, Graph(doc, dec, tools)
 
-t_fill = fill(graph, rows)
-print(f"fill {rows} rows (decode+gray+rescale+threshold+motion): {t_fill:.2f} s  "
-      f"decodes={dec.decodes} seeks={dec.seeks} memo={graph.memo.bytes >> 20} MB")
+
+dec, doc, graph = fresh()
+print(f"{path}: {dec.width}x{dec.height} @ {dec.fps:.2f} fps, {dec.count} rows; window {rows} rows")
+t_bare = [fill(graph, rows)]
+dec.close()
+dec, doc, graph = fresh()
+t_bare.append(fill(graph, rows))
+dec.close()
+dec, doc, graph = fresh()
+stats = Stats(graph)
+dump = Dump(graph, os.path.join(tempfile.gettempdir(), "sieve-bench.jsonl"))
+t_dump = fill(graph, rows)
+dump.close()
+print(f"cold fill, probe unset:     {t_bare[0]:.2f} s, again {t_bare[1]:.2f} s")
+print(f"cold fill, dump attached:   {t_dump:.2f} s; dump {os.path.getsize(dump.path) >> 10} KB")
+print(f"fill {rows} rows (decode+gray+rescale+threshold+motion)  decodes={dec.decodes} seeks={dec.seeks} memo={graph.memo.bytes >> 20} MB")
 assert dec.decodes == rows, "decodes != rows walked"
 
 t_refill = fill(graph, rows)

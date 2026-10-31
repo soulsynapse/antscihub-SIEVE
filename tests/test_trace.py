@@ -1,5 +1,6 @@
 """The dump: what a recorder derives, derived from the file and not from memory."""
 import json
+import time
 from collections import Counter
 
 from sieve_player import document as D
@@ -34,7 +35,7 @@ def dump_of(tmp_path):
 
 def test_a_recorder_derives_from_the_file(tmp_path):
     g, path = dump_of(tmp_path)
-    header, events = read_dump(path)
+    header, events, samples = read_dump(path)
     assert header["path"] == "fake.mp4" and header["count"] == 10 and header["memo_bytes"] == 200 and "keys" in header["fields"]
     reads = Counter(ev.row for ev in events if ev.node == "video" and ev.kind != "cache")
     assert reads[0] >= 2 and all(n >= 1 for n in reads.values())                       # redecodes: one row read uncached twice
@@ -56,6 +57,7 @@ def test_a_recorder_derives_from_the_file(tmp_path):
     (t0, r0), (t1, r1) = (progress[0].t, progress[0].row), (progress[5].t, progress[5].row)
     assert (r1 - r0) / (t1 - t0) > 0                                                   # the walk's rate
     assert all(ev.thread == "MainThread" and ev.serves is None for ev in events)
+    assert [s["t"] for s in samples] == [ev.t for ev in progress] and all(s["sample"] == "rss" and s["value"] > 1 << 20 for s in samples)
 
 
 def test_the_trace_has_a_timestamp_duration_and_thread_on_every_event(tmp_path):
@@ -64,7 +66,8 @@ def test_the_trace_has_a_timestamp_duration_and_thread_on_every_event(tmp_path):
     spans = [e for e in doc["traceEvents"] if e["ph"] == "X"]
     assert spans and all({"ts", "dur", "tid"} <= set(e) for e in spans)
     assert {e["name"] for e in doc["traceEvents"] if e["ph"] == "M"} == {"thread_name"}
-    _, events = read_dump(path)
+    assert sum(e["ph"] == "C" and e["name"] == "rss" for e in doc["traceEvents"]) == 12
+    _, events, _ = read_dump(path)
     total = totals(events)
     first = {ev.node: ev for ev in events if ev.row == 0 and ev.kind in ("run", "step")}
     assert total[id(first["add"])] >= first["add"].ms + total[id(first["gray"])]           # a run's total holds its reads
@@ -87,17 +90,38 @@ def test_two_threads_and_either_install_order_write_one_whole_dump(tmp_path):
     t.start()
     dump.close()
     t.join()
-    header, events = read_dump(dump.path)
+    header, events, _ = read_dump(dump.path)
     assert header["count"] == 10 and sum(ev.kind == "sync" for ev in events) == 50
     assert 30 <= sum(ev.kind == "progress" for ev in events) <= 40 and stats.snapshot()["nodes"]["add"]["n"] >= 10   # the memo dedups the three walks
     (tmp_path / "empty.jsonl").write_bytes(b"")
-    assert read_dump(tmp_path / "empty.jsonl") == ({}, [])
+    assert read_dump(tmp_path / "empty.jsonl") == ({}, [], [])
 
 
 def test_a_dump_cut_mid_line_reads_to_the_line_before(tmp_path):
     _, path = dump_of(tmp_path)
-    _, whole = read_dump(path)
+    _, whole, samples = read_dump(path)
     data = path.read_bytes()
     path.write_bytes(data[: data.rfind(b"\n", 0, -1) + 8])     # a crash: the last line half written
-    _, cut = read_dump(path)
-    assert len(cut) == len(whole) - 1 and cut == whole[:-1]
+    _, cut, cut_samples = read_dump(path)
+    assert cut == whole[:-1] and cut_samples == samples
+
+
+def test_the_window_samples_how_late_its_timer_fired_while_a_dump_is_attached(tmp_path):
+    from PySide6.QtWidgets import QApplication
+    from sieve_player.window import Lateness
+    app = QApplication.instance() or QApplication([])
+    g = Graph(D.from_tools([gray, add]), Dec(), TOOLS)
+    dump = Dump(g, tmp_path / "d.jsonl")
+    late = Lateness(dump, interval_ms=20)
+    end = time.perf_counter() + 0.1
+    while time.perf_counter() < end:
+        app.processEvents()
+    time.sleep(0.25)                                            # the GUI thread blocked
+    end = time.perf_counter() + 0.1
+    while time.perf_counter() < end:
+        app.processEvents()
+    late.stop()
+    dump.close()
+    _, _, samples = read_dump(dump.path)
+    lates = [s["value"] for s in samples if s["sample"] == "late"]
+    assert len(lates) > 3 and max(lates) >= 230 and min(lates) < 230

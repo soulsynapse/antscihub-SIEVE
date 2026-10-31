@@ -9,6 +9,7 @@ ground. The transport, the decoder, the worker and the memo are as they were: th
 the memo and never waits on the decoder. It opens with no video and never prompts.
 """
 import os
+import time
 import traceback
 
 import cv2
@@ -25,8 +26,30 @@ from .pane import Pane
 from .registry import Entry
 from .theme import GAP, PAD
 from .timeline import Timeline
+from .trace import Dump
 from .widgets import Trace
 from .worker import Worker
+
+DUMP_ENV = "SIEVE_DUMP"     # names the file every video opened in this process dumps its stream to
+
+
+class Lateness(QTimer):
+    """Samples how late the GUI thread's timer fires into a dump, while one is attached: a tick that
+    lands long after it was due says the main thread was blocked that long, by what the dump's other
+    lines may show. It measures and draws nothing; see spec/performance-monitor.md."""
+
+    def __init__(self, dump, interval_ms=100, parent=None):
+        super().__init__(parent)
+        self.dump, self._due = dump, None
+        self.setTimerType(Qt.PreciseTimer)
+        self.timeout.connect(self._fired)
+        self.start(interval_ms)
+
+    def _fired(self):
+        now = time.perf_counter()
+        if self._due is not None:
+            self.dump.sample("late", max(0.0, (now - self._due) * 1000), now)
+        self._due = now + self.interval() / 1000
 
 DOCUMENT_FILTER = "SIEVE document (*.json);;All (*)"
 
@@ -227,6 +250,7 @@ class PlayerWindow(QMainWindow):
             modules = catalogue(source)[0]
         self.doc = None
         self.decoder = self.graph = self.worker = None
+        self.dump = self.lateness = None          # the stream's file and the GUI-thread sampler, while DUMP_ENV names a file
         self.fps, self.count = 30.0, 0
         self.row, self.playing, self.window_ = 0, False, (0, 0)
         self._resume = False  # playback to restore when a playhead drag ends
@@ -524,6 +548,9 @@ class PlayerWindow(QMainWindow):
         self._unload()
         self.decoder = decoder
         self.graph = Graph(self.doc, decoder, self.tools)
+        if os.environ.get(DUMP_ENV):
+            self.dump = Dump(self.graph, os.environ[DUMP_ENV])
+            self.lateness = Lateness(self.dump, parent=self)
         self.worker = Worker(self.graph)
         self.fps, self.count = self.graph.fps, self.graph.count
         ct = self.timeline.controls
@@ -554,6 +581,10 @@ class PlayerWindow(QMainWindow):
         if self.playing:
             self.toggle_play()
         self.worker.stop()
+        if self.dump is not None:
+            self.lateness.stop()
+            self.dump.close()
+            self.dump = self.lateness = None
         self.decoder.close()
         self.decoder = self.graph = self.worker = None
         self.results = {}

@@ -85,7 +85,7 @@ added, since the fields below triple the event's width.
   Check: the walk test that forces an eviction finds the eviction event, with bytes equal to the
   memo's change, and the sum of every entry's bytes less every eviction's equals the memo's bytes
   at the end.
-- [ ] The walk's progress is an event of its own kind, rows done and rows in the window, emitted
+- [x] The walk's progress is an event of its own kind, rows done and rows in the window, emitted
   by whoever drives the walk, the worker and `bench.py`, through the same callable. Stats consumes
   it from the stream and `walked()` goes, so there is one route for the fact and one entry point
   on Stats, `event`.

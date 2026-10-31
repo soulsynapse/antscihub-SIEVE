@@ -17,7 +17,7 @@ def fill(graph, n):
     t = time.perf_counter()
     for r in range(n):
         graph.walk_row(r)
-        stats.walked(r + 1)
+        graph.progress(r + 1, n)
     return time.perf_counter() - t
 
 

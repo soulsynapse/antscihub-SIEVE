@@ -138,13 +138,14 @@ class Event:
     node: str | None    # the node that ran, or read; None on a boundary
     row: int | None
     key: str | None     # the node's raw key, what the memo holds under
-    kind: str           # "run" | "cache" | "step" | "seek" | "sync" | "evict" | "uncache"
+    kind: str           # "run" | "cache" | "step" | "seek" | "sync" | "evict" | "uncache" | "progress"
     bytes: int          # the result's; what an eviction freed
     ms: float           # wall, exclusive of the runs this one opened
     t: float            # start, on the probe's clock (perf_counter); orders events across threads
     thread: str         # the emitting thread's name
     cpu_ms: float       # the thread's CPU time over the same span, exclusive likewise; wall far above it is a wait
     serves: str | None  # "scrub" | "walk": what the worker was doing; None off the worker (bench, tests)
+    length: int | None  # progress only: rows in the window, `row` being the rows done
 
 
 @dataclass
@@ -295,13 +296,18 @@ class Graph:
             plan = self._plan
         return self._compute(plan, nid, row, raw)
 
-    def _emit(self, kind, nid, row, key, nbytes, ms=0.0, t=None, cpu_ms=0.0):
+    def _emit(self, kind, nid, row, key, nbytes, ms=0.0, t=None, cpu_ms=0.0, length=None):
         """One Event to `on_event`, stamped here with what every event carries: its start, the
         thread. The probe passes the times it measured; a boundary or an eviction has none and is
         stamped now."""
         if self.on_event is not None:
             self.on_event(Event(nid, row, key, kind, nbytes, ms, time.perf_counter() if t is None else t,
-                                threading.current_thread().name, cpu_ms, getattr(self._probing, "serves", None)))
+                                threading.current_thread().name, cpu_ms, getattr(self._probing, "serves", None), length))
+
+    def progress(self, done, length):
+        """The walk's progress, `done` rows of `length`, as an event; whoever drives the walk, the
+        worker or bench.py, says so as each row lands, and a reader takes the rate from the stream."""
+        self._emit("progress", None, done, None, 0, length=length)
 
     def serving(self, what):
         """What the events this thread emits from here on served, "scrub" or "walk"; the worker says
@@ -372,10 +378,10 @@ class Graph:
 class Stats:
     """The probe's first consumer. Per node, the last figure and a running mean over the window the
     decoder's means use, blind to key, kind and bytes; beside them the series chain's time per emit,
-    the walk's rate in rows per second, and the decoder's and memo's own counters. Making one
-    installs it as the graph's `on_event`. Whoever drives the walk calls `walked(rows)` as rows
-    land. `snapshot()` is one plain dict, the only thing a reader gets: the window and bench.py read
-    the same and neither reaches into the runtime."""
+    the walk's rate in rows per second, read off the progress events, and the decoder's and memo's
+    own counters. Making one installs it as the graph's `on_event`; `event` is its one entry point.
+    `snapshot()` is one plain dict, the only thing a reader gets: the window and bench.py read the
+    same and neither reaches into the runtime."""
 
     def __init__(self, graph):
         self.graph = graph
@@ -388,15 +394,14 @@ class Stats:
         if ev.kind in ("sync", "evict", "uncache"):
             return
         with self._lock:
+            if ev.kind == "progress":
+                if self._walk and ev.row < self._walk[-1][1]:
+                    self._walk.clear()      # a new walk; the rate is this one's
+                self._walk.append((ev.t, ev.row))
+                return
             e = self._nodes.setdefault(ev.node, [0.0, None, 0])
             e[2] += 1
             e[0], e[1] = ev.ms, _mean(e[1], ev.ms, e[2])
-
-    def walked(self, rows):
-        with self._lock:
-            if self._walk and rows < self._walk[-1][1]:
-                self._walk.clear()          # a new walk; the rate is this one's
-            self._walk.append((time.perf_counter(), rows))
 
     def snapshot(self):
         g, d, m = self.graph, self.graph.decoder, self.graph.memo

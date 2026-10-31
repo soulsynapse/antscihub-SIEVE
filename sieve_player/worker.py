@@ -111,11 +111,13 @@ class Worker(QThread):
                         self._dens[nid][self._i] = density.fold(v)
                     self._i += 1
                     self.walked.emit(self._i, self._length)
+                    self.graph.progress(self._i, self._length)
                     if self._i % self.every == 0 or self._i == self._length:
                         self._emit_series()
             except IndexError:
                 self._length = self._i  # stream ended early; close the window there
                 self.walked.emit(self._i, self._length)
+                self.graph.progress(self._i, self._length)
                 self._emit_series()
             except Exception:
                 traceback.print_exc()

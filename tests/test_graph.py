@@ -295,6 +295,7 @@ def test_events_say_whether_they_served_the_scrub_or_the_walk():
     w.stop()
     served = {(ev.row, ev.serves) for ev in events if ev.node == "add"}
     assert (0, None) in served and (7, "scrub") in served and (9, "walk") in served
+    assert [(ev.row, ev.length) for ev in events if ev.kind == "progress"] == [(i, 10) for i in range(1, 11)]
     assert {ev.thread for ev in events if ev.serves} == {"worker"}
 
 
@@ -314,7 +315,7 @@ def test_stats_counts_everything_over_a_short_walk(tmp_path):
     g.compute("add", 30)                      # a jump: one seek
     for r in range(8):
         g.compute("add", r)
-        stats.walked(r + 1)
+        g.progress(r + 1, 8)
     g.compute("add", 7)                       # a memo hit: the last row walked is still held
     n = len(events)
     g.compute("video", 7)                     # a cache hit: the small cache still holds the last rows

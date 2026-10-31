@@ -14,7 +14,7 @@ def test_a_plane_is_shown_over_its_top_and_a_field_by_direction():
     plane = np.array([[0.0, 500.0], [1000.0, 250.0]], np.float32)
     img = to_qimage(plane)
     assert img.format() == QImage.Format_Grayscale8 and img.pixelColor(0, 1).value() == 255
-    assert to_qimage(plane, 2000.0).pixelColor(0, 1).value() == 127         # a running top from before
+    assert to_qimage(plane, 2000.0).pixelColor(0, 1).value() == 128         # a running top from before; 127.5 rounds
     assert to_qimage(np.array([[7, 250]], np.uint8)).pixelColor(1, 0).value() == 250
     field = np.zeros((2, 2, 2), np.float32)
     field[0, 0], field[1, 1] = (3.0, 0.0), (0.0, -4.0)

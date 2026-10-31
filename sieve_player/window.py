@@ -58,8 +58,7 @@ def to_qimage(a, top=None):
                          np.full(mag.shape, 255.0), np.clip(mag * (255.0 / top), 0, 255)]).astype(np.uint8)
         a = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
     elif a.dtype != np.uint8:
-        top = max(flow_top(a) if top is None else float(top), 1e-6)
-        a = np.clip(a.astype(np.float32) * (255.0 / top), 0, 255).astype(np.uint8)
+        a = over(a, flow_top(a) if top is None else top)
     a = np.ascontiguousarray(a)
     if a.ndim == 2:
         fmt = QImage.Format_Grayscale8
@@ -70,8 +69,17 @@ def to_qimage(a, top=None):
     return QImage(a.data, a.shape[1], a.shape[0], a.strides[0], fmt).copy()
 
 
-_HEAT = np.stack([np.interp(np.linspace(0, 1, 256), np.linspace(0, 1, len(theme.HEAT)), [c[k] for c in theme.HEAT])
-                  for k in (2, 1, 0)], axis=1).astype(np.uint8)   # BGR LUT over theme.HEAT
+def over(a, top):
+    """`a`, a measured plane, as uint8 over `top`: 0 at or below zero, 255 at `top` and above."""
+    a = np.asarray(a).astype(np.float32, copy=False)
+    return cv2.convertScaleAbs(cv2.max(a, 0.0), alpha=255.0 / max(float(top), 1e-6))   # abs, so zero the negatives first
+
+
+# BGRA LUT over theme.HEAT: the colour by value, alpha with it up to theme.HEAT_ALPHA. One cv2.LUT
+# over a four-channel index, in place of numpy fancy indexing and a dstack, which cost ~6x.
+_HEAT = np.dstack([np.stack([np.interp(np.linspace(0, 1, 256), np.linspace(0, 1, len(theme.HEAT)), [c[k] for c in theme.HEAT])
+                             for k in (2, 1, 0)], axis=1).reshape(256, 1, 3),
+                   (np.arange(256) * theme.HEAT_ALPHA).reshape(256, 1, 1)]).astype(np.uint8)
 
 
 def heat(a, top):
@@ -80,9 +88,8 @@ def heat(a, top):
     a = np.asarray(a)
     if a.ndim != 2:
         raise ValueError(f"cannot overlay array of shape {a.shape}")
-    v = np.where(a, 255, 0).astype(np.uint8) if a.dtype == bool         else np.clip(a.astype(np.float32) * (255.0 / max(float(top), 1e-6)), 0, 255).astype(np.uint8)
-    bgra = np.dstack([_HEAT[v], (v * theme.HEAT_ALPHA).astype(np.uint8)])
-    bgra = np.ascontiguousarray(bgra)
+    v = a.view(np.uint8) * np.uint8(255) if a.dtype == bool else over(a, top)
+    bgra = cv2.LUT(cv2.merge((v, v, v, v)), _HEAT)   # GRAY2BGRA would fix alpha at 255, so merge
     return QImage(bgra.data, a.shape[1], a.shape[0], bgra.strides[0], QImage.Format_ARGB32).copy()
 
 

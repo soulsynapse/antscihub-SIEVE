@@ -12,7 +12,7 @@ from dataclasses import asdict, fields
 
 from .graph import Event
 
-SPANS = ("run", "cache", "step", "seek")    # the kinds with a duration; the rest are instants
+SPANS = ("run", "error", "cache", "step", "seek")    # the kinds with a duration; the rest are instants
 
 
 class Dump:

@@ -23,7 +23,7 @@ def _key(*parts):
     return hashlib.sha1("|".join(map(str, parts)).encode()).hexdigest()[:16]
 
 
-WINDOW = 64     # rows a running mean spans; the decoder's step and seek means use the same
+WINDOW = 64     # rows a running mean spans; the decoder's step and seek means keep their own literal, see Decoder._mean
 
 
 def _mean(mean, x, n):
@@ -138,7 +138,7 @@ class Event:
     node: str | None    # the node that ran, or read; None on a boundary
     row: int | None
     key: str | None     # the node's raw key, what the memo holds under
-    kind: str           # "run" | "cache" | "step" | "seek" | "sync" | "evict" | "uncache" | "progress"
+    kind: str           # "run" | "error" | "cache" | "step" | "seek" | "sync" | "evict" | "uncache" | "progress"
     bytes: int          # the result's; what an eviction freed
     ms: float           # wall, exclusive of the runs this one opened
     t: float            # start, on the probe's clock (perf_counter); orders events across threads
@@ -323,7 +323,8 @@ class Graph:
         own work. The body sets `kind` and `bytes` on the yielded
         list, what only the call site knows: a tool's kind is "run", since a memo hit is not a run
         and emits nothing; the video read's is "cache", "step" or "seek", read off the decoder's
-        counters. Nothing when `on_event` is unset. `sync()` emits a "sync" event into the same
+        counters; a body that raises emits "error", with the time it took and no bytes, so a reader
+        tells a failed run from one that returned. Nothing when `on_event` is unset. `sync()` emits a "sync" event into the same
         stream, a boundary with no node, row or time, and the memo and decoder cache emit "evict"
         and "uncache" with the bytes freed. The worker wraps a series tool's run in this; `_compute`
         wraps a frame tool's and the video node's read."""
@@ -336,6 +337,9 @@ class Graph:
         t, c = time.perf_counter(), time.thread_time()
         try:
             yield ev
+        except BaseException:
+            ev[0] = "error"                  # the body raised: a tool failed, or the read ran off the stream's end
+            raise
         finally:
             total, cpu = time.perf_counter() - t, time.thread_time() - c
             inner, inner_cpu = stack.pop()
@@ -397,7 +401,7 @@ class Stats:
     def event(self, ev):
         if self._prev is not None:
             self._prev(ev)
-        if ev.kind in ("sync", "evict", "uncache"):
+        if ev.kind in ("sync", "evict", "uncache", "error"):
             return
         with self._lock:
             if ev.kind == "progress":

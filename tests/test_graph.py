@@ -18,6 +18,8 @@ class Dec:
     step_ms = seek_ms = None
 
     def read(self, row):
+        if row >= self.count:
+            raise IndexError(row)
         self.decodes += 1
         return np.full((4, 6, 3), row, np.uint8)
 
@@ -248,6 +250,11 @@ def test_probe_emits_once_per_run_exclusive_of_what_the_run_reads():
     g.sync()
     before, after = (ev.keys for ev in events if ev.kind == "sync")
     assert [n for n in after if after[n] != before[n]] == ["add"]              # what the drag changed, derived from two boundaries
+    stats = Stats(g)                                                           # chains onto the list
+    with pytest.raises(IndexError):
+        g.compute("add", 10)                                                   # past the fake stream's end: the video read raises
+    assert [(ev.node, ev.kind, ev.bytes) for ev in events[-3:]] == [("video", "error", 0), ("gray", "error", 0), ("add", "error", 0)]
+    assert "video" not in stats.snapshot()["nodes"]                            # a failed run is in the stream, not in the means
 
 
 def test_an_event_is_read_by_name_and_refused_short():

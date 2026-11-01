@@ -6,7 +6,7 @@ import numpy as np
 from PySide6.QtCore import QThread, Signal
 
 from . import density
-from .graph import Series, gated
+from .graph import Memo, Series, gated
 
 
 class Worker(QThread):
@@ -65,6 +65,7 @@ class Worker(QThread):
         return self._gen != self._walk_gen or self._i < self._length
 
     def run(self):
+        threading.current_thread().name = "worker"      # what the probe's events name as their thread
         while True:
             with self._cv:
                 while not (self._stop or self._want is not None or self._series_dirty or self._pending()):
@@ -76,12 +77,14 @@ class Worker(QThread):
                 dirty, self._series_dirty = self._series_dirty, False
             try:
                 if want is not None:
+                    self.graph.serving("scrub")
                     with self.graph.decoder.scrub():   # the display's jump lands on its own cursor, not the walk's
                         self.graph.compute(self.graph.shown, want)
                         if self.graph.over is not None:
                             self.graph.compute(self.graph.over, want)
                     self.rowReady.emit(want)
                     continue
+                self.graph.serving("walk")
                 if not self.graph.fed(self.graph.walk):
                     self._walk_gen, self._i = gen, self._length   # nothing reaches the walked node; wait for the next change
                     continue
@@ -95,7 +98,7 @@ class Worker(QThread):
                 if self._i < self._length:
                     row = self._start + self._i
                     out = np.asarray(self.graph.walk_row(row))
-                    planes = {nid: v for nid in self.graph.frame_nodes() if density.is_plane(v := self.graph.compute(nid, row, raw=True))}
+                    planes = {nid: v for nid in self.graph.frame_nodes() if (v := self.graph.density(nid, row)) is not None}
                     if self._stack is not None and (self._stack.shape[1:] != out.shape or self._stack.dtype != out.dtype
                                                     or planes.keys() != self._dens.keys()):
                         self._stack, self._dens, self._i = None, {}, 0   # the nodes or the shape changed under the walk; start over
@@ -105,14 +108,16 @@ class Worker(QThread):
                         self._dens = {nid: np.zeros((self._length, density.BINS), np.uint32) for nid in planes}
                     self._stack[self._i] = out
                     for nid, v in planes.items():
-                        self._dens[nid][self._i] = density.fold(v)
+                        self._dens[nid][self._i] = v
                     self._i += 1
                     self.walked.emit(self._i, self._length)
+                    self.graph.progress(self._i, self._length)
                     if self._i % self.every == 0 or self._i == self._length:
                         self._emit_series()
             except IndexError:
                 self._length = self._i  # stream ended early; close the window there
                 self.walked.emit(self._i, self._length)
+                self.graph.progress(self._i, self._length)
                 self._emit_series()
             except Exception:
                 traceback.print_exc()
@@ -135,7 +140,9 @@ class Worker(QThread):
                 series = Series(feeds[src], self.graph.key(src), start, fps)
             else:
                 continue            # the upstream tool did not hand out the signal it declared, or was skipped itself
-            results[nid], feeds[nid] = gated(tool.run(series, params), band)
+            with self.graph.probe(nid, start + self._i - 1, self.graph.key(nid)) as ev:
+                results[nid], feeds[nid] = gated(tool.run(series, params), band)
+                ev[1] = Memo._size(results[nid])
             if isinstance(results[nid], dict):
                 results[nid] = {**results[nid], "key": self.graph.key(nid)}   # the node's key beside its gate: what a tool that writes a file records
         self.seriesReady.emit(results, start, fps)

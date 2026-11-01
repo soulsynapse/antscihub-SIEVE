@@ -1,8 +1,9 @@
 """The density of a plane: a row's pixels counted into bins on a fixed log1p axis.
 
-v2's density plot, kept by the walk rather than wired: the worker folds every plane the walk
-computes into (T, BINS) counts, so the window holds a histogram per row however large
-the plane, and no row's picture depends on another row. v2 scaled its axis to the window's maximum,
+v2's density plot, kept by the walk rather than wired: the graph folds each plane it computes into
+(BINS,) counts, memoized beside the plane and probed on its node (see `Graph.density`), and the
+worker stacks them into (T, BINS), so the window holds a histogram per row however large the
+plane, and no row's picture depends on another row. v2 scaled its axis to the window's maximum,
 which is why every change there rebinned the whole window; here a window move is a slice. The axis is
 the integers up to a knee and log1p above it, to 2**24, past any gray-units-squared measure: an integer
 plane such as a gray image or a difference then has no empty bin between its values, which a log axis

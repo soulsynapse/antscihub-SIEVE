@@ -17,6 +17,7 @@ TOOLS = [file, gray]
 
 class Dec:
     fps, count = 30.0, 3
+    decodes = seeks = 0
 
     def __init__(self, path):
         self.path = path

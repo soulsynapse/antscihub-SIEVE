@@ -42,7 +42,9 @@ class Decoder:
         self._cache_lock = threading.Lock()     # the dict only: a GUI peek never waits on a decode
         self._cap_lock = threading.Lock()       # the captures and the cursor in use
         self.decodes = self.seeks = 0
+        self.reads = self.cache_hits = 0        # read() calls, and those the cache answered
         self.step_ms = self.seek_ms = None      # running means of what a step and a seek cost on this file
+        self.on_evict = None                    # (row, bytes) for each frame the cache drops, after the lock
 
     @contextmanager
     def scrub(self):
@@ -60,9 +62,19 @@ class Decoder:
         with self._cache_lock:
             return self._cache.get(row)
 
+    @property
+    def cache_bytes(self):
+        return self._cache_bytes
+
+    @property
+    def cache_limit(self):
+        return self._cache_limit
+
     def read(self, row) -> np.ndarray:
+        self.reads += 1
         f = self.cached(row)
         if f is not None:
+            self.cache_hits += 1
             return f
         with self._cap_lock:
             cur = self._cursors[self._use]
@@ -105,6 +117,7 @@ class Decoder:
         return x if mean is None else mean + (x - mean) / min(n, 64)
 
     def _put(self, row, bgr):
+        gone = []
         with self._cache_lock:
             if row in self._cache:
                 self._cache.move_to_end(row)
@@ -112,8 +125,12 @@ class Decoder:
             self._cache[row] = bgr
             self._cache_bytes += bgr.nbytes
             while self._cache_bytes > self._cache_limit and len(self._cache) > 1:
-                _, old = self._cache.popitem(last=False)
+                r, old = self._cache.popitem(last=False)
                 self._cache_bytes -= old.nbytes
+                gone.append((r, old.nbytes))
+        if self.on_evict is not None:
+            for r, n in gone:
+                self.on_evict(r, n)
 
     def close(self):
         for cur in self._cursors.values():

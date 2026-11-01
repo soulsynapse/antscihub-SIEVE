@@ -1,22 +1,32 @@
 """The runtime: wiring, fan-out, keys, rewiring under a worker, and the series node."""
 import threading
 import time
+from contextlib import nullcontext
+from dataclasses import fields
 from types import SimpleNamespace as Tool
 
 import numpy as np
+import pytest
 
 from sieve_player import document as D
-from sieve_player.graph import Graph, gated
+from sieve_player.graph import Event, Graph, Stats, gated
 
 
 class Dec:
     path, fps, count = "fake.mp4", 30.0, 10
+    decodes = seeks = reads = cache_hits = cache_bytes = 0
+    step_ms = seek_ms = None
 
     def read(self, row):
+        if row >= self.count:
+            raise IndexError(row)
+        self.decodes += 1
         return np.full((4, 6, 3), row, np.uint8)
 
     def cached(self, row):
         return None
+
+    scrub = staticmethod(nullcontext)
 
 
 def tool(name, expects="gray", produces="gray", fn=None, kind="frame"):
@@ -216,3 +226,133 @@ def test_walk_row_is_the_walked_node_through_the_heads_fold():
     doc.connect("video", "head")
     g.sync()
     assert g.walk_row(3) is None
+
+
+def test_probe_emits_once_per_run_exclusive_of_what_the_run_reads():
+    """gray and add each wait; add reads gray. The figure add gets is its own wait, not the pair's."""
+    slow_gray = tool("gray", "bgr", "gray", lambda f, p: (time.sleep(0.01), f[..., 0])[1])
+    slow_add = tool("add", fn=lambda f, p: (time.sleep(0.01), f + 1)[1])
+    g = Graph(D.from_tools([slow_gray, slow_add]), Dec(), {t.NAME: t for t in (slow_gray, slow_add)})
+    events = []
+    g.on_event = events.append
+    for r in range(3):
+        g.compute("add", r)
+    assert sorted((ev.node, ev.row) for ev in events) == sorted((n, r) for n in ("video", "gray", "add") for r in range(3))
+    ms = {ev.node: ev.ms for ev in events if ev.row == 0}
+    assert ms["add"] < ms["gray"] + ms["add"] and ms["add"] < 15
+    assert {(ev.kind, ev.bytes) for ev in events if ev.node == "add"} == {("run", 4 * 6)} and events[0].key == g.key("video")
+    g.compute("add", 0)
+    g.compute("video", 0)
+    assert [(ev.node, ev.kind) for ev in events[9:]] == [("video", "step")]   # a memo hit is not a run; the video's read is a read
+    g.sync()
+    assert events[-1].kind == "sync" and len(events) == 11                     # a boundary, between the runs either side
+    g.doc.node("add").params["k"] = 2
+    g.sync()
+    before, after = (ev.keys for ev in events if ev.kind == "sync")
+    assert [n for n in after if after[n] != before[n]] == ["add"]              # what the drag changed, derived from two boundaries
+    stats = Stats(g)                                                           # chains onto the list
+    with pytest.raises(IndexError):
+        g.compute("add", 10)                                                   # past the fake stream's end: the video read raises
+    assert [(ev.node, ev.kind, ev.bytes) for ev in events[-3:]] == [("video", "error", 0), ("gray", "error", 0), ("add", "error", 0)]
+    assert "video" not in stats.snapshot()["nodes"]                            # a failed run is in the stream, not in the means
+
+
+def test_an_event_is_read_by_name_and_refused_short():
+    full = {f.name: None for f in fields(Event)} | {"node": "add", "kind": "run", "ms": 1.0}
+    with pytest.raises(TypeError):
+        Event(**{k: v for k, v in full.items() if k != "ms"})       # a field missing: no default fills it in
+    stats = Stats(Graph(fan_out(), Dec(), TOOLS))
+    with pytest.raises(AttributeError):
+        stats.event(tuple(full.values()))                           # a tuple is not an event; nothing is read by position
+    stats.event(Event(**full))
+    assert stats.snapshot()["nodes"]["add"]["n"] == 1
+
+
+def test_events_carry_start_thread_and_cpu_so_a_reader_sees_overlap_and_waiting():
+    """Two threads each run a tool that sleeps; the events' starts and durations alone show the
+    runs overlapped, the thread names say which was whose, and a sleep is wall time with no CPU."""
+    nap = tool("add", fn=lambda f, p: (time.sleep(0.03), f + 1)[1])
+    g = Graph(D.from_tools([gray, nap]), Dec(), {**TOOLS, "add": nap})
+    events = []
+    g.on_event = events.append
+    ts = [threading.Thread(target=g.compute, args=("add", r), name=f"t{r}") for r in range(2)]
+    [t.start() for t in ts], [t.join() for t in ts]
+    a, b = sorted((ev for ev in events if ev.node == "add"), key=lambda ev: ev.t)
+    assert {a.thread, b.thread} == {"t0", "t1"} and b.t < a.t + a.ms / 1000       # b began before a ended
+    assert a.cpu_ms < a.ms / 3 and 25 < a.ms < 100
+    assert all(ev.t >= a.t for ev in events if ev.thread == a.thread and ev.node != "add")   # its reads started inside it, not before
+
+
+def test_events_say_whether_they_served_the_scrub_or_the_walk():
+    """The worker marks what it is doing; a display row asked for mid-walk comes back marked the
+    scrub's among the walk's rows, on a thread named for the worker. Off the worker, nothing is marked."""
+    from PySide6.QtWidgets import QApplication
+    from sieve_player.worker import Worker
+    QApplication.instance() or QApplication([])
+    slow = tool("add", fn=lambda f, p: (time.sleep(0.005), f + 1)[1])
+    g = Graph(D.from_tools([gray, slow]), Dec(), {**TOOLS, "add": slow})
+    events = []
+    g.on_event = events.append
+    g.compute("add", 0)
+    w = Worker(g)
+    w.set_window(0, 10)
+    w.start()
+    time.sleep(0.015)
+    w.request_row(7)
+    for _ in range(500):
+        if any(ev.node == "add" and ev.row == 9 for ev in events):
+            break
+        time.sleep(0.01)
+    w.stop()
+    served = {(ev.row, ev.serves) for ev in events if ev.node == "add"}
+    assert (0, None) in served and (7, "scrub") in served and (9, "walk") in served
+    assert [(ev.row, ev.length) for ev in events if ev.kind == "progress"] == [(i, 10) for i in range(1, 11)]
+    assert {ev.thread for ev in events if ev.serves} == {"worker"}
+
+
+def test_stats_counts_everything_over_a_short_walk(tmp_path):
+    import cv2
+    from sieve_player.decoder import Decoder
+    path = str(tmp_path / "v.avi")
+    w = cv2.VideoWriter(path, cv2.VideoWriter_fourcc(*"MJPG"), 30, (64, 48))
+    for i in range(40):
+        w.write(np.full((48, 64, 3), i, np.uint8))
+    w.release()
+    doc = D.from_tools([gray, add], path)
+    g = Graph(doc, Decoder(path, cache_bytes=40 << 10), TOOLS, memo_bytes=40 << 10)   # room for a few rows, not the walk: both stores evict
+    stats = Stats(g)
+    events = []
+    g.on_event = lambda ev: (events.append(ev), stats.event(ev))
+    g.compute("add", 30)                      # a jump: one seek
+    for r in range(8):
+        g.compute("add", r)
+        g.progress(r + 1, 8)
+    g.compute("add", 7)                       # a memo hit: the last row walked is still held
+    n = len(events)
+    g.compute("video", 7)                     # a cache hit: the small cache still holds the last rows
+    g.compute("video", 20)                    # a seek
+    assert [ev.kind for ev in events[n:] if ev.kind != "uncache"] == ["cache", "seek"]
+    held = sum(ev.bytes for ev in events if ev.kind == "run") - sum(ev.bytes for ev in events if ev.kind == "evict")
+    assert held == g.memo.bytes and {(ev.node, ev.key) for ev in events if ev.kind == "evict"} == {(None, g.key("gray")), (None, g.key("add"))}
+    assert {ev.key for ev in events if ev.kind == "uncache"} == {g.key("video")} and len(events) > n + 2
+    assert sum(ev.bytes for ev in events if ev.kind == "uncache") == 9216 * (g.decoder.decodes - len(g.decoder._cache))
+    s = stats.snapshot()
+    assert {nid: v["n"] for nid, v in s["nodes"].items()} == {"video": 11, "gray": 9, "add": 9}
+    assert s["walk_rows_s"] > 0 and s["step_ms"] > 0 and s["seek_ms"] > 0 and s["decodes"] and s["seeks"]
+    assert s["memo_mb"] > 0 and s["cache_mb"] > 0 and 0 < s["memo_hit"] < 1 and 0 < s["cache_hit"] < 1
+    assert s["series_ms"] is None and s["evictions"] > 0    # no chain in this document
+    g.decoder.close()
+
+
+def test_a_density_is_folded_once_under_the_node_and_memoized_beside_its_plane():
+    g = Graph(fan_out(), Dec(), TOOLS)
+    seen = []
+    g.on_event = seen.append
+    counts = g.density("gray", 3)
+    assert counts.shape == (256,) and counts.sum() == 4 * 6
+    folds = [ev for ev in seen if ev.kind == "fold"]
+    assert [(ev.node, ev.row) for ev in folds] == [("gray", 3)] and folds[0].bytes == counts.nbytes
+    assert folds[0].key != g.key("gray") and folds[0].ms >= 0
+    seen.clear()
+    assert (g.density("gray", 3) == counts).all() and seen == []           # held: no run, no fold
+    assert g.density("video", 3) is None and g.density("nowhere", 3) is None and seen == []

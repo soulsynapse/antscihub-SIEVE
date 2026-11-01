@@ -436,4 +436,4 @@ class Pipeline(View):
         p.end()
 
 
-VIEWS = {"text": Text, "bars": Bars, "stacked": Stacked, "tiles": Tiles, "pipeline": Pipeline}
+VIEWS = {"bars": Bars, "stacked": Stacked, "tiles": Tiles, "pipeline": Pipeline, "text": Text}  # the drop-down's order; opens on the first

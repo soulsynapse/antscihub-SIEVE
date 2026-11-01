@@ -29,7 +29,13 @@ def _hush_c_stderr():
         return False
     try:
         kept = os.dup(2)
-        os.dup2(os.open(os.devnull, os.O_WRONLY), 2)
+        null = os.open(os.devnull, os.O_WRONLY)
+        os.dup2(null, 2)
+        if sys.platform == "win32":
+            import ctypes
+            import msvcrt
+            # the plugin links msvcrt, whose stderr is the Win32 handle when the plugin loads
+            ctypes.windll.kernel32.SetStdHandle(-12, msvcrt.get_osfhandle(null))
     except OSError:
         return False
     old = sys.stderr
@@ -43,6 +49,8 @@ def play(source, path=None, title="SIEVE", tools=()):
     opened against `tools`, the tools its nodes may name. A tool is its module, or the registry's
     entry for it, so one that failed to import is still listed. With a video `path` it loads it;
     without, it opens on whatever the document names, or empty, and never prompts."""
+    from . import decoder
+    decoder.QUIET = _hush_c_stderr() or decoder.QUIET   # before any capture: the plugin keeps the stderr it loads with
     if sys.platform == "win32":
         # DirectWrite ignores the hinting preference and draws ClearType colour fringes on a dark
         # ground; FreeType honours full hinting and renders grayscale. Must be set before the app.
@@ -58,8 +66,6 @@ def play(source, path=None, title="SIEVE", tools=()):
         QApplication.setHighDpiScaleFactorRoundingPolicy(
             Qt.HighDpiScaleFactorRoundingPolicy.Round)  # 125% becomes 100%, 150% becomes 200%: no fractional blur
         app = QApplication(sys.argv)
-    from . import decoder
-    decoder.QUIET = _hush_c_stderr() or decoder.QUIET
     import faulthandler
     faulthandler.enable()   # a crash in cv2 or Qt prints every thread's Python stack instead of nothing
     from .dev import qt_trace

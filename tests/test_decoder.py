@@ -40,6 +40,17 @@ def test_gray_output_is_converted_before_the_cache_and_a_switch_empties_it(video
         d.scale = 1.5
 
 
+def test_a_raw_stream_with_no_frame_count_is_refused(video, tmp_path):
+    import shutil
+    import subprocess
+    ffmpeg = shutil.which("ffmpeg") or pytest.skip("no ffmpeg to write a raw stream")
+    raw = tmp_path / "v.h264"
+    subprocess.check_call([ffmpeg, "-y", "-loglevel", "error", "-i", str(video), "-frames:v", "10",
+                          "-c:v", "libx264", "-f", "h264", str(raw)])
+    with pytest.raises(IOError, match="remux"):
+        Decoder(raw)
+
+
 def test_scrub_leaves_the_walk_cursor_alone(video):
     d = Decoder(video, cache_bytes=10 * 64 * 48 * 3)
     for r in range(5):

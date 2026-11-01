@@ -44,6 +44,9 @@ class Decoder:
             raise IOError(f"cannot open {path}")
         self.cap = walk.cap
         self.count = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        if self.count <= 0:
+            raise IOError(f"no frame count in {path}: a raw stream has no index and cannot be seeked; "
+                          "remux it, ffmpeg -i in.h264 -c copy out.mp4")
         self.fps = self.cap.get(cv2.CAP_PROP_FPS) or 30.0
         self.width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         self.height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))

@@ -218,7 +218,7 @@ class Worker(QThread):
         if self._cstack is None:
             if self._clen * out.nbytes > CLIP_BYTES:
                 self.clipRefused.emit(f"the clip's stack would be {self._clen * out.nbytes / 2**30:.1f} GB; "
-                                      f"{self.graph.series} has no fold()")
+                                      f"{', '.join(self.graph.heads)} do not share a fold()")
                 self._clen = 0
                 self.clipWalked.emit(0, 0)
                 return
@@ -251,9 +251,13 @@ class Worker(QThread):
         if not chain:
             return None
         results, feeds, fps = {}, {}, self.graph.fps
-        for i, (nid, tool, params, band, src) in enumerate(chain):
-            if i == 0:
-                series = Series(stack, self.graph.key(src), start, fps)
+        heads, folded, own = set(self.graph.heads), self.graph.fold is not None, {}
+        for nid, tool, params, band, src in chain:
+            if nid in heads:
+                fold = None if folded else getattr(tool, "fold", None)
+                if fold is not None and id(fold) not in own:
+                    own[id(fold)] = np.stack([fold(row) for row in stack]) if len(stack) else np.zeros((0, 0))
+                series = Series(stack if fold is None else own[id(fold)], self.graph.key(src), start, fps)
             elif feeds.get(src) is not None:
                 series = Series(feeds[src], self.graph.key(src), start, fps)
             else:

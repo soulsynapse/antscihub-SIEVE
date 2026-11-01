@@ -206,7 +206,7 @@ class Graph:
         decoder.on_evict = lambda row, n: self._emit("uncache", None, row, self._base, n)
         self._plan = {}
         self.shown = self.over = self.series = None
-        self.chain, self.unrun_series = [], []
+        self.chain, self.heads, self.unrun_series = [], [], []
         self.sync()
 
     @property
@@ -263,11 +263,14 @@ class Graph:
                                 up_key(n.id) if src else None, fed(doc, n.id, tools), srcs, static(tool))
             if kind == "series":
                 series.append(n.id)
-        # The head is the first series node reading a frame node: it runs on the walked stack. The
-        # chain is it and every fed series node wired on from a chain node, which run on the
-        # upstream result's signal in this order. Any other series node is unrun.
-        heads = [s for s in series if plan[s].src is None or plan[plan[s].src].kind != "series"]
-        chain = heads[:1]
+        # The walked node is what the first series node reading a frame node reads. The heads are
+        # every series node reading it: they run on the stack, folded only when all of them fold the
+        # same way, else each folds the raw rows itself at run. The chain is the heads and every fed
+        # series node wired on from a chain node, on the upstream result's signal. A series node
+        # reading another frame node is unrun.
+        roots = [s for s in series if plan[s].src is None or plan[plan[s].src].kind != "series"]
+        heads = [s for s in roots if plan[s].src == plan[roots[0]].src and (plan[s].fed or s == roots[0])] if roots else []
+        chain = list(heads)
         for nid in chain:
             chain += [s for s in series if plan[s].src == nid and plan[s].fed and s not in chain]
         with self._lock:
@@ -276,6 +279,7 @@ class Graph:
             # The overlay is a node the frame can be heated with: one plane, so only an OVERLAYABLE product.
             self.over = doc.overlay if doc.overlay in plan and produces(doc, tools, doc.overlay) in OVERLAYABLE else None
             self.series = chain[0] if chain else None
+            self.heads = heads
             self.chain, self.unrun_series = chain, [s for s in series if s not in chain]
         # A boundary in the stream: what runs next ran under a new plan, whose keys it carries.
         self._emit("sync", None, None, None, 0, keys={nid: e.key for nid, e in plan.items()})
@@ -294,12 +298,23 @@ class Graph:
         with self._lock:
             return self._walk()
 
-    def walk_row(self, row):
-        """The walked node at `row` as the worker stacks it: through the head's fold() when it has one,
-        so what the window holds is what the series tool asked for and never the frame. Worker threads only."""
+    def _fold(self):
+        folds = {id(f): f for f in (getattr(self._plan[s].tool, "fold", None) for s in self.heads)}
+        return next(iter(folds.values())) if len(folds) == 1 else None
+
+    @property
+    def fold(self):
+        """The fold the walk stacks rows through: the heads' when every one of them has the same,
+        None when they differ or none has one, so that the stack holds the rows as they are."""
         with self._lock:
-            plan, nid = self._plan, self._walk()
-            fold = getattr(plan[self.series].tool, "fold", None) if self.series else None
+            return self._fold()
+
+    def walk_row(self, row):
+        """The walked node at `row` as the worker stacks it: through the heads' shared fold() when
+        they have one, so what the window holds is what the series tools asked for and never the
+        frame. Worker threads only."""
+        with self._lock:
+            plan, nid, fold = self._plan, self._walk(), self._fold()
         out = self._compute(plan, nid, row)
         return out if fold is None or out is None else fold(out)
 

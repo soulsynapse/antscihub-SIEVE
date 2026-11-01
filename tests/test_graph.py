@@ -231,11 +231,20 @@ def test_rewire_during_walk():
     assert not errors and (g.compute("slow", 0) == g.compute("gray", 0) + 100).all()
 
 
-def test_two_series_nodes_one_runs():
-    s1, s2 = tool("s1", kind="series", produces=None), tool("s2", kind="series", produces=None)
+def test_series_nodes_reading_the_walked_node_are_all_heads():
+    """Two series nodes on gray both run; one on a different frame node is unrun; the fold is shared
+    only when the heads agree on it."""
+    s1, s2, s3 = (tool(n, kind="series", produces=None) for n in ("s1", "s2", "s3"))
+    s1.fold = s2.fold = lambda frame: np.asarray([frame.sum()])
     doc = D.from_tools([gray, s1, s2])
-    g = Graph(doc, Dec(), {**TOOLS, "s1": s1, "s2": s2})
-    assert g.series == "s1" and g.chain == ["s1"] and g.unrun_series == ["s2"] and g.walk == "gray"
+    doc.add_node("add", (0, 300)); doc.connect("gray", "add")
+    doc.add_node("s3", (0, 400)); doc.connect("add", "s3")
+    g = Graph(doc, Dec(), {**TOOLS, "s1": s1, "s2": s2, "s3": s3})
+    assert g.series == "s1" and g.heads == g.chain == ["s1", "s2"] and g.unrun_series == ["s3"] and g.walk == "gray"
+    assert g.fold is s1.fold and g.walk_row(2).tolist() == [24 * 3]
+    s2.fold = lambda frame: np.asarray([frame.max()])
+    g.sync()
+    assert g.fold is None and g.walk_row(2).shape == (4, 6)
     doc.connect("video", "s1")                  # "bgr" into a series node that expects "gray"
     g.sync()
     assert g.walk is None
@@ -508,3 +517,29 @@ def test_a_shown_table_walks_without_a_series_node():
         time.sleep(0.01)
     w.stop()
     assert walked[-1] == (6, 6) and len(walked) <= 7
+
+
+def test_two_heads_with_different_folds_each_run_on_their_own_folding():
+    """count folds, size does not: both read the same table node and both hand out a signal."""
+    from PySide6.QtWidgets import QApplication
+    from sieve_player.worker import Worker
+    from tools import count, size
+    QApplication.instance() or QApplication([])
+    table = tool("table", produces="blobs", fn=lambda f, p: np.array([(a,) for a in range(1, int(f.flat[0]) + 2)], dtype=[("area", "<i4")]))
+    doc = D.from_tools([gray, table, count])
+    doc.add_node("size", (0, 400), size.DEFAULTS); doc.connect("table", "size")
+    g = Graph(doc, Dec(), {**TOOLS, "table": table, "count": count, "size": size})
+    assert g.chain == ["count", "size"] and g.fold is None
+    w = Worker(g)
+    got = []
+    w.seriesReady.connect(lambda r, s, fps: got.append(r))
+    w.set_window(0, 4)
+    w.start()
+    for _ in range(500):
+        QApplication.processEvents()
+        if got and len(got[-1].get("size", {}).get("signal", ())) == 4:
+            break
+        time.sleep(0.01)
+    w.stop()
+    assert got[-1]["count"]["signal"].tolist() == [2, 3, 4, 5]          # gray is row + 1; the table has row + 2 records
+    assert got[-1]["size"]["signal"].tolist() == [1.5, 2, 2.5, 3]       # mean area of 1..n

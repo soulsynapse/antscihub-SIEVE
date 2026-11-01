@@ -75,12 +75,15 @@ How the player treats a tool, as `sieve_player/graph.py`, `pane.py` and `window.
   a `"same"` output follows. A frame tool may declare more in `INPUTS`, each a wire of its own, and
   `run` reads one as `frames(row, name)`. A node the video does not reach through every frame
   input, over wires whose types fit, computes as None, and so does everything downstream of it.
-- Series nodes run as a chain: the first one reading a frame node runs on the stacked window, and
-  each fed series node wired on from a chain node runs after it on the upstream result's
-  `"signal"`. A second series node reading a frame node does not run.
+- Series nodes run as a chain: the walked node is what the first series node reading a frame node
+  reads, every series node reading that node is a head and runs on the stacked window, and each
+  fed series node wired on from a chain node runs after it on the upstream result's `"signal"`. A
+  series node reading another frame node does not run.
 - A series tool's `fold(frame)` runs on the worker as each row is computed and takes no params: a
   change to the tool's params reruns `run` on the stack already folded, so a fold must hold every
-  number any params could ask for (reduce folds a row to its sum, max, count and size).
+  number any params could ask for (reduce folds a row to its sum, max, count and size). The walk
+  folds only when every head folds the same way; otherwise it stacks the rows as they are and each
+  head with a fold folds them at run, and the clip walk refuses a stack of frames.
 
 Facets the player reads when a tool has them:
 

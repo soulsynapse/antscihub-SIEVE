@@ -592,8 +592,10 @@ class PlayerWindow(QMainWindow):
             if self.pane.video is not None:
                 self.pane.video.show_none(f"{sel.id} picks the video; unwire it to choose by hand")
             return
-        if self._open_video(path):
-            self.doc.video = os.fspath(path)
+        was = self.doc.video
+        self.doc.video = os.fspath(path)   # before opening: the open syncs, and the sync reopens what the document names
+        if not self._open_video(path):
+            self.doc.video = was
 
     def _open_video(self, path):
         try:

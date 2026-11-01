@@ -193,7 +193,10 @@ class Display(QWidget):
                 p.setPen(theme.qgray(theme.INK_2))
                 p.drawText(self.rect(), Qt.AlignCenter, self.reason)
             return
-        pix = self._pix.scaled(self.size(), Qt.KeepAspectRatio, Qt.FastTransformation)
+        shrinking = self._pix.width() > self.width() or self._pix.height() > self.height()
+        # nearest-neighbour drops rows and columns when shrinking, which reads as stripes; grown, it shows each pixel as it is
+        pix = self._pix.scaled(self.size(), Qt.KeepAspectRatio,
+                               Qt.SmoothTransformation if shrinking else Qt.FastTransformation)
         x, y = (self.width() - pix.width()) // 2, (self.height() - pix.height()) // 2
         p.drawPixmap(x, y, pix)
         if self._over is not None:

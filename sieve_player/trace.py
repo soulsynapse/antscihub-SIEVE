@@ -3,8 +3,9 @@ header line of what no event carries, so a reader derives from the file what a r
 derive and a file a crash closed reads back to its last complete line. Beside the events the dump
 holds samples, lines that measure where the probe only carries: the process's resident memory at
 each progress event, and how late the GUI thread's timer fired, which the window reports while a
-dump is attached. `to_trace()` converts one to the Chrome trace event format, for Perfetto or
-chrome://tracing.
+dump is attached. The emitting thread only appends each event to a list; a writer thread encodes
+and writes a batch at a time. `to_trace()` converts a dump to the Chrome trace event format, for
+Perfetto or chrome://tracing.
 
     .venv\\Scripts\\python -m sieve_player.trace dump.jsonl trace.json
 """
@@ -16,31 +17,34 @@ from dataclasses import fields
 
 from .graph import Event
 
-SPANS = ("run", "error", "cache", "step", "seek")    # the kinds with a duration; the rest are instants
+SPANS = ("run", "error", "cache", "step", "seek", "dump")    # the kinds with a duration; the rest are instants
 FIELDS = tuple(f.name for f in fields(Event))
 
 
 def as_dict(ev):
-    return {n: getattr(ev, n) for n in FIELDS}      # asdict() deep-copies; this is on the emitting thread, per event
+    return {n: getattr(ev, n) for n in FIELDS}      # asdict() deep-copies
+
+
+if sys.platform == "win32":
+    import ctypes
+    from ctypes import wintypes
+
+    class _Counters(ctypes.Structure):
+        _fields_ = [("cb", wintypes.DWORD), ("PageFaultCount", wintypes.DWORD)] + [
+            (n, ctypes.c_size_t) for n in ("PeakWorkingSetSize", "WorkingSetSize", "QuotaPeakPagedPoolUsage",
+                                           "QuotaPagedPoolUsage", "QuotaPeakNonPagedPoolUsage", "QuotaNonPagedPoolUsage",
+                                           "PagefileUsage", "PeakPagefileUsage")]
+    _k32 = ctypes.WinDLL("kernel32")       # own handle: argtypes set on the shared windll.kernel32 are process-global
+    _k32.GetCurrentProcess.restype = wintypes.HANDLE
+    _k32.K32GetProcessMemoryInfo.argtypes = [wintypes.HANDLE, ctypes.POINTER(_Counters), wintypes.DWORD]
 
 
 def rss():
     """The process's resident set in bytes, as the OS reports it now."""
     if sys.platform == "win32":
-        import ctypes
-        from ctypes import wintypes
-
-        class Counters(ctypes.Structure):
-            _fields_ = [("cb", wintypes.DWORD), ("PageFaultCount", wintypes.DWORD)] + \
-                       [(n, ctypes.c_size_t) for n in ("PeakWorkingSetSize", "WorkingSetSize", "QuotaPeakPagedPoolUsage",
-                                                        "QuotaPagedPoolUsage", "QuotaPeakNonPagedPoolUsage", "QuotaNonPagedPoolUsage",
-                                                        "PagefileUsage", "PeakPagefileUsage")]
-        k = ctypes.windll.kernel32
-        k.GetCurrentProcess.restype = wintypes.HANDLE
-        k.K32GetProcessMemoryInfo.argtypes = [wintypes.HANDLE, ctypes.POINTER(Counters), wintypes.DWORD]
-        c = Counters()
+        c = _Counters()
         c.cb = ctypes.sizeof(c)
-        k.K32GetProcessMemoryInfo(k.GetCurrentProcess(), ctypes.byref(c), c.cb)
+        _k32.K32GetProcessMemoryInfo(_k32.GetCurrentProcess(), ctypes.byref(c), c.cb)
         return int(c.WorkingSetSize)
     try:
         with open("/proc/self/statm") as f:
@@ -51,33 +55,56 @@ def rss():
 
 
 class Dump:
-    """Writes every event to `path` on the thread that emits it, through a buffered file, and passes
-    it on to whatever `on_event` was before, so Stats keeps reading. `close()` restores the chain.
-    Writes are serialised under a lock, the worker and the GUI thread both emitting, and an event
-    that reaches a closed dump, a worker mid-emit as the GUI closes it, is dropped and still passed on."""
+    """Writes every event to `path`, and passes it on to whatever `on_event` was before, so Stats
+    keeps reading; `close()` restores the chain. The emitting thread only appends the event to a
+    list; a writer thread takes the list every `period` seconds, encodes each event, samples the
+    resident set at each progress event, and writes through a buffered file. One handoff per batch
+    rather than one per event is what keeps the writer from stealing the GIL at every emit. A crash
+    loses at most the last period's events and the file's buffer. An event that reaches a closed
+    dump, a worker mid-emit as the GUI closes it, is dropped and still passed on."""
 
-    def __init__(self, graph, path):
+    def __init__(self, graph, path, period=0.1):
         self.graph, self.path = graph, path
         d = graph.decoder
         self._f = open(path, "w", encoding="utf-8", buffering=1 << 16)
-        self._lock = threading.Lock()
+        self._buf = []                  # swapped out whole by the writer; list.append is atomic under the GIL
+        self._stop = threading.Event()
+        self._closed = False
         self._write({"path": d.path, "fps": d.fps, "count": d.count,
                      "width": getattr(d, "width", None), "height": getattr(d, "height", None),
                      "memo_bytes": graph.memo.limit, "cache_bytes": getattr(d, "cache_limit", None),
                      "fields": list(FIELDS)})
+        self._writer = threading.Thread(target=self._drain, args=(period,), name="dump", daemon=True)
         self._prev = graph.on_event
         graph.on_event = self.event
+        self._writer.start()
 
     def _write(self, d):
-        line = json.dumps(d, separators=(",", ":")) + "\n"
-        with self._lock:
-            if not self._f.closed:
-                self._f.write(line)
+        return self._f.write(json.dumps(d, separators=(",", ":")) + "\n")
+
+    def _drain(self, period):
+        while True:
+            stopped = self._stop.wait(period)
+            batch, self._buf = self._buf, []
+            if batch:
+                t, c, n = time.perf_counter(), time.thread_time(), 0
+                for item in batch:
+                    if isinstance(item, Event):
+                        n += self._write(as_dict(item))
+                        if item.kind == "progress":
+                            n += self._write({"sample": "rss", "value": rss(), "t": item.t})
+                    else:
+                        n += self._write(item)
+                # The writer's own cost as a span on its own thread, so a reader sees a node inflated or
+                # a GUI tick late while the writer held the GIL for what it is.
+                self._write(as_dict(Event("dump", None, None, "dump", n, (time.perf_counter() - t) * 1000, t,
+                                          "dump", (time.thread_time() - c) * 1000, None, None, None)))
+            if stopped:
+                return
 
     def event(self, ev):
-        self._write(as_dict(ev))
-        if ev.kind == "progress":
-            self.sample("rss", rss(), ev.t)
+        if not self._closed:
+            self._buf.append(ev)
         if self._prev is not None:
             self._prev(ev)
 
@@ -85,13 +112,16 @@ class Dump:
         """A measurement into the dump beside the events: `name` and `value`, at `t` on the probe's
         clock, now when not given. The dump's own is "rss" at each progress event; the window's is
         "late", the ms its timer fired behind."""
-        self._write({"sample": name, "value": value, "t": time.perf_counter() if t is None else t})
+        if not self._closed:
+            self._buf.append({"sample": name, "value": value, "t": time.perf_counter() if t is None else t})
 
     def close(self):
         if self.graph.on_event == self.event:
             self.graph.on_event = self._prev
-        with self._lock:
-            self._f.close()
+        self._closed = True
+        self._stop.set()                # the writer drains what is queued, then returns; a later append is dropped
+        self._writer.join()
+        self._f.close()
 
 
 def read_dump(path):

@@ -138,7 +138,7 @@ class Event:
     node: str | None    # the node that ran, or read; None on a boundary
     row: int | None
     key: str | None     # the node's raw key, what the memo holds under
-    kind: str           # "run" | "error" | "cache" | "step" | "seek" | "sync" | "evict" | "uncache" | "progress"
+    kind: str           # "run" | "error" | "cache" | "step" | "seek" | "sync" | "evict" | "uncache" | "progress" | "dump"
     bytes: int          # the result's; what an eviction freed
     ms: float           # wall, exclusive of the runs this one opened
     t: float            # start, on the probe's clock (perf_counter); orders events across threads

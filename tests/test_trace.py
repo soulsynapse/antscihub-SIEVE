@@ -56,7 +56,9 @@ def test_a_recorder_derives_from_the_file(tmp_path):
     assert [ev.row for ev in progress] == list(range(1, 7)) * 2 and {ev.length for ev in progress} == {6}
     (t0, r0), (t1, r1) = (progress[0].t, progress[0].row), (progress[5].t, progress[5].row)
     assert (r1 - r0) / (t1 - t0) > 0                                                   # the walk's rate
-    assert all(ev.thread == "MainThread" and ev.serves is None for ev in events)
+    batches = [ev for ev in events if ev.kind == "dump"]
+    assert batches and all(ev.node == ev.thread == "dump" and ev.ms >= 0 and ev.bytes > 0 for ev in batches)   # the writer's own cost
+    assert all(ev.thread == "MainThread" and ev.serves is None for ev in events if ev.kind != "dump")
     assert [s["t"] for s in samples] == [ev.t for ev in progress] and all(s["sample"] == "rss" and s["value"] > 1 << 20 for s in samples)
 
 

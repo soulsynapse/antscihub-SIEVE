@@ -102,8 +102,13 @@ added, since the fields below triple the event's width.
   by a crash reads back to its last complete line. A separate function converts a dump to the
   Chrome trace event format, one complete event per run with its thread as the lane and the other
   fields as args, so Perfetto or chrome://tracing shows the timeline, self and total time per node
-  and the idle on each thread without a viewer of this repo's. The dump writes on the emitting
-  thread through a buffered file until the overhead line below says otherwise.
+  and the idle on each thread without a viewer of this repo's. The emitting thread only appends
+  the event to a list; a writer thread encodes and writes a batch at a time, since the overhead
+  line below did not hold with the encoding on the emitting thread, nor with a writer woken per
+  event, the handoff costing what the encoding did. The writer writes each batch's own cost as a
+  span on its own thread, a kind of its own that no consumer but the file sees, since its GIL hold
+  lands in whichever node is running and in the GUI thread's lateness, and a reader has to be
+  able to tell the dump's cost from what it measured.
   Check: tests write a short walk with a param change in it and read the dump back, deriving from
   the file and not from in-memory events: the redecodes as two uncached reads of one row, the
   recomputes as one key and row run twice, what the change cost as the per-node means between

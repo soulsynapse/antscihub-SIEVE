@@ -36,7 +36,7 @@ from .document import (OPEN, VIDEO_OUTPUT, VIDEO_OUTPUTS, VIDEO_PRODUCES, VIDEO_
 from .theme import CONTROL_W, GAP, PAD, WIDE_W, Form, GlyphButton, Layer, measured, readout
 from .widgets import Density, Trace
 
-VIDEO_FILTER = "Video (*.mp4 *.MP4 *.avi *.mov *.mkv *.h264);;All (*)"
+VIDEO_FILTER = "Video (*.mp4 *.MP4 *.avi *.mov *.mkv *.mts *.MTS *.h264);;All (*)"
 
 
 def free_name(dst):

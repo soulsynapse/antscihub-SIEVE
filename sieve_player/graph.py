@@ -17,7 +17,8 @@ from dataclasses import dataclass
 import numpy as np
 
 from . import density
-from .document import INPUT, OPEN, OVERLAYABLE, VIDEO_PRODUCES, VIDEO_TOOL, fed, frame_inputs, is_selector, produces
+from .document import (INPUT, OPEN, OVERLAYABLE, VIDEO_PRODUCES, VIDEO_TOOL, fed, frame_inputs, is_selector, produces,
+                       static)
 
 
 def _key(*parts):
@@ -166,6 +167,7 @@ class _Entry:
     src_key: str | None  # what its run() sees as frames.key: every frame input's key, hashed together when there are several
     fed: bool
     srcs: dict          # frame input name -> the node wired into it, or None
+    static: bool        # the same output at every row: memoized under the key alone, row None
 
 
 class Graph:
@@ -234,7 +236,7 @@ class Graph:
             srcs = sources(n.id)
             src = srcs[INPUT]
             plan[n.id] = _Entry(tool, kind, dict(n.params), n.band, src, key_of(n.id), raw_keys[n.id],
-                                up_key(n.id) if src else None, fed(doc, n.id, tools), srcs)
+                                up_key(n.id) if src else None, fed(doc, n.id, tools), srcs, static(tool))
             if kind == "series":
                 series.append(n.id)
         # The head is the first series node reading a frame node: it runs on the walked stack. The
@@ -381,7 +383,7 @@ class Graph:
                 ev[0] = "seek" if d.seeks != seeks else "step" if d.decodes != decodes else "cache"
                 ev[1] = v.nbytes
             return v
-        mk = (e.raw_key, row)
+        mk = (e.raw_key, None if e.static else row)
         v = self.memo.get(mk)
         if v is None:
             with self.probe(nid, row, e.raw_key) as ev:
@@ -398,7 +400,7 @@ class Graph:
         e = plan.get(nid)
         if e is None or e.kind != "frame" or not e.fed:
             return None
-        k = (_key(e.raw_key, "fold"), row)
+        k = (_key(e.raw_key, "fold"), None if e.static else row)
         v = self.memo.get(k)
         if v is None:
             plane = self._compute(plan, nid, row, raw=True)
@@ -418,7 +420,7 @@ class Graph:
             return None
         if e.kind == "video":
             return self.decoder.cached(row)
-        v = self.memo.get((e.raw_key, row))
+        v = self.memo.get((e.raw_key, None if e.static else row))
         return v if v is None or e.band is None else banded(v, e.band)
 
 

@@ -220,6 +220,12 @@ def paths(tool):
     return dict(getattr(tool, "PATHS", None) or {})
 
 
+def static(tool):
+    """Whether the tool's output is the same at every row, as STATIC declares: the runtime then
+    computes it once per key and holds it once, and the monitor counts its run per change, not per row."""
+    return bool(getattr(tool, "STATIC", False))
+
+
 def inputs(tool):
     """A tool's frame inputs after the first, in order: name to the types each expects, as INPUTS
     declares them; empty if none."""

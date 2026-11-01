@@ -130,6 +130,22 @@ def test_a_second_input_is_read_by_name_keyed_and_required():
     assert g.key("diff") != k and D.inputs_of(doc, {**TOOLS, "diff": diff}, "diff") == [("in", ("gray",)), ("bg", ("gray",))]
 
 
+def test_a_static_node_is_computed_once_held_once_and_peeked_at_any_row():
+    const = tool("const", fn=lambda f, p: np.full_like(f, p["k"]))
+    const.STATIC = True
+    doc = fan_out()
+    doc.add_node("const", (0, 400), {"k": 1})
+    doc.connect("gray", "const")
+    g = Graph(doc, Dec(), {**TOOLS, "const": const})
+    runs, held = const.runs, g.memo.bytes
+    assert (g.compute("const", 0) == 1).all() and (g.compute("const", 7) == 1).all() and const.runs == runs + 1
+    assert g.memo.bytes == held + 4 * 6 + 4 * 6                       # the plane once, and gray at row 0 once
+    assert g.peek(9, "const") is not None and g.density("const", 3) is g.density("const", 8)
+    doc.node("const").params["k"] = 2
+    g.sync()
+    assert (g.compute("const", 7) == 2).all() and const.runs == runs + 2
+
+
 def test_key_follows_params_and_wiring():
     doc = fan_out()
     g = Graph(doc, Dec(), TOOLS)

@@ -6,15 +6,16 @@ it partitions and takes the lower middle value, so it stays in the frame's dtype
 keep an animal that sat in one place for half the samples, and the composite then carries it: a
 dark animal on pale ground wants `max`, the brightest each pixel ever showed, which drops it if it
 was away in any one sample, and a pale animal on dark ground wants `min`. Show the node to see
-which this clip gets. The composite is built on the first row asked for and kept here under
-frames.key and the params, so a knob or anything upstream rebuilds it and a seek does not; the
-sample reads are seeks into the clip, paid on the worker inside that first row, see
-docs/findings/2026-10-31-background-composite-cost.md.
+which this clip gets. STATIC says the output is one image at every row, so the player holds it
+once; it is built on the first row asked for and kept here too under frames.key and the params,
+since the memo may let it go and a rebuild is seconds of seeks, paid on the worker inside that
+row, see docs/findings/2026-10-31-background-composite-cost.md.
 """
 import numpy as np
 
 SIEVE_TOOL = True
 NAME, KIND, EXPECTS, PRODUCES = "background", "frame", ("gray", "bgr"), "same"
+STATIC = True
 STATS = ("mean", "median", "max", "min")
 DEFAULTS = {"stat": "median", "samples": 50}
 MAX_SAMPLES = 200

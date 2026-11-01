@@ -34,3 +34,18 @@ def test_median_drops_the_transient_mean_smears_it_and_one_build_serves_every_ro
     frames.key = "other"
     background.run(frames, 0, {"stat": "mean", "samples": 5})
     assert len(reads) == 15                                                                    # upstream changed: rebuilt
+    assert background.run(frames, 0, {"stat": "max", "samples": 5})[1, 1] == 250                # max keeps the one bright sighting
+    assert background.run(frames, 0, {"stat": "min", "samples": 5})[1, 1] == 10                # min erases it
+
+
+def test_max_erases_a_dark_sitter_the_median_keeps():
+    d = np.full((20, 4, 4), 200, np.uint8)
+    d[:19, 2, 2] = 0                                       # a dark animal on one spot for all but the last row
+
+    class Sitter(SimpleNamespace):
+        def __call__(self, r, input="in"):
+            return d[r]
+
+    frames = Sitter(key="s", count=20, fps=1.0)
+    assert background.run(frames, 0, {"stat": "median", "samples": 5})[2, 2] == 0
+    assert background.run(frames, 0, {"stat": "max", "samples": 5})[2, 2] == 200

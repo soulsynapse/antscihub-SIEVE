@@ -41,6 +41,8 @@ def play(source, path=None, title="SIEVE", tools=()):
         QApplication.setHighDpiScaleFactorRoundingPolicy(
             Qt.HighDpiScaleFactorRoundingPolicy.Round)  # 125% becomes 100%, 150% becomes 200%: no fractional blur
         app = QApplication(sys.argv)
+    from .dev import qt_trace
+    qt_trace.install()
     theme.install_font(app)
     win = PlayerWindow(source, title, tools)
     win.showMaximized()

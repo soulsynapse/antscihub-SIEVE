@@ -17,13 +17,16 @@ def video(tmp_path_factory):
     return path
 
 
-def test_gray_output_is_converted_before_the_cache_and_a_switch_empties_it(video):
+def test_gray_output_is_converted_before_the_cache_and_a_switch_empties_it(video, monkeypatch):
+    import sieve_player.decoder as decoder
+    monkeypatch.setattr(decoder, "QUIET", True)
     d = Decoder(video)
     assert d.read(3).shape == (48, 64, 3) and d.cached(3) is not None
     d.output = "gray"
     assert d.cached(3) is None and d.cache_bytes == 0
     f = d.read(3)
     assert f.shape == (48, 64) and f.dtype == np.uint8 and d.cached(3) is f
+    assert d.luma and abs(int(f[0, 0]) - 3) <= 1       # the luma plane itself, not a conversion of the BGR
     assert 0 < d.cache_bytes <= 2 * 48 * 64                  # gray rows only: the seek landed a row short and read through
     d.output = "bgr"
     assert d.cached(3) is None and d.read(3).shape == (48, 64, 3)

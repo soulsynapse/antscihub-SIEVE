@@ -21,6 +21,23 @@ def __getattr__(name):
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
+def _hush_c_stderr():
+    """Sends C-level stderr nowhere, keeping Python's: cv2's FFmpeg plugin warns on every unconverted
+    frame and libavcodec on every seek, and neither reads a log level set in-process.
+    SIEVE_C_STDERR=1 leaves it alone. Returns whether it was done."""
+    if os.environ.get("SIEVE_C_STDERR"):
+        return False
+    try:
+        kept = os.dup(2)
+        os.dup2(os.open(os.devnull, os.O_WRONLY), 2)
+    except OSError:
+        return False
+    old = sys.stderr
+    sys.stderr = os.fdopen(kept, "w", encoding=getattr(old, "encoding", None) or "utf-8",
+                           errors="backslashreplace", buffering=1)
+    return True
+
+
 def play(source, path=None, title="SIEVE", tools=()):
     """Open the player. `source` is a list of tools, or the path of a saved document, which is
     opened against `tools`, the tools its nodes may name. A tool is its module, or the registry's
@@ -41,6 +58,8 @@ def play(source, path=None, title="SIEVE", tools=()):
         QApplication.setHighDpiScaleFactorRoundingPolicy(
             Qt.HighDpiScaleFactorRoundingPolicy.Round)  # 125% becomes 100%, 150% becomes 200%: no fractional blur
         app = QApplication(sys.argv)
+    from . import decoder
+    decoder.QUIET = _hush_c_stderr() or decoder.QUIET
     import faulthandler
     faulthandler.enable()   # a crash in cv2 or Qt prints every thread's Python stack instead of nothing
     from .dev import qt_trace

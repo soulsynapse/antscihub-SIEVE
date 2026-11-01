@@ -4,6 +4,7 @@ in use; a short jump ahead reads through, since a seek decodes from the last key
 costs what the decoder has measured it to cost here; anything else seeks. A seek lands one row
 short and reads through it, because the tools that difference frames ask for row - 1 right after
 row, and that second ask would otherwise be a second seek."""
+import os
 import threading
 import time
 from collections import OrderedDict
@@ -14,20 +15,31 @@ import numpy as np
 
 LOOKBEHIND = 1          # rows a seek lands short of its target and reads through
 SEEK_GUESS = 12.0       # steps a seek is taken to cost until one has been measured here
+LUMA_FORMATS = {b"I420"}    # planar 8-bit 4:2:0: unconverted, cv2 hands out the luma plane as rows x cols
+QUIET = False   # play() sets it once C-level stderr goes nowhere; the plugin warns on every unconverted frame otherwise
+_QUIET_LEVELS = {"OFF", "DISABLED", "SILENT", "FATAL", "ERROR", "0", "1", "2"}
+
+
+def _quiet():
+    return QUIET or os.environ.get("OPENCV_LOG_LEVEL", "").upper() in _QUIET_LEVELS
 
 
 class _Cursor:
     __slots__ = ("cap", "pos")
 
-    def __init__(self, path):
-        self.cap = cv2.VideoCapture(path)
+    def __init__(self, path, luma):
+        self.cap = cv2.VideoCapture(path, cv2.CAP_FFMPEG)
         self.pos = 0
+        self.convert(not luma)
+
+    def convert(self, on):
+        self.cap.set(cv2.CAP_PROP_CONVERT_RGB, 1 if on else 0)
 
 
 class Decoder:
     def __init__(self, path, cache_bytes=4 << 30):
         self.path = str(path)
-        walk = _Cursor(self.path)
+        walk = _Cursor(self.path, luma=False)
         if not walk.cap.isOpened():
             raise IOError(f"cannot open {path}")
         self.cap = walk.cap
@@ -35,6 +47,8 @@ class Decoder:
         self.fps = self.cap.get(cv2.CAP_PROP_FPS) or 30.0
         self.width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         self.height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        fmt = int(self.cap.get(cv2.CAP_PROP_CODEC_PIXEL_FORMAT)).to_bytes(4, "little", signed=True)
+        self.luma = fmt in LUMA_FORMATS and _quiet()
         self._output, self._scale = "bgr", 1.0
         self._cursors = {"walk": walk, "scrub": None}   # the scrub's opens on its first use
         self._use = "walk"
@@ -60,19 +74,26 @@ class Decoder:
 
     @property
     def output(self):
-        """What read() hands out: "bgr" as decoded, or "gray", converted before it is cached, so the
-        cache holds a third of the bytes and no node downstream has to. Setting it empties the cache."""
+        """What read() hands out: "bgr" as decoded, or "gray", before it is cached. On an 8-bit 4:2:0
+        stream with QUIET set, gray is the decoder's luma plane and the YUV-to-BGR conversion is
+        skipped; otherwise it is converted from BGR. Setting it empties the cache."""
         return self._output
 
     @output.setter
     def output(self, value):
         if value not in ("bgr", "gray"):
             raise ValueError(f"decoder output {value!r}; one of bgr, gray")
-        with self._cache_lock:
+        with self._cap_lock, self._cache_lock:
             if value == self._output:
                 return
             self._output, self._cache_bytes = value, 0
             self._cache.clear()
+            for cur in self._cursors.values():
+                if cur is not None:
+                    cur.convert(not self._luma_read())
+
+    def _luma_read(self):
+        return self.luma and self._output == "gray"
 
     @property
     def scale(self):
@@ -123,7 +144,7 @@ class Decoder:
         with self._cap_lock:
             cur = self._cursors[self._use]
             if cur is None:
-                cur = self._cursors[self._use] = _Cursor(self.path)
+                cur = self._cursors[self._use] = _Cursor(self.path, self._luma_read())
             ahead = row - cur.pos
             if not 0 <= ahead <= self._read_through():
                 t = time.perf_counter()
@@ -144,7 +165,7 @@ class Decoder:
 
     def _step(self, cur):
         t = time.perf_counter()
-        ok, bgr = cur.cap.read()
+        ok, f = cur.cap.read()
         self.decodes += 1
         if not ok:
             row, cur.pos = cur.pos, -1
@@ -152,7 +173,8 @@ class Decoder:
                 self.count = row  # container header lied; trust the stream
             raise IndexError(f"row {row} past end of {self.path}")
         self.step_ms = self._mean(self.step_ms, (time.perf_counter() - t) * 1000, self.decodes)
-        f = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY) if self._output == "gray" else bgr
+        if self._output == "gray" and f.ndim == 3:
+            f = cv2.cvtColor(f, cv2.COLOR_BGR2GRAY)
         if self._scale != 1.0:
             f = cv2.resize(f, None, fx=self._scale, fy=self._scale, interpolation=cv2.INTER_AREA)
         self._put(cur.pos, f)

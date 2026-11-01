@@ -74,6 +74,12 @@ def flow_top(a):
     return float(np.hypot(a[..., 0], a[..., 1]).max()) if a.ndim == 3 and a.shape[2] == 2 else float(a.max())
 
 
+def imageable(a):
+    """Whether `to_qimage` can show `a`: a plane, a BGR image or a flow field, never a table."""
+    a = np.asarray(a)
+    return a.dtype.fields is None and (a.ndim == 2 or (a.ndim == 3 and a.shape[2] in (2, 3)))
+
+
 def to_qimage(a, top=None):
     """`a` as an image. uint8 and bool are shown as they are; any other plane is shown over `top`, its
     own maximum when not given. A flow field, (H, W, 2), is the colour wheel: hue is direction and
@@ -125,7 +131,8 @@ def heat(a, top):
 
 class Display(QWidget):
     """The frame, the overlay heated over it, the gate border, and each drawing node's draw() on
-    top, in node order, each handed its own node's series result."""
+    top, in node order, each handed its own node's result: a series node's over the window, a
+    frame node's at the row."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -133,6 +140,7 @@ class Display(QWidget):
         self._over, self._over_key, self._top = None, None, 0.0   # the overlay image, whose node's key, its running max
         self._frame_key, self._frame_top = None, 0.0               # the shown node's key and running max, for a measured plane
         self.drawers, self.row, self.results, self.start = [], 0, {}, 0   # drawers: [(node id, tool)]
+        self.frame_results = {}                                    # node id -> a drawing frame node's output at the row
         self.setMinimumSize(160, 120)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
@@ -202,7 +210,7 @@ class Display(QWidget):
         p.setWindow(0, 0, self._pix.width(), self._pix.height())
         for nid, tool in self.drawers:
             try:
-                tool.draw(p, self.row, self.results.get(nid), self.start)
+                tool.draw(p, self.row, self.frame_results.get(nid, self.results.get(nid)), self.start)
             except Exception:
                 traceback.print_exc()
                 self.drawers = [d for d in self.drawers if d[1] is not tool]  # once, not every repaint
@@ -733,7 +741,14 @@ class PlayerWindow(QMainWindow):
         frame = self.graph.peek(row)
         if frame is None:
             return False
+        if not imageable(frame):          # a table, blobs: show what the node read, with its draw() over it
+            src = self.graph.source(self.graph.shown)
+            frame = None if src is None else self.graph.peek(row, src)
+            if frame is None:
+                return False
         self.display.set_frame(frame, self.graph.key(self.graph.shown))
+        self.display.frame_results = {nid: self.graph.peek(row, nid) for nid, _ in self.display.drawers
+                                      if nid not in self.graph.chain}
         over = self.graph.over
         plane = None if over is None else self.graph.peek(row, over)
         self.display.set_overlay(plane, None if over is None else self.graph.key(over))

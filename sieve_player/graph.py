@@ -306,6 +306,12 @@ class Graph:
         with self._lock:
             return self._plan[nid].key
 
+    def source(self, nid):
+        """The node `nid`'s first input reads, or None."""
+        with self._lock:
+            e = self._plan.get(nid)
+        return None if e is None else e.src
+
     def fed(self, nid):
         """Whether the video reaches `nid` through wires whose types fit; None does not."""
         with self._lock:

@@ -2,7 +2,8 @@
 the Python stack under it and the widget that had focus, the popup that was open and the widget
 under the cursor at that moment, since the stack alone often ends at app.exec() when the call
 came from inside Qt. `SIEVE_QT_TRACE=setPointSize` prints only warnings containing that text;
-`SIEVE_QT_TRACE=0` leaves Qt's own printing alone."""
+`SIEVE_QT_TRACE=0` leaves Qt's own printing alone. `watchdog` is the matching instrument for a hang."""
+import faulthandler
 import os
 import sys
 import traceback
@@ -37,3 +38,20 @@ def install():
 
     qInstallMessageHandler(handler)
     return True
+
+
+def watchdog(app, seconds=5.0):
+    """Dumps every thread's Python stack to stderr when the GUI thread has not turned its event loop
+    for `seconds`, and again every `seconds` while it stays stuck: a timer on the GUI thread keeps
+    pushing a faulthandler deadline ahead, and a hang lets it fall due. The timer is returned so
+    it lives as long as the caller holds it."""
+    from PySide6.QtCore import QTimer
+
+    def arm():
+        faulthandler.dump_traceback_later(seconds, repeat=True)
+
+    timer = QTimer(app)
+    timer.timeout.connect(arm)
+    timer.start(int(seconds * 100))
+    arm()
+    return timer

@@ -45,6 +45,7 @@ def play(source, path=None, title="SIEVE", tools=()):
     faulthandler.enable()   # a crash in cv2 or Qt prints every thread's Python stack instead of nothing
     from .dev import qt_trace
     qt_trace.install()
+    app._watchdog = qt_trace.watchdog(app)   # a hung GUI thread prints them too
     theme.install_font(app)
     win = PlayerWindow(source, title, tools)
     win.showMaximized()

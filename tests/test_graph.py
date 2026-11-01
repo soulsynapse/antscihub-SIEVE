@@ -16,7 +16,7 @@ class Dec:
     path, fps, count = "fake.mp4", 30.0, 10
     decodes = seeks = reads = cache_hits = cache_bytes = 0
     step_ms = seek_ms = None
-    output = "bgr"
+    output, scale = "bgr", 1.0
 
     def read(self, row):
         if row >= self.count:
@@ -64,6 +64,10 @@ def test_built_from_document_and_decoder():
     doc.video_node().params["output"] = "gray"                        # the video hands out gray: the decoder is told, every key moves
     g.sync()
     assert dec.output == "gray" and g.key("gray") != k and not g.fed("gray") and g.compute("video", 0).shape == (4, 6)
+    k = g.key("gray")
+    doc.video_node().params["scale"] = 0.5
+    g.sync()
+    assert dec.scale == 0.5 and g.key("gray") != k
 
 
 def test_a_band_zeroes_the_plane_outside_it_after_run_and_keys_the_node():

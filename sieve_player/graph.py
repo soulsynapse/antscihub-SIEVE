@@ -18,7 +18,7 @@ import numpy as np
 
 from . import density
 from .document import (INPUT, OPEN, OVERLAYABLE, VIDEO_TOOL, fed, frame_inputs, is_selector, produces, static,
-                       video_output)
+                       video_output, video_scale)
 
 
 def _key(*parts):
@@ -214,9 +214,10 @@ class Graph:
         """Re-read the document: wiring, params, the flags, which series nodes run."""
         doc, tools = self.doc, self.tools
         keys, raw_keys = {}, {}
-        output = video_output(doc)
+        output, scale = video_output(doc), video_scale(doc)
         self.decoder.output = output        # a change empties its cache; a read in flight under the old plan is cancelled
-        self._base = _key("video", self.decoder.path, output)
+        self.decoder.scale = scale
+        self._base = _key("video", self.decoder.path, output, scale)
 
         def sources(nid):
             """Frame input name -> the node wired into it, or None; the first input alone when the tool is unknown."""

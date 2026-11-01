@@ -31,9 +31,10 @@ from dataclasses import dataclass, field
 
 VERSION = 1
 VIDEO_TOOL = "video"        # the reserved tool name of the node the decoder is
-VIDEO_OUTPUT = "output"     # the video node's one param: what the decoder hands out
+VIDEO_OUTPUT = "output"     # the video node's params: what the decoder hands out, and at what scale, both applied before its cache
 VIDEO_OUTPUTS = ("bgr", "gray")
-VIDEO_PRODUCES = "bgr"      # what it hands out unless the param says gray, in which case the decoder converts before caching
+VIDEO_PRODUCES = "bgr"      # what it hands out unless the param says gray
+VIDEO_SCALE = "scale"       # a factor in (0, 1]; 1 is the frame as decoded
 PATH = "path"               # the type the video node's input expects and a selector produces
 INPUT = "in"                # every tool today has one input; wires name it so fan-in costs nothing later
 OVERLAYABLE = ("gray", "mask")  # the types the overlay flag is offered on: a single plane the frame can be heated with
@@ -321,6 +322,17 @@ def video_output(doc):
     v = doc.video_node()
     out = VIDEO_PRODUCES if v is None else v.params.get(VIDEO_OUTPUT, VIDEO_PRODUCES)
     return out if out in VIDEO_OUTPUTS else VIDEO_PRODUCES
+
+
+def video_scale(doc):
+    """The factor the decoder resizes by, 1.0 unless the video node's param says less; a value
+    outside (0, 1] reads as 1.0."""
+    v = doc.video_node()
+    try:
+        s = 1.0 if v is None else float(v.params.get(VIDEO_SCALE, 1.0))
+    except (TypeError, ValueError):
+        return 1.0
+    return s if 0.0 < s <= 1.0 else 1.0
 
 
 def from_tools(tools, video=None):

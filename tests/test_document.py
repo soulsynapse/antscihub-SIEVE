@@ -108,6 +108,11 @@ def test_the_video_node_produces_what_its_output_param_says():
     assert [p.where for p in D.validate(doc, TOOLS) if p.kind == "type"] == ["video -> gray"]   # gray expects bgr
     doc.video_node().params["output"] = "nonsense"
     assert D.video_output(doc) == "bgr"
+    assert D.video_scale(doc) == 1.0
+    doc.video_node().params["scale"] = 0.25
+    assert D.video_scale(doc) == 0.25
+    doc.video_node().params["scale"] = 3
+    assert D.video_scale(doc) == 1.0
 
 
 def test_validate_type_cycle_unfed():

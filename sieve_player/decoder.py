@@ -35,7 +35,7 @@ class Decoder:
         self.fps = self.cap.get(cv2.CAP_PROP_FPS) or 30.0
         self.width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         self.height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        self._output = "bgr"
+        self._output, self._scale = "bgr", 1.0
         self._cursors = {"walk": walk, "scrub": None}   # the scrub's opens on its first use
         self._use = "walk"
         self._cache = OrderedDict()
@@ -74,8 +74,31 @@ class Decoder:
             self._output, self._cache_bytes = value, 0
             self._cache.clear()
 
+    @property
+    def scale(self):
+        """The factor frames are resized by before they are cached, 1.0 as decoded; INTER_AREA, as
+        tools/rescale does. Setting it empties the cache."""
+        return self._scale
+
+    @scale.setter
+    def scale(self, value):
+        value = float(value)
+        if not 0.0 < value <= 1.0:
+            raise ValueError(f"decoder scale {value}; in (0, 1]")
+        with self._cache_lock:
+            if value == self._scale:
+                return
+            self._scale, self._cache_bytes = value, 0
+            self._cache.clear()
+
+    def _shape(self):
+        """(rows, cols) a frame has after the scale, as cv2.resize rounds it."""
+        s = self._scale
+        return (self.height, self.width) if s == 1.0 else (int(round(self.height * s)), int(round(self.width * s)))
+
     def _fits(self, f):
-        return (f.ndim == 2) == (self._output == "gray")   # a frame of the other kind, decoded before a switch, is not served
+        # a frame of the other kind or size, decoded before a switch and landing after it, is not served
+        return (f.ndim == 2) == (self._output == "gray") and f.shape[:2] == self._shape()
 
     def cached(self, row):
         """Cache-only read; never touches a capture. Safe from the GUI thread."""
@@ -130,6 +153,8 @@ class Decoder:
             raise IndexError(f"row {row} past end of {self.path}")
         self.step_ms = self._mean(self.step_ms, (time.perf_counter() - t) * 1000, self.decodes)
         f = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY) if self._output == "gray" else bgr
+        if self._scale != 1.0:
+            f = cv2.resize(f, None, fx=self._scale, fy=self._scale, interpolation=cv2.INTER_AREA)
         self._put(cur.pos, f)
         cur.pos += 1
         return f

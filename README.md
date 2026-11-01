@@ -50,9 +50,11 @@ def select(folder, params) -> str | None      # folder is the document's
 How the player treats a tool, as `sieve_player/graph.py`, `pane.py` and `window.py` currently do:
 
 - Types are strings the player compares for equality; it attaches no meaning to them beyond the
-  video node producing `"bgr"`, or `"gray"` when its one param, `output`, says so, in which case
-  the decoder converts before caching and no gray node is needed. An `EXPECTS` tuple accepts any
-  of its members, and `PRODUCES = "same"` hands out whatever the tool reads.
+  video node producing `"bgr"`, or `"gray"` when its `output` param says so. That and its `scale`
+  param are the decoder's: both are applied before its cache, so a chain that wants small gray
+  frames never holds the large colour ones, and no gray or rescale node is needed for that. An
+  `EXPECTS` tuple accepts any of its members, and `PRODUCES = "same"` hands out whatever the tool
+  reads.
 - Only the worker thread calls `run`, but for any row in any order, since a seek jumps its queue.
   `frames.key` / `series.key` changes whenever anything upstream does; the tools that cache key on
   it and on their own params. A `frames()` read made after the node's key has changed under the

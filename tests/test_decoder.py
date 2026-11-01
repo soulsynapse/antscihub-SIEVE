@@ -29,6 +29,12 @@ def test_gray_output_is_converted_before_the_cache_and_a_switch_empties_it(video
     assert d.cached(3) is None and d.read(3).shape == (48, 64, 3)
     with pytest.raises(ValueError):
         d.output = "hsv"
+    d.scale = 0.5
+    assert d.cached(3) is None and d.read(3).shape == (24, 32, 3) and d.cached(3).shape == (24, 32, 3)
+    d.output = "gray"
+    assert d.read(3).shape == (24, 32)
+    with pytest.raises(ValueError):
+        d.scale = 1.5
 
 
 def test_scrub_leaves_the_walk_cursor_alone(video):

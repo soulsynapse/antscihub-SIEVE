@@ -30,9 +30,11 @@ from functools import lru_cache
 import cv2
 from PySide6.QtCore import QProcess, QSize, Qt, Signal
 from PySide6.QtGui import QFontMetrics
-from PySide6.QtWidgets import QComboBox, QFileDialog, QFrame, QPushButton, QScrollArea, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (QComboBox, QDoubleSpinBox, QFileDialog, QFrame, QPushButton, QScrollArea, QVBoxLayout,
+                               QWidget)
 
-from .document import OPEN, VIDEO_OUTPUT, VIDEO_OUTPUTS, VIDEO_PRODUCES, VIDEO_TOOL, is_selector, paths
+from .document import (OPEN, VIDEO_OUTPUT, VIDEO_OUTPUTS, VIDEO_PRODUCES, VIDEO_SCALE, VIDEO_TOOL, is_selector, paths,
+                       video_output, video_scale)
 from .theme import CONTROL_W, GAP, PAD, WIDE_W, Form, GlyphButton, Layer, measured, readout
 from .widgets import Density, Trace
 
@@ -78,10 +80,11 @@ def _column(parent, spacing=GAP):
 
 
 class Video(QWidget):
-    """The video node's settings: a picker, the chosen path and what cv2 says about it, and `output`,
-    what the decoder hands out, bgr as decoded or gray converted before the cache."""
+    """The video node's settings: a picker, the chosen path and what cv2 says about it, and the
+    decoder's two params, `output`, bgr as decoded or gray, and `scale`, a factor, both applied
+    before its cache so a chain that wants small gray frames never holds the large colour ones."""
     sourceChanged = Signal(str)
-    outputChanged = Signal(str)
+    paramChanged = Signal(str, object)     # (param name, value)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -95,15 +98,23 @@ class Video(QWidget):
         self.output.addItems(list(VIDEO_OUTPUTS))
         self.output.setFixedWidth(CONTROL_W)
         form.add_row(VIDEO_OUTPUT, self.output)
+        self.scale = QDoubleSpinBox()
+        self.scale.setRange(0.05, 1.0)
+        self.scale.setSingleStep(0.05)
+        self.scale.setDecimals(2)
+        self.scale.setFixedWidth(CONTROL_W)
+        form.add_row(VIDEO_SCALE, self.scale)
         lay.addWidget(form)
         self.button.clicked.connect(self._pick)
-        self.output.currentTextChanged.connect(self.outputChanged)
+        self.output.currentTextChanged.connect(lambda v: self.paramChanged.emit(VIDEO_OUTPUT, v))
+        self.scale.valueChanged.connect(lambda v: self.paramChanged.emit(VIDEO_SCALE, float(v)))
 
-    def set_output(self, value):
-        """Moves the knob to the document's value without reporting a change."""
-        self.output.blockSignals(True)
-        self.output.setCurrentText(value if value in VIDEO_OUTPUTS else VIDEO_PRODUCES)
-        self.output.blockSignals(False)
+    def set_params(self, doc):
+        """Moves the knobs to the document's values without reporting a change."""
+        for w, v in ((self.output, video_output(doc)), (self.scale, video_scale(doc))):
+            w.blockSignals(True)
+            w.setCurrentText(v) if w is self.output else w.setValue(v)
+            w.blockSignals(False)
 
     def _pick(self):
         path, _ = QFileDialog.getOpenFileName(self, "Open video", "", VIDEO_FILTER)
@@ -289,9 +300,9 @@ class Pane(QWidget):
         card = Layer(1, node.id)
         if node.tool == VIDEO_TOOL:
             self.video = Video()
-            self.video.set_output(node.params.get(VIDEO_OUTPUT, VIDEO_PRODUCES))
+            self.video.set_params(self.doc)
             self.video.sourceChanged.connect(self.videoPicked)
-            self.video.outputChanged.connect(lambda v, nid=node.id: self._video_output(nid, v))
+            self.video.paramChanged.connect(lambda name, v, nid=node.id: self._video_param(nid, name, v))
             card.add(self.video)
         elif node.unresolved:
             card.add(readout(f"tool {node.tool!r} not found"))
@@ -361,9 +372,9 @@ class Pane(QWidget):
             pin.setChecked(i == self.doc.pinned)
         self.pinChanged.emit()
 
-    def _video_output(self, nid, value):
-        """The video node's one knob moved: its param, saved and keyed like any node's."""
-        self.doc.node(nid).params[VIDEO_OUTPUT] = value
+    def _video_param(self, nid, name, value):
+        """A video node knob moved: its param, saved and keyed like any node's."""
+        self.doc.node(nid).params[name] = value
         self.paramsChanged.emit(nid)
 
     def _changed(self, nid):

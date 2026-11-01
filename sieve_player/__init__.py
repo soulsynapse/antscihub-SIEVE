@@ -6,7 +6,7 @@ import importlib
 import os
 import sys
 
-_HOME = {"Frames": "graph", "Memo": "graph", "Series": "graph", "Decoder": "decoder", "probe": "pane",
+_HOME = {"Frames": "graph", "Memo": "graph", "Series": "graph", "Decoder": "decoder", "probe": "decoder",
          "ParamWidget": "widgets", "Trace": "widgets", "Density": "widgets", "Worker": "worker"}
 __all__ = ["play", *_HOME, "theme"]
 

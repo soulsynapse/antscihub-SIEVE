@@ -40,15 +40,22 @@ def test_gray_output_is_converted_before_the_cache_and_a_switch_empties_it(video
         d.scale = 1.5
 
 
-def test_a_raw_stream_with_no_frame_count_is_refused(video, tmp_path):
+def test_a_raw_stream_is_counted_by_packet_and_seeks_from_the_top(video, tmp_path):
     import shutil
     import subprocess
+    from sieve_player.decoder import probe
     ffmpeg = shutil.which("ffmpeg") or pytest.skip("no ffmpeg to write a raw stream")
     raw = tmp_path / "v.h264"
     subprocess.check_call([ffmpeg, "-y", "-loglevel", "error", "-i", str(video), "-frames:v", "10",
-                          "-c:v", "libx264", "-f", "h264", str(raw)])
-    with pytest.raises(IOError, match="remux"):
-        Decoder(raw)
+                          "-c:v", "libx264", "-g", "4", "-f", "h264", str(raw)])
+    d = Decoder(raw)
+    assert not d.indexed and d.count == 10 and probe(raw)[3] == 10
+    assert d.read(7).shape[:2] == (48, 64) and d.decodes == 8 and d.seeks == 0
+    d.output = "gray"                                  # empties the cache, so row 2 is behind the cursor
+    assert d.read(2).shape == (48, 64) and d.seeks == 1 and d.decodes == 11   # back means from the top
+    with pytest.raises(IndexError):
+        d.read(10)
+    assert d.count == 10
 
 
 def test_scrub_leaves_the_walk_cursor_alone(video):

@@ -9,6 +9,7 @@ import threading
 import time
 from collections import OrderedDict
 from contextlib import contextmanager
+from functools import lru_cache
 
 import cv2
 import numpy as np
@@ -24,15 +25,63 @@ def _quiet():
     return QUIET or os.environ.get("OPENCV_LOG_LEVEL", "").upper() in _QUIET_LEVELS
 
 
+def frame_count(path, cap=None):
+    """Rows in the file: the container's claim, or, for a raw stream that makes none, the packets
+    demuxed without decoding."""
+    own = cap is None
+    cap = cap or cv2.VideoCapture(str(path), cv2.CAP_FFMPEG)
+    try:
+        n = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        if n > 0:
+            return n
+        scan = cv2.VideoCapture(str(path), cv2.CAP_FFMPEG)
+        scan.set(cv2.CAP_PROP_FORMAT, -1)
+        n = 0
+        while scan.read()[0]:
+            n += 1
+        scan.release()
+        return n
+    finally:
+        if own:
+            cap.release()
+
+
+@lru_cache(maxsize=16)
+def _probe(path, mtime):
+    cap = cv2.VideoCapture(path, cv2.CAP_FFMPEG)
+    try:
+        if not cap.isOpened():
+            raise IOError(f"cannot open {path}")
+        return (int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)),
+                cap.get(cv2.CAP_PROP_FPS) or 30.0, frame_count(path, cap))
+    finally:
+        cap.release()
+
+
+def probe(src):
+    """(width, height, fps, count) via cv2, cached per path and mtime. The count is the container's
+    claim, or a packet scan of a raw stream; the decoder trusts the stream over either."""
+    src = str(src)
+    return _probe(src, os.stat(src).st_mtime)
+
+
 class _Cursor:
-    __slots__ = ("cap", "pos")
+    __slots__ = ("cap", "pos", "path", "luma")
 
     def __init__(self, path, luma):
-        self.cap = cv2.VideoCapture(path, cv2.CAP_FFMPEG)
+        self.path, self.luma, self.cap = path, luma, None
+        self.reopen()
+
+    def reopen(self):
+        """A fresh capture at row 0; the only way back in a stream with no index."""
+        if self.cap is not None:
+            self.cap.release()
+        self.cap = cv2.VideoCapture(self.path, cv2.CAP_FFMPEG)
         self.pos = 0
-        self.convert(not luma)
+        self.convert(not self.luma)
 
     def convert(self, on):
+        self.luma = not on
         self.cap.set(cv2.CAP_PROP_CONVERT_RGB, 1 if on else 0)
 
 
@@ -43,10 +92,8 @@ class Decoder:
         if not walk.cap.isOpened():
             raise IOError(f"cannot open {path}")
         self.cap = walk.cap
-        self.count = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        if self.count <= 0:
-            raise IOError(f"no frame count in {path}: a raw stream has no index and cannot be seeked; "
-                          "remux it, ffmpeg -i in.h264 -c copy out.mp4")
+        self.indexed = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT)) > 0
+        self.count = frame_count(self.path, self.cap)
         self.fps = self.cap.get(cv2.CAP_PROP_FPS) or 30.0
         self.width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         self.height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
@@ -149,7 +196,11 @@ class Decoder:
             if cur is None:
                 cur = self._cursors[self._use] = _Cursor(self.path, self._luma_read())
             ahead = row - cur.pos
-            if not 0 <= ahead <= self._read_through():
+            if not self.indexed:
+                if ahead < 0:
+                    cur.reopen()   # a raw stream seeks nowhere: back means from the top
+                    self.seeks += 1
+            elif not 0 <= ahead <= self._read_through():
                 t = time.perf_counter()
                 cur.pos = max(0, row - LOOKBEHIND)
                 cur.cap.set(cv2.CAP_PROP_POS_FRAMES, cur.pos)

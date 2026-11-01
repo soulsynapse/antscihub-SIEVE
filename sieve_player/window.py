@@ -633,7 +633,7 @@ class PlayerWindow(QMainWindow):
         self.goto(0, commit=True)
         self.toggle_play()  # _unload left it paused
         if self.pane.video is not None:
-            self.pane.video.show_source(path)
+            self.pane.video.show_source(path, (decoder.width, decoder.height, self.fps, self.count))
         self.pane.set_source(path, self.fps)
         self._retitle()
         return True

@@ -25,9 +25,7 @@ changed; it knows nothing of the runtime.
 """
 import os
 import re
-from functools import lru_cache
 
-import cv2
 from PySide6.QtCore import QProcess, QSize, Qt, Signal
 from PySide6.QtGui import QFontMetrics
 from PySide6.QtWidgets import (QComboBox, QDoubleSpinBox, QFileDialog, QFrame, QPushButton, QScrollArea, QVBoxLayout,
@@ -38,26 +36,7 @@ from .document import (OPEN, VIDEO_OUTPUT, VIDEO_OUTPUTS, VIDEO_PRODUCES, VIDEO_
 from .theme import CONTROL_W, GAP, PAD, WIDE_W, Form, GlyphButton, Layer, measured, readout
 from .widgets import Density, Trace
 
-VIDEO_FILTER = "Video (*.mp4 *.MP4 *.avi *.mov *.mkv);;All (*)"
-
-
-@lru_cache(maxsize=16)
-def _probe(path, mtime):
-    cap = cv2.VideoCapture(path)
-    try:
-        if not cap.isOpened():
-            raise IOError(f"cannot open {path}")
-        return (int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)),
-                cap.get(cv2.CAP_PROP_FPS) or 30.0, int(cap.get(cv2.CAP_PROP_FRAME_COUNT)))
-    finally:
-        cap.release()
-
-
-def probe(src):
-    """(width, height, fps, count) via cv2, cached per path and mtime. The count is the container's
-    claim; the decoder trusts the stream over it."""
-    src = str(src)
-    return _probe(src, os.stat(src).st_mtime)
+VIDEO_FILTER = "Video (*.mp4 *.MP4 *.avi *.mov *.mkv *.h264);;All (*)"
 
 
 def free_name(dst):
@@ -121,8 +100,9 @@ class Video(QWidget):
         if path:
             self.sourceChanged.emit(path)
 
-    def show_source(self, path):
-        w, h, fps, n = probe(path)
+    def show_source(self, path, facts):
+        """`facts` is (width, height, fps, count), as the decoder found them."""
+        w, h, fps, n = facts
         self.path.setText(str(path))
         self.info.setText(f"{w}×{h} · {fps:.2f} fps · {n} frames · {n / fps:.1f} s")
 

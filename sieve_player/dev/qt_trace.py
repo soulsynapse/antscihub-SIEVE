@@ -1,8 +1,8 @@
-"""Where a Qt warning came from. `SIEVE_QT_TRACE=1` installs a message handler that prints each
-warning with the Python stack under it and the widget that had focus, the popup that was open and
-the widget under the cursor at that moment, since the stack alone often ends at app.exec() when
-the call came from inside Qt. `SIEVE_QT_TRACE=setPointSize` prints only warnings containing that
-text."""
+"""Where a Qt warning came from: a message handler, on by default, that prints each warning with
+the Python stack under it and the widget that had focus, the popup that was open and the widget
+under the cursor at that moment, since the stack alone often ends at app.exec() when the call
+came from inside Qt. `SIEVE_QT_TRACE=setPointSize` prints only warnings containing that text;
+`SIEVE_QT_TRACE=0` leaves Qt's own printing alone."""
 import os
 import sys
 import traceback
@@ -17,8 +17,8 @@ def _name(w):
 
 
 def install():
-    want = os.environ.get("SIEVE_QT_TRACE", "")
-    if not want:
+    want = os.environ.get("SIEVE_QT_TRACE", "1")
+    if want == "0":
         return False
     needle = "" if want == "1" else want
 

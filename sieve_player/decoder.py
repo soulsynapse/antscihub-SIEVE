@@ -25,7 +25,7 @@ class _Cursor:
 
 
 class Decoder:
-    def __init__(self, path, cache_bytes=256 << 20):
+    def __init__(self, path, cache_bytes=4 << 30):
         self.path = str(path)
         walk = _Cursor(self.path)
         if not walk.cap.isOpened():

@@ -185,7 +185,7 @@ class _Entry:
 
 
 class Graph:
-    def __init__(self, doc, decoder, tools, memo_bytes=512 << 20):
+    def __init__(self, doc, decoder, tools, memo_bytes=4 << 30):
         self.doc, self.decoder = doc, decoder
         self.tools = tools if hasattr(tools, "get") else {t.NAME: t for t in tools}
         self.fps = decoder.fps

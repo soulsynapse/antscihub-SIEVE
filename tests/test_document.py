@@ -137,3 +137,13 @@ def test_video_path_relative_to_document(tmp_path):
     assert doc.video_path() == os.path.normpath(tmp_path / "b" / "clip.mp4")
     doc.video = os.path.abspath("elsewhere.mp4")
     assert doc.video_path() == doc.video
+
+
+def test_load_fills_missing_params_from_defaults(tmp_path):
+    doc = two_nodes()
+    doc.add_node("threshold", (0, 240), {})
+    D.save(doc, tmp_path / "a.sieve")
+    loaded = D.load(tmp_path / "a.sieve", known={"gray": gray, "threshold": threshold})
+    assert loaded.node("threshold").params == {"thresh": 128}
+    assert loaded.node("gray").params == {"k": 3}
+    assert D.load(tmp_path / "a.sieve", known={"gray", "threshold"}).node("threshold").params == {}

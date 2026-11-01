@@ -53,12 +53,17 @@ def banded(v, band):
 
 def gated(result, band):
     """A series node's result as the player hands it out: the tool's dict with "gate", the rows its
-    signal keeps under the node's band, and `fed`, the signal with the rest zeroed, which is what a
-    series node downstream reads. A result without a signal passes through ungated, and feeds nothing."""
+    signal keeps under the node's band, and `fed`, what a series node downstream reads: the result's
+    "rows", one table a row, with each gated-out row emptied, when it has them, else the signal with
+    the rest zeroed. A result without a signal passes through ungated, and feeds nothing."""
     if not isinstance(result, dict) or "signal" not in result:
         return result, None
     signal = np.asarray(result["signal"])
     gate = inband(signal, OPEN if band is None else band)
+    if "rows" in result:
+        fed = np.empty(len(result["rows"]), object)
+        fed[:] = [r if g else r[:0] for r, g in zip(result["rows"], gate)]
+        return {**result, "gate": gate}, fed
     return {**result, "gate": gate}, np.where(gate, signal, np.zeros((), signal.dtype))
 
 
@@ -140,8 +145,8 @@ class Frames:
 
 class Series:
     """What a series tool's run() gets: data is (T, ...), the read node stacked over the window, each
-    row through the tool's fold() first when it has one; or, for a series node reading another, the
-    upstream node's (T,) signal with the rows its band shuts out zeroed."""
+    row through the tool's fold() first when it has one; or, for a series node reading another, what
+    `gated` fed from the upstream result: its (T,) signal, or its rows, under the band."""
 
     def __init__(self, data, key, start, fps):
         self.data, self.key, self.start, self.fps = data, key, start, fps

@@ -40,7 +40,11 @@ def settings(parent=None) -> ParamWidget      # optionally show_result(result, s
                                               # set_source(path, fps): the video, for a tool that writes a file (csv)
 
 # a series tool reading another: EXPECTS = "signal", and series.data is the upstream result's
-# "signal" with the rows its band shuts out zeroed (smooth).
+# "signal" with the rows its band shuts out zeroed (smooth); or, when the upstream result also
+# carries "rows", one table a row (track), those tables, emptied where the band shuts them out (travel).
+
+# a frame tool with more inputs: INPUTS = {"diff": "gray"}, read as frames(row, "diff"); one named
+# in OPTIONAL = ("diff",) may be unwired and then reads as None (blobs).
 
 # a selector: which file, by rule
 NAME = "file"; KIND = "selector"; PRODUCES = "path"
@@ -82,7 +86,7 @@ Facets the player reads when a tool has them:
 
 | facet | what the player does with it |
 |---|---|
-| `draw(painter, row, result, start)` | paints on the frame, in frame-pixel coordinates (`painter.window()` is the frame's rect); one that raises is dropped for the session |
+| `draw(painter, row, result, start, params)` | paints on the frame, in frame-pixel coordinates (`painter.window()` is the frame's rect), with the node's params as they stand; one that raises is dropped for the session |
 | a `"signal"` array in a series result | the node's trace, drawn as a detector. Its two handles are the node's band, in the signal's units, saved with the node: the player adds `"gate"`, the rows inside it (outside when lo is above hi), washes them on the trace, zeroes the rest of the signal before a series node downstream reads it, and draws a green border on the frame while the playhead is in a row the last chain node gates. Every chain node's result also gets `"key"`, the node's key (`graph`), which hashes its band and everything upstream: a tool that writes a file records it, and can read it back to say whether the file on disk is this graph's (csv) |
 | `output_name`, `export_command`, `describe_output` | an Export button on the node; an existing target gets a numbered sibling, and a failed run leaves no partial file |
 | `INPUTS = {input: types}` | a frame input after the first, with the types it expects; `run` reads it as `frames(row, input)`, and the node's key and `frames.key` follow it |

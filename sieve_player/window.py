@@ -139,7 +139,7 @@ class Display(QWidget):
         self._pix, self.gate, self.reason = None, False, ""
         self._over, self._over_key, self._top = None, None, 0.0   # the overlay image, whose node's key, its running max
         self._frame_key, self._frame_top = None, 0.0               # the shown node's key and running max, for a measured plane
-        self.drawers, self.row, self.results, self.start = [], 0, {}, 0   # drawers: [(node id, tool)]
+        self.drawers, self.row, self.results, self.start = [], 0, {}, 0   # drawers: [(node id, tool, node)]
         self.frame_results = {}                                    # node id -> a drawing frame node's output at the row
         self.setMinimumSize(160, 120)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
@@ -211,9 +211,9 @@ class Display(QWidget):
         # frame's rect back from painter.window() when its own data is another resolution.
         p.setViewport(x, y, pix.width(), pix.height())
         p.setWindow(0, 0, self._pix.width(), self._pix.height())
-        for nid, tool in self.drawers:
+        for nid, tool, node in self.drawers:
             try:
-                tool.draw(p, self.row, self.frame_results.get(nid, self.results.get(nid)), self.start)
+                tool.draw(p, self.row, self.frame_results.get(nid, self.results.get(nid)), self.start, node.params)
             except Exception:
                 traceback.print_exc()
                 self.drawers = [d for d in self.drawers if d[1] is not tool]  # once, not every repaint
@@ -442,7 +442,7 @@ class PlayerWindow(QMainWindow):
         self.pane.sync()
         self._hook_traces()
         self._pick_video()
-        self.display.drawers = [(n.id, self.tools[n.tool]) for n in self.doc.nodes
+        self.display.drawers = [(n.id, self.tools[n.tool], n) for n in self.doc.nodes
                                 if n.tool in self.tools and hasattr(self.tools[n.tool], "draw")]
         self.canvas.update()
         if self.graph is None:
@@ -746,13 +746,14 @@ class PlayerWindow(QMainWindow):
         frame = self.graph.peek(row)
         if frame is None:
             return False
-        if not imageable(frame):          # a table, blobs: show what the node read, with its draw() over it
-            src = self.graph.source(self.graph.shown)
+        src = self.graph.shown
+        while not imageable(frame):       # a table, blobs: show the nearest image upstream, with its draw() over it
+            src = self.graph.source(src)
             frame = None if src is None else self.graph.peek(row, src)
             if frame is None:
                 return False
         self.display.set_frame(frame, self.graph.key(self.graph.shown))
-        self.display.frame_results = {nid: self.graph.peek(row, nid) for nid, _ in self.display.drawers
+        self.display.frame_results = {nid: self.graph.peek(row, nid) for nid, *_ in self.display.drawers
                                       if nid not in self.graph.chain}
         over = self.graph.over
         plane = None if over is None else self.graph.peek(row, over)

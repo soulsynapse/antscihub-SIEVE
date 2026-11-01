@@ -23,7 +23,8 @@ file (see `pick_path`) and the window hands it to the loader. A path input never
 A frame tool reads one node through its first input, INPUT, which is the one insertion into a wire
 and a pass-through's type follow. It may declare more frame inputs in INPUTS, name to the types
 each expects, after the first; `run` reads one as `frames(row, name)`. Every frame input must be
-fed for the node to compute, and the node's key hashes each of them.
+fed for the node to compute, except those named in OPTIONAL, which read as None unwired; the
+node's key hashes each of them.
 """
 import json
 import os
@@ -247,6 +248,11 @@ def frame_inputs(tool):
     return [INPUT, *inputs(tool)]
 
 
+def optional(tool):
+    """The frame inputs after the first that may be unwired, as OPTIONAL names them."""
+    return tuple(getattr(tool, "OPTIONAL", None) or ())
+
+
 def inputs_of(doc, tools, nid):
     """[(input name, types it expects or None)]: PATH on the video node, none on a selector, else
     the frame inputs and then each path input."""
@@ -378,14 +384,16 @@ def fed(doc, nid, tools=None):
             return True
         if nid in stack:
             return False
-        names = [INPUT]
+        names, skip = [INPUT], ()
         if tools is not None:
             tool = tools.get(node.tool)
             if tool is None:
                 return False
-            names = frame_inputs(tool)
+            names, skip = frame_inputs(tool), optional(tool)
         for name in names:
             w = doc.source(nid, name)
+            if w is None and name in skip:
+                continue
             if w is None or (tools is not None and not fits(doc, tools, w)) or not reaches(w.src, (*stack, nid)):
                 return False
         return True
@@ -433,6 +441,6 @@ def validate(doc, tools):
         if n.tool == VIDEO_TOOL or is_selector(tool):
             continue
         for name in [INPUT] if tool is None else frame_inputs(tool):
-            if doc.source(n.id, name) is None:
+            if doc.source(n.id, name) is None and name not in optional(tool):
                 out.append(Problem("unfed", n.id, f"{n.id} has no input" if name == INPUT else f"{n.id}'s {name} is unfed"))
     return out

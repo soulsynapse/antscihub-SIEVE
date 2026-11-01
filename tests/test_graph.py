@@ -130,6 +130,11 @@ def test_a_second_input_is_read_by_name_keyed_and_required():
     g = Graph(doc, Dec(), {**TOOLS, "diff": diff})
     assert g.compute("diff", 2) is None and not g.fed("diff")                 # bg unwired: unfed, as a missing first input is
     assert [p.where for p in D.validate(doc, {**TOOLS, "diff": diff}) if p.kind == "unfed"] == ["diff"]
+    diff.OPTIONAL = ("bg",)
+    diff.run = lambda frames, row, params: frames(row) if frames(row, "bg") is None else frames(row) - frames(row, "bg")
+    g.sync()
+    assert g.fed("diff") and (g.compute("diff", 2) == 4).all()                # optional and unwired: read as None; add alone
+    assert not [p for p in D.validate(doc, {**TOOLS, "diff": diff}) if p.kind == "unfed"]
     doc.connect("same", "diff", "bg")
     g.sync()
     k = g.key("diff")

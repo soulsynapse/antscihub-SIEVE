@@ -19,6 +19,11 @@ means, from the document's folder, and the answer is written into `video` so a r
 selector's tool opens the same file (see `pick_video`). Any tool may declare path inputs of its
 own in PATHS, name to a loader of params from the file; a selector wired into one answers the
 file (see `pick_path`) and the window hands it to the loader. A path input never reaches `run`.
+
+A frame tool reads one node through its first input, INPUT, which is the one insertion into a wire
+and a pass-through's type follow. It may declare more frame inputs in INPUTS, name to the types
+each expects, after the first; `run` reads one as `frames(row, name)`. Every frame input must be
+fed for the node to compute, and the node's key hashes each of them.
 """
 import json
 import os
@@ -215,9 +220,21 @@ def paths(tool):
     return dict(getattr(tool, "PATHS", None) or {})
 
 
+def inputs(tool):
+    """A tool's frame inputs after the first, in order: name to the types each expects, as INPUTS
+    declares them; empty if none."""
+    return {name: tuple(t) if isinstance(t, (tuple, list, set)) else (t,)
+            for name, t in (getattr(tool, "INPUTS", None) or {}).items()}
+
+
+def frame_inputs(tool):
+    """Every input `run` reads through `frames`: INPUT first, then each of INPUTS."""
+    return [INPUT, *inputs(tool)]
+
+
 def inputs_of(doc, tools, nid):
     """[(input name, types it expects or None)]: PATH on the video node, none on a selector, else
-    the frame input and then each path input."""
+    the frame inputs and then each path input."""
     node = doc.node(nid)
     if node.tool == VIDEO_TOOL:
         return [(INPUT, (PATH,))]
@@ -226,7 +243,7 @@ def inputs_of(doc, tools, nid):
         return [(INPUT, None)]
     if is_selector(tool):
         return []
-    return [(INPUT, expects(tool))] + [(name, (PATH,)) for name in paths(tool)]
+    return [(INPUT, expects(tool)), *inputs(tool).items()] + [(name, (PATH,)) for name in paths(tool)]
 
 
 def wants(doc, tools, nid, input=INPUT):
@@ -316,24 +333,30 @@ def from_tools(tools, video=None):
 
 
 def fed(doc, nid, tools=None):
-    """Whether the video reaches `nid` through its wires. With `tools`, a node whose tool the names
-    do not resolve, or a wire whose types do not fit, breaks the chain: what the runtime computes."""
+    """Whether the video reaches `nid` through every frame input's wires. With `tools`, a node whose
+    tool the names do not resolve, or a wire whose types do not fit, breaks the chain: what the
+    runtime computes. Without them only the first input is known, and it alone is followed."""
     tools = None if tools is None else _by_name(tools)
-    seen = set()
-    while nid not in seen:
+
+    def reaches(nid, stack):
         node = doc.node(nid)
         if node.tool == VIDEO_TOOL:
             return True
-        seen.add(nid)
-        w = doc.source(nid)
-        if w is None:
+        if nid in stack:
             return False
+        names = [INPUT]
         if tools is not None:
             tool = tools.get(node.tool)
-            if tool is None or not fits(doc, tools, w):
+            if tool is None:
                 return False
-        nid = w.src
-    return False
+            names = frame_inputs(tool)
+        for name in names:
+            w = doc.source(nid, name)
+            if w is None or (tools is not None and not fits(doc, tools, w)) or not reaches(w.src, (*stack, nid)):
+                return False
+        return True
+
+    return reaches(nid, ())
 
 
 def fits(doc, tools, wire):
@@ -372,6 +395,10 @@ def validate(doc, tools):
         if n.id not in state:
             walk(n.id, [n.id])
     for n in doc.nodes:
-        if n.tool != VIDEO_TOOL and not is_selector(tools.get(n.tool)) and doc.source(n.id) is None:
-            out.append(Problem("unfed", n.id, f"{n.id} has no input"))
+        tool = tools.get(n.tool)
+        if n.tool == VIDEO_TOOL or is_selector(tool):
+            continue
+        for name in [INPUT] if tool is None else frame_inputs(tool):
+            if doc.source(n.id, name) is None:
+                out.append(Problem("unfed", n.id, f"{n.id} has no input" if name == INPUT else f"{n.id}'s {name} is unfed"))
     return out

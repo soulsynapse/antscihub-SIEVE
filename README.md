@@ -61,8 +61,10 @@ How the player treats a tool, as `sieve_player/graph.py`, `pane.py` and `window.
 - The document holds the params. The pane moves a settings widget's knobs to them with
   `set_params()` and writes `params()` back on every change; `ParamWidget` provides both, and a
   widget without them is shown as a defect.
-- Each node reads one node through a wire. A node the video does not reach, through wires whose
-  types fit, computes as None, and so does everything downstream of it.
+- Each node reads one node through its first input, `"in"`, the one a drop onto a wire lands on and
+  a `"same"` output follows. A frame tool may declare more in `INPUTS`, each a wire of its own, and
+  `run` reads one as `frames(row, name)`. A node the video does not reach through every frame
+  input, over wires whose types fit, computes as None, and so does everything downstream of it.
 - Series nodes run as a chain: the first one reading a frame node runs on the stacked window, and
   each fed series node wired on from a chain node runs after it on the upstream result's
   `"signal"`. A second series node reading a frame node does not run.
@@ -77,6 +79,7 @@ Facets the player reads when a tool has them:
 | `draw(painter, row, result, start)` | paints on the frame, in frame-pixel coordinates (`painter.window()` is the frame's rect); one that raises is dropped for the session |
 | a `"signal"` array in a series result | the node's trace, drawn as a detector. Its two handles are the node's band, in the signal's units, saved with the node: the player adds `"gate"`, the rows inside it (outside when lo is above hi), washes them on the trace, zeroes the rest of the signal before a series node downstream reads it, and draws a green border on the frame while the playhead is in a row the last chain node gates. Every chain node's result also gets `"key"`, the node's key (`graph`), which hashes its band and everything upstream: a tool that writes a file records it, and can read it back to say whether the file on disk is this graph's (csv) |
 | `output_name`, `export_command`, `describe_output` | an Export button on the node; an existing target gets a numbered sibling, and a failed run leaves no partial file |
+| `INPUTS = {input: types}` | a frame input after the first, with the types it expects; `run` reads it as `frames(row, input)`, and the node's key and `frames.key` follow it |
 | `PATHS = {input: loader}` | a path input a selector feeds; the loader turns the file into params |
 | a plane as output | the node's density, v2's plot: its pixels per row counted on a fixed log axis, under its settings, for every fed frame node; a mask or a field has none. Its two handles are the node's band, saved with the node: the player zeroes every pixel outside it (inside it when lo is above hi) before anything downstream reads the node |
 

@@ -108,6 +108,25 @@ def test_unwired_computes_none_downstream():
     assert g.compute("gray", 0) is None and g.compute("add", 0) is None and g.compute("same", 0) is None
 
 
+def test_a_second_input_is_read_by_name_keyed_and_required():
+    diff = tool("diff", fn=lambda f, p: f)
+    diff.INPUTS = {"bg": "gray"}
+    diff.run = lambda frames, row, params: frames(row) - frames(row, "bg")
+    doc = fan_out()                                  # video -> gray -> {add, same}
+    doc.add_node("diff", (0, 400))
+    doc.connect("add", "diff")
+    g = Graph(doc, Dec(), {**TOOLS, "diff": diff})
+    assert g.compute("diff", 2) is None and not g.fed("diff")                 # bg unwired: unfed, as a missing first input is
+    assert [p.where for p in D.validate(doc, {**TOOLS, "diff": diff}) if p.kind == "unfed"] == ["diff"]
+    doc.connect("same", "diff", "bg")
+    g.sync()
+    k = g.key("diff")
+    assert (g.compute("diff", 2) == 1).all()                                  # add is gray + 1, same is gray
+    doc.node("same").params["k"] = 2                                          # no effect on same's output, but behind bg
+    g.sync()
+    assert g.key("diff") != k and D.inputs_of(doc, {**TOOLS, "diff": diff}, "diff") == [("in", ("gray",)), ("bg", ("gray",))]
+
+
 def test_key_follows_params_and_wiring():
     doc = fan_out()
     g = Graph(doc, Dec(), TOOLS)

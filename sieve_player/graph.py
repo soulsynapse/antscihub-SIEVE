@@ -17,7 +17,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from . import density
-from .document import OPEN, OVERLAYABLE, VIDEO_PRODUCES, VIDEO_TOOL, fed, is_selector, produces
+from .document import INPUT, OPEN, OVERLAYABLE, VIDEO_PRODUCES, VIDEO_TOOL, fed, frame_inputs, is_selector, produces
 
 
 def _key(*parts):
@@ -110,16 +110,17 @@ class Memo:
 
 
 class Frames:
-    """What a frame tool's run() gets: frames(r) is the output of the node it reads, at row r. It
-    reads through the plan the computation began in, so one run() sees one graph even if the
-    document is synced under it."""
+    """What a frame tool's run() gets: frames(r) is the output of the node its first input reads,
+    at row r, and frames(r, name) that of another of its INPUTS. `key` changes whenever anything
+    upstream of any input does. It reads through the plan the computation began in, so one run()
+    sees one graph even if the document is synced under it."""
 
-    def __init__(self, graph, plan, source, key):
-        self._graph, self._plan, self._source = graph, plan, source
+    def __init__(self, graph, plan, sources, key):
+        self._graph, self._plan, self._sources = graph, plan, sources
         self.key, self.fps, self.count = key, graph.fps, graph.count
 
-    def __call__(self, row):
-        return self._graph._compute(self._plan, self._source, row)
+    def __call__(self, row, input=INPUT):
+        return self._graph._compute(self._plan, self._sources[input], row)
 
 
 class Series:
@@ -159,11 +160,12 @@ class _Entry:
     kind: str           # "video" | "frame" | "series" | "selector"
     params: dict
     band: tuple | None  # (lo, hi): what the node's plane, or signal, keeps; see document
-    src: str | None     # the node its input wire names
+    src: str | None     # the node its first input's wire names
     key: str
     raw_key: str         # the key without the band: what the memo holds
-    src_key: str | None
+    src_key: str | None  # what its run() sees as frames.key: every frame input's key, hashed together when there are several
     fed: bool
+    srcs: dict          # frame input name -> the node wired into it, or None
 
 
 class Graph:
@@ -190,6 +192,18 @@ class Graph:
         doc, tools = self.doc, self.tools
         keys, raw_keys = {}, {}
 
+        def sources(nid):
+            """Frame input name -> the node wired into it, or None; the first input alone when the tool is unknown."""
+            tool = tools.get(doc.node(nid).tool)
+            names = [INPUT] if tool is None or is_selector(tool) else frame_inputs(tool)
+            return {name: (w.src if (w := doc.source(nid, name)) else None) for name in names}
+
+        def up_key(nid, stack=()):
+            # Every frame input's key, hashed together when there are several, so a tool caching on
+            # frames.key and the node's own key both follow a change behind any input.
+            ups = [key_of(src, stack) if src is not None and src not in stack else "none" for src in sources(nid).values()]
+            return ups[0] if len(ups) == 1 else _key(*ups)
+
         def key_of(nid, stack=()):
             # The raw key names what the tool computes and the memo holds; the key adds the band, which
             # is applied on read, so what downstream sees is keyed by it and the node's own run is not.
@@ -198,9 +212,7 @@ class Graph:
                 if node.tool == VIDEO_TOOL:
                     keys[nid] = raw_keys[nid] = self._base
                 else:
-                    w = doc.source(nid)
-                    up = "none" if w is None or w.src in stack else key_of(w.src, (*stack, nid))
-                    raw_keys[nid] = _key(up, node.tool, json.dumps(node.params, sort_keys=True))
+                    raw_keys[nid] = _key(up_key(nid, (*stack, nid)), node.tool, json.dumps(node.params, sort_keys=True))
                     keys[nid] = raw_keys[nid] if node.band is None else _key(raw_keys[nid], node.band)
             return keys[nid]
 
@@ -213,10 +225,10 @@ class Graph:
                 kind = "selector"       # answers a path, once, before the decoder; never a row
             else:
                 kind = getattr(tool, "KIND", "frame")
-            w = doc.source(n.id)
-            src = w.src if w else None
+            srcs = sources(n.id)
+            src = srcs[INPUT]
             plan[n.id] = _Entry(tool, kind, dict(n.params), n.band, src, key_of(n.id), raw_keys[n.id],
-                                key_of(src) if src else None, fed(doc, n.id, tools))
+                                up_key(n.id) if src else None, fed(doc, n.id, tools), srcs)
             if kind == "series":
                 series.append(n.id)
         # The head is the first series node reading a frame node: it runs on the walked stack. The
@@ -367,7 +379,7 @@ class Graph:
         v = self.memo.get(mk)
         if v is None:
             with self.probe(nid, row, e.raw_key) as ev:
-                v = e.tool.run(Frames(self, plan, e.src, e.src_key), row, e.params)
+                v = e.tool.run(Frames(self, plan, e.srcs, e.src_key), row, e.params)
                 ev[1] = Memo._size(v)
             self.memo.put(mk, v)
         return v if raw or e.band is None else banded(v, e.band)

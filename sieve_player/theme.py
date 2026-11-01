@@ -41,7 +41,7 @@ LINE_LIFT = 20     # a layer's hairline edge is this much lighter than the layer
 MEASURED_LIFT = 18 # a measured result is a flat field this much lighter than the surface it sits on
 HOVER_LIFT = 4     # a node under the pointer is this much lighter, its edge brightened to match
 HOVER_EDGE = 125   # QColor.lighter() factor for that node's edge, percent
-FONT_PX = 12       # integer pixels, never points, so glyphs sit on the grid under display scaling
+FONT_PX = 12       # integer logical pixels, so glyphs sit on the grid under display scaling; see _size
 FONT_WEIGHT = 500  # regular Inter reads thin on dark; 500 fills the stroke without reading bold
 HINTING = 3        # QFont.HintingPreference: full. DirectWrite ignores it; see play()
 VALUE_W = 36       # a slider's mono readout
@@ -107,18 +107,23 @@ def install_font(app: QApplication) -> str:
     return family
 
 
+def _size(font: QFont) -> QFont:
+    # FONT_PX as points at Qt's 96 logical dpi: the same pixels, and the font keeps a point size,
+    # which Qt's combo popup asks the app font for and warns about when it is -1
+    font.setPointSizeF(FONT_PX * 72 / 96)
+    return font
+
+
 def ui_font(family: str | None = None) -> QFont:
-    font = QFont(family or QApplication.font().family())
-    font.setPixelSize(FONT_PX)
+    font = _size(QFont(family or QApplication.font().family()))
     font.setWeight(QFont.Weight(FONT_WEIGHT))
     font.setHintingPreference(QFont.HintingPreference(HINTING))
     return font
 
 
 def mono_font() -> QFont:
-    font = QFont()
+    font = _size(QFont())
     font.setFamilies(MONO)
-    font.setPixelSize(FONT_PX)
     font.setHintingPreference(QFont.HintingPreference(HINTING))
     return font
 

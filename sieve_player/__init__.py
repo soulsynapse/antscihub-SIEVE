@@ -41,6 +41,8 @@ def play(source, path=None, title="SIEVE", tools=()):
         QApplication.setHighDpiScaleFactorRoundingPolicy(
             Qt.HighDpiScaleFactorRoundingPolicy.Round)  # 125% becomes 100%, 150% becomes 200%: no fractional blur
         app = QApplication(sys.argv)
+    import faulthandler
+    faulthandler.enable()   # a crash in cv2 or Qt prints every thread's Python stack instead of nothing
     from .dev import qt_trace
     qt_trace.install()
     theme.install_font(app)

@@ -126,6 +126,20 @@ added, since the fields below triple the event's width.
   the recorder's spec decides what a start and stop in the player look like.
   Check: a test attaches a dump, blocks the GUI thread for a known time, and finds a lateness
   event at least that long; the walk test finds a resident-memory figure on each progress event.
+- [x] The density is the graph's, not the worker's. The walk folds every plane it computes into a
+  row of counts for the density plot, and that work ran in the worker's loop under no node's
+  probe, so the first reader to subtract probed time from wall time found about half of every
+  cold row unaccounted for, scaling with the number of plane-producing nodes and not the walked
+  chain. The graph now answers a node's density at a row the way it answers its output: memoized
+  under a key of its own beside the plane, so a rewalk over rows the memo holds folds nothing
+  again, and probed on the node under a kind of its own, "fold", a run the node's output costs
+  that the tool did not do. Stats leaves it out of the per-node means, which stay the tool's; the
+  trace draws it as a span; a reader that wants a node's whole cost per row adds the two. The
+  worker asks for the counts and no longer knows what a fold is. The fold's memo entries evict
+  as any other, under the fold key, which the sync boundary's keys do not carry.
+  Check: a test asks the graph for a plane node's density twice and finds one "fold" event on the
+  node and none the second time; a node whose output is not a plane answers None and emits
+  nothing. The worker test still receives a density per plane node.
 - [x] The probe is cheaper than what it measures, and `bench.py` says by how much: its fill runs
   once with the callable unset and once with the dump attached, and prints both, and the dump's
   file size for the run. The two figures are a measurement, so they live in a commit message or a

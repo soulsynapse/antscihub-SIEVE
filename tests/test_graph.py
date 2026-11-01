@@ -342,3 +342,17 @@ def test_stats_counts_everything_over_a_short_walk(tmp_path):
     assert s["memo_mb"] > 0 and s["cache_mb"] > 0 and 0 < s["memo_hit"] < 1 and 0 < s["cache_hit"] < 1
     assert s["series_ms"] is None and s["evictions"] > 0    # no chain in this document
     g.decoder.close()
+
+
+def test_a_density_is_folded_once_under_the_node_and_memoized_beside_its_plane():
+    g = Graph(fan_out(), Dec(), TOOLS)
+    seen = []
+    g.on_event = seen.append
+    counts = g.density("gray", 3)
+    assert counts.shape == (256,) and counts.sum() == 4 * 6
+    folds = [ev for ev in seen if ev.kind == "fold"]
+    assert [(ev.node, ev.row) for ev in folds] == [("gray", 3)] and folds[0].bytes == counts.nbytes
+    assert folds[0].key != g.key("gray") and folds[0].ms >= 0
+    seen.clear()
+    assert (g.density("gray", 3) == counts).all() and seen == []           # held: no run, no fold
+    assert g.density("video", 3) is None and g.density("nowhere", 3) is None and seen == []

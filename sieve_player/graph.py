@@ -16,6 +16,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from . import density
 from .document import OPEN, OVERLAYABLE, VIDEO_PRODUCES, VIDEO_TOOL, fed, is_selector, produces
 
 
@@ -138,7 +139,7 @@ class Event:
     node: str | None    # the node that ran, or read; None on a boundary
     row: int | None
     key: str | None     # the node's raw key, what the memo holds under
-    kind: str           # "run" | "error" | "cache" | "step" | "seek" | "sync" | "evict" | "uncache" | "progress" | "dump"
+    kind: str           # "run" | "fold" | "error" | "cache" | "step" | "seek" | "sync" | "evict" | "uncache" | "progress" | "dump"
     bytes: int          # the result's; what an eviction freed
     ms: float           # wall, exclusive of the runs this one opened
     t: float            # start, on the probe's clock (perf_counter); orders events across threads
@@ -369,6 +370,26 @@ class Graph:
             self.memo.put(mk, v)
         return v if raw or e.band is None else banded(v, e.band)
 
+    def density(self, nid, row):
+        """`nid`'s plane at `row` folded to (BINS,) counts, memoized under its own key and probed on
+        the node as a "fold"; None when the output is not a plane. Worker threads only."""
+        with self._lock:
+            plan = self._plan
+        e = plan.get(nid)
+        if e is None or e.kind != "frame" or not e.fed:
+            return None
+        k = (_key(e.raw_key, "fold"), row)
+        v = self.memo.get(k)
+        if v is None:
+            plane = self._compute(plan, nid, row, raw=True)
+            if not density.is_plane(plane):
+                return None
+            with self.probe(nid, row, k[0]) as ev:
+                v = density.fold(plane)
+                ev[0], ev[1] = "fold", v.nbytes
+            self.memo.put(k, v)
+        return v
+
     def peek(self, row, nid=None):
         """Memo-only read of the shown node, or of `nid`, at `row`; None if it isn't there. GUI-safe."""
         with self._lock:
@@ -401,8 +422,8 @@ class Stats:
     def event(self, ev):
         if self._prev is not None:
             self._prev(ev)
-        if ev.kind in ("sync", "evict", "uncache", "error"):
-            return
+        if ev.kind in ("sync", "evict", "uncache", "error", "fold"):
+            return                          # the means are the tool's; a fold is not
         with self._lock:
             if ev.kind == "progress":
                 if self._walk and ev.row < self._walk[-1][1]:

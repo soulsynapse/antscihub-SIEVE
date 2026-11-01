@@ -38,8 +38,11 @@ def test_holds_nodes_wires_flags_video():
     assert doc.node("gray") == D.Node("gray", "gray", {"k": 3}, (10.5, 120.0))
     assert doc.wires == [D.Wire("video", "gray", D.INPUT)]
     assert doc.display == "gray" and doc.overlay == "gray" and doc.video == "clip.mp4"
+    assert "pinned" not in doc.to_dict()
+    doc.pinned = "gray"
+    assert D.Document.from_dict(json.loads(json.dumps(doc.to_dict()))).pinned == "gray"
     doc.remove_node("gray")
-    assert doc.display is None and doc.overlay is None
+    assert doc.display is None and doc.overlay is None and doc.pinned is None
 
 
 def test_band_rides_with_its_node_and_is_absent_until_set():

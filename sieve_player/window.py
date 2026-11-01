@@ -1,5 +1,5 @@
-"""The window: the frame left, the canvas over the parameter pane right, the transport across the
-bottom.
+"""The window: the header across the top, the frame left, the canvas over the parameter pane right,
+the transport across the bottom.
 
 The document is the one source of truth for the graph. The canvas and the pane read and write it
 and say what changed; the window carries the change to the runtime, which is built on every load
@@ -7,6 +7,12 @@ of a video and re-synced on every change. The frame shows the node that carries 
 a flagged node the video does not reach blanks the frame and says why, and no flag is empty
 ground. The transport, the decoder, the worker and the memo are as they were: the display reads
 the memo and never waits on the decoder. It opens with no video and never prompts.
+
+The header's button walks the whole clip, in the worker's time behind the window; the transport's
+strip draws the pinned series' signal (the document's pinned flag, set from the pin in a series
+card's corner) over the clip walk's rows when there are any, else over the window's, at their place.
+A change to a frame tool drops the clip walk, since its rows were of a graph that is gone; the
+button runs it again.
 """
 import os
 import time
@@ -15,8 +21,8 @@ import traceback
 import cv2
 import numpy as np
 from PySide6.QtCore import QRectF, Qt, QTimer
-from PySide6.QtGui import QImage, QKeySequence, QPainter, QPen, QPixmap, QShortcut
-from PySide6.QtWidgets import QFileDialog, QMainWindow, QSizePolicy, QVBoxLayout, QWidget
+from PySide6.QtGui import QFontMetrics, QImage, QKeySequence, QPainter, QPen, QPixmap, QShortcut
+from PySide6.QtWidgets import QFileDialog, QHBoxLayout, QMainWindow, QPushButton, QSizePolicy, QVBoxLayout, QWidget
 
 from . import dev, document, theme
 from .canvas import Canvas
@@ -24,7 +30,7 @@ from .decoder import Decoder
 from .graph import Graph
 from .pane import Pane
 from .registry import Entry
-from .theme import GAP, PAD
+from .theme import GAP, PAD, ROW_H, readout
 from .timeline import Timeline
 from .trace import Dump
 from .widgets import Trace
@@ -219,6 +225,31 @@ def catalogue(items):
     return modules, {t.NAME: t for t in modules}, broken
 
 
+class Header(QWidget):
+    """The row across the top: the clip walk's progress and its button, at the right."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(GAP)
+        self.note = readout(mono=True, wrap=False)
+        self.note.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.note.setMinimumWidth(QFontMetrics(self.note.font()).horizontalAdvance("clip 000000/000000"))   # so a digit more never shifts it
+        self.walk = QPushButton("Walk clip")
+        self.walk.setFixedSize(80, ROW_H)
+        lay.addStretch(1)
+        lay.addWidget(self.note)
+        lay.addWidget(self.walk)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+
+    def set_walking(self, on):
+        self.walk.setText("Stop walk" if on else "Walk clip")
+
+    def set_progress(self, done, total):
+        self.note.setText(f"clip {done}/{total}" if done < total else "")
+
+
 class Column(QWidget):
     """The right side: the canvas over the pane. The pane takes the height its content asks for, up
     to `SHARE` of the column, and the canvas the rest; nothing is dragged between them."""
@@ -256,7 +287,9 @@ class PlayerWindow(QMainWindow):
         self.row, self.playing, self.window_ = 0, False, (0, 0)
         self._resume = False  # playback to restore when a playhead drag ends
         self.results, self.result_start = {}, 0   # node id -> the series chain's results, and the row they start at
-        self._taken = {}       # (node id, path input) -> the file last handed to its loader
+        self.clip_results = {}                    # the same over the clip walk's rows, from row 0; {} when there are none
+        self._clip_asked = False                  # a clip walk was asked for and has not finished or been stopped
+        self._taken = {}      # (node id, path input) -> the file last handed to its loader
         self._driven = {}      # (node id, path input) -> (the keys its loader set, the selector's id)
         self.traces = []
         self._hooked = set()   # ids of traces already wired to the strip's cursor
@@ -270,7 +303,11 @@ class PlayerWindow(QMainWindow):
         self.canvas.changed.connect(self.sync)
         self.canvas.flagged.connect(self.reflag)
         self.pane.paramsChanged.connect(self._params_changed)
+        self.pane.pinChanged.connect(self._show_pinned)
         self.pane.videoPicked.connect(self.load)
+        self.header = Header()
+        self.header.walk.clicked.connect(self._toggle_clip)
+        self.header.setEnabled(False)
 
         right = Column()
         right.lay.addWidget(self.canvas, 1)
@@ -289,6 +326,7 @@ class PlayerWindow(QMainWindow):
         lay = QVBoxLayout(central)
         lay.setContentsMargins(PAD, PAD, PAD, PAD)
         lay.setSpacing(GAP)
+        lay.addWidget(self.header, 0)
         lay.addWidget(split, 1)
         lay.addWidget(self.timeline, 0)
         self.setCentralWidget(central)
@@ -399,7 +437,7 @@ class PlayerWindow(QMainWindow):
         if self.graph is None:
             return
         self.graph.sync()
-        self.worker.invalidate()
+        self._invalidate()
         self.goto(self.row, commit=True)
 
     def reflag(self):
@@ -422,8 +460,18 @@ class PlayerWindow(QMainWindow):
         if nid in self.graph.chain:
             self.worker.rerun_series()
         else:
-            self.worker.invalidate()
+            self._invalidate()
             self.goto(self.row, commit=True)
+
+    def _invalidate(self):
+        """The frame tools changed: the walk restarts, and the clip walk's rows are of a graph that is
+        gone, so they are dropped here and now rather than when the worker gets to it."""
+        self.worker.invalidate()
+        self._clip_asked = False
+        self.header.set_walking(False)
+        self.header.set_progress(0, 0)
+        self.clip_results = {}
+        self._show_pinned()
 
     # -- loading ---------------------------------------------------------
     def _pick_video(self):
@@ -561,6 +609,10 @@ class PlayerWindow(QMainWindow):
         self.worker.walked.connect(ct.set_progress)
         self.worker.walked.connect(lambda _, n: self._set_length(n))   # the walk's own length: clamped, or closed early
         self.worker.failed.connect(lambda r: ct.progress.setText(f"tool raised at row {r}, see console"))
+        self.worker.clipWalked.connect(self._clip_walked)
+        self.worker.clipReady.connect(self._clip_ready)
+        self.worker.clipRefused.connect(self._clip_refused)
+        self.header.setEnabled(True)
         self.timeline.strip.set_count(self.count, self.fps)
         ct.set_count(self.count, self.fps)
         ct.progress.setText("")
@@ -588,7 +640,11 @@ class PlayerWindow(QMainWindow):
             self.dump = self.lateness = None
         self.decoder.close()
         self.decoder = self.graph = self.worker = None
-        self.results = {}
+        self.results, self.clip_results, self._clip_asked = {}, {}, False
+        self.header.set_walking(False)
+        self.header.set_progress(0, 0)
+        self.header.setEnabled(False)
+        self.timeline.strip.set_series(None, 0)
         self.row, self.window_ = 0, (0, 0)
         self.display.clear()
 
@@ -695,6 +751,50 @@ class PlayerWindow(QMainWindow):
             if w is not None and hasattr(w, "show_result"):
                 w.show_result(result, start, fps)
         self._update_gate()
+        self._show_pinned()
+
+    # -- the clip walk ---------------------------------------------------
+    def _toggle_clip(self):
+        if self.worker is None:
+            return
+        if self._clip_asked:
+            self.worker.stop_clip()
+            self._clip_asked = False
+            self.header.set_progress(0, 0)
+        else:
+            self.worker.walk_clip()
+            self._clip_asked = True
+            self.header.note.setText("clip: after the window")
+        self.header.set_walking(self._clip_asked)
+
+    def _clip_walked(self, done, total):
+        if self._clip_asked:
+            self.header.set_progress(done, total)
+            if done >= total:
+                self._clip_asked = False
+                self.header.set_walking(False)
+
+    def _clip_ready(self, results, start, fps):
+        self.clip_results = results
+        self._show_pinned()
+
+    def _clip_refused(self, why):
+        self._clip_asked = False
+        self.header.set_walking(False)
+        self.header.note.setText(why)
+
+    def _show_pinned(self):
+        """The strip draws the pinned node's signal: the clip walk's when it has one, else the
+        window's, each at its own rows; nothing when no node is pinned or the pinned has no signal."""
+        nid = None if self.doc is None else self.doc.pinned
+        if nid in self.clip_results:
+            r, start = self.clip_results[nid], 0
+        else:
+            r, start = self.results.get(nid), self.result_start
+        if isinstance(r, dict) and "signal" in r:
+            self.timeline.strip.set_series(r["signal"], start, r.get("gate"))
+        else:
+            self.timeline.strip.set_series(None, 0)
 
     def _set_length(self, rows):
         """Every trace's x axis is the window, so a walk fills in at its place instead of stretching."""

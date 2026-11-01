@@ -1,7 +1,7 @@
 """The saved form of a pipeline.
 
-Nodes, wires, the display and overlay flags and the video path; nothing of the canvas's view or the runtime's
-memo. A node may carry a band, two values in its output's units: the runtime zeroes every pixel of
+Nodes, wires, the display, overlay and pinned flags and the video path; nothing of the canvas's view or the runtime's
+memo. The pinned flag names the series node whose signal the timeline draws over the clip. A node may carry a band, two values in its output's units: the runtime zeroes every pixel of
 a plane, or every row of a series node's signal, outside it (inside it when lo is above hi) before
 anything downstream reads the node, and the handles on the pane's density or trace are its control.
 It changes results, so it is saved with the node; a series node without one keeps every row. This
@@ -69,7 +69,8 @@ class Document:
     wires: list = field(default_factory=list)
     display: str | None = None
     overlay: str | None = None                                      # heated over the displayed frame; None is off
-    video: str | None = None                                        # as written
+    pinned: str | None = None                                       # the series node the timeline draws; None is none
+    video: str | None = None                                      # as written
     extra: dict = field(default_factory=dict, repr=False)
     path: str | None = field(default=None, compare=False)           # where it was loaded from or saved to
 
@@ -98,13 +99,15 @@ class Document:
         return node
 
     def remove_node(self, nid):
-        """Removes the node, every wire into or out of it, and either flag if it carried it."""
+        """Removes the node, every wire into or out of it, and any flag it carried."""
         self.nodes = [n for n in self.nodes if n.id != nid]
         self.wires = [w for w in self.wires if nid not in (w.src, w.dst)]
         if self.display == nid:
             self.display = None
         if self.overlay == nid:
             self.overlay = None
+        if self.pinned == nid:
+            self.pinned = None
 
     def connect(self, src, dst, input=INPUT):
         """Wires `src` into `dst`'s input, replacing whatever fed it."""
@@ -145,6 +148,7 @@ class Document:
             "video": self.video,
             "display": self.display,
             "overlay": self.overlay,
+            **({"pinned": self.pinned} if self.pinned is not None else {}),
             "nodes": [{"id": n.id, "tool": n.tool, "params": n.params, "pos": list(n.pos),
                        **({"band": list(n.band)} if n.band is not None else {}), **n.extra} for n in self.nodes],
             "wires": [{"from": w.src, "to": w.dst, "input": w.input} for w in self.wires],
@@ -156,9 +160,10 @@ class Document:
         v = d.get("version")
         if not isinstance(v, int) or v > VERSION:
             raise FormatError(f"document is format version {v!r}; this module reads up to {VERSION}")
-        top = {"version", "video", "display", "overlay", "nodes", "wires"}
+        top = {"version", "video", "display", "overlay", "pinned", "nodes", "wires"}
         node_keys = {"id", "tool", "params", "pos", "band"}
-        doc = cls(video=d.get("video"), display=d.get("display"), overlay=d.get("overlay"), extra={k: v for k, v in d.items() if k not in top})
+        doc = cls(video=d.get("video"), display=d.get("display"), overlay=d.get("overlay"), pinned=d.get("pinned"),
+                  extra={k: v for k, v in d.items() if k not in top})
         for nd in d.get("nodes", []):
             if any(n.id == nd["id"] for n in doc.nodes):
                 raise FormatError(f"node id {nd['id']!r} appears twice")

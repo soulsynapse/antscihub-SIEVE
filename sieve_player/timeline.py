@@ -1,7 +1,11 @@
 """The transport: a layer-1 box across the bottom, the control row over the full-width strip
-(playhead + loop window), which is a layer-2 field inside it."""
-from PySide6.QtCore import QPoint, QRectF, Qt, Signal
-from PySide6.QtGui import QColor, QPainter, QPen
+(playhead + loop window), which is a layer-2 field inside it. The strip's x axis is the whole clip,
+and under its handle it draws the pinned series' signal at its rows, as a trace does over the
+window: a column covering more than one row is their min and max, so nothing is hidden and nothing
+is added, and the rows its gate keeps are washed."""
+import numpy as np
+from PySide6.QtCore import QPoint, QPointF, QRectF, Qt, Signal
+from PySide6.QtGui import QColor, QPainter, QPen, QPolygonF
 from PySide6.QtWidgets import QDoubleSpinBox, QHBoxLayout, QLabel, QPushButton, QSizePolicy, QWidget
 
 from . import theme
@@ -28,6 +32,7 @@ class Strip(QWidget):
         self.count, self.fps = 1, 30.0
         self.playhead, self.window = 0, (0, 0)
         self.hover = -1
+        self.values, self.gate, self.start = None, None, 0   # the pinned series' signal and gate, from row start
         self._mode = None        # "head" | "body" | "place"
         self._draft = None       # (start, length) while a window drag is live
         self._grab = 0           # row offset of the grab point inside the body
@@ -54,6 +59,13 @@ class Strip(QWidget):
 
     def set_hover(self, row):
         self.hover = row
+        self.update()
+
+    def set_series(self, values, start, gate=None):
+        """The signal drawn under the handle, from row `start`; None draws none."""
+        self.values = None if values is None else np.asarray(values, np.float32)
+        self.gate = None if gate is None else np.asarray(gate, bool)
+        self.start = start
         self.update()
 
     def _x(self, row):
@@ -86,6 +98,7 @@ class Strip(QWidget):
             a = theme.ACCENT
             p.fillRect(QRectF(x0, 1, x1 - x0, self.height() - 2), QColor(a.red(), a.green(), a.blue(), 40))
             p.fillRect(QRectF(x0, 1, x1 - x0, self.GRAB), a)
+        self._paint_series(p)
         if self.hover >= 0:
             p.setPen(QPen(qgray(theme.INK_2), 1))
             x = int(self._x(self.hover))
@@ -93,6 +106,38 @@ class Strip(QWidget):
         p.setPen(QPen(qgray(theme.HEAD), 1.5))
         x = int(self._x(self.playhead))
         p.drawLine(x, 1, x, self.height() - 2)
+
+    def _paint_series(self, p):
+        """Each pixel column the values cover: the min and max of its rows, as one polygon; the
+        columns whose gate keeps any row, washed first. A row that stands alone in its column is a
+        point of the line."""
+        if self.values is None or not len(self.values):
+            return
+        inner = QRectF(1, self.GRAB + 2, self.width() - 2, self.height() - self.GRAB - 4)
+        n, w = len(self.values), max(1, self.width())
+        col = (self.start + np.arange(n)) * w // self.count
+        starts = np.flatnonzero(np.diff(col, prepend=-1))
+        xs = col[starts] + 0.5
+        top = max(float(self.values.max()), 1e-6)
+        y = lambda v: inner.bottom() - inner.height() * min(float(v) / top, 1.0)
+        p.setRenderHint(QPainter.Antialiasing, True)
+        p.setPen(Qt.NoPen)
+        if self.gate is not None:
+            kept = np.maximum.reduceat(self.gate[:n].astype(np.uint8), starts) > 0
+            edges = np.flatnonzero(np.diff(np.concatenate(([0], kept.astype(np.int8), [0]))))
+            p.setBrush(theme.GATED)
+            for a, b in zip(edges[0::2], edges[1::2] - 1):
+                p.drawRect(QRectF(xs[a] - 0.5, inner.top(), xs[b] - xs[a] + 1, inner.height()))
+        lo, hi = np.minimum.reduceat(self.values, starts), np.maximum.reduceat(self.values, starts)
+        line = theme.GATE if self.gate is not None else theme.SERIES
+        p.setPen(QPen(line, 1))
+        p.setBrush(line)
+        if len(xs) == 1:   # one column: a polygon of one x has no area and no length, so its span is a line
+            p.drawLine(QPointF(xs[0], y(hi[0])), QPointF(xs[0], max(y(lo[0]), y(hi[0]) + 1)))
+        else:
+            p.drawPolygon(QPolygonF([QPointF(x, y(v)) for x, v in zip(xs, hi)]
+                                    + [QPointF(x, y(v)) for x, v in zip(xs[::-1], lo[::-1])]))
+        p.setRenderHint(QPainter.Antialiasing, False)
 
     def mousePressEvent(self, e):
         if e.button() != Qt.LeftButton:

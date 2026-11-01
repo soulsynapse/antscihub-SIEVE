@@ -17,8 +17,8 @@ from pathlib import Path
 from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QColor, QFont, QFontDatabase, QFontMetrics, QPainter, QPen, QPixmap
 from PySide6.QtSvg import QSvgRenderer
-from PySide6.QtWidgets import (QAbstractSpinBox, QApplication, QComboBox, QFrame, QGridLayout, QLabel,
-                               QSplitter, QSplitterHandle,
+from PySide6.QtWidgets import (QAbstractButton, QAbstractSpinBox, QApplication, QComboBox, QFrame, QGridLayout,
+                               QHBoxLayout, QLabel, QSplitter, QSplitterHandle,
                                QLineEdit, QPushButton, QVBoxLayout, QWidget)
 
 GROUND = 31        # ground gray, 0-255
@@ -205,8 +205,54 @@ def sheet() -> str:
     """
 
 
+def depth_of(w: QWidget) -> int:
+    """The depth of the nearest Layer `w` sits in; 0 on the ground."""
+    parent = w.parentWidget()
+    while parent is not None:
+        if isinstance(parent, Layer):
+            return parent.depth
+        parent = parent.parentWidget()
+    return 0
+
+
+class GlyphButton(QAbstractButton):
+    """A square the height of a form row with a line glyph centred, as the canvas's column draws its
+    buttons: lifted under the pointer, dim when disabled. Named a second glyph, it is checkable and
+    shows `on` while checked, `off` otherwise."""
+
+    def __init__(self, off: str, on: str | None = None, tip: str = "", parent=None) -> None:
+        super().__init__(parent)
+        self.off, self.on = off, on
+        self.setCheckable(on is not None)
+        self.setFixedSize(ROW_H, ROW_H)
+        self.setToolTip(tip)
+        self.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+
+    def paintEvent(self, event) -> None:
+        del event
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing, True)
+        base = layer(depth_of(self) + 1)
+        if self.underMouse() and self.isEnabled():
+            p.setPen(QPen(qgray(base + LINE_LIFT).lighter(HOVER_EDGE), 1))
+            p.setBrush(qgray(base + HOVER_LIFT))
+            p.drawRoundedRect(QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5), RADIUS, RADIUS)
+        name = self.on if self.isChecked() and self.on else self.off
+        ink = INK_2 - 50 if not self.isEnabled() else INK if self.isChecked() or not self.isCheckable() else INK_2
+        pm = glyph(name, ink, GLYPH, self.devicePixelRatioF())
+        p.drawPixmap(QPointF((self.width() - GLYPH) / 2, (self.height() - GLYPH) / 2), pm)
+        p.end()
+
+    def event(self, e):
+        if e.type() in (e.Type.HoverEnter, e.Type.HoverLeave):
+            self.update()
+        return super().event(e)
+
+
 class Layer(QFrame):
-    """A surface one step lighter than whatever it sits on, named in white if it has a name."""
+    """A surface one step lighter than whatever it sits on, named in white if it has a name. A named
+    layer's head is a row: the name left, and whatever `add_corner` gives it at the right."""
 
     def __init__(self, depth: int, name: str = "", parent=None) -> None:
         super().__init__(parent)
@@ -215,15 +261,23 @@ class Layer(QFrame):
         self.body = QVBoxLayout(self)
         self.body.setContentsMargins(PAD, PAD, PAD, PAD)
         self.body.setSpacing(GAP)
-        self.head = None
+        self.head = self.head_row = None
         if name:
             self.head = QLabel(name[0].upper() + name[1:])
             self.head.setProperty("role", "name")
-            self.body.addWidget(self.head)
+            self.head_row = QHBoxLayout()
+            self.head_row.setContentsMargins(0, 0, 0, 0)
+            self.head_row.setSpacing(GAP)
+            self.head_row.addWidget(self.head, 1)
+            self.body.addLayout(self.head_row)
             self.body.addSpacing(max(0, HEAD_GAP - GAP))
 
     def add(self, w: QWidget, stretch: int = 0) -> None:
         self.body.addWidget(w, stretch)
+
+    def add_corner(self, w: QWidget) -> None:
+        """Puts `w` at the right end of the head row; the layer must have a name."""
+        self.head_row.addWidget(w, 0, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
 
     def paintEvent(self, event) -> None:
         del event

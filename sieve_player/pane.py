@@ -18,8 +18,9 @@ every fed frame node; a node whose output is a mask or a field, or that the vide
 reach, shows none; its handles are the node's band (see `document`), written like a param. Under a
 series node's settings sits its trace, the result's signal over the window, which the window hands
 the pane for every chain node; its handles are the node's band the same way, in the signal's units,
-and the rows the band shuts out are washed. A node whose tool the catalogue lacks shows which name was
-not found and its params read-only. The pane writes params into the document and says which node
+and the rows the band shuts out are washed. The pin in a series card's corner is the document's
+pinned flag: one series node at a time, whose signal the timeline draws. A node whose tool the catalogue lacks shows which name was
+not found and its params read-only. The pane writes params and the pin into the document and says what
 changed; it knows nothing of the runtime.
 """
 import os
@@ -32,7 +33,7 @@ from PySide6.QtGui import QFontMetrics
 from PySide6.QtWidgets import QFileDialog, QFrame, QPushButton, QScrollArea, QVBoxLayout, QWidget
 
 from .document import OPEN, VIDEO_TOOL, is_selector, paths
-from .theme import GAP, PAD, WIDE_W, Form, Layer, measured, readout
+from .theme import GAP, PAD, WIDE_W, Form, GlyphButton, Layer, measured, readout
 from .widgets import Density, Trace
 
 VIDEO_FILTER = "Video (*.mp4 *.MP4 *.avi *.mov *.mkv);;All (*)"
@@ -208,6 +209,7 @@ class Pane(QWidget):
     `exports[nid]` the Export under a node whose tool exports. Its size hint is the shown card's
     height, so a host that stacks it under the canvas gives it only the room its content needs."""
     paramsChanged = Signal(str)   # this node's params in the document changed here
+    pinChanged = Signal()         # the document's pinned flag moved here
     videoPicked = Signal(str)
 
     def __init__(self, tools, parent=None):
@@ -217,6 +219,7 @@ class Pane(QWidget):
         self.cards, self.widgets, self.exports, self.notes = {}, {}, {}, {}
         self.densities = {}   # frame node -> its Density plot, hidden until the window hands it counts
         self.traces = {}      # series node -> its Trace, hidden until the window hands it a result
+        self.pins = {}        # series node -> the pin in its card's corner
         self.video = None
         self.current = None
         self._src, self._fps = None, None
@@ -261,6 +264,7 @@ class Pane(QWidget):
         self.notes.pop(nid, None)
         self.densities.pop(nid, None)
         self.traces.pop(nid, None)
+        self.pins.pop(nid, None)
         if self.video is not None and self.video.parent() is card:
             self.video = None
         self._lay.removeWidget(card)
@@ -314,6 +318,11 @@ class Pane(QWidget):
                     plot.hide()
                     card.add(plot)
                     self.traces[node.id] = plot
+                    pin = GlyphButton("pin", "pinned", "draw this signal on the timeline")
+                    pin.setChecked(self.doc.pinned == node.id)
+                    pin.clicked.connect(lambda on, nid=node.id: self._pin(nid, on))
+                    card.add_corner(pin)
+                    self.pins[node.id] = pin
             if w is not None and getattr(tool, "export_command", None) is not None:
                 ex = Export(tool)
                 ex.set_params(node.params)
@@ -329,6 +338,13 @@ class Pane(QWidget):
         plot = self.densities.get(nid) or self.traces[nid]
         self.doc.node(nid).band = tuple(plot.levels)
         self.paramsChanged.emit(nid)
+
+    def _pin(self, nid, on):
+        """A pin was clicked: the flag lands on `nid` or leaves it, and every pin shows where it is."""
+        self.doc.pinned = nid if on else None
+        for i, pin in self.pins.items():
+            pin.setChecked(i == self.doc.pinned)
+        self.pinChanged.emit()
 
     def _changed(self, nid):
         node = self.doc.node(nid)

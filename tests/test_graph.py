@@ -356,3 +356,51 @@ def test_a_density_is_folded_once_under_the_node_and_memoized_beside_its_plane()
     seen.clear()
     assert (g.density("gray", 3) == counts).all() and seen == []           # held: no run, no fold
     assert g.density("video", 3) is None and g.density("nowhere", 3) is None and seen == []
+
+
+def test_the_clip_walk_runs_behind_the_window_and_a_frame_change_drops_it():
+    """Asked for, the clip walk covers every row from the first once the window is walked, and the
+    chain's result over it arrives as clipReady; a change to a frame tool abandons it and says so
+    with an empty clipReady, while a series-only change reruns the chain on the clip's stack."""
+    from PySide6.QtWidgets import QApplication
+    from sieve_player.worker import Worker
+    QApplication.instance() or QApplication([])
+    head = tool("head", kind="series", produces="signal")
+    head.run = lambda series, params: {"signal": np.asarray(series.data, np.float64).reshape(len(series.data), -1)[:, 0] + params["k"]}
+    head.fold = lambda frame: np.asarray([float(frame.mean())])
+    doc = D.from_tools([gray, head])
+    g = Graph(doc, Dec(), {**TOOLS, "head": head})
+    w = Worker(g, every=3)
+    clips, walked, windows = [], [], []
+    w.clipReady.connect(lambda r, s, fps: clips.append((r, s)))
+    w.clipWalked.connect(lambda d, n: walked.append((d, n)))
+    w.seriesReady.connect(lambda r, s, fps: windows.append((r, s)))
+    w.set_window(4, 3)
+    w.walk_clip()
+    w.start()
+    for _ in range(500):
+        QApplication.processEvents()
+        if clips and len(clips[-1][0].get("head", {}).get("signal", ())) == 10:
+            break
+        time.sleep(0.01)
+    assert walked[-1] == (10, 10) and clips[-1][1] == 0
+    assert clips[-1][0]["head"]["signal"].tolist() == [r + 1 + 1 for r in range(10)]   # gray adds k=1, head adds k=1
+    assert windows and len(windows[-1][0]["head"]["signal"]) == 3 and windows[-1][1] == 4
+    assert windows[0][1] == 4 and clips[0][1] == 0 and walked[0][0] == 0            # the window's result came first
+    doc.node("head").params["k"] = 5
+    g.sync()
+    w.rerun_series()
+    for _ in range(500):
+        QApplication.processEvents()
+        if clips[-1][0]["head"]["signal"][0] == 6:
+            break
+        time.sleep(0.01)
+    assert clips[-1][0]["head"]["signal"].tolist() == [r + 1 + 5 for r in range(10)]
+    w.invalidate()
+    for _ in range(500):
+        QApplication.processEvents()
+        if clips[-1][0] == {}:
+            break
+        time.sleep(0.01)
+    w.stop()
+    assert clips[-1] == ({}, 0) and walked[-1] == (0, 0)

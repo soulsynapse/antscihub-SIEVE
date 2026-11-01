@@ -144,7 +144,9 @@ class Event:
     ms: float           # wall, exclusive of the runs this one opened
     t: float            # start, on the probe's clock (perf_counter); orders events across threads
     thread: str         # the emitting thread's name
-    cpu_ms: float       # the thread's CPU time over the same span, exclusive likewise; wall far above it is a wait
+    cpu_ms: float       # the thread's CPU time over the same span, exclusive likewise; wall far above it is a wait. On
+                        # Windows thread_time ticks at the scheduler quantum (~16 ms), so one event's is 0 or a tick and
+                        # only a sum over many events is a figure
     serves: str | None  # "scrub" | "walk": what the worker was doing; None off the worker (bench, tests)
     length: int | None  # progress only: rows in the window, `row` being the rows done
     keys: dict | None   # sync only: every node's key under the new plan, band included; diff two to see what a drag changed

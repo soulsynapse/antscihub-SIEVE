@@ -1,7 +1,8 @@
 # The stores against the window: LRU thrash, and where a scrub's cost lands
 
-2026-10-31, on v5-performance-monitor at efd1fe10, read off a dev monitor (`sieve_player/dev/monitor.py`,
-uncommitted) polling the runtime and chaining consumers onto the probe, not off a dump. The file is
+2026-10-31, on v5-performance-monitor at efd1fe10, read off the first dev monitor, discarded and
+rebuilt as `sieve_player/dev/monitor.py` in 295ac684, polling the runtime and chaining consumers onto
+the probe, not off a dump. The file is
 `video-tests/rep3_intermittent_crop.MP4`, 456×462 at 59.94 fps, 30579 rows; the document
 `video-tests/test.json`, video → gray → rescale → threshold → motion; the window 600 rows. Limits at
 the time: decoder cache 256 MB, memo 512 MB. Numbers are one run each, offscreen, and vary by a

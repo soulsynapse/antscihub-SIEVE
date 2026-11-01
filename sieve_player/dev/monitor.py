@@ -1,7 +1,7 @@
 """Dev > Monitor: the probe's stream read live as a summary of the clip and a line per node in walk order.
 
 Two scopes. Share and runs are this walk's, reset when a progress row falls below the last. Per-run
-means, the unprobed cost per cold row, and what they feed (the cold projection, store coverage in
+means, the unprobed and series cost per cold row, and what they feed (the cold projection, store coverage in
 windows, change costs) are each node's latest walk it ran in, so a rewalk that touched two nodes
 keeps the rest. Stores are stated in windows because LRU under a scanning walk serves nothing below
 one (docs/findings/2026-10-31-window-fit-and-lru-thrash.md). Runs landing between a restart and
@@ -44,7 +44,8 @@ class Monitor:
 
     def _reset(self):
         self._walk = defaultdict(lambda: [0.0, 0, 0, 0.0, 0])    # node -> [tool ms, runs, bytes, fold ms, folds] this walk
-        self._other = [0.0, 0]                              # [unprobed ms, cold rows] this walk
+        self._other = [0.0, 0, 0.0]                         # [unprobed ms, cold rows, series ms] this walk
+        self._row_series = 0.0                              # series ms since the last progress event
         self._kinds = defaultdict(int)                      # read kind -> count this walk
         self._done, self._length = 0, None
         self._t0 = self._t1 = None
@@ -66,6 +67,7 @@ class Monitor:
                     self._scrub_runs += 1
                     return
                 if ev.node in self.graph.chain:      # a series node: once per emit, not per row
+                    self._row_series += ev.ms
                     self._add(ev.node, ev.ms, ev.bytes)
                     return
                 r = self._row[ev.node]
@@ -106,10 +108,12 @@ class Monitor:
                 self._kinds[k] += n
                 self._last_kinds = self._kinds
         if self._row:
-            self._other[0] += (ev.t - prev) * 1000 - probed
+            self._other[0] += (ev.t - prev) * 1000 - probed - self._row_series
             self._other[1] += 1
+            self._other[2] += self._row_series
             self._last_other = self._other
         self._row.clear()
+        self._row_series = 0.0
         self._done, self._length, self._t1 = ev.row, ev.length, ev.t
 
     def close(self):
@@ -125,6 +129,7 @@ class Monitor:
             runs = {n: max(w[1], w[4]) for n, w in self._walk.items()}
             life = {n: tuple(v) for n, v in self._last.items()}
             other_row = self._last_other[0] / self._last_other[1] if self._last_other else None
+            series_row = self._last_other[2] / self._last_other[1] if self._last_other else None
             kinds = dict(self._last_kinds)
             scrub = {"ms": self._scrub_ms, "runs": self._scrub_runs}
             syncs, changed = self._syncs, self._changed
@@ -159,7 +164,7 @@ class Monitor:
                           "kinds": kinds if n == video else None})
         probed = sum(ms.get(n, 0.0) for n in frame)
         series_ms = sum(ms.get(n, 0.0) for n in chain)
-        cold_row_ms = sum(row_ms[n] for n in frame) + (other_row or 0.0) if frame else None    # one row, nothing held
+        cold_row_ms = sum(row_ms[n] for n in frame) + (other_row or 0.0) + (series_row or 0.0) if frame else None    # one row, nothing held
         clip_s = g.count * cold_row_ms / 1000 if cold_row_ms else None
         footage_s = g.count / g.fps if g.fps else None
         return {
@@ -169,7 +174,7 @@ class Monitor:
             "multiple": footage_s / clip_s if clip_s and footage_s else None,
             "left_s": (length - done) * (cold_row_ms or 0) / 1000 if cold_row_ms and length else None,
             "probed_ms": probed, "series_ms": series_ms, "other_ms": wall * 1000 - probed - series_ms,
-            "other_row_ms": other_row,
+            "other_row_ms": other_row, "series_row_ms": series_row,
             "memo": {"bytes": m.bytes, "limit": m.limit, "row_bytes": memo_row, "windows": memo_windows},
             "cache": {"bytes": d.cache_bytes, "limit": getattr(d, "cache_limit", None), "row_bytes": cache_row,
                       "windows": cache_windows},
@@ -230,7 +235,8 @@ def summary(s):
     lines = [f"clip    {_time(s['footage_s'])} of footage, {s['count']} rows at {s['fps']:.2f} fps"]
     if s["clip_s"]:
         lines.append(f"cold    whole clip in ~{_time(s['clip_s'])}  ({s['multiple']:.1f}x realtime, "
-                     f"{s['cold_row_ms']:.2f} ms/row of which {s['other_row_ms']:.2f} unprobed)")
+                     f"{s['cold_row_ms']:.2f} ms/row of which {s['other_row_ms']:.2f} unprobed"
+                     + (f", {s['series_row_ms']:.2f} series" if s["series_row_ms"] else "") + ")")
     else:
         lines.append("cold    whole clip in -  (nothing has run)")
     walk = f"walk    {s['done']} / {s['length']} rows"

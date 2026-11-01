@@ -43,11 +43,19 @@ def series_nodes(s):
 
 
 def cold_parts(s):
-    """[(name, ms per cold row, colour)] for the frame nodes in walk order, then the unprobed rest."""
+    """[(name, ms per cold row, colour)] for the frame nodes in walk order, then the unprobed rest, then
+    the series chain's share of a row, in its type's hue."""
     parts = [(n["node"], n["row_ms"], type_color(n["type"])) for n in frame_nodes(s)]
     if s["other_row_ms"] is not None:
         parts.append(("unprobed", s["other_row_ms"], OTHER))
+    if s["series_row_ms"]:
+        parts.append(("series", s["series_row_ms"], series_color(s)))
     return parts
+
+
+def series_color(s):
+    chain = series_nodes(s)
+    return type_color(chain[0]["type"]) if chain else OTHER
 
 
 def walk_parts(s):
@@ -240,7 +248,8 @@ class Bars(View):
             y += ROW
         if s["wall_s"]:
             wall = s["wall_s"] * 1000
-            self.text(p, PAD, y + 10, f"this walk: {s['probed_ms'] / wall:.0%} in nodes, {s['other_ms'] / wall:.0%} unprobed"
+            self.text(p, PAD, y + 10, f"this walk: {s['probed_ms'] / wall:.0%} in frame nodes, {s['series_ms'] / wall:.0%} series, "
+                      f"{s['other_ms'] / wall:.0%} unprobed"
                       + (f" · {s['scrub']['runs']} scrub runs" if s["scrub"]["runs"] else "")
                       + (f" · {s['syncs']} changes, last {', '.join(s['changed']) or 'nothing'}" if s["syncs"] else ""), INK_2)
         y += 20
@@ -308,7 +317,7 @@ class Tiles(View):
     TILE_H = 60
 
     def height_for(self, s):
-        return PAD + 12 + SECTION + (self.TILE_H + GAP) * 2 + GAP + SECTION + 18 + ROW * (len(s["nodes"]) + 1) + PAD
+        return PAD + 12 + SECTION + (self.TILE_H + GAP) * 2 + GAP + SECTION + 18 + ROW * (len(s["nodes"]) + 1 + bool(s["series_row_ms"])) + PAD
 
     def paintEvent(self, _):
         s, w = self.s, self.width()
@@ -333,7 +342,7 @@ class Tiles(View):
             self.text(p, x, y, k, INK_2, self.mono)
         y += 18
         frame = frame_nodes(s)
-        top = max([n["row_ms"] for n in frame] + [s["other_row_ms"] or 0.0, 1e-9])    # the bars share one scale, the unprobed one too
+        top = max([n["row_ms"] for n in frame] + [s["other_row_ms"] or 0.0, s["series_row_ms"] or 0.0, 1e-9])    # the bars share one scale, the unprobed and series ones too
         for n in s["nodes"]:
             self.text(p, cx["node"], y + BAR, n["node"], INK)
             if not n["series"]:
@@ -349,10 +358,13 @@ class Tiles(View):
             self.text(p, cx["change"], y + BAR, "per emit" if n["series"] else f"~{_time(n['change_s'])}", INK_2, self.mono)
             self._hits.append((QRectF(PAD, y, w - PAD * 2, BAR), f"{n['node']} produces {n['type']}"))
             y += ROW
-        if s["other_row_ms"] is not None and frame:
-            self.text(p, cx["node"], y + BAR, "unprobed", INK_2)
-            self.bar(p, cx["ms"], y, bar_w * s["other_row_ms"] / top, BAR, OTHER)
-            self.text(p, cx["ms"] + bar_w + 6, y + BAR, f"{s['other_row_ms']:.2f}", INK_2, self.mono)
+        rest = [("unprobed", s["other_row_ms"], OTHER), ("series, per row", s["series_row_ms"], series_color(s))]
+        for name, ms, colour in rest:
+            if ms is not None and frame and (ms or name == "unprobed"):
+                self.text(p, cx["node"], y + BAR, name, INK_2)
+                self.bar(p, cx["ms"], y, bar_w * ms / top, BAR, colour)
+                self.text(p, cx["ms"] + bar_w + 6, y + BAR, f"{ms:.2f}", INK_2, self.mono)
+                y += ROW
         p.end()
 
 

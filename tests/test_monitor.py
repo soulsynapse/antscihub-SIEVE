@@ -22,7 +22,8 @@ def test_shares_are_this_walks_and_the_means_outlive_a_restart():
     assert [n["node"] for n in s["nodes"]] == walk_order(doc) == ["video", "gray", "add", "same"]
     assert s["done"] == 5 and all(n["runs"] == 5 for n in s["nodes"])
     assert abs(sum(n["share"] for n in s["nodes"]) + s["other_ms"] / (s["wall_s"] * 1000) - 1) < 1e-9
-    assert s["cold_row_ms"] == sum(n["row_ms"] for n in s["nodes"]) + s["other_row_ms"]
+    assert s["cold_row_ms"] == sum(n["row_ms"] for n in s["nodes"]) + s["other_row_ms"] + s["series_row_ms"]
+    assert s["series_row_ms"] == 0                           # no chain here; with one its time leaves unprobed for this
     assert all(n["row_ms"] == n["run_ms"] + n["fold_ms"] for n in s["nodes"]) and s["nodes"][1]["fold_ms"] == 0   # gray's density is not asked for here
     assert s["clip_s"] == g.count * s["cold_row_ms"] / 1000 and s["multiple"] == s["footage_s"] / s["clip_s"]
     video, gray, add = s["nodes"][:3]

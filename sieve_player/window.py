@@ -36,7 +36,8 @@ DUMP_ENV = "SIEVE_DUMP"     # names the file every video opened in this process 
 class Lateness(QTimer):
     """Samples how late the GUI thread's timer fires into a dump, while one is attached: a tick that
     lands long after it was due says the main thread was blocked that long, by what the dump's other
-    lines may show. It measures and draws nothing; see spec/performance-monitor.md."""
+    lines may show. It lives here and not in the probe since the probe carries what its site knows
+    and measures nothing; the dump holds the measurements. It draws nothing."""
 
     def __init__(self, dump, interval_ms=100, parent=None):
         super().__init__(parent)

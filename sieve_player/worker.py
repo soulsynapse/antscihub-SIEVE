@@ -7,6 +7,10 @@ only behind a finished window walk, so what is viewed is never kept waiting by i
 with `walk_clip()`, halted with `stop_clip()`, and abandoned by `invalidate()`, which says the graph
 it walked is gone. A clip whose stack would not fit CLIP_BYTES is refused with a line saying so; a
 head with a fold() holds a few numbers a row and always fits.
+
+A stack holds images by shape, one row each, and tables, blobs' records, whose length is each row's
+own, in an object array, one table a row, so a walked node that hands out a table never reads as a
+graph changing shape under the walk.
 """
 import threading
 import traceback
@@ -18,6 +22,17 @@ from . import density
 from .graph import Cancelled, Memo, Series, gated
 
 CLIP_BYTES = 512 << 20    # the most a clip walk's stack may take
+
+
+def _stack_for(n, out):
+    return np.empty(n, object) if out.dtype.fields is not None else np.empty((n,) + out.shape, out.dtype)
+
+
+def _fits(stack, out):
+    """Whether `out` is a row of `stack`: a table into an object stack, an image by shape and dtype."""
+    if stack.dtype == object:
+        return out.dtype.fields is not None
+    return stack.shape[1:] == out.shape and stack.dtype == out.dtype
 
 
 class Worker(QThread):
@@ -180,12 +195,11 @@ class Worker(QThread):
         row = self._start + self._i
         out = np.asarray(self.graph.walk_row(row))
         planes = {nid: v for nid in self.graph.frame_nodes() if (v := self.graph.density(nid, row)) is not None}
-        if self._stack is not None and (self._stack.shape[1:] != out.shape or self._stack.dtype != out.dtype
-                                        or planes.keys() != self._dens.keys()):
+        if self._stack is not None and (not _fits(self._stack, out) or planes.keys() != self._dens.keys()):
             self._stack, self._dens, self._i = None, {}, 0   # the nodes or the shape changed under the walk; start over
             return
         if self._stack is None:
-            self._stack = np.empty((self._length,) + out.shape, dtype=out.dtype)
+            self._stack = _stack_for(self._length, out)
             self._dens = {nid: np.zeros((self._length, density.BINS), np.uint32) for nid in planes}
         self._stack[self._i] = out
         for nid, v in planes.items():
@@ -198,7 +212,7 @@ class Worker(QThread):
 
     def _clip_one(self):
         out = np.asarray(self.graph.walk_row(self._ci))
-        if self._cstack is not None and (self._cstack.shape[1:] != out.shape or self._cstack.dtype != out.dtype):
+        if self._cstack is not None and not _fits(self._cstack, out):
             self._cstack, self._ci = None, 0
             return
         if self._cstack is None:
@@ -208,7 +222,7 @@ class Worker(QThread):
                 self._clen = 0
                 self.clipWalked.emit(0, 0)
                 return
-            self._cstack = np.empty((self._clen,) + out.shape, dtype=out.dtype)
+            self._cstack = _stack_for(self._clen, out)
         self._cstack[self._ci] = out
         self._ci += 1
         self.clipWalked.emit(self._ci, self._clen)

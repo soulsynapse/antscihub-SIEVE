@@ -479,3 +479,27 @@ def test_the_clip_walk_runs_behind_the_window_and_a_frame_change_drops_it():
         time.sleep(0.01)
     w.stop()
     assert clips[-1] == ({}, 0) and walked[-1] == (0, 0)
+
+
+def test_a_shown_table_walks_without_a_series_node():
+    """blobs shown with nothing reading it: the walk is that node, each row a table of its own length,
+    and the walk finishes instead of reading every row as a shape change and starting over."""
+    from PySide6.QtWidgets import QApplication
+    from sieve_player.worker import Worker
+    QApplication.instance() or QApplication([])
+    table = tool("table", produces="blobs", fn=lambda f, p: np.zeros(int(f.flat[0]) % 3, dtype=[("x", "<i4")]))
+    doc = D.from_tools([gray, table])
+    doc.display = "table"
+    g = Graph(doc, Dec(), {**TOOLS, "table": table})
+    w = Worker(g)
+    walked = []
+    w.walked.connect(lambda d, n: walked.append((d, n)))
+    w.set_window(0, 6)
+    w.start()
+    for _ in range(300):
+        QApplication.processEvents()
+        if walked and walked[-1] == (6, 6):
+            break
+        time.sleep(0.01)
+    w.stop()
+    assert walked[-1] == (6, 6) and len(walked) <= 7

@@ -32,7 +32,7 @@ from dataclasses import dataclass, field
 VERSION = 1
 VIDEO_TOOL = "video"        # the reserved tool name of the node the decoder is
 VIDEO_OUTPUT = "output"     # the video node's params: what the decoder hands out, and at what scale, both applied before its cache
-VIDEO_OUTPUTS = ("bgr", "gray")
+VIDEO_OUTPUTS = ("bgr", "gray", "luma")    # luma: the decoder's own plane, a gray left in the stream's range
 VIDEO_PRODUCES = "bgr"      # what it hands out unless the param says gray
 VIDEO_SCALE = "scale"       # a factor in (0, 1]; 1 is the frame as decoded
 PATH = "path"               # the type the video node's input expects and a selector produces
@@ -313,7 +313,8 @@ def produces(doc, tools, nid, _seen=()):
     """The type `nid` hands out, or None: unresolved, a pass-through nothing feeds, or in a cycle."""
     node = doc.node(nid)
     if node.tool == VIDEO_TOOL:
-        return video_output(doc)
+        out = video_output(doc)
+        return "gray" if out == "luma" else out
     p = getattr(_by_name(tools).get(node.tool), "PRODUCES", None)
     if p != "same":
         return p

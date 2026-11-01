@@ -77,6 +77,8 @@ class Video(QWidget):
         self.output.addItems(list(VIDEO_OUTPUTS))
         self.output.setFixedWidth(CONTROL_W)
         form.add_row(VIDEO_OUTPUT, self.output)
+        self.output_note = readout()
+        form.add_line(self.output_note)
         self.scale = QDoubleSpinBox()
         self.scale.setRange(0.05, 1.0)
         self.scale.setSingleStep(0.05)
@@ -85,8 +87,19 @@ class Video(QWidget):
         form.add_row(VIDEO_SCALE, self.scale)
         lay.addWidget(form)
         self.button.clicked.connect(self._pick)
+        self.output.currentTextChanged.connect(self._note_output)
         self.output.currentTextChanged.connect(lambda v: self.paramChanged.emit(VIDEO_OUTPUT, v))
         self.scale.valueChanged.connect(lambda v: self.paramChanged.emit(VIDEO_SCALE, float(v)))
+        self._note_output(self.output.currentText())
+
+    OUTPUT_NOTES = {
+        "bgr": "as decoded",
+        "gray": "full range, 0 to 255; from the stream's luma plane where it has one, with no colour conversion",
+        "luma": "the stream's luma plane as is: fastest, and limited range, 16 to 235, on most camera files",
+    }
+
+    def _note_output(self, value):
+        self.output_note.setText(self.OUTPUT_NOTES.get(value, ""))
 
     def set_params(self, doc):
         """Moves the knobs to the document's values without reporting a change."""
@@ -94,6 +107,7 @@ class Video(QWidget):
             w.blockSignals(True)
             w.setCurrentText(v) if w is self.output else w.setValue(v)
             w.blockSignals(False)
+        self._note_output(video_output(doc))
 
     def _pick(self):
         path, _ = QFileDialog.getOpenFileName(self, "Open video", "", VIDEO_FILTER)

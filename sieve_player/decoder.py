@@ -19,10 +19,34 @@ SEEK_GUESS = 12.0       # steps a seek is taken to cost until one has been measu
 LUMA_FORMATS = {b"I420"}    # planar 8-bit 4:2:0: unconverted, cv2 hands out the luma plane as rows x cols
 QUIET = False   # play() sets it once C-level stderr goes nowhere; the plugin warns on every unconverted frame otherwise
 _QUIET_LEVELS = {"OFF", "DISABLED", "SILENT", "FATAL", "ERROR", "0", "1", "2"}
+_EXPAND = np.clip(np.round((np.arange(256) - 16) * 255 / 219), 0, 255).astype(np.uint8)   # limited-range luma to full
 
 
 def _quiet():
     return QUIET or os.environ.get("OPENCV_LOG_LEVEL", "").upper() in _QUIET_LEVELS
+
+
+def _luma_range(path):
+    """(usable, limited) for the luma plane of row 0: usable when it is the shape of the converted
+    frame, limited when cv2's own conversion, which knows the stream's range, sits at a slope near
+    219/255 above it. A flat row that cannot tell is taken as limited, the camera norm."""
+    raw, rgb = cv2.VideoCapture(path, cv2.CAP_FFMPEG), cv2.VideoCapture(path, cv2.CAP_FFMPEG)
+    try:
+        raw.set(cv2.CAP_PROP_CONVERT_RGB, 0)
+        ok, y = raw.read()
+        ok2, bgr = rgb.read()
+    finally:
+        raw.release()
+        rgb.release()
+    if not (ok and ok2) or y.ndim != 2 or y.shape != bgr.shape[:2]:
+        return False, False
+    y = y.ravel()[::97].astype(np.float64)
+    g = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY).ravel()[::97].astype(np.float64)
+    var = y.var()
+    if var < 25.0:
+        return True, True
+    slope = ((y - y.mean()) * (g - g.mean())).mean() / var
+    return True, slope > 1.08
 
 
 def frame_count(path, cap=None):
@@ -99,6 +123,7 @@ class Decoder:
         self.height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         fmt = int(self.cap.get(cv2.CAP_PROP_CODEC_PIXEL_FORMAT)).to_bytes(4, "little", signed=True)
         self.luma = fmt in LUMA_FORMATS and _quiet()
+        self._limited = None    # measured at the first gray read, two decodes of row 0
         self._output, self._scale = "bgr", 1.0
         self._cursors = {"walk": walk, "scrub": None}   # the scrub's opens on its first use
         self._use = "walk"
@@ -124,23 +149,32 @@ class Decoder:
 
     @property
     def output(self):
-        """What read() hands out: "bgr" as decoded, or "gray", before it is cached. On an 8-bit 4:2:0
-        stream with QUIET set, gray is the decoder's luma plane and the YUV-to-BGR conversion is
-        skipped; otherwise it is converted from BGR. Setting it empties the cache."""
+        """What read() hands out, before it is cached: "bgr" as decoded; "gray", full range; or
+        "luma", the decoder's own plane in the stream's range, 16 to 235 on most camera files. On an
+        8-bit 4:2:0 stream with QUIET set both grays come from the plane and skip the YUV-to-BGR
+        conversion, gray through a lookup table when the stream is limited range; otherwise both are
+        converted from BGR. Setting it empties the cache."""
         return self._output
 
     @output.setter
     def output(self, value):
-        if value not in ("bgr", "gray"):
-            raise ValueError(f"decoder output {value!r}; one of bgr, gray")
+        if value not in ("bgr", "gray", "luma"):
+            raise ValueError(f"decoder output {value!r}; one of bgr, gray, luma")
         with self._cache_lock:
             if value == self._output:
                 return
             self._output, self._cache_bytes = value, 0
             self._cache.clear()
 
+    @property
+    def limited(self):
+        """Whether the luma plane is limited range, measured on row 0 the first time it is asked."""
+        if self._limited is None:
+            self.luma, self._limited = _luma_range(self.path) if self.luma else (False, False)
+        return self._limited
+
     def _luma_read(self):
-        return self.luma and self._output == "gray"
+        return self.luma and self._output != "bgr"
 
     @property
     def scale(self):
@@ -166,7 +200,7 @@ class Decoder:
 
     def _fits(self, f):
         # a frame of the other kind or size, decoded before a switch and landing after it, is not served
-        return (f.ndim == 2) == (self._output == "gray") and f.shape[:2] == self._shape()
+        return (f.ndim == 2) == (self._output != "bgr") and f.shape[:2] == self._shape()
 
     def cached(self, row):
         """Cache-only read; never touches a capture. Safe from the GUI thread."""
@@ -226,8 +260,10 @@ class Decoder:
                 self.count = row  # container header lied; trust the stream
             raise IndexError(f"row {row} past end of {self.path}")
         self.step_ms = self._mean(self.step_ms, (time.perf_counter() - t) * 1000, self.decodes)
-        if self._output == "gray" and f.ndim == 3:
+        if self._output != "bgr" and f.ndim == 3:
             f = cv2.cvtColor(f, cv2.COLOR_BGR2GRAY)
+        elif self._output == "gray" and self.limited:
+            f = cv2.LUT(f, _EXPAND)
         if self._scale != 1.0:
             f = cv2.resize(f, None, fx=self._scale, fy=self._scale, interpolation=cv2.INTER_AREA)
         self._put(cur.pos, f)

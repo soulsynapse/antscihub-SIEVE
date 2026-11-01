@@ -17,8 +17,8 @@ from dataclasses import dataclass
 import numpy as np
 
 from . import density
-from .document import (INPUT, OPEN, OVERLAYABLE, VIDEO_PRODUCES, VIDEO_TOOL, fed, frame_inputs, is_selector, produces,
-                       static)
+from .document import (INPUT, OPEN, OVERLAYABLE, VIDEO_TOOL, fed, frame_inputs, is_selector, produces, static,
+                       video_output)
 
 
 def _key(*parts):
@@ -194,7 +194,7 @@ class Graph:
         self.on_event = None                # the probe's one consumer; see probe() for the event
         self.halt = False                   # set by whoever is stopping the worker: every read from then on raises Cancelled
         self._probing = threading.local()   # the runs open on this thread, so a run's time excludes its reads
-        self._base = _key("video", decoder.path, VIDEO_PRODUCES)
+        self._base = None                   # the video node's key: the file and what the decoder hands out; set at sync()
         # The two stores report what they discard into the same stream: the memo's entry by its key and
         # row, the decoder cache's frame by its row under the video's key.
         self.memo.on_evict = lambda k, n: self._emit("evict", None, k[1], k[0], n)
@@ -214,6 +214,9 @@ class Graph:
         """Re-read the document: wiring, params, the flags, which series nodes run."""
         doc, tools = self.doc, self.tools
         keys, raw_keys = {}, {}
+        output = video_output(doc)
+        self.decoder.output = output        # a change empties its cache; a read in flight under the old plan is cancelled
+        self._base = _key("video", self.decoder.path, output)
 
         def sources(nid):
             """Frame input name -> the node wired into it, or None; the first input alone when the tool is unknown."""

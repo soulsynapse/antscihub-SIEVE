@@ -16,12 +16,13 @@ class Dec:
     path, fps, count = "fake.mp4", 30.0, 10
     decodes = seeks = reads = cache_hits = cache_bytes = 0
     step_ms = seek_ms = None
+    output = "bgr"
 
     def read(self, row):
         if row >= self.count:
             raise IndexError(row)
         self.decodes += 1
-        return np.full((4, 6, 3), row, np.uint8)
+        return np.full((4, 6, 3) if self.output == "bgr" else (4, 6), row, np.uint8)
 
     def cached(self, row):
         return None
@@ -54,11 +55,15 @@ def fan_out():
 
 
 def test_built_from_document_and_decoder():
-    dec = Dec()
-    g = Graph(fan_out(), dec, TOOLS)
+    dec, doc = Dec(), fan_out()
+    g = Graph(doc, dec, TOOLS)
     assert g.shown == "add" and g.walk == "add" and g.over is None
     dec.count = 7                                                      # the decoder found the header lied
     assert g.count == 7
+    k = g.key("gray")
+    doc.video_node().params["output"] = "gray"                        # the video hands out gray: the decoder is told, every key moves
+    g.sync()
+    assert dec.output == "gray" and g.key("gray") != k and not g.fed("gray") and g.compute("video", 0).shape == (4, 6)
 
 
 def test_a_band_zeroes_the_plane_outside_it_after_run_and_keys_the_node():

@@ -31,7 +31,9 @@ from dataclasses import dataclass, field
 
 VERSION = 1
 VIDEO_TOOL = "video"        # the reserved tool name of the node the decoder is
-VIDEO_PRODUCES = "bgr"
+VIDEO_OUTPUT = "output"     # the video node's one param: what the decoder hands out
+VIDEO_OUTPUTS = ("bgr", "gray")
+VIDEO_PRODUCES = "bgr"      # what it hands out unless the param says gray, in which case the decoder converts before caching
 PATH = "path"               # the type the video node's input expects and a selector produces
 INPUT = "in"                # every tool today has one input; wires name it so fan-in costs nothing later
 OVERLAYABLE = ("gray", "mask")  # the types the overlay flag is offered on: a single plane the frame can be heated with
@@ -304,7 +306,7 @@ def produces(doc, tools, nid, _seen=()):
     """The type `nid` hands out, or None: unresolved, a pass-through nothing feeds, or in a cycle."""
     node = doc.node(nid)
     if node.tool == VIDEO_TOOL:
-        return VIDEO_PRODUCES
+        return video_output(doc)
     p = getattr(_by_name(tools).get(node.tool), "PRODUCES", None)
     if p != "same":
         return p
@@ -312,6 +314,13 @@ def produces(doc, tools, nid, _seen=()):
     if w is None or nid in _seen:
         return None
     return produces(doc, tools, w.src, (*_seen, nid))
+
+
+def video_output(doc):
+    """What the video node hands out, "bgr" unless its param says "gray"; "bgr" with no video node."""
+    v = doc.video_node()
+    out = VIDEO_PRODUCES if v is None else v.params.get(VIDEO_OUTPUT, VIDEO_PRODUCES)
+    return out if out in VIDEO_OUTPUTS else VIDEO_PRODUCES
 
 
 def from_tools(tools, video=None):

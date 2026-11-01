@@ -100,6 +100,16 @@ def test_from_tools_wires_nearest_producer():
     assert doc.display == "threshold" and doc.node("threshold").params == {"thresh": 128}
 
 
+def test_the_video_node_produces_what_its_output_param_says():
+    doc = D.from_tools(TOOLS)
+    assert D.video_output(doc) == D.produces(doc, TOOLS, "video") == "bgr"
+    doc.video_node().params["output"] = "gray"
+    assert D.produces(doc, TOOLS, "video") == "gray" and D.produces(doc, TOOLS, "rescale") == "gray"
+    assert [p.where for p in D.validate(doc, TOOLS) if p.kind == "type"] == ["video -> gray"]   # gray expects bgr
+    doc.video_node().params["output"] = "nonsense"
+    assert D.video_output(doc) == "bgr"
+
+
 def test_validate_type_cycle_unfed():
     doc = D.from_tools(TOOLS)
     doc.connect("video", "threshold")                       # bgr into a gray input

@@ -35,6 +35,7 @@ class Decoder:
         self.fps = self.cap.get(cv2.CAP_PROP_FPS) or 30.0
         self.width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         self.height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        self._output = "bgr"
         self._cursors = {"walk": walk, "scrub": None}   # the scrub's opens on its first use
         self._use = "walk"
         self._cache = OrderedDict()
@@ -57,10 +58,30 @@ class Decoder:
             with self._cap_lock:
                 self._use = "walk"
 
+    @property
+    def output(self):
+        """What read() hands out: "bgr" as decoded, or "gray", converted before it is cached, so the
+        cache holds a third of the bytes and no node downstream has to. Setting it empties the cache."""
+        return self._output
+
+    @output.setter
+    def output(self, value):
+        if value not in ("bgr", "gray"):
+            raise ValueError(f"decoder output {value!r}; one of bgr, gray")
+        with self._cache_lock:
+            if value == self._output:
+                return
+            self._output, self._cache_bytes = value, 0
+            self._cache.clear()
+
+    def _fits(self, f):
+        return (f.ndim == 2) == (self._output == "gray")   # a frame of the other kind, decoded before a switch, is not served
+
     def cached(self, row):
         """Cache-only read; never touches a capture. Safe from the GUI thread."""
         with self._cache_lock:
-            return self._cache.get(row)
+            f = self._cache.get(row)
+            return f if f is None or self._fits(f) else None
 
     @property
     def cache_bytes(self):
@@ -108,9 +129,10 @@ class Decoder:
                 self.count = row  # container header lied; trust the stream
             raise IndexError(f"row {row} past end of {self.path}")
         self.step_ms = self._mean(self.step_ms, (time.perf_counter() - t) * 1000, self.decodes)
-        self._put(cur.pos, bgr)
+        f = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY) if self._output == "gray" else bgr
+        self._put(cur.pos, f)
         cur.pos += 1
-        return bgr
+        return f
 
     @staticmethod
     def _mean(mean, x, n):
@@ -119,6 +141,8 @@ class Decoder:
     def _put(self, row, bgr):
         gone = []
         with self._cache_lock:
+            if not self._fits(bgr):
+                return
             if row in self._cache:
                 self._cache.move_to_end(row)
                 return

@@ -266,7 +266,7 @@ class Canvas(QWidget):
 
     def output_type(self, node):
         if node.tool == VIDEO_TOOL:
-            return VIDEO_PRODUCES
+            return produces(self.doc, self.tools, node.id)
         return None if node.unresolved else produces(self.doc, self.tools, node.id)
 
     def can_display(self, node):

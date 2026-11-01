@@ -30,10 +30,10 @@ from functools import lru_cache
 import cv2
 from PySide6.QtCore import QProcess, QSize, Qt, Signal
 from PySide6.QtGui import QFontMetrics
-from PySide6.QtWidgets import QFileDialog, QFrame, QPushButton, QScrollArea, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QComboBox, QFileDialog, QFrame, QPushButton, QScrollArea, QVBoxLayout, QWidget
 
-from .document import OPEN, VIDEO_TOOL, is_selector, paths
-from .theme import GAP, PAD, WIDE_W, Form, GlyphButton, Layer, measured, readout
+from .document import OPEN, VIDEO_OUTPUT, VIDEO_OUTPUTS, VIDEO_PRODUCES, VIDEO_TOOL, is_selector, paths
+from .theme import CONTROL_W, GAP, PAD, WIDE_W, Form, GlyphButton, Layer, measured, readout
 from .widgets import Density, Trace
 
 VIDEO_FILTER = "Video (*.mp4 *.MP4 *.avi *.mov *.mkv);;All (*)"
@@ -78,8 +78,10 @@ def _column(parent, spacing=GAP):
 
 
 class Video(QWidget):
-    """The video node's settings: a picker, the chosen path and what cv2 says about it."""
+    """The video node's settings: a picker, the chosen path and what cv2 says about it, and `output`,
+    what the decoder hands out, bgr as decoded or gray converted before the cache."""
     sourceChanged = Signal(str)
+    outputChanged = Signal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -89,8 +91,19 @@ class Video(QWidget):
         form = Form([("video", self.button)])
         form.add_line(self.path)
         form.add_line(self.info)
+        self.output = QComboBox()
+        self.output.addItems(list(VIDEO_OUTPUTS))
+        self.output.setFixedWidth(CONTROL_W)
+        form.add_row(VIDEO_OUTPUT, self.output)
         lay.addWidget(form)
         self.button.clicked.connect(self._pick)
+        self.output.currentTextChanged.connect(self.outputChanged)
+
+    def set_output(self, value):
+        """Moves the knob to the document's value without reporting a change."""
+        self.output.blockSignals(True)
+        self.output.setCurrentText(value if value in VIDEO_OUTPUTS else VIDEO_PRODUCES)
+        self.output.blockSignals(False)
 
     def _pick(self):
         path, _ = QFileDialog.getOpenFileName(self, "Open video", "", VIDEO_FILTER)
@@ -276,7 +289,9 @@ class Pane(QWidget):
         card = Layer(1, node.id)
         if node.tool == VIDEO_TOOL:
             self.video = Video()
+            self.video.set_output(node.params.get(VIDEO_OUTPUT, VIDEO_PRODUCES))
             self.video.sourceChanged.connect(self.videoPicked)
+            self.video.outputChanged.connect(lambda v, nid=node.id: self._video_output(nid, v))
             card.add(self.video)
         elif node.unresolved:
             card.add(readout(f"tool {node.tool!r} not found"))
@@ -345,6 +360,11 @@ class Pane(QWidget):
         for i, pin in self.pins.items():
             pin.setChecked(i == self.doc.pinned)
         self.pinChanged.emit()
+
+    def _video_output(self, nid, value):
+        """The video node's one knob moved: its param, saved and keyed like any node's."""
+        self.doc.node(nid).params[VIDEO_OUTPUT] = value
+        self.paramsChanged.emit(nid)
 
     def _changed(self, nid):
         node = self.doc.node(nid)

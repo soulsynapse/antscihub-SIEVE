@@ -12,6 +12,7 @@ from PySide6.QtWidgets import QMainWindow
 def install(window: QMainWindow) -> None:
     menu = window.menuBar().addMenu("Dev")
     menu.addAction("Icon reference…", lambda: _show(window, "icons"))
+    menu.addAction("Monitor…", lambda: _show(window, "monitor"))
 
 
 def _show(window: QMainWindow, key: str) -> None:
@@ -21,6 +22,9 @@ def _show(window: QMainWindow, key: str) -> None:
         if key == "icons":
             from .reference.icons import Icons
             w = Icons(window)
+        elif key == "monitor":
+            from .monitor import MonitorWindow
+            w = MonitorWindow(window)
         opened[key] = w
     w.show()
     w.raise_()

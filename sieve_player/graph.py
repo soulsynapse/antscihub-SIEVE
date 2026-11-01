@@ -172,7 +172,7 @@ class Graph:
     def __init__(self, doc, decoder, tools, memo_bytes=512 << 20):
         self.doc, self.decoder = doc, decoder
         self.tools = tools if hasattr(tools, "get") else {t.NAME: t for t in tools}
-        self.fps, self.count = decoder.fps, decoder.count
+        self.fps = decoder.fps
         self.memo = Memo(memo_bytes)
         self._lock = threading.Lock()
         self.on_event = None                # the probe's one consumer; see probe() for the event
@@ -186,6 +186,12 @@ class Graph:
         self.shown = self.over = self.series = None
         self.chain, self.unrun_series = [], []
         self.sync()
+
+    @property
+    def count(self):
+        """The decoder's, read live: a container's header may claim rows the stream lacks, and the
+        decoder corrects itself at the first read past the end."""
+        return self.decoder.count
 
     def sync(self):
         """Re-read the document: wiring, params, the flags, which series nodes run."""

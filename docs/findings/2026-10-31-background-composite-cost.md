@@ -42,3 +42,36 @@ gray, 2 MB a row, 250 rows do. The memo's accounting is right for a plane that d
 wrong for one that does not, and nothing in the tool's facets says which it is. Houdini's answer
 is a time-dependence flag on the node: cooked once, cached once. The player has no such facet
 yet; this is the figure that argues for one, and the fix is a player change, not the tool's.
+
+## The same on 5.3K footage, and what the monitor made of it
+
+Later the same day, over dfcb8ac0, on `video-tests/GX010047c2_02_17_26.MP4`, 5312×2988 at 23.98 fps,
+11328 rows claimed and 11326 present, 45.4 MB a frame; the graph video → gray → background →
+bg-subtract with bg-subtract reading gray on `in` and background on `bg`. The decoder measured a
+step at 31 ms and a seek at 490 ms. The walk is `walk_row` plus a density per fed frame node, as
+the worker runs it, over 30 rows; the scrub is the display asking for a row 3000 away every fifth
+row, on its own cursor.
+
+| | ms/row | of which video | bg-subtract | gray | the three densities |
+|---|---|---|---|---|---|
+| composite, 50 samples, median | 32500 once | 50 seeks | | | |
+| walk alone | 45 | 34 | 6.0 | 1.5 | 2.4 |
+| walk with scrubs | 85 | 73 | 6.6 | 2.0 | 2.5 |
+
+So the clip is ten to twenty minutes of walk for eight minutes of footage, plus 30 s of composite
+on every change upstream of the background node. The chain itself is within a 24 fps budget; the
+decode is not, and the memo at 512 MB holds about ten rows of this chain (gray 16 MB, bg-subtract
+16 MB, and 16 MB counted for the composite each row), so the window does not fit and the thrash
+finding applies whole.
+
+The monitor said 3 h for the clip. It takes each node's lifetime run ms over its runs as what a
+cold row pays that node, and the background node has one run that is the whole composite, so
+after 40 rows walked it reads 30 s / 40 ≈ 750 ms a row, times the clip's count. That figure is
+the monitor's model, a run per row, applied to a node that runs once per key, and it is a second
+consumer for the same row-invariance facet: with it the memo holds the plane once and the monitor
+counts the build as a per-change cost and not a per-row one.
+
+Two faults the clip surfaced, fixed over dfcb8ac0: the graph took the decoder's count at
+construction, so the header's two phantom rows stayed in `frames.count` after the decoder had
+corrected itself; it now reads the decoder's live. And the composite's last sample sits on the
+claimed last row, so the tool stops at the first sample the clip lacks rather than failing.

@@ -54,8 +54,11 @@ def fan_out():
 
 
 def test_built_from_document_and_decoder():
-    g = Graph(fan_out(), Dec(), TOOLS)
+    dec = Dec()
+    g = Graph(fan_out(), dec, TOOLS)
     assert g.shown == "add" and g.walk == "add" and g.over is None
+    dec.count = 7                                                      # the decoder found the header lied
+    assert g.count == 7
 
 
 def test_a_band_zeroes_the_plane_outside_it_after_run_and_keys_the_node():

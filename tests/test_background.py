@@ -49,3 +49,6 @@ def test_max_erases_a_dark_sitter_the_median_keeps():
     frames = Sitter(key="s", count=20, fps=1.0)
     assert background.run(frames, 0, {"stat": "median", "samples": 5})[2, 2] == 0
     assert background.run(frames, 0, {"stat": "max", "samples": 5})[2, 2] == 200
+    frames = Sitter(key="lied", count=24, fps=1.0)         # the header claims rows 20-23 the stream lacks
+    assert background.run(frames, 0, {"stat": "mean", "samples": 5})[2, 2] == 0   # rows 0, 6, 12, 17; the 23rd is dropped
+    assert background.run(frames, 0, {"stat": "median", "samples": 5}).shape == (4, 4)

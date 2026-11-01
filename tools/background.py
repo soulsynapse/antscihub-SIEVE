@@ -27,24 +27,36 @@ def sample_rows(count, samples):
     return np.unique(np.linspace(0, count - 1, n).round().astype(int))
 
 
+def samples_of(frames, rows):
+    """Each row's frame, stopping at the first the clip turns out not to have: a container's header
+    may claim rows the stream lacks, and the last sample sits on the claim."""
+    out = []
+    for r in rows:
+        try:
+            out.append(frames(r))
+        except IndexError:
+            break
+    return out
+
+
 def composite(frames, params):
     stat, rows = params["stat"], sample_rows(frames.count, params["samples"])
     if stat not in STATS:
         raise ValueError(f"background: no stat {stat!r}; one of {STATS}")
     if stat == "median":
-        stack = np.stack([frames(r) for r in rows])
-        mid = (len(rows) - 1) // 2
+        stack = np.stack(samples_of(frames, rows))
+        mid = (len(stack) - 1) // 2
         return np.partition(stack, mid, axis=0)[mid]
-    acc = None
-    for r in rows:
-        f = frames(r)
+    acc, n = None, 0
+    for f in samples_of(frames, rows):
+        n += 1
         if acc is None:
             acc = f.astype(np.float64) if stat == "mean" else f.copy()
         elif stat == "mean":
             acc += f
         else:
             (np.maximum if stat == "max" else np.minimum)(acc, f, out=acc)
-    return (acc / len(rows)).round().astype(f.dtype) if stat == "mean" else acc
+    return (acc / n).round().astype(f.dtype) if stat == "mean" else acc
 
 
 def run(frames, row, params):

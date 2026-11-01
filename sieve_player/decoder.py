@@ -133,14 +133,11 @@ class Decoder:
     def output(self, value):
         if value not in ("bgr", "gray"):
             raise ValueError(f"decoder output {value!r}; one of bgr, gray")
-        with self._cap_lock, self._cache_lock:
+        with self._cache_lock:
             if value == self._output:
                 return
             self._output, self._cache_bytes = value, 0
             self._cache.clear()
-            for cur in self._cursors.values():
-                if cur is not None:
-                    cur.convert(not self._luma_read())
 
     def _luma_read(self):
         return self.luma and self._output == "gray"
@@ -195,6 +192,8 @@ class Decoder:
             cur = self._cursors[self._use]
             if cur is None:
                 cur = self._cursors[self._use] = _Cursor(self.path, self._luma_read())
+            if cur.luma != self._luma_read():
+                cur.convert(not self._luma_read())   # here, under the lock a read holds, never from the setter
             ahead = row - cur.pos
             if not self.indexed:
                 if ahead < 0:

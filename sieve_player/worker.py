@@ -15,7 +15,7 @@ import numpy as np
 from PySide6.QtCore import QThread, Signal
 
 from . import density
-from .graph import Memo, Series, gated
+from .graph import Cancelled, Memo, Series, gated
 
 CLIP_BYTES = 512 << 20    # the most a clip walk's stack may take
 
@@ -89,6 +89,8 @@ class Worker(QThread):
             self._cv.notify()
 
     def stop(self):
+        """Halts the graph, so a run of many reads dies at its next one, then joins the thread."""
+        self.graph.halt = True
         with self._cv:
             self._stop = True
             self._cv.notify()
@@ -151,6 +153,8 @@ class Worker(QThread):
                     self.clipWalked.emit(self._ci, self._clen)
                 if clip_on and self._ci < self._clen:
                     self._clip_one()
+            except Cancelled:
+                continue        # the graph moved on under the row, or we are stopping: the loop reads the new state
             except IndexError:
                 if self._i < self._length:
                     self._length = self._i  # stream ended early; close the window there

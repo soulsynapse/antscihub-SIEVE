@@ -54,7 +54,10 @@ How the player treats a tool, as `sieve_player/graph.py`, `pane.py` and `window.
   `PRODUCES = "same"` hands out whatever the tool reads.
 - Only the worker thread calls `run`, but for any row in any order, since a seek jumps its queue.
   `frames.key` / `series.key` changes whenever anything upstream does; the tools that cache key on
-  it and on their own params.
+  it and on their own params. A `frames()` read made after the node's key has changed under the
+  run, or while the player is closing, raises `graph.Cancelled` and the row is dropped: a run of
+  many reads ends at its next one, so a tool never needs to poll for interruption and must not
+  swallow that exception.
 - The tools under `tools/` import Qt and `sieve_player` inside `settings()`, `draw()` and their
   `__main__` block rather than at module top, which lets a script without Qt import them and call
   `run`.

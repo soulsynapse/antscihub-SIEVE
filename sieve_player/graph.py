@@ -110,18 +110,32 @@ class Memo:
                 self.on_evict(ok, n)
 
 
+class Cancelled(Exception):
+    """A run read a frame after the graph had moved on under it, or while the worker was stopping:
+    what it was computing is for a plan that is gone, so the read raises instead of serving it. The
+    worker drops the row; a tool that catches Exception around a read should let this one through."""
+
+
 class Frames:
     """What a frame tool's run() gets: frames(r) is the output of the node its first input reads,
     at row r, and frames(r, name) that of another of its INPUTS. `key` changes whenever anything
     upstream of any input does. It reads through the plan the computation began in, so one run()
-    sees one graph even if the document is synced under it."""
+    sees one graph even if the document is synced under it; but a read made once the node's key
+    under the current plan differs from the one it began under, or once the graph is halted,
+    raises Cancelled, so a run of many reads, a composite over the clip, dies at its next read
+    rather than finishing work nothing will take."""
 
-    def __init__(self, graph, plan, sources, key):
-        self._graph, self._plan, self._sources = graph, plan, sources
+    def __init__(self, graph, plan, nid, sources, key):
+        self._graph, self._plan, self._nid, self._sources = graph, plan, nid, sources
+        self._raw_key = plan[nid].raw_key
         self.key, self.fps, self.count = key, graph.fps, graph.count
 
     def __call__(self, row, input=INPUT):
-        return self._graph._compute(self._plan, self._sources[input], row)
+        g = self._graph
+        now = g._plan.get(self._nid)
+        if g.halt or now is None or now.raw_key != self._raw_key:
+            raise Cancelled(f"{self._nid} at row {row}: the graph moved on")
+        return g._compute(self._plan, self._sources[input], row)
 
 
 class Series:
@@ -141,7 +155,7 @@ class Event:
     node: str | None    # the node that ran, or read; None on a boundary
     row: int | None
     key: str | None     # the node's raw key, what the memo holds under
-    kind: str           # "run" | "fold" | "error" | "cache" | "step" | "seek" | "sync" | "evict" | "uncache" | "progress" | "dump"
+    kind: str           # "run" | "fold" | "error" | "cancel" | "cache" | "step" | "seek" | "sync" | "evict" | "uncache" | "progress" | "dump"
     bytes: int          # the result's; what an eviction freed
     ms: float           # wall, exclusive of the runs this one opened
     t: float            # start, on the probe's clock (perf_counter); orders events across threads
@@ -178,6 +192,7 @@ class Graph:
         self.memo = Memo(memo_bytes)
         self._lock = threading.Lock()
         self.on_event = None                # the probe's one consumer; see probe() for the event
+        self.halt = False                   # set by whoever is stopping the worker: every read from then on raises Cancelled
         self._probing = threading.local()   # the runs open on this thread, so a run's time excludes its reads
         self._base = _key("video", decoder.path, VIDEO_PRODUCES)
         # The two stores report what they discard into the same stream: the memo's entry by its key and
@@ -366,6 +381,9 @@ class Graph:
         t, c = time.perf_counter(), time.thread_time()
         try:
             yield ev
+        except Cancelled:
+            ev[0] = "cancel"                 # the graph moved on under the run; not the tool's fault
+            raise
         except BaseException:
             ev[0] = "error"                  # the body raised: a tool failed, or the read ran off the stream's end
             raise
@@ -393,7 +411,7 @@ class Graph:
         v = self.memo.get(mk)
         if v is None:
             with self.probe(nid, row, e.raw_key) as ev:
-                v = e.tool.run(Frames(self, plan, e.srcs, e.src_key), row, e.params)
+                v = e.tool.run(Frames(self, plan, nid, e.srcs, e.src_key), row, e.params)
                 ev[1] = Memo._size(v)
             self.memo.put(mk, v)
         return v if raw or e.band is None else banded(v, e.band)

@@ -130,6 +130,35 @@ def test_a_second_input_is_read_by_name_keyed_and_required():
     assert g.key("diff") != k and D.inputs_of(doc, {**TOOLS, "diff": diff}, "diff") == [("in", ("gray",)), ("bg", ("gray",))]
 
 
+def test_a_read_after_the_node_moved_on_or_a_halt_is_cancelled():
+    from sieve_player.graph import Cancelled
+    doc = fan_out()
+    g = Graph(doc, Dec(), TOOLS)
+    seen = []
+
+    def many(frames, row, params):      # a composite: many reads in one run
+        for r in range(8):
+            seen.append(r)
+            frames(r)
+            if r == 2:
+                doc.node("gray").params["k"] = 5        # the user moves a knob upstream mid-build
+                g.sync()
+        return frames(0)
+
+    add.run, keep = many, add.run
+    try:
+        kinds = []
+        g.on_event = lambda ev: kinds.append(ev.kind) if ev.node == "add" else None
+        with pytest.raises(Cancelled):
+            g.compute("add", 0)
+        assert seen == [0, 1, 2, 3] and kinds[-1] == "cancel" and g.memo.get((g.key("add"), 0)) is None
+        g.halt = True
+        with pytest.raises(Cancelled):
+            g.compute("same", 1)
+    finally:
+        add.run, g.halt = keep, False
+
+
 def test_a_static_node_is_computed_once_held_once_and_peeked_at_any_row():
     const = tool("const", fn=lambda f, p: np.full_like(f, p["k"]))
     const.STATIC = True
@@ -230,22 +259,21 @@ def test_a_series_band_gates_the_signal_and_zeroes_what_the_next_reads():
 
 
 def test_one_compute_sees_one_plan():
-    """A sync between a node's run() starting and its frames(row) call: the value memoized under the
-    old key is the old graph's, so flipping the param back serves the right frame."""
+    """A sync between a node's run() starting and its frames(row) call that leaves the node's key
+    alone: the run reads through the plan it began in, finishes, and is memoized under that key. A
+    sync that changes the key cancels the read instead; see the cancellation test."""
     doc = fan_out()
     g = Graph(doc, Dec(), TOOLS)
 
     def run(frames, row, params):
-        doc.node("gray").params["k"] = 50       # upstream changes while this node is mid-run
+        doc.node("same").params["k"] = 50       # a sibling changes while this node is mid-run
         g.sync()
         return frames(row) + params["k"]
     add.run, old = run, add.run
     try:
         k_old = g.key("add")
         v = g.compute("add", 0)
-        assert (v == 0 + 1 + 1).all()                            # gray's k was 1 when this compute began
-        doc.node("gray").params["k"] = 1
-        g.sync()
+        assert (v == 0 + 1 + 1).all()
         assert g.key("add") == k_old and g.compute("add", 0) is v        # served from the memo, not recomputed
     finally:
         add.run = old

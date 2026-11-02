@@ -155,16 +155,16 @@ Every "this blob is on that blob" relation: a paint dot on the ant it sits on, a
 and heading on the ant under it, a region's blob on every ant inside it. The mark's own centroid
 and area come along, which a pixel count does not say.
 
-- [ ] A frame tool, blobs in with a second blobs input, the first table out with columns of the
+- [x] A frame tool, blobs in with a second blobs input, the first table out with columns of the
   second written onto the record the second's centroid lies in, by contour or box by a knob; the
   columns are named in the params and land under a prefix the params give, with the second's
   `cx`, `cy` and `area` always among them.
   Check: a test attaches a small table of dots to a table of animals and reads each dot's
   columns on the right animal.
-- [ ] A record with no attachment reads NaN in the attached columns, and one with several reads
+- [x] A record with no attachment reads NaN in the attached columns, and one with several reads
   the largest by area with a count column saying how many.
   Check: a test with an animal under no dot and one under two.
-- [ ] Tables found in planes of different shapes attach in the first table's coordinates.
+- [x] Tables found in planes of different shapes attach in the first table's coordinates.
   Check: a test attaches a table at twice the shape.
 
 Worth a look: a colour's inrange blobs attached to the ants on marked footage, before decode is

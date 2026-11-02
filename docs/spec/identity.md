@@ -108,10 +108,10 @@ mark's own mask, since the mark is a hole in the silhouette otherwise. One tool 
 and "the animal" compositions of masks that exist rather than a tool per case; morphology, in
 docs/spec/blob-tools.md, is its neighbour for the hole a paint dot leaves.
 
-- [ ] A frame tool, mask in with a second mask input, mask out, with a method among and, or,
+- [x] A frame tool, mask in with a second mask input, mask out, with a method among and, or,
   difference, and not, where not reads the first input alone and the second may be unwired for it.
   Check: a test for each method on two small masks.
-- [ ] Two masks of different shapes are reported on the node, as a type mismatch is, and the
+- [x] Two masks of different shapes are reported on the node, as a type mismatch is, and the
   node computes as None.
   Check: a test wires mismatched shapes and reads the report.
 

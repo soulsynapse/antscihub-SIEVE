@@ -85,18 +85,22 @@ Built as tools/blobs_to_mask.py under docs/spec/identity.md: the kept records' c
 into a plane the shape the table carries, so a filtered table can gate flow, motion, bg-subtract or
 reduce downstream.
 
-## Kinematics on tracks (series; tracks in, tracks out)
+## Kinematics on tracks (series; tracks in, tracks out): built, tools/kinematics.py
 
-`dx`, `dy`, `speed` and `heading` columns from an id's consecutive rows, NaN on a track's first row.
-The moment `angle` is ambiguous by 180 degrees and motion resolves it; travel's moving threshold
-and any speed cut in the tracks filter derive from these rather than each recomputing steps.
+`dx`, `dy`, `speed` and `heading` columns from an id's previous record, per row across a gap, NaN
+on a first record. The moment `angle` is ambiguous by 180 degrees and motion resolves it, but
+docs/findings/2026-11-02-kinematics-and-spacing.md finds a one-row step at this frame rate is
+sub-pixel jitter and a ten-row step agrees with the axis only off contacts and turns; a span is
+not in the tool. travel's moving threshold and tracks-filter's displacement still compute their
+own steps.
 
-## Spacing (series; blobs in, signal out)
+## Spacing (series; blobs in, signal out): built, tools/spacing.py
 
-Nearest-neighbour distance between centroids, by a method, or the count of pairs within `r` px. For
-ants it is the contact rate, the one behavioural number the branch cannot produce, and a pairwise
-distance over a few records a row. A region filter is not needed: `cx` and `cy` are columns of
-filter already.
+Nearest-other distance between centroids, by a method, or the count of pairs within `r` px. For
+ants it is the contact rate, the one behavioural number the branch could not produce, and a
+pairwise distance over a few records a row. A region filter is not needed: `cx` and `cy` are
+columns of filter already, and the finding above says the pile's pieces must be filtered out
+before the count is a contact rate.
 
 ## Held
 

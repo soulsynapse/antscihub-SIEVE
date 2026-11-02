@@ -17,7 +17,8 @@ def test_rows_pass_through_and_the_file_holds_one_line_per_record(tmp_path):
     assert p.name == "ants_7-9_tracks.csv"
     tracks_csv.write(p, result, 7, 30.0, "ants.mp4")
     lines = p.read_text(encoding="utf-8").splitlines()
-    assert lines[0] == "# sieve key=abc123 rows=7-9 footage=ants.mp4" and lines[1] == ",".join(tracks_csv.COLUMNS)
+    assert lines[0] == "# sieve key=abc123 rows=7-9 footage=ants.mp4" and lines[1] == ",".join(tracks_csv.columns(rows[0].dtype))
+    assert lines[1].startswith("row,time,id,x,y,w,h,area,") and lines[1].endswith(",core,gate")
     assert len(lines) == 5 and lines[2].startswith("7,0.233333,0,8,18,4,4,16,10,20,") and lines[4].startswith("9,0.300000,0,")
     assert lines[2].endswith(",1") and lines[4].endswith(",0")
     assert csv.written_key(p) == "abc123"

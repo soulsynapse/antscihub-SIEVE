@@ -6,6 +6,12 @@ outer boundary as (N, 2) x, y, an object column, so the table is not a flat arra
 the `diff` input, `mean`, `peak` and `core` (pixels at or over `core_threshold`) are read from it;
 without it they are NaN, NaN, -1. `split` cuts a region over `max_area` at rising levels of the
 diff until it falls into two or more pieces within bounds, and drops it if none does.
+
+A table's dtype carries the shape of the plane it was found in, `plane(table)`, so a tool relating
+it to a plane or table of another shape can scale; `with_column(table, name, values)` is how a tool
+downstream adds a column, which every reader of a table takes by the table's own names. The kind
+`blobs` promises the position columns and the plane; any other column may be NaN or absent where
+its producer did not make it.
 """
 import cv2
 import numpy as np
@@ -21,14 +27,40 @@ DTYPE = np.dtype([("x", np.int32), ("y", np.int32), ("w", np.int32), ("h", np.in
                   ("major", np.float32), ("minor", np.float32),
                   ("mean", np.float32), ("peak", np.float32), ("core", np.int32), ("contour", object)])
 OUTLINES = ("box", "contour")
+
+
+def plane_dtype(shape, dtype=DTYPE):
+    """`dtype` with the plane's (height, width) on it."""
+    return np.dtype(dtype.descr, metadata={"plane": (int(shape[0]), int(shape[1]))})
+
+
+def plane(table):
+    """The (height, width) the table was found in, or None when it has none."""
+    return (table.dtype.metadata or {}).get("plane")
+
+
+def with_column(table, name, values):
+    """The table with `values` as a column named `name`, the plane kept; a name the table already
+    has raises ValueError, since overwriting a producer's column would silently change its meaning."""
+    if name in table.dtype.names:
+        raise ValueError(f"the table already has a column {name!r}")
+    values = np.asarray(values)
+    dtype = np.dtype(table.dtype.descr + [(name, values.dtype)], metadata=dict(table.dtype.metadata or {}))
+    out = np.empty(len(table), dtype)
+    for n in table.dtype.names:
+        out[n] = table[n]
+    out[name] = values
+    return out
+
+
 SPLIT_STEP = 4            # levels between thresholds tried when splitting
 SPLIT_KEEP = 0.2          # a split whose pieces hold less of the region than this is not one
 
 
-def _records(labels, ids, stats, diff, core_threshold, offset=(0, 0)):
+def _records(labels, ids, stats, diff, core_threshold, offset=(0, 0), dtype=DTYPE):
     """One record per label in `ids`, each computed inside its own box from `stats`, so the plane
     is read by the labeling alone; `offset` is added to every coordinate."""
-    out = np.empty(len(ids), DTYPE)
+    out = np.empty(len(ids), dtype)
     for k, i in enumerate(ids):
         x, y, w, h, area = (int(v) for v in stats[i])
         win = (slice(y, y + h), slice(x, x + w))
@@ -53,7 +85,7 @@ def _records(labels, ids, stats, diff, core_threshold, offset=(0, 0)):
     return out
 
 
-def _split(crop, lo, hi, core_threshold, offset):
+def _split(crop, lo, hi, core_threshold, offset, dtype):
     whole = int(np.count_nonzero(crop))
     for t in range(int(crop[crop > 0].min()) + 1, int(crop.max()) + 1, SPLIT_STEP):
         fg = (crop >= t).astype(np.uint8)
@@ -65,26 +97,27 @@ def _split(crop, lo, hi, core_threshold, offset):
             return None
         keep = np.flatnonzero((areas >= lo) & (areas <= hi)) + 1
         if len(keep) >= 2:
-            return _records(labels, keep, stats, crop, core_threshold, offset)
+            return _records(labels, keep, stats, crop, core_threshold, offset, dtype)
     return None
 
 
 def find(mask, min_area, max_area=0, diff=None, core_threshold=0, split=False):
     fg = (np.asarray(mask) != 0).astype(np.uint8)
+    dtype = plane_dtype(fg.shape)
     n, labels, stats, _ = cv2.connectedComponentsWithStats(fg, connectivity=8)
     area = stats[1:, cv2.CC_STAT_AREA]
     kept = area >= min_area
     if max_area <= 0:
-        return _records(labels, np.flatnonzero(kept) + 1, stats, diff, core_threshold)
+        return _records(labels, np.flatnonzero(kept) + 1, stats, diff, core_threshold, dtype=dtype)
     big = kept & (area > max_area)
-    out = _records(labels, np.flatnonzero(kept & ~big) + 1, stats, diff, core_threshold)
+    out = _records(labels, np.flatnonzero(kept & ~big) + 1, stats, diff, core_threshold, dtype=dtype)
     pieces = []
     if split and diff is not None:
         for i in np.flatnonzero(big) + 1:
             x, y, w, h, _ = (int(v) for v in stats[i])
             win = (slice(y, y + h), slice(x, x + w))
             crop = np.where(labels[win] == i, diff[win], 0)
-            recs = _split(crop, min_area, max_area, core_threshold, (x, y))
+            recs = _split(crop, min_area, max_area, core_threshold, (x, y), dtype)
             if recs is not None:
                 pieces.append(recs)
     return np.concatenate([out, *pieces]) if pieces else out

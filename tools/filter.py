@@ -1,7 +1,7 @@
 """Frame tool: the records of a blob table whose `field` lies in [lo, hi]; blobs in, blobs out.
 
-`field` is a column or `core_ratio` (core / area) or `aspect` (major / minor). A blank bound is
-none; a NaN field never passes.
+`field` is any column of the table, blobs' own or one added upstream, or `core_ratio` (core / area)
+or `aspect` (major / minor). A blank bound is none; a NaN field never passes.
 """
 import numpy as np
 
@@ -20,8 +20,8 @@ def column(table, field):
             return np.where(table["core"] < 0, np.nan, table["core"] / np.maximum(table["area"], 1))
         if field == "aspect":
             return table["major"] / np.where(table["minor"] > 0, table["minor"], np.nan)
-    if field not in blobs.DTYPE.names:
-        raise ValueError(f"filter: no field {field!r}; one of {FIELDS}")
+    if field not in table.dtype.names:
+        raise ValueError(f"filter: no field {field!r}; one of {(*table.dtype.names, *RATIOS)}")
     return table[field].astype(np.float64)
 
 
@@ -47,7 +47,7 @@ def settings(parent=None):
     from sieve_player import ParamWidget  # only the GUI needs the player
 
     w = ParamWidget(parent)
-    w.add_choice("field", FIELDS, DEFAULTS["field"])
+    w.add_choice("field", FIELDS, DEFAULTS["field"], editable=True)
     w.add_text("lo", DEFAULTS["lo"])
     w.add_text("hi", DEFAULTS["hi"])
     w.add_choice("outline", blobs.OUTLINES, DEFAULTS["outline"])

@@ -52,8 +52,8 @@ def link(tables, max_step, lost_rows, min_rows, min_p, reach):
     out, live, next_id, events = [], [], 0, []
     n_contested = n_pairs = 0
     for r, t in enumerate(tables):
-        rec = np.empty(len(t), track.DTYPE)
-        for name in blobs.DTYPE.names:
+        rec = np.empty(len(t), track._with_id(t))
+        for name in t.dtype.names:
             rec[name] = t[name]
         rec["id"] = -1
         for k in live:

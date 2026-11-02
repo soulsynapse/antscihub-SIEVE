@@ -55,17 +55,17 @@ filter, size, travel and both csv tools read its names. A table that carries its
 what makes an observation a column rather than a side table, and what lets the tools below be
 general: none of them knows what a column means.
 
-- [ ] A tool downstream of blobs adds a column, named by its params, and the table reaches filter,
+- [x] A tool downstream of blobs adds a column, named by its params, and the table reaches filter,
   size, track, travel, tracks-csv and draw with that column in it; track's output has the column
   beside `id`; tracks-csv writes it.
   Check: a test adds a column with a stub tool and reads it through each of those.
-- [ ] filter's `field` offers the table's own columns, so a column added upstream is a field to cut
+- [x] filter's `field` offers the table's own columns, so a column added upstream is a field to cut
   on, and the ratios it computes still are.
   Check: a test filters on an added column.
 - [ ] A column added under a name the table already has is reported on that node, as a type
   mismatch is, and the table passes through unchanged.
   Check: a test adds `area` and reads the report.
-- [ ] blobs' own columns, their names, types and `contour` as an object column, are as they were,
+- [x] blobs' own columns, their names, types and `contour` as an object column, are as they were,
   and every existing test passes.
   Check: `tests/test_blobs.py` and `tests/test_track.py` unchanged and green.
 
@@ -77,7 +77,7 @@ A record carries no frame shape, which blocked blobs-to-mask already. Here it is
 found at one scale meet a plane or a table at another, which a neon tag at full resolution against
 ants at half is.
 
-- [ ] A blobs table carries the height and width of the plane it was found in, and the shape
+- [x] A blobs table carries the height and width of the plane it was found in, and the shape
   survives filter, track and every tool that passes a table through.
   Check: a test reads the shape off blobs' output and off track's.
 - [ ] A tool that relates a table to a plane or table of a different shape does so in the other's

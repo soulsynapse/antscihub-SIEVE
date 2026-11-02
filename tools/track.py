@@ -1,9 +1,10 @@
 """Series tool: ids across rows for a blob table, greedy nearest-neighbour; blobs in, tracks out.
 
-`rows` is each table with an `id` column; the signal is the tracks seen in at least `min_rows`
-rows. `max_step` is px per row: a track unseen for g rows reaches g times it and no further, so
-set it from one row's step, not from the distance an animal may cover while lost. A track unseen
-over `lost_rows` ends and its id is not reused. Ids are assigned afresh each run.
+`rows` is each table with an `id` column after its own, the plane kept; the signal is the tracks
+seen in at least `min_rows` rows. `max_step` is px per row: a track unseen for g rows reaches g
+times it and no further, so set it from one row's step, not from the distance an animal may cover
+while lost. A track unseen over `lost_rows` ends and its id is not reused. Ids are assigned afresh
+each run.
 """
 import numpy as np
 
@@ -12,9 +13,13 @@ from tools import blobs
 SIEVE_TOOL = True
 NAME, KIND, EXPECTS, PRODUCES = "track", "series", "blobs", "tracks"
 DEFAULTS = {"max_step": 4.0, "lost_rows": 30, "min_rows": 3, "min_p": 0.1, "outline": "box"}
-DTYPE = np.dtype(blobs.DTYPE.descr + [("id", np.int32)])
+DTYPE = np.dtype(blobs.DTYPE.descr + [("id", np.int32)])      # the output's dtype for a table of blobs' own columns
 STEPS = 5           # recent steps averaged into the prediction
 TRAIL = 30          # rows of path drawn behind each box
+
+
+def _with_id(t):
+    return np.dtype(t.dtype.descr + [("id", np.int32)], metadata=dict(t.dtype.metadata or {}))
 
 
 class _Track:
@@ -43,8 +48,8 @@ def link(tables, max_step, lost_rows, min_rows, min_p):
     out, signal, live, next_id = [], np.zeros(len(tables), np.float32), [], 0
     for r, t in enumerate(tables):
         t = np.asarray(t)
-        rec = np.empty(len(t), DTYPE)
-        for name in blobs.DTYPE.names:
+        rec = np.empty(len(t), _with_id(t))
+        for name in t.dtype.names:
             rec[name] = t[name]
         rec["id"] = -1
         live = [k for k in live if r - k.seen <= lost_rows]

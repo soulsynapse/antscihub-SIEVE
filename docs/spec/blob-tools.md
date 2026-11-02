@@ -45,7 +45,7 @@ done with tags (Mersch, Crespi and Keller 2013; Crall et al. 2015; Wild et al. 2
 segmentation with learned correspondence (Bozek et al. 2021 on a bee comb), so the cluster is out of
 reach of this pipeline's ids by design, not by tuning.
 
-## A tracks filter (series; tracks in, tracks out)
+## A tracks filter (series; tracks in, tracks out): built, tools/tracks_filter.py
 
 The finding's open question is whether lowering min_area under the ants' distribution and letting the
 linker carry an ant through its small rows mends the short tracks. It also lets speckle in, and the

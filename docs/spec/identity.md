@@ -212,7 +212,7 @@ Assumes: Columns a table carries.
 Stubs out, and the tracklets resolve reads restricted to confirmed ones. Listed in
 docs/spec/blob-tools.md; a deliverable here because resolve assumes it.
 
-- [ ] A series tool, tracks in, tracks out, keeping the ids whose property lies in a range with
+- [x] A series tool, tracks in, tracks out, keeping the ids whose property lies in a range with
   filter's blank-is-none bounds: rows seen, net displacement, path length, or the mean of a
   named column. Ids are not renumbered; a dropped id's records leave every row.
   Check: a test drops a short track and a far-walking one and reads the ids left.

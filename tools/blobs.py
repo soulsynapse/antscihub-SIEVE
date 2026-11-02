@@ -25,38 +25,31 @@ SPLIT_STEP = 4            # levels between thresholds tried when splitting
 SPLIT_KEEP = 0.2          # a split whose pieces hold less of the region than this is not one
 
 
-def _records(labels, n, stats, diff, core_threshold, offset=(0, 0)):
-    out = np.empty(max(n - 1, 0), DTYPE)
-    if n <= 1:
-        return out
-    s = stats[1:]
-    out["x"], out["y"] = s[:, cv2.CC_STAT_LEFT] + offset[0], s[:, cv2.CC_STAT_TOP] + offset[1]
-    out["w"], out["h"], out["area"] = s[:, cv2.CC_STAT_WIDTH], s[:, cv2.CC_STAT_HEIGHT], s[:, cv2.CC_STAT_AREA]
-    ys, xs = np.nonzero(labels)
-    lab = labels[ys, xs]
-    xs, ys = xs.astype(np.float64), ys.astype(np.float64)
-    area = np.bincount(lab, minlength=n)[1:].astype(np.float64)
-    cx = np.bincount(lab, xs, n)[1:] / area
-    cy = np.bincount(lab, ys, n)[1:] / area
-    mu20 = np.bincount(lab, xs * xs, n)[1:] / area - cx * cx
-    mu02 = np.bincount(lab, ys * ys, n)[1:] / area - cy * cy
-    mu11 = np.bincount(lab, xs * ys, n)[1:] / area - cx * cy
-    half, spread = (mu20 + mu02) / 2, np.sqrt(4 * mu11 * mu11 + (mu20 - mu02) ** 2) / 2
-    out["cx"], out["cy"] = cx + offset[0], cy + offset[1]
-    out["angle"] = np.degrees(0.5 * np.arctan2(2 * mu11, mu20 - mu02))
-    out["major"], out["minor"] = 4 * np.sqrt(np.maximum(half + spread, 0)), 4 * np.sqrt(np.maximum(half - spread, 0))
-    contours, _ = cv2.findContours((labels > 0).astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    for c in contours:
-        out["contour"][labels[c[0, 0, 1], c[0, 0, 0]] - 1] = c[:, 0, :] + np.array(offset, np.int32)
-    if diff is None:
-        out["mean"], out["peak"], out["core"] = np.nan, np.nan, -1
-    else:
-        d = diff[labels.nonzero()].astype(np.float64)
-        out["mean"] = np.bincount(lab, d, n)[1:] / area
-        peak = np.zeros(n)
-        np.maximum.at(peak, lab, d)
-        out["peak"] = peak[1:]
-        out["core"] = np.bincount(lab[d >= core_threshold], minlength=n)[1:]
+def _records(labels, ids, stats, diff, core_threshold, offset=(0, 0)):
+    """One record per label in `ids`, each computed inside its own box from `stats`, so the plane
+    is read by the labeling alone; `offset` is added to every coordinate."""
+    out = np.empty(len(ids), DTYPE)
+    for k, i in enumerate(ids):
+        x, y, w, h, area = (int(v) for v in stats[i])
+        win = (slice(y, y + h), slice(x, x + w))
+        sub = labels[win] == i
+        ys, xs = np.nonzero(sub)
+        xs, ys = xs.astype(np.float64), ys.astype(np.float64)
+        cx, cy = xs.sum() / area, ys.sum() / area
+        mu20, mu02, mu11 = (xs * xs).sum() / area - cx * cx, (ys * ys).sum() / area - cy * cy, (xs * ys).sum() / area - cx * cy
+        half, spread = (mu20 + mu02) / 2, np.sqrt(4 * mu11 * mu11 + (mu20 - mu02) ** 2) / 2
+        contours, _ = cv2.findContours(sub.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        r = out[k]
+        r["x"], r["y"], r["w"], r["h"], r["area"] = x + offset[0], y + offset[1], w, h, area
+        r["cx"], r["cy"] = x + offset[0] + cx, y + offset[1] + cy
+        r["angle"] = np.degrees(0.5 * np.arctan2(2 * mu11, mu20 - mu02))
+        r["major"], r["minor"] = 4 * np.sqrt(max(half + spread, 0)), 4 * np.sqrt(max(half - spread, 0))
+        r["contour"] = max(contours, key=len)[:, 0, :] + np.array((x + offset[0], y + offset[1]), np.int32)
+        if diff is None:
+            r["mean"], r["peak"], r["core"] = np.nan, np.nan, -1
+        else:
+            d = diff[win][sub].astype(np.float64)
+            r["mean"], r["peak"], r["core"] = d.sum() / area, d.max(), int(np.count_nonzero(d >= core_threshold))
     return out
 
 
@@ -70,31 +63,31 @@ def _split(crop, lo, hi, core_threshold, offset):
         areas = stats[1:, cv2.CC_STAT_AREA]
         if areas.sum() < SPLIT_KEEP * whole:
             return None
-        keep = (areas >= lo) & (areas <= hi)
-        if keep.sum() >= 2:
-            recs = _records(labels, n, stats, crop, core_threshold, offset)
-            return recs[keep]
+        keep = np.flatnonzero((areas >= lo) & (areas <= hi)) + 1
+        if len(keep) >= 2:
+            return _records(labels, keep, stats, crop, core_threshold, offset)
     return None
 
 
 def find(mask, min_area, max_area=0, diff=None, core_threshold=0, split=False):
     fg = (np.asarray(mask) != 0).astype(np.uint8)
     n, labels, stats, _ = cv2.connectedComponentsWithStats(fg, connectivity=8)
-    out = _records(labels, n, stats, diff, core_threshold)
-    keep = out["area"] >= min_area
+    area = stats[1:, cv2.CC_STAT_AREA]
+    kept = area >= min_area
     if max_area <= 0:
-        return out[keep]
-    big = keep & (out["area"] > max_area)
+        return _records(labels, np.flatnonzero(kept) + 1, stats, diff, core_threshold)
+    big = kept & (area > max_area)
+    out = _records(labels, np.flatnonzero(kept & ~big) + 1, stats, diff, core_threshold)
     pieces = []
     if split and diff is not None:
-        for i in np.flatnonzero(big):
-            b = out[i]
-            win = (slice(b["y"], b["y"] + b["h"]), slice(b["x"], b["x"] + b["w"]))
-            crop = np.where(labels[win] == i + 1, diff[win], 0)
-            recs = _split(crop, min_area, max_area, core_threshold, (b["x"], b["y"]))
+        for i in np.flatnonzero(big) + 1:
+            x, y, w, h, _ = (int(v) for v in stats[i])
+            win = (slice(y, y + h), slice(x, x + w))
+            crop = np.where(labels[win] == i, diff[win], 0)
+            recs = _split(crop, min_area, max_area, core_threshold, (x, y))
             if recs is not None:
                 pieces.append(recs)
-    return np.concatenate([out[keep & ~big], *pieces]) if pieces else out[keep & ~big]
+    return np.concatenate([out, *pieces]) if pieces else out
 
 
 def run(frames, row, params):

@@ -28,6 +28,17 @@ def test_regions_as_records_with_area_bounds_from_mask_or_gray():
     assert len(blobs.run(fed(gray), 0, {**blobs.DEFAULTS, "min_area": 2})) == 2
     empty = blobs.run(fed(np.zeros((4, 4), np.uint8)), 0, blobs.DEFAULTS)
     assert len(empty) == 0 and empty.dtype == blobs.DTYPE
+    moved = np.zeros((11, 15), np.uint8)
+    moved[1:, 3:] = m                                          # the same regions, 3 right and 1 down
+    there = blobs.run(fed(moved), 0, {**blobs.DEFAULTS, "min_area": 2})
+    for k in ("area", "w", "h", "angle", "major", "minor"):
+        assert np.array_equal(out[k], there[k])
+    assert (there["x"] - out["x"]).tolist() == [3, 3] and (there["cy"] - out["cy"]).tolist() == [1, 1]
+    assert all(np.array_equal(a + (3, 1), b) for a, b in zip(out["contour"], there["contour"]))
+    ring = np.zeros((9, 9), np.uint8)
+    ring[1:8, 1:8], ring[3:6, 3:6], ring[4, 4] = 255, 0, 255    # a speck inside another region's hole
+    speck = blobs.run(fed(ring), 0, {**blobs.DEFAULTS, "min_area": 1, "max_area": 10})[0]
+    assert speck["area"] == 1 and speck["contour"].tolist() == [[4, 4]]
     assert not imageable(out) and imageable(m) and imageable(np.zeros((4, 4, 3), np.uint8))
 
 

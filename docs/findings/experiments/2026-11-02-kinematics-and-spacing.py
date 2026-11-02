@@ -1,12 +1,15 @@
 """Experiment behind docs/findings/2026-11-02-kinematics-and-spacing.md: what the loose ants' speeds
 and headings and the rows' spacing read on a document's settings.
 
-    .venv\Scripts\python -X utf8 docs\findings\experiments\2026-11-02-kinematics-and-spacing.py [document] [start] [rows]
+    .venv\Scripts\python -X utf8 docs\findings\experiments\2026-11-02-kinematics-and-spacing.py [document] [start] [rows] [picture.png]
 
 Reads the video, threshold, blobs and track params from the document (default
 video-tests/purb-settings.json), decodes the rows once, detects and links as the GUI would, then
-runs kinematics over the tracks and spacing over the blobs. Loose is outside the cluster box the
-diagnostics finding drew; records inside it are the split's pieces of the pile.
+runs kinematics over the tracks at each span and spacing over the blobs. Loose is outside the
+cluster box the diagnostics finding drew; records inside it are the split's pieces of the pile.
+The heading is set against the moment axis on the moving records, and with a picture path given,
+eight ten-row cases spread from worst to best agreement are drawn to it, the axis in yellow and the
+step as a red arrow.
 """
 import json
 import os
@@ -25,6 +28,7 @@ from tools import blobs, kinematics, spacing, track  # noqa: E402
 DOC = sys.argv[1] if len(sys.argv) > 1 else os.path.join(ROOT, "video-tests", "purb-settings.json")
 START = int(sys.argv[2]) if len(sys.argv) > 2 else 2000
 ROWS = int(sys.argv[3]) if len(sys.argv) > 3 else 600
+PICTURE = sys.argv[4] if len(sys.argv) > 4 else None
 CLUSTER = (330, 160, 520, 300)   # x0, y0, x1, y1 at scale 0.5, from 2026-11-01-track-diagnostics.md
 
 
@@ -40,6 +44,28 @@ def pct(a, q=(5, 50, 95)):
 def loose(t):
     x0, y0, x1, y1 = CLUSTER
     return t[~((t["cx"] >= x0) & (t["cx"] < x1) & (t["cy"] >= y0) & (t["cy"] < y1))]
+
+
+def picture(frames, kin, moving, diff):
+    """Eight of `moving`, spread from worst to best agreement, cut 80 px about the centroid at four
+    times the size, the moment axis in yellow and the step as a red arrow ending on the centroid."""
+    order = np.argsort(-diff)
+    tiles = []
+    for b, d in ((moving[i], diff[i]) for i in order[:: max(1, len(order) // 8)][:8]):
+        cx, cy = int(round(float(b["cx"]))), int(round(float(b["cy"])))
+        r = next(r for r, t in enumerate(kin) if len(t) and np.any((t["id"] == b["id"]) & (t["cx"] == b["cx"]) & (t["cy"] == b["cy"])))
+        x0, y0 = max(cx - 40, 0), max(cy - 40, 0)
+        crop = cv2.resize(cv2.cvtColor(frames[r][y0:cy + 40, x0:cx + 40], cv2.COLOR_GRAY2BGR), None, fx=4, fy=4, interpolation=cv2.INTER_NEAREST)
+        c = (cx - x0) * 4, (cy - y0) * 4
+        a = np.radians(float(b["angle"]))
+        cv2.line(crop, (int(c[0] - 60 * np.cos(a)), int(c[1] - 60 * np.sin(a))), (int(c[0] + 60 * np.cos(a)), int(c[1] + 60 * np.sin(a))), (0, 255, 255), 2)
+        cv2.arrowedLine(crop, (int(c[0] - 40 * b["dx"]), int(c[1] - 40 * b["dy"])), c, (0, 0, 255), 2, tipLength=0.3)
+        cv2.putText(crop, f"r{r + START} id{int(b['id'])} {d:.0f} deg", (4, 16), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 1)
+        pad = np.zeros((320, 320, 3), np.uint8)
+        pad[:crop.shape[0], :crop.shape[1]] = crop
+        tiles.append(pad)
+    cv2.imwrite(PICTURE, np.vstack([np.hstack(tiles[:4]), np.hstack(tiles[4:])]) if len(tiles) == 8 else np.hstack(tiles))
+    print(f"  picture of eight ten-row cases: {PICTURE}")
 
 
 def main():
@@ -60,13 +86,21 @@ def main():
     print(f"kinematics over {ROWS} rows: {(time.perf_counter() - t0) * 1000:.0f} ms")
     la = np.concatenate([loose(t) for t in kin])
     la = la[~np.isnan(la["speed"])]
-    moving = la[la["speed"] > 0.5]
-    diff = np.abs(((moving["heading"] - moving["angle"]) + 90) % 180 - 90)
-    print(f"loose records with a step {len(la)}: speed px/row {pct(la['speed'], (5, 50, 95, 99))}; over 0.5 px/row {np.mean(la['speed'] > 0.5) * 100:.1f}%")
-    print(f"moving ones {len(moving)}: |heading - angle| mod 180 {pct(diff, (50, 90, 95))} deg; within 20 deg {np.mean(diff <= 20) * 100:.1f}%; "
-          f"within 45 deg {np.mean(diff <= 45) * 100:.1f}%")
-    fast = la[la["speed"] > 2]
-    print(f"records over 2 px/row {len(fast)}: speed {pct(fast['speed'], (50, 95, 100))}")
+    print(f"loose records with a step {len(la)}: speed px/row {pct(la['speed'], (5, 50, 95, 99))}; over 0.5 px/row {np.mean(la['speed'] > 0.5) * 100:.1f}%; "
+          f"over 2 px/row {np.sum(la['speed'] > 2)}, their speed {pct(la[la['speed'] > 2]['speed'], (50, 95, 100))}")
+    print("heading against the moment axis, loose records under 1000 px moving at least 3 px and 0.3 px a row over the span:")
+    for span in (1, 3, 5, 10, 20, 30):
+        kin = kinematics.kinematics(tracks, span)
+        la = np.concatenate([loose(t) for t in kin])
+        la = la[~np.isnan(la["speed"]) & (la["area"] <= 1000) & (la["speed"] * span >= 3) & (la["speed"] >= 0.3)]
+        diff = np.abs(((la["heading"] - la["angle"]) + 90) % 180 - 90)
+        moved = la["speed"] * span
+        bands = ", ".join(f"{lo}..{hi} {np.mean(diff[(moved >= lo) & (moved < hi)] <= 20) * 100:.0f}% of {np.sum((moved >= lo) & (moved < hi))}"
+                          for lo, hi in ((3, 5), (5, 10), (10, 20), (20, 1e9)))
+        print(f"  span {span:2d}: moving {len(la):4d}; |heading - angle| mod 180 {pct(diff, (50, 90))} deg; within 20 deg {np.mean(diff <= 20) * 100:.0f}%"
+              + (f"; by px moved {bands}" if span == 10 else ""))
+        if span == 10 and PICTURE:
+            picture(frames, kin, la, diff)
     lt = [loose(t) for t in tables]
     for m in ("min", "mean"):
         t0 = time.perf_counter()

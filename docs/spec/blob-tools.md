@@ -87,11 +87,11 @@ reduce downstream.
 
 ## Kinematics on tracks (series; tracks in, tracks out): built, tools/kinematics.py
 
-`dx`, `dy`, `speed` and `heading` columns from an id's previous record, per row across a gap, NaN
-on a first record. The moment `angle` is ambiguous by 180 degrees and motion resolves it, but
-docs/findings/2026-11-02-kinematics-and-spacing.md finds a one-row step at this frame rate is
-sub-pixel jitter and a ten-row step agrees with the axis only off contacts and turns; a span is
-not in the tool. travel's moving threshold and tracks-filter's displacement still compute their
+`dx`, `dy`, `speed` and `heading` columns from an id's latest record at least `span` rows back,
+per row across a gap, NaN with none. The moment `angle` is ambiguous by 180 degrees and motion
+resolves it, but docs/findings/2026-11-02-kinematics-and-spacing.md finds a one-row step at this
+frame rate is sub-pixel jitter and a ten-row step agrees with the axis only off contacts, which
+is what the span is for. travel's moving threshold and tracks-filter's displacement still compute their
 own steps.
 
 ## Spacing (series; blobs in, signal out): built, tools/spacing.py

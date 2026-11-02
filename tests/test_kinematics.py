@@ -1,5 +1,5 @@
-"""kinematics: dx, dy, speed and heading per record from the id's previous record, per row across a
-gap, NaN on a first record, heading in blobs' angle convention; the signal is the row's mean speed."""
+"""kinematics: dx, dy, speed and heading per record from the id's latest record at least span rows
+back, per row across a gap, NaN with none, heading in blobs' angle convention; the signal is the row's mean speed."""
 import numpy as np
 import pytest
 
@@ -17,7 +17,7 @@ def col(rows, name):
 
 
 def test_motion_per_row_across_a_gap_nan_on_a_first_record():
-    out = kinematics.run(Series(ROWS, "k", 0, 30.0), {})
+    out = kinematics.run(Series(ROWS, "k", 0, 30.0), {"span": 1})
     rows = out["rows"]
     assert rows[0].dtype.names[-4:] == kinematics.COLUMNS and blobs.plane(rows[0]) == (20, 100)
     assert col(rows, "dx") == [[None, None], [3.0, None], [3.0, 0.0, -3.0]]
@@ -25,5 +25,7 @@ def test_motion_per_row_across_a_gap_nan_on_a_first_record():
     assert col(rows, "speed") == [[None, None], [3.0, None], [3.0, 2.0, 5.0]]
     assert col(rows, "heading") == [[None, None], [0.0, None], [0.0, 90.0, 126.87]]
     assert out["signal"].tolist() == [0.0, 3.0] + [np.float32(10 / 3)]
+    two = kinematics.kinematics(ROWS, span=2)
+    assert col(two, "dx") == [[None, None], [None, None], [3.0, 0.0, None]] and col(two, "dy")[2] == [0.0, 2.0, None]
     with pytest.raises(ValueError):
         kinematics.kinematics(rows)

@@ -199,7 +199,7 @@ Assumes: Columns a table carries.
 Entries and exits are ids whose membership changed between consecutive rows; the boundary never
 enters the tracker, and the same count serves any state a column records.
 
-- [ ] A series tool, tracks in, signal out: per row, the ids present in it and the row before
+- [x] A series tool, tracks in, signal out: per row, the ids present in it and the row before
   whose named column changed, from a value to a value given in the params, either blank for any.
   An id absent in the row before counts nothing.
   Check: a test with a synthetic track table whose ids cross a membership column, and a second

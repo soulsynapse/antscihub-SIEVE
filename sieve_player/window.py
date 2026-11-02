@@ -20,7 +20,7 @@ import traceback
 
 import cv2
 import numpy as np
-from PySide6.QtCore import QRectF, Qt, QTimer
+from PySide6.QtCore import QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import QFontMetrics, QImage, QKeySequence, QPainter, QPen, QPixmap, QShortcut
 from PySide6.QtWidgets import QFileDialog, QHBoxLayout, QMainWindow, QPushButton, QSizePolicy, QVBoxLayout, QWidget
 
@@ -130,6 +130,8 @@ def heat(a, top):
 
 
 class Display(QWidget):
+    drawFailed = Signal(str, str)   # a tool's draw() raised: the node, the line
+
     """The frame, the overlay heated over it, the gate border, and each drawing node's draw() on
     top, in node order, each handed its own node's result: a series node's over the window, a
     frame node's at the row."""
@@ -214,9 +216,10 @@ class Display(QWidget):
         for nid, tool, node in self.drawers:
             try:
                 tool.draw(p, self.row, self.frame_results.get(nid, self.results.get(nid)), self.start, node.params)
-            except Exception:
+            except Exception as e:
                 traceback.print_exc()
                 self.drawers = [d for d in self.drawers if d[1] is not tool]  # once, not every repaint
+                self.drawFailed.emit(nid, f"draw() raised: {type(e).__name__}: {e}")
         p.restore()
 
 
@@ -316,6 +319,7 @@ class PlayerWindow(QMainWindow):
         self.pane.paramsChanged.connect(self._params_changed)
         self.pane.pinChanged.connect(self._show_pinned)
         self.pane.videoPicked.connect(self.load)
+        self.display.drawFailed.connect(self._draw_failed)
         self.header = Header()
         self.header.walk.clicked.connect(self._toggle_clip)
         self.header.setEnabled(False)
@@ -448,6 +452,7 @@ class PlayerWindow(QMainWindow):
         if self.graph is None:
             return
         self.graph.sync()
+        self._restate()
         self._invalidate()
         self.goto(self.row, commit=True)
 
@@ -458,7 +463,28 @@ class PlayerWindow(QMainWindow):
         if self.graph is None:
             return
         self.graph.sync()
+        self._restate()
         self.goto(self.row, commit=True)
+
+    def _restate(self):
+        if self.graph is None:
+            return
+        for n in self.doc.nodes:
+            text = self.graph.standing(n.id)
+            self.pane.set_standing(n.id, text)
+            if text:
+                self.canvas.standings[n.id] = text
+            else:
+                self.canvas.standings.pop(n.id, None)
+
+    def _failed(self, row, nid):
+        self._restate()
+        self.timeline.controls.progress.setText(f"{nid} {self.graph.standing(nid)}" if nid else f"a tool raised at row {row}, see console")
+
+    def _draw_failed(self, nid, line):
+        if self.graph is not None:
+            self.graph.note(nid, line)
+            self._restate()
 
     def _params_changed(self, nid):
         self.canvas.update()   # a band moved recolours its node's dot
@@ -468,6 +494,7 @@ class PlayerWindow(QMainWindow):
         if self.graph is None:
             return
         self.graph.sync()
+        self._restate()
         if nid in self.graph.chain:
             self.worker.rerun_series()
         else:
@@ -621,7 +648,7 @@ class PlayerWindow(QMainWindow):
         self.worker.densityReady.connect(self.pane.show_density)
         self.worker.walked.connect(ct.set_progress)
         self.worker.walked.connect(lambda _, n: self._set_length(n))   # the walk's own length: clamped, or closed early
-        self.worker.failed.connect(lambda r: ct.progress.setText(f"tool raised at row {r}, see console"))
+        self.worker.failed.connect(self._failed)
         self.worker.clipWalked.connect(self._clip_walked)
         self.worker.clipReady.connect(self._clip_ready)
         self.worker.clipRefused.connect(self._clip_refused)
@@ -689,7 +716,7 @@ class PlayerWindow(QMainWindow):
         if shown is None:
             self.display.clear()
         elif not self.graph.fed(shown):
-            self.display.clear(f"{shown}: no input")
+            self.display.clear(f"{shown}: {self.graph.standing(shown)}")
         elif not self._show(row) and commit:
             self.worker.request_row(row)
         self.timeline.strip.set_playhead(row)
@@ -767,6 +794,7 @@ class PlayerWindow(QMainWindow):
     def _series_ready(self, results, start, fps):
         self.results, self.result_start = results, start
         self.pane.show_series(results, start)
+        self._restate()
         for nid, result in results.items():
             w = self.pane.widget(nid)
             if w is not None and hasattr(w, "show_result"):

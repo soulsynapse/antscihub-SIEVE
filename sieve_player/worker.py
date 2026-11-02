@@ -40,7 +40,7 @@ class Worker(QThread):
     walked = Signal(int, int)                 # rows done, rows in window
     seriesReady = Signal(object, int, float)  # {node: result} for the series chain, each gated and keyed, start, fps
     densityReady = Signal(object, int)        # {node: (rows, BINS) counts} per plane the walk computes, start
-    failed = Signal(int)                      # a tool raised at this row; the walk is abandoned
+    failed = Signal(int, str)                 # a tool raised at this row, on this node; the walk is abandoned
     clipWalked = Signal(int, int)             # rows done, rows in the clip; done == total when the clip walk is not running
     clipReady = Signal(object, int, float)    # as seriesReady, over the clip walk's rows; {} when the walk was abandoned
     clipRefused = Signal(str)                 # the clip walk did not start, and why
@@ -180,14 +180,15 @@ class Worker(QThread):
                     self._clen = self._ci
                     self.clipWalked.emit(self._ci, self._clen)
                     self._emit_clip()
-            except Exception:
+            except Exception as e:
                 traceback.print_exc()
+                nid = getattr(e, "sieve_node", "")
                 if want is None:
                     if self._i < self._length:
-                        self.failed.emit(self._start + self._i)
+                        self.failed.emit(self._start + self._i, nid)
                         self._i = self._length  # abandon this walk; the next gen bump restarts it
                     else:
-                        self.failed.emit(self._ci)
+                        self.failed.emit(self._ci, nid)
                         self._clen = self._ci
                         self.clipWalked.emit(self._ci, self._clen)
 
@@ -261,10 +262,17 @@ class Worker(QThread):
             elif feeds.get(src) is not None:
                 series = Series(feeds[src], self.graph.key(src), start, fps)
             else:
-                continue            # the upstream tool did not hand out the signal it declared, or was skipped itself
+                self.graph.note(nid, f"{src} handed out no signal")
+                continue
             with self.graph.probe(nid, start + done - 1, self.graph.key(nid)) as ev:
-                results[nid], feeds[nid] = gated(tool.run(series, params), band)
+                try:
+                    results[nid], feeds[nid] = gated(tool.run(series, params), band)
+                except Exception as exc:
+                    exc.sieve_node = nid
+                    self.graph.note(nid, f"raised over {done} rows from {start}: {type(exc).__name__}: {exc}")
+                    raise
                 ev[1] = Memo._size(results[nid])
+            self.graph.note(nid, "")
             if isinstance(results[nid], dict):
                 results[nid] = {**results[nid], "key": self.graph.key(nid)}   # the node's key beside its gate: what a tool that writes a file records
         return results

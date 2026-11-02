@@ -10,6 +10,7 @@ py -3.13 -m venv .venv            # not the Anaconda python: its Qt DLLs shadow 
 .venv\Scripts\python -m pip install -r requirements.txt
 .venv\Scripts\python main.py [video]                     # the example pipeline, every tool under tools/ placeable
 .venv\Scripts\python -m sieve_player doc.json [root ...] # a saved document, against the tools under the roots
+.venv\Scripts\python -m sieve_player doc.json --plan      # the plan instead: each node's kind, key, role and standing
 .venv\Scripts\python tools\motion.py [video]             # any tool runs alone
 .venv\Scripts\python smoke.py video                      # offscreen end-to-end check
 .venv\Scripts\python -m pytest
@@ -75,6 +76,9 @@ How the player treats a tool, as `sieve_player/graph.py`, `pane.py` and `window.
   a `"same"` output follows. A frame tool may declare more in `INPUTS`, each a wire of its own, and
   `run` reads one as `frames(row, name)`. A node the video does not reach through every frame
   input, over wires whose types fit, computes as None, and so does everything downstream of it.
+  Why a node does not run is its standing, one line the runtime states per node (`Graph.standing`):
+  the pane shows it under the node's settings, the canvas as its tooltip, and `--plan` prints it. A
+  tool raising, or a chain node handed no signal, is noted there too, until the node's key changes.
 - Series nodes run as a chain: the walked node is what the first series node reading a frame node
   reads, every series node reading that node is a head and runs on the stacked window, and each
   fed series node wired on from a chain node runs after it on the upstream result's `"signal"`. A

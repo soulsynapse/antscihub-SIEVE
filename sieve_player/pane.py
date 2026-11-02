@@ -19,7 +19,8 @@ reach, shows none; its handles are the node's band (see `document`), written lik
 series node's settings sits its trace, the result's signal over the window, which the window hands
 the pane for every chain node; its handles are the node's band the same way, in the signal's units,
 and the rows the band shuts out are washed. The pin in a series card's corner is the document's
-pinned flag: one series node at a time, whose signal the timeline draws. A node whose tool the catalogue lacks shows which name was
+pinned flag: one series node at a time, whose signal the timeline draws. Under any tool node's settings a line says why it does
+not run, or what its run said, when there is something to say (`set_standing`); the window reads it off the runtime. A node whose tool the catalogue lacks shows which name was
 not found and its params read-only. The pane writes params and the pin into the document and says what
 changed; it knows nothing of the runtime.
 """
@@ -235,6 +236,7 @@ class Pane(QWidget):
         self.tools = tools
         self.doc = None
         self.cards, self.widgets, self.exports, self.notes = {}, {}, {}, {}
+        self.standings = {}   # tool node -> the line under its settings, see set_standing
         self.densities = {}   # frame node -> its Density plot, hidden until the window hands it counts
         self.traces = {}      # series node -> its Trace, hidden until the window hands it a result
         self.pins = {}        # series node -> the pin in its card's corner
@@ -280,6 +282,7 @@ class Pane(QWidget):
         self.widgets.pop(nid, None)
         self.exports.pop(nid, None)
         self.notes.pop(nid, None)
+        self.standings.pop(nid, None)
         self.densities.pop(nid, None)
         self.traces.pop(nid, None)
         self.pins.pop(nid, None)
@@ -317,6 +320,9 @@ class Pane(QWidget):
                 w.changed.connect(lambda nid=node.id: self._changed(nid))
                 card.add(w)
                 self.widgets[node.id] = w
+                self.standings[node.id] = readout()
+                self.standings[node.id].hide()
+                card.add(self.standings[node.id])
                 if hasattr(w, "set_source"):
                     w.set_source(self._src, self._fps)
                 if is_selector(tool) or paths(tool):
@@ -442,6 +448,14 @@ class Pane(QWidget):
         inputs, which files were picked for them."""
         if nid in self.notes:
             self.notes[nid].setText(text)
+
+    def set_standing(self, nid, text):
+        """The line under `nid`'s settings: why it does not run, or what its run said, from the
+        runtime through the window; "" hides it."""
+        lab = self.standings.get(nid)
+        if lab is not None:
+            lab.setText(text)
+            lab.setVisible(bool(text))
 
     def set_source(self, path, fps):
         """The video every Export, and every settings widget with a `set_source`, writes from; None

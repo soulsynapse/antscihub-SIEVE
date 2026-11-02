@@ -112,13 +112,15 @@ def run_window():
         win.canvas.set_flag("motion")
         doc.disconnect("rescale")
         win.sync()
-        check(not win.graph.fed("motion") and win.display.reason == "motion: no input" and doc.display == "motion",
+        check(not win.graph.fed("motion") and win.display.reason == "motion: in waits on threshold" and doc.display == "motion"
+              and win.graph.standing("rescale") == "in is unwired" and win.pane.standings["rescale"].isVisibleTo(win.pane),
               f"unfed flag {win.display.reason!r}")
         doc.connect("gray", "rescale")
         win.sync()
         win.graph.compute("motion", win.row)   # what the worker would deliver; the frame clears on arrival
         win.goto(win.row, commit=True)
-        check(win.graph.fed("motion") and win.display.reason == "", "rewire did not land")
+        check(win.graph.fed("motion") and win.display.reason == "" and not win.pane.standings["rescale"].isVisibleTo(win.pane),
+              "rewire did not land")
         # save, then open the file in another window: same nodes, places, params, flag and video
         saved = os.path.join(tempfile.mkdtemp(), "smoke.json")
         win.save_document(saved)
@@ -138,7 +140,7 @@ def run_window():
         check([(w.src, w.dst) for w in doc.wires] == [("video", "gray"), ("threshold", "motion"), ("motion", "reduce")],
               f"delete left {doc.wires}")
         check("rescale" not in win.pane.cards and win.pane.current is None, "the deleted node's card stayed")
-        check(not win.graph.fed("motion") and win.display.reason == "motion: no input", "delete did not reach the runtime")
+        check(not win.graph.fed("motion") and win.display.reason == "motion: in waits on threshold", "delete did not reach the runtime")
         # deleting the flagged node leaves no flag and empty ground
         win.canvas.select(["motion"])
         win.canvas.delete_selected()

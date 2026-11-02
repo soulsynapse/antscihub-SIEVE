@@ -171,6 +171,7 @@ class Canvas(QWidget):
         self.broken = dict(broken or {})
         self.doc = None
         self.errors = {}                        # node id -> the one line wrong with it, set by the window
+        self.standings = {}                     # node id -> why it does not run, set by the window; the node's tooltip
         self.selected = []
         self.hover = None                       # the node id under the pointer
         self._drag = None                       # ("move", start, {id: pos}) | ("box", start, shift, base)
@@ -991,4 +992,6 @@ class Canvas(QWidget):
             return f"tool {node.tool!r} not found"
         if node is not None and node.id in self.errors:
             return self.errors[node.id]
+        if node is not None:
+            return self.standings.get(node.id, "")
         return ""

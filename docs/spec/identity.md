@@ -245,27 +245,27 @@ The identity pass. It never knows what an observation is, only that a column ass
 so colour counts, codes and a labels file enter it alike, and the manual method's scoring and a
 human's corrections are the same source as a tag.
 
-- [ ] A series tool, tracks in, tracks out with an identity column, reading observation columns
+- [x] A series tool, tracks in, tracks out with an identity column, reading observation columns
   named in the params. An id is labelled from reads on its own rows only where at least a number
   of reads agree, the number a param, and none contradict; a labelled id is that identity on every
   row it holds, before and after the reads.
   Check: a test with one read on a long tracklet reads the identity on its first row; a test with
   fewer reads than the number reads none.
-- [ ] An id with reads of two identities is labelled neither and flagged in a conflict column; the
+- [x] An id with reads of two identities is labelled neither and flagged in a conflict column; the
   node's signal is the identities present per row or the conflicts per row, by a knob.
   Check: a test with a swapped tracklet reads the flag and the signal.
-- [ ] Identity is exclusive in time: an id overlapping in rows with a labelled id of the same
+- [x] Identity is exclusive in time: an id overlapping in rows with a labelled id of the same
   identity is not that identity, whatever it reads.
   Check: a test with two ids both reading blue over overlapping rows resolves the better supported
   and flags the other.
-- [ ] Through a merge of a labelled id and an unlabelled one into one id that splits into two,
+- [x] Through a merge of a labelled id and an unlabelled one into one id that splits into two,
   a read on one piece labels the other by elimination.
   Check: a test with purple and unknown merging, parting, and blue read on one piece; the other
   reads purple back to its first row.
-- [ ] A labels file, rows of row span, track id and identity, enters through a path input as reads
+- [x] A labels file, rows of row span, track id and identity, enters through a path input as reads
   of a further column, and resolves as any other.
   Check: a test wires a selector to a labels file beside the document.
-- [ ] The same pass runs over a tracks csv written by tracks-csv, from the command line, and writes
+- [x] The same pass runs over a tracks csv written by tracks-csv, from the command line, and writes
   the file back with the identity and conflict columns, so back propagation spans the whole export
   and not the window.
   Check: a test writes a tracks csv, resolves it, and reads the columns back through csv's key line

@@ -80,7 +80,7 @@ ants at half is.
 - [x] A blobs table carries the height and width of the plane it was found in, and the shape
   survives filter, track and every tool that passes a table through.
   Check: a test reads the shape off blobs' output and off track's.
-- [ ] A tool that relates a table to a plane or table of a different shape does so in the other's
+- [x] A tool that relates a table to a plane or table of a different shape does so in the other's
   coordinates, scaling by the ratio of the shapes, and the result reads the same whether the
   table or the plane was the larger.
   Check: a test runs sample (below) on a plane at twice the table's shape and at half, and reads
@@ -134,13 +134,13 @@ blobs reads a second plane inside each record now, its diff input giving mean, p
 is that reading made general and separable, into a named column, for what is not a blob:
 membership in a region mask, distance to a boundary from a distance transform.
 
-- [ ] A frame tool, blobs in with a gray or mask plane as a second input, blobs out with one
+- [x] A frame tool, blobs in with a gray or mask plane as a second input, blobs out with one
   column added, named by the params, holding a statistic of the plane inside each record's own
   mask, not its box: mean, max, or count of nonzero pixels, by a knob.
   Check: a test with a plane holding a known patch under one record and nothing under another.
-- [ ] A plane of a different shape from the table's is read in the plane's coordinates.
+- [x] A plane of a different shape from the table's is read in the plane's coordinates.
   Check: the test under The plane a table was found in.
-- [ ] Sampling a mask painted by blobs-to-mask from a region's table gives a membership column
+- [x] Sampling a mask painted by blobs-to-mask from a region's table gives a membership column
   that reads full inside and empty outside.
   Check: a test paints one record and samples a table with records in and out of it.
 

@@ -34,6 +34,11 @@ def run(series, params):
     return {"signal": np.asarray(series.data, np.float32).reshape(-1)}
 
 
+def count(result):
+    """How many rows Write would write from `result`, 0 when it has none."""
+    return 0 if not isinstance(result, dict) or "signal" not in result else len(result["signal"])
+
+
 def default_name(footage, start, n):
     root, _ = os.path.splitext(str(footage))
     return f"{root}_{start}-{start + n - 1}.csv"
@@ -69,7 +74,11 @@ def written_key(path):
     return m.group(1) if m else None
 
 
-def settings(parent=None):
+def settings(parent=None, export=None):
+    """The Write widget; `export` is the module whose `write`, `default_name`, `count` and FILTER it
+    uses, this one by default, so a tool writing another table from a series result shares it."""
+    import sys
+
     from PySide6.QtCore import Qt
     from PySide6.QtGui import QFontMetrics
     from PySide6.QtWidgets import QFileDialog, QPushButton
@@ -88,6 +97,7 @@ def settings(parent=None):
             self.form.add_row("write", self.button)
             self.form.add_line(self.status)
             self.button.clicked.connect(self._write)
+            self.export = export or sys.modules[__name__]
             self.footage = self.fps = self.result = None
             self.start, self.chosen = 0, None      # chosen: where the dialog last wrote, while not beside the footage
             self.changed.connect(self._describe)
@@ -102,10 +112,10 @@ def settings(parent=None):
             self._describe()
 
         def _count(self):
-            return 0 if not isinstance(self.result, dict) or "signal" not in self.result else len(self.result["signal"])
+            return self.export.count(self.result)
 
         def _default(self):
-            return default_name(self.footage, self.start, self._count())
+            return self.export.default_name(self.footage, self.start, self._count())
 
         def _path(self):
             """Where Write would write, or None while it is not known: no footage, no rows yet, or
@@ -145,12 +155,13 @@ def settings(parent=None):
             path = self._path()
             if path is None:
                 folder = os.path.dirname(self.chosen or self._default())
-                path, _ = QFileDialog.getSaveFileName(self, "Write csv", os.path.join(folder, os.path.basename(self._default())), FILTER)
+                path, _ = QFileDialog.getSaveFileName(self, "Write csv", os.path.join(folder, os.path.basename(self._default())),
+                                                      self.export.FILTER)
                 if not path:
                     return
                 self.chosen = path
             try:
-                write(path, self.result, self.start, self.fps, self.footage)
+                self.export.write(path, self.result, self.start, self.fps, self.footage)
             except OSError as e:
                 self.status.setText(f"could not write: {e}")
                 return

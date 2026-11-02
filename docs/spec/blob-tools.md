@@ -1,6 +1,6 @@
 # Blob tools: what the blob branch of the graph still lacks
 
-Prospective, 2026-11-01, none built. Read with the registry's type report (`python -m
+Prospective, 2026-11-01; an entry whose heading says built is built. Read with the registry's type report (`python -m
 sieve_player.registry`), which is the live statement of what feeds what; at writing, `blobs` fed only
 count, filter, size and track, `tracks` fed only travel, and nothing turned a table back into an
 image, so a decision made on the table was lost to the image side of the graph. The order below is
@@ -62,11 +62,14 @@ sharing its Write widget and key line. Long format, one line per record, row, ti
 columns less contour, gate; a row with no records writes nothing. The signal is the records per
 row, so the band gates by count.
 
-## Morphology on the mask (frame; mask in, mask out)
+## Morphology on the mask (frame; mask in, mask out): built, tools/morphology.py
 
-Open and close, kernel size and iterations. Not a blob tool, and the fix for the flicker the finding
-puts down to the area cut: an opening steadies an ant's area across rows and removes the one- and
-two-pixel regions, over a hundred a row, before blobs counts them. Sits between threshold and blobs.
+Open and close, kernel radius and iterations. Not a blob tool, and listed as the fix for the flicker
+the finding puts down to the area cut. docs/findings/2026-11-02-morphology.md measured it on the purb
+document and found the premise gone, the cut having been lowered under the ants' areas since, and
+the opening harmful: at half scale an ant's waist is thinner than any kernel, so it cuts every ant
+into pieces on the cut, and closing mends no gap the tracks have. It is for the marks branch's masks,
+unmeasured there, and not for the ants document.
 
 ## Shape columns from the contour blobs already holds
 

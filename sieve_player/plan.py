@@ -1,7 +1,7 @@
 """The plan: what the runtime will compute, read off the document and the tools alone.
 
 `plan()` is pure: the same document, tools and video key give the same plan, with no decoder, thread
-or memo in sight, so a test or `python -m sieve_player --plan` reads it as a table. The Graph calls
+or memo in sight, so a test or `python -m sieve_player doc.json --plan` reads it as a table. The Graph calls
 it at every sync and holds the result under its lock; nothing here is touched after it is built.
 """
 import hashlib
@@ -34,16 +34,16 @@ class Entry:
     src_key: str | None  # what its run() sees as frames.key: every frame input's key, hashed together when there are several
     fed: bool
     srcs: dict          # frame input name -> the node wired into it, or None
-    static: bool        # the same output at every row: memoized under the key alone, row None
+    static: bool        # the same output at every row: memoized under the raw key alone, row None
     standing: str = ""  # why the node does not run, as the plan sees it; "" when it runs
 
 
 @dataclass
 class Plan:
     entries: dict = field(default_factory=dict)   # node id -> Entry
-    heads: list = field(default_factory=list)     # every series node reading the walked node
+    heads: list = field(default_factory=list)     # the series nodes that run on the stack: those fed by the walked node
     chain: list = field(default_factory=list)     # the heads and each fed series node on from a chain node, in run order
-    unrun: list = field(default_factory=list)     # series nodes reading a frame node that is not the walked one
+    unrun: list = field(default_factory=list)     # every series node not in the chain; its standing says why
     shown: str | None = None                      # the display flag, when it names a node
     over: str | None = None                       # the overlay flag, when it names a one-plane node
 

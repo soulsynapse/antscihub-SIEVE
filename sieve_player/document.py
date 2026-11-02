@@ -1,30 +1,11 @@
-"""The saved form of a pipeline.
+"""The saved form of a pipeline: nodes, wires, the display, overlay and pinned flags, the video path
+as written, and nothing of the canvas's view or the runtime's memo.
 
-Nodes, wires, the display, overlay and pinned flags and the video path; nothing of the canvas's view or the runtime's
-memo. The pinned flag names the series node whose signal the timeline draws over the clip. A node may carry a band, two values in its output's units: the runtime zeroes every pixel of
-a plane, or every row of a series node's signal, outside it (inside it when lo is above hi) before
-anything downstream reads the node, and the handles on the pane's density or trace are its control.
-It changes results, so it is saved with the node; a series node without one keeps every row. This
-module imports neither Qt nor cv2 nor any other part of the player. Where a function
-needs a tool's facets (EXPECTS, PRODUCES) it is handed the tools, as a mapping of name to module
-or as the modules themselves; the document stores only names.
-
-The video is a node like any other, with the reserved tool name VIDEO_TOOL, so that wires can name
-it. Its path is kept on the document, not in the node's params, so it can be stored as written and
-resolved against the document's folder on load.
-
-The video node has one input, of type PATH. A selector is a tool that produces PATH and expects
-nothing; wired into the video node, its `select(folder, params)` answers which file the document
-means, from the document's folder, and the answer is written into `video` so a reader without the
-selector's tool opens the same file (see `pick_video`). Any tool may declare path inputs of its
-own in PATHS, name to a loader of params from the file; a selector wired into one answers the
-file (see `pick_path`) and the window hands it to the loader. A path input never reaches `run`.
-
-A frame tool reads one node through its first input, INPUT, which is the one insertion into a wire
-and a pass-through's type follow. It may declare more frame inputs in INPUTS, name to the types
-each expects, after the first; `run` reads one as `frames(row, name)`. Every frame input must be
-fed for the node to compute, except those named in OPTIONAL, which read as None unwired; the
-node's key hashes each of them.
+Imports neither Qt nor cv2 nor any other part of the player. The document stores tool names only;
+a function that needs a tool's facets is handed the tools, a mapping of name to module or the
+modules themselves. The video is a node under the reserved name VIDEO_TOOL so wires can name it;
+its path lives on the document, resolved against the document's folder on load. A node's band is
+read by the runtime before anything downstream sees the node, so it is saved with the node.
 """
 import json
 import os
@@ -34,10 +15,10 @@ VERSION = 1
 VIDEO_TOOL = "video"        # the reserved tool name of the node the decoder is
 VIDEO_OUTPUT = "output"     # the video node's params: what the decoder hands out, and at what scale, both applied before its cache
 VIDEO_OUTPUTS = ("bgr", "gray", "luma")    # luma: the decoder's own plane, a gray left in the stream's range
-VIDEO_PRODUCES = "bgr"      # what it hands out unless the param says gray
+VIDEO_PRODUCES = "bgr"      # what it hands out unless its output param names another of VIDEO_OUTPUTS
 VIDEO_SCALE = "scale"       # a factor in (0, 1]; 1 is the frame as decoded
 PATH = "path"               # the type the video node's input expects and a selector produces
-INPUT = "in"                # every tool today has one input; wires name it so fan-in costs nothing later
+INPUT = "in"                # every tool's first input; INPUTS declares more
 OVERLAYABLE = ("gray", "mask")  # the types the overlay flag is offered on: a single plane the frame can be heated with
 LAYOUT_STEP = 100.0         # vertical spacing of a list-built document
 OPEN = (0.0, float("inf"))  # the band a series node without one is read under: every row kept, and gated
@@ -331,7 +312,7 @@ def produces(doc, tools, nid, _seen=()):
 
 
 def video_output(doc):
-    """What the video node hands out, "bgr" unless its param says "gray"; "bgr" with no video node."""
+    """What the video node hands out, one of VIDEO_OUTPUTS; "bgr" unless its param says otherwise or with no video node."""
     v = doc.video_node()
     out = VIDEO_PRODUCES if v is None else v.params.get(VIDEO_OUTPUT, VIDEO_PRODUCES)
     return out if out in VIDEO_OUTPUTS else VIDEO_PRODUCES
@@ -412,8 +393,8 @@ def fits(doc, tools, wire):
 def validate(doc, tools):
     """Every wire whose destination does not expect what its source produces, every cycle, and every
     node with an input nothing feeds; the video node's input and a selector, which has none, are
-    never unfed. Reports; never refuses. Needs the tools for the types; the
-    other two checks read the document alone."""
+    never unfed. Reports; never refuses. Needs the tools for the types and the unfed
+    check; the cycle check reads the document alone."""
     tools = _by_name(tools)
     out = []
     for w in doc.wires:

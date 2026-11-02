@@ -1,9 +1,10 @@
-"""The seams: which modules under sieve_player may import which."""
+"""The seams: which modules under sieve_player may import which, and how much a module header may say."""
 import ast
 import re
 from pathlib import Path
 
 PKG = Path(__file__).resolve().parents[1] / "sieve_player"
+HEADER_LINES = 10   # a module docstring states the module and its seams; past this it is a changelog, see CLAUDE.md
 MAY_IMPORT = {
     "document": set(),
     "plan": {"document"},
@@ -37,3 +38,12 @@ def test_canvas_and_pane_never_name_the_runtime():
     for name in ("canvas", "pane"):
         src = (PKG / f"{name}.py").read_text(encoding="utf-8")
         assert not re.search(r"\bGraph\b|\.graph\b|sieve_player\.graph", src), name
+
+
+def test_a_module_header_states_the_module_not_its_history():
+    def header_lines(path):
+        doc = ast.get_docstring(ast.parse(path.read_text(encoding="utf-8")), clean=False) or ""
+        return len(doc.splitlines())
+
+    long = {str(p.relative_to(PKG)): n for p in PKG.rglob("*.py") if (n := header_lines(p)) > HEADER_LINES}
+    assert not long, long

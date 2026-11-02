@@ -12,4 +12,3 @@
   commit message that added it, beside the diff it explains.
 - A comment or docstring that contradicts the code is reported in the reply,
   never silently fixed or cut; it may be a bug's only witness.
-- Before calling a diff done, run /comment-check over it.

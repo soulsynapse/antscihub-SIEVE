@@ -1,10 +1,7 @@
-"""Fetch a Tabler Icons release into tabler.zip beside this file, with its licence beside both.
-
-Tabler Icons is the line-icon set SIEVE vendors from (sieve_player/glyphs). tabler.zip is the
-catalogue Dev > Icon reference scrolls: the package's icons/outline and icons/filled svgs,
-icons.json (category and tags per icon), its LICENSE, and a VERSION file naming the release. The
-zip and the licence are downloads, not sources: both are gitignored, and the sheet offers the
-download when they are missing. From a shell, with no argument it fetches VERSION:
+"""Fetch a Tabler Icons release into tabler.zip beside this file, with its licence beside both: the
+outline and filled svgs, icons.json with category and tags, LICENSE, and a VERSION file. Both files
+are downloads, gitignored, and the icon reference offers the download when they are missing. With
+no argument it fetches VERSION:
 
     .venv/Scripts/python -X utf8 sieve_player/dev/reference/build_icons.py [version]
 

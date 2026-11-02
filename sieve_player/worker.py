@@ -1,16 +1,10 @@
-"""The one thread that runs tools. Walks the loop window; serves display requests first; walks the
-whole clip, when asked, in the time the window leaves.
+"""The one thread that runs tools. Serves display requests first, walks the loop window, and walks the
+whole clip when asked in the time the window leaves.
 
-The clip walk is the window walk over (0, count) without the densities: the walked node row by row
-into its own stack, the series chain on that, emitted as `clipReady` at the same cadence. It runs
-only behind a finished window walk, so what is viewed is never kept waiting by it; it is asked for
-with `walk_clip()`, halted with `stop_clip()`, and abandoned by `invalidate()`, which says the graph
-it walked is gone. A clip whose stack would not fit CLIP_BYTES is refused with a line saying so; a
-head with a fold() holds a few numbers a row and always fits.
-
-A stack holds images by shape, one row each, and tables, blobs' records, whose length is each row's
-own, in an object array, one table a row, so a walked node that hands out a table never reads as a
-graph changing shape under the walk.
+The clip walk is the window walk over the clip without the densities, behind a finished window
+walk so what is viewed never waits on it; a frame change abandons it and its rows. A stack holds
+images by shape, one row each, and tables in an object array, one table a row, so a walked node
+that hands out a table never reads as a graph changing shape under the walk.
 """
 import threading
 import traceback
@@ -36,7 +30,7 @@ def _fits(stack, out):
 
 
 class Worker(QThread):
-    rowReady = Signal(int)                    # a requested row is now in the memo
+    rowReady = Signal(int)                    # a requested row is computed and peekable
     walked = Signal(int, int)                 # rows done, rows in window
     seriesReady = Signal(object, int, float)  # {node: result} for the series chain, each gated and keyed, start, fps
     densityReady = Signal(object, int)        # {node: (rows, BINS) counts} per plane the walk computes, start

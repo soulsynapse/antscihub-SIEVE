@@ -118,7 +118,7 @@ class Frames:
     """What a frame tool's run() gets: frames(r) is the output of the node its first input reads,
     at row r, and frames(r, name) that of another of its INPUTS. `key` changes whenever anything
     upstream of any input does. It reads through the plan the computation began in, so one run()
-    sees one graph even if the document is synced under it; but a read made once the node's key
+    sees one graph even if the document is synced under it; but a read made once the node's raw key
     under the current plan differs from the one it began under, or once the graph is halted,
     raises Cancelled, so a run of many reads, a composite over the clip, dies at its next read
     rather than finishing work nothing will take."""
@@ -179,7 +179,7 @@ class Graph:
         self.memo = Memo(memo_bytes)
         self._lock = threading.Lock()
         self.on_event = None                # the probe's one consumer; see probe() for the event
-        self.halt = False                   # set by whoever is stopping the worker: every read from then on raises Cancelled
+        self.halt = False                   # set by whoever is stopping the worker: every Frames read from then on raises Cancelled
         self._probing = threading.local()   # the runs open on this thread, so a run's time excludes its reads
         self._base = None                   # the video node's key: the file and what the decoder hands out; set at sync()
         # The two stores report what they discard into the same stream: the memo's entry by its key and
@@ -187,7 +187,7 @@ class Graph:
         self.memo.on_evict = lambda k, n: self._emit("evict", None, k[1], k[0], n)
         decoder.on_evict = lambda row, n: self._emit("uncache", None, row, self._base, n)
         self._plan = {}
-        self._notes = {}                    # node -> (its key, what the run said): a tool raising, a head without a signal
+        self._notes = {}                    # node -> (its key, what the run said): a tool raising, a chain node fed no signal
         self.shown = self.over = self.series = None
         self.chain, self.heads, self.unrun_series = [], [], []
         self.sync()
@@ -217,7 +217,7 @@ class Graph:
     def standing(self, nid):
         """One line on why `nid` does not run, else what its run said under its current key, else
         "". The plan's reasons: an input unwired, mismatched or waiting on an unfed node, a series
-        node off the chain, a cycle. The notes: a tool raising, a head handing out no signal."""
+        node off the chain, a cycle. The notes: a tool raising, a chain node fed no signal."""
         with self._lock:
             e = self._plan.get(nid)
             note = self._notes.get(nid)
@@ -283,9 +283,9 @@ class Graph:
             return dict(self._plan[self.series].params) if self.series else {}
 
     def series_chain(self):
-        """[(node, tool, params, band, the node it reads)] in run order: the head first, then each
-        series node on from a chain node. The worker feeds the head the stack and the rest the
-        upstream result's signal under its band (see `gated`)."""
+        """[(node, tool, params, band, the node it reads)] in run order: the heads first, then each
+        series node on from a chain node. The worker feeds each head the stack and the rest what
+        `gated` fed from the upstream result under its band, its signal or its rows."""
         with self._lock:
             return [(nid, self._plan[nid].tool, dict(self._plan[nid].params), self._plan[nid].band, self._plan[nid].src)
                     for nid in self.chain]
@@ -340,8 +340,8 @@ class Graph:
         own work. The body sets `kind` and `bytes` on the yielded
         list, what only the call site knows: a tool's kind is "run", since a memo hit is not a run
         and emits nothing; the video read's is "cache", "step" or "seek", read off the decoder's
-        counters; a body that raises emits "error", with the time it took and no bytes, so a reader
-        tells a failed run from one that returned. Nothing when `on_event` is unset. `sync()` emits a "sync" event into the same
+        counters; a body that raises emits "error", or "cancel" for Cancelled, with the time it took and
+        no bytes, so a reader tells a failed run from one that returned. Nothing when `on_event` is unset. `sync()` emits a "sync" event into the same
         stream, a boundary with no node, row or time, and the memo and decoder cache emit "evict"
         and "uncache" with the bytes freed. The worker wraps a series tool's run in this; `_compute`
         wraps a frame tool's and the video node's read."""

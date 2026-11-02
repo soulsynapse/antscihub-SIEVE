@@ -1,18 +1,10 @@
 """The window: the header across the top, the frame left, the canvas over the parameter pane right,
 the transport across the bottom.
 
-The document is the one source of truth for the graph. The canvas and the pane read and write it
-and say what changed; the window carries the change to the runtime, which is built on every load
-of a video and re-synced on every change. The frame shows the node that carries the display flag;
-a flagged node the video does not reach blanks the frame and says why, and no flag is empty
-ground. The transport, the decoder, the worker and the memo are as they were: the display reads
-the memo and never waits on the decoder. It opens with no video and never prompts.
-
-The header's button walks the whole clip, in the worker's time behind the window; the transport's
-strip draws the pinned series' signal (the document's pinned flag, set from the pin in a series
-card's corner) over the clip walk's rows when there are any, else over the window's, at their place.
-A change to a frame tool drops the clip walk, since its rows were of a graph that is gone; the
-button runs it again.
+The document is the one source of truth. The canvas and the pane read and write it and say what
+changed; the window carries the change to the runtime, built on every load of a video and
+re-synced on every change, and carries the runtime's results and standings back to the widgets.
+The display reads the memo and never waits on the decoder. It opens on whatever the document names, or empty, and never prompts.
 """
 import os
 import time

@@ -1,28 +1,10 @@
-"""The parameter pane: the selected node's settings.
+"""The parameter pane: one card per node, built once per document, shown one at a time.
 
-One surface per node, built once per document and shown one at a time: the widget the tool's
-`settings()` returns, with its knobs moved to the node's params. The document is the store and the
-widget a view over it, as a Houdini parameter pane is over its node: the widget must take the
-stored values (`set_params`) and its knobs are the node's whole param set, so a tool whose
-`settings()` returns anything less is shown as a defect, not as its own defaults. Two parts are SIEVE's own. The
-video node's is a picker, the chosen path and what cv2 says about the file; while a selector is
-wired in, the picker is greyed and the selector picks. A selector's card is its settings and a
-note of what its rule matched, which the window writes. Under a tool that
-exports sits the target it would write, an Export button that runs the tool's argv in a QProcess,
-and the process's last line; a tool takes part by defining `output_name(src, params) -> path` and
-`export_command(src, dst, params, fps) -> argv`, and may add `describe_output(src, params, fps)
--> str` for the line under the target. A settings widget with `set_source(path, fps)` is told the
-video too, as the Export block is, for a tool that writes a file of its own (csv). Under a frame node's settings sits its density, the
-population its plane's values make per row of the loop window, which the window hands the pane for
-every fed frame node; a node whose output is a mask or a field, or that the video does not
-reach, shows none; its handles are the node's band (see `document`), written like a param. Under a
-series node's settings sits its trace, the result's signal over the window, which the window hands
-the pane for every chain node; its handles are the node's band the same way, in the signal's units,
-and the rows the band shuts out are washed. The pin in a series card's corner is the document's
-pinned flag: one series node at a time, whose signal the timeline draws. Under any tool node's settings a line says why it does
-not run, or what its run said, when there is something to say (`set_standing`); the window reads it off the runtime. A node whose tool the catalogue lacks shows which name was
-not found and its params read-only. The pane writes params and the pin into the document and says what
-changed; it knows nothing of the runtime.
+The document is the store and a card a view over it, as a Houdini parameter pane is over its node:
+a tool's settings widget must take the stored values and its knobs are the node's whole param set,
+so one that cannot be told them is shown as a defect, never as its own defaults. The pane writes
+params, bands and the pin into the document and says what changed; it knows nothing of the
+runtime, and what it shows of a run, the density, the trace, the standing line, the window hands it.
 """
 import os
 import re
@@ -61,7 +43,7 @@ def _column(parent, spacing=GAP):
 
 class Video(QWidget):
     """The video node's settings: a picker, the chosen path and what cv2 says about it, and the
-    decoder's two params, `output`, bgr as decoded or gray, and `scale`, a factor, both applied
+    decoder's two params, `output`, bgr as decoded, gray or luma, and `scale`, a factor, both applied
     before its cache so a chain that wants small gray frames never holds the large colour ones."""
     sourceChanged = Signal(str)
     paramChanged = Signal(str, object)     # (param name, value)
@@ -137,7 +119,10 @@ class Video(QWidget):
 
 
 class Export(QWidget):
-    """The export block under a tool that defines `export_command`."""
+    """The export block under a tool that defines `export_command(src, dst, params, fps) -> argv`
+    and `output_name(src, params) -> path`: the target, a button that runs the argv in a QProcess,
+    and the process's last line; `describe_output(src, params, fps) -> str`, if defined, is the
+    line under the target."""
 
     def __init__(self, tool, parent=None):
         super().__init__(parent)
@@ -339,7 +324,7 @@ class Pane(QWidget):
                 elif getattr(tool, "KIND", "frame") == "series":
                     plot = Trace(rows=5, levels=2)
                     plot.levels[:] = [float(v) for v in node.band] if node.band is not None else list(OPEN)
-                    plot.levelDragged.connect(lambda _i, _v, nid=node.id: self._banded(nid))    # the chain reruns on the folded stack, cheap enough to follow the drag
+                    plot.levelDragged.connect(lambda _i, _v, nid=node.id: self._banded(nid))    # the chain reruns on the stack already walked, cheap enough to follow the drag
                     plot.levelReleased.connect(lambda _i, _v, nid=node.id: self._banded(nid))
                     plot.hide()
                     card.add(plot)

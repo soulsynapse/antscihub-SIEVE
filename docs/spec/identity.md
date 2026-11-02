@@ -226,12 +226,12 @@ gate mostly ends a track at a merge already, since a pair's centroid is far from
 on area makes it a rule rather than a property of this footage, and it is the only change to the
 linker this needs.
 
-- [ ] track ends a track rather than continuing it onto a blob whose area is over a ratio of the
+- [x] track ends a track rather than continuing it onto a blob whose area is over a ratio of the
   track's own, the ratio a param, the track's own area a running estimate over its rows; the merged
   blob is a new id, and the pieces it splits into are new ids.
   Check: a test with two animals merging into one blob and parting: five ids, none shared across
   the merge.
-- [ ] With the ratio off, track's ids are what they were.
+- [x] With the ratio off, track's ids are what they were.
   Check: `tests/test_track.py` unchanged and green.
 
 Worth a look: the ratio on the crossings clip, since a flickering blob at the pile's edge can trip

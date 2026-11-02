@@ -313,6 +313,8 @@ class Pane(QWidget):
                 if is_selector(tool) or paths(tool):
                     self.notes[node.id] = readout()
                     card.add(self.notes[node.id])
+                if is_selector(tool):
+                    pass
                 elif getattr(tool, "KIND", "frame") == "frame":
                     plot = Density()
                     if node.band is not None:

@@ -15,7 +15,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from . import density
-from .document import INPUT, OPEN, video_output, video_scale
+from .document import INPUT, video_output, video_scale
 from .plan import _key, base_key, plan, shared_fold, walked
 
 WINDOW = 64     # rows a running mean spans; the decoder's step and seek means keep their own literal, see Decoder._mean
@@ -52,7 +52,7 @@ def gated(result, band):
     if not isinstance(result, dict) or "signal" not in result:
         return result, None
     signal = np.asarray(result["signal"])
-    gate = inband(signal, OPEN if band is None else band)
+    gate = np.ones(len(signal), bool) if band is None else inband(signal, band)
     if "rows" in result:
         fed = np.empty(len(result["rows"]), object)
         fed[:] = [r if g else r[:0] for r, g in zip(result["rows"], gate)]

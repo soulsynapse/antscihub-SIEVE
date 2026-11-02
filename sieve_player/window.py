@@ -849,12 +849,14 @@ class PlayerWindow(QMainWindow):
         self.timeline.strip.set_hover(row)
 
     def _update_gate(self):
-        """The border is on while the last node of the series chain gates the playhead's row: each
-        band zeroes what the next reads, so the last gate is the chain's."""
+        """The border is on while every leaf of the series chain, a chain node no chain node reads,
+        gates the playhead's row: each band zeroes what the next reads, so a leaf's gate is its branch's."""
         i = self.row - self.result_start
-        last = self.graph.chain[-1] if self.graph is not None and self.graph.chain else None
-        g = self.results.get(last, {}).get("gate") if isinstance(self.results.get(last), dict) else None
-        self.display.set_gate(g is not None and 0 <= i < len(g) and bool(g[i]))
+        chain = self.graph.series_chain() if self.graph is not None else []
+        read = {src for _, _, _, _, src in chain}
+        gates = [self.results[nid].get("gate") for nid, *_ in chain
+                 if nid not in read and isinstance(self.results.get(nid), dict)]
+        self.display.set_gate(bool(gates) and all(g is not None and 0 <= i < len(g) and bool(g[i]) for g in gates))
         self.display.set_state(self.row, self.results, self.result_start)
 
     SPLIT = 0.5   # the frame's share of the width until the handle is dragged

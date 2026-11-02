@@ -56,6 +56,7 @@ class Worker(QThread):
         self._clip_on = False                 # whether a clip walk is wanted
         self._clen = self._ci = 0
         self._cstack = None
+        self._folded = {}                     # fold id -> ((stack buffer id, rows), that head's own folding of the stack)
 
     # -- GUI-side calls --------------------------------------------------
     def request_row(self, row):
@@ -110,7 +111,7 @@ class Worker(QThread):
         return self._gen != self._walk_gen or self._i < self._length
 
     def _clip_pending(self):
-        return self._clip_gen != self._clip_walk_gen or (self._clip_on and self._ci < self._clen)
+        return self._clip_gen != self._clip_walk_gen or self._ci < self._clen
 
     def run(self):
         threading.current_thread().name = "worker"      # what the probe's events name as their thread
@@ -123,8 +124,11 @@ class Worker(QThread):
                     return
                 want, self._want = self._want, None
                 gen, (start, length) = self._gen, self._window
-                dirty, self._series_dirty = self._series_dirty, False
+                dirty = False
+                if want is None:
+                    dirty, self._series_dirty = self._series_dirty, False
                 clip_gen, clip_on = self._clip_gen, self._clip_on
+            which = "window"
             try:
                 if want is not None:
                     self.graph.serving("scrub")
@@ -141,6 +145,9 @@ class Worker(QThread):
                         self._clip_walk_gen, self._ci, self._clen, self._cstack = clip_gen, 0, 0, None
                         self.clipReady.emit({}, 0, self.graph.fps)
                         self.clipWalked.emit(0, 0)
+                    elif self._ci < self._clen:
+                        self._clen = self._ci
+                        self.clipWalked.emit(self._ci, self._clen)
                     continue
                 if gen != self._walk_gen:
                     self._walk_gen, self._i, self._stack, self._dens = gen, 0, None, {}
@@ -154,18 +161,22 @@ class Worker(QThread):
                 if self._i < self._length:
                     self._walk_one()
                     continue
+                which = "clip"
                 if clip_gen != self._clip_walk_gen:
                     self._clip_walk_gen, self._ci, self._cstack = clip_gen, 0, None
                     self._clen = self.graph.count if clip_on else 0
                     if not clip_on:
                         self.clipReady.emit({}, 0, self.graph.fps)
                     self.clipWalked.emit(self._ci, self._clen)
+                elif not clip_on and self._ci < self._clen:
+                    self._clen = self._ci       # stopped: the rows it has stand, and the count says so
+                    self.clipWalked.emit(self._ci, self._clen)
                 if clip_on and self._ci < self._clen:
                     self._clip_one()
             except Cancelled:
                 continue        # the graph moved on under the row, or we are stopping: the loop reads the new state
             except IndexError:
-                if self._i < self._length:
+                if which == "window":
                     self._length = self._i  # stream ended early; close the window there
                     self.walked.emit(self._i, self._length)
                     self.graph.progress(self._i, self._length)
@@ -178,7 +189,7 @@ class Worker(QThread):
                 traceback.print_exc()
                 nid = getattr(e, "sieve_node", "")
                 if want is None:
-                    if self._i < self._length:
+                    if which == "window":
                         self.failed.emit(self._start + self._i, nid)
                         self._i = self._length  # abandon this walk; the next gen bump restarts it
                     else:
@@ -246,13 +257,17 @@ class Worker(QThread):
         if not chain:
             return None
         results, feeds, fps = {}, {}, self.graph.fps
-        heads, folded, own = set(self.graph.heads), self.graph.fold is not None, {}
+        heads, folded = set(self.graph.heads), self.graph.fold is not None
+        buffer = id(stack.base) if stack.base is not None else id(stack)
         for nid, tool, params, band, src in chain:
             if nid in heads:
                 fold = None if folded else getattr(tool, "fold", None)
-                if fold is not None and id(fold) not in own:
-                    own[id(fold)] = np.stack([fold(row) for row in stack]) if len(stack) else np.zeros((0, 0))
-                series = Series(stack if fold is None else own[id(fold)], self.graph.key(src), start, fps)
+                if fold is not None:
+                    held = self._folded.get(id(fold))
+                    if held is None or held[0] != (buffer, len(stack)):
+                        held = ((buffer, len(stack)), np.stack([fold(row) for row in stack]) if len(stack) else np.zeros((0, 0)))
+                        self._folded[id(fold)] = held
+                series = Series(stack if fold is None else held[1], self.graph.key(src), start, fps)
             elif feeds.get(src) is not None:
                 series = Series(feeds[src], self.graph.key(src), start, fps)
             else:

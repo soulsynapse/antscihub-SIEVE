@@ -21,7 +21,7 @@ PATH = "path"               # the type the video node's input expects and a sele
 INPUT = "in"                # every tool's first input; INPUTS declares more
 OVERLAYABLE = ("gray", "mask")  # the types the overlay flag is offered on: a single plane the frame can be heated with
 LAYOUT_STEP = 100.0         # vertical spacing of a list-built document
-OPEN = (0.0, float("inf"))  # the band a series node without one is read under: every row kept, and gated
+OPEN = (0.0, float("inf"))  # where a series node's handles rest while it has no band; without one nothing is gated
 
 
 class FormatError(ValueError):

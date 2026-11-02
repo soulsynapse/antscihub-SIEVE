@@ -279,6 +279,8 @@ def test_a_series_band_gates_the_signal_and_zeroes_what_the_next_reads():
     assert r["gate"].tolist() == [True, False, False, False, True] and feed.tolist() == [0.0, 0.0, 0.0, 0.0, 20.0]
     r, feed = gated({"signal": sig}, None)
     assert r["gate"].all() and feed.tolist() == sig.tolist()
+    r, feed = gated({"signal": np.array([-3.0, 0.0, 4.0])}, None)         # no band gates nothing, a negative row included
+    assert r["gate"].all() and feed.tolist() == [-3.0, 0.0, 4.0]
     assert gated({"other": 1}, (0.0, 1.0)) == ({"other": 1}, None)
 
 
@@ -479,6 +481,7 @@ def test_the_clip_walk_runs_behind_the_window_and_a_frame_change_drops_it():
     assert windows[0][1] == 4 and clips[0][1] == 0 and walked[0][0] == 0            # the window's result came first
     doc.node("head").params["k"] = 5
     g.sync()
+    w.request_row(2)                            # a row request pending beside the rerun must not swallow it
     w.rerun_series()
     for _ in range(500):
         QApplication.processEvents()

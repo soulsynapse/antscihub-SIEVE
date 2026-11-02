@@ -22,7 +22,7 @@ linker variants (merge and split gates on area, a max_step calibrated from confi
 tried the same day and dropped: each was tuned against one clip's self-reported counts or a
 simulation built to the same assumptions, and none could be justified without ground truth. The
 linker stays as it is. Still open: the cluster as a region rather than blobs, which is a settings
-choice (split off, max_area) with paint, below, as the region's mask; and a labelled segment to settle the
+choice (split off, max_area) with blobs-to-mask, below, as the region's mask; and a labelled segment to settle the
 swaps no self-report can count, which docs/spec/identity.md takes up with marks and codes as the
 observations, scored as identity switches and IDF1 (Bernardin and Stiefelhagen's CLEAR MOT; Ristani et al.; Luiten et al.'s HOTA), which
 `motmetrics` computes from two tables of row, id, x, y. The labels come from correcting the
@@ -78,7 +78,7 @@ per record over a few hundred points, which the per-record finding's figures say
 
 ## Blobs to a mask (frame; blobs in, mask out)
 
-Built as tools/paint.py under docs/spec/identity.md: the kept records' contours or boxes painted
+Built as tools/blobs_to_mask.py under docs/spec/identity.md: the kept records' contours or boxes painted
 into a plane the shape the table carries, so a filtered table can gate flow, motion, bg-subtract or
 reduce downstream.
 

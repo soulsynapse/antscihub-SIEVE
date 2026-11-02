@@ -11,7 +11,7 @@ that the second table lacks, a non-numeric one, or a name the first already has,
 import numpy as np
 
 from tools.blobs import plane as plane_of, with_column
-from tools.paint import OUTLINES, footprint
+from tools.blobs_to_mask import OUTLINES, footprint
 
 SIEVE_TOOL = True
 NAME, KIND, EXPECTS, PRODUCES = "attach", "frame", "blobs", "blobs"

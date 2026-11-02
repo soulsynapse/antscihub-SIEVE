@@ -3,7 +3,7 @@ blobs in, mask out.
 
 `outline` paints each record's contour filled or its box; a record with no contour gets its box
 either way, as draw shows it. No records is an empty mask. A table with no plane on it raises.
-`footprint` is the per-record mask sample reads a plane through, in that plane's coordinates.
+`footprint` is the per-record mask sample and attach read a plane through, in that plane's coordinates.
 """
 import math
 
@@ -13,7 +13,7 @@ import numpy as np
 from tools.blobs import plane
 
 SIEVE_TOOL = True
-NAME, KIND, EXPECTS, PRODUCES = "paint", "frame", "blobs", "mask"
+NAME, KIND, EXPECTS, PRODUCES = "blobs-to-mask", "frame", "blobs", "mask"
 OUTLINES = ("contour", "box")
 DEFAULTS = {"outline": "contour"}
 
@@ -40,7 +40,7 @@ def footprint(b, shape, scale=(1.0, 1.0), outline="contour"):
     return rows, cols, local[np.ix_(iy, ix)]
 
 
-def paint(table, outline="contour"):
+def mask(table, outline="contour"):
     shape = plane(table)
     if shape is None:
         raise ValueError("the table carries no plane to paint into")
@@ -52,7 +52,7 @@ def paint(table, outline="contour"):
 
 
 def run(frames, row, params):
-    return paint(frames(row), params["outline"])
+    return mask(frames(row), params["outline"])
 
 
 def settings(parent=None):

@@ -116,17 +116,21 @@ class Cancelled(Exception):
 
 class Frames:
     """What a frame tool's run() gets: frames(r) is the output of the node its first input reads,
-    at row r, and frames(r, name) that of another of its INPUTS. `key` changes whenever anything
-    upstream of any input does. It reads through the plan the computation began in, so one run()
+    at row r, and frames(r, name) that of another of its INPUTS; frames.type(name) is what the node
+    wired into that input produces, for a tool whose EXPECTS admits types its run() must tell
+    apart. `key` changes whenever anything upstream of any input does. It reads through the plan the computation began in, so one run()
     sees one graph even if the document is synced under it; but a read made once the node's raw key
     under the current plan differs from the one it began under, or once the graph is halted,
     raises Cancelled, so a run of many reads, a composite over the clip, dies at its next read
     rather than finishing work nothing will take."""
 
-    def __init__(self, graph, plan, nid, sources, key):
+    def __init__(self, graph, plan, nid, sources, key, types=None):
         self._graph, self._plan, self._nid, self._sources = graph, plan, nid, sources
-        self._raw_key = plan[nid].raw_key
+        self._raw_key, self._types = plan[nid].raw_key, types or {}
         self.key, self.fps, self.count = key, graph.fps, graph.count
+
+    def type(self, input=INPUT):
+        return self._types.get(input)
 
     def __call__(self, row, input=INPUT):
         g = self._graph
@@ -385,7 +389,7 @@ class Graph:
         if v is None:
             with self.probe(nid, row, e.raw_key) as ev:
                 try:
-                    v = e.tool.run(Frames(self, plan, nid, e.srcs, e.src_key), row, e.params)
+                    v = e.tool.run(Frames(self, plan, nid, e.srcs, e.src_key, e.types), row, e.params)
                 except Cancelled:
                     raise
                 except Exception as exc:

@@ -62,9 +62,9 @@ general: none of them knows what a column means.
 - [x] filter's `field` offers the table's own columns, so a column added upstream is a field to cut
   on, and the ratios it computes still are.
   Check: a test filters on an added column.
-- [ ] A column added under a name the table already has is reported on that node, as a type
-  mismatch is, and the table passes through unchanged.
-  Check: a test adds `area` and reads the report.
+- [x] A column added under a name the table already has is refused: the tool raises, which the
+  runtime reports on the node and computes as None downstream, as any tool raising is.
+  Check: a test adds `area` and reads the refusal.
 - [x] blobs' own columns, their names, types and `contour` as an object column, are as they were,
   and every existing test passes.
   Check: `tests/test_blobs.py` and `tests/test_track.py` unchanged and green.
@@ -93,10 +93,10 @@ Assumes: nothing.
 inrange converts the frame to HSV itself, so five mark colours are five conversions of the full
 frame a row; one conversion the memo shares is what makes colour affordable at full resolution.
 
-- [ ] A frame tool, bgr in, hsv out, whose output inrange accepts beside bgr, and inrange's mask is
+- [x] A frame tool, bgr in, hsv out, whose output inrange accepts beside bgr, and inrange's mask is
   the same from either.
   Check: a test runs inrange on a bgr frame and on hsv of it and compares the masks.
-- [ ] Several inrange nodes reading one hsv node cause one conversion a row.
+- [x] Several inrange nodes reading one hsv node cause one conversion a row.
   Check: a test with three readers asserts one run of hsv per row, through the probe.
 
 ## Mask combine

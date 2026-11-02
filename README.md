@@ -45,7 +45,8 @@ def settings(parent=None) -> ParamWidget      # optionally show_result(result, s
 # carries "rows", one table a row (track), those tables, emptied where the band shuts them out (travel).
 
 # a frame tool with more inputs: INPUTS = {"diff": "gray"}, read as frames(row, "diff"); one named
-# in OPTIONAL = ("diff",) may be unwired and then reads as None (blobs).
+# in OPTIONAL = ("diff",) may be unwired and then reads as None (blobs). frames.type(input) is what
+# the node wired into an input produces, for an EXPECTS whose types run() must tell apart (inrange).
 
 # a selector: which file, by rule
 NAME = "file"; KIND = "selector"; PRODUCES = "path"

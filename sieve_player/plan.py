@@ -36,6 +36,7 @@ class Entry:
     srcs: dict          # frame input name -> the node wired into it, or None
     static: bool        # the same output at every row: memoized under the raw key alone, row None
     standing: str = ""  # why the node does not run, as the plan sees it; "" when it runs
+    types: dict = field(default_factory=dict)   # frame input name -> what the node wired into it produces, or None
 
 
 @dataclass
@@ -101,7 +102,8 @@ def plan(doc, tools, base):
         srcs = sources(n.id)
         src = srcs[INPUT]
         entries[n.id] = Entry(tool, kind, dict(n.params), n.band, src, key_of(n.id), raw_keys[n.id],
-                              up_key(n.id) if src else None, fed(doc, n.id, tools), srcs, static(tool))
+                              up_key(n.id) if src else None, fed(doc, n.id, tools), srcs, static(tool),
+                              types={name: produces(doc, tools, s) if s else None for name, s in srcs.items()})
         if kind == "series":
             series.append(n.id)
     roots = [s for s in series if entries[s].src is None or entries[entries[s].src].kind != "series"]

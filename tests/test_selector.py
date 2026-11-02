@@ -158,7 +158,7 @@ def open_window(tmp_path, tools):
 
 def test_a_selector_into_a_path_input_lands_params_on_the_node(tmp_path):
     doc, tools = settings_tree(tmp_path)
-    assert D.inputs_of(doc, tools, "inrange") == [(D.INPUT, (inrange.EXPECTS,)), ("settings", (D.PATH,))]
+    assert D.inputs_of(doc, tools, "inrange") == [(D.INPUT, inrange.EXPECTS), ("settings", (D.PATH,))]
     win = open_window(tmp_path, tools)
     said = inrange.load_bounds(str(tmp_path / "colour.json"))
     p, shown = win.doc.node("inrange").params, win.pane.widget("inrange").params()

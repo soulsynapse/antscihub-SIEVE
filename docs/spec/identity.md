@@ -1,6 +1,6 @@
 # Identity: marks and codes attached to blobs, carried along tracklets, resolved after the fact
 
-Prospective, 2026-11-02, none built. Read with the registry's type report (`python -m
+Written 2026-11-02; the ticked boxes below are what the tree has. Read with the registry's type report (`python -m
 sieve_player.registry`), the live statement of what feeds what, and with the facet table in the
 root README, which says what a tool may declare. docs/spec/blob-tools.md lists the rest of what the
 blob branch lacks; two of its tools are deliverables here because the ones below assume them.

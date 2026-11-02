@@ -178,13 +178,13 @@ A code is read, not counted, so it is its own tool; run on the neon mask's blobs
 records a row rather than searching every ant. The tag's orientation comes with its code, where the
 moment ellipse's angle is ambiguous by 180 degrees.
 
-- [ ] A frame tool, blobs in with a bgr or gray plane as a second input, blobs out with a code
+- [x] A frame tool, blobs in with a bgr or gray plane as a second input, blobs out with a code
   column and a heading column in degrees, from an ArUco detector over each record's box cut from
   the plane with a margin, under a dictionary chosen by a knob; a record that decodes to nothing
   reads none in both.
   Check: a test draws a marker into a plane, finds it with blobs, decodes it and reads its id and
   heading; a record over blank plane reads none.
-- [ ] A plane of a different shape from the table's is cut in the plane's coordinates.
+- [x] A plane of a different shape from the table's is cut in the plane's coordinates.
   Check: a test decodes from a plane at twice the table's shape.
 
 Worth a look: before this is built at all, whether a tag decodes from a crop of real footage at

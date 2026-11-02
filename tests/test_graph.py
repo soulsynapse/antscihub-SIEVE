@@ -10,6 +10,7 @@ import pytest
 
 from sieve_player import document as D
 from sieve_player.graph import Event, Graph, Stats, gated
+from sieve_player.plan import base_key, plan
 
 
 class Dec:
@@ -543,3 +544,48 @@ def test_two_heads_with_different_folds_each_run_on_their_own_folding():
     w.stop()
     assert got[-1]["count"]["signal"].tolist() == [2, 3, 4, 5]          # gray is row + 1; the table has row + 2 records
     assert got[-1]["size"]["signal"].tolist() == [1.5, 2, 2.5, 3]       # mean area of 1..n
+
+
+def test_standing_says_why_a_node_does_not_run_and_what_its_run_said():
+    """The plan's reason per node, "" for one that runs; a tool raising leaves its line on the node
+    until the node's key changes; a run that goes through clears a note."""
+    s1, s3 = tool("s1", kind="series", produces=None), tool("s3", kind="series", produces=None)
+    doc = fan_out()
+    doc.add_node("s1", (0, 400)); doc.connect("gray", "s1")
+    doc.add_node("s3", (0, 500)); doc.connect("add", "s3")
+    g = Graph(doc, Dec(), {**TOOLS, "s1": s1, "s3": s3})
+    assert g.standing("video") == g.standing("gray") == g.standing("add") == g.standing("s1") == ""
+    assert g.standing("s3") == "unrun: reads add; the walk is gray, which s1 reads"
+    doc.disconnect("gray")
+    g.sync()
+    assert g.standing("gray") == "in is unwired" and g.standing("add") == "in waits on gray"
+    doc.connect("video", "add")
+    g.sync()
+    assert g.standing("add") == "in expects gray, video produces bgr"
+    doc.disconnect("add"); doc.connect("video", "gray"); doc.connect("gray", "add")
+    bad = tool("bad", fn=lambda f, p: f[99])
+    doc.add_node("bad", (0, 600)); doc.connect("gray", "bad")
+    g = Graph(doc, Dec(), {**TOOLS, "s1": s1, "s3": s3, "bad": bad})
+    with pytest.raises(IndexError) as e:
+        g.compute("bad", 2)
+    assert e.value.sieve_node == "bad" and g.standing("bad").startswith("raised at row 2: IndexError") and g.standing("gray") == ""
+    with pytest.raises(IndexError) as e:
+        g.compute("add", 10)                    # the stream's end is the video node's, not the reader's
+    assert e.value.sieve_node == "video" and g.standing("add") == ""
+    doc.node("bad").params["k"] = 2
+    g.sync()
+    assert g.standing("bad") == ""
+    g.note("bad", "said so")
+    assert g.standing("bad") == "said so"
+    g.note("bad", "")
+    assert g.standing("bad") == ""
+
+
+def test_the_plan_is_pure_in_the_document_and_the_tools():
+    """plan() needs no decoder and says the same twice; the graph's sync holds nothing it does not."""
+    doc = fan_out()
+    base = base_key("fake.mp4", "bgr", 1.0)
+    p, q = plan(doc, TOOLS, base), plan(doc, TOOLS, base)
+    assert p == q and p.shown == doc.display and p.entries["video"].key == base and not p.chain
+    g = Graph(doc, Dec(), TOOLS)
+    assert {nid: e.key for nid, e in p.entries.items()} == {n.id: g.key(n.id) for n in doc.nodes}

@@ -6,7 +6,8 @@ from pathlib import Path
 PKG = Path(__file__).resolve().parents[1] / "sieve_player"
 MAY_IMPORT = {
     "document": set(),
-    "graph": {"document", "density"},     # Graph.density folds planes
+    "plan": {"document"},
+    "graph": {"document", "density", "plan"},     # Graph.density folds planes; sync holds a plan
     "canvas": {"document", "theme"},
     "pane": {"document", "theme", "widgets"},
     "widgets": {"density", "theme"},

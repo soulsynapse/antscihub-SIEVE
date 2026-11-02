@@ -6,8 +6,6 @@ mid-computation works from one consistent plan and the next computation sees the
 are read from the document's nodes; the runtime holds none of its own. A node is computed as None
 when nothing reaches it: no wire, an unresolved tool, or a wire whose types do not fit.
 """
-import hashlib
-import json
 import threading
 import time
 from collections import OrderedDict, deque
@@ -17,13 +15,8 @@ from dataclasses import dataclass
 import numpy as np
 
 from . import density
-from .document import (INPUT, OPEN, OVERLAYABLE, VIDEO_TOOL, fed, frame_inputs, is_selector, produces, static,
-                       video_output, video_scale)
-
-
-def _key(*parts):
-    return hashlib.sha1("|".join(map(str, parts)).encode()).hexdigest()[:16]
-
+from .document import INPUT, OPEN, video_output, video_scale
+from .plan import _key, base_key, plan, shared_fold, walked
 
 WINDOW = 64     # rows a running mean spans; the decoder's step and seek means keep their own literal, see Decoder._mean
 
@@ -140,7 +133,12 @@ class Frames:
         now = g._plan.get(self._nid)
         if g.halt or now is None or now.raw_key != self._raw_key:
             raise Cancelled(f"{self._nid} at row {row}: the graph moved on")
-        return g._compute(self._plan, self._sources[input], row)
+        try:
+            return g._compute(self._plan, self._sources[input], row)
+        except Exception as exc:
+            if not hasattr(exc, "sieve_node"):
+                exc.sieve_node = self._sources[input]     # a read that fails is the read node's, never the reader's
+            raise
 
 
 class Series:
@@ -173,22 +171,6 @@ class Event:
     keys: dict | None   # sync only: every node's key under the new plan, band included; diff two to see what a drag changed
 
 
-@dataclass
-class _Entry:
-    """One node as the plan saw it at sync()."""
-    tool: object
-    kind: str           # "video" | "frame" | "series" | "selector"
-    params: dict
-    band: tuple | None  # (lo, hi): what the node's plane, or signal, keeps; see document
-    src: str | None     # the node its first input's wire names
-    key: str
-    raw_key: str         # the key without the band: what the memo holds
-    src_key: str | None  # what its run() sees as frames.key: every frame input's key, hashed together when there are several
-    fed: bool
-    srcs: dict          # frame input name -> the node wired into it, or None
-    static: bool        # the same output at every row: memoized under the key alone, row None
-
-
 class Graph:
     def __init__(self, doc, decoder, tools, memo_bytes=4 << 30):
         self.doc, self.decoder = doc, decoder
@@ -205,6 +187,7 @@ class Graph:
         self.memo.on_evict = lambda k, n: self._emit("evict", None, k[1], k[0], n)
         decoder.on_evict = lambda row, n: self._emit("uncache", None, row, self._base, n)
         self._plan = {}
+        self._notes = {}                    # node -> (its key, what the run said): a tool raising, a head without a signal
         self.shown = self.over = self.series = None
         self.chain, self.heads, self.unrun_series = [], [], []
         self.sync()
@@ -216,80 +199,47 @@ class Graph:
         return self.decoder.count
 
     def sync(self):
-        """Re-read the document: wiring, params, the flags, which series nodes run."""
-        doc, tools = self.doc, self.tools
-        keys, raw_keys = {}, {}
-        output, scale = video_output(doc), video_scale(doc)
+        """Re-read the document: the plan, pure in the document and the tools (see `plan`), and the
+        decoder's output and scale, which the video node's params set."""
+        output, scale = video_output(self.doc), video_scale(self.doc)
         self.decoder.output = output        # a change empties its cache; a read in flight under the old plan is cancelled
         self.decoder.scale = scale
-        self._base = _key("video", self.decoder.path, output, scale)
-
-        def sources(nid):
-            """Frame input name -> the node wired into it, or None; the first input alone when the tool is unknown."""
-            tool = tools.get(doc.node(nid).tool)
-            names = [INPUT] if tool is None or is_selector(tool) else frame_inputs(tool)
-            return {name: (w.src if (w := doc.source(nid, name)) else None) for name in names}
-
-        def up_key(nid, stack=()):
-            # Every frame input's key, hashed together when there are several, so a tool caching on
-            # frames.key and the node's own key both follow a change behind any input.
-            ups = [key_of(src, stack) if src is not None and src not in stack else "none" for src in sources(nid).values()]
-            return ups[0] if len(ups) == 1 else _key(*ups)
-
-        def key_of(nid, stack=()):
-            # The raw key names what the tool computes and the memo holds; the key adds the band, which
-            # is applied on read, so what downstream sees is keyed by it and the node's own run is not.
-            if nid not in keys:
-                node = doc.node(nid)
-                if node.tool == VIDEO_TOOL:
-                    keys[nid] = raw_keys[nid] = self._base
-                else:
-                    raw_keys[nid] = _key(up_key(nid, (*stack, nid)), node.tool, json.dumps(node.params, sort_keys=True))
-                    keys[nid] = raw_keys[nid] if node.band is None else _key(raw_keys[nid], node.band)
-            return keys[nid]
-
-        plan, series = {}, []
-        for n in doc.nodes:
-            tool = tools.get(n.tool)
-            if n.tool == VIDEO_TOOL:
-                kind = "video"
-            elif is_selector(tool):
-                kind = "selector"       # answers a path, once, before the decoder; never a row
-            else:
-                kind = getattr(tool, "KIND", "frame")
-            srcs = sources(n.id)
-            src = srcs[INPUT]
-            plan[n.id] = _Entry(tool, kind, dict(n.params), n.band, src, key_of(n.id), raw_keys[n.id],
-                                up_key(n.id) if src else None, fed(doc, n.id, tools), srcs, static(tool))
-            if kind == "series":
-                series.append(n.id)
-        # The walked node is what the first series node reading a frame node reads. The heads are
-        # every series node reading it: they run on the stack, folded only when all of them fold the
-        # same way, else each folds the raw rows itself at run. The chain is the heads and every fed
-        # series node wired on from a chain node, on the upstream result's signal. A series node
-        # reading another frame node is unrun.
-        roots = [s for s in series if plan[s].src is None or plan[plan[s].src].kind != "series"]
-        heads = [s for s in roots if plan[s].src == plan[roots[0]].src and (plan[s].fed or s == roots[0])] if roots else []
-        chain = list(heads)
-        for nid in chain:
-            chain += [s for s in series if plan[s].src == nid and plan[s].fed and s not in chain]
+        self._base = base_key(self.decoder.path, output, scale)
+        p = plan(self.doc, self.tools, self._base)
         with self._lock:
-            self._plan = plan
-            self.shown = doc.display if doc.display in plan else None
-            # The overlay is a node the frame can be heated with: one plane, so only an OVERLAYABLE product.
-            self.over = doc.overlay if doc.overlay in plan and produces(doc, tools, doc.overlay) in OVERLAYABLE else None
-            self.series = chain[0] if chain else None
-            self.heads = heads
-            self.chain, self.unrun_series = chain, [s for s in series if s not in chain]
+            self._plan = p.entries
+            self.shown, self.over = p.shown, p.over
+            self.series = p.chain[0] if p.chain else None
+            self.heads, self.chain, self.unrun_series = p.heads, p.chain, p.unrun
         # A boundary in the stream: what runs next ran under a new plan, whose keys it carries.
-        self._emit("sync", None, None, None, 0, keys={nid: e.key for nid, e in plan.items()})
+        self._emit("sync", None, None, None, 0, keys={nid: e.key for nid, e in p.entries.items()})
+
+    def standing(self, nid):
+        """One line on why `nid` does not run, else what its run said under its current key, else
+        "". The plan's reasons: an input unwired, mismatched or waiting on an unfed node, a series
+        node off the chain, a cycle. The notes: a tool raising, a head handing out no signal."""
+        with self._lock:
+            e = self._plan.get(nid)
+            note = self._notes.get(nid)
+        if e is None:
+            return ""
+        if e.standing:
+            return e.standing
+        return note[1] if note is not None and note[0] == e.key else ""
+
+    def note(self, nid, text):
+        """What `nid`'s run said, kept under its current key so a change to the node drops it;
+        "" clears. The worker and the display write it; the window reads it through `standing`."""
+        with self._lock:
+            e = self._plan.get(nid)
+            if text and e is not None:
+                self._notes[nid] = (e.key, text)
+            else:
+                self._notes.pop(nid, None)
 
     # -- what the worker and the display ask -------------------------------
     def _walk(self):
-        if self.series is None:
-            return self.shown
-        e = self._plan[self.series]
-        return e.src if e.fed else None
+        return walked(self._plan, self.chain, self.shown)
 
     @property
     def walk(self):
@@ -299,8 +249,7 @@ class Graph:
             return self._walk()
 
     def _fold(self):
-        folds = {id(f): f for f in (getattr(self._plan[s].tool, "fold", None) for s in self.heads)}
-        return next(iter(folds.values())) if len(folds) == 1 else None
+        return shared_fold(self._plan, self.heads)
 
     @property
     def fold(self):
@@ -435,7 +384,15 @@ class Graph:
         v = self.memo.get(mk)
         if v is None:
             with self.probe(nid, row, e.raw_key) as ev:
-                v = e.tool.run(Frames(self, plan, nid, e.srcs, e.src_key), row, e.params)
+                try:
+                    v = e.tool.run(Frames(self, plan, nid, e.srcs, e.src_key), row, e.params)
+                except Cancelled:
+                    raise
+                except Exception as exc:
+                    if not hasattr(exc, "sieve_node"):
+                        exc.sieve_node = nid
+                        self.note(nid, f"raised at row {row}: {type(exc).__name__}: {exc}")
+                    raise
                 ev[1] = Memo._size(v)
             self.memo.put(mk, v)
         return v if raw or e.band is None else banded(v, e.band)

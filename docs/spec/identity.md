@@ -122,7 +122,7 @@ Assumes: The plane a table was found in.
 The nest region is the pile's own blob painted, so the boundary for in and out follows the pile.
 Listed in docs/spec/blob-tools.md; a deliverable here because sample and transitions assume it.
 
-- [ ] A frame tool, blobs in, mask out, the plane's shape, with every record painted by its
+- [x] A frame tool, blobs in, mask out, the plane's shape, with every record painted by its
   contour or its box by a knob; a table with no records is an empty mask.
   Check: a test paints a known table and compares to the mask blobs was run on.
 

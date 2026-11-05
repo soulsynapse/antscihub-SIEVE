@@ -9,7 +9,8 @@ import numpy as np
 import pytest
 
 from sieve_player import document as D
-from sieve_player.graph import Event, Graph, Stats, gated
+from sieve_player.decoder import EndOfStream
+from sieve_player.graph import Event, Graph, Stats, gated, nbytes
 from sieve_player.plan import base_key, plan
 
 
@@ -21,7 +22,7 @@ class Dec:
 
     def read(self, row):
         if row >= self.count:
-            raise IndexError(row)
+            raise EndOfStream(row)
         self.decodes += 1
         return np.full((4, 6, 3) if self.output == "bgr" else (4, 6), row, np.uint8)
 
@@ -497,6 +498,82 @@ def test_the_clip_walk_runs_behind_the_window_and_a_frame_change_drops_it():
         time.sleep(0.01)
     w.stop()
     assert clips[-1] == ({}, 0) and walked[-1] == (0, 0)
+
+
+def test_a_tool_raising_indexerror_fails_the_walk_and_only_the_stream_end_closes_it():
+    """The worker closes a window early on EndOfStream alone; a tool's own IndexError is a failure
+    said on the node, never a shorter clip with a clean trace."""
+    from PySide6.QtWidgets import QApplication
+    from sieve_player.worker import Worker
+    QApplication.instance() or QApplication([])
+    bad = tool("bad", fn=lambda f, p: f[99] if int(f.flat[0]) == 3 else f)
+    doc = D.from_tools([gray, bad])
+    g = Graph(doc, Dec(), {**TOOLS, "bad": bad})
+    w = Worker(g)
+    failed, walked = [], []
+    w.failed.connect(lambda r, n: failed.append((r, n)))
+    w.walked.connect(lambda d, n: walked.append((d, n)))
+    w.set_window(0, 8)
+    w.start()
+    for _ in range(300):
+        QApplication.processEvents()
+        if failed:
+            break
+        time.sleep(0.01)
+    assert failed == [(2, "bad")] and walked[-1] == (2, 8) and g.standing("bad").startswith("raised at row 2: IndexError")
+    w.request_row(2)                            # the display asking for the row fails the same way, and says so
+    for _ in range(300):
+        QApplication.processEvents()
+        if len(failed) == 2:
+            break
+        time.sleep(0.01)
+    assert failed[-1] == (2, "bad")
+    w.set_window(8, 5)                          # past the fake stream's ten rows: the window closes where the stream ends
+    for _ in range(300):
+        QApplication.processEvents()
+        if walked[-1] == (2, 2):
+            break
+        time.sleep(0.01)
+    w.stop()
+    assert walked[-1] == (2, 2) and len(failed) == 2
+
+
+def test_a_clip_stack_of_tables_is_counted_through_its_object_columns():
+    """nbytes reads the arrays behind an object field; the clip walk stops where the running total
+    passes CLIP_BYTES, the rows it has standing, where the first row's forecast let it start."""
+    from PySide6.QtWidgets import QApplication
+    from sieve_player import worker as W
+    QApplication.instance() or QApplication([])
+    t = np.empty(2, dtype=[("x", "<i4"), ("contour", object)])
+    t["contour"] = [np.zeros((100, 2), np.int32), None]
+    stack = np.empty(2, object)
+    stack[:] = [t, t]
+    assert t.nbytes == 24 and nbytes(t) == 24 + 800 and nbytes(stack) == 16 + 2 * 824 and nbytes({}) == 64
+    table = tool("table", produces="blobs", fn=lambda f, p: np.array([(0, np.zeros((50 * int(f.flat[0]), 2), np.int32))], dtype=t.dtype))
+    head = tool("head", kind="series", expects="blobs", produces="signal")
+    head.run = lambda series, params: {"signal": np.array([len(r) for r in series.data], np.float32)}
+    doc = D.from_tools([gray, table, head])
+    g = Graph(doc, Dec(), {**TOOLS, "table": table, "head": head})
+    w = W.Worker(g)
+    W.CLIP_BYTES = 10_000           # ten rows of row 0's 424 B pass the forecast; the contours grow 400 B a row
+    refused, walked, clips = [], [], []
+    w.clipRefused.connect(refused.append)
+    w.clipWalked.connect(lambda d, n: walked.append((d, n)))
+    w.clipReady.connect(lambda r, s, fps: clips.append(r))
+    try:
+        w.set_window(0, 2)
+        w.walk_clip()
+        w.start()
+        for _ in range(500):
+            QApplication.processEvents()
+            if refused:
+                break
+            time.sleep(0.01)
+        w.stop()
+    finally:
+        W.CLIP_BYTES = 512 << 20
+    assert refused and refused[0].startswith("the clip's stack reached") and walked[-1][0] == walked[-1][1] < 10
+    assert len(clips[-1]["head"]["signal"]) == walked[-1][0]
 
 
 def test_a_shown_table_walks_without_a_series_node():

@@ -14,6 +14,7 @@ import re
 
 import numpy as np
 
+from tools import csv
 from tools.blobs import with_column
 
 SIEVE_TOOL = True
@@ -187,8 +188,7 @@ def rewrite(path, columns, min_reads=2, labels=(), out=None):
     for p in lines:
         ident, conf = value[(int(p[at_row]), int(p[at_id]))]
         text.append(",".join(p[:g] + [np.format_float_positional(ident, trim="-"), str(conf)] + p[g:]))
-    with open(out or path, "w", encoding="utf-8", newline="\n") as f:
-        f.write("\n".join(text) + "\n")
+    csv.replace(out or path, "\n".join(text) + "\n")
 
 
 def main(argv=None):

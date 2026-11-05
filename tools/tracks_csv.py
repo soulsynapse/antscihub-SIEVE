@@ -60,8 +60,7 @@ def text(result, start, fps, footage):
 
 
 def write(path, result, start, fps, footage):
-    with open(path, "w", encoding="utf-8", newline="\n") as f:
-        f.write(text(result, start, fps, footage))
+    csv.replace(path, text(result, start, fps, footage))
 
 
 def settings(parent=None):

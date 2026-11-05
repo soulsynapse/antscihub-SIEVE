@@ -17,6 +17,14 @@ py -3.13 -m venv .venv            # not the Anaconda python: its Qt DLLs shadow 
 .venv\Scripts\python -m sieve_player.registry --check    # the tools, their facets, the types they use
 ```
 
+What the player prints to stderr, tracebacks, Qt warnings, the watchdog's and a crash's stacks, it
+also writes to a log, the previous launch's kept beside it as `.prev.log`; `SIEVE_LOG` names the
+file or, as `0`, turns it off, and `sieve_player.log_path` says where it goes unset. `SIEVE_DUMP`
+names a file every video opened dumps the probe's stream to (`sieve_player/trace.py`);
+`SIEVE_QT_TRACE` narrows the Qt warning handler to warnings containing its text, or `0` leaves
+Qt's own printing alone; `SIEVE_C_STDERR=1` leaves C-level stderr alone, so cv2's plugin warns on
+every unconverted frame.
+
 ## A tool
 
 A tool is one Python file with `SIEVE_TOOL = True` and a `NAME`. Everything else is a facet it may
@@ -66,10 +74,13 @@ How the player treats a tool, as `sieve_player/graph.py`, `pane.py` and `window.
   it and on their own params. A `frames()` read made after the node's key has changed under the
   run, or while the player is closing, raises `graph.Cancelled` and the row is dropped: a run of
   many reads ends at its next one, so a tool never needs to poll for interruption and must not
-  swallow that exception.
-- The tools under `tools/` import Qt and `sieve_player` inside `settings()`, `draw()` and their
-  `__main__` block rather than at module top, which lets a script without Qt import them and call
-  `run`.
+  swallow that exception. A read past the last row the stream has raises `decoder.EndOfStream`,
+  the one IndexError the worker closes a walk on; a tool reading rows the container claims
+  (background) catches it by that name, and any other IndexError is the tool's failure.
+- The tools under `tools/` import Qt, and the parts of `sieve_player` that import it, inside
+  `settings()`, `draw()` and their `__main__` block rather than at module top, which lets a script
+  without Qt import them and call `run`; a player module that imports no Qt, `document` or
+  `decoder`, may be imported at top (background imports the decoder's `EndOfStream`).
 - The document holds the params. The pane moves a settings widget's knobs to them with
   `set_params()` and writes `params()` back on every change; `ParamWidget` provides both, and a
   widget without them is shown as a defect.

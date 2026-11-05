@@ -60,9 +60,24 @@ def gated(result, band):
     return {**result, "gate": gate}, np.where(gate, signal, np.zeros((), signal.dtype))
 
 
+def nbytes(v):
+    """The bytes `v` holds: an array's own and, through an object field or an object array, every
+    array behind it, since `ndarray.nbytes` counts a contour as its eight-byte pointer; 64 for
+    anything else that is not None."""
+    if v is None:
+        return 0
+    if not isinstance(v, np.ndarray):
+        return 64
+    if not v.dtype.hasobject:
+        return v.nbytes
+    held = [x for n in v.dtype.names if v.dtype[n] == object for x in v[n].ravel()] if v.dtype.names else v.ravel()
+    return v.nbytes + sum(nbytes(x) for x in held)
+
+
 class Memo:
-    """LRU bounded by bytes. Image-shaped entries (ndim >= 2) are evicted before small ones. Each
-    eviction goes to `on_evict(key, bytes)` when set, after the lock is dropped."""
+    """LRU bounded by bytes, as `nbytes` counts them. Image-shaped entries (ndim >= 2) are evicted
+    before small ones. Each eviction goes to `on_evict(key, bytes)` when set, after the lock is
+    dropped."""
 
     def __init__(self, limit_bytes):
         self.limit = limit_bytes
@@ -72,9 +87,7 @@ class Memo:
         self.hits = self.misses = self.evictions = 0
         self.on_evict = None
 
-    @staticmethod
-    def _size(v):
-        return v.nbytes if isinstance(v, np.ndarray) else 64
+    _size = staticmethod(nbytes)
 
     def get(self, k):
         with self._lock:

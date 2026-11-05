@@ -4,18 +4,23 @@ whole clip when asked in the time the window leaves.
 The clip walk is the window walk over the clip without the densities, behind a finished window
 walk so what is viewed never waits on it; a frame change abandons it and its rows. A stack holds
 images by shape, one row each, and tables in an object array, one table a row, so a walked node
-that hands out a table never reads as a graph changing shape under the walk.
+that hands out a table never reads as a graph changing shape under the walk. The clip's chain runs
+over the rows so far only once the walk has run CHAIN_SHARE times as long as the chain's last run,
+so a chain of per-row loops never makes the walk quadratic in the clip.
 """
 import threading
+import time
 import traceback
 
 import numpy as np
 from PySide6.QtCore import QThread, Signal
 
 from . import density
-from .graph import Cancelled, Memo, Series, gated
+from .decoder import EndOfStream
+from .graph import Cancelled, Memo, Series, gated, nbytes
 
-CLIP_BYTES = 512 << 20    # the most a clip walk's stack may take
+CLIP_BYTES = 512 << 20    # the most a clip walk's stack may take, as nbytes counts it
+CHAIN_SHARE = 9           # walking between two clip chain runs takes at least this many times the last run
 
 
 def _stack_for(n, out):
@@ -34,7 +39,7 @@ class Worker(QThread):
     walked = Signal(int, int)                 # rows done, rows in window
     seriesReady = Signal(object, int, float)  # {node: result} for the series chain, each gated and keyed, start, fps
     densityReady = Signal(object, int)        # {node: (rows, BINS) counts} per plane the walk computes, start
-    failed = Signal(int, str)                 # a tool raised at this row, on this node; the walk is abandoned
+    failed = Signal(int, str)                 # a tool raised at this row, on this node; a walk is abandoned, a display request dropped
     clipWalked = Signal(int, int)             # rows done, rows in the clip; done == total when the clip walk is not running
     clipReady = Signal(object, int, float)    # as seriesReady, over the clip walk's rows; {} when the walk was abandoned
     clipRefused = Signal(str)                 # the clip walk did not start, and why
@@ -54,8 +59,9 @@ class Worker(QThread):
         self._dens = {}                       # node -> (length, BINS) counts, for the planes the walk computes
         self._clip_gen, self._clip_walk_gen = 0, 0   # bumped by walk_clip and invalidate; what the clip stack was walked under
         self._clip_on = False                 # whether a clip walk is wanted
-        self._clen = self._ci = 0
+        self._clen = self._ci = self._cbytes = 0
         self._cstack = None
+        self._clip_due = 0.0                  # when the clip's chain may next run, on perf_counter's clock
         self._folded = {}                     # fold id -> ((stack buffer id, rows), that head's own folding of the stack)
 
     # -- GUI-side calls --------------------------------------------------
@@ -142,7 +148,7 @@ class Worker(QThread):
                 if not self.graph.fed(self.graph.walk):
                     self._walk_gen, self._i = gen, self._length   # nothing reaches the walked node; wait for the next change
                     if clip_gen != self._clip_walk_gen:
-                        self._clip_walk_gen, self._ci, self._clen, self._cstack = clip_gen, 0, 0, None
+                        self._clip_walk_gen, self._ci, self._clen, self._cstack, self._cbytes = clip_gen, 0, 0, None, 0
                         self.clipReady.emit({}, 0, self.graph.fps)
                         self.clipWalked.emit(0, 0)
                     elif self._ci < self._clen:
@@ -163,7 +169,7 @@ class Worker(QThread):
                     continue
                 which = "clip"
                 if clip_gen != self._clip_walk_gen:
-                    self._clip_walk_gen, self._ci, self._cstack = clip_gen, 0, None
+                    self._clip_walk_gen, self._ci, self._cstack, self._cbytes, self._clip_due = clip_gen, 0, None, 0, 0.0
                     self._clen = self.graph.count if clip_on else 0
                     if not clip_on:
                         self.clipReady.emit({}, 0, self.graph.fps)
@@ -175,7 +181,7 @@ class Worker(QThread):
                     self._clip_one()
             except Cancelled:
                 continue        # the graph moved on under the row, or we are stopping: the loop reads the new state
-            except IndexError:
+            except EndOfStream:
                 if which == "window":
                     self._length = self._i  # stream ended early; close the window there
                     self.walked.emit(self._i, self._length)
@@ -188,14 +194,15 @@ class Worker(QThread):
             except Exception as e:
                 traceback.print_exc()
                 nid = getattr(e, "sieve_node", "")
-                if want is None:
-                    if which == "window":
-                        self.failed.emit(self._start + self._i, nid)
-                        self._i = self._length  # abandon this walk; the next gen bump restarts it
-                    else:
-                        self.failed.emit(self._ci, nid)
-                        self._clen = self._ci
-                        self.clipWalked.emit(self._ci, self._clen)
+                if want is not None:
+                    self.failed.emit(want, nid)
+                elif which == "window":
+                    self.failed.emit(self._start + self._i, nid)
+                    self._i = self._length  # abandon this walk; the next gen bump restarts it
+                else:
+                    self.failed.emit(self._ci, nid)
+                    self._clen = self._ci
+                    self.clipWalked.emit(self._ci, self._clen)
 
     def _walk_one(self):
         row = self._start + self._i
@@ -219,20 +226,27 @@ class Worker(QThread):
     def _clip_one(self):
         out = np.asarray(self.graph.walk_row(self._ci))
         if self._cstack is not None and not _fits(self._cstack, out):
-            self._cstack, self._ci = None, 0
+            self._cstack, self._ci, self._cbytes = None, 0, 0
             return
         if self._cstack is None:
-            if self._clen * out.nbytes > CLIP_BYTES:
-                self.clipRefused.emit(f"the clip's stack would be {self._clen * out.nbytes / 2**30:.1f} GB; "
+            if self._clen * nbytes(out) > CLIP_BYTES:
+                self.clipRefused.emit(f"the clip's stack would be {self._clen * nbytes(out) / 2**30:.1f} GB; "
                                       f"{', '.join(self.graph.heads)} do not share a fold()")
                 self._clen = 0
                 self.clipWalked.emit(0, 0)
                 return
             self._cstack = _stack_for(self._clen, out)
         self._cstack[self._ci] = out
+        self._cbytes += nbytes(out)
         self._ci += 1
+        if self._cbytes > CLIP_BYTES:
+            self._clen = self._ci       # tables grew past the first row's forecast: the rows it has stand, as after stop_clip
+            self.clipWalked.emit(self._ci, self._clen)
+            self._emit_clip()
+            self.clipRefused.emit(f"the clip's stack reached {self._cbytes / 2**30:.1f} GB at row {self._ci}; the rows walked stand")
+            return
         self.clipWalked.emit(self._ci, self._clen)
-        if self._ci % self.every == 0 or self._ci == self._clen:
+        if self._ci == self._clen or (self._ci % self.every == 0 and time.perf_counter() >= self._clip_due):
             self._emit_clip()
 
     def _emit_series(self):
@@ -246,7 +260,9 @@ class Worker(QThread):
     def _emit_clip(self):
         if not self._ci:
             return
+        t = time.perf_counter()
         results = self._run_chain(self._cstack[: self._ci], 0, self._ci)
+        self._clip_due = time.perf_counter() + CHAIN_SHARE * (time.perf_counter() - t)
         if results is not None:
             self.clipReady.emit(results, 0, self.graph.fps)
 

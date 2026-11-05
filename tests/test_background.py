@@ -3,6 +3,7 @@ from types import SimpleNamespace
 
 import numpy as np
 
+from sieve_player.decoder import EndOfStream
 from tools import background
 
 
@@ -44,6 +45,8 @@ def test_max_erases_a_dark_sitter_the_median_keeps():
 
     class Sitter(SimpleNamespace):
         def __call__(self, r, input="in"):
+            if r >= len(d):
+                raise EndOfStream(r)
             return d[r]
 
     frames = Sitter(key="s", count=20, fps=1.0)

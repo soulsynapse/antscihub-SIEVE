@@ -23,15 +23,17 @@ def test_gray_output_is_converted_before_the_cache_and_a_switch_empties_it(video
     import sieve_player.decoder as decoder
     monkeypatch.setattr(decoder, "QUIET", True)
     d = Decoder(video)
-    assert d.read(3).shape == (48, 64, 3) and d.cached(3) is not None
+    bgr = d.read(3)
+    assert bgr.shape == (48, 64, 3) and d.cached(3) is not None
     d.output = "gray"
     assert d.cached(3) is None and d.cache_bytes == 0
     f = d.read(3)
     assert f.shape == (48, 64) and f.dtype == np.uint8 and d.cached(3) is f
     assert d.luma and not d.limited and abs(int(f[0, 0]) - 3) <= 1   # the luma plane itself; MJPEG is full range
-    assert 0 < d.cache_bytes <= 2 * 48 * 64                  # gray rows only: the seek landed a row short and read through
+    assert np.abs(f.astype(int) - cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)).max() <= 2   # the ramp too: a switch mid-stream garbles columns
+    assert d.cache_bytes == 4 * 48 * 64                      # gray rows only: the switch reopened at row 0 and read through
     d.output = "bgr"
-    assert d.cached(3) is None and d.read(3).shape == (48, 64, 3)
+    assert d.cached(3) is None and np.abs(d.read(3).astype(int) - bgr).max() <= 2
     with pytest.raises(ValueError):
         d.output = "hsv"
     d.scale = 0.5
@@ -42,23 +44,28 @@ def test_gray_output_is_converted_before_the_cache_and_a_switch_empties_it(video
         d.scale = 1.5
 
 
-def test_a_raw_stream_is_counted_by_packet_and_seeks_from_the_top(video, tmp_path, monkeypatch):
+def test_a_raw_stream_is_refused_and_its_remux_opens_with_limited_range_luma(video, tmp_path, monkeypatch):
     import shutil
     import subprocess
     import sieve_player.decoder as decoder
     from sieve_player.decoder import probe
     monkeypatch.setattr(decoder, "QUIET", True)
     ffmpeg = shutil.which("ffmpeg") or pytest.skip("no ffmpeg to write a raw stream")
-    raw = tmp_path / "v.h264"
+    raw, mp4 = tmp_path / "v.h264", tmp_path / "v.mp4"
     subprocess.check_call([ffmpeg, "-y", "-loglevel", "error", "-i", str(video), "-frames:v", "10",
                           "-vf", "scale=in_range=pc:out_range=tv,format=yuv420p", "-color_range", "tv",   # as a camera writes it
-                          "-c:v", "libx264", "-g", "4", "-f", "h264", str(raw)])
-    d = Decoder(raw)
-    assert not d.indexed and d.count == 10 and probe(raw)[3] == 10
+                          "-c:v", "libx264", "-g", "4", "-bf", "0", "-f", "h264", str(raw)])   # no B-frames, as the Pi 4 encoder writes; see docs/findings/2026-11-04-raw-remux.md
+    with pytest.raises(IOError, match="no index.*remux.*v.mp4"):
+        Decoder(raw)
+    with pytest.raises(IOError, match="no index"):
+        probe(raw)
+    subprocess.check_call([ffmpeg, "-y", "-loglevel", "error", "-framerate", "30", "-i", str(raw), "-c", "copy", str(mp4)])
+    d = Decoder(mp4, cache_bytes=1)                    # the last row only, so a row behind is a decode
+    assert d.count == 10 and probe(mp4)[3] == 10 and abs(d.fps - 30.0) < 0.01   # the framerate given to the remux, on mp4's timescale
     assert d.read(7).shape[:2] == (48, 64) and d.decodes == 8 and d.seeks == 0
-    d.output = "gray"                                  # empties the cache, so row 2 is behind the cursor
+    d.output = "gray"                                  # reopens at the top, so row 2 is a step
     g = d.read(2)
-    assert g.shape == (48, 64) and d.seeks == 1 and d.decodes == 11   # back means from the top
+    assert g.shape == (48, 64) and d.seeks == 0 and d.decodes == 11
     assert d.luma and d.limited                        # libx264 writes limited range: the plane is expanded to full
     assert abs(int(g[0, 0]) - 2) <= 3                  # row 2 was written as 2 everywhere
     d.output = "luma"

@@ -13,6 +13,8 @@ row, see docs/findings/2026-10-31-background-composite-cost.md.
 """
 import numpy as np
 
+from sieve_player.decoder import EndOfStream
+
 SIEVE_TOOL = True
 NAME, KIND, EXPECTS, PRODUCES = "background", "frame", ("gray", "bgr"), "same"
 STATIC = True
@@ -35,7 +37,7 @@ def samples_of(frames, rows):
     for r in rows:
         try:
             out.append(frames(r))
-        except IndexError:
+        except EndOfStream:
             break
     return out
 

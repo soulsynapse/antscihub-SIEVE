@@ -9,6 +9,8 @@ decode's heading, which resolves the 180 degrees `angle` cannot. A record with n
 reads NaN in all four. The signal is the mean speed of the row's records that have one, 0 where
 none does. A table that already has one of the columns raises.
 """
+from collections import deque
+
 import numpy as np
 
 from tools.blobs import with_column
@@ -25,10 +27,11 @@ def kinematics(rows, span=1):
     for r, t in enumerate(rows):
         v = np.full((len(t), 2), np.nan)
         for i, b in enumerate(t):
-            past = seen.setdefault(int(b["id"]), [])
-            back = [p for p in past if p[0] <= r - span]
-            if back:
-                r0, x0, y0 = back[-1]
+            past = seen.setdefault(int(b["id"]), deque())
+            while len(past) > 1 and past[1][0] <= r - span:   # past[0] is the latest record span rows back; the rest are newer
+                past.popleft()
+            if past and past[0][0] <= r - span:
+                r0, x0, y0 = past[0]
                 v[i] = (float(b["cx"]) - x0) / (r - r0), (float(b["cy"]) - y0) / (r - r0)
             past.append((r, float(b["cx"]), float(b["cy"])))
         with np.errstate(invalid="ignore"):

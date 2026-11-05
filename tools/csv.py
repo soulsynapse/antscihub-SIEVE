@@ -59,8 +59,15 @@ def text(result, start, fps, footage):
 
 
 def write(path, result, start, fps, footage):
-    with open(path, "w", encoding="utf-8", newline="\n") as f:
-        f.write(text(result, start, fps, footage))
+    replace(path, text(result, start, fps, footage))
+
+
+def replace(path, text):
+    """`text` at `path`, written whole or not at all: a write that fails leaves what was there."""
+    part = f"{path}.part"
+    with open(part, "w", encoding="utf-8", newline="\n") as f:
+        f.write(text)
+    os.replace(part, path)
 
 
 def written_key(path):

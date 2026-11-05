@@ -7,22 +7,29 @@ import importlib
 import os
 import sys
 import tempfile
+import time
 
 _HOME = {"Frames": "graph", "Memo": "graph", "Series": "graph", "Decoder": "decoder", "probe": "decoder",
          "ParamWidget": "widgets", "Trace": "widgets", "Density": "widgets", "Worker": "worker"}
 __all__ = ["play", *_HOME, "theme"]
 LOG_ENV = "SIEVE_LOG"       # the log's path; unset: SIEVE/stderr.log under LOCALAPPDATA or the temp dir; 0: no log
+LOG_FILE = None             # the open log, once play() has one; the window names it when it sends the user to stderr
 
 
 class _Tee:
-    """A text stream writing to every stream given; the first answers for the descriptor and encoding."""
+    """A text stream writing to every stream given; the first answers for the descriptor and
+    encoding. A stream that will not take a write is passed over, so a full disk or a console that
+    has gone never turns a traceback being printed into a second exception."""
 
     def __init__(self, *streams):
         self.streams = streams
 
     def write(self, s):
         for st in self.streams:
-            st.write(s)
+            try:
+                st.write(s)
+            except (OSError, ValueError):
+                pass
         return len(s)
 
     def flush(self):
@@ -104,9 +111,13 @@ def play(source, path=None, title="SIEVE", tools=()):
     without, it opens on whatever the document names, or empty, and never prompts."""
     from . import decoder
     decoder.QUIET = _hush_c_stderr() or decoder.QUIET   # before any capture: the plugin keeps the stderr it loads with
-    log = None if log_path() is None else log_stderr(log_path())
+    global LOG_FILE
+    log = LOG_FILE = None if log_path() is None else log_stderr(log_path())
+    stamp = time.strftime("%Y-%m-%d %H:%M:%S")
     if log is not None:
-        print(f"stderr also in {log.name}", file=sys.stderr)
+        print(f"SIEVE {stamp}: stderr also in {log.name}", file=sys.stderr)
+    elif log_path() is not None:
+        print(f"SIEVE {stamp}: could not open the log at {log_path()}; stderr only", file=sys.stderr)
     if sys.platform == "win32":
         # DirectWrite ignores the hinting preference and draws ClearType colour fringes on a dark
         # ground; FreeType honours full hinting and renders grayscale. Must be set before the app.

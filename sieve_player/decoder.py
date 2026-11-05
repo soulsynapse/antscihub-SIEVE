@@ -87,7 +87,7 @@ def probe(src):
 
 
 class _Cursor:
-    __slots__ = ("cap", "pos", "path", "luma")
+    __slots__ = ("cap", "pos", "path", "luma")      # pos: the row the next step reads; None once a step has failed, so the next read seeks
 
     def __init__(self, path, luma):
         self.path, self.luma, self.cap = path, luma, None
@@ -228,8 +228,7 @@ class Decoder:
                 cur = self._cursors[self._use] = _Cursor(self.path, self._luma_read())
             if cur.luma != self._luma_read():
                 cur.reopen(self._luma_read())   # here, under the lock a read holds, never from the setter
-            ahead = row - cur.pos
-            if not 0 <= ahead <= self._read_through():
+            if cur.pos is None or not 0 <= row - cur.pos <= self._read_through():
                 t = time.perf_counter()
                 cur.pos = max(0, row - LOOKBEHIND)
                 cur.cap.set(cv2.CAP_PROP_POS_FRAMES, cur.pos)
@@ -251,8 +250,8 @@ class Decoder:
         ok, f = cur.cap.read()
         self.decodes += 1
         if not ok:
-            row, cur.pos = cur.pos, -1
-            if row < self.count:
+            row, cur.pos = cur.pos, None
+            if 0 <= row < self.count:
                 self.count = row  # container header lied; trust the stream
             raise EndOfStream(f"row {row} past end of {self.path}")
         self.step_ms = self._mean(self.step_ms, (time.perf_counter() - t) * 1000, self.decodes)

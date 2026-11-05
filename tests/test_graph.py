@@ -606,7 +606,7 @@ def test_two_heads_with_different_folds_each_run_on_their_own_folding():
     from sieve_player.worker import Worker
     from tools import count, size
     QApplication.instance() or QApplication([])
-    table = tool("table", produces="blobs", fn=lambda f, p: np.array([(a,) for a in range(1, int(f.flat[0]) + 2)], dtype=[("area", "<i4")]))
+    table = tool("table", produces="blobs", fn=lambda f, p: np.array([(a,) for a in range(1, int(f.flat[0]) + 1 + p["k"])], dtype=[("area", "<i4")]))
     doc = D.from_tools([gray, table, count])
     doc.add_node("size", (0, 400), size.DEFAULTS); doc.connect("table", "size")
     g = Graph(doc, Dec(), {**TOOLS, "table": table, "count": count, "size": size})
@@ -621,9 +621,18 @@ def test_two_heads_with_different_folds_each_run_on_their_own_folding():
         if got and len(got[-1].get("size", {}).get("signal", ())) == 4:
             break
         time.sleep(0.01)
-    w.stop()
-    assert got[-1]["count"]["signal"].tolist() == [2, 3, 4, 5]          # gray is row + 1; the table has row + 2 records
+    assert got[-1]["count"]["signal"].tolist() == [2, 3, 4, 5]          # gray is row + 1; the table has row + 1 + k records
     assert got[-1]["size"]["signal"].tolist() == [1.5, 2, 2.5, 3]       # mean area of 1..n
+    doc.node("table").params["k"] = 2
+    g.sync()
+    w.invalidate()                              # a new stack of the same shape, likely at the freed one's address, folded afresh
+    for _ in range(500):
+        QApplication.processEvents()
+        if got[-1]["count"]["signal"].tolist() == [3, 4, 5, 6]:
+            break
+        time.sleep(0.01)
+    w.stop()
+    assert got[-1]["count"]["signal"].tolist() == [3, 4, 5, 6]
 
 
 def test_standing_says_why_a_node_does_not_run_and_what_its_run_said():
@@ -669,3 +678,41 @@ def test_the_plan_is_pure_in_the_document_and_the_tools():
     assert p == q and p.shown == doc.display and p.entries["video"].key == base and not p.chain
     g = Graph(doc, Dec(), TOOLS)
     assert {nid: e.key for nid, e in p.entries.items()} == {n.id: g.key(n.id) for n in doc.nodes}
+
+
+def test_a_scrub_past_the_end_says_the_count_and_leaves_the_walk_standing():
+    """A header may claim rows the stream lacks. The walk closes where the stream ends and says the
+    count; a display request past it says the count again and neither fails nor closes the walk."""
+    from PySide6.QtWidgets import QApplication
+    from sieve_player.worker import Worker
+    QApplication.instance() or QApplication([])
+
+    class Lying(Dec):
+        count = 12
+
+        def read(self, row):
+            if row >= 10:
+                self.count = 10
+            return super().read(row)
+    g = Graph(D.from_tools([gray]), Lying(), TOOLS)
+    w = Worker(g)
+    failed, walked, short = [], [], []
+    w.failed.connect(lambda r, n: failed.append((r, n)))
+    w.walked.connect(lambda d, n: walked.append((d, n)))
+    w.shortened.connect(short.append)
+    w.set_window(0, 12)
+    w.start()
+    for _ in range(300):
+        QApplication.processEvents()
+        if short:
+            break
+        time.sleep(0.01)
+    assert short == [10] and walked[-1] == (10, 10)
+    w.request_row(11)
+    for _ in range(300):
+        QApplication.processEvents()
+        if len(short) == 2:
+            break
+        time.sleep(0.01)
+    w.stop()
+    assert short == [10, 10] and walked[-1] == (10, 10) and not failed

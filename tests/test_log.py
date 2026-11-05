@@ -21,3 +21,11 @@ def test_stderr_is_teed_into_the_log_and_the_last_log_kept(tmp_path, monkeypatch
     monkeypatch.setenv(sieve_player.LOG_ENV, "here.log")
     assert sieve_player.log_path() == "here.log"
     assert sieve_player.log_stderr(str(tmp_path / "logs" / "stderr.log" / "under-a-file")) is None   # a path that will not open: no log, stderr as it was
+
+
+def test_a_stream_that_will_not_take_a_write_is_passed_over(tmp_path):
+    kept, gone = io.StringIO(), open(tmp_path / "gone.log", "w")
+    gone.close()
+    tee = sieve_player._Tee(kept, gone)
+    print("still", file=tee)                        # a full disk or a closed log never makes a traceback raise
+    assert kept.getvalue() == "still\n"

@@ -16,6 +16,8 @@ from PySide6.QtCore import QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import QFontMetrics, QImage, QKeySequence, QPainter, QPen, QPixmap, QShortcut
 from PySide6.QtWidgets import QFileDialog, QHBoxLayout, QMainWindow, QPushButton, QSizePolicy, QVBoxLayout, QWidget
 
+import sieve_player
+
 from . import dev, document, theme
 from .canvas import Canvas
 from .decoder import Decoder
@@ -51,6 +53,11 @@ class Lateness(QTimer):
         self._due = now + self.interval() / 1000
 
 DOCUMENT_FILTER = "SIEVE document (*.json);;All (*)"
+
+
+def _log_name():
+    """Where stderr went, for a line that sends the user there."""
+    return sieve_player.LOG_FILE.name if sieve_player.LOG_FILE is not None else "stderr"
 
 
 def _same(a, b):
@@ -471,7 +478,29 @@ class PlayerWindow(QMainWindow):
 
     def _failed(self, row, nid):
         self._restate()
-        self.timeline.controls.progress.setText(f"{nid} {self.graph.standing(nid)}" if nid else f"a tool raised at row {row}, see console")
+        self.timeline.controls.progress.setText(f"{nid} {self.graph.standing(nid)}" if nid else f"a tool raised at row {row}, see {_log_name()}")
+
+    def _worker_ended(self, worker):
+        """The worker thread exited other than through `_unload`, so nothing will answer the display
+        again until the video is reopened; the traceback is on stderr."""
+        if worker is self.worker:
+            self.timeline.controls.progress.setText(f"the worker stopped, see {_log_name()}; reopen the video")
+
+    def _shortened(self, count):
+        """The stream ended short of its container's claim: everything sized by the count follows
+        the decoder's, and a playhead past the end lands on the last row there is."""
+        if self.graph is None or count == self.count:
+            return
+        self.count = count
+        self.timeline.strip.set_count(count, self.fps)
+        self.timeline.controls.set_count(count, self.fps)
+        if self.pane.video is not None:
+            self.pane.video.show_source(self.decoder.path, (self.decoder.width, self.decoder.height, self.fps, count))
+        s, n = self.window_
+        if s + n > count:
+            self.set_window(s, n)
+        if self.row >= count:
+            self.goto(count - 1, commit=True)
 
     def _draw_failed(self, nid, line):
         if self.graph is not None:
@@ -644,6 +673,8 @@ class PlayerWindow(QMainWindow):
         self.worker.clipWalked.connect(self._clip_walked)
         self.worker.clipReady.connect(self._clip_ready)
         self.worker.clipRefused.connect(self._clip_refused)
+        self.worker.shortened.connect(self._shortened)
+        self.worker.finished.connect(lambda w=self.worker: self._worker_ended(w))
         self.header.setEnabled(True)
         self.timeline.strip.set_count(self.count, self.fps)
         ct.set_count(self.count, self.fps)

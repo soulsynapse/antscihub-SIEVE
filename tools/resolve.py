@@ -54,7 +54,9 @@ def load_labels(path):
 
 
 def reads_of(rows, columns, labels, start):
-    reads, spans = {}, {}
+    reads, spans, labelled = {}, {}, {}
+    for a, last, i, z in labels:
+        labelled.setdefault(i, []).append((a, last, z))
     for r, t in enumerate(rows):
         for c in columns:
             if len(t) and c not in t.dtype.names:
@@ -63,7 +65,7 @@ def reads_of(rows, columns, labels, start):
             id = int(b["id"])
             spans.setdefault(id, set()).add(r)
             count = reads.setdefault(id, {})
-            for v in [float(b[c]) for c in columns] + [float(z) for a, last, i, z in labels if i == id and a <= r + start <= last]:
+            for v in [float(b[c]) for c in columns] + [float(z) for a, last, z in labelled.get(id, ()) if a <= r + start <= last]:
                 if not np.isnan(v):
                     count[v] = count.get(v, 0) + 1
     return reads, spans
@@ -83,11 +85,16 @@ def contacts(rows):
     def inside(b, box):
         return box["x"] <= b["cx"] <= box["x"] + box["w"] and box["y"] <= b["cy"] <= box["y"] + box["h"]
 
+    ending, starting = {}, {}       # row -> the ids whose last, or first, record is there
+    for i, (r, _) in last.items():
+        ending.setdefault(r, []).append(i)
+    for i, (r, _) in first.items():
+        starting.setdefault(r, []).append(i)
     out = []
     for c, (r0, b0) in first.items():
         r1, b1 = last[c]
-        ins = [i for i, (r, b) in last.items() if r == r0 - 1 and inside(b, b0)]
-        outs = [i for i, (r, b) in first.items() if r == r1 + 1 and inside(b, b1)]
+        ins = [i for i in ending.get(r0 - 1, ()) if inside(last[i][1], b0)]
+        outs = [i for i in starting.get(r1 + 1, ()) if inside(first[i][1], b1)]
         if len(ins) >= 2 and len(ins) == len(outs):
             out.append((ins, outs))
     return out

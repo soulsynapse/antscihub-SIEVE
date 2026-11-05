@@ -94,4 +94,5 @@ def test_scrub_leaves_the_walk_cursor_alone(video):
     assert d.cached(0) is None and d.cached(250) is not None   # bytes bound the cache, oldest out
     with pytest.raises(IndexError):
         d.read(10_000)
+    assert d.count == 300 and d.read(0)[0, 0, 0] == 0 and d.count == 300   # a read after the end seeks; it never steps the dead capture and reads its failure as row -1
     d.close()

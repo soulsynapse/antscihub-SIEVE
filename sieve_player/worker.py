@@ -8,6 +8,7 @@ that hands out a table never reads as a graph changing shape under the walk. The
 over the rows so far only once the walk has run CHAIN_SHARE times as long as the chain's last run,
 so a chain of per-row loops never makes the walk quadratic in the clip.
 """
+import sys
 import threading
 import time
 import traceback
@@ -21,6 +22,7 @@ from .graph import Cancelled, Memo, Series, gated, nbytes
 
 CLIP_BYTES = 512 << 20    # the most a clip walk's stack may take, as nbytes counts it
 CHAIN_SHARE = 9           # walking between two clip chain runs takes at least this many times the last run
+STOP_PATIENCE_MS = 10_000  # how long stop() waits before saying on stderr what it is waiting for
 
 
 def _stack_for(n, out):
@@ -43,6 +45,7 @@ class Worker(QThread):
     clipWalked = Signal(int, int)             # rows done, rows in the clip; done == total when the clip walk is not running
     clipReady = Signal(object, int, float)    # as seriesReady, over the clip walk's rows; {} when the walk was abandoned
     clipRefused = Signal(str)                 # the clip walk did not start, and why
+    shortened = Signal(int)                   # the stream ended short of the container's claim: the count as the decoder now has it
 
     def __init__(self, graph, every=30):
         super().__init__()
@@ -62,7 +65,9 @@ class Worker(QThread):
         self._clen = self._ci = self._cbytes = 0
         self._cstack = None
         self._clip_due = 0.0                  # when the clip's chain may next run, on perf_counter's clock
-        self._folded = {}                     # fold id -> ((stack buffer id, rows), that head's own folding of the stack)
+        # fold id -> (the stack's buffer, rows, that head's own folding of the stack), one dict per stack; the buffer
+        # is held, not its id, since a freed buffer's address comes back for the next stack of the same shape
+        self._folded, self._cfolded = {}, {}
 
     # -- GUI-side calls --------------------------------------------------
     def request_row(self, row):
@@ -110,7 +115,9 @@ class Worker(QThread):
         with self._cv:
             self._stop = True
             self._cv.notify()
-        self.wait()
+        if not self.wait(STOP_PATIENCE_MS):
+            print(f"worker still running {STOP_PATIENCE_MS // 1000} s after stop: a tool in a loop no read interrupts", file=sys.stderr)
+            self.wait()
 
     # -- thread side -----------------------------------------------------
     def _pending(self):
@@ -121,6 +128,13 @@ class Worker(QThread):
 
     def run(self):
         threading.current_thread().name = "worker"      # what the probe's events name as their thread
+        try:
+            self._serve()
+        except BaseException:
+            traceback.print_exc()   # _serve answers for a tool's exceptions; one reaching here ends the thread, and `finished` says so
+            raise
+
+    def _serve(self):
         while True:
             with self._cv:
                 while not (self._stop or self._want is not None or self._series_dirty or self._pending()
@@ -156,7 +170,7 @@ class Worker(QThread):
                         self.clipWalked.emit(self._ci, self._clen)
                     continue
                 if gen != self._walk_gen:
-                    self._walk_gen, self._i, self._stack, self._dens = gen, 0, None, {}
+                    self._walk_gen, self._i, self._stack, self._dens, self._folded = gen, 0, None, {}, {}
                     self._start = max(0, min(start, self.graph.count - 1))
                     self._length = max(0, min(length, self.graph.count - self._start))
                 if dirty and self._i:
@@ -170,6 +184,7 @@ class Worker(QThread):
                 which = "clip"
                 if clip_gen != self._clip_walk_gen:
                     self._clip_walk_gen, self._ci, self._cstack, self._cbytes, self._clip_due = clip_gen, 0, None, 0, 0.0
+                    self._cfolded = {}
                     self._clen = self.graph.count if clip_on else 0
                     if not clip_on:
                         self.clipReady.emit({}, 0, self.graph.fps)
@@ -182,7 +197,10 @@ class Worker(QThread):
             except Cancelled:
                 continue        # the graph moved on under the row, or we are stopping: the loop reads the new state
             except EndOfStream:
-                if which == "window":
+                self.shortened.emit(self.graph.count)
+                if want is not None:
+                    pass            # the display asked past the end; the window follows the count and asks again
+                elif which == "window":
                     self._length = self._i  # stream ended early; close the window there
                     self.walked.emit(self._i, self._length)
                     self.graph.progress(self._i, self._length)
@@ -253,7 +271,7 @@ class Worker(QThread):
         if not self._i:
             return
         self.densityReady.emit({nid: d[: self._i] for nid, d in self._dens.items()}, self._start)
-        results = self._run_chain(self._stack[: self._i], self._start, self._i)
+        results = self._run_chain(self._stack[: self._i], self._start, self._i, self._folded)
         if results is not None:
             self.seriesReady.emit(results, self._start, self.graph.fps)
 
@@ -261,29 +279,30 @@ class Worker(QThread):
         if not self._ci:
             return
         t = time.perf_counter()
-        results = self._run_chain(self._cstack[: self._ci], 0, self._ci)
+        results = self._run_chain(self._cstack[: self._ci], 0, self._ci, self._cfolded)
         self._clip_due = time.perf_counter() + CHAIN_SHARE * (time.perf_counter() - t)
         if results is not None:
             self.clipReady.emit(results, 0, self.graph.fps)
 
-    def _run_chain(self, stack, start, done):
+    def _run_chain(self, stack, start, done, folds):
         """The series chain over `stack`, the walked node's rows from `start`, `done` of them so
-        far: {node: result}, each gated and keyed; None when there is no chain."""
+        far, with `folds` the stack's own cache of each head's folding: {node: result}, each gated
+        and keyed; None when there is no chain."""
         chain = self.graph.series_chain()
         if not chain:
             return None
         results, feeds, fps = {}, {}, self.graph.fps
         heads, folded = set(self.graph.heads), self.graph.fold is not None
-        buffer = id(stack.base) if stack.base is not None else id(stack)
+        buffer = stack.base if stack.base is not None else stack
         for nid, tool, params, band, src in chain:
             if nid in heads:
                 fold = None if folded else getattr(tool, "fold", None)
                 if fold is not None:
-                    held = self._folded.get(id(fold))
-                    if held is None or held[0] != (buffer, len(stack)):
-                        held = ((buffer, len(stack)), np.stack([fold(row) for row in stack]) if len(stack) else np.zeros((0, 0)))
-                        self._folded[id(fold)] = held
-                series = Series(stack if fold is None else held[1], self.graph.key(src), start, fps)
+                    held = folds.get(id(fold))
+                    if held is None or held[0] is not buffer or held[1] != len(stack):
+                        held = (buffer, len(stack), np.stack([fold(row) for row in stack]) if len(stack) else np.zeros((0, 0)))
+                        folds[id(fold)] = held
+                series = Series(stack if fold is None else held[2], self.graph.key(src), start, fps)
             elif feeds.get(src) is not None:
                 series = Series(feeds[src], self.graph.key(src), start, fps)
             else:

@@ -56,7 +56,7 @@ def test_band_rides_with_its_node_and_is_absent_until_set():
 def test_round_trip(tmp_path):
     doc = two_nodes()
     D.save(doc, tmp_path / "a.sieve")
-    assert D.load(tmp_path / "a.sieve") == doc
+    assert D.load(tmp_path / "a.sieve") == doc and list(tmp_path.iterdir()) == [tmp_path / "a.sieve"]   # written whole: no part left
 
 
 def test_file_is_versioned_readable_json(tmp_path):

@@ -21,6 +21,15 @@ def test_stderr_is_teed_into_the_log_and_the_last_log_kept(tmp_path, monkeypatch
     monkeypatch.setenv(console.LOG_ENV, "here.log")
     assert console.log_path() == "here.log"
     assert console.log_stderr(str(tmp_path / "logs" / "stderr.log" / "under-a-file")) is None   # a path that will not open: no log, stderr as it was
+    import os
+
+    def busy(*a):
+        raise PermissionError("in use by another player")
+    monkeypatch.setattr(sys, "stderr", kept)
+    monkeypatch.setattr(os, "replace", busy)
+    log = console.log_stderr(str(path))
+    log.close()
+    assert log.name == str(tmp_path / "logs" / f"stderr.{os.getpid()}.log")
 
 
 def test_a_stream_that_will_not_take_a_write_is_passed_over(tmp_path):

@@ -55,11 +55,16 @@ def log_path():
 
 def log_stderr(path):
     """Opens the log at `path`, the previous one kept beside it as .prev.log, and tees sys.stderr
-    into it. Returns the log, or None when it could not be opened, stderr then left alone."""
+    into it; while another player holds `path` open, a log named with this process's id beside it.
+    Returns the log, or None when it could not be opened, stderr then left alone."""
+    stem = os.path.splitext(path)[0]
     try:
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-        if os.path.exists(path):
-            os.replace(path, os.path.splitext(path)[0] + ".prev.log")
+        try:
+            if os.path.exists(path):
+                os.replace(path, stem + ".prev.log")
+        except PermissionError:
+            path = f"{stem}.{os.getpid()}.log"
         log = open(path, "w", encoding="utf-8", errors="backslashreplace", buffering=1)
     except OSError:
         return None

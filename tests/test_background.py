@@ -25,16 +25,12 @@ def test_sample_rows_span_the_clip_and_never_exceed_it():
     assert background.sample_rows(3, 50).tolist() == [0, 1, 2] and background.sample_rows(1, 0).tolist() == [0]
 
 
-def test_median_drops_the_transient_mean_smears_it_and_one_build_serves_every_row():
+def test_median_drops_the_transient_and_mean_smears_it():
     frames, reads = clip(20)
     out = background.run(frames, 7, {"stat": "median", "samples": 5})
     assert out.dtype == np.uint8 and out[1, 1] == 10 and out[0, 0] == 10 and reads == [0, 5, 10, 14, 19]
-    assert background.run(frames, 3, {"stat": "median", "samples": 5}) is out and len(reads) == 5   # same key: no reads
     out = background.run(frames, 0, {"stat": "mean", "samples": 5})
-    assert out.dtype == np.uint8 and out[1, 1] == 58 and len(reads) == 10                      # (250 + 4 * 10) / 5
-    frames.key = "other"
-    background.run(frames, 0, {"stat": "mean", "samples": 5})
-    assert len(reads) == 15                                                                    # upstream changed: rebuilt
+    assert out.dtype == np.uint8 and out[1, 1] == 58                                           # (250 + 4 * 10) / 5
     assert background.run(frames, 0, {"stat": "max", "samples": 5})[1, 1] == 250                # max keeps the one bright sighting
     assert background.run(frames, 0, {"stat": "min", "samples": 5})[1, 1] == 10                # min erases it
 

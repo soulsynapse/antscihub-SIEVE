@@ -7,9 +7,8 @@ keep an animal that sat in one place for half the samples, and the composite the
 dark animal on pale ground wants `max`, the brightest each pixel ever showed, which drops it if it
 was away in any one sample, and a pale animal on dark ground wants `min`. Show the node to see
 which this clip gets. STATIC says the output is one image at every row, so the player holds it
-once; it is built on the first row asked for and kept here too under frames.key and the params,
-since the memo may let it go and a rebuild is seconds of seeks, paid on the worker inside that
-row, see docs/findings/2026-10-31-background-composite-cost.md.
+once and keeps it while the node stands, a rebuild being seconds of seeks paid on the worker inside
+the first row asked for, see docs/findings/2026-10-31-background-composite-cost.md.
 """
 import numpy as np
 
@@ -21,7 +20,6 @@ STATIC = True
 STATS = ("mean", "median", "max", "min")
 DEFAULTS = {"stat": "median", "samples": 50}
 MAX_SAMPLES = 200
-_last = None    # ((frames.key, stat, samples), composite): one clip's composite, the last built
 
 
 def sample_rows(count, samples):
@@ -63,11 +61,7 @@ def composite(frames, params):
 
 
 def run(frames, row, params):
-    global _last
-    key = (frames.key, params["stat"], int(params["samples"]))
-    if _last is None or _last[0] != key:
-        _last = (key, composite(frames, params))
-    return _last[1]
+    return composite(frames, params)
 
 
 def settings(parent=None):

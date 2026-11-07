@@ -181,13 +181,18 @@ def test_a_static_node_is_computed_once_held_once_and_peeked_at_any_row():
     doc = fan_out()
     doc.add_node("const", (0, 400), {"k": 1})
     doc.connect("gray", "const")
-    g = Graph(doc, Dec(), {**TOOLS, "const": const})
+    g = Graph(doc, Dec(), {**TOOLS, "const": const}, memo_bytes=200)
     runs, held = const.runs, g.memo.bytes
     assert (g.compute("const", 0) == 1).all() and (g.compute("const", 7) == 1).all() and const.runs == runs + 1
     assert g.memo.bytes == held + 4 * 6 + 4 * 6                       # the plane once, and gray at row 0 once
     assert g.peek(9, "const") is not None and g.density("const", 3) is g.density("const", 8)
+    for row in range(10):                                                 # a walk past the memo's limit evicts every plane but the static one
+        g.compute("add", row)
+    assert g.memo.evictions and g.peek(9, "const") is not None and g.compute("const", 5) is not None and const.runs == runs + 1
+    old = (g._plan["const"].raw_key, None)
     doc.node("const").params["k"] = 2
     g.sync()
+    assert g.memo.get(old) is None                                     # the plan it was pinned under is gone
     assert (g.compute("const", 7) == 2).all() and const.runs == runs + 2
 
 

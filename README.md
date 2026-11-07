@@ -10,11 +10,23 @@ py -3.13 -m venv .venv            # not the Anaconda python: its Qt DLLs shadow 
 .venv\Scripts\python -m pip install -r requirements.txt
 .venv\Scripts\python main.py [video]                     # the example pipeline, every tool under tools/ placeable
 .venv\Scripts\python -m sieve_player doc.json [root ...] # a saved document, against the tools under the roots
+.venv\Scripts\python -m sieve_player doc.json --plan      # the plan instead: each node's kind, key, role and standing
 .venv\Scripts\python tools\motion.py [video]             # any tool runs alone
 .venv\Scripts\python smoke.py video                      # offscreen end-to-end check
 .venv\Scripts\python -m pytest
 .venv\Scripts\python -m sieve_player.registry --check    # the tools, their facets, the types they use
 ```
+
+What the player prints to stderr, tracebacks, Qt warnings, the watchdog's and a crash's stacks, it
+also writes to a log, the previous launch's kept beside it as `.prev.log`; `SIEVE_LOG` names the
+file or, as `0`, turns it off, and `sieve_player.dev.console.log_path` says where it goes unset. `SIEVE_DUMP`
+names a file every video opened dumps the probe's stream to (`sieve_player/trace.py`);
+`SIEVE_QT_TRACE` narrows the Qt warning handler to warnings containing its text, or `0` leaves
+Qt's own printing alone; `SIEVE_C_STDERR=1` leaves C-level stderr alone, so cv2's plugin warns on
+every unconverted frame, and libav says why a stream ended where it did, which the player's own
+line at the correction cannot. `SIEVE_MEMO_GB` and `SIEVE_CACHE_GB` set the memo's and the
+decoder cache's limits; unset or `0`, each is the default in its class, and the line the player prints on
+opening a video says what both are.
 
 ## A tool
 
@@ -40,7 +52,12 @@ def settings(parent=None) -> ParamWidget      # optionally show_result(result, s
                                               # set_source(path, fps): the video, for a tool that writes a file (csv)
 
 # a series tool reading another: EXPECTS = "signal", and series.data is the upstream result's
-# "signal" with the rows its band shuts out zeroed (smooth).
+# "signal" with the rows its band shuts out zeroed (smooth); or, when the upstream result also
+# carries "rows", one table a row (track), those tables, emptied where the band shuts them out (travel).
+
+# a frame tool with more inputs: INPUTS = {"diff": "gray"}, read as frames(row, "diff"); one named
+# in OPTIONAL = ("diff",) may be unwired and then reads as None (blobs). frames.type(input) is what
+# the node wired into an input produces, for an EXPECTS whose types run() must tell apart (inrange).
 
 # a selector: which file, by rule
 NAME = "file"; KIND = "selector"; PRODUCES = "path"
@@ -50,37 +67,58 @@ def select(folder, params) -> str | None      # folder is the document's
 How the player treats a tool, as `sieve_player/graph.py`, `pane.py` and `window.py` currently do:
 
 - Types are strings the player compares for equality; it attaches no meaning to them beyond the
-  video node producing `"bgr"`. An `EXPECTS` tuple accepts any of its members, and
-  `PRODUCES = "same"` hands out whatever the tool reads.
+  video node producing `"bgr"`, or `"gray"` when its `output` param says so. That and its `scale`
+  param are the decoder's: both are applied before its cache, so a chain that wants small gray
+  frames never holds the large colour ones, and no gray or rescale node is needed for that. An
+  `EXPECTS` tuple accepts any of its members, and `PRODUCES = "same"` hands out whatever the tool
+  reads.
 - Only the worker thread calls `run`, but for any row in any order, since a seek jumps its queue.
   `frames.key` / `series.key` changes whenever anything upstream does; the tools that cache key on
-  it and on their own params.
-- The tools under `tools/` import Qt and `sieve_player` inside `settings()`, `draw()` and their
-  `__main__` block rather than at module top, which lets a script without Qt import them and call
-  `run`.
+  it and on their own params. A `frames()` read made after the node's key has changed under the
+  run, or while the player is closing, raises `graph.Cancelled` and the row is dropped: a run of
+  many reads ends at its next one, so a tool never needs to poll for interruption and must not
+  swallow that exception. A read past the last row the stream has raises `decoder.EndOfStream`,
+  the one IndexError the worker closes a walk on; a tool reading rows the container claims
+  (background) catches it by that name, and any other IndexError is the tool's failure.
+- The tools under `tools/` import Qt, and the parts of `sieve_player` that import it, inside
+  `settings()`, `draw()` and their `__main__` block rather than at module top, which lets a script
+  without Qt import them and call `run`; a player module that imports no Qt, `document` or
+  `decoder`, may be imported at top (background imports the decoder's `EndOfStream`).
 - The document holds the params. The pane moves a settings widget's knobs to them with
   `set_params()` and writes `params()` back on every change; `ParamWidget` provides both, and a
   widget without them is shown as a defect.
-- Each node reads one node through a wire. A node the video does not reach, through wires whose
-  types fit, computes as None, and so does everything downstream of it.
-- Series nodes run as a chain: the first one reading a frame node runs on the stacked window, and
-  each fed series node wired on from a chain node runs after it on the upstream result's
-  `"signal"`. A second series node reading a frame node does not run.
+- Each node reads one node through its first input, `"in"`, the one a drop onto a wire lands on and
+  a `"same"` output follows. A frame tool may declare more in `INPUTS`, each a wire of its own, and
+  `run` reads one as `frames(row, name)`. A node the video does not reach through every frame
+  input, over wires whose types fit, computes as None, and so does everything downstream of it.
+  Why a node does not run is its standing, one line the runtime states per node (`Graph.standing`):
+  the pane shows it under the node's settings, the canvas as its tooltip, and `--plan` prints it. A
+  tool raising, or a chain node handed no signal, is noted there too, until the node's key changes.
+- Series nodes run as a chain: the walked node is what the first series node reading a frame node
+  reads, every series node reading that node is a head and runs on the stacked window, and each
+  fed series node wired on from a chain node runs after it on the upstream result's `"signal"`. A
+  series node reading another frame node does not run.
 - A series tool's `fold(frame)` runs on the worker as each row is computed and takes no params: a
   change to the tool's params reruns `run` on the stack already folded, so a fold must hold every
-  number any params could ask for (reduce folds a row to its sum, max, count and size).
+  number any params could ask for (reduce folds a row to its sum, max, count and size). The walk
+  folds only when every head folds the same way; otherwise it stacks the rows as they are and each
+  head with a fold folds them at run, and the clip walk refuses a stack of frames.
 
 Facets the player reads when a tool has them:
 
 | facet | what the player does with it |
 |---|---|
-| `draw(painter, row, result, start)` | paints on the frame, in frame-pixel coordinates (`painter.window()` is the frame's rect); one that raises is dropped for the session |
+| `draw(painter, row, result, start, params)` | paints on the frame, in frame-pixel coordinates (`painter.window()` is the frame's rect), with the node's params as they stand; one that raises is dropped for the session |
 | a `"signal"` array in a series result | the node's trace, drawn as a detector. Its two handles are the node's band, in the signal's units, saved with the node: the player adds `"gate"`, the rows inside it (outside when lo is above hi), washes them on the trace, zeroes the rest of the signal before a series node downstream reads it, and draws a green border on the frame while the playhead is in a row the last chain node gates. Every chain node's result also gets `"key"`, the node's key (`graph`), which hashes its band and everything upstream: a tool that writes a file records it, and can read it back to say whether the file on disk is this graph's (csv) |
 | `output_name`, `export_command`, `describe_output` | an Export button on the node; an existing target gets a numbered sibling, and a failed run leaves no partial file |
+| `INPUTS = {input: types}` | a frame input after the first, with the types it expects; `run` reads it as `frames(row, input)`, and the node's key and `frames.key` follow it |
 | `PATHS = {input: loader}` | a path input a selector feeds; the loader turns the file into params |
+| `STATIC = True` | the output is the same at every row: the memo holds it once under the key and never evicts it while the node stands under that key, and the monitor counts its run per change rather than per row |
 | a plane as output | the node's density, v2's plot: its pixels per row counted on a fixed log axis, under its settings, for every fed frame node; a mask or a field has none. Its two handles are the node's band, saved with the node: the player zeroes every pixel outside it (inside it when lo is above hi) before anything downstream reads the node |
 
-`tools/` holds a working example of each.
+`tools/` holds a working example of each. A module there whose name begins with `_` is not a tool
+but what tools share, the table kind in `_table.py` and its drawing in `_draw.py`; a tool imports
+from those and from no other tool, which `tests/test_seams.py` checks.
 
 ## The player
 

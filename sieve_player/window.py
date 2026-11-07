@@ -1,22 +1,21 @@
-"""The window: the frame left, the canvas over the parameter pane right, the transport across the
-bottom.
+"""The window: the header across the top, the frame left, the canvas over the parameter pane right,
+the transport across the bottom.
 
-The document is the one source of truth for the graph. The canvas and the pane read and write it
-and say what changed; the window carries the change to the runtime, which is built on every load
-of a video and re-synced on every change. The frame shows the node that carries the display flag;
-a flagged node the video does not reach blanks the frame and says why, and no flag is empty
-ground. The transport, the decoder, the worker and the memo are as they were: the display reads
-the memo and never waits on the decoder. It opens with no video and never prompts.
+The document is the one source of truth. The canvas and the pane read and write it and say what
+changed; the window carries the change to the runtime, built on every load of a video and
+re-synced on every change, and carries the runtime's results and standings back to the widgets.
+The display reads the memo and never waits on the decoder. It opens on whatever the document names, or empty, and never prompts.
 """
 import os
+import sys
 import time
 import traceback
 
 import cv2
 import numpy as np
-from PySide6.QtCore import QRectF, Qt, QTimer
-from PySide6.QtGui import QImage, QKeySequence, QPainter, QPen, QPixmap, QShortcut
-from PySide6.QtWidgets import QFileDialog, QMainWindow, QSizePolicy, QVBoxLayout, QWidget
+from PySide6.QtCore import QRectF, Qt, QTimer, Signal
+from PySide6.QtGui import QFontMetrics, QImage, QKeySequence, QPainter, QPen, QPixmap, QShortcut
+from PySide6.QtWidgets import QFileDialog, QHBoxLayout, QMainWindow, QPushButton, QSizePolicy, QVBoxLayout, QWidget
 
 from . import dev, document, theme
 from .canvas import Canvas
@@ -24,13 +23,22 @@ from .decoder import Decoder
 from .graph import Graph
 from .pane import Pane
 from .registry import Entry
-from .theme import GAP, PAD
+from .theme import GAP, PAD, ROW_H, readout
 from .timeline import Timeline
 from .trace import Dump
 from .widgets import Trace
 from .worker import Worker
 
 DUMP_ENV = "SIEVE_DUMP"     # names the file every video opened in this process dumps its stream to
+MEMO_ENV, CACHE_ENV = "SIEVE_MEMO_GB", "SIEVE_CACHE_GB"   # the memo's and the decoder cache's limits; unset, each class's default
+
+
+def _gb(env):
+    """The limit in bytes the variable names, or None for the default; a value that is not a number reads as unset."""
+    try:
+        return int(float(os.environ[env]) * 2**30)
+    except (KeyError, ValueError):
+        return None
 
 
 class Lateness(QTimer):
@@ -66,6 +74,12 @@ def flow_top(a):
     if not a.size:
         return 0.0
     return float(np.hypot(a[..., 0], a[..., 1]).max()) if a.ndim == 3 and a.shape[2] == 2 else float(a.max())
+
+
+def imageable(a):
+    """Whether `to_qimage` can show `a`: a plane, a BGR image or a flow field, never a table."""
+    a = np.asarray(a)
+    return a.dtype.fields is None and (a.ndim == 2 or (a.ndim == 3 and a.shape[2] in (2, 3)))
 
 
 def to_qimage(a, top=None):
@@ -118,15 +132,19 @@ def heat(a, top):
 
 
 class Display(QWidget):
+    drawFailed = Signal(str, str)   # a tool's draw() raised: the node, the line
+
     """The frame, the overlay heated over it, the gate border, and each drawing node's draw() on
-    top, in node order, each handed its own node's series result."""
+    top, in node order, each handed its own node's result: a series node's over the window, a
+    frame node's at the row."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._pix, self.gate, self.reason = None, False, ""
         self._over, self._over_key, self._top = None, None, 0.0   # the overlay image, whose node's key, its running max
         self._frame_key, self._frame_top = None, 0.0               # the shown node's key and running max, for a measured plane
-        self.drawers, self.row, self.results, self.start = [], 0, {}, 0   # drawers: [(node id, tool)]
+        self.drawers, self.row, self.results, self.start = [], 0, {}, 0   # drawers: [(node id, tool, node)]
+        self.frame_results = {}                                    # node id -> a drawing frame node's output at the row
         self.setMinimumSize(160, 120)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
@@ -179,7 +197,10 @@ class Display(QWidget):
                 p.setPen(theme.qgray(theme.INK_2))
                 p.drawText(self.rect(), Qt.AlignCenter, self.reason)
             return
-        pix = self._pix.scaled(self.size(), Qt.KeepAspectRatio, Qt.FastTransformation)
+        shrinking = self._pix.width() > self.width() or self._pix.height() > self.height()
+        # nearest-neighbour drops rows and columns when shrinking, which reads as stripes; grown, it shows each pixel as it is
+        pix = self._pix.scaled(self.size(), Qt.KeepAspectRatio,
+                               Qt.SmoothTransformation if shrinking else Qt.FastTransformation)
         x, y = (self.width() - pix.width()) // 2, (self.height() - pix.height()) // 2
         p.drawPixmap(x, y, pix)
         if self._over is not None:
@@ -194,12 +215,13 @@ class Display(QWidget):
         # frame's rect back from painter.window() when its own data is another resolution.
         p.setViewport(x, y, pix.width(), pix.height())
         p.setWindow(0, 0, self._pix.width(), self._pix.height())
-        for nid, tool in self.drawers:
+        for nid, tool, node in self.drawers:
             try:
-                tool.draw(p, self.row, self.results.get(nid), self.start)
-            except Exception:
+                tool.draw(p, self.row, self.frame_results.get(nid, self.results.get(nid)), self.start, node.params)
+            except Exception as e:
                 traceback.print_exc()
                 self.drawers = [d for d in self.drawers if d[1] is not tool]  # once, not every repaint
+                self.drawFailed.emit(nid, f"draw() raised: {type(e).__name__}: {e}")
         p.restore()
 
 
@@ -217,6 +239,31 @@ def catalogue(items):
         else:
             modules.append(t)
     return modules, {t.NAME: t for t in modules}, broken
+
+
+class Header(QWidget):
+    """The row across the top: the clip walk's progress and its button, at the right."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(GAP)
+        self.note = readout(mono=True, wrap=False)
+        self.note.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.note.setMinimumWidth(QFontMetrics(self.note.font()).horizontalAdvance("clip 000000/000000"))   # so a digit more never shifts it
+        self.walk = QPushButton("Walk clip")
+        self.walk.setFixedSize(80, ROW_H)
+        lay.addStretch(1)
+        lay.addWidget(self.note)
+        lay.addWidget(self.walk)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+
+    def set_walking(self, on):
+        self.walk.setText("Stop walk" if on else "Walk clip")
+
+    def set_progress(self, done, total):
+        self.note.setText(f"clip {done}/{total}" if done < total else "")
 
 
 class Column(QWidget):
@@ -238,12 +285,13 @@ class Column(QWidget):
 
 
 class PlayerWindow(QMainWindow):
-    def __init__(self, source, title="SIEVE", tools=()):
+    def __init__(self, source, title="SIEVE", tools=(), log=None):
         """`source` is a list of tools, which become the document, or the path of a saved document.
         The catalogue the Tab menu offers and the document's names index is `tools`, plus the list
-        when `source` is one. Either list holds tool modules or registry entries; see `catalogue`."""
+        when `source` is one. Either list holds tool modules or registry entries; see `catalogue`.
+        `log` names where stderr also goes, for a line that sends the user there."""
         super().__init__()
-        self.title = title
+        self.title, self.log = title, log or "stderr"
         self.setStyleSheet(theme.sheet())
         from_file = isinstance(source, (str, os.PathLike))
         modules, self.tools, broken = catalogue(list(tools) if from_file else [*source, *tools])
@@ -256,7 +304,9 @@ class PlayerWindow(QMainWindow):
         self.row, self.playing, self.window_ = 0, False, (0, 0)
         self._resume = False  # playback to restore when a playhead drag ends
         self.results, self.result_start = {}, 0   # node id -> the series chain's results, and the row they start at
-        self._taken = {}       # (node id, path input) -> the file last handed to its loader
+        self.clip_results = {}                    # the same over the clip walk's rows, from row 0; {} when there are none
+        self._clip_asked = False                  # a clip walk was asked for and has not finished or been stopped
+        self._taken = {}      # (node id, path input) -> the file last handed to its loader
         self._driven = {}      # (node id, path input) -> (the keys its loader set, the selector's id)
         self.traces = []
         self._hooked = set()   # ids of traces already wired to the strip's cursor
@@ -270,7 +320,12 @@ class PlayerWindow(QMainWindow):
         self.canvas.changed.connect(self.sync)
         self.canvas.flagged.connect(self.reflag)
         self.pane.paramsChanged.connect(self._params_changed)
+        self.pane.pinChanged.connect(self._show_pinned)
         self.pane.videoPicked.connect(self.load)
+        self.display.drawFailed.connect(self._draw_failed)
+        self.header = Header()
+        self.header.walk.clicked.connect(self._toggle_clip)
+        self.header.setEnabled(False)
 
         right = Column()
         right.lay.addWidget(self.canvas, 1)
@@ -289,6 +344,7 @@ class PlayerWindow(QMainWindow):
         lay = QVBoxLayout(central)
         lay.setContentsMargins(PAD, PAD, PAD, PAD)
         lay.setSpacing(GAP)
+        lay.addWidget(self.header, 0)
         lay.addWidget(split, 1)
         lay.addWidget(self.timeline, 0)
         self.setCentralWidget(central)
@@ -352,7 +408,11 @@ class PlayerWindow(QMainWindow):
         path = path or self.doc.path
         if not path:
             return self._save_as()
-        document.save(self.doc, path)
+        try:
+            document.save(self.doc, path)
+        except OSError as e:
+            self.timeline.controls.progress.setText(f"could not save {os.path.basename(str(path))}: {e}")
+            return False
         self._retitle()
         return True
 
@@ -393,13 +453,14 @@ class PlayerWindow(QMainWindow):
         self.pane.sync()
         self._hook_traces()
         self._pick_video()
-        self.display.drawers = [(n.id, self.tools[n.tool]) for n in self.doc.nodes
+        self.display.drawers = [(n.id, self.tools[n.tool], n) for n in self.doc.nodes
                                 if n.tool in self.tools and hasattr(self.tools[n.tool], "draw")]
         self.canvas.update()
         if self.graph is None:
             return
         self.graph.sync()
-        self.worker.invalidate()
+        self._restate()
+        self._invalidate()
         self.goto(self.row, commit=True)
 
     def reflag(self):
@@ -409,7 +470,50 @@ class PlayerWindow(QMainWindow):
         if self.graph is None:
             return
         self.graph.sync()
+        self._restate()
         self.goto(self.row, commit=True)
+
+    def _restate(self):
+        if self.graph is None:
+            return
+        for n in self.doc.nodes:
+            text = self.graph.standing(n.id)
+            self.pane.set_standing(n.id, text)
+            if text:
+                self.canvas.standings[n.id] = text
+            else:
+                self.canvas.standings.pop(n.id, None)
+
+    def _failed(self, row, nid):
+        self._restate()
+        self.timeline.controls.progress.setText(f"{nid} {self.graph.standing(nid)}" if nid else f"a tool raised at row {row}, see {self.log}")
+
+    def _worker_ended(self, worker):
+        """The worker thread exited other than through `_unload`, so nothing will answer the display
+        again until the video is reopened; the traceback is on stderr."""
+        if worker is self.worker:
+            self.timeline.controls.progress.setText(f"the worker stopped, see {self.log}; reopen the video")
+
+    def _shortened(self, count):
+        """The stream ended short of its container's claim: everything sized by the count follows
+        the decoder's, and a playhead past the end lands on the last row there is."""
+        if self.graph is None or count == self.count:
+            return
+        self.count = count
+        self.timeline.strip.set_count(count, self.fps)
+        self.timeline.controls.set_count(count, self.fps)
+        if self.pane.video is not None:
+            self.pane.video.show_source(self.decoder.path, (self.decoder.width, self.decoder.height, self.fps, count))
+        s, n = self.window_
+        if s + n > count:
+            self.set_window(s, n)
+        if self.row >= count:
+            self.goto(count - 1, commit=True)
+
+    def _draw_failed(self, nid, line):
+        if self.graph is not None:
+            self.graph.note(nid, line)
+            self._restate()
 
     def _params_changed(self, nid):
         self.canvas.update()   # a band moved recolours its node's dot
@@ -419,11 +523,22 @@ class PlayerWindow(QMainWindow):
         if self.graph is None:
             return
         self.graph.sync()
+        self._restate()
         if nid in self.graph.chain:
             self.worker.rerun_series()
         else:
-            self.worker.invalidate()
+            self._invalidate()
             self.goto(self.row, commit=True)
+
+    def _invalidate(self):
+        """The frame tools changed: the walk restarts, and the clip walk's rows are of a graph that is
+        gone, so they are dropped here and now rather than when the worker gets to it."""
+        self.worker.invalidate()
+        self._clip_asked = False
+        self.header.set_walking(False)
+        self.header.set_progress(0, 0)
+        self.clip_results = {}
+        self._show_pinned()
 
     # -- loading ---------------------------------------------------------
     def _pick_video(self):
@@ -536,19 +651,25 @@ class PlayerWindow(QMainWindow):
             if self.pane.video is not None:
                 self.pane.video.show_none(f"{sel.id} picks the video; unwire it to choose by hand")
             return
-        if self._open_video(path):
-            self.doc.video = os.fspath(path)
+        was = self.doc.video
+        self.doc.video = os.fspath(path)   # before opening: the open syncs, and the sync reopens what the document names
+        if not self._open_video(path):
+            self.doc.video = was
 
     def _open_video(self, path):
         try:
-            decoder = Decoder(path)
+            decoder = Decoder(path, **({"cache_bytes": c} if (c := _gb(CACHE_ENV)) else {}))
         except IOError as e:
             if self.pane.video is not None:
                 self.pane.video.show_error(path, e)
             return False
         self._unload()
         self.decoder = decoder
-        self.graph = Graph(self.doc, decoder, self.tools)
+        self.graph = Graph(self.doc, decoder, self.tools, **({"memo_bytes": m} if (m := _gb(MEMO_ENV)) else {}))
+        # the one line a report of this video's run needs beside the log's tracebacks
+        print(f"SIEVE {time.strftime('%H:%M:%S')}: opened {path}: {decoder.width}x{decoder.height} at {decoder.fps:.3f} fps, "
+              f"{decoder.count} rows claimed, luma plane {'read' if decoder.luma else 'converted'}; "
+              f"memo {self.graph.memo.limit >> 30} GB, cache {decoder.cache_limit >> 30} GB", file=sys.stderr)
         if os.environ.get(DUMP_ENV):
             self.dump = Dump(self.graph, os.environ[DUMP_ENV])
             self.lateness = Lateness(self.dump, parent=self)
@@ -560,7 +681,14 @@ class PlayerWindow(QMainWindow):
         self.worker.densityReady.connect(self.pane.show_density)
         self.worker.walked.connect(ct.set_progress)
         self.worker.walked.connect(lambda _, n: self._set_length(n))   # the walk's own length: clamped, or closed early
-        self.worker.failed.connect(lambda r: ct.progress.setText(f"tool raised at row {r}, see console"))
+        self.worker.failed.connect(self._failed)
+        self.worker.clipWalked.connect(self._clip_walked)
+        self.worker.clipReady.connect(self._clip_ready)
+        self.worker.clipRefused.connect(self._clip_refused)
+        self.worker.walkRefused.connect(ct.progress.setText)
+        self.worker.shortened.connect(self._shortened)
+        self.worker.finished.connect(lambda w=self.worker: self._worker_ended(w))
+        self.header.setEnabled(True)
         self.timeline.strip.set_count(self.count, self.fps)
         ct.set_count(self.count, self.fps)
         ct.progress.setText("")
@@ -571,7 +699,7 @@ class PlayerWindow(QMainWindow):
         self.goto(0, commit=True)
         self.toggle_play()  # _unload left it paused
         if self.pane.video is not None:
-            self.pane.video.show_source(path)
+            self.pane.video.show_source(path, (decoder.width, decoder.height, self.fps, self.count))
         self.pane.set_source(path, self.fps)
         self._retitle()
         return True
@@ -588,7 +716,11 @@ class PlayerWindow(QMainWindow):
             self.dump = self.lateness = None
         self.decoder.close()
         self.decoder = self.graph = self.worker = None
-        self.results = {}
+        self.results, self.clip_results, self._clip_asked = {}, {}, False
+        self.header.set_walking(False)
+        self.header.set_progress(0, 0)
+        self.header.setEnabled(False)
+        self.timeline.strip.set_series(None, 0)
         self.row, self.window_ = 0, (0, 0)
         self.display.clear()
 
@@ -620,7 +752,7 @@ class PlayerWindow(QMainWindow):
         if shown is None:
             self.display.clear()
         elif not self.graph.fed(shown):
-            self.display.clear(f"{shown}: no input")
+            self.display.clear(f"{shown}: {self.graph.standing(shown)}")
         elif not self._show(row) and commit:
             self.worker.request_row(row)
         self.timeline.strip.set_playhead(row)
@@ -677,7 +809,15 @@ class PlayerWindow(QMainWindow):
         frame = self.graph.peek(row)
         if frame is None:
             return False
+        src = self.graph.shown
+        while not imageable(frame):       # a table, blobs: show the nearest image upstream, with its draw() over it
+            src = self.graph.source(src)
+            frame = None if src is None else self.graph.peek(row, src)
+            if frame is None:
+                return False
         self.display.set_frame(frame, self.graph.key(self.graph.shown))
+        self.display.frame_results = {nid: self.graph.peek(row, nid) for nid, *_ in self.display.drawers
+                                      if nid not in self.graph.chain}
         over = self.graph.over
         plane = None if over is None else self.graph.peek(row, over)
         self.display.set_overlay(plane, None if over is None else self.graph.key(over))
@@ -690,11 +830,56 @@ class PlayerWindow(QMainWindow):
     def _series_ready(self, results, start, fps):
         self.results, self.result_start = results, start
         self.pane.show_series(results, start)
+        self._restate()
         for nid, result in results.items():
             w = self.pane.widget(nid)
             if w is not None and hasattr(w, "show_result"):
                 w.show_result(result, start, fps)
         self._update_gate()
+        self._show_pinned()
+
+    # -- the clip walk ---------------------------------------------------
+    def _toggle_clip(self):
+        if self.worker is None:
+            return
+        if self._clip_asked:
+            self.worker.stop_clip()
+            self._clip_asked = False
+            self.header.set_progress(0, 0)
+        else:
+            self.worker.walk_clip()
+            self._clip_asked = True
+            self.header.note.setText("clip: after the window")
+        self.header.set_walking(self._clip_asked)
+
+    def _clip_walked(self, done, total):
+        if self._clip_asked:
+            self.header.set_progress(done, total)
+            if done >= total:
+                self._clip_asked = False
+                self.header.set_walking(False)
+
+    def _clip_ready(self, results, start, fps):
+        self.clip_results = results
+        self._show_pinned()
+
+    def _clip_refused(self, why):
+        self._clip_asked = False
+        self.header.set_walking(False)
+        self.header.note.setText(why)
+
+    def _show_pinned(self):
+        """The strip draws the pinned node's signal: the clip walk's when it has one, else the
+        window's, each at its own rows; nothing when no node is pinned or the pinned has no signal."""
+        nid = None if self.doc is None else self.doc.pinned
+        if nid in self.clip_results:
+            r, start = self.clip_results[nid], 0
+        else:
+            r, start = self.results.get(nid), self.result_start
+        if isinstance(r, dict) and "signal" in r:
+            self.timeline.strip.set_series(r["signal"], start, r.get("gate"))
+        else:
+            self.timeline.strip.set_series(None, 0)
 
     def _set_length(self, rows):
         """Every trace's x axis is the window, so a walk fills in at its place instead of stretching."""
@@ -708,12 +893,14 @@ class PlayerWindow(QMainWindow):
         self.timeline.strip.set_hover(row)
 
     def _update_gate(self):
-        """The border is on while the last node of the series chain gates the playhead's row: each
-        band zeroes what the next reads, so the last gate is the chain's."""
+        """The border is on while every leaf of the series chain, a chain node no chain node reads,
+        gates the playhead's row: each band zeroes what the next reads, so a leaf's gate is its branch's."""
         i = self.row - self.result_start
-        last = self.graph.chain[-1] if self.graph is not None and self.graph.chain else None
-        g = self.results.get(last, {}).get("gate") if isinstance(self.results.get(last), dict) else None
-        self.display.set_gate(g is not None and 0 <= i < len(g) and bool(g[i]))
+        chain = self.graph.series_chain() if self.graph is not None else []
+        read = {src for _, _, _, _, src in chain}
+        gates = [self.results[nid].get("gate") for nid, *_ in chain
+                 if nid not in read and isinstance(self.results.get(nid), dict)]
+        self.display.set_gate(bool(gates) and all(g is not None and 0 <= i < len(g) and bool(g[i]) for g in gates))
         self.display.set_state(self.row, self.results, self.result_start)
 
     SPLIT = 0.5   # the frame's share of the width until the handle is dragged

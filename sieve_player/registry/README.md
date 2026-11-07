@@ -24,7 +24,7 @@ read by nothing, or if a type under `tools/` is produced or expected by nothing.
 - `is_tool(obj)`
 - `probe(tool, facet)`
 - `hint(facet)`
-- `discover(*roots)` -- imports each `.py` under `roots` as `<dirname>.<stem>`
+- `discover(*roots)` -- imports each `.py` under `roots` as `<dirname>.<stem>`, skipping a stem that begins with `_`: those are what tools share, never tools
 - `types(entries, extra=())` -- type -> (producers, expecters)
 
 ```

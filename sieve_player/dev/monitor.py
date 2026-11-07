@@ -16,7 +16,7 @@ from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import QComboBox, QFrame, QHBoxLayout, QScrollArea, QVBoxLayout, QWidget
 
 from .. import theme
-from ..document import produces
+from ..document import produces, static
 from ..theme import GAP, PAD
 
 READ_KINDS = ("cache", "step", "seek")
@@ -140,7 +140,8 @@ class Monitor:
         order = frame + [n for n in chain if n in life]
         run_ms = {n: life[n][0] / life[n][1] if life[n][1] else 0.0 for n in order}        # the tool's, per run
         fold_ms = {n: life[n][3] / life[n][4] if life[n][4] else 0.0 for n in order}       # the density's, per fold
-        row_ms = {n: run_ms[n] + fold_ms[n] for n in order}                                # what a cold row pays the node
+        fixed = {n for n in order if static(g.tools.get(g.doc.node(n).tool))}             # run once per key: a row pays nothing
+        row_ms = {n: 0.0 if n in fixed else run_ms[n] + fold_ms[n] for n in order}         # what a cold row pays the node
         run_bytes = {n: life[n][2] / max(life[n][1], life[n][4], 1) for n in order}
         cache_row = run_bytes.get(video, 0.0)
         memo_row = sum(run_bytes[n] for n in frame if n != video)
@@ -157,10 +158,11 @@ class Monitor:
             cost = sum(row_ms.get(x, 0.0) for x in down[n] | {n})
             if n != video and video in row_ms and cache_windows is not None and cache_windows < 1:
                 cost += row_ms[video]                    # the frames come back through the decoder too
-            nodes.append({"node": n, "type": kind, "series": False, "ms": ms.get(n, 0.0), "runs": runs.get(n, 0),
-                          "share": ms.get(n, 0.0) / (wall * 1000) if wall else None,
+            once = sum(run_ms[x] + fold_ms[x] for x in (down[n] | {n}) & fixed)   # each static node here rebuilds once
+            nodes.append({"node": n, "type": kind, "series": False, "static": n in fixed, "ms": ms.get(n, 0.0),
+                          "runs": runs.get(n, 0), "share": ms.get(n, 0.0) / (wall * 1000) if wall else None,
                           "run_ms": run_ms[n], "fold_ms": fold_ms[n], "row_ms": row_ms[n], "run_bytes": run_bytes[n],
-                          "change_s": cost * length / 1000 if length else None,
+                          "change_s": (cost * length + once) / 1000 if length else None,
                           "kinds": kinds if n == video else None})
         probed = sum(ms.get(n, 0.0) for n in frame)
         series_ms = sum(ms.get(n, 0.0) for n in chain)
@@ -269,6 +271,10 @@ def table(s):
             rows.append(f"{n['node']:<14}{'':>6}{n['runs']:>7}  {n['run_ms']:>6.1f}{'':>7}{n['run_bytes'] / 2**20:>7.2f}   per emit, not per row")
             continue
         share = "-" if n["share"] is None else f"{n['share']:.0%}"
+        if n["static"]:
+            rows.append(f"{n['node']:<14}{share:>6}{n['runs']:>7}  {n['run_ms']:>6.1f}{n['fold_ms']:>7.1f}{n['run_bytes'] / 2**20:>7.2f}"
+                        f"   per change, not per row; ~{_time(n['change_s'])} with the window below it")
+            continue
         tail = f"~{_time(n['change_s'])} over the window" if n["change_s"] is not None else ""
         if n["kinds"]:
             k = n["kinds"]

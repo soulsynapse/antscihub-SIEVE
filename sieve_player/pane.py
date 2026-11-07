@@ -1,60 +1,25 @@
-"""The parameter pane: the selected node's settings.
+"""The parameter pane: one card per node, built once per document, shown one at a time.
 
-One surface per node, built once per document and shown one at a time: the widget the tool's
-`settings()` returns, with its knobs moved to the node's params. The document is the store and the
-widget a view over it, as a Houdini parameter pane is over its node: the widget must take the
-stored values (`set_params`) and its knobs are the node's whole param set, so a tool whose
-`settings()` returns anything less is shown as a defect, not as its own defaults. Two parts are SIEVE's own. The
-video node's is a picker, the chosen path and what cv2 says about the file; while a selector is
-wired in, the picker is greyed and the selector picks. A selector's card is its settings and a
-note of what its rule matched, which the window writes. Under a tool that
-exports sits the target it would write, an Export button that runs the tool's argv in a QProcess,
-and the process's last line; a tool takes part by defining `output_name(src, params) -> path` and
-`export_command(src, dst, params, fps) -> argv`, and may add `describe_output(src, params, fps)
--> str` for the line under the target. A settings widget with `set_source(path, fps)` is told the
-video too, as the Export block is, for a tool that writes a file of its own (csv). Under a frame node's settings sits its density, the
-population its plane's values make per row of the loop window, which the window hands the pane for
-every fed frame node; a node whose output is a mask or a field, or that the video does not
-reach, shows none; its handles are the node's band (see `document`), written like a param. Under a
-series node's settings sits its trace, the result's signal over the window, which the window hands
-the pane for every chain node; its handles are the node's band the same way, in the signal's units,
-and the rows the band shuts out are washed. A node whose tool the catalogue lacks shows which name was
-not found and its params read-only. The pane writes params into the document and says which node
-changed; it knows nothing of the runtime.
+The document is the store and a card a view over it, as a Houdini parameter pane is over its node:
+a tool's settings widget must take the stored values and its knobs are the node's whole param set,
+so one that cannot be told them is shown as a defect, never as its own defaults. The pane writes
+params, bands and the pin into the document and says what changed; it knows nothing of the
+runtime, and what it shows of a run, the density, the trace, the standing line, the window hands it.
 """
 import os
 import re
-from functools import lru_cache
 
-import cv2
 from PySide6.QtCore import QProcess, QSize, Qt, Signal
 from PySide6.QtGui import QFontMetrics
-from PySide6.QtWidgets import QFileDialog, QFrame, QPushButton, QScrollArea, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (QComboBox, QDoubleSpinBox, QFileDialog, QFrame, QPushButton, QScrollArea, QVBoxLayout,
+                               QWidget)
 
-from .document import OPEN, VIDEO_TOOL, is_selector, paths
-from .theme import GAP, PAD, WIDE_W, Form, Layer, measured, readout
+from .document import (OPEN, VIDEO_OUTPUT, VIDEO_OUTPUTS, VIDEO_PRODUCES, VIDEO_SCALE, VIDEO_TOOL, is_selector, paths,
+                       video_output, video_scale)
+from .theme import CONTROL_W, GAP, PAD, WIDE_W, Form, GlyphButton, Layer, measured, readout
 from .widgets import Density, Trace
 
-VIDEO_FILTER = "Video (*.mp4 *.MP4 *.avi *.mov *.mkv);;All (*)"
-
-
-@lru_cache(maxsize=16)
-def _probe(path, mtime):
-    cap = cv2.VideoCapture(path)
-    try:
-        if not cap.isOpened():
-            raise IOError(f"cannot open {path}")
-        return (int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)),
-                cap.get(cv2.CAP_PROP_FPS) or 30.0, int(cap.get(cv2.CAP_PROP_FRAME_COUNT)))
-    finally:
-        cap.release()
-
-
-def probe(src):
-    """(width, height, fps, count) via cv2, cached per path and mtime. The count is the container's
-    claim; the decoder trusts the stream over it."""
-    src = str(src)
-    return _probe(src, os.stat(src).st_mtime)
+VIDEO_FILTER = "Video (*.mp4 *.MP4 *.avi *.mov *.mkv *.mts *.MTS);;All (*)"
 
 
 def free_name(dst):
@@ -77,8 +42,11 @@ def _column(parent, spacing=GAP):
 
 
 class Video(QWidget):
-    """The video node's settings: a picker, the chosen path and what cv2 says about it."""
+    """The video node's settings: a picker, the chosen path and what cv2 says about it, and the
+    decoder's two params, `output`, bgr as decoded, gray or luma, and `scale`, a factor, both applied
+    before its cache so a chain that wants small gray frames never holds the large colour ones."""
     sourceChanged = Signal(str)
+    paramChanged = Signal(str, object)     # (param name, value)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -88,16 +56,50 @@ class Video(QWidget):
         form = Form([("video", self.button)])
         form.add_line(self.path)
         form.add_line(self.info)
+        self.output = QComboBox()
+        self.output.addItems(list(VIDEO_OUTPUTS))
+        self.output.setFixedWidth(CONTROL_W)
+        form.add_row(VIDEO_OUTPUT, self.output)
+        self.output_note = readout()
+        form.add_line(self.output_note)
+        self.scale = QDoubleSpinBox()
+        self.scale.setRange(0.05, 1.0)
+        self.scale.setSingleStep(0.05)
+        self.scale.setDecimals(2)
+        self.scale.setFixedWidth(CONTROL_W)
+        form.add_row(VIDEO_SCALE, self.scale)
         lay.addWidget(form)
         self.button.clicked.connect(self._pick)
+        self.output.currentTextChanged.connect(self._note_output)
+        self.output.currentTextChanged.connect(lambda v: self.paramChanged.emit(VIDEO_OUTPUT, v))
+        self.scale.valueChanged.connect(lambda v: self.paramChanged.emit(VIDEO_SCALE, float(v)))
+        self._note_output(self.output.currentText())
+
+    OUTPUT_NOTES = {
+        "bgr": "as decoded",
+        "gray": "full range, 0 to 255; from the stream's luma plane where it has one, with no colour conversion",
+        "luma": "the stream's luma plane as is: fastest, and limited range, 16 to 235, on most camera files",
+    }
+
+    def _note_output(self, value):
+        self.output_note.setText(self.OUTPUT_NOTES.get(value, ""))
+
+    def set_params(self, doc):
+        """Moves the knobs to the document's values without reporting a change."""
+        for w, v in ((self.output, video_output(doc)), (self.scale, video_scale(doc))):
+            w.blockSignals(True)
+            w.setCurrentText(v) if w is self.output else w.setValue(v)
+            w.blockSignals(False)
+        self._note_output(video_output(doc))
 
     def _pick(self):
         path, _ = QFileDialog.getOpenFileName(self, "Open video", "", VIDEO_FILTER)
         if path:
             self.sourceChanged.emit(path)
 
-    def show_source(self, path):
-        w, h, fps, n = probe(path)
+    def show_source(self, path, facts):
+        """`facts` is (width, height, fps, count), as the decoder found them."""
+        w, h, fps, n = facts
         self.path.setText(str(path))
         self.info.setText(f"{w}×{h} · {fps:.2f} fps · {n} frames · {n / fps:.1f} s")
 
@@ -117,7 +119,10 @@ class Video(QWidget):
 
 
 class Export(QWidget):
-    """The export block under a tool that defines `export_command`."""
+    """The export block under a tool that defines `export_command(src, dst, params, fps) -> argv`
+    and `output_name(src, params) -> path`: the target, a button that runs the argv in a QProcess,
+    and the process's last line; `describe_output(src, params, fps) -> str`, if defined, is the
+    line under the target."""
 
     def __init__(self, tool, parent=None):
         super().__init__(parent)
@@ -208,6 +213,7 @@ class Pane(QWidget):
     `exports[nid]` the Export under a node whose tool exports. Its size hint is the shown card's
     height, so a host that stacks it under the canvas gives it only the room its content needs."""
     paramsChanged = Signal(str)   # this node's params in the document changed here
+    pinChanged = Signal()         # the document's pinned flag moved here
     videoPicked = Signal(str)
 
     def __init__(self, tools, parent=None):
@@ -215,8 +221,10 @@ class Pane(QWidget):
         self.tools = tools
         self.doc = None
         self.cards, self.widgets, self.exports, self.notes = {}, {}, {}, {}
+        self.standings = {}   # tool node -> the line under its settings, see set_standing
         self.densities = {}   # frame node -> its Density plot, hidden until the window hands it counts
         self.traces = {}      # series node -> its Trace, hidden until the window hands it a result
+        self.pins = {}        # series node -> the pin in its card's corner
         self.video = None
         self.current = None
         self._src, self._fps = None, None
@@ -259,8 +267,10 @@ class Pane(QWidget):
         self.widgets.pop(nid, None)
         self.exports.pop(nid, None)
         self.notes.pop(nid, None)
+        self.standings.pop(nid, None)
         self.densities.pop(nid, None)
         self.traces.pop(nid, None)
+        self.pins.pop(nid, None)
         if self.video is not None and self.video.parent() is card:
             self.video = None
         self._lay.removeWidget(card)
@@ -272,7 +282,9 @@ class Pane(QWidget):
         card = Layer(1, node.id)
         if node.tool == VIDEO_TOOL:
             self.video = Video()
+            self.video.set_params(self.doc)
             self.video.sourceChanged.connect(self.videoPicked)
+            self.video.paramChanged.connect(lambda name, v, nid=node.id: self._video_param(nid, name, v))
             card.add(self.video)
         elif node.unresolved:
             card.add(readout(f"tool {node.tool!r} not found"))
@@ -293,11 +305,16 @@ class Pane(QWidget):
                 w.changed.connect(lambda nid=node.id: self._changed(nid))
                 card.add(w)
                 self.widgets[node.id] = w
+                self.standings[node.id] = readout()
+                self.standings[node.id].hide()
+                card.add(self.standings[node.id])
                 if hasattr(w, "set_source"):
                     w.set_source(self._src, self._fps)
                 if is_selector(tool) or paths(tool):
                     self.notes[node.id] = readout()
                     card.add(self.notes[node.id])
+                if is_selector(tool):
+                    pass
                 elif getattr(tool, "KIND", "frame") == "frame":
                     plot = Density()
                     if node.band is not None:
@@ -309,11 +326,16 @@ class Pane(QWidget):
                 elif getattr(tool, "KIND", "frame") == "series":
                     plot = Trace(rows=5, levels=2)
                     plot.levels[:] = [float(v) for v in node.band] if node.band is not None else list(OPEN)
-                    plot.levelDragged.connect(lambda _i, _v, nid=node.id: self._banded(nid))    # the chain reruns on the folded stack, cheap enough to follow the drag
+                    plot.levelDragged.connect(lambda _i, _v, nid=node.id: self._banded(nid))    # the chain reruns on the stack already walked, cheap enough to follow the drag
                     plot.levelReleased.connect(lambda _i, _v, nid=node.id: self._banded(nid))
                     plot.hide()
                     card.add(plot)
                     self.traces[node.id] = plot
+                    pin = GlyphButton("pin", "pinned", "draw this signal on the timeline")
+                    pin.setChecked(self.doc.pinned == node.id)
+                    pin.clicked.connect(lambda on, nid=node.id: self._pin(nid, on))
+                    card.add_corner(pin)
+                    self.pins[node.id] = pin
             if w is not None and getattr(tool, "export_command", None) is not None:
                 ex = Export(tool)
                 ex.set_params(node.params)
@@ -328,6 +350,18 @@ class Pane(QWidget):
         """A density or trace handle moved: the band is the node's, saved and keyed like a param."""
         plot = self.densities.get(nid) or self.traces[nid]
         self.doc.node(nid).band = tuple(plot.levels)
+        self.paramsChanged.emit(nid)
+
+    def _pin(self, nid, on):
+        """A pin was clicked: the flag lands on `nid` or leaves it, and every pin shows where it is."""
+        self.doc.pinned = nid if on else None
+        for i, pin in self.pins.items():
+            pin.setChecked(i == self.doc.pinned)
+        self.pinChanged.emit()
+
+    def _video_param(self, nid, name, value):
+        """A video node knob moved: its param, saved and keyed like any node's."""
+        self.doc.node(nid).params[name] = value
         self.paramsChanged.emit(nid)
 
     def _changed(self, nid):
@@ -401,6 +435,14 @@ class Pane(QWidget):
         inputs, which files were picked for them."""
         if nid in self.notes:
             self.notes[nid].setText(text)
+
+    def set_standing(self, nid, text):
+        """The line under `nid`'s settings: why it does not run, or what its run said, from the
+        runtime through the window; "" hides it."""
+        lab = self.standings.get(nid)
+        if lab is not None:
+            lab.setText(text)
+            lab.setVisible(bool(text))
 
     def set_source(self, path, fps):
         """The video every Export, and every settings widget with a `set_source`, writes from; None

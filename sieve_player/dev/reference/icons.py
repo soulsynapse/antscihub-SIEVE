@@ -1,17 +1,12 @@
 """Dev > Icon reference: every icon in the Tabler catalogue, drawn by Qt the way the window would
-draw it, with the knobs that decide how a vendored one will look: size, stroke, ink, filled.
-
-The catalogue is tabler.zip beside this file, written by build_icons.py beside it; it is not in
-the repo, so the sheet offers the download when it is missing. The sheet paints its own tiles, so five thousand icons cost one widget
-and one pixmap each per knob setting. Tabler draws its filled style as separate icons, so the filled
-knob shows those and only those. The filter matches names and Tabler's tags; a click picks an icon, which
-puts its name on the clipboard and its name, tags and category in the knobs layer, so the names and
-tooltips knobs are for scanning, never needed to identify one.
+draw it, with knobs for size, stroke, ink and filled. The catalogue is tabler.zip beside this
+file, written by build_icons.py and not in the repo, so the sheet offers the download when it is
+missing. The sheet paints its own tiles, so five thousand icons cost one widget. A click puts the
+icon's name on the clipboard and its name, tags and category in the knobs layer.
 
 Two marks record Kendrick's judgement and persist in marks.json beside this file, which is in the
-repo: a double-click makes an icon a favourite (accent outline), a right-click marks it no use
-(drawn dim). Three show knobs, unmarked / favourites / no use, pick which kinds the sheet shows;
-no use starts hidden.
+repo: a double-click makes an icon a favourite, a right-click marks it no use. Three show knobs,
+unmarked / favourites / no use, pick which the sheet shows; no use starts hidden.
 """
 from __future__ import annotations
 

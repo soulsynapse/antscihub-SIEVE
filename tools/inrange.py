@@ -1,6 +1,6 @@
 """Frame tool: the mask of pixels inside an HSV box, as color_detector_v2 draws it.
 
-BGR in, 0/255 mask out. Bounds are on cv2's scale (H 0-179, S and V 0-255). Hue is circular, so
+BGR or HSV in, 0/255 mask out; an hsv node upstream converts once for every inrange reading it. Bounds are on cv2's scale (H 0-179, S and V 0-255). Hue is circular, so
 h_lo above h_hi selects the two outer strips (reds); S and V do not wrap. A channel at its full
 range constrains nothing. `load_bounds(path)` reads the detector's settings JSON into params; the
 card's Load… button does the same by hand, and the `settings` path input does it from whatever
@@ -13,14 +13,14 @@ import cv2
 import numpy as np
 
 SIEVE_TOOL = True
-NAME, KIND, EXPECTS, PRODUCES = "inrange", "frame", "bgr", "mask"
+NAME, KIND, EXPECTS, PRODUCES = "inrange", "frame", ("bgr", "hsv"), "mask"
 H_MAX, SV_MAX = 179, 255
 DEFAULTS = {"h_lo": 0, "h_hi": H_MAX, "s_lo": 0, "s_hi": SV_MAX, "v_lo": 0, "v_hi": SV_MAX}
 PATHS = {"settings": lambda path: load_bounds(path)}
 
 
 def run(frames, row, params):
-    hsv = cv2.cvtColor(frames(row), cv2.COLOR_BGR2HSV)
+    hsv = frames(row) if frames.type() == "hsv" else cv2.cvtColor(frames(row), cv2.COLOR_BGR2HSV)
     h0, h1 = params["h_lo"], params["h_hi"]
     lo = [h0, params["s_lo"], params["v_lo"]]
     hi = [h1, params["s_hi"], params["v_hi"]]

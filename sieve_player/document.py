@@ -1,24 +1,11 @@
-"""The saved form of a pipeline.
+"""The saved form of a pipeline: nodes, wires, the display, overlay and pinned flags, the video path
+as written, and nothing of the canvas's view or the runtime's memo.
 
-Nodes, wires, the display and overlay flags and the video path; nothing of the canvas's view or the runtime's
-memo. A node may carry a band, two values in its output's units: the runtime zeroes every pixel of
-a plane, or every row of a series node's signal, outside it (inside it when lo is above hi) before
-anything downstream reads the node, and the handles on the pane's density or trace are its control.
-It changes results, so it is saved with the node; a series node without one keeps every row. This
-module imports neither Qt nor cv2 nor any other part of the player. Where a function
-needs a tool's facets (EXPECTS, PRODUCES) it is handed the tools, as a mapping of name to module
-or as the modules themselves; the document stores only names.
-
-The video is a node like any other, with the reserved tool name VIDEO_TOOL, so that wires can name
-it. Its path is kept on the document, not in the node's params, so it can be stored as written and
-resolved against the document's folder on load.
-
-The video node has one input, of type PATH. A selector is a tool that produces PATH and expects
-nothing; wired into the video node, its `select(folder, params)` answers which file the document
-means, from the document's folder, and the answer is written into `video` so a reader without the
-selector's tool opens the same file (see `pick_video`). Any tool may declare path inputs of its
-own in PATHS, name to a loader of params from the file; a selector wired into one answers the
-file (see `pick_path`) and the window hands it to the loader. A path input never reaches `run`.
+Imports neither Qt nor cv2 nor any other part of the player. The document stores tool names only;
+a function that needs a tool's facets is handed the tools, a mapping of name to module or the
+modules themselves. The video is a node under the reserved name VIDEO_TOOL so wires can name it;
+its path lives on the document, resolved against the document's folder on load. A node's band is
+read by the runtime before anything downstream sees the node, so it is saved with the node.
 """
 import json
 import os
@@ -26,12 +13,15 @@ from dataclasses import dataclass, field
 
 VERSION = 1
 VIDEO_TOOL = "video"        # the reserved tool name of the node the decoder is
-VIDEO_PRODUCES = "bgr"
+VIDEO_OUTPUT = "output"     # the video node's params: what the decoder hands out, and at what scale, both applied before its cache
+VIDEO_OUTPUTS = ("bgr", "gray", "luma")    # luma: the decoder's own plane, a gray left in the stream's range
+VIDEO_PRODUCES = "bgr"      # what it hands out unless its output param names another of VIDEO_OUTPUTS
+VIDEO_SCALE = "scale"       # a factor in (0, 1]; 1 is the frame as decoded
 PATH = "path"               # the type the video node's input expects and a selector produces
-INPUT = "in"                # every tool today has one input; wires name it so fan-in costs nothing later
+INPUT = "in"                # every tool's first input; INPUTS declares more
 OVERLAYABLE = ("gray", "mask")  # the types the overlay flag is offered on: a single plane the frame can be heated with
 LAYOUT_STEP = 100.0         # vertical spacing of a list-built document
-OPEN = (0.0, float("inf"))  # the band a series node without one is read under: every row kept, and gated
+OPEN = (0.0, float("inf"))  # where a series node's handles rest while it has no band; without one nothing is gated
 
 
 class FormatError(ValueError):
@@ -69,7 +59,8 @@ class Document:
     wires: list = field(default_factory=list)
     display: str | None = None
     overlay: str | None = None                                      # heated over the displayed frame; None is off
-    video: str | None = None                                        # as written
+    pinned: str | None = None                                       # the series node the timeline draws; None is none
+    video: str | None = None                                      # as written
     extra: dict = field(default_factory=dict, repr=False)
     path: str | None = field(default=None, compare=False)           # where it was loaded from or saved to
 
@@ -98,13 +89,15 @@ class Document:
         return node
 
     def remove_node(self, nid):
-        """Removes the node, every wire into or out of it, and either flag if it carried it."""
+        """Removes the node, every wire into or out of it, and any flag it carried."""
         self.nodes = [n for n in self.nodes if n.id != nid]
         self.wires = [w for w in self.wires if nid not in (w.src, w.dst)]
         if self.display == nid:
             self.display = None
         if self.overlay == nid:
             self.overlay = None
+        if self.pinned == nid:
+            self.pinned = None
 
     def connect(self, src, dst, input=INPUT):
         """Wires `src` into `dst`'s input, replacing whatever fed it."""
@@ -115,9 +108,15 @@ class Document:
         self.wires = [w for w in self.wires if not (w.dst == dst and w.input == input)]
 
     def resolve(self, known):
-        """Marks each node whose tool name `known` does not contain; the video node is always known."""
+        """Marks each node whose tool name `known` does not contain; the video node is always known.
+        Given the tools themselves, a mapping of name to module, a resolved node's params are laid
+        over its tool's DEFAULTS, so a param the file lacks, one the tool gained since it was
+        saved, has its value."""
         for n in self.nodes:
             n.unresolved = n.tool != VIDEO_TOOL and n.tool not in known
+            tool = known.get(n.tool) if hasattr(known, "get") else None
+            if tool is not None:
+                n.params = {**getattr(tool, "DEFAULTS", {}), **n.params}
 
     def folder(self):
         """Where relative paths resolve: the document's folder, else the working directory."""
@@ -145,6 +144,7 @@ class Document:
             "video": self.video,
             "display": self.display,
             "overlay": self.overlay,
+            **({"pinned": self.pinned} if self.pinned is not None else {}),
             "nodes": [{"id": n.id, "tool": n.tool, "params": n.params, "pos": list(n.pos),
                        **({"band": list(n.band)} if n.band is not None else {}), **n.extra} for n in self.nodes],
             "wires": [{"from": w.src, "to": w.dst, "input": w.input} for w in self.wires],
@@ -156,9 +156,10 @@ class Document:
         v = d.get("version")
         if not isinstance(v, int) or v > VERSION:
             raise FormatError(f"document is format version {v!r}; this module reads up to {VERSION}")
-        top = {"version", "video", "display", "overlay", "nodes", "wires"}
+        top = {"version", "video", "display", "overlay", "pinned", "nodes", "wires"}
         node_keys = {"id", "tool", "params", "pos", "band"}
-        doc = cls(video=d.get("video"), display=d.get("display"), overlay=d.get("overlay"), extra={k: v for k, v in d.items() if k not in top})
+        doc = cls(video=d.get("video"), display=d.get("display"), overlay=d.get("overlay"), pinned=d.get("pinned"),
+                  extra={k: v for k, v in d.items() if k not in top})
         for nd in d.get("nodes", []):
             if any(n.id == nd["id"] for n in doc.nodes):
                 raise FormatError(f"node id {nd['id']!r} appears twice")
@@ -177,10 +178,17 @@ class Document:
 
 
 def save(doc, path):
-    """Writes the document and records `path` as where it lives."""
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(doc.to_dict(), f, indent=2, ensure_ascii=False)
-        f.write("\n")
+    """Writes the document, whole or not at all, and records `path` as where it lives."""
+    part = f"{os.fspath(path)}.part"
+    try:
+        with open(part, "w", encoding="utf-8") as f:
+            json.dump(doc.to_dict(), f, indent=2, ensure_ascii=False)
+            f.write("\n")
+        os.replace(part, path)
+    except OSError:
+        if os.path.exists(part):
+            os.remove(part)
+        raise
     doc.path = os.fspath(path)
 
 
@@ -210,9 +218,32 @@ def paths(tool):
     return dict(getattr(tool, "PATHS", None) or {})
 
 
+def static(tool):
+    """Whether the tool's output is the same at every row, as STATIC declares: the runtime then
+    computes it once per key and holds it once, and the monitor counts its run per change, not per row."""
+    return bool(getattr(tool, "STATIC", False))
+
+
+def inputs(tool):
+    """A tool's frame inputs after the first, in order: name to the types each expects, as INPUTS
+    declares them; empty if none."""
+    return {name: tuple(t) if isinstance(t, (tuple, list, set)) else (t,)
+            for name, t in (getattr(tool, "INPUTS", None) or {}).items()}
+
+
+def frame_inputs(tool):
+    """Every input `run` reads through `frames`: INPUT first, then each of INPUTS."""
+    return [INPUT, *inputs(tool)]
+
+
+def optional(tool):
+    """The frame inputs after the first that may be unwired, as OPTIONAL names them."""
+    return tuple(getattr(tool, "OPTIONAL", None) or ())
+
+
 def inputs_of(doc, tools, nid):
     """[(input name, types it expects or None)]: PATH on the video node, none on a selector, else
-    the frame input and then each path input."""
+    the frame inputs and then each path input."""
     node = doc.node(nid)
     if node.tool == VIDEO_TOOL:
         return [(INPUT, (PATH,))]
@@ -221,7 +252,7 @@ def inputs_of(doc, tools, nid):
         return [(INPUT, None)]
     if is_selector(tool):
         return []
-    return [(INPUT, expects(tool))] + [(name, (PATH,)) for name in paths(tool)]
+    return [(INPUT, expects(tool)), *inputs(tool).items()] + [(name, (PATH,)) for name in paths(tool)]
 
 
 def wants(doc, tools, nid, input=INPUT):
@@ -276,7 +307,8 @@ def produces(doc, tools, nid, _seen=()):
     """The type `nid` hands out, or None: unresolved, a pass-through nothing feeds, or in a cycle."""
     node = doc.node(nid)
     if node.tool == VIDEO_TOOL:
-        return VIDEO_PRODUCES
+        out = video_output(doc)
+        return "gray" if out == "luma" else out
     p = getattr(_by_name(tools).get(node.tool), "PRODUCES", None)
     if p != "same":
         return p
@@ -284,6 +316,24 @@ def produces(doc, tools, nid, _seen=()):
     if w is None or nid in _seen:
         return None
     return produces(doc, tools, w.src, (*_seen, nid))
+
+
+def video_output(doc):
+    """What the video node hands out, one of VIDEO_OUTPUTS; "bgr" unless its param says otherwise or with no video node."""
+    v = doc.video_node()
+    out = VIDEO_PRODUCES if v is None else v.params.get(VIDEO_OUTPUT, VIDEO_PRODUCES)
+    return out if out in VIDEO_OUTPUTS else VIDEO_PRODUCES
+
+
+def video_scale(doc):
+    """The factor the decoder resizes by, 1.0 unless the video node's param says less; a value
+    outside (0, 1] reads as 1.0."""
+    v = doc.video_node()
+    try:
+        s = 1.0 if v is None else float(v.params.get(VIDEO_SCALE, 1.0))
+    except (TypeError, ValueError):
+        return 1.0
+    return s if 0.0 < s <= 1.0 else 1.0
 
 
 def from_tools(tools, video=None):
@@ -311,24 +361,32 @@ def from_tools(tools, video=None):
 
 
 def fed(doc, nid, tools=None):
-    """Whether the video reaches `nid` through its wires. With `tools`, a node whose tool the names
-    do not resolve, or a wire whose types do not fit, breaks the chain: what the runtime computes."""
+    """Whether the video reaches `nid` through every frame input's wires. With `tools`, a node whose
+    tool the names do not resolve, or a wire whose types do not fit, breaks the chain: what the
+    runtime computes. Without them only the first input is known, and it alone is followed."""
     tools = None if tools is None else _by_name(tools)
-    seen = set()
-    while nid not in seen:
+
+    def reaches(nid, stack):
         node = doc.node(nid)
         if node.tool == VIDEO_TOOL:
             return True
-        seen.add(nid)
-        w = doc.source(nid)
-        if w is None:
+        if nid in stack:
             return False
+        names, skip = [INPUT], ()
         if tools is not None:
             tool = tools.get(node.tool)
-            if tool is None or not fits(doc, tools, w):
+            if tool is None:
                 return False
-        nid = w.src
-    return False
+            names, skip = frame_inputs(tool), optional(tool)
+        for name in names:
+            w = doc.source(nid, name)
+            if w is None and name in skip:
+                continue
+            if w is None or (tools is not None and not fits(doc, tools, w)) or not reaches(w.src, (*stack, nid)):
+                return False
+        return True
+
+    return reaches(nid, ())
 
 
 def fits(doc, tools, wire):
@@ -342,8 +400,8 @@ def fits(doc, tools, wire):
 def validate(doc, tools):
     """Every wire whose destination does not expect what its source produces, every cycle, and every
     node with an input nothing feeds; the video node's input and a selector, which has none, are
-    never unfed. Reports; never refuses. Needs the tools for the types; the
-    other two checks read the document alone."""
+    never unfed. Reports; never refuses. Needs the tools for the types and the unfed
+    check; the cycle check reads the document alone."""
     tools = _by_name(tools)
     out = []
     for w in doc.wires:
@@ -367,6 +425,10 @@ def validate(doc, tools):
         if n.id not in state:
             walk(n.id, [n.id])
     for n in doc.nodes:
-        if n.tool != VIDEO_TOOL and not is_selector(tools.get(n.tool)) and doc.source(n.id) is None:
-            out.append(Problem("unfed", n.id, f"{n.id} has no input"))
+        tool = tools.get(n.tool)
+        if n.tool == VIDEO_TOOL or is_selector(tool):
+            continue
+        for name in [INPUT] if tool is None else frame_inputs(tool):
+            if doc.source(n.id, name) is None and name not in optional(tool):
+                out.append(Problem("unfed", n.id, f"{n.id} has no input" if name == INPUT else f"{n.id}'s {name} is unfed"))
     return out

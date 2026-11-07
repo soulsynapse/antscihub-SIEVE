@@ -158,12 +158,37 @@ def open_window(tmp_path, tools):
 
 def test_a_selector_into_a_path_input_lands_params_on_the_node(tmp_path):
     doc, tools = settings_tree(tmp_path)
-    assert D.inputs_of(doc, tools, "inrange") == [(D.INPUT, (inrange.EXPECTS,)), ("settings", (D.PATH,))]
+    assert D.inputs_of(doc, tools, "inrange") == [(D.INPUT, inrange.EXPECTS), ("settings", (D.PATH,))]
     win = open_window(tmp_path, tools)
     said = inrange.load_bounds(str(tmp_path / "colour.json"))
     p, shown = win.doc.node("inrange").params, win.pane.widget("inrange").params()
     assert said and all(p[k] == v and shown[k] == v for k, v in said.items())
     assert "colour.json" in win.pane.notes["inrange"].text() and "inrange" not in win.canvas.errors
+    win.close()
+
+
+def test_loading_by_hand_twice_opens_the_second_video(tmp_path):
+    import cv2
+    import numpy as np
+
+    paths = []
+    for name in ("a.avi", "b.avi"):
+        p = tmp_path / name
+        w = cv2.VideoWriter(str(p), cv2.VideoWriter_fourcc(*"MJPG"), 30, (16, 16))
+        for _ in range(3):
+            w.write(np.zeros((16, 16, 3), np.uint8))
+        w.release()
+        paths.append(str(p))
+    from tools import gray as real_gray
+    D.save(D.from_tools([real_gray]), tmp_path / "doc.json")
+    win = open_window(tmp_path, [real_gray])
+    for p in paths:
+        win.load(p)
+        assert os.path.normcase(str(win.decoder.path)) == os.path.normcase(p)
+        assert win.doc.video_path() == os.path.normpath(p)
+    win.load(str(tmp_path / "missing.avi"))
+    assert os.path.normcase(str(win.decoder.path)) == os.path.normcase(paths[1])
+    assert win.doc.video_path() == os.path.normpath(paths[1])
     win.close()
 
 

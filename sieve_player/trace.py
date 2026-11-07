@@ -1,13 +1,11 @@
-"""The dump: the probe's stream written to a file as it arrives, one JSON line per event behind a
-header line of what no event carries, so a reader derives from the file what a recorder exists to
-derive and a file a crash closed reads back to its last complete line. Beside the events the dump
-holds samples, lines that measure where the probe only carries: the process's resident memory at
-each progress event, and how late the GUI thread's timer fired, which the window reports while a
-dump is attached. The emitting thread only appends each event to a list; a writer thread encodes
-and writes a batch at a time. `to_trace()` converts a dump to the Chrome trace event format, for
-Perfetto or chrome://tracing.
+r"""The dump: the probe's stream written to a file as it arrives, one JSON line per event behind a
+header line of what no event carries, so a file a crash closed reads back to its last complete
+line. Beside the events sit samples the probe does not carry, resident memory at each progress
+event and how late the GUI thread's timer fired, which the window reports while a dump is attached.
+The emitting thread only appends to a list; a writer thread encodes and writes a batch at a time.
+`to_trace()` converts a dump to the Chrome trace event format, for Perfetto or chrome://tracing.
 
-    .venv\\Scripts\\python -m sieve_player.trace dump.jsonl trace.json
+    .venv\Scripts\python -m sieve_player.trace dump.jsonl trace.json
 """
 import json
 import sys

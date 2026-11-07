@@ -38,8 +38,11 @@ def test_holds_nodes_wires_flags_video():
     assert doc.node("gray") == D.Node("gray", "gray", {"k": 3}, (10.5, 120.0))
     assert doc.wires == [D.Wire("video", "gray", D.INPUT)]
     assert doc.display == "gray" and doc.overlay == "gray" and doc.video == "clip.mp4"
+    assert "pinned" not in doc.to_dict()
+    doc.pinned = "gray"
+    assert D.Document.from_dict(json.loads(json.dumps(doc.to_dict()))).pinned == "gray"
     doc.remove_node("gray")
-    assert doc.display is None and doc.overlay is None
+    assert doc.display is None and doc.overlay is None and doc.pinned is None
 
 
 def test_band_rides_with_its_node_and_is_absent_until_set():
@@ -53,7 +56,10 @@ def test_band_rides_with_its_node_and_is_absent_until_set():
 def test_round_trip(tmp_path):
     doc = two_nodes()
     D.save(doc, tmp_path / "a.sieve")
-    assert D.load(tmp_path / "a.sieve") == doc
+    assert D.load(tmp_path / "a.sieve") == doc and list(tmp_path.iterdir()) == [tmp_path / "a.sieve"]   # written whole: no part left
+    with pytest.raises(OSError):
+        D.save(doc, tmp_path / "a.sieve" / "under-a-file")       # a save that fails leaves no part either
+    assert list(tmp_path.iterdir()) == [tmp_path / "a.sieve"]
 
 
 def test_file_is_versioned_readable_json(tmp_path):
@@ -97,6 +103,21 @@ def test_from_tools_wires_nearest_producer():
     assert doc.display == "threshold" and doc.node("threshold").params == {"thresh": 128}
 
 
+def test_the_video_node_produces_what_its_output_param_says():
+    doc = D.from_tools(TOOLS)
+    assert D.video_output(doc) == D.produces(doc, TOOLS, "video") == "bgr"
+    doc.video_node().params["output"] = "gray"
+    assert D.produces(doc, TOOLS, "video") == "gray" and D.produces(doc, TOOLS, "rescale") == "gray"
+    assert [p.where for p in D.validate(doc, TOOLS) if p.kind == "type"] == ["video -> gray"]   # gray expects bgr
+    doc.video_node().params["output"] = "nonsense"
+    assert D.video_output(doc) == "bgr"
+    assert D.video_scale(doc) == 1.0
+    doc.video_node().params["scale"] = 0.25
+    assert D.video_scale(doc) == 0.25
+    doc.video_node().params["scale"] = 3
+    assert D.video_scale(doc) == 1.0
+
+
 def test_validate_type_cycle_unfed():
     doc = D.from_tools(TOOLS)
     doc.connect("video", "threshold")                       # bgr into a gray input
@@ -119,3 +140,13 @@ def test_video_path_relative_to_document(tmp_path):
     assert doc.video_path() == os.path.normpath(tmp_path / "b" / "clip.mp4")
     doc.video = os.path.abspath("elsewhere.mp4")
     assert doc.video_path() == doc.video
+
+
+def test_load_fills_missing_params_from_defaults(tmp_path):
+    doc = two_nodes()
+    doc.add_node("threshold", (0, 240), {})
+    D.save(doc, tmp_path / "a.sieve")
+    loaded = D.load(tmp_path / "a.sieve", known={"gray": gray, "threshold": threshold})
+    assert loaded.node("threshold").params == {"thresh": 128}
+    assert loaded.node("gray").params == {"k": 3}
+    assert D.load(tmp_path / "a.sieve", known={"gray", "threshold"}).node("threshold").params == {}

@@ -10,7 +10,7 @@ after coarsegrain(mean) no longer has them.
 """
 import numpy as np
 
-from tools.coarsegrain import reduce_blocks
+from tools._blocks import reduce_blocks
 
 SIEVE_TOOL = True
 NAME, KIND, EXPECTS, PRODUCES = "agreement", "frame", "flow", "gray"

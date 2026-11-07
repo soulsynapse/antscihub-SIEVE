@@ -13,6 +13,26 @@ def walk(g, rows):
         g.progress(r + 1, len(rows))
 
 
+def test_a_static_node_costs_a_change_and_not_a_row():
+    from types import SimpleNamespace as Tool
+    const = Tool(NAME="const", KIND="frame", EXPECTS="gray", PRODUCES="gray", DEFAULTS={}, STATIC=True,
+                 run=lambda frames, row, params: frames(row) * 0)
+    doc = fan_out()
+    doc.add_node("const", (0, 400))
+    doc.connect("gray", "const")
+    g = Graph(doc, Dec(), {**TOOLS, "const": const})
+    mon = Monitor(g)
+    g.serving("walk")
+    for r in range(5):
+        g.compute("const", r)
+        g.progress(r + 1, 5)
+    s = mon.snapshot()
+    const_n = next(n for n in s["nodes"] if n["node"] == "const")
+    assert const_n["static"] and const_n["runs"] == 1 and const_n["row_ms"] == 0.0
+    assert s["cold_row_ms"] == sum(n["row_ms"] for n in s["nodes"]) + s["other_row_ms"] + s["series_row_ms"]
+    assert const_n["change_s"] >= const_n["run_ms"] / 1000 and "per change" in table(s)
+
+
 def test_shares_are_this_walks_and_the_means_outlive_a_restart():
     doc = fan_out()
     g = Graph(doc, Dec(), TOOLS, memo_bytes=200)             # too small: every row reruns

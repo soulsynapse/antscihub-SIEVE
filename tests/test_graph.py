@@ -9,19 +9,22 @@ import numpy as np
 import pytest
 
 from sieve_player import document as D
-from sieve_player.graph import Event, Graph, Stats, gated
+from sieve_player.decoder import EndOfStream
+from sieve_player.graph import Event, Graph, Stats, gated, nbytes
+from sieve_player.plan import base_key, plan
 
 
 class Dec:
     path, fps, count = "fake.mp4", 30.0, 10
     decodes = seeks = reads = cache_hits = cache_bytes = 0
     step_ms = seek_ms = None
+    output, scale = "bgr", 1.0
 
     def read(self, row):
         if row >= self.count:
-            raise IndexError(row)
+            raise EndOfStream(row)
         self.decodes += 1
-        return np.full((4, 6, 3), row, np.uint8)
+        return np.full((4, 6, 3) if self.output == "bgr" else (4, 6), row, np.uint8)
 
     def cached(self, row):
         return None
@@ -54,8 +57,19 @@ def fan_out():
 
 
 def test_built_from_document_and_decoder():
-    g = Graph(fan_out(), Dec(), TOOLS)
+    dec, doc = Dec(), fan_out()
+    g = Graph(doc, dec, TOOLS)
     assert g.shown == "add" and g.walk == "add" and g.over is None
+    dec.count = 7                                                      # the decoder found the header lied
+    assert g.count == 7
+    k = g.key("gray")
+    doc.video_node().params["output"] = "gray"                        # the video hands out gray: the decoder is told, every key moves
+    g.sync()
+    assert dec.output == "gray" and g.key("gray") != k and not g.fed("gray") and g.compute("video", 0).shape == (4, 6)
+    k = g.key("gray")
+    doc.video_node().params["scale"] = 0.5
+    g.sync()
+    assert dec.scale == 0.5 and g.key("gray") != k
 
 
 def test_a_band_zeroes_the_plane_outside_it_after_run_and_keys_the_node():
@@ -108,6 +122,82 @@ def test_unwired_computes_none_downstream():
     assert g.compute("gray", 0) is None and g.compute("add", 0) is None and g.compute("same", 0) is None
 
 
+def test_a_second_input_is_read_by_name_keyed_and_required():
+    diff = tool("diff", fn=lambda f, p: f)
+    diff.INPUTS = {"bg": "gray"}
+    diff.run = lambda frames, row, params: frames(row) - frames(row, "bg")
+    doc = fan_out()                                  # video -> gray -> {add, same}
+    doc.add_node("diff", (0, 400))
+    doc.connect("add", "diff")
+    g = Graph(doc, Dec(), {**TOOLS, "diff": diff})
+    assert g.compute("diff", 2) is None and not g.fed("diff")                 # bg unwired: unfed, as a missing first input is
+    assert [p.where for p in D.validate(doc, {**TOOLS, "diff": diff}) if p.kind == "unfed"] == ["diff"]
+    diff.OPTIONAL = ("bg",)
+    diff.run = lambda frames, row, params: frames(row) if frames(row, "bg") is None else frames(row) - frames(row, "bg")
+    g.sync()
+    assert g.fed("diff") and (g.compute("diff", 2) == 4).all()                # optional and unwired: read as None; add alone
+    assert not [p for p in D.validate(doc, {**TOOLS, "diff": diff}) if p.kind == "unfed"]
+    doc.connect("same", "diff", "bg")
+    g.sync()
+    k = g.key("diff")
+    assert (g.compute("diff", 2) == 1).all()                                  # add is gray + 1, same is gray
+    doc.node("same").params["k"] = 2                                          # no effect on same's output, but behind bg
+    g.sync()
+    assert g.key("diff") != k and D.inputs_of(doc, {**TOOLS, "diff": diff}, "diff") == [("in", ("gray",)), ("bg", ("gray",))]
+
+
+def test_a_read_after_the_node_moved_on_or_a_halt_is_cancelled():
+    from sieve_player.graph import Cancelled
+    doc = fan_out()
+    g = Graph(doc, Dec(), TOOLS)
+    seen = []
+
+    def many(frames, row, params):      # a composite: many reads in one run
+        for r in range(8):
+            seen.append(r)
+            frames(r)
+            if r == 2:
+                doc.node("gray").params["k"] = 5        # the user moves a knob upstream mid-build
+                g.sync()
+        return frames(0)
+
+    add.run, keep = many, add.run
+    try:
+        kinds = []
+        g.on_event = lambda ev: kinds.append(ev.kind) if ev.node == "add" else None
+        with pytest.raises(Cancelled):
+            g.compute("add", 0)
+        assert seen == [0, 1, 2, 3] and kinds[-1] == "cancel" and g.memo.get((g.key("add"), 0)) is None
+        g.halt = True
+        with pytest.raises(Cancelled):
+            g.compute("same", 1)
+    finally:
+        add.run, g.halt = keep, False
+
+
+def test_a_static_node_is_computed_once_held_once_and_peeked_at_any_row():
+    const = tool("const", fn=lambda f, p: np.full_like(f, p["k"]))
+    const.STATIC = True
+    doc = fan_out()
+    doc.add_node("const", (0, 400), {"k": 1})
+    doc.connect("gray", "const")
+    g = Graph(doc, Dec(), {**TOOLS, "const": const}, memo_bytes=200)
+    runs, held = const.runs, g.memo.bytes
+    assert (g.compute("const", 0) == 1).all() and (g.compute("const", 7) == 1).all() and const.runs == runs + 1
+    assert g.memo.bytes == held + 4 * 6 + 4 * 6                       # the plane once, and gray at row 0 once
+    assert g.peek(9, "const") is not None and g.density("const", 3) is g.density("const", 8)
+    for row in range(10):                                                 # a walk past the memo's limit evicts every plane but the static one
+        g.compute("add", row)
+    assert g.memo.evictions and g.peek(9, "const") is not None and g.compute("const", 5) is not None and const.runs == runs + 1
+    old, fold = (g._plan["const"].raw_key, None), g.density("const", 3)
+    g.sync()
+    assert g.memo.get(old) is not None and g.density("const", 3) is fold   # a sync that leaves the node alone keeps both pins
+    doc.node("const").params["k"] = 2
+    g.sync()
+    assert g.memo.get(old) is None and g.density("const", 3) is not fold   # the plan they were pinned under is gone
+    assert (g.compute("const", 7) == 2).all() and const.runs == runs + 2
+
+
 def test_key_follows_params_and_wiring():
     doc = fan_out()
     g = Graph(doc, Dec(), TOOLS)
@@ -150,11 +240,20 @@ def test_rewire_during_walk():
     assert not errors and (g.compute("slow", 0) == g.compute("gray", 0) + 100).all()
 
 
-def test_two_series_nodes_one_runs():
-    s1, s2 = tool("s1", kind="series", produces=None), tool("s2", kind="series", produces=None)
+def test_series_nodes_reading_the_walked_node_are_all_heads():
+    """Two series nodes on gray both run; one on a different frame node is unrun; the fold is shared
+    only when the heads agree on it."""
+    s1, s2, s3 = (tool(n, kind="series", produces=None) for n in ("s1", "s2", "s3"))
+    s1.fold = s2.fold = lambda frame: np.asarray([frame.sum()])
     doc = D.from_tools([gray, s1, s2])
-    g = Graph(doc, Dec(), {**TOOLS, "s1": s1, "s2": s2})
-    assert g.series == "s1" and g.chain == ["s1"] and g.unrun_series == ["s2"] and g.walk == "gray"
+    doc.add_node("add", (0, 300)); doc.connect("gray", "add")
+    doc.add_node("s3", (0, 400)); doc.connect("add", "s3")
+    g = Graph(doc, Dec(), {**TOOLS, "s1": s1, "s2": s2, "s3": s3})
+    assert g.series == "s1" and g.heads == g.chain == ["s1", "s2"] and g.unrun_series == ["s3"] and g.walk == "gray"
+    assert g.fold is s1.fold and g.walk_row(2).tolist() == [24 * 3]
+    s2.fold = lambda frame: np.asarray([frame.max()])
+    g.sync()
+    assert g.fold is None and g.walk_row(2).shape == (4, 6)
     doc.connect("video", "s1")                  # "bgr" into a series node that expects "gray"
     g.sync()
     assert g.walk is None
@@ -188,26 +287,27 @@ def test_a_series_band_gates_the_signal_and_zeroes_what_the_next_reads():
     assert r["gate"].tolist() == [True, False, False, False, True] and feed.tolist() == [0.0, 0.0, 0.0, 0.0, 20.0]
     r, feed = gated({"signal": sig}, None)
     assert r["gate"].all() and feed.tolist() == sig.tolist()
+    r, feed = gated({"signal": np.array([-3.0, 0.0, 4.0])}, None)         # no band gates nothing, a negative row included
+    assert r["gate"].all() and feed.tolist() == [-3.0, 0.0, 4.0]
     assert gated({"other": 1}, (0.0, 1.0)) == ({"other": 1}, None)
 
 
 def test_one_compute_sees_one_plan():
-    """A sync between a node's run() starting and its frames(row) call: the value memoized under the
-    old key is the old graph's, so flipping the param back serves the right frame."""
+    """A sync between a node's run() starting and its frames(row) call that leaves the node's key
+    alone: the run reads through the plan it began in, finishes, and is memoized under that key. A
+    sync that changes the key cancels the read instead; see the cancellation test."""
     doc = fan_out()
     g = Graph(doc, Dec(), TOOLS)
 
     def run(frames, row, params):
-        doc.node("gray").params["k"] = 50       # upstream changes while this node is mid-run
+        doc.node("same").params["k"] = 50       # a sibling changes while this node is mid-run
         g.sync()
         return frames(row) + params["k"]
     add.run, old = run, add.run
     try:
         k_old = g.key("add")
         v = g.compute("add", 0)
-        assert (v == 0 + 1 + 1).all()                            # gray's k was 1 when this compute began
-        doc.node("gray").params["k"] = 1
-        g.sync()
+        assert (v == 0 + 1 + 1).all()
         assert g.key("add") == k_old and g.compute("add", 0) is v        # served from the memo, not recomputed
     finally:
         add.run = old
@@ -356,3 +456,303 @@ def test_a_density_is_folded_once_under_the_node_and_memoized_beside_its_plane()
     seen.clear()
     assert (g.density("gray", 3) == counts).all() and seen == []           # held: no run, no fold
     assert g.density("video", 3) is None and g.density("nowhere", 3) is None and seen == []
+
+
+def test_the_clip_walk_runs_behind_the_window_and_a_frame_change_drops_it():
+    """Asked for, the clip walk covers every row from the first once the window is walked, and the
+    chain's result over it arrives as clipReady; a change to a frame tool abandons it and says so
+    with an empty clipReady, while a series-only change reruns the chain on the clip's stack."""
+    from PySide6.QtWidgets import QApplication
+    from sieve_player.worker import Worker
+    QApplication.instance() or QApplication([])
+    head = tool("head", kind="series", produces="signal")
+    head.run = lambda series, params: {"signal": np.asarray(series.data, np.float64).reshape(len(series.data), -1)[:, 0] + params["k"]}
+    head.fold = lambda frame: np.asarray([float(frame.mean())])
+    doc = D.from_tools([gray, head])
+    g = Graph(doc, Dec(), {**TOOLS, "head": head})
+    w = Worker(g, every=3)
+    clips, walked, windows = [], [], []
+    w.clipReady.connect(lambda r, s, fps: clips.append((r, s)))
+    w.clipWalked.connect(lambda d, n: walked.append((d, n)))
+    w.seriesReady.connect(lambda r, s, fps: windows.append((r, s)))
+    w.set_window(4, 3)
+    w.walk_clip()
+    w.start()
+    for _ in range(500):
+        QApplication.processEvents()
+        if clips and len(clips[-1][0].get("head", {}).get("signal", ())) == 10:
+            break
+        time.sleep(0.01)
+    assert walked[-1] == (10, 10) and clips[-1][1] == 0
+    assert clips[-1][0]["head"]["signal"].tolist() == [r + 1 + 1 for r in range(10)]   # gray adds k=1, head adds k=1
+    assert windows and len(windows[-1][0]["head"]["signal"]) == 3 and windows[-1][1] == 4
+    assert windows[0][1] == 4 and clips[0][1] == 0 and walked[0][0] == 0            # the window's result came first
+    doc.node("head").params["k"] = 5
+    g.sync()
+    w.request_row(2)                            # a row request pending beside the rerun must not swallow it
+    w.rerun_series()
+    for _ in range(500):
+        QApplication.processEvents()
+        if clips[-1][0]["head"]["signal"][0] == 6:
+            break
+        time.sleep(0.01)
+    assert clips[-1][0]["head"]["signal"].tolist() == [r + 1 + 5 for r in range(10)]
+    w.invalidate()
+    for _ in range(500):
+        QApplication.processEvents()
+        if clips[-1][0] == {}:
+            break
+        time.sleep(0.01)
+    w.stop()
+    assert clips[-1] == ({}, 0) and walked[-1] == (0, 0)
+
+
+def test_a_tool_raising_indexerror_fails_the_walk_and_only_the_stream_end_closes_it():
+    """The worker closes a window early on EndOfStream alone; a tool's own IndexError is a failure
+    said on the node, never a shorter clip with a clean trace."""
+    from PySide6.QtWidgets import QApplication
+    from sieve_player.worker import Worker
+    QApplication.instance() or QApplication([])
+    bad = tool("bad", fn=lambda f, p: f[99] if int(f.flat[0]) == 3 else f)
+    doc = D.from_tools([gray, bad])
+    g = Graph(doc, Dec(), {**TOOLS, "bad": bad})
+    w = Worker(g)
+    failed, walked = [], []
+    w.failed.connect(lambda r, n: failed.append((r, n)))
+    w.walked.connect(lambda d, n: walked.append((d, n)))
+    w.set_window(0, 8)
+    w.start()
+    for _ in range(300):
+        QApplication.processEvents()
+        if failed:
+            break
+        time.sleep(0.01)
+    assert failed == [(2, "bad")] and walked[-1] == (2, 8) and g.standing("bad").startswith("raised at row 2: IndexError")
+    w.request_row(2)                            # the display asking for the row fails the same way, and says so
+    for _ in range(300):
+        QApplication.processEvents()
+        if len(failed) == 2:
+            break
+        time.sleep(0.01)
+    assert failed[-1] == (2, "bad")
+    w.set_window(8, 5)                          # past the fake stream's ten rows: the window closes where the stream ends
+    for _ in range(300):
+        QApplication.processEvents()
+        if walked[-1] == (2, 2):
+            break
+        time.sleep(0.01)
+    w.stop()
+    assert walked[-1] == (2, 2) and len(failed) == 2
+
+
+def test_a_clip_stack_of_tables_is_counted_through_its_object_columns():
+    """nbytes reads the arrays behind an object field; the clip walk stops where the running total
+    passes STACK_BYTES, the rows it has standing, where the first row's forecast let it start."""
+    from PySide6.QtWidgets import QApplication
+    from sieve_player import worker as W
+    QApplication.instance() or QApplication([])
+    t = np.empty(2, dtype=[("x", "<i4"), ("contour", object)])
+    t["contour"] = [np.zeros((100, 2), np.int32), None]
+    stack = np.empty(2, object)
+    stack[:] = [t, t]
+    assert t.nbytes == 24 and nbytes(t) == 24 + 800 and nbytes(stack) == 16 + 2 * 824 and nbytes({}) == 64
+    table = tool("table", produces="blobs", fn=lambda f, p: np.array([(0, np.zeros((50 * int(f.flat[0]), 2), np.int32))], dtype=t.dtype))
+    head = tool("head", kind="series", expects="blobs", produces="signal")
+    head.run = lambda series, params: {"signal": np.array([len(r) for r in series.data], np.float32)}
+    doc = D.from_tools([gray, table, head])
+    g = Graph(doc, Dec(), {**TOOLS, "table": table, "head": head})
+    w = W.Worker(g)
+    W.STACK_BYTES = 10_000           # ten rows of row 0's 424 B pass the forecast; the contours grow 400 B a row
+    refused, walked, clips = [], [], []
+    w.clipRefused.connect(refused.append)
+    w.clipWalked.connect(lambda d, n: walked.append((d, n)))
+    w.clipReady.connect(lambda r, s, fps: clips.append(r))
+    try:
+        w.set_window(0, 2)
+        w.walk_clip()
+        w.start()
+        for _ in range(500):
+            QApplication.processEvents()
+            if refused:
+                break
+            time.sleep(0.01)
+        w.stop()
+    finally:
+        W.STACK_BYTES = 512 << 20
+    assert refused and refused[0].startswith("the clip's stack reached") and walked[-1][0] == walked[-1][1] < 10
+    assert len(clips[-1]["head"]["signal"]) == walked[-1][0]
+
+
+def test_a_shown_table_walks_without_a_series_node():
+    """blobs shown with nothing reading it: the walk is that node, each row a table of its own length,
+    and the walk finishes instead of reading every row as a shape change and starting over."""
+    from PySide6.QtWidgets import QApplication
+    from sieve_player.worker import Worker
+    QApplication.instance() or QApplication([])
+    table = tool("table", produces="blobs", fn=lambda f, p: np.zeros(int(f.flat[0]) % 3, dtype=[("x", "<i4")]))
+    doc = D.from_tools([gray, table])
+    doc.display = "table"
+    g = Graph(doc, Dec(), {**TOOLS, "table": table})
+    w = Worker(g)
+    walked = []
+    w.walked.connect(lambda d, n: walked.append((d, n)))
+    w.set_window(0, 6)
+    w.start()
+    for _ in range(300):
+        QApplication.processEvents()
+        if walked and walked[-1] == (6, 6):
+            break
+        time.sleep(0.01)
+    w.stop()
+    assert walked[-1] == (6, 6) and len(walked) <= 7 and w._stack is None     # nothing reads a stack, so none is held
+
+
+def test_a_window_stack_stops_at_the_byte_limit_as_the_clip_stack_does():
+    """The window's stack is forecast from the first row and summed as it fills; past STACK_BYTES the
+    walk closes at the rows it has, the chain runs over them, and the transport is told why."""
+    from PySide6.QtWidgets import QApplication
+    from sieve_player import worker as W
+    QApplication.instance() or QApplication([])
+    t = np.dtype([("x", "<i4"), ("contour", object)])
+    table = tool("table", produces="blobs", fn=lambda f, p: np.array([(0, np.zeros((50 * int(f.flat[0]), 2), np.int32))], dtype=t))
+    head = tool("head", kind="series", expects="blobs", produces="signal")
+    head.run = lambda series, params: {"signal": np.array([len(r) for r in series.data], np.float32)}
+    doc = D.from_tools([gray, table, head])
+    g = Graph(doc, Dec(), {**TOOLS, "table": table, "head": head})
+    w = W.Worker(g)
+    W.STACK_BYTES = 10_000
+    refused, walked, got = [], [], []
+    w.walkRefused.connect(refused.append)
+    w.walked.connect(lambda d, n: walked.append((d, n)))
+    w.seriesReady.connect(lambda r, s, fps: got.append(r))
+    try:
+        w.set_window(0, 20)
+        w.start()
+        for _ in range(500):
+            QApplication.processEvents()
+            if refused:
+                break
+            time.sleep(0.01)
+        w.stop()
+    finally:
+        W.STACK_BYTES = 512 << 20
+    assert refused[0].startswith("the window's stack reached") and walked[-1][0] == walked[-1][1] < 20
+    assert len(got[-1]["head"]["signal"]) == walked[-1][0]
+
+
+def test_two_heads_with_different_folds_each_run_on_their_own_folding():
+    """count folds, size does not: both read the same table node and both hand out a signal."""
+    from PySide6.QtWidgets import QApplication
+    from sieve_player.worker import Worker
+    from tools import count, size
+    QApplication.instance() or QApplication([])
+    table = tool("table", produces="blobs", fn=lambda f, p: np.array([(a,) for a in range(1, int(f.flat[0]) + 1 + p["k"])], dtype=[("area", "<i4")]))
+    doc = D.from_tools([gray, table, count])
+    doc.add_node("size", (0, 400), size.DEFAULTS); doc.connect("table", "size")
+    g = Graph(doc, Dec(), {**TOOLS, "table": table, "count": count, "size": size})
+    assert g.chain == ["count", "size"] and g.fold is None
+    w = Worker(g)
+    got = []
+    w.seriesReady.connect(lambda r, s, fps: got.append(r))
+    w.set_window(0, 4)
+    w.start()
+    for _ in range(500):
+        QApplication.processEvents()
+        if got and len(got[-1].get("size", {}).get("signal", ())) == 4:
+            break
+        time.sleep(0.01)
+    assert got[-1]["count"]["signal"].tolist() == [2, 3, 4, 5]          # gray is row + 1; the table has row + 1 + k records
+    assert got[-1]["size"]["signal"].tolist() == [1.5, 2, 2.5, 3]       # mean area of 1..n
+    doc.node("table").params["k"] = 2
+    g.sync()
+    w.invalidate()                              # a new stack of the same shape, likely at the freed one's address, folded afresh
+    for _ in range(500):
+        QApplication.processEvents()
+        if got[-1]["count"]["signal"].tolist() == [3, 4, 5, 6]:
+            break
+        time.sleep(0.01)
+    w.stop()
+    assert got[-1]["count"]["signal"].tolist() == [3, 4, 5, 6]
+
+
+def test_standing_says_why_a_node_does_not_run_and_what_its_run_said():
+    """The plan's reason per node, "" for one that runs; a tool raising leaves its line on the node
+    until the node's key changes; a run that goes through clears a note."""
+    s1, s3 = tool("s1", kind="series", produces=None), tool("s3", kind="series", produces=None)
+    doc = fan_out()
+    doc.add_node("s1", (0, 400)); doc.connect("gray", "s1")
+    doc.add_node("s3", (0, 500)); doc.connect("add", "s3")
+    g = Graph(doc, Dec(), {**TOOLS, "s1": s1, "s3": s3})
+    assert g.standing("video") == g.standing("gray") == g.standing("add") == g.standing("s1") == ""
+    assert g.standing("s3") == "unrun: reads add; the walk is gray, which s1 reads"
+    doc.disconnect("gray")
+    g.sync()
+    assert g.standing("gray") == "in is unwired" and g.standing("add") == "in waits on gray"
+    doc.connect("video", "add")
+    g.sync()
+    assert g.standing("add") == "in expects gray, video produces bgr"
+    doc.disconnect("add"); doc.connect("video", "gray"); doc.connect("gray", "add")
+    bad = tool("bad", fn=lambda f, p: f[99])
+    doc.add_node("bad", (0, 600)); doc.connect("gray", "bad")
+    g = Graph(doc, Dec(), {**TOOLS, "s1": s1, "s3": s3, "bad": bad})
+    with pytest.raises(IndexError) as e:
+        g.compute("bad", 2)
+    assert e.value.sieve_node == "bad" and g.standing("bad").startswith("raised at row 2: IndexError") and g.standing("gray") == ""
+    with pytest.raises(IndexError) as e:
+        g.compute("add", 10)                    # the stream's end is the video node's, not the reader's
+    assert e.value.sieve_node == "video" and g.standing("add") == ""
+    doc.node("bad").params["k"] = 2
+    g.sync()
+    assert g.standing("bad") == ""
+    g.note("bad", "said so")
+    assert g.standing("bad") == "said so"
+    g.note("bad", "")
+    assert g.standing("bad") == ""
+
+
+def test_the_plan_is_pure_in_the_document_and_the_tools():
+    """plan() needs no decoder and says the same twice; the graph's sync holds nothing it does not."""
+    doc = fan_out()
+    base = base_key("fake.mp4", "bgr", 1.0)
+    p, q = plan(doc, TOOLS, base), plan(doc, TOOLS, base)
+    assert p == q and p.shown == doc.display and p.entries["video"].key == base and not p.chain
+    g = Graph(doc, Dec(), TOOLS)
+    assert {nid: e.key for nid, e in p.entries.items()} == {n.id: g.key(n.id) for n in doc.nodes}
+
+
+def test_a_scrub_past_the_end_says_the_count_and_leaves_the_walk_standing():
+    """A header may claim rows the stream lacks. The walk closes where the stream ends and says the
+    count; a display request past it says the count again and neither fails nor closes the walk."""
+    from PySide6.QtWidgets import QApplication
+    from sieve_player.worker import Worker
+    QApplication.instance() or QApplication([])
+
+    class Lying(Dec):
+        count = 12
+
+        def read(self, row):
+            if row >= 10:
+                self.count = 10
+            return super().read(row)
+    g = Graph(D.from_tools([gray]), Lying(), TOOLS)
+    w = Worker(g)
+    failed, walked, short = [], [], []
+    w.failed.connect(lambda r, n: failed.append((r, n)))
+    w.walked.connect(lambda d, n: walked.append((d, n)))
+    w.shortened.connect(short.append)
+    w.set_window(0, 12)
+    w.start()
+    for _ in range(300):
+        QApplication.processEvents()
+        if short:
+            break
+        time.sleep(0.01)
+    assert short == [10] and walked[-1] == (10, 10)
+    w.request_row(11)
+    for _ in range(300):
+        QApplication.processEvents()
+        if len(short) == 2:
+            break
+        time.sleep(0.01)
+    w.stop()
+    assert short == [10, 10] and walked[-1] == (10, 10) and not failed

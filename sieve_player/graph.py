@@ -6,8 +6,6 @@ mid-computation works from one consistent plan and the next computation sees the
 are read from the document's nodes; the runtime holds none of its own. A node is computed as None
 when nothing reaches it: no wire, an unresolved tool, or a wire whose types do not fit.
 """
-import hashlib
-import json
 import threading
 import time
 from collections import OrderedDict, deque
@@ -17,12 +15,8 @@ from dataclasses import dataclass
 import numpy as np
 
 from . import density
-from .document import OPEN, OVERLAYABLE, VIDEO_PRODUCES, VIDEO_TOOL, fed, is_selector, produces
-
-
-def _key(*parts):
-    return hashlib.sha1("|".join(map(str, parts)).encode()).hexdigest()[:16]
-
+from .document import INPUT, video_output, video_scale
+from .plan import _key, base_key, plan, shared_fold, walked
 
 WINDOW = 64     # rows a running mean spans; the decoder's step and seek means keep their own literal, see Decoder._mean
 
@@ -52,33 +46,56 @@ def banded(v, band):
 
 def gated(result, band):
     """A series node's result as the player hands it out: the tool's dict with "gate", the rows its
-    signal keeps under the node's band, and `fed`, the signal with the rest zeroed, which is what a
-    series node downstream reads. A result without a signal passes through ungated, and feeds nothing."""
+    signal keeps under the node's band, and `fed`, what a series node downstream reads: the result's
+    "rows", one table a row, with each gated-out row emptied, when it has them, else the signal with
+    the rest zeroed. A result without a signal passes through ungated, and feeds nothing."""
     if not isinstance(result, dict) or "signal" not in result:
         return result, None
     signal = np.asarray(result["signal"])
-    gate = inband(signal, OPEN if band is None else band)
+    gate = np.ones(len(signal), bool) if band is None else inband(signal, band)
+    if "rows" in result:
+        fed = np.empty(len(result["rows"]), object)
+        fed[:] = [r if g else r[:0] for r, g in zip(result["rows"], gate)]
+        return {**result, "gate": gate}, fed
     return {**result, "gate": gate}, np.where(gate, signal, np.zeros((), signal.dtype))
 
 
+def nbytes(v):
+    """The bytes `v` holds: an array's own and, through an object field or an object array, every
+    array behind it, since `ndarray.nbytes` counts a contour as its eight-byte pointer; 64 for
+    anything else that is not None."""
+    if v is None:
+        return 0
+    if not isinstance(v, np.ndarray):
+        return 64
+    if not v.dtype.hasobject:
+        return v.nbytes
+    held = [x for n in v.dtype.names if v.dtype[n] == object for x in v[n].ravel()] if v.dtype.names else v.ravel()
+    return v.nbytes + sum(nbytes(x) for x in held)
+
+
 class Memo:
-    """LRU bounded by bytes. Image-shaped entries (ndim >= 2) are evicted before small ones. Each
-    eviction goes to `on_evict(key, bytes)` when set, after the lock is dropped."""
+    """LRU bounded by bytes, as `nbytes` counts them. Image-shaped entries (ndim >= 2) are evicted
+    before small ones. An entry put with an owner is pinned: never evicted, counted toward the
+    limit, and gone only through `unpin`, which drops every pinned entry whose owner is not in
+    `keep`, so whatever a STATIC node has memoized under any key outlives any walk and goes with
+    its plan. Each eviction goes to `on_evict(key, bytes)` when set, after the lock is dropped."""
 
     def __init__(self, limit_bytes):
         self.limit = limit_bytes
         self.bytes = 0
-        self._big, self._small = OrderedDict(), OrderedDict()
+        self._big, self._small, self._pinned = OrderedDict(), OrderedDict(), {}     # pinned: key -> (owner, value)
         self._lock = threading.Lock()
         self.hits = self.misses = self.evictions = 0
         self.on_evict = None
 
-    @staticmethod
-    def _size(v):
-        return v.nbytes if isinstance(v, np.ndarray) else 64
+    _size = staticmethod(nbytes)
 
     def get(self, k):
         with self._lock:
+            if k in self._pinned:
+                self.hits += 1
+                return self._pinned[k][1]
             for d in (self._big, self._small):
                 v = d.get(k)
                 if v is not None:
@@ -88,13 +105,29 @@ class Memo:
             self.misses += 1
             return None
 
-    def put(self, k, v):
-        d = self._big if isinstance(v, np.ndarray) and v.ndim >= 2 else self._small
+    def unpin(self, keep):
         gone = []
         with self._lock:
-            if k in self._big or k in self._small:
+            for k in [k for k, (owner, _) in self._pinned.items() if owner not in keep]:
+                _, old = self._pinned.pop(k)
+                self.bytes -= self._size(old)
+                gone.append((k, self._size(old)))
+        if self.on_evict is not None:
+            for ok, n in gone:
+                self.on_evict(ok, n)
+
+    def put(self, k, v, owner=None):
+        """`v` under `k`, pinned to `owner` when one is given; a key already held is left as it is."""
+        gone = []
+        with self._lock:
+            if k in self._big or k in self._small or k in self._pinned:
                 return
-            d[k] = v
+            if owner is not None:
+                self._pinned[k] = (owner, v)
+            elif isinstance(v, np.ndarray) and v.ndim >= 2:
+                self._big[k] = v
+            else:
+                self._small[k] = v
             self.bytes += self._size(v)
             while self.bytes > self.limit:
                 src = self._big or self._small
@@ -109,23 +142,47 @@ class Memo:
                 self.on_evict(ok, n)
 
 
-class Frames:
-    """What a frame tool's run() gets: frames(r) is the output of the node it reads, at row r. It
-    reads through the plan the computation began in, so one run() sees one graph even if the
-    document is synced under it."""
+class Cancelled(Exception):
+    """A run read a frame after the graph had moved on under it, or while the worker was stopping:
+    what it was computing is for a plan that is gone, so the read raises instead of serving it. The
+    worker drops the row; a tool that catches Exception around a read should let this one through."""
 
-    def __init__(self, graph, plan, source, key):
-        self._graph, self._plan, self._source = graph, plan, source
+
+class Frames:
+    """What a frame tool's run() gets: frames(r) is the output of the node its first input reads,
+    at row r, and frames(r, name) that of another of its INPUTS; frames.type(name) is what the node
+    wired into that input produces, for a tool whose EXPECTS admits types its run() must tell
+    apart. `key` changes whenever anything upstream of any input does. It reads through the plan the computation began in, so one run()
+    sees one graph even if the document is synced under it; but a read made once the node's raw key
+    under the current plan differs from the one it began under, or once the graph is halted,
+    raises Cancelled, so a run of many reads, a composite over the clip, dies at its next read
+    rather than finishing work nothing will take."""
+
+    def __init__(self, graph, plan, nid, sources, key, types=None):
+        self._graph, self._plan, self._nid, self._sources = graph, plan, nid, sources
+        self._raw_key, self._types = plan[nid].raw_key, types or {}
         self.key, self.fps, self.count = key, graph.fps, graph.count
 
-    def __call__(self, row):
-        return self._graph._compute(self._plan, self._source, row)
+    def type(self, input=INPUT):
+        return self._types.get(input)
+
+    def __call__(self, row, input=INPUT):
+        g = self._graph
+        now = g._plan.get(self._nid)
+        if g.halt or now is None or now.raw_key != self._raw_key:
+            raise Cancelled(f"{self._nid} at row {row}: the graph moved on")
+        try:
+            return g._compute(self._plan, self._sources[input], row)
+        except Exception as exc:
+            if not hasattr(exc, "sieve_node"):
+                exc.sieve_node = self._sources[input]     # a read that fails is the read node's, never the reader's
+            raise
 
 
 class Series:
     """What a series tool's run() gets: data is (T, ...), the read node stacked over the window, each
-    row through the tool's fold() first when it has one; or, for a series node reading another, the
-    upstream node's (T,) signal with the rows its band shuts out zeroed."""
+    row through the tool's fold() first when it has one; or, for a series node reading another, what
+    `gated` fed from the upstream result: its (T,) signal, or its rows, under the band."""
 
     def __init__(self, data, key, start, fps):
         self.data, self.key, self.start, self.fps = data, key, start, fps
@@ -139,7 +196,7 @@ class Event:
     node: str | None    # the node that ran, or read; None on a boundary
     row: int | None
     key: str | None     # the node's raw key, what the memo holds under
-    kind: str           # "run" | "fold" | "error" | "cache" | "step" | "seek" | "sync" | "evict" | "uncache" | "progress" | "dump"
+    kind: str           # "run" | "fold" | "error" | "cancel" | "cache" | "step" | "seek" | "sync" | "evict" | "uncache" | "progress" | "dump"
     bytes: int          # the result's; what an eviction freed
     ms: float           # wall, exclusive of the runs this one opened
     t: float            # start, on the probe's clock (perf_counter); orders events across threads
@@ -152,96 +209,76 @@ class Event:
     keys: dict | None   # sync only: every node's key under the new plan, band included; diff two to see what a drag changed
 
 
-@dataclass
-class _Entry:
-    """One node as the plan saw it at sync()."""
-    tool: object
-    kind: str           # "video" | "frame" | "series" | "selector"
-    params: dict
-    band: tuple | None  # (lo, hi): what the node's plane, or signal, keeps; see document
-    src: str | None     # the node its input wire names
-    key: str
-    raw_key: str         # the key without the band: what the memo holds
-    src_key: str | None
-    fed: bool
-
-
 class Graph:
-    def __init__(self, doc, decoder, tools, memo_bytes=512 << 20):
+    def __init__(self, doc, decoder, tools, memo_bytes=4 << 30):
         self.doc, self.decoder = doc, decoder
         self.tools = tools if hasattr(tools, "get") else {t.NAME: t for t in tools}
-        self.fps, self.count = decoder.fps, decoder.count
+        self.fps = decoder.fps
         self.memo = Memo(memo_bytes)
         self._lock = threading.Lock()
         self.on_event = None                # the probe's one consumer; see probe() for the event
+        self.halt = False                   # set by whoever is stopping the worker: every Frames read from then on raises Cancelled
         self._probing = threading.local()   # the runs open on this thread, so a run's time excludes its reads
-        self._base = _key("video", decoder.path, VIDEO_PRODUCES)
+        self._base = None                   # the video node's key: the file and what the decoder hands out; set at sync()
         # The two stores report what they discard into the same stream: the memo's entry by its key and
         # row, the decoder cache's frame by its row under the video's key.
         self.memo.on_evict = lambda k, n: self._emit("evict", None, k[1], k[0], n)
         decoder.on_evict = lambda row, n: self._emit("uncache", None, row, self._base, n)
         self._plan = {}
+        self._notes = {}                    # node -> (its key, what the run said): a tool raising, a chain node fed no signal
         self.shown = self.over = self.series = None
-        self.chain, self.unrun_series = [], []
+        self.chain, self.heads, self.unrun_series = [], [], []
         self.sync()
 
+    @property
+    def count(self):
+        """The decoder's, read live: a container's header may claim rows the stream lacks, and the
+        decoder corrects itself at the first read past the end."""
+        return self.decoder.count
+
     def sync(self):
-        """Re-read the document: wiring, params, the flags, which series nodes run."""
-        doc, tools = self.doc, self.tools
-        keys, raw_keys = {}, {}
-
-        def key_of(nid, stack=()):
-            # The raw key names what the tool computes and the memo holds; the key adds the band, which
-            # is applied on read, so what downstream sees is keyed by it and the node's own run is not.
-            if nid not in keys:
-                node = doc.node(nid)
-                if node.tool == VIDEO_TOOL:
-                    keys[nid] = raw_keys[nid] = self._base
-                else:
-                    w = doc.source(nid)
-                    up = "none" if w is None or w.src in stack else key_of(w.src, (*stack, nid))
-                    raw_keys[nid] = _key(up, node.tool, json.dumps(node.params, sort_keys=True))
-                    keys[nid] = raw_keys[nid] if node.band is None else _key(raw_keys[nid], node.band)
-            return keys[nid]
-
-        plan, series = {}, []
-        for n in doc.nodes:
-            tool = tools.get(n.tool)
-            if n.tool == VIDEO_TOOL:
-                kind = "video"
-            elif is_selector(tool):
-                kind = "selector"       # answers a path, once, before the decoder; never a row
-            else:
-                kind = getattr(tool, "KIND", "frame")
-            w = doc.source(n.id)
-            src = w.src if w else None
-            plan[n.id] = _Entry(tool, kind, dict(n.params), n.band, src, key_of(n.id), raw_keys[n.id],
-                                key_of(src) if src else None, fed(doc, n.id, tools))
-            if kind == "series":
-                series.append(n.id)
-        # The head is the first series node reading a frame node: it runs on the walked stack. The
-        # chain is it and every fed series node wired on from a chain node, which run on the
-        # upstream result's signal in this order. Any other series node is unrun.
-        heads = [s for s in series if plan[s].src is None or plan[plan[s].src].kind != "series"]
-        chain = heads[:1]
-        for nid in chain:
-            chain += [s for s in series if plan[s].src == nid and plan[s].fed and s not in chain]
+        """Re-read the document: the plan, pure in the document and the tools (see `plan`), and the
+        decoder's output and scale, which the video node's params set."""
+        output, scale = video_output(self.doc), video_scale(self.doc)
+        self.decoder.output = output        # a change empties its cache; a read in flight under the old plan is cancelled
+        self.decoder.scale = scale
+        self._base = base_key(self.decoder.path, output, scale)
+        p = plan(self.doc, self.tools, self._base)
         with self._lock:
-            self._plan = plan
-            self.shown = doc.display if doc.display in plan else None
-            # The overlay is a node the frame can be heated with: one plane, so only an OVERLAYABLE product.
-            self.over = doc.overlay if doc.overlay in plan and produces(doc, tools, doc.overlay) in OVERLAYABLE else None
-            self.series = chain[0] if chain else None
-            self.chain, self.unrun_series = chain, [s for s in series if s not in chain]
+            self._plan = p.entries
+            self.shown, self.over = p.shown, p.over
+            self.series = p.chain[0] if p.chain else None
+            self.heads, self.chain, self.unrun_series = p.heads, p.chain, p.unrun
+        self.memo.unpin({e.raw_key for e in p.entries.values() if e.static})
         # A boundary in the stream: what runs next ran under a new plan, whose keys it carries.
-        self._emit("sync", None, None, None, 0, keys={nid: e.key for nid, e in plan.items()})
+        self._emit("sync", None, None, None, 0, keys={nid: e.key for nid, e in p.entries.items()})
+
+    def standing(self, nid):
+        """One line on why `nid` does not run, else what its run said under its current key, else
+        "". The plan's reasons: an input unwired, mismatched or waiting on an unfed node, a series
+        node off the chain, a cycle. The notes: a tool raising, a chain node fed no signal."""
+        with self._lock:
+            e = self._plan.get(nid)
+            note = self._notes.get(nid)
+        if e is None:
+            return ""
+        if e.standing:
+            return e.standing
+        return note[1] if note is not None and note[0] == e.key else ""
+
+    def note(self, nid, text):
+        """What `nid`'s run said, kept under its current key so a change to the node drops it;
+        "" clears. The worker and the display write it; the window reads it through `standing`."""
+        with self._lock:
+            e = self._plan.get(nid)
+            if text and e is not None:
+                self._notes[nid] = (e.key, text)
+            else:
+                self._notes.pop(nid, None)
 
     # -- what the worker and the display ask -------------------------------
     def _walk(self):
-        if self.series is None:
-            return self.shown
-        e = self._plan[self.series]
-        return e.src if e.fed else None
+        return walked(self._plan, self.chain, self.shown)
 
     @property
     def walk(self):
@@ -250,12 +287,22 @@ class Graph:
         with self._lock:
             return self._walk()
 
-    def walk_row(self, row):
-        """The walked node at `row` as the worker stacks it: through the head's fold() when it has one,
-        so what the window holds is what the series tool asked for and never the frame. Worker threads only."""
+    def _fold(self):
+        return shared_fold(self._plan, self.heads)
+
+    @property
+    def fold(self):
+        """The fold the walk stacks rows through: the heads' when every one of them has the same,
+        None when they differ or none has one, so that the stack holds the rows as they are."""
         with self._lock:
-            plan, nid = self._plan, self._walk()
-            fold = getattr(plan[self.series].tool, "fold", None) if self.series else None
+            return self._fold()
+
+    def walk_row(self, row):
+        """The walked node at `row` as the worker stacks it: through the heads' shared fold() when
+        they have one, so what the window holds is what the series tools asked for and never the
+        frame. Worker threads only."""
+        with self._lock:
+            plan, nid, fold = self._plan, self._walk(), self._fold()
         out = self._compute(plan, nid, row)
         return out if fold is None or out is None else fold(out)
 
@@ -275,9 +322,9 @@ class Graph:
             return dict(self._plan[self.series].params) if self.series else {}
 
     def series_chain(self):
-        """[(node, tool, params, band, the node it reads)] in run order: the head first, then each
-        series node on from a chain node. The worker feeds the head the stack and the rest the
-        upstream result's signal under its band (see `gated`)."""
+        """[(node, tool, params, band, the node it reads)] in run order: the heads first, then each
+        series node on from a chain node. The worker feeds each head the stack and the rest what
+        `gated` fed from the upstream result under its band, its signal or its rows."""
         with self._lock:
             return [(nid, self._plan[nid].tool, dict(self._plan[nid].params), self._plan[nid].band, self._plan[nid].src)
                     for nid in self.chain]
@@ -285,6 +332,12 @@ class Graph:
     def key(self, nid):
         with self._lock:
             return self._plan[nid].key
+
+    def source(self, nid):
+        """The node `nid`'s first input reads, or None."""
+        with self._lock:
+            e = self._plan.get(nid)
+        return None if e is None else e.src
 
     def fed(self, nid):
         """Whether the video reaches `nid` through wires whose types fit; None does not."""
@@ -326,8 +379,8 @@ class Graph:
         own work. The body sets `kind` and `bytes` on the yielded
         list, what only the call site knows: a tool's kind is "run", since a memo hit is not a run
         and emits nothing; the video read's is "cache", "step" or "seek", read off the decoder's
-        counters; a body that raises emits "error", with the time it took and no bytes, so a reader
-        tells a failed run from one that returned. Nothing when `on_event` is unset. `sync()` emits a "sync" event into the same
+        counters; a body that raises emits "error", or "cancel" for Cancelled, with the time it took and
+        no bytes, so a reader tells a failed run from one that returned. Nothing when `on_event` is unset. `sync()` emits a "sync" event into the same
         stream, a boundary with no node, row or time, and the memo and decoder cache emit "evict"
         and "uncache" with the bytes freed. The worker wraps a series tool's run in this; `_compute`
         wraps a frame tool's and the video node's read."""
@@ -340,6 +393,9 @@ class Graph:
         t, c = time.perf_counter(), time.thread_time()
         try:
             yield ev
+        except Cancelled:
+            ev[0] = "cancel"                 # the graph moved on under the run; not the tool's fault
+            raise
         except BaseException:
             ev[0] = "error"                  # the body raised: a tool failed, or the read ran off the stream's end
             raise
@@ -363,13 +419,21 @@ class Graph:
                 ev[0] = "seek" if d.seeks != seeks else "step" if d.decodes != decodes else "cache"
                 ev[1] = v.nbytes
             return v
-        mk = (e.raw_key, row)
+        mk = (e.raw_key, None if e.static else row)
         v = self.memo.get(mk)
         if v is None:
             with self.probe(nid, row, e.raw_key) as ev:
-                v = e.tool.run(Frames(self, plan, e.src, e.src_key), row, e.params)
+                try:
+                    v = e.tool.run(Frames(self, plan, nid, e.srcs, e.src_key, e.types), row, e.params)
+                except Cancelled:
+                    raise
+                except Exception as exc:
+                    if not hasattr(exc, "sieve_node"):
+                        exc.sieve_node = nid
+                        self.note(nid, f"raised at row {row}: {type(exc).__name__}: {exc}")
+                    raise
                 ev[1] = Memo._size(v)
-            self.memo.put(mk, v)
+            self.memo.put(mk, v, owner=e.raw_key if e.static else None)
         return v if raw or e.band is None else banded(v, e.band)
 
     def density(self, nid, row):
@@ -380,7 +444,7 @@ class Graph:
         e = plan.get(nid)
         if e is None or e.kind != "frame" or not e.fed:
             return None
-        k = (_key(e.raw_key, "fold"), row)
+        k = (_key(e.raw_key, "fold"), None if e.static else row)
         v = self.memo.get(k)
         if v is None:
             plane = self._compute(plan, nid, row, raw=True)
@@ -389,7 +453,7 @@ class Graph:
             with self.probe(nid, row, k[0]) as ev:
                 v = density.fold(plane)
                 ev[0], ev[1] = "fold", v.nbytes
-            self.memo.put(k, v)
+            self.memo.put(k, v, owner=e.raw_key if e.static else None)
         return v
 
     def peek(self, row, nid=None):
@@ -400,7 +464,7 @@ class Graph:
             return None
         if e.kind == "video":
             return self.decoder.cached(row)
-        v = self.memo.get((e.raw_key, row))
+        v = self.memo.get((e.raw_key, None if e.static else row))
         return v if v is None or e.band is None else banded(v, e.band)
 
 

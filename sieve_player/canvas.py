@@ -1,24 +1,13 @@
-"""The network editor: a node one layer above the ground with its
-connectors, on a node with a frame to show its display flag and, on one producing one plane, its overlay flag; select, box-select, drag, Delete, the mark on a node whose tool was
-not found and on an input nothing feeds; pan, zoom about the cursor, H to frame; wires dragged from
-either end, picked up, cut with Y, and a node dropped onto a wire inserted in it; Tab or a
-right-click on empty canvas for the menu that places a tool, which a wire grown into empty canvas
-also opens, filtered to what the wire may feed or be fed by, and a wire pulled by its body opens,
-filtered to what may sit in it, the chosen tool spliced in where it was let go; a column of buttons at the top right,
-one per key that is an action, for the mouse hand. It reads and writes the document and nothing
-else. The tools' declared types reach it as data, for the connectors' colours, the unfed
-mark, the band dot on a node whose pane has handles, which connectors a dragged wire may land on and which tools the menu offers it; what the
-runtime makes of the graph never does. A tool the registry listed but could not import reaches it
-as its name and the error, for the menu to show greyed.
+"""The network editor. It reads and writes the document and nothing else; the tools' declared types
+reach it as data, for the connectors' colours, the unfed mark, where a dragged wire may land and
+what the menu offers; what the runtime makes of the graph never does, and what the window learns
+from the runtime arrives as text to show.
 
 Geometry is in document space; the view is a pan and a zoom applied to the painter, never written
 to the document. A key pressed with the cursor over the canvas is the canvas's, as in Houdini's
-panes, unless something is being typed into: Space held pans with the left button instead of
-toggling play, Y held cuts with it, H frames.
-
-A type nobody declared matches every type: an unresolved node and an unfed pass-through can be
-wired like any other, and the red wire says afterwards whether the types fit. Only a node's own
-connectors are refused; a longer cycle is the document's to report and the runtime's to starve.
+panes, unless something is being typed into. A type nobody declared matches every type, so an
+unresolved node or an unfed pass-through wires like any other and the red wire says afterwards
+whether the types fit; only a node's own connectors are refused, a longer cycle is the document's.
 """
 import zlib
 
@@ -171,6 +160,7 @@ class Canvas(QWidget):
         self.broken = dict(broken or {})
         self.doc = None
         self.errors = {}                        # node id -> the one line wrong with it, set by the window
+        self.standings = {}                     # node id -> why it does not run, set by the window; the node's tooltip
         self.selected = []
         self.hover = None                       # the node id under the pointer
         self._drag = None                       # ("move", start, {id: pos}) | ("box", start, shift, base)
@@ -266,7 +256,7 @@ class Canvas(QWidget):
 
     def output_type(self, node):
         if node.tool == VIDEO_TOOL:
-            return VIDEO_PRODUCES
+            return produces(self.doc, self.tools, node.id)
         return None if node.unresolved else produces(self.doc, self.tools, node.id)
 
     def can_display(self, node):
@@ -991,4 +981,6 @@ class Canvas(QWidget):
             return f"tool {node.tool!r} not found"
         if node is not None and node.id in self.errors:
             return self.errors[node.id]
+        if node is not None:
+            return self.standings.get(node.id, "")
         return ""

@@ -112,9 +112,15 @@ class ParamWidget(QWidget):
         self._get[name], self._set[name] = e.text, set_
         return e
 
-    def add_choice(self, name, options, value):
+    def add_choice(self, name, options, value, editable=False):
+        """`editable` lets a value outside `options` be typed, for a choice among names the tool
+        cannot list, such as the columns a table carries."""
         c = QComboBox()
         c.addItems([str(o) for o in options])
+        c.setEditable(editable)
+        if editable:
+            c.setInsertPolicy(QComboBox.NoInsert)
+            c.lineEdit().setFont(mono_font())
         c.setCurrentText(str(value))
         c.setFixedWidth(CONTROL_W)
         c.currentTextChanged.connect(lambda _: self.changed.emit())

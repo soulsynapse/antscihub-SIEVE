@@ -1,22 +1,22 @@
 """Series tool: the tracks it reads, written to a csv; tracks in, the same tracks out.
 
-A pass-through as csv is, sharing its Write widget and key line: the rows leave unchanged, the signal
-is the records each row holds, so the node's band gates rows by their count. One line per record of
-the window, long format: `row`, `time`, `id`, the table's columns less `contour` and `id`, and
-`gate`, 1 where this node's band keeps the row; a row with no records writes nothing, so an
-upstream band's rows are simply absent. Scores and labels read it as one table of row, id, x, y.
+A pass-through as csv is, sharing its Write widget and key line (tools/_csvfile.py): the rows leave
+unchanged, the signal is the records each row holds, so the node's band gates rows by their count.
+One line per record of the window, long format: `row`, `time`, `id`, the table's columns less
+`contour` and `id`, and `gate`, 1 where this node's band keeps the row; a row with no records
+writes nothing, so an upstream band's rows are simply absent. Scores and labels read it as one
+table of row, id, x, y.
 """
 import os
+import sys
 
 import numpy as np
 
-from tools import csv
+from tools._csvfile import DEFAULTS, FILTER, key_line, replace  # noqa: F401  DEFAULTS and FILTER are this tool's facets
 from tools._table import TRACKS_DTYPE
 
 SIEVE_TOOL = True
 NAME, KIND, EXPECTS, PRODUCES = "tracks-csv", "series", "tracks", "tracks"
-DEFAULTS = dict(csv.DEFAULTS)
-FILTER = csv.FILTER
 
 
 def fields(dtype):
@@ -49,8 +49,7 @@ def text(result, start, fps, footage):
     gate = np.asarray(result.get("gate", np.ones(len(rows), bool)), bool)
     dtype = rows[0].dtype if len(rows) else TRACKS_DTYPE
     names = fields(dtype)
-    lines = [f"# sieve key={result.get('key', '')} rows={start}-{start + len(rows) - 1} footage={os.path.basename(str(footage))}",
-             ",".join(columns(dtype))]
+    lines = [key_line(result.get("key", ""), start, len(rows), footage), ",".join(columns(dtype))]
     for i, (t, g) in enumerate(zip(rows, gate)):
         r = start + i
         for b in t:
@@ -61,18 +60,16 @@ def text(result, start, fps, footage):
 
 
 def write(path, result, start, fps, footage):
-    csv.replace(path, text(result, start, fps, footage))
+    replace(path, text(result, start, fps, footage))
 
 
 def settings(parent=None):
-    import sys
+    from tools._csvfile import widget
 
-    return csv.settings(parent, export=sys.modules[__name__])
+    return widget(parent, sys.modules[__name__])
 
 
 if __name__ == "__main__":
-    import sys
-
     from sieve_player import play
     from tools import blobs, gray, threshold, track
 

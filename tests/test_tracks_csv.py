@@ -4,7 +4,7 @@ import numpy as np
 
 from sieve_player.graph import Series
 from tests.test_track import table
-from tools import csv, track, tracks_csv
+from tools import _csvfile, track, tracks_csv
 
 
 def test_rows_pass_through_and_the_file_holds_one_line_per_record(tmp_path):
@@ -21,4 +21,4 @@ def test_rows_pass_through_and_the_file_holds_one_line_per_record(tmp_path):
     assert lines[1].startswith("row,time,id,x,y,w,h,area,") and lines[1].endswith(",core,gate")
     assert len(lines) == 5 and lines[2].startswith("7,0.233333,0,8,18,4,4,16,10,20,") and lines[4].startswith("9,0.300000,0,")
     assert lines[2].endswith(",1") and lines[4].endswith(",0")
-    assert csv.written_key(p) == "abc123"
+    assert _csvfile.written_key(p) == "abc123"

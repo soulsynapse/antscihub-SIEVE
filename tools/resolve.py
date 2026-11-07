@@ -10,11 +10,10 @@ its last box, the identities entering and leaving are one set, and the one unlab
 takes the identity the other side has that its own lacks. `main` is the same pass over a tracks csv.
 """
 import os
-import re
 
 import numpy as np
 
-from tools import csv
+from tools._csvfile import read, replace
 from tools._table import draw_tracks, with_column
 
 SIEVE_TOOL = True
@@ -176,16 +175,9 @@ def tables_of(header, lines, start, n):
 def rewrite(path, columns, min_reads=2, labels=(), out=None):
     """The tracks csv at `path` with `identity` and `conflict` written before `gate` on every line,
     replacing a previous pass's, the key line kept; written to `out` or over `path`."""
-    with open(path, encoding="utf-8") as f:
-        key = f.readline().rstrip("\n")
-        header = f.readline().rstrip("\n").split(",")
-        lines = [line.rstrip("\n").split(",") for line in f if line.strip()]
-    m = re.search(r"rows=(\d+)-(\d+)", key)
-    if not m:
-        raise ValueError(f"{os.path.basename(path)} has no sieve key line; is it a tracks csv?")
+    key, start, n, header, lines = read(path)
     keep = [i for i, c in enumerate(header) if c not in (IDENTITY, CONFLICT)]
     header, lines = [header[i] for i in keep], [[p[i] for i in keep] for p in lines]
-    start, n = int(m.group(1)), int(m.group(2)) - int(m.group(1)) + 1
     rows = resolve(tables_of(header, lines, start, n), columns, min_reads, labels, start)
     value = {(start + r, int(b["id"])): (float(b[IDENTITY]), int(b[CONFLICT])) for r, t in enumerate(rows) for b in t}
     g, at_row, at_id = header.index("gate"), header.index("row"), header.index("id")
@@ -193,7 +185,7 @@ def rewrite(path, columns, min_reads=2, labels=(), out=None):
     for p in lines:
         ident, conf = value[(int(p[at_row]), int(p[at_id]))]
         text.append(",".join(p[:g] + [np.format_float_positional(ident, trim="-"), str(conf)] + p[g:]))
-    csv.replace(out or path, "\n".join(text) + "\n")
+    replace(out or path, "\n".join(text) + "\n")
 
 
 def main(argv=None):

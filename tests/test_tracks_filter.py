@@ -4,9 +4,10 @@ import numpy as np
 import pytest
 
 from sieve_player.graph import Series
-from tools import blobs, track, tracks_filter
+from tools import track, tracks_filter
+from tools import _table
 
-DTYPE = blobs.plane_dtype((20, 100), track.DTYPE)
+DTYPE = _table.plane_dtype((20, 100), track.DTYPE)
 
 
 def table(records):
@@ -36,7 +37,7 @@ def test_tracks_kept_by_their_properties_leave_every_row_with_ids_intact():
     assert tracks_filter.properties(ROWS, "mean", "area") == {1: 10.0, 2: 30.0, 3: 20.0}
     out = tracks_filter.run(SERIES, {"property": "rows", "column": "area", "lo": "3", "hi": ""})
     assert ids(out["rows"]) == [[1, 2], [1, 2], [1, 2], [1], [1, 2]] and out["signal"].tolist() == [2, 2, 2, 1, 2]
-    assert out["rows"][0].dtype == DTYPE and blobs.plane(out["rows"][0]) == (20, 100)
+    assert out["rows"][0].dtype == DTYPE and _table.plane(out["rows"][0]) == (20, 100)
     assert ids(tracks_filter.keep(ROWS, "displacement", "", "", "20"))[0] == [2, 3]
     assert ids(tracks_filter.keep(ROWS, "path", "", "5", ""))[0] == [1, 3]
     assert ids(tracks_filter.keep(ROWS, "mean", "area", "15", "25"))[0] == [3]

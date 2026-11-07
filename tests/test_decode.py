@@ -6,6 +6,7 @@ import pytest
 
 from tests.test_blobs import fed
 from tools import blobs, decode
+from tools import _table
 
 DICT = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
 
@@ -35,7 +36,7 @@ def turned(h, by):
 def test_a_marker_reads_its_id_and_heading_and_a_blank_record_reads_none():
     for plane in (PLANE, cv2.cvtColor(PLANE, cv2.COLOR_GRAY2BGR)):
         out = decode.run(fed(FOUND, plane), 0, decode.DEFAULTS)
-        assert out.dtype.names[-2:] == ("tag_code", "tag_heading") and blobs.plane(out) == PLANE.shape
+        assert out.dtype.names[-2:] == ("tag_code", "tag_heading") and _table.plane(out) == PLANE.shape
         assert out["tag_code"][TAG] == 7 and turned(out["tag_heading"][TAG], -90) < 1
         assert np.isnan(out["tag_code"][BLANK]) and np.isnan(out["tag_heading"][BLANK])
     for turns, heading in ((1, 180), (2, 90), (3, 0)):

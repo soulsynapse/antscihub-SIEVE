@@ -7,14 +7,12 @@ the `diff` input, `mean`, `peak` and `core` (pixels at or over `core_threshold`)
 without it they are NaN, NaN, -1. `split` cuts a region over `max_area` at rising levels of the
 diff until it falls into two or more pieces within bounds, and drops it if none does.
 
-A table's dtype carries the shape of the plane it was found in, `plane(table)`, so a tool relating
-it to a plane or table of another shape can scale; `with_column(table, name, values)` is how a tool
-downstream adds a column, which every reader of a table takes by the table's own names. The kind
-`blobs` promises the position columns and the plane; any other column may be NaN or absent where
-its producer did not make it.
+The table's dtype, the plane on it and how a column is added are tools/_table.py's.
 """
 import cv2
 import numpy as np
+
+from tools._table import DTYPE, OUTLINES, draw as draw_table, plane_dtype
 
 SIEVE_TOOL = True
 NAME, KIND, EXPECTS, PRODUCES = "blobs", "frame", ("mask", "gray"), "blobs"
@@ -22,37 +20,6 @@ INPUTS = {"diff": "gray"}
 OPTIONAL = ("diff",)
 DEFAULTS = {"min_area": 50, "max_area": 0, "core_threshold": 0, "split": False, "outline": "box"}
 MAX_AREA = 100000
-DTYPE = np.dtype([("x", np.int32), ("y", np.int32), ("w", np.int32), ("h", np.int32), ("area", np.int32),
-                  ("cx", np.float32), ("cy", np.float32), ("angle", np.float32),
-                  ("major", np.float32), ("minor", np.float32),
-                  ("mean", np.float32), ("peak", np.float32), ("core", np.int32), ("contour", object)])
-OUTLINES = ("box", "contour")
-
-
-def plane_dtype(shape, dtype=DTYPE):
-    """`dtype` with the plane's (height, width) on it."""
-    return np.dtype(dtype.descr, metadata={"plane": (int(shape[0]), int(shape[1]))})
-
-
-def plane(table):
-    """The (height, width) the table was found in, or None when it has none."""
-    return (table.dtype.metadata or {}).get("plane")
-
-
-def with_column(table, name, values):
-    """The table with `values` as a column named `name`, the plane kept; a name the table already
-    has raises ValueError, since overwriting a producer's column would silently change its meaning."""
-    if name in table.dtype.names:
-        raise ValueError(f"the table already has a column {name!r}")
-    values = np.asarray(values)
-    dtype = np.dtype(table.dtype.descr + [(name, values.dtype)], metadata=dict(table.dtype.metadata or {}))
-    out = np.empty(len(table), dtype)
-    for n in table.dtype.names:
-        out[n] = table[n]
-    out[name] = values
-    return out
-
-
 SPLIT_STEP = 4            # levels between thresholds tried when splitting
 SPLIT_KEEP = 0.2          # a split whose pieces hold less of the region than this is not one
 
@@ -128,29 +95,8 @@ def run(frames, row, params):
                 int(params["core_threshold"]), bool(params["split"]))
 
 
-def outline(painter, b, kind):
-    """A record's box or contour in the painter's pen; the contour's points are pixel centres, +0.5."""
-    from PySide6.QtCore import QPointF, QRectF
-    from PySide6.QtGui import QPolygonF
-
-    if kind == "contour" and b["contour"] is not None:
-        painter.drawPolygon(QPolygonF([QPointF(float(x) + 0.5, float(y) + 0.5) for x, y in b["contour"]]))
-    else:
-        painter.drawRect(QRectF(float(b["x"]), float(b["y"]), float(b["w"]), float(b["h"])))
-
-
-def draw(painter, row, result, start, params, color=(80, 220, 120)):
-    from PySide6.QtCore import Qt
-    from PySide6.QtGui import QColor, QPen
-
-    if result is None or len(result) == 0:
-        return
-    pen = QPen(QColor(*color), 0)      # width 0: one device pixel at any zoom
-    pen.setCosmetic(True)
-    painter.setPen(pen)
-    painter.setBrush(Qt.NoBrush)
-    for b in result:
-        outline(painter, b, params.get("outline", "box"))
+def draw(painter, row, result, start, params):
+    draw_table(painter, result, params.get("outline", "box"))
 
 
 def settings(parent=None):

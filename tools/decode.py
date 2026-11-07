@@ -14,7 +14,7 @@ import math
 import cv2
 import numpy as np
 
-from tools.blobs import plane as plane_of, with_column
+from tools._table import draw as draw_table, plane as plane_of, with_column
 
 SIEVE_TOOL = True
 NAME, KIND, EXPECTS, PRODUCES = "decode", "frame", "blobs", "blobs"
@@ -65,9 +65,7 @@ def run(frames, row, params):
 
 
 def draw(painter, row, result, start, params):
-    from tools import blobs
-
-    blobs.draw(painter, row, result, start, params, color=(240, 200, 80))
+    draw_table(painter, result, params.get("outline", "box"), color=(240, 200, 80))
 
 
 def settings(parent=None):

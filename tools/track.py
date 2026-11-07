@@ -11,19 +11,13 @@ new ids and a tracklet never spans a contact. At 0 area is not read.
 """
 import numpy as np
 
-from tools import blobs
+from tools._table import OUTLINES, TRACKS_DTYPE as DTYPE, draw_tracks, with_column
 
 SIEVE_TOOL = True
 NAME, KIND, EXPECTS, PRODUCES = "track", "series", "blobs", "tracks"
 DEFAULTS = {"max_step": 4.0, "lost_rows": 30, "min_rows": 3, "min_p": 0.1, "merge_ratio": 0.0, "outline": "box"}
 MAX_RATIO = 10.0
-DTYPE = np.dtype(blobs.DTYPE.descr + [("id", np.int32)])      # the output's dtype for a table of blobs' own columns
 STEPS = 5           # recent steps averaged into the prediction
-TRAIL = 30          # rows of path drawn behind each box
-
-
-def _with_id(t):
-    return np.dtype(t.dtype.descr + [("id", np.int32)], metadata=dict(t.dtype.metadata or {}))
 
 
 class _Track:
@@ -53,10 +47,7 @@ def link(tables, max_step, lost_rows, min_rows, min_p, merge_ratio=0.0):
     out, signal, live, next_id = [], np.zeros(len(tables), np.float32), [], 0
     for r, t in enumerate(tables):
         t = np.asarray(t)
-        rec = np.empty(len(t), _with_id(t))
-        for name in t.dtype.names:
-            rec[name] = t[name]
-        rec["id"] = -1
+        rec = with_column(t, "id", np.full(len(t), -1, np.int32))
         live = [k for k in live if r - k.seen <= lost_rows]
         pos = np.stack([t["cx"], t["cy"]], axis=1).astype(np.float64) if len(t) else np.zeros((0, 2))
         area = t["area"].astype(np.float64) if len(t) else np.zeros(0)
@@ -100,23 +91,7 @@ def run(series, params):
 
 
 def draw(painter, row, result, start, params):
-    from PySide6.QtCore import QPointF, Qt
-    from PySide6.QtGui import QColor, QPen
-
-    if not isinstance(result, dict) or not 0 <= row - start < len(result["rows"]):
-        return
-    rows, i = result["rows"], row - start
-    painter.setBrush(Qt.NoBrush)
-    for b in rows[i]:
-        pen = QPen(QColor.fromHsv(int(b["id"]) * 47 % 360, 200, 240), 0)
-        pen.setCosmetic(True)
-        painter.setPen(pen)
-        blobs.outline(painter, b, params.get("outline", "box"))
-        painter.drawText(QPointF(float(b["x"]), float(b["y"]) - 2), str(int(b["id"])))
-        path = [(float(t["cx"][0]), float(t["cy"][0])) for t in (rows[k][rows[k]["id"] == b["id"]]
-                                                                 for k in range(max(0, i - TRAIL), i + 1)) if len(t)]
-        for (x0, y0), (x1, y1) in zip(path, path[1:]):
-            painter.drawLine(QPointF(x0, y0), QPointF(x1, y1))
+    draw_tracks(painter, row, result, start, params.get("outline", "box"))
 
 
 def settings(parent=None):
@@ -128,7 +103,7 @@ def settings(parent=None):
     w.add_int("min_rows", 1, 60, DEFAULTS["min_rows"])
     w.add_float("min_p", 0.0, 1.0, DEFAULTS["min_p"])
     w.add_float("merge_ratio", 0.0, MAX_RATIO, DEFAULTS["merge_ratio"], decimals=1)
-    w.add_choice("outline", blobs.OUTLINES, DEFAULTS["outline"])
+    w.add_choice("outline", OUTLINES, DEFAULTS["outline"])
     return w
 
 
@@ -136,6 +111,6 @@ if __name__ == "__main__":
     import sys
 
     from sieve_player import play
-    from tools import gray, threshold
+    from tools import blobs, gray, threshold
 
     sys.exit(play([gray, threshold, blobs, sys.modules[__name__]], sys.argv[1] if len(sys.argv) > 1 else None))

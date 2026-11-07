@@ -8,7 +8,7 @@ mean, and one the tables lack raises then.
 """
 import numpy as np
 
-from tools.filter import _bound
+from tools._table import draw_tracks
 
 SIEVE_TOOL = True
 NAME, KIND, EXPECTS, PRODUCES = "tracks-filter", "series", "tracks", "tracks"
@@ -39,9 +39,14 @@ def properties(rows, property, column="area"):
     return out
 
 
+def bound(text, default):
+    text = str(text).strip()
+    return default if text == "" else float(text)
+
+
 def keep(rows, property, column, lo, hi):
     value = properties(rows, property, column)
-    lo, hi = _bound(lo, -np.inf), _bound(hi, np.inf)
+    lo, hi = bound(lo, -np.inf), bound(hi, np.inf)
     kept = {id for id, v in value.items() if lo <= v <= hi}
     out = np.empty(len(rows), object)
     out[:] = [t[np.isin(t["id"], list(kept))] if len(t) else t for t in rows]
@@ -54,9 +59,7 @@ def run(series, params):
 
 
 def draw(painter, row, result, start, params):
-    from tools import track
-
-    track.draw(painter, row, result, start, params)
+    draw_tracks(painter, row, result, start, params.get("outline", "box"))
 
 
 def settings(parent=None):

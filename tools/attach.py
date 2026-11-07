@@ -10,8 +10,7 @@ that the second table lacks, a non-numeric one, or a name the first already has,
 """
 import numpy as np
 
-from tools.blobs import plane as plane_of, with_column
-from tools.blobs_to_mask import OUTLINES, footprint
+from tools._table import OUTLINES, draw as draw_table, footprint, plane as plane_of, with_column
 
 SIEVE_TOOL = True
 NAME, KIND, EXPECTS, PRODUCES = "attach", "frame", "blobs", "blobs"
@@ -65,9 +64,7 @@ def run(frames, row, params):
 
 
 def draw(painter, row, result, start, params):
-    from tools import blobs
-
-    blobs.draw(painter, row, result, start, params, color=(240, 120, 200))
+    draw_table(painter, result, params.get("outline", "box"), color=(240, 120, 200))
 
 
 def settings(parent=None):

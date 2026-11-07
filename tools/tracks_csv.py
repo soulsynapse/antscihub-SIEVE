@@ -10,7 +10,8 @@ import os
 
 import numpy as np
 
-from tools import csv, track
+from tools import csv
+from tools._table import TRACKS_DTYPE
 
 SIEVE_TOOL = True
 NAME, KIND, EXPECTS, PRODUCES = "tracks-csv", "series", "tracks", "tracks"
@@ -46,7 +47,7 @@ def default_name(footage, start, n):
 def text(result, start, fps, footage):
     rows = result["rows"]
     gate = np.asarray(result.get("gate", np.ones(len(rows), bool)), bool)
-    dtype = rows[0].dtype if len(rows) else track.DTYPE
+    dtype = rows[0].dtype if len(rows) else TRACKS_DTYPE
     names = fields(dtype)
     lines = [f"# sieve key={result.get('key', '')} rows={start}-{start + len(rows) - 1} footage={os.path.basename(str(footage))}",
              ",".join(columns(dtype))]
@@ -73,6 +74,6 @@ if __name__ == "__main__":
     import sys
 
     from sieve_player import play
-    from tools import blobs, gray, threshold
+    from tools import blobs, gray, threshold, track
 
     sys.exit(play([gray, threshold, blobs, track, sys.modules[__name__]], sys.argv[1] if len(sys.argv) > 1 else None))

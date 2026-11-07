@@ -5,12 +5,12 @@ or `aspect` (major / minor). A blank bound is none; a NaN field never passes.
 """
 import numpy as np
 
-from tools import blobs
+from tools._table import DTYPE, OUTLINES, draw as draw_table
 
 SIEVE_TOOL = True
 NAME, KIND, EXPECTS, PRODUCES = "filter", "frame", "blobs", "blobs"
 RATIOS = ("core_ratio", "aspect")
-FIELDS = (*blobs.DTYPE.names, *RATIOS)
+FIELDS = (*DTYPE.names, *RATIOS)
 DEFAULTS = {"field": "area", "lo": "", "hi": "", "outline": "box"}
 
 
@@ -25,14 +25,14 @@ def column(table, field):
     return table[field].astype(np.float64)
 
 
-def _bound(text, default):
+def bound(text, default):
     text = str(text).strip()
     return default if text == "" else float(text)
 
 
 def keep(table, field, lo, hi):
     v = column(table, field)
-    return table[(v >= _bound(lo, -np.inf)) & (v <= _bound(hi, np.inf))]
+    return table[(v >= bound(lo, -np.inf)) & (v <= bound(hi, np.inf))]
 
 
 def run(frames, row, params):
@@ -40,7 +40,7 @@ def run(frames, row, params):
 
 
 def draw(painter, row, result, start, params):
-    blobs.draw(painter, row, result, start, params, color=(240, 200, 60))
+    draw_table(painter, result, params.get("outline", "box"), color=(240, 200, 60))
 
 
 def settings(parent=None):
@@ -50,7 +50,7 @@ def settings(parent=None):
     w.add_choice("field", FIELDS, DEFAULTS["field"], editable=True)
     w.add_text("lo", DEFAULTS["lo"])
     w.add_text("hi", DEFAULTS["hi"])
-    w.add_choice("outline", blobs.OUTLINES, DEFAULTS["outline"])
+    w.add_choice("outline", OUTLINES, DEFAULTS["outline"])
     return w
 
 
@@ -58,6 +58,6 @@ if __name__ == "__main__":
     import sys
 
     from sieve_player import play
-    from tools import gray, threshold
+    from tools import blobs, gray, threshold
 
     sys.exit(play([gray, threshold, blobs, sys.modules[__name__]], sys.argv[1] if len(sys.argv) > 1 else None))

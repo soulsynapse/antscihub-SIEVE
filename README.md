@@ -113,7 +113,9 @@ Facets the player reads when a tool has them:
 | `STATIC = True` | the output is the same at every row: the memo holds it once under the key, and the monitor counts its run per change rather than per row |
 | a plane as output | the node's density, v2's plot: its pixels per row counted on a fixed log axis, under its settings, for every fed frame node; a mask or a field has none. Its two handles are the node's band, saved with the node: the player zeroes every pixel outside it (inside it when lo is above hi) before anything downstream reads the node |
 
-`tools/` holds a working example of each.
+`tools/` holds a working example of each. A module there whose name begins with `_` is not a tool
+but what tools share, the table kind in `_table.py`; a tool imports from those and from no other
+tool, which `tests/test_seams.py` checks.
 
 ## The player
 

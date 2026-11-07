@@ -6,6 +6,7 @@ import pytest
 
 from tests.test_blobs import fed
 from tools import blobs, blobs_to_mask, filter, sample
+from tools import _table
 
 M = np.zeros((8, 8), np.uint8)
 M[1:7, 1:3] = 255
@@ -27,7 +28,7 @@ def test_a_statistic_inside_the_records_own_contour_not_its_box():
     plane[1:3, 5:7] = 0                        # nothing under the square
     for method, ell, square in (("mean", 200.0, 0.0), ("max", 200.0, 0.0), ("count", 18, 0)):
         out = sample.run(fed(FOUND, plane), 0, {"column": "under", "method": method})
-        assert out.dtype.names[-1] == "under" and blobs.plane(out) == M.shape
+        assert out.dtype.names[-1] == "under" and _table.plane(out) == M.shape
         assert out["under"][ELL] == ell and out["under"][SQUARE] == square
     assert filter.keep(out, "under", "1", "")["area"].tolist() == [18]
     with pytest.raises(ValueError):

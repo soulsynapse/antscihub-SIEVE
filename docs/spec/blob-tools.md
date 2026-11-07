@@ -8,7 +8,7 @@ the order the ants findings argue for (docs/findings/2026-11-01-ants-blob-featur
 docs/findings/2026-11-01-track-diagnostics.md): measure the linker before building on its ids,
 then detection flickering at the area cut, tracks ending at a median of seven rows, the cluster
 never resolving. Each tool is a module under tools/ with the facets the registry README names; a column is
-a change to blobs.DTYPE and reaches filter for free. A tool lands only with a finding on the ants clip
+a change to tools/_table.py's DTYPE and reaches filter for free. A tool lands only with a finding on the ants clip
 that says what it changed, as blobs did.
 
 ## Measure first

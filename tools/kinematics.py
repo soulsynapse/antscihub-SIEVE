@@ -13,7 +13,7 @@ from collections import deque
 
 import numpy as np
 
-from tools.blobs import with_column
+from tools._table import draw_tracks, with_column
 
 SIEVE_TOOL = True
 NAME, KIND, EXPECTS, PRODUCES = "kinematics", "series", "tracks", "tracks"
@@ -51,9 +51,7 @@ def run(series, params):
 
 
 def draw(painter, row, result, start, params):
-    from tools import track
-
-    track.draw(painter, row, result, start, params)
+    draw_tracks(painter, row, result, start, params.get("outline", "box"))
 
 
 def settings(parent=None):

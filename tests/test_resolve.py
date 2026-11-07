@@ -10,8 +10,9 @@ from sieve_player import document as D
 from sieve_player.graph import Series
 from tests.test_selector import open_window, tree
 from tools import blobs, resolve, track, tracks_csv
+from tools import _table
 
-DTYPE = blobs.plane_dtype((100, 100), np.dtype(track.DTYPE.descr + [("tag", np.float64)]))
+DTYPE = _table.plane_dtype((100, 100), np.dtype(track.DTYPE.descr + [("tag", np.float64)]))
 
 
 def table(records):
@@ -37,7 +38,7 @@ def test_enough_agreeing_reads_label_the_whole_tracklet_and_disagreement_flags_i
     rows[3]["tag"][1] = 9
     rows[5]["tag"][2] = rows[6]["tag"][2] = 8
     out = run(rows)
-    assert out["rows"][0].dtype.names[-2:] == ("identity", "conflict") and blobs.plane(out["rows"][0]) == (100, 100)
+    assert out["rows"][0].dtype.names[-2:] == ("identity", "conflict") and _table.plane(out["rows"][0]) == (100, 100)
     assert column(out["rows"], "identity")[0] == {1: 5.0, 2: None, 3: None}
     assert column(out["rows"], "conflict")[0] == {1: 0, 2: 0, 3: 1}
     assert out["signal"].tolist() == [1] * 10

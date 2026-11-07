@@ -8,8 +8,7 @@ empty reads NaN, or 0 for count. The table must carry a plane and must not alrea
 """
 import numpy as np
 
-from tools.blobs import plane as plane_of, with_column
-from tools.blobs_to_mask import footprint
+from tools._table import draw as draw_table, footprint, plane as plane_of, with_column
 
 SIEVE_TOOL = True
 NAME, KIND, EXPECTS, PRODUCES = "sample", "frame", "blobs", "blobs"
@@ -43,9 +42,7 @@ def run(frames, row, params):
 
 
 def draw(painter, row, result, start, params):
-    from tools import blobs
-
-    blobs.draw(painter, row, result, start, params, color=(120, 180, 240))
+    draw_table(painter, result, params.get("outline", "box"), color=(120, 180, 240))
 
 
 def settings(parent=None):

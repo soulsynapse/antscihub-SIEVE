@@ -19,7 +19,7 @@ py -3.13 -m venv .venv            # not the Anaconda python: its Qt DLLs shadow 
 
 What the player prints to stderr, tracebacks, Qt warnings, the watchdog's and a crash's stacks, it
 also writes to a log, the previous launch's kept beside it as `.prev.log`; `SIEVE_LOG` names the
-file or, as `0`, turns it off, and `sieve_player.log_path` says where it goes unset. `SIEVE_DUMP`
+file or, as `0`, turns it off, and `sieve_player.dev.console.log_path` says where it goes unset. `SIEVE_DUMP`
 names a file every video opened dumps the probe's stream to (`sieve_player/trace.py`);
 `SIEVE_QT_TRACE` narrows the Qt warning handler to warnings containing its text, or `0` leaves
 Qt's own printing alone; `SIEVE_C_STDERR=1` leaves C-level stderr alone, so cv2's plugin warns on

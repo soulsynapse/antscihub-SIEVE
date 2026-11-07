@@ -16,7 +16,6 @@ from PySide6.QtCore import QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import QFontMetrics, QImage, QKeySequence, QPainter, QPen, QPixmap, QShortcut
 from PySide6.QtWidgets import QFileDialog, QHBoxLayout, QMainWindow, QPushButton, QSizePolicy, QVBoxLayout, QWidget
 
-import sieve_player
 
 from . import dev, document, theme
 from .canvas import Canvas
@@ -53,11 +52,6 @@ class Lateness(QTimer):
         self._due = now + self.interval() / 1000
 
 DOCUMENT_FILTER = "SIEVE document (*.json);;All (*)"
-
-
-def _log_name():
-    """Where stderr went, for a line that sends the user there."""
-    return sieve_player.LOG_FILE.name if sieve_player.LOG_FILE is not None else "stderr"
 
 
 def _same(a, b):
@@ -282,12 +276,13 @@ class Column(QWidget):
 
 
 class PlayerWindow(QMainWindow):
-    def __init__(self, source, title="SIEVE", tools=()):
+    def __init__(self, source, title="SIEVE", tools=(), log=None):
         """`source` is a list of tools, which become the document, or the path of a saved document.
         The catalogue the Tab menu offers and the document's names index is `tools`, plus the list
-        when `source` is one. Either list holds tool modules or registry entries; see `catalogue`."""
+        when `source` is one. Either list holds tool modules or registry entries; see `catalogue`.
+        `log` names where stderr also goes, for a line that sends the user there."""
         super().__init__()
-        self.title = title
+        self.title, self.log = title, log or "stderr"
         self.setStyleSheet(theme.sheet())
         from_file = isinstance(source, (str, os.PathLike))
         modules, self.tools, broken = catalogue(list(tools) if from_file else [*source, *tools])
@@ -478,13 +473,13 @@ class PlayerWindow(QMainWindow):
 
     def _failed(self, row, nid):
         self._restate()
-        self.timeline.controls.progress.setText(f"{nid} {self.graph.standing(nid)}" if nid else f"a tool raised at row {row}, see {_log_name()}")
+        self.timeline.controls.progress.setText(f"{nid} {self.graph.standing(nid)}" if nid else f"a tool raised at row {row}, see {self.log}")
 
     def _worker_ended(self, worker):
         """The worker thread exited other than through `_unload`, so nothing will answer the display
         again until the video is reopened; the traceback is on stderr."""
         if worker is self.worker:
-            self.timeline.controls.progress.setText(f"the worker stopped, see {_log_name()}; reopen the video")
+            self.timeline.controls.progress.setText(f"the worker stopped, see {self.log}; reopen the video")
 
     def _shortened(self, count):
         """The stream ended short of its container's claim: everything sized by the count follows

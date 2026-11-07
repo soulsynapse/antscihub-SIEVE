@@ -44,23 +44,28 @@ def default_name(footage, start, n):
     return f"{root}_{start}-{start + n - 1}_tracks.csv"
 
 
-def text(result, start, fps, footage):
+def lines(result, start, fps, footage):
+    """The file, a line at a time with its newline, so a clip's records never sit whole in memory."""
     rows = result["rows"]
     gate = np.asarray(result.get("gate", np.ones(len(rows), bool)), bool)
     dtype = rows[0].dtype if len(rows) else TRACKS_DTYPE
     names = fields(dtype)
-    lines = [key_line(result.get("key", ""), start, len(rows), footage), ",".join(columns(dtype))]
+    yield key_line(result.get("key", ""), start, len(rows), footage) + "\n"
+    yield ",".join(columns(dtype)) + "\n"
     for i, (t, g) in enumerate(zip(rows, gate)):
         r = start + i
         for b in t:
             vals = (np.format_float_positional(float(b[f]), trim="-") if np.issubdtype(dtype[f], np.floating) else str(int(b[f]))
                     for f in names)
-            lines.append(f"{r},{r / fps:.6f},{int(b['id'])},{','.join(vals)},{int(g)}")
-    return "\n".join(lines) + "\n"
+            yield f"{r},{r / fps:.6f},{int(b['id'])},{','.join(vals)},{int(g)}\n"
+
+
+def text(result, start, fps, footage):
+    return "".join(lines(result, start, fps, footage))
 
 
 def write(path, result, start, fps, footage):
-    replace(path, text(result, start, fps, footage))
+    replace(path, lines(result, start, fps, footage))
 
 
 def settings(parent=None):

@@ -57,6 +57,9 @@ def test_round_trip(tmp_path):
     doc = two_nodes()
     D.save(doc, tmp_path / "a.sieve")
     assert D.load(tmp_path / "a.sieve") == doc and list(tmp_path.iterdir()) == [tmp_path / "a.sieve"]   # written whole: no part left
+    with pytest.raises(OSError):
+        D.save(doc, tmp_path / "a.sieve" / "under-a-file")       # a save that fails leaves no part either
+    assert list(tmp_path.iterdir()) == [tmp_path / "a.sieve"]
 
 
 def test_file_is_versioned_readable_json(tmp_path):

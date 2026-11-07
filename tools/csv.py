@@ -37,20 +37,24 @@ def default_name(footage, start, n):
     return f"{root}_{start}-{start + n - 1}.csv"
 
 
-def text(result, start, fps, footage):
-    """The file: the key line, the column names, one line per row. A signal value is written as
-    the shortest text that reads back to the same float32."""
+def lines(result, start, fps, footage):
+    """The file, a line at a time with its newline: the key line, the column names, one per row. A
+    signal value is written as the shortest text that reads back to the same float32."""
     sig = np.asarray(result["signal"], np.float32).reshape(-1)
     gate = np.asarray(result.get("gate", np.ones(len(sig), bool)), bool)
-    lines = [key_line(result.get("key", ""), start, len(sig), footage), ",".join(COLUMNS)]
+    yield key_line(result.get("key", ""), start, len(sig), footage) + "\n"
+    yield ",".join(COLUMNS) + "\n"
     for i, (v, g) in enumerate(zip(sig, gate)):
         r = start + i
-        lines.append(f"{r},{r / fps:.6f},{np.format_float_positional(v, trim='-')},{int(g)}")
-    return "\n".join(lines) + "\n"
+        yield f"{r},{r / fps:.6f},{np.format_float_positional(v, trim='-')},{int(g)}\n"
+
+
+def text(result, start, fps, footage):
+    return "".join(lines(result, start, fps, footage))
 
 
 def write(path, result, start, fps, footage):
-    replace(path, text(result, start, fps, footage))
+    replace(path, lines(result, start, fps, footage))
 
 
 def settings(parent=None):

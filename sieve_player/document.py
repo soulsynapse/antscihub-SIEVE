@@ -180,10 +180,15 @@ class Document:
 def save(doc, path):
     """Writes the document, whole or not at all, and records `path` as where it lives."""
     part = f"{os.fspath(path)}.part"
-    with open(part, "w", encoding="utf-8") as f:
-        json.dump(doc.to_dict(), f, indent=2, ensure_ascii=False)
-        f.write("\n")
-    os.replace(part, path)
+    try:
+        with open(part, "w", encoding="utf-8") as f:
+            json.dump(doc.to_dict(), f, indent=2, ensure_ascii=False)
+            f.write("\n")
+        os.replace(part, path)
+    except OSError:
+        if os.path.exists(part):
+            os.remove(part)
+        raise
     doc.path = os.fspath(path)
 
 

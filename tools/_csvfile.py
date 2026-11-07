@@ -40,11 +40,20 @@ def written_key(path):
 
 
 def replace(path, text):
-    """`text` at `path`, written whole or not at all: a write that fails leaves what was there."""
+    """`text`, a string or an iterable of lines each ending in its newline, at `path`, written whole
+    or not at all: a write that fails leaves what was there and no .part beside it."""
     part = f"{path}.part"
-    with open(part, "w", encoding="utf-8", newline="\n") as f:
-        f.write(text)
-    os.replace(part, path)
+    try:
+        with open(part, "w", encoding="utf-8", newline="\n") as f:
+            if isinstance(text, str):
+                f.write(text)
+            else:
+                f.writelines(text)
+        os.replace(part, path)
+    except OSError:
+        if os.path.exists(part):
+            os.remove(part)
+        raise
 
 
 def read(path):

@@ -4,9 +4,10 @@ whole clip when asked in the time the window leaves.
 The clip walk is the window walk over the clip without the densities, behind a finished window
 walk so what is viewed never waits on it; a frame change abandons it and its rows. A stack holds
 images by shape, one row each, and tables in an object array, one table a row, so a walked node
-that hands out a table never reads as a graph changing shape under the walk. The clip's chain runs
-over the rows so far only once the walk has run CHAIN_SHARE times as long as the chain's last run,
-so a chain of per-row loops never makes the walk quadratic in the clip.
+that hands out a table never reads as a graph changing shape under the walk; there is none without
+a series chain, and either walk stops at STACK_BYTES. The clip's chain runs over the rows so far only
+once the walk has run CHAIN_SHARE times as long as the chain's last run, so a chain of per-row loops
+never makes the walk quadratic in the clip.
 """
 import sys
 import threading
@@ -20,7 +21,7 @@ from . import density
 from .decoder import EndOfStream
 from .graph import Cancelled, Memo, Series, gated, nbytes
 
-CLIP_BYTES = 512 << 20    # the most a clip walk's stack may take, as nbytes counts it
+STACK_BYTES = 512 << 20   # the most a walk's stack, the window's or the clip's, may take, as nbytes counts it
 CHAIN_SHARE = 9           # walking between two clip chain runs takes at least this many times the last run
 STOP_PATIENCE_MS = 10_000  # how long stop() waits before saying on stderr what it is waiting for
 
@@ -44,7 +45,8 @@ class Worker(QThread):
     failed = Signal(int, str)                 # a tool raised at this row, on this node; a walk is abandoned, a display request dropped
     clipWalked = Signal(int, int)             # rows done, rows in the clip; done == total when the clip walk is not running
     clipReady = Signal(object, int, float)    # as seriesReady, over the clip walk's rows; {} when the walk was abandoned
-    clipRefused = Signal(str)                 # the clip walk did not start, and why
+    clipRefused = Signal(str)                 # the clip walk did not start, or stopped short of the clip, and why
+    walkRefused = Signal(str)                 # the window walk closed short of the window, and why: its stack passed STACK_BYTES
     shortened = Signal(int)                   # the stream ended short of the container's claim: the count as the decoder now has it
 
     def __init__(self, graph, every=30):
@@ -57,7 +59,7 @@ class Worker(QThread):
         self._series_dirty = False
         self._window = (0, 0)
         self._walk_gen = -1
-        self._start = self._length = self._i = 0
+        self._start = self._length = self._i = self._bytes = 0
         self._stack = None
         self._dens = {}                       # node -> (length, BINS) counts, for the planes the walk computes
         self._clip_gen, self._clip_walk_gen = 0, 0   # bumped by walk_clip and invalidate; what the clip stack was walked under
@@ -170,7 +172,7 @@ class Worker(QThread):
                         self.clipWalked.emit(self._ci, self._clen)
                     continue
                 if gen != self._walk_gen:
-                    self._walk_gen, self._i, self._stack, self._dens, self._folded = gen, 0, None, {}, {}
+                    self._walk_gen, self._i, self._bytes, self._stack, self._dens, self._folded = gen, 0, 0, None, {}, {}
                     self._start = max(0, min(start, self.graph.count - 1))
                     self._length = max(0, min(length, self.graph.count - self._start))
                 if dirty and self._i:
@@ -226,20 +228,39 @@ class Worker(QThread):
         row = self._start + self._i
         out = np.asarray(self.graph.walk_row(row))
         planes = {nid: v for nid in self.graph.frame_nodes() if (v := self.graph.density(nid, row)) is not None}
-        if self._stack is not None and (not _fits(self._stack, out) or planes.keys() != self._dens.keys()):
-            self._stack, self._dens, self._i = None, {}, 0   # the nodes or the shape changed under the walk; start over
+        stacked = bool(self.graph.chain)      # without a chain nothing reads the stack, and the rows are not held
+        if self._i and ((self._stack is not None) != stacked or (stacked and not _fits(self._stack, out))
+                        or planes.keys() != self._dens.keys()):
+            self._stack, self._dens, self._i, self._bytes = None, {}, 0, 0   # the nodes or the shape changed under the walk; start over
             return
-        if self._stack is None:
-            self._stack = _stack_for(self._length, out)
+        if not self._i:
+            if stacked and self._length * nbytes(out) > STACK_BYTES:
+                self._refuse_walk(f"the window's stack would be {self._length * nbytes(out) / 2**30:.1f} GB; "
+                                  f"{', '.join(self.graph.heads)} do not share a fold()")
+                return
+            self._stack = _stack_for(self._length, out) if stacked else None
             self._dens = {nid: np.zeros((self._length, density.BINS), np.uint32) for nid in planes}
-        self._stack[self._i] = out
+        if stacked:
+            self._stack[self._i] = out
+            self._bytes += nbytes(out)
         for nid, v in planes.items():
             self._dens[nid][self._i] = v
         self._i += 1
+        if self._bytes > STACK_BYTES:
+            self._refuse_walk(f"the window's stack reached {self._bytes / 2**30:.1f} GB at row {row}; the rows walked stand")
+            return
         self.walked.emit(self._i, self._length)
         self.graph.progress(self._i, self._length)
         if self._i % self.every == 0 or self._i == self._length:
             self._emit_series()
+
+    def _refuse_walk(self, why):
+        """Closes the window walk at the rows it has, as a short stream does, and says why."""
+        self._length = self._i
+        self.walked.emit(self._i, self._length)
+        self.graph.progress(self._i, self._length)
+        self._emit_series()
+        self.walkRefused.emit(why)
 
     def _clip_one(self):
         out = np.asarray(self.graph.walk_row(self._ci))
@@ -247,7 +268,7 @@ class Worker(QThread):
             self._cstack, self._ci, self._cbytes = None, 0, 0
             return
         if self._cstack is None:
-            if self._clen * nbytes(out) > CLIP_BYTES:
+            if self._clen * nbytes(out) > STACK_BYTES:
                 self.clipRefused.emit(f"the clip's stack would be {self._clen * nbytes(out) / 2**30:.1f} GB; "
                                       f"{', '.join(self.graph.heads)} do not share a fold()")
                 self._clen = 0
@@ -257,7 +278,7 @@ class Worker(QThread):
         self._cstack[self._ci] = out
         self._cbytes += nbytes(out)
         self._ci += 1
-        if self._cbytes > CLIP_BYTES:
+        if self._cbytes > STACK_BYTES:
             self._clen = self._ci       # tables grew past the first row's forecast: the rows it has stand, as after stop_clip
             self.clipWalked.emit(self._ci, self._clen)
             self._emit_clip()
@@ -271,6 +292,8 @@ class Worker(QThread):
         if not self._i:
             return
         self.densityReady.emit({nid: d[: self._i] for nid, d in self._dens.items()}, self._start)
+        if self._stack is None:
+            return
         results = self._run_chain(self._stack[: self._i], self._start, self._i, self._folded)
         if results is not None:
             self.seriesReady.emit(results, self._start, self.graph.fps)

@@ -23,7 +23,7 @@ reduce as head covered all 30579 rows in about 20 s.
 ## What the guard is
 
 `_clip_one` refuses, at the first row once `out.nbytes` is known, when `count × nbytes` exceeds
-`CLIP_BYTES`, and says the figure and the head's name in the header. The limit is a guess that
+`STACK_BYTES` (`CLIP_BYTES` when this was written), and says the figure and the head's name in the header. The limit is a guess that
 matched the memo's default; it enforces by bytes a rule the contract does not state.
 
 ## The rule it stands in for

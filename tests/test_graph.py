@@ -547,7 +547,7 @@ def test_a_tool_raising_indexerror_fails_the_walk_and_only_the_stream_end_closes
 
 def test_a_clip_stack_of_tables_is_counted_through_its_object_columns():
     """nbytes reads the arrays behind an object field; the clip walk stops where the running total
-    passes CLIP_BYTES, the rows it has standing, where the first row's forecast let it start."""
+    passes STACK_BYTES, the rows it has standing, where the first row's forecast let it start."""
     from PySide6.QtWidgets import QApplication
     from sieve_player import worker as W
     QApplication.instance() or QApplication([])
@@ -562,7 +562,7 @@ def test_a_clip_stack_of_tables_is_counted_through_its_object_columns():
     doc = D.from_tools([gray, table, head])
     g = Graph(doc, Dec(), {**TOOLS, "table": table, "head": head})
     w = W.Worker(g)
-    W.CLIP_BYTES = 10_000           # ten rows of row 0's 424 B pass the forecast; the contours grow 400 B a row
+    W.STACK_BYTES = 10_000           # ten rows of row 0's 424 B pass the forecast; the contours grow 400 B a row
     refused, walked, clips = [], [], []
     w.clipRefused.connect(refused.append)
     w.clipWalked.connect(lambda d, n: walked.append((d, n)))
@@ -578,7 +578,7 @@ def test_a_clip_stack_of_tables_is_counted_through_its_object_columns():
             time.sleep(0.01)
         w.stop()
     finally:
-        W.CLIP_BYTES = 512 << 20
+        W.STACK_BYTES = 512 << 20
     assert refused and refused[0].startswith("the clip's stack reached") and walked[-1][0] == walked[-1][1] < 10
     assert len(clips[-1]["head"]["signal"]) == walked[-1][0]
 
@@ -604,7 +604,40 @@ def test_a_shown_table_walks_without_a_series_node():
             break
         time.sleep(0.01)
     w.stop()
-    assert walked[-1] == (6, 6) and len(walked) <= 7
+    assert walked[-1] == (6, 6) and len(walked) <= 7 and w._stack is None     # nothing reads a stack, so none is held
+
+
+def test_a_window_stack_stops_at_the_byte_limit_as_the_clip_stack_does():
+    """The window's stack is forecast from the first row and summed as it fills; past STACK_BYTES the
+    walk closes at the rows it has, the chain runs over them, and the transport is told why."""
+    from PySide6.QtWidgets import QApplication
+    from sieve_player import worker as W
+    QApplication.instance() or QApplication([])
+    t = np.dtype([("x", "<i4"), ("contour", object)])
+    table = tool("table", produces="blobs", fn=lambda f, p: np.array([(0, np.zeros((50 * int(f.flat[0]), 2), np.int32))], dtype=t))
+    head = tool("head", kind="series", expects="blobs", produces="signal")
+    head.run = lambda series, params: {"signal": np.array([len(r) for r in series.data], np.float32)}
+    doc = D.from_tools([gray, table, head])
+    g = Graph(doc, Dec(), {**TOOLS, "table": table, "head": head})
+    w = W.Worker(g)
+    W.STACK_BYTES = 10_000
+    refused, walked, got = [], [], []
+    w.walkRefused.connect(refused.append)
+    w.walked.connect(lambda d, n: walked.append((d, n)))
+    w.seriesReady.connect(lambda r, s, fps: got.append(r))
+    try:
+        w.set_window(0, 20)
+        w.start()
+        for _ in range(500):
+            QApplication.processEvents()
+            if refused:
+                break
+            time.sleep(0.01)
+        w.stop()
+    finally:
+        W.STACK_BYTES = 512 << 20
+    assert refused[0].startswith("the window's stack reached") and walked[-1][0] == walked[-1][1] < 20
+    assert len(got[-1]["head"]["signal"]) == walked[-1][0]
 
 
 def test_two_heads_with_different_folds_each_run_on_their_own_folding():

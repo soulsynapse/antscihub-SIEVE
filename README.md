@@ -23,7 +23,10 @@ file or, as `0`, turns it off, and `sieve_player.dev.console.log_path` says wher
 names a file every video opened dumps the probe's stream to (`sieve_player/trace.py`);
 `SIEVE_QT_TRACE` narrows the Qt warning handler to warnings containing its text, or `0` leaves
 Qt's own printing alone; `SIEVE_C_STDERR=1` leaves C-level stderr alone, so cv2's plugin warns on
-every unconverted frame.
+every unconverted frame, and libav says why a stream ended where it did, which the player's own
+line at the correction cannot. `SIEVE_MEMO_GB` and `SIEVE_CACHE_GB` set the memo's and the
+decoder cache's limits; unset or `0`, each is the default in its class, and the line the player prints on
+opening a video says what both are.
 
 ## A tool
 

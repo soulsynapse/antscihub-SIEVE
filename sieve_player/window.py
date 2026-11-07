@@ -7,6 +7,7 @@ re-synced on every change, and carries the runtime's results and standings back 
 The display reads the memo and never waits on the decoder. It opens on whatever the document names, or empty, and never prompts.
 """
 import os
+import sys
 import time
 import traceback
 
@@ -29,6 +30,15 @@ from .widgets import Trace
 from .worker import Worker
 
 DUMP_ENV = "SIEVE_DUMP"     # names the file every video opened in this process dumps its stream to
+MEMO_ENV, CACHE_ENV = "SIEVE_MEMO_GB", "SIEVE_CACHE_GB"   # the memo's and the decoder cache's limits; unset, each class's default
+
+
+def _gb(env):
+    """The limit in bytes the variable names, or None for the default; a value that is not a number reads as unset."""
+    try:
+        return int(float(os.environ[env]) * 2**30)
+    except (KeyError, ValueError):
+        return None
 
 
 class Lateness(QTimer):
@@ -398,7 +408,11 @@ class PlayerWindow(QMainWindow):
         path = path or self.doc.path
         if not path:
             return self._save_as()
-        document.save(self.doc, path)
+        try:
+            document.save(self.doc, path)
+        except OSError as e:
+            self.timeline.controls.progress.setText(f"could not save {os.path.basename(str(path))}: {e}")
+            return False
         self._retitle()
         return True
 
@@ -644,14 +658,18 @@ class PlayerWindow(QMainWindow):
 
     def _open_video(self, path):
         try:
-            decoder = Decoder(path)
+            decoder = Decoder(path, **({"cache_bytes": c} if (c := _gb(CACHE_ENV)) else {}))
         except IOError as e:
             if self.pane.video is not None:
                 self.pane.video.show_error(path, e)
             return False
         self._unload()
         self.decoder = decoder
-        self.graph = Graph(self.doc, decoder, self.tools)
+        self.graph = Graph(self.doc, decoder, self.tools, **({"memo_bytes": m} if (m := _gb(MEMO_ENV)) else {}))
+        # the one line a report of this video's run needs beside the log's tracebacks
+        print(f"SIEVE {time.strftime('%H:%M:%S')}: opened {path}: {decoder.width}x{decoder.height} at {decoder.fps:.3f} fps, "
+              f"{decoder.count} rows claimed, luma plane {'read' if decoder.luma else 'converted'}; "
+              f"memo {self.graph.memo.limit >> 30} GB, cache {decoder.cache_limit >> 30} GB", file=sys.stderr)
         if os.environ.get(DUMP_ENV):
             self.dump = Dump(self.graph, os.environ[DUMP_ENV])
             self.lateness = Lateness(self.dump, parent=self)
@@ -667,6 +685,7 @@ class PlayerWindow(QMainWindow):
         self.worker.clipWalked.connect(self._clip_walked)
         self.worker.clipReady.connect(self._clip_ready)
         self.worker.clipRefused.connect(self._clip_refused)
+        self.worker.walkRefused.connect(ct.progress.setText)
         self.worker.shortened.connect(self._shortened)
         self.worker.finished.connect(lambda w=self.worker: self._worker_ended(w))
         self.header.setEnabled(True)

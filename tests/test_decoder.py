@@ -96,3 +96,20 @@ def test_scrub_leaves_the_walk_cursor_alone(video):
         d.read(10_000)
     assert d.count == 300 and d.read(0)[0, 0, 0] == 0 and d.count == 300   # a read after the end seeks; it never steps the dead capture and reads its failure as row -1
     d.close()
+
+
+def test_a_stream_ending_short_of_the_container_is_said_once_on_stderr(video, tmp_path, capsys):
+    """The header's claim stands until a read fails; the correction is the one line that says where
+    and when, since C-level stderr is hushed; a container that seeks exactly is never called inexact."""
+    short = tmp_path / "short.avi"
+    short.write_bytes(video.read_bytes()[: video.stat().st_size // 2])
+    d = Decoder(short, cache_bytes=64 * 48 * 3)       # one frame: a read after the failure seeks rather than hits
+    claimed = d.count
+    with pytest.raises(IndexError):
+        for r in range(claimed):
+            d.read(r)
+    err = capsys.readouterr().err
+    assert 0 < d.count < claimed and f"ended at row {d.count} of the container's {claimed}" in err and " s; the count is now" in err
+    d.read(0)
+    assert "inexactly" not in capsys.readouterr().err and d.seeks == 1
+    d.close()

@@ -76,15 +76,15 @@ def nbytes(v):
 
 class Memo:
     """LRU bounded by bytes, as `nbytes` counts them. Image-shaped entries (ndim >= 2) are evicted
-    before small ones. An entry put pinned is never evicted; it counts toward the limit and leaves
-    only through `unpin`, which keeps the pinned entries whose key's first element is in `keep`
-    and drops the rest, so a STATIC node's one output outlives any walk and goes with its plan.
-    Each eviction goes to `on_evict(key, bytes)` when set, after the lock is dropped."""
+    before small ones. An entry put with an owner is pinned: never evicted, counted toward the
+    limit, and gone only through `unpin`, which drops every pinned entry whose owner is not in
+    `keep`, so whatever a STATIC node has memoized under any key outlives any walk and goes with
+    its plan. Each eviction goes to `on_evict(key, bytes)` when set, after the lock is dropped."""
 
     def __init__(self, limit_bytes):
         self.limit = limit_bytes
         self.bytes = 0
-        self._big, self._small, self._pinned = OrderedDict(), OrderedDict(), {}
+        self._big, self._small, self._pinned = OrderedDict(), OrderedDict(), {}     # pinned: key -> (owner, value)
         self._lock = threading.Lock()
         self.hits = self.misses = self.evictions = 0
         self.on_evict = None
@@ -93,10 +93,9 @@ class Memo:
 
     def get(self, k):
         with self._lock:
-            v = self._pinned.get(k)
-            if v is not None:
+            if k in self._pinned:
                 self.hits += 1
-                return v
+                return self._pinned[k][1]
             for d in (self._big, self._small):
                 v = d.get(k)
                 if v is not None:
@@ -109,21 +108,26 @@ class Memo:
     def unpin(self, keep):
         gone = []
         with self._lock:
-            for k in [k for k in self._pinned if k[0] not in keep]:
-                old = self._pinned.pop(k)
+            for k in [k for k, (owner, _) in self._pinned.items() if owner not in keep]:
+                _, old = self._pinned.pop(k)
                 self.bytes -= self._size(old)
                 gone.append((k, self._size(old)))
         if self.on_evict is not None:
             for ok, n in gone:
                 self.on_evict(ok, n)
 
-    def put(self, k, v, pin=False):
-        d = self._pinned if pin else self._big if isinstance(v, np.ndarray) and v.ndim >= 2 else self._small
+    def put(self, k, v, owner=None):
+        """`v` under `k`, pinned to `owner` when one is given; a key already held is left as it is."""
         gone = []
         with self._lock:
             if k in self._big or k in self._small or k in self._pinned:
                 return
-            d[k] = v
+            if owner is not None:
+                self._pinned[k] = (owner, v)
+            elif isinstance(v, np.ndarray) and v.ndim >= 2:
+                self._big[k] = v
+            else:
+                self._small[k] = v
             self.bytes += self._size(v)
             while self.bytes > self.limit:
                 src = self._big or self._small
@@ -429,7 +433,7 @@ class Graph:
                         self.note(nid, f"raised at row {row}: {type(exc).__name__}: {exc}")
                     raise
                 ev[1] = Memo._size(v)
-            self.memo.put(mk, v, pin=e.static)
+            self.memo.put(mk, v, owner=e.raw_key if e.static else None)
         return v if raw or e.band is None else banded(v, e.band)
 
     def density(self, nid, row):
@@ -449,7 +453,7 @@ class Graph:
             with self.probe(nid, row, k[0]) as ev:
                 v = density.fold(plane)
                 ev[0], ev[1] = "fold", v.nbytes
-            self.memo.put(k, v, pin=e.static)
+            self.memo.put(k, v, owner=e.raw_key if e.static else None)
         return v
 
     def peek(self, row, nid=None):

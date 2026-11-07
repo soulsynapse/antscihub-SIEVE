@@ -11,7 +11,8 @@ new ids and a tracklet never spans a contact. At 0 area is not read.
 """
 import numpy as np
 
-from tools._table import OUTLINES, TRACKS_DTYPE as DTYPE, draw_tracks, with_column
+from tools._draw import draw_tracks
+from tools._table import OUTLINES, TRACKS_DTYPE as DTYPE, with_column
 
 SIEVE_TOOL = True
 NAME, KIND, EXPECTS, PRODUCES = "track", "series", "blobs", "tracks"

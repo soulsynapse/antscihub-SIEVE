@@ -8,7 +8,8 @@ empty reads NaN, or 0 for count. The table must carry a plane and must not alrea
 """
 import numpy as np
 
-from tools._table import draw as draw_table, footprint, plane as plane_of, with_column
+from tools._draw import draw as draw_table
+from tools._table import footprint, plane as plane_of, with_column
 
 SIEVE_TOOL = True
 NAME, KIND, EXPECTS, PRODUCES = "sample", "frame", "blobs", "blobs"

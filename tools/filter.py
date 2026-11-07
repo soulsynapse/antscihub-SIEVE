@@ -5,7 +5,8 @@ or `aspect` (major / minor). A blank bound is none; a NaN field never passes.
 """
 import numpy as np
 
-from tools._table import DTYPE, OUTLINES, draw as draw_table
+from tools._draw import draw as draw_table
+from tools._table import DTYPE, OUTLINES, bound
 
 SIEVE_TOOL = True
 NAME, KIND, EXPECTS, PRODUCES = "filter", "frame", "blobs", "blobs"
@@ -23,11 +24,6 @@ def column(table, field):
     if field not in table.dtype.names:
         raise ValueError(f"filter: no field {field!r}; one of {(*table.dtype.names, *RATIOS)}")
     return table[field].astype(np.float64)
-
-
-def bound(text, default):
-    text = str(text).strip()
-    return default if text == "" else float(text)
 
 
 def keep(table, field, lo, hi):

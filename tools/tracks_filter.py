@@ -8,7 +8,8 @@ mean, and one the tables lack raises then.
 """
 import numpy as np
 
-from tools._table import draw_tracks
+from tools._draw import draw_tracks
+from tools._table import bound
 
 SIEVE_TOOL = True
 NAME, KIND, EXPECTS, PRODUCES = "tracks-filter", "series", "tracks", "tracks"
@@ -37,11 +38,6 @@ def properties(rows, property, column="area"):
             xy = np.array([(float(b["cx"]), float(b["cy"])) for b in recs])
             out[id] = float(np.hypot(*(xy[-1] - xy[0]))) if property == "displacement" else float(np.hypot(*np.diff(xy, axis=0).T).sum())
     return out
-
-
-def bound(text, default):
-    text = str(text).strip()
-    return default if text == "" else float(text)
 
 
 def keep(rows, property, column, lo, hi):

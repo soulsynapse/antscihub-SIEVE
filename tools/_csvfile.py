@@ -35,8 +35,8 @@ def written_key(path):
             first = f.readline()
     except OSError:
         return None
-    m = re.match(r"# sieve key=(\S*)", first)
-    return m.group(1) if m else None
+    parsed = parse_key(first)
+    return None if parsed is None else parsed[0]
 
 
 def replace(path, text):

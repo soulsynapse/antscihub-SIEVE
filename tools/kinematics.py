@@ -13,7 +13,8 @@ from collections import deque
 
 import numpy as np
 
-from tools._table import draw_tracks, with_column
+from tools._draw import draw_tracks
+from tools._table import with_column
 
 SIEVE_TOOL = True
 NAME, KIND, EXPECTS, PRODUCES = "kinematics", "series", "tracks", "tracks"

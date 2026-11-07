@@ -12,7 +12,7 @@ from sieve_player.graph import Series
 from tests.test_blobs import fed, m
 from tests.test_track import table
 from tools import blobs, filter, size, track, tracks_csv, travel
-from tools import _table
+from tools import _draw, _table
 
 
 def test_an_added_column_reaches_every_reader_by_the_tables_names(tmp_path):
@@ -42,7 +42,7 @@ def test_an_added_column_reaches_every_reader_by_the_tables_names(tmp_path):
     QApplication.instance() or QApplication([])
     image = QImage(100, 60, QImage.Format_RGB32)
     painter = QPainter(image)
-    _table.draw(painter, tables[3])
+    _draw.draw(painter, tables[3])
     track.draw(painter, 3, tracked, 0, track.DEFAULTS)
     painter.end()
 

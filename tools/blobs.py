@@ -12,7 +12,8 @@ The table's dtype, the plane on it and how a column is added are tools/_table.py
 import cv2
 import numpy as np
 
-from tools._table import DTYPE, OUTLINES, draw as draw_table, plane_dtype
+from tools._draw import draw as draw_table
+from tools._table import DTYPE, OUTLINES, plane_dtype
 
 SIEVE_TOOL = True
 NAME, KIND, EXPECTS, PRODUCES = "blobs", "frame", ("mask", "gray"), "blobs"

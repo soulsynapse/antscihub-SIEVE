@@ -1,7 +1,8 @@
-"""The table kind the blob tools share: its dtype, the plane it was found in, how a column is added
-and how a record meets a plane. Not a tool; the registry skips a stem beginning with `_`, and a tool
-imports from here and from no other tool (tests/test_seams.py). What a column means, a statistic
-over a table or a linker's state belongs to the tool that computes it, never here.
+"""The table kind the blob tools share: its dtype, the plane it was found in, how a column is added,
+how a record meets a plane and how a bound knob reads. Not a tool; the registry skips a stem
+beginning with `_`, and a tool imports from here and from no other tool (tests/test_seams.py). What
+a column means, a statistic over a table or a linker's state belongs to the tool that computes it,
+never here; how a table is drawn is `_draw.py`'s.
 
 A table is a structured array, one record a region; its dtype carries the (height, width) of the
 plane it was found in as metadata, `plane(table)`, so a tool relating it to a plane or table of
@@ -68,53 +69,7 @@ def footprint(b, shape, scale=(1.0, 1.0), outline="contour"):
     return rows, cols, local[np.ix_(iy, ix)]
 
 
-def outline(painter, b, kind):
-    """A record's box or contour in the painter's pen; the contour's points are pixel centres, +0.5."""
-    from PySide6.QtCore import QPointF, QRectF
-    from PySide6.QtGui import QPolygonF
-
-    if kind == "contour" and "contour" in b.dtype.names and b["contour"] is not None:
-        painter.drawPolygon(QPolygonF([QPointF(float(x) + 0.5, float(y) + 0.5) for x, y in b["contour"]]))
-    else:
-        painter.drawRect(QRectF(float(b["x"]), float(b["y"]), float(b["w"]), float(b["h"])))
-
-
-def draw(painter, table, kind="box", color=(80, 220, 120)):
-    """Every record of `table` outlined in `color`, one device pixel wide at any zoom; a frame
-    tool's draw() over a table, given the result it was handed."""
-    from PySide6.QtCore import Qt
-    from PySide6.QtGui import QColor, QPen
-
-    if table is None or len(table) == 0:
-        return
-    pen = QPen(QColor(*color), 0)
-    pen.setCosmetic(True)
-    painter.setPen(pen)
-    painter.setBrush(Qt.NoBrush)
-    for b in table:
-        outline(painter, b, kind)
-
-
-TRAIL = 30          # rows of path drawn behind each record of a tracks table
-
-
-def draw_tracks(painter, row, result, start, kind="box"):
-    """A series tool's draw() over a tracks result: the row's records outlined in a hue per id, the
-    id beside each, and the id's path over the last TRAIL rows."""
-    from PySide6.QtCore import QPointF, Qt
-    from PySide6.QtGui import QColor, QPen
-
-    if not isinstance(result, dict) or not 0 <= row - start < len(result["rows"]):
-        return
-    rows, i = result["rows"], row - start
-    painter.setBrush(Qt.NoBrush)
-    for b in rows[i]:
-        pen = QPen(QColor.fromHsv(int(b["id"]) * 47 % 360, 200, 240), 0)
-        pen.setCosmetic(True)
-        painter.setPen(pen)
-        outline(painter, b, kind)
-        painter.drawText(QPointF(float(b["x"]), float(b["y"]) - 2), str(int(b["id"])))
-        path = [(float(t["cx"][0]), float(t["cy"][0])) for t in (rows[k][rows[k]["id"] == b["id"]]
-                                                                 for k in range(max(0, i - TRAIL), i + 1)) if len(t)]
-        for (x0, y0), (x1, y1) in zip(path, path[1:]):
-            painter.drawLine(QPointF(x0, y0), QPointF(x1, y1))
+def bound(text, default):
+    """A bound knob's text as a float, `default` when it is blank, so a blank bound is none."""
+    text = str(text).strip()
+    return default if text == "" else float(text)

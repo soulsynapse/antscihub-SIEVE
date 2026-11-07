@@ -19,3 +19,6 @@
   be a bug's only witness.
 - Moving or refactoring code keeps its comments unless the change makes one
   obsolete.
+
+## Running
+- Run Python and pytest through `.venv/Scripts/python.exe`; the anaconda `python` on PATH has no PySide6.

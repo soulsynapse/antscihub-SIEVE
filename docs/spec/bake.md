@@ -237,7 +237,7 @@ per-tool roll-up below. It is the only tool declaring `output_name`, `export_com
 `describe_output`, and the registry's check fails only on a facet the player does not read, so the
 tool, the pane's export block and the three facets go together or not at all.
 
-- [ ] tools/downsample.py is gone, with the export block and the three facets, and the registry's
+- [x] tools/downsample.py is gone, with the export block and the three facets, and the registry's
   check and the facet table in README agree.
   Check: `python -m sieve_player.registry --check` green and a test that the registry's FACETS
   names none of the three.

@@ -1,5 +1,6 @@
 """The bake node, live: the identity on every kind, a frame node on a frame wire and a series node on a series wire, its params changing nothing it hands out, and its mode live."""
 import json
+import os
 
 import numpy as np
 
@@ -62,3 +63,9 @@ def test_no_param_changes_what_a_live_node_hands_out():
         g.sync()
         assert all((g.compute("bake", r) == before[0][r]).all() for r in range(ROWS))
         assert series(g)["smooth"]["signal"].tolist() == before[1]
+
+
+def test_the_export_facets_are_retired_with_downsample():
+    from sieve_player.registry import FACETS
+    assert not {"output_name", "export_command", "describe_output"} & set(FACETS)
+    assert not os.path.exists(os.path.join(os.path.dirname(__file__), "..", "tools", "downsample.py"))

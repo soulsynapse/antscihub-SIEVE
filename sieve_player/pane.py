@@ -7,31 +7,17 @@ params, bands and the pin into the document and says what changed; it knows noth
 runtime, and what it shows of a run, the density, the trace, the standing line, the window hands it.
 """
 import os
-import re
 
-from PySide6.QtCore import QProcess, QSize, Qt, Signal
-from PySide6.QtGui import QFontMetrics
+from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtWidgets import (QComboBox, QDoubleSpinBox, QFileDialog, QFrame, QPushButton, QScrollArea, QVBoxLayout,
                                QWidget)
 
 from .document import (OPEN, VIDEO_OUTPUT, VIDEO_OUTPUTS, VIDEO_PRODUCES, VIDEO_SCALE, VIDEO_TOOL, is_selector, mode_of,
                        paths, video_output, video_scale)
-from .theme import CONTROL_W, GAP, PAD, WIDE_W, Form, GlyphButton, Layer, measured, readout
+from .theme import CONTROL_W, GAP, PAD, WIDE_W, Form, GlyphButton, Layer, readout
 from .widgets import Density, Trace
 
 VIDEO_FILTER = "Video (*.mp4 *.MP4 *.avi *.mov *.mkv *.mts *.MTS);;All (*)"
-
-
-def free_name(dst):
-    """`dst` if nothing is there, else the first `stem-2.ext`, `stem-3.ext`... that is free."""
-    if not os.path.exists(dst):
-        return dst
-    root, ext = os.path.splitext(dst)
-    root = re.sub(r"-\d+$", "", root)
-    n = 2
-    while os.path.exists(f"{root}-{n}{ext}"):
-        n += 1
-    return f"{root}-{n}{ext}"
 
 
 def _column(parent, spacing=GAP):
@@ -118,95 +104,6 @@ class Video(QWidget):
         self.button.setToolTip("" if free else f"{by} picks the video; unwire it to choose by hand")
 
 
-class Export(QWidget):
-    """The export block under a tool that defines `export_command(src, dst, params, fps) -> argv`
-    and `output_name(src, params) -> path`: the target, a button that runs the argv in a QProcess,
-    and the process's last line; `describe_output(src, params, fps) -> str`, if defined, is the
-    line under the target."""
-
-    def __init__(self, tool, parent=None):
-        super().__init__(parent)
-        self.tool = tool
-        lay = _column(self)
-        self.target, self.detail = measured(wide=True), readout()
-        self.button, self.status = QPushButton("Export"), readout()
-        self.form = Form([("target", self.target)])
-        self.form.add_line(self.detail)
-        self.form.add_row("export", self.button)
-        self.form.add_line(self.status)
-        lay.addWidget(self.form)
-        self.button.clicked.connect(self._export)
-        self.button.setEnabled(False)
-        self.proc, self.src, self.fps, self.params = None, None, None, {}
-        self._describe()
-
-    def set_source(self, path, fps):
-        self.src, self.fps = path, fps
-        self.button.setEnabled(path is not None)
-        self._describe()
-
-    def set_params(self, params):
-        self.params = dict(params)
-        self._describe()
-
-    def _target(self):
-        return free_name(self.tool.output_name(self.src, self.params))
-
-    def _describe(self):
-        if self.src is None:
-            self.target.setText("")
-            self.detail.setText("pick a video on the video node")
-            return
-        dst = self._target()
-        self._name = os.path.basename(dst)
-        self._elide()
-        self.target.setToolTip(dst)
-        describe = getattr(self.tool, "describe_output", None)
-        self.detail.setText(describe(self.src, self.params, self.fps) if describe else "")
-
-    _name = ""
-
-    def _elide(self):
-        metrics = QFontMetrics(self.target.font())
-        self.target.setText(metrics.elidedText(self._name, Qt.ElideMiddle, self.target.width() - 12))
-
-    def resizeEvent(self, e):
-        super().resizeEvent(e)
-        if self._name:
-            self._elide()
-
-    def _export(self):
-        if self.proc is not None:
-            self.proc.kill()
-            return
-        dst = self._target()
-        cmd = self.tool.export_command(self.src, dst, self.params, self.fps)
-        self.proc = QProcess(self)
-        self.proc.setProcessChannelMode(QProcess.MergedChannels)
-        self.proc.readyReadStandardOutput.connect(self._progress)
-        self.proc.finished.connect(lambda code, _: self._done(code, dst))
-        self.proc.start(cmd[0], cmd[1:])
-        self.button.setText("Cancel")
-        self.status.setText(f"writing {os.path.basename(dst)}")
-
-    def _progress(self):
-        text = bytes(self.proc.readAllStandardOutput()).decode(errors="replace").replace("\r", "\n")
-        lines = [s for s in text.split("\n") if s.strip()]
-        if lines:
-            self.status.setText(lines[-1].strip())
-
-    def _done(self, code, dst):
-        self.proc = None
-        self.button.setText("Export")
-        if code == 0:
-            self.status.setText(f"wrote {os.path.basename(dst)}")
-        else:
-            if os.path.exists(dst):
-                os.remove(dst)  # a cancelled or failed run leaves no partial file behind
-            self.status.setText(f"exited {code}; nothing written")
-        self._describe()
-
-
 class BakeBlock(QWidget):
     """The block under a tool declaring BAKES: the node's mode, the button that asks the window
     for a bake and cancels one running, and the line that says how far it is or why it stopped."""
@@ -240,7 +137,7 @@ class BakeBlock(QWidget):
 class Pane(QWidget):
     """`tools` is the catalogue, name to module. `select(nid)` shows that node's surface, None
     shows nothing. `video` is the video node's widget, `widget(nid)` a tool node's settings widget,
-    `exports[nid]` the Export under a node whose tool exports. Its size hint is the shown card's
+    Its size hint is the shown card's
     height, so a host that stacks it under the canvas gives it only the room its content needs."""
     paramsChanged = Signal(str)   # this node's params in the document changed here
     pinChanged = Signal()         # the document's pinned flag moved here
@@ -252,7 +149,7 @@ class Pane(QWidget):
         super().__init__(parent)
         self.tools = tools
         self.doc = None
-        self.cards, self.widgets, self.exports, self.notes = {}, {}, {}, {}
+        self.cards, self.widgets, self.notes = {}, {}, {}
         self.standings = {}   # tool node -> the line under its settings, see set_standing
         self.densities = {}   # frame node -> its Density plot, hidden until the window hands it counts
         self.traces = {}      # series node -> its Trace, hidden until the window hands it a result
@@ -298,7 +195,6 @@ class Pane(QWidget):
     def _drop(self, nid):
         card = self.cards.pop(nid)
         self.widgets.pop(nid, None)
-        self.exports.pop(nid, None)
         self.notes.pop(nid, None)
         self.standings.pop(nid, None)
         self.densities.pop(nid, None)
@@ -378,12 +274,6 @@ class Pane(QWidget):
                 block.cancelled.connect(lambda nid=node.id: self.bakeCancelled.emit(nid))
                 card.add(block)
                 self.bakes[node.id] = block
-            if w is not None and getattr(tool, "export_command", None) is not None:
-                ex = Export(tool)
-                ex.set_params(node.params)
-                ex.set_source(self._src, self._fps)
-                card.add(ex)
-                self.exports[node.id] = ex
         card.hide()
         self._lay.insertWidget(self._lay.count() - 1, card)
         self.cards[node.id] = card
@@ -409,8 +299,6 @@ class Pane(QWidget):
     def _changed(self, nid):
         node = self.doc.node(nid)
         node.params = self.widgets[nid].params()   # the knobs are the whole set; a param a tool dropped goes with it
-        if nid in self.exports:
-            self.exports[nid].set_params(node.params)
         self.paramsChanged.emit(nid)
 
     def select(self, nid):
@@ -500,8 +388,7 @@ class Pane(QWidget):
             lab.setVisible(bool(text))
 
     def set_source(self, path, fps):
-        """The video every Export, and every settings widget with a `set_source`, writes from; None
-        when nothing is loaded."""
+        """The video every settings widget with a `set_source` writes from; None when nothing is loaded."""
         self._src, self._fps = path, fps
-        for w in (*self.exports.values(), *[w for w in self.widgets.values() if hasattr(w, "set_source")]):
+        for w in [w for w in self.widgets.values() if hasattr(w, "set_source")]:
             w.set_source(path, fps)

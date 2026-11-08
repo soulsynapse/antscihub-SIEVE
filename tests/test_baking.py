@@ -237,6 +237,30 @@ def test_a_kind_with_no_writer_is_refused_by_what_the_store_says(tmp_path, in_st
     g.decoder.close()
 
 
+def test_a_writer_that_cannot_open_refuses_the_bake_and_leaves_the_window_walk_alone(tmp_path, in_store, monkeypatch):
+    """A raise while the bake starts is the bake's: it is refused naming the node, the window walks to its
+    end and nothing is reported failed, where a walk closing at the bake's raise would stop it short."""
+    class Shut:
+        def __init__(self, *a, **k):
+            raise OSError("the file is held")
+    ext, _ = store.writer("gray")
+    monkeypatch.setitem(store.WRITERS, "gray", (ext, Shut))
+    g = graph(clip(tmp_path / "v.avi"), "gray")
+    w = Worker(g)
+    walked, failed = [], []
+    w.walked.connect(lambda d, n: walked.append((d, n)))
+    w.failed.connect(lambda r, nid: failed.append((r, nid)))
+    done, refused = run_bake(w)          # asks a window of 2 beside the bake
+    t = time.perf_counter()
+    while (2, 2) not in walked and time.perf_counter() - t < 10:
+        QApplication.processEvents()
+        time.sleep(0.005)
+    w.stop()
+    assert not done and refused == [("bake", "did not start: OSError: the file is held")]
+    assert (2, 2) in walked and not failed, (walked, failed)
+    g.decoder.close()
+
+
 @pytest.mark.parametrize("quality", ["lossless", "standard"])
 def test_a_frame_kind_writes_a_clip_the_video_node_opens(tmp_path, in_store, quality, monkeypatch):
     monkeypatch.setattr(decoder_mod, "QUIET", True)

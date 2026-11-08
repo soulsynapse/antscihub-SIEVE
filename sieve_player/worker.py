@@ -275,6 +275,7 @@ class _Bake:
         self.asked = False
         self.ask = (None, "", "")       # (the node to bake, or None, its document's name, and why the one running is to go)
         self.at = None                  # the _Writing in progress
+        self.starting = None            # the node begin() last tried to start: what a raise before `at` exists is refused on
 
     def pending(self):
         return self.asked or (self.at is not None and not self.at.series and self.at.i < len(self.at.rows))
@@ -285,6 +286,7 @@ class _Bake:
 
     def begin(self, nid, document, why):
         self.abandon(why)
+        self.starting = nid
         if nid is not None:
             self.start(nid, document)
 
@@ -409,7 +411,11 @@ class _Bake:
 
     def raised(self, exc):
         b = self.at
-        row = b.rows[b.i] if b is not None and b.i < len(b.rows) else "?"
+        if b is None:
+            if self.starting is not None:
+                self.refuse(self.starting, f"did not start: {type(exc).__name__}: {exc}")
+            return
+        row = b.rows[b.i] if b.i < len(b.rows) else "?"
         self.abandon(f"{getattr(exc, 'sieve_node', '') or 'the writer'} raised at row {row}: {type(exc).__name__}: {exc}")
 
 
@@ -555,6 +561,7 @@ class Worker(QThread):
                     continue
                 self.graph.serving("walk")
                 if bake_asked:
+                    job = bake
                     with self._cv:      # an ask is taken as the job begins, so one landing meanwhile is not lost
                         ask, bake.asked = bake.ask, False
                     bake.begin(*ask)
@@ -574,6 +581,7 @@ class Worker(QThread):
                 if fed and dirty and win.i:
                     win.emit()
                     if clip.i:
+                        job = clip
                         clip.emit()
                     continue
                 if fed and win.i < win.length:

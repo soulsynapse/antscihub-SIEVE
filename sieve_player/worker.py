@@ -102,7 +102,7 @@ class Worker(QThread):
     walked = Signal(int, int)                 # rows done, rows in window
     seriesReady = Signal(object, int, float)  # {node: result} for the series chain, each gated and keyed, start, fps
     densityReady = Signal(object, int)        # {node: (rows, BINS) counts} per plane the walk computes, start
-    failed = Signal(int, str)                 # a tool raised at this row, on this node; a walk is abandoned, a display request dropped
+    failed = Signal(int, str)                 # a tool raised at this row, on this node; a walk closes at the rows it has, as a refused one does, a display request is dropped
     clipWalked = Signal(int, int)             # rows done, rows in the clip; done == total when the clip walk is not running
     clipReady = Signal(object, int, float)    # as seriesReady, over the clip walk's rows; {} when the walk was abandoned
     clipRefused = Signal(str)                 # the clip walk did not start, or stopped short of the clip, and why
@@ -336,12 +336,9 @@ class Worker(QThread):
                     self._bake_fail(f"{nid or 'the writer'} raised at row {row}: {type(e).__name__}: {e}")
                 else:
                     job = clip if which == "clip" else win
-                    self.failed.emit(job.start + job.i, nid)
-                    if job is win:
-                        job.i = job.length      # abandoned where it stands, the count still the window's; the next ask restarts it
-                    else:
-                        job.length = job.i      # closed at the rows it has, so the header reads it done
-                        job.progress.emit(job.i, job.length)
+                    row = job.start + job.i
+                    self._close(job)
+                    self.failed.emit(row, nid)
 
     def _walk_one(self, job):
         row = job.start + job.i

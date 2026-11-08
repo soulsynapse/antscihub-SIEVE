@@ -548,8 +548,9 @@ def test_the_window_and_the_clip_are_one_walk_over_two_ranges():
 
 
 def test_a_tool_raising_indexerror_fails_the_walk_and_only_the_stream_end_closes_it():
-    """The worker closes a window early on EndOfStream alone; a tool's own IndexError is a failure
-    said on the node, never a shorter clip with a clean trace."""
+    """A tool's own IndexError is a failure said on the node, never a shorter clip with a clean
+    trace: the walk closes at the rows it has, as a refused one does, and only EndOfStream closes
+    it with no node blamed."""
     from PySide6.QtWidgets import QApplication
     from sieve_player.worker import Worker
     QApplication.instance() or QApplication([])
@@ -567,7 +568,7 @@ def test_a_tool_raising_indexerror_fails_the_walk_and_only_the_stream_end_closes
         if failed:
             break
         time.sleep(0.01)
-    assert failed == [(2, "bad")] and walked[-1] == (2, 8) and g.standing("bad").startswith("raised at row 2: IndexError")
+    assert failed == [(2, "bad")] and walked[-1] == (2, 2) and g.standing("bad").startswith("raised at row 2: IndexError")
     w.request_row(2)                            # the display asking for the row fails the same way, and says so
     for _ in range(300):
         QApplication.processEvents()

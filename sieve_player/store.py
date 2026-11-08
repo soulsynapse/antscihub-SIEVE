@@ -1,7 +1,7 @@
 """The store: the folder bakes land in, each a file named by its node's key with a sidecar beside it
-that says what the file is, and the rule for where the folder is. Imports nothing of the player; the
+that says what the file is, the rule for where the folder is, and which kinds have a writer. The
 window shows what `status()` says and `choose()`s on the user's behalf, a bake writes through
-`place()` and `write_sidecar()`, and a reader asks `sidecar()`."""
+`writer()`, `place()` and `write_sidecar()`, and a reader asks `sidecar()`."""
 import json
 import os
 import shutil
@@ -79,6 +79,18 @@ def status(path=None):
     why = writable(path)
     free = 0 if why else shutil.disk_usage(path).free
     return path, held(path), free, why
+
+
+def writer(kind):
+    """(the file's extension, the writer class) for `kind`, or None for a kind no bake can write."""
+    from .writers import WRITERS
+    return WRITERS.get(kind)
+
+
+def kinds():
+    """The kinds a bake can write, sorted."""
+    from .writers import WRITERS
+    return sorted(WRITERS)
 
 
 def place(key, ext, path=None):

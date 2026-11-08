@@ -36,6 +36,7 @@ class Node:
     pos: tuple = (0.0, 0.0)
     band: tuple | None = None                                       # (lo, hi) kept, of a plane's pixels or a signal's rows; None keeps every value
     mode: str | None = None                                         # one of the tool's MODES, for a tool declaring them; None is the first
+    baked: str | None = None                                        # the key the node's bake in the store was written under, once there is one
     extra: dict = field(default_factory=dict, repr=False)            # keys this module does not know
     unresolved: bool = field(default=False, compare=False)          # set by resolve(); not saved
 
@@ -148,7 +149,8 @@ class Document:
             **({"pinned": self.pinned} if self.pinned is not None else {}),
             "nodes": [{"id": n.id, "tool": n.tool, "params": n.params, "pos": list(n.pos),
                        **({"band": list(n.band)} if n.band is not None else {}),
-                       **({"mode": n.mode} if n.mode is not None else {}), **n.extra} for n in self.nodes],
+                       **({"mode": n.mode} if n.mode is not None else {}),
+                       **({"baked": n.baked} if n.baked is not None else {}), **n.extra} for n in self.nodes],
             "wires": [{"from": w.src, "to": w.dst, "input": w.input} for w in self.wires],
             **self.extra,
         }
@@ -159,7 +161,7 @@ class Document:
         if not isinstance(v, int) or v > VERSION:
             raise FormatError(f"document is format version {v!r}; this module reads up to {VERSION}")
         top = {"version", "video", "display", "overlay", "pinned", "nodes", "wires"}
-        node_keys = {"id", "tool", "params", "pos", "band", "mode"}
+        node_keys = {"id", "tool", "params", "pos", "band", "mode", "baked"}
         doc = cls(video=d.get("video"), display=d.get("display"), overlay=d.get("overlay"), pinned=d.get("pinned"),
                   extra={k: v for k, v in d.items() if k not in top})
         for nd in d.get("nodes", []):
@@ -168,7 +170,7 @@ class Document:
             doc.nodes.append(Node(nd["id"], nd["tool"], dict(nd.get("params", {})),
                                   tuple(float(x) for x in nd.get("pos", (0, 0))),
                                   None if nd.get("band") is None else tuple(float(x) for x in nd["band"]),
-                                  nd.get("mode"), {k: v for k, v in nd.items() if k not in node_keys}))
+                                  nd.get("mode"), nd.get("baked"), {k: v for k, v in nd.items() if k not in node_keys}))
         ids = {n.id for n in doc.nodes}
         for wd in d.get("wires", []):
             if wd["from"] not in ids or wd["to"] not in ids:

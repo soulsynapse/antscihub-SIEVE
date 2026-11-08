@@ -341,6 +341,8 @@ class PlayerWindow(QMainWindow):
         self.pane.paramsChanged.connect(self._params_changed)
         self.pane.pinChanged.connect(self._show_pinned)
         self.pane.videoPicked.connect(self.load)
+        self.pane.bakeAsked.connect(lambda nid: self.worker is not None and self.worker.bake(nid))
+        self.pane.bakeCancelled.connect(lambda nid: self.worker is not None and self.worker.cancel_bake())
         self.display.drawFailed.connect(self._draw_failed)
         self.header = Header()
         self.header.walk.clicked.connect(self._toggle_clip)
@@ -704,6 +706,9 @@ class PlayerWindow(QMainWindow):
         self.worker.clipWalked.connect(self._clip_walked)
         self.worker.clipReady.connect(self._clip_ready)
         self.worker.clipRefused.connect(self._clip_refused)
+        self.worker.baked.connect(self.pane.show_bake)
+        self.worker.bakeDone.connect(self._baked)
+        self.worker.bakeRefused.connect(self._bake_refused)
         self.worker.walkRefused.connect(ct.progress.setText)
         self.worker.shortened.connect(self._shortened)
         self.worker.finished.connect(lambda w=self.worker: self._worker_ended(w))
@@ -881,6 +886,16 @@ class PlayerWindow(QMainWindow):
     def _clip_ready(self, results, start, fps):
         self.clip_results = results
         self._show_pinned()
+
+    def _baked(self, nid, key):
+        """The worker landed `nid`'s bake and set its mode on the document; the views follow."""
+        self.pane.show_modes()
+        self.canvas.update()
+        self._restate()
+
+    def _bake_refused(self, nid, why):
+        self.pane.bake_refused(nid, why)
+        self._restate()
 
     def _clip_refused(self, why):
         self._clip_asked = False

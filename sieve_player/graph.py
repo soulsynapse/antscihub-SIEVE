@@ -204,7 +204,7 @@ class Event:
     cpu_ms: float       # the thread's CPU time over the same span, exclusive likewise; wall far above it is a wait. On
                         # Windows thread_time ticks at the scheduler quantum (~16 ms), so one event's is 0 or a tick and
                         # only a sum over many events is a figure
-    serves: str | None  # "scrub" | "walk": what the worker was doing; None off the worker (bench, tests)
+    serves: str | None  # "scrub" | "walk" | "bake": what the worker was doing; None off the worker (bench, tests)
     length: int | None  # progress only: rows in the window, `row` being the rows done
     keys: dict | None   # sync only: every node's key under the new plan, band included; diff two to see what a drag changed
 
@@ -333,6 +333,11 @@ class Graph:
         with self._lock:
             return self._plan[nid].key
 
+    def entry(self, nid):
+        """The plan's Entry for `nid`, or None; built at sync and never touched after, so safe to hold."""
+        with self._lock:
+            return self._plan.get(nid)
+
     def source(self, nid):
         """The node `nid`'s first input reads, or None."""
         with self._lock:
@@ -368,7 +373,7 @@ class Graph:
         self._emit("progress", None, done, None, 0, length=length)
 
     def serving(self, what):
-        """What the events this thread emits from here on served, "scrub" or "walk"; the worker says
+        """What the events this thread emits from here on served, "scrub", "walk" or "bake"; the worker says
         at the top of each loop, since only it knows, and nothing else sets it."""
         self._probing.serves = what
 

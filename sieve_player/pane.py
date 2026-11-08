@@ -14,8 +14,8 @@ from PySide6.QtGui import QFontMetrics
 from PySide6.QtWidgets import (QComboBox, QDoubleSpinBox, QFileDialog, QFrame, QPushButton, QScrollArea, QVBoxLayout,
                                QWidget)
 
-from .document import (OPEN, VIDEO_OUTPUT, VIDEO_OUTPUTS, VIDEO_PRODUCES, VIDEO_SCALE, VIDEO_TOOL, is_selector, paths,
-                       video_output, video_scale)
+from .document import (OPEN, VIDEO_OUTPUT, VIDEO_OUTPUTS, VIDEO_PRODUCES, VIDEO_SCALE, VIDEO_TOOL, is_selector, mode_of,
+                       paths, video_output, video_scale)
 from .theme import CONTROL_W, GAP, PAD, WIDE_W, Form, GlyphButton, Layer, measured, readout
 from .widgets import Density, Trace
 
@@ -207,6 +207,36 @@ class Export(QWidget):
         self._describe()
 
 
+class BakeBlock(QWidget):
+    """The block under a tool declaring BAKES: the node's mode, the button that asks the window
+    for a bake and cancels one running, and the line that says how far it is or why it stopped."""
+    asked = Signal()
+    cancelled = Signal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        lay = _column(self)
+        self.mode, self.button, self.status = readout(mono=True), QPushButton("Bake"), readout()
+        self.form = Form([("mode", self.mode), ("bake", self.button)])
+        self.form.add_line(self.status)
+        lay.addWidget(self.form)
+        self.running = False
+        self.button.clicked.connect(lambda: (self.cancelled if self.running else self.asked).emit())
+
+    def set_mode(self, mode):
+        self.mode.setText(mode or "")
+
+    def set_progress(self, done, total):
+        self.running = done < total
+        self.button.setText("Cancel" if self.running else "Bake")
+        self.status.setText(f"baking {done}/{total}" if self.running else f"baked {total} rows" if total else "")
+
+    def set_refused(self, why):
+        self.running = False
+        self.button.setText("Bake")
+        self.status.setText(why)
+
+
 class Pane(QWidget):
     """`tools` is the catalogue, name to module. `select(nid)` shows that node's surface, None
     shows nothing. `video` is the video node's widget, `widget(nid)` a tool node's settings widget,
@@ -215,6 +245,8 @@ class Pane(QWidget):
     paramsChanged = Signal(str)   # this node's params in the document changed here
     pinChanged = Signal()         # the document's pinned flag moved here
     videoPicked = Signal(str)
+    bakeAsked = Signal(str)       # the Bake button under this node
+    bakeCancelled = Signal(str)
 
     def __init__(self, tools, parent=None):
         super().__init__(parent)
@@ -225,6 +257,7 @@ class Pane(QWidget):
         self.densities = {}   # frame node -> its Density plot, hidden until the window hands it counts
         self.traces = {}      # series node -> its Trace, hidden until the window hands it a result
         self.pins = {}        # series node -> the pin in its card's corner
+        self.bakes = {}       # node whose tool BAKES -> its BakeBlock
         self.video = None
         self.current = None
         self._src, self._fps = None, None
@@ -271,6 +304,7 @@ class Pane(QWidget):
         self.densities.pop(nid, None)
         self.traces.pop(nid, None)
         self.pins.pop(nid, None)
+        self.bakes.pop(nid, None)
         if self.video is not None and self.video.parent() is card:
             self.video = None
         self._lay.removeWidget(card)
@@ -337,6 +371,13 @@ class Pane(QWidget):
                     pin.clicked.connect(lambda on, nid=node.id: self._pin(nid, on))
                     card.add_corner(pin)
                     self.pins[node.id] = pin
+            if w is not None and getattr(tool, "BAKES", None):
+                block = BakeBlock()
+                block.set_mode(mode_of(self.doc, self.tools, node.id))
+                block.asked.connect(lambda nid=node.id: self.bakeAsked.emit(nid))
+                block.cancelled.connect(lambda nid=node.id: self.bakeCancelled.emit(nid))
+                card.add(block)
+                self.bakes[node.id] = block
             if w is not None and getattr(tool, "export_command", None) is not None:
                 ex = Export(tool)
                 ex.set_params(node.params)
@@ -426,6 +467,19 @@ class Pane(QWidget):
                 plot.show()
             else:
                 plot.hide()
+
+    def show_bake(self, nid, done, total):
+        if nid in self.bakes:
+            self.bakes[nid].set_progress(done, total)
+
+    def bake_refused(self, nid, why):
+        if nid in self.bakes:
+            self.bakes[nid].set_refused(why)
+
+    def show_modes(self):
+        """Every mode line follows the document, after a bake lands or a document is reopened."""
+        for nid, block in self.bakes.items():
+            block.set_mode(mode_of(self.doc, self.tools, nid))
 
     def set_playhead(self, row):
         for plot in (*self.densities.values(), *self.traces.values()):

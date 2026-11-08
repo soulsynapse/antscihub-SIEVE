@@ -120,34 +120,34 @@ cancel, and a run that does not finish leaves nothing, as every writer in tools/
 The increment is where time decimation lives: dropping rows is not a thing a frame tool can do,
 one row in and one out, so tools/downsample.py's hold-every-N preview was the sign it belonged here.
 
-- [ ] Bake on the node writes its input from the first row to the last of the range, every increment
+- [x] Bake on the node writes its input from the first row to the last of the range, every increment
   rows, into the store under the node's key with its sidecar, on the worker, with progress said on
   the node; when it is done the node is baked.
   Check: a test bakes a short chain over a synthetic clip and finds the file, the sidecar and the
   node's mode.
-- [ ] While a bake runs, a scrub is answered between its rows, and the bake holds no more than the
+- [x] While a bake runs, a scrub is answered between its rows, and the bake holds no more than the
   row it is writing.
   Check: a test scrubs during a bake through the probe and reads the worker's bytes held.
-- [ ] Cancel, a tool raising mid-bake, or the store refusing a write leaves no file and no part of
+- [x] Cancel, a tool raising mid-bake, or the store refusing a write leaves no file and no part of
   one, and the node stays live with the reason in its standing.
   Check: a test cancels one bake and fails another and reads the store and the standing.
-- [ ] Bake on a kind with no writer, flow and hsv today, is refused with the reason in the node's
+- [x] Bake on a kind with no writer, flow and hsv today, is refused with the reason in the node's
   standing and the node stays live; which kinds have a writer is what the store says, not a list in
   the node.
   Check: a test asks a bake on a flow wire and reads the standing.
-- [ ] A frame kind writes a clip the video node opens: gray and bgr at the node's quality, a mask
+- [x] A frame kind writes a clip the video node opens: gray and bgr at the node's quality, a mask
   losslessly; the clip's row count is the rows baked and its fps the source's over the increment.
   Lossless means equal on read, so a gray at lossless is written in a range the frame has and not
   the encoder's default.
   Check: a test bakes each of the three at each quality, opens the clip through the decoder and
   reads count, fps, the mask equal, the gray equal at lossless and within the quality's tolerance
   at standard.
-- [ ] A baked gray clip is in a pixel format the decoder reads through its luma path
+- [x] A baked gray clip is in a pixel format the decoder reads through its luma path
   (docs/findings/2026-11-01-luma-read.md), so a row of the bake never pays the conversion the chain
   it replaced had already shed.
   Check: a test opens a baked gray clip with the decoder quiet, as the player runs it, and reads
   the decoder's luma-read flag.
-- [ ] A table kind reads back equal, every column and its dtype, `contour` included; a signal reads
+- [x] A table kind reads back equal, every column and its dtype, `contour` included; a signal reads
   back equal.
   Check: a test bakes blobs, tracks and a signal and compares.
 

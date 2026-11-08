@@ -119,6 +119,7 @@ Facets the player reads when a tool has them:
 | `INPUTS = {input: types}` | a frame input after the first, with the types it expects; `run` reads it as `frames(row, input)`, and the node's key and `frames.key` follow it |
 | `PATHS = {input: loader}` | a path input a selector feeds; the loader turns the file into params |
 | `MODES = (...)` | the node has a mode, one of them, saved with the node and drawn on it in the canvas; the first is the mode of a node that has none saved (bake: live, baked, stale) |
+| `BAKES = True` | a Bake button under the node: the worker writes the node's input over its `from`, `to` and `increment` params into the store (`sieve_player/store.py`) under the node's key, a row at a time between scrubs, frame kinds as a clip at the node's `quality` and tables and signals as files that read back equal (`sieve_player/writers.py`); a cancelled or failed bake leaves nothing and says why in the node's standing |
 | `STATIC = True` | the output is the same at every row: the memo holds it once under the key and never evicts it while the node stands under that key, and the monitor counts its run per change rather than per row |
 | a plane as output | the node's density, v2's plot: its pixels per row counted on a fixed log axis, under its settings, for every fed frame node; a mask or a field has none. Its two handles are the node's band, saved with the node: the player zeroes every pixel outside it (inside it when lo is above hi) before anything downstream reads the node |
 

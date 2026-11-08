@@ -2,7 +2,9 @@
 baked. Its kind is its wire's, so on a frame wire it is a frame node and on a signal or tracks wire
 a series node, and its params say what a bake would write, the rows, the increment and the frame
 writer's quality, and change nothing it hands out live. The mode, live until a bake exists, is saved
-on the node and shown there; what baking writes and where is docs/spec/bake.md's and the store's.
+on the node and shown there. Bake, on the node's card, has the worker write the input over the
+range into the store under the node's key (sieve_player/worker.py, store.py, writers.py); the
+kinds it can write are the store's to say, and a row's bound left blank is the clip's end.
 """
 import numpy as np
 
@@ -10,6 +12,7 @@ SIEVE_TOOL = True
 NAME, KIND, PRODUCES = "bake", "same", "same"
 EXPECTS = ("bgr", "gray", "mask", "hsv", "flow", "blobs", "signal", "tracks")
 MODES = ("live", "baked", "stale")
+BAKES = True
 QUALITIES = ("lossless", "standard")
 DEFAULTS = {"from": "", "to": "", "increment": 1, "quality": "lossless"}
 MAX_INCREMENT = 600

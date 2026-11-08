@@ -526,7 +526,6 @@ class PlayerWindow(QMainWindow):
         return True
 
     def _toggle_mode(self, nid):
-        """The switch under a node with a bake: serving it, go live; live, serve it again."""
         node = self.doc.node(nid)
         node.mode = "live" if document.served(node) else "baked"
         self.sync()

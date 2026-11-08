@@ -200,7 +200,6 @@ class RowsReader:
 
 
 def reader(path, kind, cache_bytes=0):
-    """What reads a bake of `kind` back from `path`: a ClipReader for a frame kind, a RowsReader otherwise."""
     return (ClipReader if WRITERS[kind][1] is ClipWriter else RowsReader)(path, kind, cache_bytes)
 
 

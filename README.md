@@ -26,7 +26,8 @@ Qt's own printing alone; `SIEVE_C_STDERR=1` leaves C-level stderr alone, so cv2'
 every unconverted frame, and libav says why a stream ended where it did, which the player's own
 line at the correction cannot. `SIEVE_MEMO_GB` and `SIEVE_CACHE_GB` set the memo's and the
 decoder cache's limits; unset or `0`, each is the default in its class, and the line the player prints on
-opening a video says what both are.
+opening a video says what both are. `SIEVE_STORE` names the store, the folder bakes land in, while
+no folder has been chosen in the player; `sieve_player.store.folder` says where it is otherwise.
 
 ## A tool
 

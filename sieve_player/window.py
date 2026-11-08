@@ -17,7 +17,7 @@ from PySide6.QtCore import QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import QFontMetrics, QImage, QKeySequence, QPainter, QPen, QPixmap, QShortcut
 from PySide6.QtWidgets import QFileDialog, QHBoxLayout, QMainWindow, QPushButton, QSizePolicy, QVBoxLayout, QWidget
 
-from . import dev, document, theme
+from . import dev, document, store, theme
 from .canvas import Canvas
 from .decoder import Decoder
 from .graph import Graph
@@ -242,22 +242,41 @@ def catalogue(items):
 
 
 class Header(QWidget):
-    """The row across the top: the clip walk's progress and its button, at the right."""
+    """The row across the top: the store's folder, what it holds and what the disk has free with the
+    button that changes it, at the left; the clip walk's progress and its button, at the right."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
         lay = QHBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(GAP)
+        self.store_note = readout(mono=True, wrap=False)
+        self.store = QPushButton("Store…")
+        self.store.setFixedSize(80, ROW_H)
+        self.store.clicked.connect(self._choose_store)
         self.note = readout(mono=True, wrap=False)
         self.note.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self.note.setMinimumWidth(QFontMetrics(self.note.font()).horizontalAdvance("clip 000000/000000"))   # so a digit more never shifts it
         self.walk = QPushButton("Walk clip")
         self.walk.setFixedSize(80, ROW_H)
+        lay.addWidget(self.store)
+        lay.addWidget(self.store_note)
         lay.addStretch(1)
         lay.addWidget(self.note)
         lay.addWidget(self.walk)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.show_store()
+
+    def show_store(self, refused=""):
+        path, held, free, why = store.status()
+        line = f"{path}  holds {store.fmt_bytes(held)}, {store.fmt_bytes(free)} free" if not why else why
+        self.store_note.setText(f"{refused}; {line}" if refused else line)
+        self.store_note.setToolTip(path)
+
+    def _choose_store(self):
+        path = QFileDialog.getExistingDirectory(self, "Store folder", store.folder())
+        if path:
+            self.show_store(store.choose(path))
 
     def set_walking(self, on):
         self.walk.setText("Stop walk" if on else "Walk clip")

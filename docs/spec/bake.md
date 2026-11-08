@@ -74,15 +74,15 @@ code, so the sidecar records the repository commit the bake was written under, f
 to read. The sidecar names the document and node that first wrote the file; a second document
 sharing it by key is not recorded there.
 
-- [ ] A module says where the store is: the folder chosen, else `SIEVE_STORE` from the launch
+- [x] A module says where the store is: the folder chosen, else `SIEVE_STORE` from the launch
   environment, else the default; the choice survives a relaunch.
   Check: a test resolves each of the three and reads a choice back through a fresh call.
-- [ ] A file in the store is named by the node's key, with a sidecar beside it saying the key, the
+- [x] A file in the store is named by the node's key, with a sidecar beside it saying the key, the
   kind, the document and node that first wrote it, the rows and increment baked, the source's fps
   and the written one, the plane shape, the quality, the repository commit and the time written; a
   sidecar is what makes the file ours.
   Check: a test writes a bake and reads every field back off the sidecar.
-- [ ] The player shows the store's folder, how much it holds and how much the disk has free, and
+- [x] The player shows the store's folder, how much it holds and how much the disk has free, and
   lets the user change the folder; a folder that cannot be written is refused with the reason.
   Check: a test on the function the display reads, with an unwritable folder.
 

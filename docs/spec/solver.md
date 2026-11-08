@@ -381,14 +381,20 @@ generation comparison anywhere, and both pins stand through this.
   stored positions after the fact, and their non-causal step is a smoothing, which is this
   player's smooth and not travel. A centred or smoothed speed, if wanted, is a separate tool fed
   from travel or kinematics, as the equality rule requires.
-- What a step may read beside its row. `run` is handed a `Series` carrying `start` and `fps`;
-  `step` is handed the state, the folded row, its index within the range and the params, so a
-  tool whose row needs the absolute row or the frame rate, a speed in pixels per second, a bout
-  with a duration threshold in seconds, cannot step with equality to `run` and runs whole, which
-  the plan says and tests/stepping.py would catch if a step read a rate off a param that `run`
-  read off the Series. The gap fails loudly, so nothing is built for it; the shape of the fix, two
-  more arguments or a per-row context, waits on what the first such tool actually reads. Noted
-  2026-11-08 from the architect review.
+- What a step may read beside its row: the state, the folded row, its index within the range and
+  the params, and not the frame rate or the absolute row, decided 2026-11-08. A series tool
+  reasons in rows. The frame rate is the axis's, not the row's, and the axis is what the player's
+  transforms change: a bake at a stride records `fps / inc` in its sidecar, a served head's rows
+  are on that rate, and the plan's `axis` and `off` exist because a node can sit in another row
+  space than the display, so a rate handed to a tool per row would mean a different thing at
+  different nodes of one graph. The tools already hold this line: track's `lost_rows` and
+  `min_rows`, kinematics' `span` and its speed in pixels per row are in rows, and nothing in
+  tools/ reads `Series.fps`. Seconds are for whoever knows the axis, the timeline, the header and
+  the sidecar, as the trace draws a value and never a derived one. A bout with a duration
+  threshold is a bout with a threshold in rows, as `lost_rows` is. What would reopen this is a
+  tool whose answer needs the absolute row rather than the range index, a per-row timestamp
+  column say, and that is the export's to add at write time, where it has the Series, as resolve
+  reads `start` and runs whole. Noted from the architect review of the branch.
 - Whether a fast window walk changes the default window length, which is 10 s for the stack and
   the decoder cache and not for the chain. docs/findings/2026-11-08-bake-window-fit.md has the
   fit numbers; the chain's are the Worth a look above.

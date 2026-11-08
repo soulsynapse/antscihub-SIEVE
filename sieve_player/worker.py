@@ -323,7 +323,10 @@ class Worker(QThread):
                 elif which == "bake":
                     self._bake_fail(f"the stream ended at row {self.graph.count}, inside the range")
                 else:
-                    self._close(clip if which == "clip" else win)
+                    job = clip if which == "clip" else win
+                    exc = self._close(job)
+                    if exc is not None:
+                        self.failed.emit(job.start + job.i, getattr(exc, "sieve_node", ""))
             except Exception as e:
                 traceback.print_exc()
                 nid = getattr(e, "sieve_node", "")
@@ -336,8 +339,8 @@ class Worker(QThread):
                 else:
                     job = clip if which == "clip" else win
                     row = job.start + job.i
-                    self._close(job)
-                    self.failed.emit(row, nid)
+                    again = self._close(job)
+                    self.failed.emit(row, getattr(again, "sieve_node", nid))
 
     def _walk_one(self, job):
         row = job.start + job.i
@@ -417,14 +420,23 @@ class Worker(QThread):
             self.graph.note(nid, "")
 
     def _close(self, job):
+        """Returns the exception the chain raised over the rows held, if it did, the range closed
+        with its progress alone: the handlers that close on a tool's first raise must not raise on
+        its second."""
         job.length = job.i
         job.progress.emit(job.i, job.length)
         if job.probes:
             self.graph.progress(job.i, job.length)
-        self._emit(job)
+        try:
+            self._emit(job)
+        except Exception as exc:
+            traceback.print_exc()
+            return exc
 
     def _refuse_walk(self, job, why):
-        self._close(job)
+        exc = self._close(job)
+        if exc is not None:
+            self.failed.emit(job.start + job.i, getattr(exc, "sieve_node", ""))
         job.refused.emit(why)
         if job is self._clip:
             self._bake_fail(f"the clip walk was refused: {why}")

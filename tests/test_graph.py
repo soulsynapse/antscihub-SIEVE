@@ -554,8 +554,10 @@ def test_a_tool_raising_indexerror_fails_the_walk_and_only_the_stream_end_closes
     from sieve_player.worker import Worker
     QApplication.instance() or QApplication([])
     bad = tool("bad", fn=lambda f, p: f[99] if int(f.flat[0]) == 3 else f)
+    always = tool("always", kind="series", produces="signal")      # a series tool raising at every run, wired in below
+    always.run = lambda series, params: 1 / 0
     doc = D.from_tools([gray, bad])
-    g = Graph(doc, Dec(), {**TOOLS, "bad": bad})
+    g = Graph(doc, Dec(), {**TOOLS, "bad": bad, "always": always})
     w = Worker(g)
     failed, walked = [], []
     w.failed.connect(lambda r, n: failed.append((r, n)))
@@ -581,8 +583,28 @@ def test_a_tool_raising_indexerror_fails_the_walk_and_only_the_stream_end_closes
         if walked[-1] == (2, 2):
             break
         time.sleep(0.01)
-    w.stop()
     assert walked[-1] == (2, 2) and len(failed) == 2
+    doc.add_node("always", (0, 300))            # the close's own chain run now raises too, and the thread must survive it
+    doc.connect("bad", "always")
+    g.sync()
+    w.invalidate()
+    w.set_window(0, 4)
+    for _ in range(300):
+        QApplication.processEvents()
+        if len(failed) == 3:
+            break
+        time.sleep(0.01)
+    assert failed[-1] == (2, "always") and walked[-1] == (2, 2) and w.isRunning()
+    w.request_row(1)                            # the thread survived the double raise and still serves
+    rows = []
+    w.rowReady.connect(rows.append)
+    for _ in range(300):
+        QApplication.processEvents()
+        if rows:
+            break
+        time.sleep(0.01)
+    w.stop()
+    assert rows == [1] and len(failed) == 3
 
 
 def test_a_clip_stack_of_tables_is_counted_through_its_object_columns():

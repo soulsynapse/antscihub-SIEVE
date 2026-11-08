@@ -30,8 +30,8 @@ re-simulate from the first frame each time the viewer refreshes.
 
 The player's series tools split three ways by what a row needs. count, size, spacing, reduce,
 csv and tracks-csv read one row. track, kinematics, transitions and travel read the row and state
-carried from the rows before it, and are already written as loops that carry it; travel's state
-is the row before, as transitions' is, and it is the one of the four not yet written as a step.
+carried from the rows before it, and are written as steps; travel's state is the row before, as
+transitions' is, and it was the last of the four written so, on 2026-11-08 after the walk stepped.
 smooth, tracks-filter and resolve read the whole window, rows not yet walked included, and change
 their past as the window grows. The second group is the solver case and the whole measured cost;
 the third is the bound on what stepping can reach.
@@ -41,7 +41,7 @@ its past cannot step, since its input at a row it has passed is not what it was.
 a steppable prefix and a rerun suffix, and the planner's job is to know where the line falls and
 say so. On the current tools the suffix is tables of a few hundred rows: kinematics was measured at
 65 ms over 600 rows in docs/findings/2026-11-02-kinematics-and-spacing.md, against track's 200 to
-250 ms a rerun in the bake finding; tracks-filter, resolve and travel are unmeasured, and
+250 ms a rerun in the bake finding; tracks-filter and resolve are unmeasured, and
 tracks-filter's `properties` is a Python loop over every record of every row, so "cheap" is an
 extrapolation until the Worth a look under The window walk extends reads them.
 
@@ -132,8 +132,8 @@ run, empty when it runs, and the canvas tooltip and the pane's line read it so; 
 runs, so the verdict is a field of its own on the plan's entry and not a standing. The ants
 documents under video-tests/ at ba71e6f5 head the chain with track, size and count off blobs and
 run travel under track, with none of tracks-filter, resolve or kinematics in them, so under the
-rule their prefix is track alone and the suffix is travel, which steps nothing until it is written
-as a step; the Why above says what is and is not measured of a suffix's cost. If a whole-window
+rule their whole chain is prefix once travel steps, which it did not when this was written; the
+Why above says what is and is not measured of a suffix's cost. If a whole-window
 tool heavy enough to matter arrives, the
 plan's verdict is what makes its cost legible on the node rather than hidden in the chain, which
 is the Houdini and Blender case: the non-stepping node is a visible kind of thing, not a slow
@@ -241,7 +241,7 @@ chain's, and nothing here touches them.
 
 Worth a look: the crossings document's window walk, cold and rewalk, through
 `sieve_player/dev/monitor.py`, beside the finding's 7 s and 4–5 s, as the second half of
-docs/findings/2026-11-08-bake-window-fit.md, with tracks-filter's, resolve's and travel's per-run
+docs/findings/2026-11-08-bake-window-fit.md, with tracks-filter's and resolve's per-run
 cost read off the probe beside kinematics' 65 ms; and whether a shorter cadence than thirty reads better or
 worse to a user tuning while a walk is in progress, now that compute no longer sets it.
 
@@ -312,10 +312,16 @@ split that changes any emitted signal, refusal or order has gone further than th
   row, which Blender and Houdini show as a reset; the sidebar today holds the old result until the
   new one lands. Whether the hold or a visible restart is right is Kendrick's call once the walk
   is fast enough that the difference is seen.
-- Whether travel steps. It is the ants documents' whole suffix and its loop body already reads
-  only the row and the row before, so the step is the shape the first deliverable gave
-  transitions; what it costs whole on the crossings document is the Worth a look above, and
-  whether that cost earns the step is the call.
+- Whether travel steps: it does, decided 2026-11-08, on what its row reads and not on its cost.
+  Its row reads the row before and nothing else, the shape transitions has, and a tool whose row
+  is causal steps by nature; cost was the wrong criterion, since on the window travel is cheap
+  either way and on the clip it was the ants documents' whole suffix, rerun every cadence rows
+  with the throttle gone. The programs around it draw the line in the same place: Bonsai's
+  displacement is a Scan over the stream and buffering is the marked construct; SLEAP tracks
+  forward and culls over the finished video; TRex, DeepLabCut and idtracker.ai derive speed from
+  stored positions after the fact, and their non-causal step is a smoothing, which is this
+  player's smooth and not travel. A centred or smoothed speed, if wanted, is a separate tool fed
+  from travel or kinematics, as the equality rule requires.
 - Whether a fast window walk changes the default window length, which is 10 s for the stack and
   the decoder cache and not for the chain. docs/findings/2026-11-08-bake-window-fit.md has the
   fit numbers; the chain's are the Worth a look above.

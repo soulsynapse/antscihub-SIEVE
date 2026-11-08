@@ -17,17 +17,21 @@ def steps(prev, cur):
 
 
 def run(series, params):
+    out, state = np.zeros(len(series.data), np.float32), None
+    for r, t in enumerate(series.data):
+        state, share = step(state, t, r, params)
+        out[r] = share["signal"]
+    return {"signal": out}
+
+
+def step(state, row, i, params):
+    """The state is the row before, None at the first, which reads 0."""
     m, moving = params["method"], float(params["moving"])
     if m not in METHODS:
         raise ValueError(f"travel: no method {m!r}; one of {METHODS}")
-    rows = series.data
-    out = np.zeros(len(rows), np.float32)
-    for r in range(1, len(rows)):
-        s = steps(rows[r - 1], rows[r])
-        if len(s) == 0:
-            continue
-        out[r] = {"mean": s.mean, "sum": s.sum, "max": s.max, "count": lambda: (s > moving).sum()}[m]()
-    return {"signal": out}
+    s = np.zeros(0) if state is None else steps(state, row)
+    v = 0.0 if len(s) == 0 else {"mean": s.mean, "sum": s.sum, "max": s.max, "count": lambda: (s > moving).sum()}[m]()
+    return row, {"signal": np.float32(v)}
 
 
 def settings(parent=None):

@@ -34,9 +34,8 @@ def test_ids_follow_the_animals_and_a_long_absence_ends_a_track():
 def test_travel_reads_the_steps_under_the_gate():
     rows = track.run(Series([table([(0, 0), (50, 50)]), table([(3, 4), (50, 50)]), table([(6, 8)])], "k", 0, 30.0),
                      {"max_step": 10.0, "lost_rows": 5, "min_rows": 1, "min_p": 0.1})["rows"]
-    series = Series(rows, "k", 0, 30.0)
-    assert travel.run(series, {"method": "mean", "moving": 1.0})["signal"].tolist() == [0, 2.5, 5]
-    assert travel.run(series, {"method": "count", "moving": 1.0})["signal"].tolist() == [0, 1, 1]
+    assert hold(travel, rows, {"method": "mean", "moving": 1.0})["signal"].tolist() == [0, 2.5, 5]
+    assert hold(travel, rows, {"method": "count", "moving": 1.0})["signal"].tolist() == [0, 1, 1]
     _, fed = gated({"rows": rows, "signal": np.array([2.0, 2.0, 1.0])}, (2.0, 2.0))
     assert [len(t) for t in fed] == [2, 2, 0]                     # a gated-out row feeds an empty table
-    assert travel.run(Series(fed, "k", 0, 30.0), {"method": "sum", "moving": 1.0})["signal"].tolist() == [0, 5, 0]
+    assert hold(travel, fed, {"method": "sum", "moving": 1.0})["signal"].tolist() == [0, 5, 0]

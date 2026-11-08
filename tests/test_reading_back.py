@@ -3,6 +3,7 @@ import os
 import time
 
 import numpy as np
+import pytest
 from PySide6.QtWidgets import QApplication
 
 from sieve_player import document as D
@@ -11,7 +12,7 @@ from sieve_player.decoder import Decoder
 from sieve_player.graph import Graph
 from sieve_player.plan import _key, base_key, plan
 from sieve_player.worker import Worker
-from tests.test_baking import H, N, W, TOOLS as BASE, clip, in_store, run_bake, slow  # noqa: F401  in_store is a fixture
+from tests.test_baking import H, N, W, TOOLS as BASE, clip, pytestmark, run_bake, slow  # noqa: F401  pytestmark skips without ffmpeg
 from tools import bake, csv, rescale, reduce, smooth, threshold
 
 TOOLS = {**BASE, **{t.NAME: t for t in (csv, rescale, reduce, smooth)}}
@@ -35,21 +36,26 @@ def baked(g):
 
 
 def walk(g, start, length, timeout=10.0):
-    """One window walk: the chain's results and every probe event it raised."""
-    events, series = [], []
+    """One window walk: the chain's results and every probe event it raised. The walk is over when the
+    worker says it walked every row and, with a chain, the chain's result is in, which a walk headed by a
+    served series node says without a probe progress event; fails when that is not within `timeout`."""
+    events, series, walked = [], [], []
     g.on_event = events.append
     w = Worker(g)
     w.seriesReady.connect(lambda r, s, fps: series.append(r))
+    w.walked.connect(lambda done, total: walked.append((done, total)))
     w.set_window(start, length)
     w.start()
     t = time.perf_counter()
     while time.perf_counter() - t < timeout:
         QApplication.processEvents()
-        if any(ev.kind == "progress" and ev.row == ev.length for ev in events) and (series or not g.chain):
+        if walked and walked[-1][0] == walked[-1][1] and (series or not g.chain):
             break
         time.sleep(0.005)
-    w.request_row(start)
-    time.sleep(0.05)
+    else:
+        w.stop()
+        pytest.fail(f"the walk from {start} over {length} did not finish in {timeout} s: walked={walked[-3:]}, "
+                    f"series={bool(series)}, chain={g.chain}")
     w.stop()
     g.halt, g.on_event = False, None
     return series[-1] if series else None, events

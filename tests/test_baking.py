@@ -1,5 +1,6 @@
 """Baking: a bake streams the node's input into the store on the worker with a scrub served between rows, lands a file and sidecar and marks the node baked, serves a key the store already has, leaves nothing on cancel or failure, survives a change elsewhere and goes on one upstream, refuses a kind with no writer, and what it wrote reads back: a clip the decoder opens through its luma path, tables and a signal equal."""
 import os
+import shutil
 import time
 from types import SimpleNamespace as Tool
 
@@ -17,6 +18,7 @@ from sieve_player.worker import Worker
 from tools import bake, blobs, count, flow, gray, threshold, track
 
 H, W, N = 48, 64, 12
+pytestmark = pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="a bake's clip writer runs ffmpeg from PATH")
 
 
 def clip(path):
@@ -56,7 +58,8 @@ def graph(path, *chain, tools=TOOLS, **params):
 
 
 def run_bake(w, nid="bake", timeout=20.0):
-    """Starts the worker on a bake and returns (done, refused) once one has been said."""
+    """Starts the worker on a bake and returns (done, refused) once one has been said; fails, with the
+    node's standing and the worker's state, when neither is within `timeout`."""
     done, refused = [], []
     w.bakeDone.connect(lambda n, b: (done.append((n, b.key)), D.land(w.graph.doc.node(n), b)))   # as the window lands one
     w.bakeRefused.connect(lambda n, why: refused.append((n, why)))
@@ -68,14 +71,11 @@ def run_bake(w, nid="bake", timeout=20.0):
     while not (done or refused) and time.perf_counter() - t < timeout:
         QApplication.processEvents()
         time.sleep(0.005)
+    if not (done or refused):
+        state = f"worker running={w.isRunning()}, bake={w._bake}, standing={w.graph.standing(nid)!r}"
+        w.stop()
+        pytest.fail(f"bake {nid} said nothing in {timeout} s; {state}")
     return done, refused
-
-
-@pytest.fixture
-def in_store(tmp_path, monkeypatch):
-    folder = tmp_path / "store"
-    monkeypatch.setattr(store, "folder", lambda: str(folder))
-    return folder
 
 
 def test_a_bake_lands_the_file_and_sidecar_and_marks_the_node_baked(tmp_path, in_store):

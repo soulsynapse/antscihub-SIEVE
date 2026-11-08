@@ -35,6 +35,7 @@ class Node:
     params: dict = field(default_factory=dict)
     pos: tuple = (0.0, 0.0)
     band: tuple | None = None                                       # (lo, hi) kept, of a plane's pixels or a signal's rows; None keeps every value
+    mode: str | None = None                                         # one of the tool's MODES, for a tool declaring them; None is the first
     extra: dict = field(default_factory=dict, repr=False)            # keys this module does not know
     unresolved: bool = field(default=False, compare=False)          # set by resolve(); not saved
 
@@ -146,7 +147,8 @@ class Document:
             "overlay": self.overlay,
             **({"pinned": self.pinned} if self.pinned is not None else {}),
             "nodes": [{"id": n.id, "tool": n.tool, "params": n.params, "pos": list(n.pos),
-                       **({"band": list(n.band)} if n.band is not None else {}), **n.extra} for n in self.nodes],
+                       **({"band": list(n.band)} if n.band is not None else {}),
+                       **({"mode": n.mode} if n.mode is not None else {}), **n.extra} for n in self.nodes],
             "wires": [{"from": w.src, "to": w.dst, "input": w.input} for w in self.wires],
             **self.extra,
         }
@@ -157,7 +159,7 @@ class Document:
         if not isinstance(v, int) or v > VERSION:
             raise FormatError(f"document is format version {v!r}; this module reads up to {VERSION}")
         top = {"version", "video", "display", "overlay", "pinned", "nodes", "wires"}
-        node_keys = {"id", "tool", "params", "pos", "band"}
+        node_keys = {"id", "tool", "params", "pos", "band", "mode"}
         doc = cls(video=d.get("video"), display=d.get("display"), overlay=d.get("overlay"), pinned=d.get("pinned"),
                   extra={k: v for k, v in d.items() if k not in top})
         for nd in d.get("nodes", []):
@@ -166,7 +168,7 @@ class Document:
             doc.nodes.append(Node(nd["id"], nd["tool"], dict(nd.get("params", {})),
                                   tuple(float(x) for x in nd.get("pos", (0, 0))),
                                   None if nd.get("band") is None else tuple(float(x) for x in nd["band"]),
-                                  {k: v for k, v in nd.items() if k not in node_keys}))
+                                  nd.get("mode"), {k: v for k, v in nd.items() if k not in node_keys}))
         ids = {n.id for n in doc.nodes}
         for wd in d.get("wires", []):
             if wd["from"] not in ids or wd["to"] not in ids:
@@ -318,6 +320,35 @@ def produces(doc, tools, nid, _seen=()):
     return produces(doc, tools, w.src, (*_seen, nid))
 
 
+def kind_of(doc, tools, nid, _seen=()):
+    """The kind the plan gives `nid`: "video", "selector", else the tool's KIND; a KIND of "same"
+    is the kind of the node wired into the first input, "frame" under the video node, while nothing
+    is wired or in a cycle. An unresolved tool reads as "frame", as a tool that did not say does."""
+    node = doc.node(nid)
+    if node.tool == VIDEO_TOOL:
+        return "video"
+    tool = _by_name(tools).get(node.tool)
+    if is_selector(tool):
+        return "selector"
+    kind = getattr(tool, "KIND", "frame")
+    if kind != "same":
+        return kind
+    w = doc.source(nid)
+    if w is None or nid in _seen:
+        return "frame"
+    up = kind_of(doc, tools, w.src, (*_seen, nid))
+    return "frame" if up in ("video", "selector") else up
+
+
+def mode_of(doc, tools, nid):
+    """The node's mode, for a tool declaring MODES: what is saved on the node, else the first of them; None for any other node."""
+    modes = getattr(_by_name(tools).get(doc.node(nid).tool), "MODES", None)
+    if not modes:
+        return None
+    node = doc.node(nid)
+    return node.mode if node.mode in modes else modes[0]
+
+
 def video_output(doc):
     """What the video node hands out, one of VIDEO_OUTPUTS; "bgr" unless its param says otherwise or with no video node."""
     v = doc.video_node()
@@ -355,7 +386,7 @@ def from_tools(tools, video=None):
     doc.display = doc.nodes[0].id
     for n in doc.nodes[1:]:
         t = _by_name(tools)[n.tool]
-        if not is_selector(t) and getattr(t, "KIND", "frame") == "frame" and fed(doc, n.id):
+        if kind_of(doc, tools, n.id) == "frame" and fed(doc, n.id):
             doc.display = n.id
     return doc
 

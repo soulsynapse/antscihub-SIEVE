@@ -313,9 +313,10 @@ class Pane(QWidget):
                 if is_selector(tool) or paths(tool):
                     self.notes[node.id] = readout()
                     card.add(self.notes[node.id])
+                kind = getattr(tool, "KIND", "frame")   # "same" takes both plots: the walk fills the one its wire's kind has
                 if is_selector(tool):
                     pass
-                elif getattr(tool, "KIND", "frame") == "frame":
+                if kind in ("frame", "same"):
                     plot = Density()
                     if node.band is not None:
                         plot.levels = [float(v) for v in node.band]
@@ -323,7 +324,7 @@ class Pane(QWidget):
                     plot.hide()
                     card.add(plot)
                     self.densities[node.id] = plot
-                elif getattr(tool, "KIND", "frame") == "series":
+                if kind in ("series", "same"):
                     plot = Trace(rows=5, levels=2)
                     plot.levels[:] = [float(v) for v in node.band] if node.band is not None else list(OPEN)
                     plot.levelDragged.connect(lambda _i, _v, nid=node.id: self._banded(nid))    # the chain reruns on the stack already walked, cheap enough to follow the drag

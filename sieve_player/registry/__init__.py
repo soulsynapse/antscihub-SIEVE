@@ -12,7 +12,7 @@ MARKER = "SIEVE_TOOL"
 _HINTS = {
     MARKER: "SIEVE_TOOL = True",
     "NAME": 'NAME = "mytool"',
-    "KIND": 'KIND = "frame"  # or "series"',
+    "KIND": 'KIND = "frame"  # or "series", or "same": the kind of the node wired into its first input',
     "EXPECTS": 'EXPECTS = "gray"  # or a tuple; the report lists the types in use',
     "PRODUCES": 'PRODUCES = "gray"  # or "same": out as in',
     "DEFAULTS": "DEFAULTS = {}",
@@ -29,6 +29,7 @@ _HINTS = {
     "PATHS": 'PATHS = {"settings": load_settings}  # path inputs: name -> params from the file',
     "select": "def select(folder, params): ...  # a selector: the path it picks under folder, or None",
     "matches": "def matches(folder, params): ...  # a selector: every path its rule matches, picked first",
+    "MODES": 'MODES = ("live", "baked", "stale")  # the node has a mode, saved with it and shown on it; the first is the default',
 }
 FACETS = tuple(_HINTS)
 

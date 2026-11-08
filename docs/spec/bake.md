@@ -96,12 +96,12 @@ module is the builder's call; the user places one thing called bake. The node ha
 baked or stale, a fact saved with the node and shown on it; its standing stays what standing is
 everywhere, why the node does not run, and a bake node in any mode runs.
 
-- [ ] A bake node accepts every frame and series kind the registry's report lists, `path` excepted,
+- [x] A bake node accepts every frame and series kind the registry's report lists, `path` excepted,
   and produces the same; wired on a frame kind its reader gets the frame, on a table kind the
   table, on a signal the signal, and the node's mode is live.
   Check: a test places one on a gray wire, a blobs wire and a signal wire and reads each reader's
   input against the chain without it.
-- [ ] The node's params are the rows to bake, from and to with blank meaning the clip's ends, the
+- [x] The node's params are the rows to bake, from and to with blank meaning the clip's ends, the
   increment, one row in every so many, and the frame writer's quality, two positions, lossless and
   standard, never a continuous rate; none of them changes what a live node hands out.
   Check: a test changes each and reads the live output unchanged.

@@ -8,8 +8,8 @@ import hashlib
 import json
 from dataclasses import dataclass, field
 
-from .document import (INPUT, OVERLAYABLE, VIDEO_TOOL, fed, fits, frame_inputs, is_selector, optional, produces, static,
-                       wants)
+from .document import (INPUT, OVERLAYABLE, VIDEO_TOOL, fed, fits, frame_inputs, is_selector, kind_of, optional, produces,
+                       static, wants)
 
 
 def _key(*parts):
@@ -93,12 +93,7 @@ def plan(doc, tools, base):
     entries, series = {}, []
     for n in doc.nodes:
         tool = tools.get(n.tool)
-        if n.tool == VIDEO_TOOL:
-            kind = "video"
-        elif is_selector(tool):
-            kind = "selector"       # answers a path, once, before the decoder; never a row
-        else:
-            kind = getattr(tool, "KIND", "frame")
+        kind = kind_of(doc, tools, n.id)      # a selector answers a path, once, before the decoder; never a row
         srcs = sources(n.id)
         src = srcs[INPUT]
         entries[n.id] = Entry(tool, kind, dict(n.params), n.band, src, key_of(n.id), raw_keys[n.id],

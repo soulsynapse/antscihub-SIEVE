@@ -60,6 +60,10 @@ def settings(parent=None) -> ParamWidget      # optionally show_result(result, s
 # in OPTIONAL = ("diff",) may be unwired and then reads as None (blobs). frames.type(input) is what
 # the node wired into an input produces, for an EXPECTS whose types run() must tell apart (inrange).
 
+# a tool on a wire of any kind: KIND = "same" makes the node a frame node on a frame wire and a
+# series node on a signal or tracks wire, so run is called either way, run(frames, row, params) or
+# run(series, params), and settles which by its arguments (bake).
+
 # a selector: which file, by rule
 NAME = "file"; KIND = "selector"; PRODUCES = "path"
 def select(folder, params) -> str | None      # folder is the document's
@@ -114,6 +118,7 @@ Facets the player reads when a tool has them:
 | `output_name`, `export_command`, `describe_output` | an Export button on the node; an existing target gets a numbered sibling, and a failed run leaves no partial file |
 | `INPUTS = {input: types}` | a frame input after the first, with the types it expects; `run` reads it as `frames(row, input)`, and the node's key and `frames.key` follow it |
 | `PATHS = {input: loader}` | a path input a selector feeds; the loader turns the file into params |
+| `MODES = (...)` | the node has a mode, one of them, saved with the node and drawn on it in the canvas; the first is the mode of a node that has none saved (bake: live, baked, stale) |
 | `STATIC = True` | the output is the same at every row: the memo holds it once under the key and never evicts it while the node stands under that key, and the monitor counts its run per change rather than per row |
 | a plane as output | the node's density, v2's plot: its pixels per row counted on a fixed log axis, under its settings, for every fed frame node; a mask or a field has none. Its two handles are the node's band, saved with the node: the player zeroes every pixel outside it (inside it when lo is above hi) before anything downstream reads the node |
 

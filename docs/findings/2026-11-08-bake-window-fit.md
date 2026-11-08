@@ -104,3 +104,64 @@ The monitor's cache lane is the plate decoder's. Baked, that lane sits at whatev
 left in it, frames nothing reads, while the store that serves the window is the reader's cache,
 which the monitor does not show. When the lanes are drawn per store, as the first finding asked,
 the served readers are stores.
+
+## Second half: the same window once the chain's prefix steps
+
+2026-11-08, on v5-solver at 2712d0d3, the stepping walk of docs/spec/solver.md landed, through
+`docs/findings/experiments/2026-11-08-stepped-chain.py` over the crossings document with no bake
+node, and `2026-11-08-bake-window-fit.py` again with one. The plan steps track and travel and runs
+size and count whole; a stepping node's runs below are its steps. One run each, as above.
+
+| walk | before, above | stepped |
+|---|---|---|
+| live, cold | 7.1–7.7 s | 3.3–4.0 s |
+| live, rewalk | 4.2–5.0 s | 0.60–0.74 s |
+| baked, cold | 7.7–8.7 s | 3.8 s |
+| baked, rewalk after a change on rescale | 5.2 s | 0.8 s |
+
+| per window of 590 rows, every 30 | runs | per run | summed |
+|---|---|---|---|
+| track, stepped | 590 | 0.57–0.89 ms | 0.34–0.50 s |
+| travel, stepped | 590 | 0.05–0.07 ms | 0.03–0.04 s |
+| size, whole | 20 | 4.5–6.2 ms | 0.09–0.10 s |
+| count, whole | 20 | 0.01–0.02 ms | 0.00 s |
+
+The series chain is 13–14% of the cold walk, where it was most of it, and the rewalk is the
+prefix's steps plus size: track's 4–5 s a window became 0.3–0.5 s, linear in the rows. What is left
+quadratic is the suffix, and on this document the suffix is size, a median over the stack per emit
+at 5 ms. The rewalk at four cadences:
+
+| every | emits | rewalk | size summed |
+|---|---|---|---|
+| 30 | 20 | 0.74 s | 0.10 s |
+| 10 | 59 | 1.06 s | 0.37 s |
+| 3 | 197 | 1.88 s | 1.14 s |
+| 1 | 590 | 3.49 s | 2.64 s |
+
+At every row the rewalk is back near the cold walk's time and three quarters of it is size. size
+and count read one row, and the spec's Why says so, but they run whole, so each emit pays them over
+the stack; a cadence shorter than thirty on the ants documents costs size, not track. With
+tracks-filter and resolve spliced under track, lo 3 on rows and `area` as resolve's column so the
+pass does its whole work on tables with no tag, the plan reads track step, tracks-filter whole,
+resolve whole, travel whole by resolve:
+
+| per window, every 30 | runs | per run | summed |
+|---|---|---|---|
+| tracks-filter | 20 | 11.2–11.5 ms | 0.22–0.23 s |
+| resolve | 20 | 52–54 ms | 1.05–1.08 s |
+| travel, whole by resolve | 20 | 9–11 ms | 0.18–0.22 s |
+
+The rewalk with them is 1.9 s, 1.5 s of it the suffix; at every row it would be of the order of 45 s.
+So "cheap" held at thirty and does not hold at one: the cadence is bounded by the suffix's cost per
+emit wherever a whole-window tool is in the chain, and the Worth a look's question of a shorter
+cadence has the answer that it is the suffix's to pay. travel under resolve runs whole at 9–11 ms
+where it stepped at 0.05, which is the rule working as written.
+
+Seen on the way. The monitor reads 589 steps of 590 on a rewalk: the first row's step lands before
+the new walk's first progress event and is counted to the walk before, then reset. On the chain
+with resolve the summary says 104% in series nodes and −4% unprobed: the closing emit lands after
+the last progress event, outside the wall the monitor measures and inside the node totals, 75 ms of
+1.9 s. And a tool that raises at every run ends the worker thread: `_serve`'s handler closes the
+range, the close emits the chain, the chain raises again inside the handler, and the thread dies
+with a traceback where fe462c3b meant `failed` to name the row and the node. tracks-filter with a
+node that lacked its `column` default did it here; a column the tables lack would do it in the GUI.

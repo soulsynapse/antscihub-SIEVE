@@ -41,9 +41,8 @@ its past cannot step, since its input at a row it has passed is not what it was.
 a steppable prefix and a rerun suffix, and the planner's job is to know where the line falls and
 say so. On the current tools the suffix is tables of a few hundred rows: kinematics was measured at
 65 ms over 600 rows in docs/findings/2026-11-02-kinematics-and-spacing.md, against track's 200 to
-250 ms a rerun in the bake finding; tracks-filter and resolve are unmeasured, and
-tracks-filter's `properties` is a Python loop over every record of every row, so "cheap" is an
-extrapolation until the Worth a look under The window walk extends reads them.
+250 ms a rerun in the bake finding; tracks-filter, resolve and the stepped walk itself are read in
+that finding's second half, where the suffix is what bounds the cadence.
 
 For a tool author, carried state is the natural shape of most behavioural analysis, a state per
 animal, a bout, a contact with hysteresis, an ethogram classifier. Written against the contract
@@ -243,7 +242,8 @@ Worth a look: the crossings document's window walk, cold and rewalk, through
 `sieve_player/dev/monitor.py`, beside the finding's 7 s and 4–5 s, as the second half of
 docs/findings/2026-11-08-bake-window-fit.md, with tracks-filter's and resolve's per-run
 cost read off the probe beside kinematics' 65 ms; and whether a shorter cadence than thirty reads better or
-worse to a user tuning while a walk is in progress, now that compute no longer sets it.
+worse to a user tuning while a walk is in progress, now that compute no longer sets it. Read
+2026-11-08 and written as that second half; the cadence question is open there with its numbers.
 
 ## The worker schedules; jobs hold their state
 

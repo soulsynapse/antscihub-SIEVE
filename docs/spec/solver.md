@@ -1,7 +1,8 @@
 # Solver: a series tool that carries state from row to row, and a worker that steps it
 
-Written 2026-11-08, revised the same day after an architecture review; every deliverable was
-ticked that day, the worker's last.
+Written 2026-11-08, revised the same day after an architecture review; the first five
+deliverables were ticked that day, the worker's last. The two after it were added the same day,
+from an architect review of the branch at b588358c, and are open.
 Read with the registry's facet table and type report (`python -m sieve_player.registry`), the live
 statement of what a tool may offer and what feeds what, and with
 docs/findings/2026-11-08-bake-window-fit.md, the measurement this spec answers. docs/spec/bake.md
@@ -281,6 +282,64 @@ split that changes any emitted signal, refusal or order has gone further than th
 - [x] The monitor's `serving` lanes name the job that served each event as they do today.
   Check: tests/test_monitor.py passes unchanged.
 
+## The wait predicate means a rung will turn
+
+Assumes: The worker schedules; jobs hold their state.
+
+The condition `_serve` waits on and the ladder that serves are two readings of one question, is
+there a turn to take, and they can disagree: a job can say it is pending while the ladder, on the
+same pass, finds no rung due and takes nothing, and the loop then spins through the lock until
+some ask changes the answer. The predicate should be the ladder's own word, so that waking means
+turning.
+
+Facts to weigh, as the tree stands at b588358c and to be verified against it. `_Bake.pending()`
+is true for a frame bake with rows left, and the ladder serves a bake row only behind a finished
+window; a window stalled with rows left and nothing feeding its walked node, the moment between a
+graph edit on the GUI side and the `invalidate` that follows it, leaves `pending()` true and
+nothing turning. The pre-refactor loop had the same gap, so no test pins it either way. The
+`fed` test is made once per pass in `_serve` and the bake's rung reads `win.i >= win.length`
+beside it; the duplication is where the disagreement lives.
+
+- [ ] The condition `_serve` waits on is true only when the next pass of the ladder will begin or
+  turn some job, and each job's due-ness is read in one place by the predicate and the ladder
+  alike.
+  Check: a test stalls a window unfed with rows left while a frame bake has rows to write, holds
+  there, and reads the ladder passed no more times than asks were made; the seams test reads one
+  due-ness per job.
+- [ ] Every signal, request and refusal is as it was.
+  Check: the walk, clip, bake and ladder tests pass unchanged.
+
+## A job is built from what it reads and emits
+
+Assumes: The wait predicate means a rung will turn.
+
+Each job holds a reference to the whole worker and reaches through it for the graph, the cadence,
+the store, the signals it emits and two of the worker's private methods, so a job cannot be made
+without a `QThread` under it and the seam the job decomposition was reaching for, a job driven by
+a test with a graph and a few signals, is not there. A job should take what it reads and what it
+emits at construction, named, and the worker should be the one thing that knows all of them.
+
+Facts to weigh, as the tree stands at b588358c and to be verified against it. `_Walk.w` is typed
+`object` and `_Walk` reaches `w.graph`, `w.every`, `w.failed`, `w.densityReady`, `w._run_chain`
+and `w._served_head`; `_Bake` reaches `w.graph`, `w.store`, `w.baked`, `w.bakeDone`,
+`w.bakeRefused` and `w.walk_clip`; `_Scrub` reaches `w.graph`, `w.rowReady` and `w.failed`.
+`_Walk` already takes its progress, ready and refused signals as fields, which is the shape the
+rest should follow. `_run_chain` reads only the graph and is called by both ranges and by
+tests/test_bake.py, so it is a function over a graph that moves with its callers. The two walks
+are built by position at `Worker.__init__`, two booleans and three signals in a row, which the
+rebuild of their construction should name. The seams test pins `begin` to `_serve` and no
+generation comparison anywhere, and both pins stand through this.
+
+- [ ] Each job holds the graph it reads, the cadence and the signals it emits, and reaches nothing
+  through the worker; the chain run and the served-head test are functions over a graph; the
+  walks are constructed with every field named.
+  Check: the seams test reads no field or attribute of a job that names the worker and no
+  positional argument past the first in a `_Walk` construction; tests/test_bake.py's call of the
+  chain run follows it.
+- [ ] Every signal, request and refusal is as it was, and the `serving` lanes name the job as they
+  do today.
+  Check: the walk, clip, bake, ladder and monitor tests pass unchanged.
+
 ## Non-goals
 
 - A frame tool that carries state. A frame tool's row is keyed and memoized on its inputs at that
@@ -322,6 +381,14 @@ split that changes any emitted signal, refusal or order has gone further than th
   stored positions after the fact, and their non-causal step is a smoothing, which is this
   player's smooth and not travel. A centred or smoothed speed, if wanted, is a separate tool fed
   from travel or kinematics, as the equality rule requires.
+- What a step may read beside its row. `run` is handed a `Series` carrying `start` and `fps`;
+  `step` is handed the state, the folded row, its index within the range and the params, so a
+  tool whose row needs the absolute row or the frame rate, a speed in pixels per second, a bout
+  with a duration threshold in seconds, cannot step with equality to `run` and runs whole, which
+  the plan says and tests/stepping.py would catch if a step read a rate off a param that `run`
+  read off the Series. The gap fails loudly, so nothing is built for it; the shape of the fix, two
+  more arguments or a per-row context, waits on what the first such tool actually reads. Noted
+  2026-11-08 from the architect review.
 - Whether a fast window walk changes the default window length, which is 10 s for the stack and
   the decoder cache and not for the chain. docs/findings/2026-11-08-bake-window-fit.md has the
   fit numbers; the chain's are the Worth a look above.

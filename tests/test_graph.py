@@ -516,7 +516,7 @@ def test_the_clip_walk_runs_behind_the_window_and_a_frame_change_drops_it():
 def test_the_window_and_the_clip_are_one_walk_over_two_ranges():
     """Under the probe the clip walk runs each node as the window walk does: a frame node once per
     row the memo does not hold, the chain at each cadence row and at the range's end; the densities
-    are the window's alone. The clip's time-share gate is set to nothing so the cadence reads exactly."""
+    are the window's alone."""
     from PySide6.QtWidgets import QApplication
     from sieve_player.worker import Worker
     QApplication.instance() or QApplication([])
@@ -528,7 +528,6 @@ def test_the_window_and_the_clip_are_one_walk_over_two_ranges():
     events = []
     g.on_event = events.append
     w = Worker(g, every=3)
-    w._clip.share = 0
     clips = []
     w.clipReady.connect(lambda r, s, fps: clips.append(r))
     w.set_window(0, 6)

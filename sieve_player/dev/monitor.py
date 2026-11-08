@@ -20,7 +20,7 @@ from ..document import produces, static
 from ..theme import GAP, PAD
 
 READ_KINDS = ("cache", "decode", "seek")
-COST_KINDS = READ_KINDS + ("run", "error", "fold")
+COST_KINDS = READ_KINDS + ("run", "step", "error", "fold")
 
 
 class Monitor:

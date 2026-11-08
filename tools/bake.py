@@ -47,6 +47,13 @@ def passed(data):
     return {"signal": data.astype(np.float32).reshape(-1)}
 
 
+def step(state, row, i, params):
+    """One row of `passed`; no state."""
+    if isinstance(row, np.ndarray) and row.dtype.fields is not None:
+        return None, {"rows": row, "signal": np.float32(len(row))}
+    return None, {"signal": np.float32(row)}
+
+
 def settings(parent=None):
     from sieve_player import ParamWidget  # only the GUI needs the player
 

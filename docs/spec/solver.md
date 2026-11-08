@@ -1,7 +1,7 @@
 # Solver: a series tool that carries state from row to row, and a worker that steps it
 
 Written 2026-11-08, revised the same day after an architecture review; the first deliverable, the
-plan's verdict and the one-walk refactor were ticked that day.
+plan's verdict, the one-walk refactor and the stepping walk were ticked that day.
 Read with the registry's facet table and type report (`python -m sieve_player.registry`), the live
 statement of what a tool may offer and what feeds what, and with
 docs/findings/2026-11-08-bake-window-fit.md, the measurement this spec answers. docs/spec/bake.md
@@ -210,30 +210,30 @@ today costs a rerun at every emit until the window is done. `rerun_series` is th
 series-only change already takes, so the reset has a home. The densities are per row and never the
 chain's, and nothing here touches them.
 
-- [ ] Across a window walk each stepping node is stepped each row exactly once and never handed
+- [x] Across a window walk each stepping node is stepped each row exactly once and never handed
   the stack; each whole-run node runs once per emit over the prefix's accumulated result; and the
   series results emitted at each cadence equal the results the unstepped chain gives over the same
   rows.
   Check: a test walks a synthetic window under the probe, counts steps per node per row and runs
   per node per emit, and compares each emit's results to the whole-stack chain's.
-- [ ] A rewalk of a window the memo holds, nothing changed, costs the stepping prefix one step per
+- [x] A rewalk of a window the memo holds, nothing changed, costs the stepping prefix one step per
   row and no rerun, so its time is the per-row step summed and not the chain summed per emit.
   Check: a test rewalks under the probe and reads one step per row for each stepping node and
   zero whole runs for them.
-- [ ] A served series head's rows reach the stepping chain under it one at a time, each node
+- [x] A served series head's rows reach the stepping chain under it one at a time, each node
   stepped once per row and never handed the file's rows whole, as a walked head's would be.
   Check: a test serves a baked blobs file into track and reads the per-row stepping through the
   probe.
-- [ ] A change to a stepping node's params, or to anything upstream of it, discards its state and
+- [x] A change to a stepping node's params, or to anything upstream of it, discards its state and
   accumulated result and the walk steps it again from the window's first row off the stack it
   holds; a change to a node after the prefix reruns the suffix over the prefix's standing result
   and steps the prefix nothing.
   Check: a test changes track's `max_step` and reads the steps restart at row zero; changes
   tracks-filter's `lo` and reads no step of track and one run of the suffix.
-- [ ] The result cadence is one setting in one place, read by the walk over either range and not
+- [x] The result cadence is one setting in one place, read by the walk over either range and not
   encoded in a worker constant per range; the time-share throttle is gone.
   Check: a test changes the setting and reads the emit count over a fixed window and over a clip.
-- [ ] A stepping tool's state is the tool's own and opaque to the player: nothing in the player
+- [x] A stepping tool's state is the tool's own and opaque to the player: nothing in the player
   reads into it, sizes it, memoizes it, or keeps it past the walk that made it; the accumulated
   result is the player's, counted toward the walk's bytes as the stack is.
   Check: a test walks a stepping chain and reads the memo's entries and the probe's bytes for the

@@ -37,8 +37,8 @@ def baked(g):
 
 def walk(g, start, length, timeout=10.0):
     """One window walk: the chain's results and every probe event it raised. The walk is over when the
-    worker says it walked every row and, with a chain, the chain's result is in, which a walk headed by a
-    served series node says without a probe progress event; fails when that is not within `timeout`."""
+    worker says it walked every row and, with a chain, the chain's result is in; fails when that is
+    not within `timeout`."""
     events, series, walked = [], [], []
     g.on_event = events.append
     w = Worker(g)

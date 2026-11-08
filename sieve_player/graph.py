@@ -60,6 +60,19 @@ def gated(result, band):
     return {**result, "gate": gate}, np.where(gate, signal, np.zeros((), signal.dtype))
 
 
+def fed_row(share, band):
+    """What a series node downstream is stepped with from one row's `share` of a stepping node's
+    result: the row `gated` would feed at that index, the table emptied or the signal zeroed when
+    the signal is outside `band`; None for a share without a signal."""
+    if not isinstance(share, dict) or "signal" not in share:
+        return None
+    signal = np.asarray(share["signal"])
+    kept = band is None or bool(inband(signal, band))
+    if "rows" in share:
+        return share["rows"] if kept else share["rows"][:0]
+    return share["signal"] if kept else signal.dtype.type(0)
+
+
 def nbytes(v):
     """The bytes `v` holds: an array's own and, through an object field or an object array, every
     array behind it, since `ndarray.nbytes` counts a contour as its eight-byte pointer; 64 for
@@ -196,7 +209,7 @@ class Event:
     node: str | None    # the node that ran, or read; None on a boundary
     row: int | None
     key: str | None     # the node's raw key, what the memo holds under
-    kind: str           # "run" | "fold" | "error" | "cancel" | "cache" | "decode" | "seek" | "read" | "sync" | "evict" | "uncache" | "progress" | "dump"
+    kind: str           # "run" | "step" | "fold" | "error" | "cancel" | "cache" | "decode" | "seek" | "read" | "sync" | "evict" | "uncache" | "progress" | "dump"
     bytes: int          # the result's; what an eviction freed
     ms: float           # wall, exclusive of the runs this one opened
     t: float            # start, on the probe's clock (perf_counter); orders events across threads
@@ -469,7 +482,8 @@ class Graph:
         """Times the run inside and hands `on_event` one Event, its ms wall time exclusive of the
         runs it opened in turn, so a cold row charges the decode to the video node and each tool its
         own work. The body sets `kind` and `bytes` on the yielded
-        list, what only the call site knows: a tool's kind is "run", since a memo hit is not a run
+        list, what only the call site knows: a tool's kind is "run", or "step" for one row of a
+        series tool the walk steps, since a memo hit is not a run
         and emits nothing; the video read's is "cache", "decode" or "seek", read off the decoder's
         counters; a body that raises emits "error", or "cancel" for Cancelled, with the time it took and
         no bytes, so a reader tells a failed run from one that returned. Nothing when `on_event` is unset. `sync()` emits a "sync" event into the same
@@ -575,7 +589,8 @@ class Graph:
 
 class Stats:
     """The probe's first consumer. Per node, the last figure and a running mean over the window the
-    decoder's means use, blind to key, kind and bytes; beside them the series chain's time per emit,
+    decoder's means use, blind to key, kind and bytes; beside them the chain nodes' last figures
+    summed, a whole run's or one step's,
     the walk's rate in rows per second, read off the progress events, and the decoder's and memo's
     own counters. Making one installs it as the graph's `on_event`, passing each event on to whatever
     was there before, so consumers chain in any order; `event` is its one entry point. `snapshot()`

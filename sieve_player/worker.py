@@ -5,9 +5,9 @@ The window walk and the clip walk are one job, _Walk, over two ranges: the windo
 densities and reports to the probe, the clip's runs behind a finished window walk so what is viewed
 never waits on it, and a frame change abandons it and its rows, and a bake whose key it changed. A
 stack holds images by shape, one row each, and tables in an object array, one table a row, so a
-walked node handing out a table never reads as a graph changing shape; there is none without a
-series chain, and either range stops at STACK_BYTES. A bake on a frame wire streams the node's
-input into a store writer, holding only the row it writes; on a series wire it writes from the clip walk's result."""
+walked node handing out a table never reads as a graph changing shape; there is none without a series chain, and either
+range stops at STACK_BYTES. Each row steps the chain's prefix, the nodes the plan says step, once; the rest runs whole over
+the prefix's accumulated result at each cadence row. A bake on a frame wire streams the node's input into a store writer, holding only the row it writes; on a series wire it writes from the clip walk's result."""
 import os
 import sys
 import threading
@@ -21,13 +21,23 @@ from PySide6.QtCore import QThread, Signal
 from . import density
 from .decoder import EndOfStream
 from .document import INPUT
-from .graph import Cancelled, Memo, Series, gated, nbytes
+from .graph import Cancelled, Memo, Series, fed_row, gated, nbytes
 from .store import Sidecar, current, kinds, writer
 
-STACK_BYTES = 512 << 20   # the most a walk's stack, the window's or the clip's, may take, as nbytes counts it
-CHAIN_SHARE = 9           # walking between two clip chain runs takes at least this many times the last run
+STACK_BYTES = 512 << 20   # the most a walk's stack and stepped results, the window's or the clip's, may take, as nbytes counts them
 STOP_PATIENCE_MS = 10_000  # how long stop() waits before saying on stderr what it is waiting for
 LOW_DISK = 256 << 20      # a bake stops, whole, when the store's disk has less than this free, rather than when the writer hits the wall
+
+
+@dataclass
+class _Stepped:
+    """A stepping node's progress over a range: the key it is stepped under, the state its tool
+    returned last, its result accumulated over `rows` rows, and the bytes the result holds."""
+    key: str
+    state: object = None
+    fields: dict = field(default_factory=dict)
+    rows: int = 0
+    bytes: int = 0
 
 
 @dataclass
@@ -37,7 +47,6 @@ class _Walk:
     name: str
     densities: bool     # whether the walk folds and hands out each frame node's plane densities
     probes: bool        # whether its rows reach the probe as progress events; the monitor's walk scope is the window's
-    share: float        # the chain runs again only once walking since its last run took this many times as long; 0 runs it at every cadence row
     progress: object    # Signal(int, int): rows done, rows in the range
     ready: object       # Signal(object, int, float): the chain's {node: result}, start, fps
     refused: object     # Signal(str): the range closed short, and why
@@ -52,14 +61,16 @@ class _Walk:
     # fold id -> (the stack's buffer, rows, that head's own folding of the stack); the buffer is held, not
     # its id, since a freed buffer's address comes back for the next stack of the same shape
     folded: dict = field(default_factory=dict)
-    due: float = 0.0    # when the chain may next run, on perf_counter's clock
+    stepped: dict = field(default_factory=dict)   # node -> _Stepped
 
     def begin(self, gen, start, length):
         """Starts over under `gen` over `length` rows from `start`, dropping every row held."""
         self.gen, self.start, self.length = gen, start, length
+        self.drop()
+
+    def drop(self):
         self.i = self.bytes = 0
-        self.due = 0.0
-        self.stack, self.dens, self.folded = None, {}, {}
+        self.stack, self.dens, self.folded, self.stepped = None, {}, {}, {}
 
     def pending(self):
         return self.asked != self.gen or self.i < self.length
@@ -122,8 +133,8 @@ class Worker(QThread):
         self._stop = False
         self._series_dirty = False
         self._window = (0, 0)
-        self._win = _Walk("window", True, True, 0, self.walked, self.seriesReady, self.walkRefused)
-        self._clip = _Walk("clip", False, False, CHAIN_SHARE, self.clipWalked, self.clipReady, self.clipRefused)
+        self._win = _Walk("window", True, True, self.walked, self.seriesReady, self.walkRefused)
+        self._clip = _Walk("clip", False, False, self.clipWalked, self.clipReady, self.clipRefused)
         self._clip_on = False                 # whether a clip walk is wanted
         self._bake_gen, self._bake_walk_gen = 0, 0   # bumped by bake, cancel_bake and invalidate; what the thread last acted on
         self._bake_ask = (None, "", "")               # (the node to bake, or None, its document's name, and why the one running is to go)
@@ -264,28 +275,16 @@ class Worker(QThread):
                     self._bake_one()
                     continue
                 count = self.graph.count
-                if not self.graph.fed(self.graph.walk):
-                    # nothing reaches a walked node: either nothing to do until the next change, or a served
-                    # series node heads the chain, which then runs on the file's rows with no stack walked
-                    headed = self._served_head()
+                if not (self.graph.fed(self.graph.walk) or self._served_head()):
+                    # nothing reaches a walked node and no served series node heads the chain: nothing to do until the next change
                     if gen != win.gen:
                         s = max(0, min(start, count - 1))
                         win.begin(gen, s, max(0, min(length, count - s)))
                         win.i = win.length
-                        if headed:
-                            win.progress.emit(win.i, win.length)
-                            self._emit(win)
-                    elif dirty and headed:
-                        self._emit(win)
                     if clip_gen != clip.gen:
-                        clip.begin(clip_gen, 0, count if clip_on and headed else 0)
-                        clip.i = clip.length
-                        if clip.length:
-                            clip.progress.emit(clip.i, clip.length)
-                            self._emit(clip)
-                        else:
-                            clip.ready.emit({}, 0, self.graph.fps)
-                            clip.progress.emit(0, 0)
+                        clip.begin(clip_gen, 0, 0)
+                        clip.ready.emit({}, 0, self.graph.fps)
+                        clip.progress.emit(0, 0)
                     elif clip.i < clip.length:
                         clip.length = clip.i
                         clip.progress.emit(clip.i, clip.length)
@@ -342,12 +341,13 @@ class Worker(QThread):
 
     def _walk_one(self, job):
         row = job.start + job.i
-        out = np.asarray(self.graph.walk_row(row))
-        planes = {nid: v for nid in self.graph.frame_nodes() if (v := self.graph.density(nid, row)) is not None} if job.densities else {}
-        stacked = bool(self.graph.chain)      # without a chain nothing reads the stack, and the rows are not held
+        headed = self.graph.walk is None      # a served series node heads the chain: the rows are its file's, and nothing is walked for them
+        out = None if headed else np.asarray(self.graph.walk_row(row))
+        planes = {nid: v for nid in self.graph.frame_nodes() if (v := self.graph.density(nid, row)) is not None} if job.densities and not headed else {}
+        stacked = bool(self.graph.chain) and not headed      # without a chain nothing reads the stack, and the rows are not held
         if job.i and ((job.stack is not None) != stacked or (stacked and not _fits(job.stack, out))
                       or planes.keys() != job.dens.keys()):
-            job.stack, job.dens, job.i, job.bytes = None, {}, 0, 0   # the nodes or the shape changed under the walk; start over
+            job.drop()      # the nodes or the shape changed under the walk; start over
             return
         if not job.i:
             if stacked and job.length * nbytes(out) > STACK_BYTES:
@@ -361,6 +361,7 @@ class Worker(QThread):
             job.bytes += nbytes(out)
         for nid, v in planes.items():
             job.dens[nid][job.i] = v
+        self._step(job, job.i + 1)
         job.i += 1
         if job.bytes > STACK_BYTES:
             self._refuse_walk(job, f"the {job.name}'s stack reached {job.bytes / 2**30:.1f} GB at row {row}; the rows walked stand")
@@ -368,8 +369,52 @@ class Worker(QThread):
         job.progress.emit(job.i, job.length)
         if job.probes:
             self.graph.progress(job.i, job.length)
-        if job.i == job.length or (job.i % self.every == 0 and time.perf_counter() >= job.due):
+        if job.i == job.length or job.i % self.every == 0:
             self._emit(job)
+
+    def _step(self, job, rows):
+        """Brings every node the plan steps up to `rows` of the range; one whose raw key is not the
+        one it was stepped under starts over from the range's first row. A head is handed the stacked
+        row through its own fold() when the stack holds the rows unfolded, or its file's row when it
+        serves a bake; a chain node what its source's share feeds under the source's band."""
+        chain = self.graph.series_chain()
+        heads, shared = set(self.graph.heads), self.graph.fold is not None
+        bands = {nid: band for nid, _, _, band, _ in chain}
+        stepping = [(nid, self.graph.entry(nid), params, src) for nid, _, params, _, src in chain if self.graph.entry(nid).steps]
+        for nid in [n for n in job.stepped if n not in {s[0] for s in stepping}]:
+            job.bytes -= job.stepped.pop(nid).bytes
+        for nid, e, params, src in stepping:
+            held = job.stepped.get(nid)
+            if held is None or held.key != e.raw_key:
+                if held is not None:
+                    job.bytes -= held.bytes
+                held = job.stepped[nid] = _Stepped(e.raw_key)
+            fold = None if shared or nid not in heads else getattr(e.tool, "fold", None)
+            for r in range(held.rows, rows):
+                if e.bake is not None:
+                    row = self.graph.baked_series(nid)[job.start + r]
+                elif nid in heads:
+                    row = job.stack[r] if fold is None else fold(job.stack[r])
+                else:
+                    up = job.stepped[src]
+                    row = fed_row({f: a[r] for f, a in up.fields.items()}, bands[src])
+                with self.graph.probe(nid, job.start + r, e.raw_key) as ev:
+                    try:
+                        held.state, share = e.tool.step(held.state, row, r, params)
+                    except Exception as exc:
+                        exc.sieve_node = nid
+                        self.graph.note(nid, f"raised stepping row {job.start + r}: {type(exc).__name__}: {exc}")
+                        raise
+                    ev[0], ev[1] = "step", sum(nbytes(v) for v in share.values())
+                for f, v in share.items():
+                    a = held.fields.get(f)
+                    if a is None:
+                        a = held.fields[f] = np.empty(job.length, object if isinstance(v, np.ndarray) else np.asarray(v).dtype)
+                    a[r] = v
+                held.rows = r + 1
+                held.bytes += ev[1]
+                job.bytes += ev[1]
+            self.graph.note(nid, "")
 
     def _close(self, job):
         job.length = job.i
@@ -394,9 +439,9 @@ class Worker(QThread):
             self.densityReady.emit({nid: d[: job.i] for nid, d in job.dens.items()}, job.start)
         results = None
         if job.stack is not None or self._served_head():
-            t = time.perf_counter()
-            results = self._run_chain(None if job.stack is None else job.stack[: job.i], job.start, job.i, job.folded)
-            job.due = time.perf_counter() + job.share * (time.perf_counter() - t)
+            self._step(job, job.i)
+            stepped = {nid: {f: a[: job.i] for f, a in h.fields.items()} for nid, h in job.stepped.items()}
+            results = self._run_chain(None if job.stack is None else job.stack[: job.i], job.start, job.i, job.folded, stepped)
         if results is not None:
             job.ready.emit(results, job.start, self.graph.fps)
         if job is self._clip and self._bake is not None and self._bake.series and job.i == job.length:
@@ -516,10 +561,11 @@ class Worker(QThread):
         _log(f"bake {b.nid}: {why}; nothing written, after {time.perf_counter() - b.t0:.0f} s and {b.i} rows")
         self._refuse(b.nid, why)
 
-    def _run_chain(self, stack, start, done, folds):
+    def _run_chain(self, stack, start, done, folds, stepped=None):
         """The series chain over `stack`, the walked node's rows from `start`, `done` of them so
-        far, with `folds` the stack's own cache of each head's folding: {node: result}, each gated
-        and keyed; None when there is no chain."""
+        far, with `folds` the stack's own cache of each head's folding and `stepped` the result
+        accumulated over those rows for each node the walk stepped, which runs nothing here:
+        {node: result}, each gated and keyed; None when there is no chain."""
         chain = self.graph.series_chain()
         if not chain:
             return None
@@ -527,6 +573,12 @@ class Worker(QThread):
         heads, folded = set(self.graph.heads), self.graph.fold is not None
         buffer = None if stack is None else stack.base if stack.base is not None else stack
         for nid, tool, params, band, src in chain:
+            if stepped is not None and nid in stepped:
+                results[nid], feeds[nid] = gated(stepped[nid], band)
+                self.graph.note(nid, "")
+                if isinstance(results[nid], dict):
+                    results[nid] = {**results[nid], "key": self.graph.key(nid), "plate": self.graph.plate}
+                continue
             if nid in heads and self.graph.entry(nid).bake is not None:
                 series = Series(self.graph.baked_series(nid)[start: start + done], self.graph.key(nid), start, fps)
             elif nid in heads and stack is None:

@@ -40,6 +40,8 @@ class Entry:
     axis: str | None = None                     # the served, unaligned bake at or upstream of the node, whose rows it is in; None in the plate's
     bake: object = None                         # the Bake the node serves (document.served), or None
     off: bool = False                           # in another row space than the display: not fed, the standing says so
+    steps: bool = False                         # a chain node the walk steps a row at a time, a served head included; a chain node without it runs whole
+    whole_by: str | None = None                 # a stepping tool run whole: the chain node that ended the prefix; None on every other node
 
 
 @dataclass
@@ -79,7 +81,10 @@ def plan(doc, tools, base):
     its live key, what the chain as it stands would give it, every bake upstream still served, is
     kept beside to say whether it is stale. The row
     axis is the bake the display flag is behind when that bake is not aligned with the plate, else
-    the plate's; a node in the other space is not fed, its standing saying so."""
+    the plate's; a node in the other space is not fed, its standing saying so. A chain node is
+    stepped when its tool steps and everything it reads on the chain is stepped, a served head's
+    rows counting as stepped; the first node that runs whole ends the prefix for every node after
+    it, and a stepping tool so ended names that node in `whole_by`."""
     keys, raw_keys, live_keys = {}, {}, {}
 
     def bake_of(nid):
@@ -151,6 +156,12 @@ def plan(doc, tools, base):
     chain = list(heads)
     for nid in chain:
         chain += [s for s in series if entries[s].src == nid and entries[s].fed and s not in chain]
+    enders = {}
+    for nid in chain:
+        e = entries[nid]
+        own = e.bake is None and getattr(e.tool, "step", None) is None
+        enders[nid] = nid if own else enders.get(e.src)
+        e.steps, e.whole_by = enders[nid] is None, None if own else enders[nid]
     for nid, e in entries.items():
         e.standing = _standing(doc, tools, entries, heads, chain, nid, axis)
     over = doc.overlay if doc.overlay in entries and produces(doc, tools, doc.overlay) in OVERLAYABLE else None

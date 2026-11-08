@@ -1,7 +1,7 @@
 # Solver: a series tool that carries state from row to row, and a worker that steps it
 
-Written 2026-11-08, revised the same day after an architecture review; the first boxes were ticked
-that day.
+Written 2026-11-08, revised the same day after an architecture review; the first deliverable and
+the plan's verdict were ticked that day.
 Read with the registry's facet table and type report (`python -m sieve_player.registry`), the live
 statement of what a tool may offer and what feeds what, and with
 docs/findings/2026-11-08-bake-window-fit.md, the measurement this spec answers. docs/spec/bake.md
@@ -29,20 +29,21 @@ the node as data; the player's series bake is that shape already. What none of t
 re-simulate from the first frame each time the viewer refreshes.
 
 The player's series tools split three ways by what a row needs. count, size, spacing, reduce,
-csv and tracks-csv read one row. track, kinematics and transitions read the row and state carried
-from the rows before it, and are already written as loops that carry it. smooth, tracks-filter and
-resolve read the whole window, rows not yet walked included, and change their past as the window
-grows. The second group is the solver case and the whole measured cost; the third is the bound on
-what stepping can reach.
+csv and tracks-csv read one row. track, kinematics, transitions and travel read the row and state
+carried from the rows before it, and are already written as loops that carry it; travel's state
+is the row before, as transitions' is, and it is the one of the four not yet written as a step.
+smooth, tracks-filter and resolve read the whole window, rows not yet walked included, and change
+their past as the window grows. The second group is the solver case and the whole measured cost;
+the third is the bound on what stepping can reach.
 
 Stepping is a property of the chain, not of a tool. A tool that steps reading a tool that rewrites
 its past cannot step, since its input at a row it has passed is not what it was. So the chain has
 a steppable prefix and a rerun suffix, and the planner's job is to know where the line falls and
 say so. On the current tools the suffix is tables of a few hundred rows: kinematics was measured at
 65 ms over 600 rows in docs/findings/2026-11-02-kinematics-and-spacing.md, against track's 200 to
-250 ms a rerun in the bake finding; tracks-filter and resolve are unmeasured, and tracks-filter's
-`properties` is a Python loop over every record of every row, so "cheap" is an extrapolation until
-the Worth a look under The window walk extends reads them.
+250 ms a rerun in the bake finding; tracks-filter, resolve and travel are unmeasured, and
+tracks-filter's `properties` is a Python loop over every record of every row, so "cheap" is an
+extrapolation until the Worth a look under The window walk extends reads them.
 
 For a tool author, carried state is the natural shape of most behavioural analysis, a state per
 animal, a bout, a contact with hysteresis, an ethogram classifier. Written against the contract
@@ -128,26 +129,29 @@ or unrun with a standing that says why, so the verdict is one more thing read of
 if that pass has moved by the time this is built, the fact to keep is that the verdict is made
 where fed and unrun are, not somewhere of its own. The standing's contract is why a node does not
 run, empty when it runs, and the canvas tooltip and the pane's line read it so; a node run whole
-runs, so the verdict is a field of its own on the plan's entry and not a standing. The ants chain
-as tuned under video-tests/ is track, then tracks-filter or resolve, then kinematics, so under the
-rule its prefix is track alone and the suffix is the rest, and the Why above says what is and is
-not measured of that suffix's cost. If a whole-window tool heavy enough to matter arrives, the
+runs, so the verdict is a field of its own on the plan's entry and not a standing. The ants
+documents under video-tests/ at ba71e6f5 head the chain with track, size and count off blobs and
+run travel under track, with none of tracks-filter, resolve or kinematics in them, so under the
+rule their prefix is track alone and the suffix is travel, which steps nothing until it is written
+as a step; the Why above says what is and is not measured of a suffix's cost. If a whole-window
+tool heavy enough to matter arrives, the
 plan's verdict is what makes its cost legible on the node rather than hidden in the chain, which
 is the Houdini and Blender case: the non-stepping node is a visible kind of thing, not a slow
 version of the same thing.
 
-- [ ] The plan names, for each node in the chain, whether the walk steps it or runs it whole, and
+- [x] The plan names, for each node in the chain, whether the walk steps it or runs it whole, and
   a stepping tool downstream of a whole-run node is run whole.
   Check: a test plans track → tracks-filter → kinematics and reads step, whole, whole; and
   track → kinematics → transitions and reads step, step, step.
-- [ ] A node run whole because of what it reads carries, in a field beside its standing, the node
+- [x] A node run whole because of what it reads carries, in a field beside its standing, the node
   that ended the prefix; a stepping node and a whole-run node whose own tool does not step carry
   nothing there, and the standing's meaning is unchanged.
   Check: a test reads the field and the standings of the first chain above.
-- [ ] A served series head, a bake read back in place of a walked head, is stepped into a
-  stepping chain under it row by row as a walked head would be.
-  Check: a test serves a baked blobs file into track and reads the plan's verdict and the walk's
-  per-row stepping through the probe.
+- [x] A served series head, a bake read back in place of a walked head, is stepped by the plan's
+  verdict, and so is a stepping chain under it, as a walked head's would be.
+  Check: a test lands a blobs bake on the node track reads and reads the plan's verdict for the
+  head and the chain. The walk's half of this, the served rows reaching the chain one at a time
+  through the probe, is a box under The window walk extends, since nothing walks a step before it.
 
 ## One walk, two ranges
 
@@ -216,6 +220,10 @@ chain's, and nothing here touches them.
   row and no rerun, so its time is the per-row step summed and not the chain summed per emit.
   Check: a test rewalks under the probe and reads one step per row for each stepping node and
   zero whole runs for them.
+- [ ] A served series head's rows reach the stepping chain under it one at a time, each node
+  stepped once per row and never handed the file's rows whole, as a walked head's would be.
+  Check: a test serves a baked blobs file into track and reads the per-row stepping through the
+  probe.
 - [ ] A change to a stepping node's params, or to anything upstream of it, discards its state and
   accumulated result and the walk steps it again from the window's first row off the stack it
   holds; a change to a node after the prefix reruns the suffix over the prefix's standing result
@@ -233,8 +241,8 @@ chain's, and nothing here touches them.
 
 Worth a look: the crossings document's window walk, cold and rewalk, through
 `sieve_player/dev/monitor.py`, beside the finding's 7 s and 4–5 s, as the second half of
-docs/findings/2026-11-08-bake-window-fit.md, with tracks-filter's and resolve's per-run cost read
-off the probe beside kinematics' 65 ms; and whether a shorter cadence than thirty reads better or
+docs/findings/2026-11-08-bake-window-fit.md, with tracks-filter's, resolve's and travel's per-run
+cost read off the probe beside kinematics' 65 ms; and whether a shorter cadence than thirty reads better or
 worse to a user tuning while a walk is in progress, now that compute no longer sets it.
 
 ## The worker schedules; jobs hold their state
@@ -304,6 +312,10 @@ split that changes any emitted signal, refusal or order has gone further than th
   row, which Blender and Houdini show as a reset; the sidebar today holds the old result until the
   new one lands. Whether the hold or a visible restart is right is Kendrick's call once the walk
   is fast enough that the difference is seen.
+- Whether travel steps. It is the ants documents' whole suffix and its loop body already reads
+  only the row and the row before, so the step is the shape the first deliverable gave
+  transitions; what it costs whole on the crossings document is the Worth a look above, and
+  whether that cost earns the step is the call.
 - Whether a fast window walk changes the default window length, which is 10 s for the stack and
   the decoder cache and not for the chain. docs/findings/2026-11-08-bake-window-fit.md has the
   fit numbers; the chain's are the Worth a look above.

@@ -54,7 +54,7 @@ def graph(path, *chain, tools=TOOLS, **params):
     doc = D.from_tools([tools[n] for n in chain] + [bake], path)
     doc.node("bake").params.update(params)
     doc.path = os.path.join(os.path.dirname(path), "doc.json")
-    return Graph(doc, Decoder(path), tools, open_bake=store.open_bake)
+    return Graph(doc, Decoder(path), tools, open_bake=store.current().open_bake)
 
 
 def run_bake(w, nid="bake", timeout=20.0):
@@ -84,8 +84,8 @@ def test_a_bake_lands_the_file_and_sidecar_and_marks_the_node_baked(tmp_path, in
     done, refused = run_bake(w)
     key = g.key("bake")
     assert done == [("bake", key)] and not refused, refused
-    side = store.sidecar(key, str(in_store))
-    mp4 = store.place(key, ".mp4", str(in_store))
+    side = store.Store(str(in_store)).sidecar(key)
+    mp4 = store.Store(str(in_store)).place(key, ".mp4")
     assert os.path.exists(mp4) and not list(in_store.glob("*.part*"))
     assert side == store.Sidecar(key, "gray", "doc.json", "bake", [2, 8], 2, 30.0, 15.0, [H, W], "lossless", side.commit, side.written)
     assert side.bake(N) == g.doc.node("bake").baked and side.written
@@ -103,13 +103,13 @@ def test_a_bake_lands_the_file_and_sidecar_and_marks_the_node_baked(tmp_path, in
     # without its sidecar the file is not ours: baked again over it, which on Windows needs the reader sync() opened on it closed
     g.sync()
     assert g.compute("bake", 0) is not None
-    os.remove(store.sidecar_path(key, str(in_store)))
+    os.remove(store.Store(str(in_store)).sidecar_path(key))
     g.doc.node("bake").mode = "live"
     g.sync()
     done, refused = run_bake(w)
     w.stop()
     assert done == [("bake", key)] and not refused, refused
-    assert store.sidecar(key, str(in_store)) is not None and os.path.getmtime(mp4) > before and not list(in_store.glob("*.part*"))
+    assert store.Store(str(in_store)).sidecar(key) is not None and os.path.getmtime(mp4) > before and not list(in_store.glob("*.part*"))
     g.close()
     g.decoder.close()
 
@@ -154,7 +154,7 @@ def test_cancel_a_raise_and_a_refusing_store_leave_nothing_and_say_why(tmp_path,
     g.decoder.close()
     def no_sidecar(*a, **k):
         raise OSError("disk full")
-    monkeypatch.setattr(store, "write_sidecar", no_sidecar)
+    monkeypatch.setattr(store.Store, "write_sidecar", no_sidecar)
     g = graph(path, "gray")
     w = Worker(g)
     done, refused = run_bake(w)
@@ -205,7 +205,7 @@ def test_a_change_elsewhere_leaves_a_bake_writing_and_one_upstream_abandons_it(t
     done, refused = run_bake(w)
     w.stop()
     assert not done and refused == [("bake", "abandoned: a tool upstream changed")] and not list(in_store.glob("*.part*"))
-    assert store.sidecar(g.key("bake"), str(in_store)) is None and len(list(in_store.iterdir())) == 2    # the first bake's two alone
+    assert store.Store(str(in_store)).sidecar(g.key("bake")) is None and len(list(in_store.iterdir())) == 2    # the first bake's two alone
     g.decoder.close()
 
 
@@ -250,8 +250,8 @@ def test_a_frame_kind_writes_a_clip_the_video_node_opens(tmp_path, in_store, qua
         w.stop()
         assert done and not refused, refused
         want = [g.compute(chain[-1] if chain else "video", r) for r in range(0, 11, 3)]
-        d = Decoder(store.place(g.key("bake"), ".mp4", str(in_store)))
-        assert (d.count, d.fps, (d.height, d.width)) == (len(want), 10.0, (H, W)) and store.sidecar(g.key("bake"), str(in_store)).kind == kind
+        d = Decoder(store.Store(str(in_store)).place(g.key("bake"), ".mp4"))
+        assert (d.count, d.fps, (d.height, d.width)) == (len(want), 10.0, (H, W)) and store.Store(str(in_store)).sidecar(g.key("bake")).kind == kind
         if kind != "bgr":
             d.output = "gray"
             assert d.luma, "a baked gray is read through the luma path"
@@ -273,7 +273,7 @@ def test_tables_and_a_signal_read_back_equal(tmp_path, in_store):
     done, refused = run_bake(w)
     w.stop()
     assert done and not refused, refused
-    back = writers.read_tables(store.place(g.key("bake"), ".tables", str(in_store)))
+    back = writers.read_tables(store.Store(str(in_store)).place(g.key("bake"), ".tables"))
     want = [g.compute("blobs", r) for r in range(N)]
     assert len(back) == N and all(len(t) for t in want)
     for a, b in zip(back, want):
@@ -294,9 +294,9 @@ def test_tables_and_a_signal_read_back_equal(tmp_path, in_store):
         assert done and not refused, refused
         want = [r for r in clips if "bake" in r][-1]["bake"][pick]
         if pick == "rows":
-            back = writers.read_tables(store.place(g.key("bake"), ext, str(in_store)))
+            back = writers.read_tables(store.Store(str(in_store)).place(g.key("bake"), ext))
             assert len(back) == N and all(a.dtype == b.dtype and (a["id"] == b["id"]).all() and (a["cx"] == b["cx"]).all() for a, b in zip(back, want))
         else:
-            assert writers.read_signal(store.place(g.key("bake"), ext, str(in_store))).tolist() == np.asarray(want, np.float32).tolist()
-        assert store.sidecar(g.key("bake"), str(in_store)).kind == ("tracks" if pick == "rows" else "signal")
+            assert writers.read_signal(store.Store(str(in_store)).place(g.key("bake"), ext)).tolist() == np.asarray(want, np.float32).tolist()
+        assert store.Store(str(in_store)).sidecar(g.key("bake")).kind == ("tracks" if pick == "rows" else "signal")
         g.decoder.close()

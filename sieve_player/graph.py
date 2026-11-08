@@ -265,7 +265,7 @@ class Graph:
     def __init__(self, doc, decoder, tools, memo_bytes=4 << 30, open_bake=None):
         """`open_bake(bake, cache_bytes)` opens a served node's file as a reader, or raises IOError;
         without it a served node's read raises. Whether the file is there is asked where the document
-        opens, store.missing, not here."""
+        opens, Store.missing, not here."""
         self.doc, self.decoder = doc, decoder
         self.tools = tools if hasattr(tools, "get") else {t.NAME: t for t in tools}
         self.readers = Readers(open_bake)

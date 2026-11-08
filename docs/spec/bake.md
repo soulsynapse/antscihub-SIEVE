@@ -180,7 +180,7 @@ long run stays cheap while the operator keeps tuning; it shows the node stale an
 between rebaking and going live, as Houdini's load-from-disk toggle does. Everything that makes the
 node a source is saved with it, the mode and the key it was baked under, so the plan stays pure
 over the document and the tools and never looks in the store; whether the file is there is asked
-where the document is opened, `store.missing` in the window's open path, and the runtime never
+where the document is opened, `Store.missing` in the window's open path, and the runtime never
 writes the document. The box below that reads "its mode stale" is met by the plan's stale set,
 which the node shows; the saved mode stays baked. Whether the plan knows the node by a reserved name beside `video` or
 by a facet any tool may declare is the builder's call; the registry's check holds either to being

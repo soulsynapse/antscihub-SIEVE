@@ -253,7 +253,6 @@ class Header(QWidget):
         self.store_note = readout(mono=True, wrap=False)
         self.store = QPushButton("Store…")
         self.store.setFixedSize(80, ROW_H)
-        self.store.clicked.connect(self._choose_store)
         self.note = readout(mono=True, wrap=False)
         self.note.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self.note.setMinimumWidth(QFontMetrics(self.note.font()).horizontalAdvance("clip 000000/000000"))   # so a digit more never shifts it
@@ -265,21 +264,16 @@ class Header(QWidget):
         lay.addWidget(self.note)
         lay.addWidget(self.walk)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.show_store()
 
-    def show_store(self, refused=""):
-        path, held, free, why = store.status()
-        n, stray = store.strays(path)
-        line = f"{path}  holds {store.fmt_bytes(held)}, {store.fmt_bytes(free)} free" if not why else why
+    def show_store(self, st, refused=""):
+        """`st`, the Store the player writes to, as its line reads it; `refused` is why a choice was not taken."""
+        held, free = st.status()
+        n, stray = st.strays()
+        line = f"{st.folder}  holds {store.fmt_bytes(held)}, {store.fmt_bytes(free)} free"
         if n:
             line += f"; {n} part file{'s' if n > 1 else ''} of a bake that died with its process, {store.fmt_bytes(stray)}"
         self.store_note.setText(f"{refused}; {line}" if refused else line)
-        self.store_note.setToolTip(path)
-
-    def _choose_store(self):
-        path = QFileDialog.getExistingDirectory(self, "Store folder", store.folder())
-        if path:
-            self.show_store(store.choose(path))
+        self.store_note.setToolTip(st.folder)
 
     def set_walking(self, on):
         self.walk.setText("Stop walk" if on else "Walk clip")
@@ -333,6 +327,7 @@ class PlayerWindow(QMainWindow):
         self.traces = []
         self._hooked = set()   # ids of traces already wired to the strip's cursor
         self._gone = {}        # node -> why its bake could not be read when the document opened, for the graph's notes
+        self.store = store.current()   # where bakes land and are read from; Store… replaces it
 
         self.display = Display()
         self.canvas = Canvas(self.tools, broken)
@@ -350,6 +345,8 @@ class PlayerWindow(QMainWindow):
         self.pane.modeToggled.connect(self._toggle_mode)
         self.display.drawFailed.connect(self._draw_failed)
         self.header = Header()
+        self.header.show_store(self.store)
+        self.header.store.clicked.connect(self._choose_store)
         self.header.walk.clicked.connect(self._toggle_clip)
         self.header.setEnabled(False)
 
@@ -412,7 +409,7 @@ class PlayerWindow(QMainWindow):
         self._unload()
         self.doc = doc
         doc.resolve(self.tools)
-        self._gone = store.missing(doc)     # asked here, where the document opens; said on the graph once there is one
+        self._gone = self.store.missing(doc)    # asked here, where the document opens; said on the graph once there is one
         for nid in self._gone:
             doc.node(nid).mode = document.LIVE
         self.canvas.set_document(doc)
@@ -533,13 +530,24 @@ class PlayerWindow(QMainWindow):
     def _toggle_mode(self, nid):
         node = self.doc.node(nid)
         node.mode = document.LIVE if document.served(node) else document.BAKED
-        gone = store.missing(self.doc).get(nid)
+        gone = self.store.missing(self.doc).get(nid)
         if gone:
             node.mode = document.LIVE
         self.sync()
         if gone:
             self.graph.note(nid, gone)
             self._restate()
+
+    def _choose_store(self):
+        path = QFileDialog.getExistingDirectory(self, "Store folder", self.store.folder)
+        if not path:
+            return
+        refused = store.choose(path)
+        if not refused:
+            self.store = store.current()
+            if self.worker is not None:
+                self.worker.store = self.store      # the next bake's; one running lands where it began
+        self.header.show_store(self.store, refused)
 
     def _restate(self):
         if self.graph is None:
@@ -735,7 +743,7 @@ class PlayerWindow(QMainWindow):
             return False
         self._unload()
         self.decoder = decoder
-        self.graph = Graph(self.doc, decoder, self.tools, open_bake=store.open_bake,
+        self.graph = Graph(self.doc, decoder, self.tools, open_bake=lambda bake, cache: self.store.open_bake(bake, cache),
                            **({"memo_bytes": m} if (m := _gb(MEMO_ENV)) else {}))
         for nid, why in self._gone.items():
             self.graph.note(nid, why)
@@ -747,7 +755,7 @@ class PlayerWindow(QMainWindow):
         if os.environ.get(DUMP_ENV):
             self.dump = Dump(self.graph, os.environ[DUMP_ENV])
             self.lateness = Lateness(self.dump, parent=self)
-        self.worker = Worker(self.graph)
+        self.worker = Worker(self.graph, store=self.store)
         self.fps, self.count = self.graph.fps, self.graph.count
         ct = self.timeline.controls
         self.worker.rowReady.connect(self._row_ready)
@@ -944,7 +952,7 @@ class PlayerWindow(QMainWindow):
     def _baked(self, nid, bake):
         """Recorded here, on the GUI thread, since the document is the GUI's and the worker's alone to read."""
         document.land(self.doc.node(nid), bake)
-        self.header.show_store()
+        self.header.show_store(self.store)
         self.sync()
 
     def _bake_refused(self, nid, why):

@@ -24,7 +24,7 @@ def build(path, *chain, tools=TOOLS, **params):
     doc = D.from_tools([tools[n] for n in chain], path)
     doc.node("bake").params.update(params)
     doc.path = os.path.join(os.path.dirname(path), "doc.json")
-    return Graph(doc, Decoder(path), tools, open_bake=store.open_bake)
+    return Graph(doc, Decoder(path), tools, open_bake=store.current().open_bake)
 
 
 def baked(g):
@@ -137,7 +137,7 @@ def test_a_served_series_node_heads_the_chain_on_the_files_rows(tmp_path, in_sto
     g.sync()
     assert g.stale == {"bake"} and g.doc.node("bake").mode == "baked" and g.walk is None and g.heads == ["bake"] and g.chain == ["bake", "smooth"]
     results, events = walk(g, 2, 6)
-    signal = writers.read_signal(store.place(g.doc.node("bake").baked.key, ".csv"))
+    signal = writers.read_signal(store.current().place(g.doc.node("bake").baked.key, ".csv"))
     assert results["bake"]["signal"].tolist() == signal[2:8].tolist() and len(results["smooth"]["signal"]) == 6
     assert not [ev for ev in events if ev.node in ("video", "gray", "threshold", "blobs", "count") and ev.serves == "walk"]
     g.close()
@@ -185,19 +185,19 @@ def test_a_document_reopens_baked_or_live_as_the_store_has_the_file(tmp_path, in
     g.close()
     g.decoder.close()
     again = D.load(g.doc.path, TOOLS)
-    g2 = Graph(again, Decoder(again.video_path()), TOOLS, open_bake=store.open_bake)
+    g2 = Graph(again, Decoder(again.video_path()), TOOLS, open_bake=store.current().open_bake)
     assert again.node("bake").mode == "baked" and g2.key("bake") == _key("served", key) and (g2.count, g2.fps) == (6, 15.0)
     g2.close()
     g2.decoder.close()
-    os.remove(store.place(key, ".mp4"))
+    os.remove(store.current().place(key, ".mp4"))
     gone = D.load(g.doc.path, TOOLS)
-    missing = store.missing(gone)          # as the window asks where the document opens, then sets the node live and notes why
+    missing = store.current().missing(gone)          # as the window asks where the document opens, then sets the node live and notes why
     assert list(missing) == ["bake"] and missing["bake"].startswith(f"bake {key} is not in the store") and missing["bake"].endswith("serving live")
     gone.node("bake").mode = D.LIVE
-    g3 = Graph(gone, Decoder(gone.video_path()), TOOLS, open_bake=store.open_bake)
+    g3 = Graph(gone, Decoder(gone.video_path()), TOOLS, open_bake=store.current().open_bake)
     g3.note("bake", missing["bake"])
     assert g3.key("bake") == key and (g3.count, g3.fps) == (N, 30.0) and g3.standing("bake") == missing["bake"]   # live again, under the key it was baked under
-    g4 = Graph(again, Decoder(again.video_path()), TOOLS, open_bake=store.open_bake)   # a file gone under a document still serving: the read says so
+    g4 = Graph(again, Decoder(again.video_path()), TOOLS, open_bake=store.current().open_bake)   # a file gone under a document still serving: the read says so
     with pytest.raises(IOError):
         g4.compute("bake", 0)
     assert g4.standing("bake").startswith(f"bake {key} is not in the store")
@@ -211,7 +211,7 @@ def test_a_baked_clip_opens_as_another_documents_video(tmp_path, in_store):
     g.sync()
     done, refused = baked(g)
     assert done and not refused, refused
-    path = store.place(g.doc.node("bake").baked.key, ".mp4")
+    path = store.current().place(g.doc.node("bake").baked.key, ".mp4")
     g.close()
     g.decoder.close()
     doc = D.from_tools([threshold], path)

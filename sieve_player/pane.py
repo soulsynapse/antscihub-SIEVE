@@ -7,31 +7,15 @@ params, bands and the pin into the document and says what changed; it knows noth
 runtime, and what it shows of a run, the density, the trace, the standing line, the window hands it.
 """
 import os
-import re
 
-from PySide6.QtCore import QProcess, QSize, Qt, Signal
-from PySide6.QtGui import QFontMetrics
-from PySide6.QtWidgets import (QComboBox, QDoubleSpinBox, QFileDialog, QFrame, QPushButton, QScrollArea, QVBoxLayout,
-                               QWidget)
+from PySide6.QtCore import QSize, Qt, Signal
+from PySide6.QtWidgets import QComboBox, QFileDialog, QFrame, QPushButton, QScrollArea, QVBoxLayout, QWidget
 
-from .document import (OPEN, VIDEO_OUTPUT, VIDEO_OUTPUTS, VIDEO_PRODUCES, VIDEO_SCALE, VIDEO_TOOL, is_selector, paths,
-                       video_output, video_scale)
-from .theme import CONTROL_W, GAP, PAD, WIDE_W, Form, GlyphButton, Layer, measured, readout
+from .document import BAKED, LIVE, OPEN, VIDEO_OUTPUT, VIDEO_OUTPUTS, VIDEO_TOOL, is_selector, mode_of, paths, video_output
+from .theme import CONTROL_W, GAP, PAD, WIDE_W, Form, GlyphButton, Layer, readout
 from .widgets import Density, Trace
 
 VIDEO_FILTER = "Video (*.mp4 *.MP4 *.avi *.mov *.mkv *.mts *.MTS);;All (*)"
-
-
-def free_name(dst):
-    """`dst` if nothing is there, else the first `stem-2.ext`, `stem-3.ext`... that is free."""
-    if not os.path.exists(dst):
-        return dst
-    root, ext = os.path.splitext(dst)
-    root = re.sub(r"-\d+$", "", root)
-    n = 2
-    while os.path.exists(f"{root}-{n}{ext}"):
-        n += 1
-    return f"{root}-{n}{ext}"
 
 
 def _column(parent, spacing=GAP):
@@ -43,8 +27,8 @@ def _column(parent, spacing=GAP):
 
 class Video(QWidget):
     """The video node's settings: a picker, the chosen path and what cv2 says about it, and the
-    decoder's two params, `output`, bgr as decoded, gray or luma, and `scale`, a factor, both applied
-    before its cache so a chain that wants small gray frames never holds the large colour ones."""
+    decoder's one param, `output`, bgr as decoded, gray or luma, applied before its cache so a chain
+    that wants gray frames never holds the colour ones; a smaller frame is a rescale node's, or a bake's."""
     sourceChanged = Signal(str)
     paramChanged = Signal(str, object)     # (param name, value)
 
@@ -62,17 +46,10 @@ class Video(QWidget):
         form.add_row(VIDEO_OUTPUT, self.output)
         self.output_note = readout()
         form.add_line(self.output_note)
-        self.scale = QDoubleSpinBox()
-        self.scale.setRange(0.05, 1.0)
-        self.scale.setSingleStep(0.05)
-        self.scale.setDecimals(2)
-        self.scale.setFixedWidth(CONTROL_W)
-        form.add_row(VIDEO_SCALE, self.scale)
         lay.addWidget(form)
         self.button.clicked.connect(self._pick)
         self.output.currentTextChanged.connect(self._note_output)
         self.output.currentTextChanged.connect(lambda v: self.paramChanged.emit(VIDEO_OUTPUT, v))
-        self.scale.valueChanged.connect(lambda v: self.paramChanged.emit(VIDEO_SCALE, float(v)))
         self._note_output(self.output.currentText())
 
     OUTPUT_NOTES = {
@@ -86,10 +63,9 @@ class Video(QWidget):
 
     def set_params(self, doc):
         """Moves the knobs to the document's values without reporting a change."""
-        for w, v in ((self.output, video_output(doc)), (self.scale, video_scale(doc))):
-            w.blockSignals(True)
-            w.setCurrentText(v) if w is self.output else w.setValue(v)
-            w.blockSignals(False)
+        self.output.blockSignals(True)
+        self.output.setCurrentText(video_output(doc))
+        self.output.blockSignals(False)
         self._note_output(video_output(doc))
 
     def _pick(self):
@@ -118,113 +94,67 @@ class Video(QWidget):
         self.button.setToolTip("" if free else f"{by} picks the video; unwire it to choose by hand")
 
 
-class Export(QWidget):
-    """The export block under a tool that defines `export_command(src, dst, params, fps) -> argv`
-    and `output_name(src, params) -> path`: the target, a button that runs the argv in a QProcess,
-    and the process's last line; `describe_output(src, params, fps) -> str`, if defined, is the
-    line under the target."""
+class BakeBlock(QWidget):
+    """The block under a tool with a `bake` facet: the node's mode, the button that asks the window
+    for a bake and cancels one running, and the line that says how far it is or why it stopped."""
+    asked = Signal()
+    cancelled = Signal()
+    toggled = Signal()      # the switch between serving the bake and going live
 
-    def __init__(self, tool, parent=None):
+    def __init__(self, parent=None):
         super().__init__(parent)
-        self.tool = tool
         lay = _column(self)
-        self.target, self.detail = measured(wide=True), readout()
-        self.button, self.status = QPushButton("Export"), readout()
-        self.form = Form([("target", self.target)])
-        self.form.add_line(self.detail)
-        self.form.add_row("export", self.button)
+        self.mode, self.button, self.status = readout(mono=True), QPushButton("Bake"), readout()
+        self.switch = QPushButton("Go live")
+        self.form = Form([("mode", self.mode), ("bake", self.button), ("serve", self.switch)])
         self.form.add_line(self.status)
         lay.addWidget(self.form)
-        self.button.clicked.connect(self._export)
-        self.button.setEnabled(False)
-        self.proc, self.src, self.fps, self.params = None, None, None, {}
-        self._describe()
+        self.running = False
+        self.button.clicked.connect(lambda: (self.cancelled if self.running else self.asked).emit())
+        self.switch.clicked.connect(self.toggled)
+        self.switch.setEnabled(False)
 
-    def set_source(self, path, fps):
-        self.src, self.fps = path, fps
-        self.button.setEnabled(path is not None)
-        self._describe()
+    def set_mode(self, mode, has_bake=False, stale=False):
+        """`mode` as the document says it, shown as stale when the plan says so; the switch offers
+        the other side only once a bake exists, and Bake is offered only live, since a bake is of the chain."""
+        self.mode.setText("stale" if stale else mode or "")
+        self.switch.setEnabled(has_bake)
+        self.button.setEnabled(mode != BAKED)
+        self.switch.setText("Serve bake" if mode == LIVE else "Go live")
 
-    def set_params(self, params):
-        self.params = dict(params)
-        self._describe()
+    def set_progress(self, done, total):
+        self.running = done < total
+        self.button.setText("Cancel" if self.running else "Bake")
+        self.status.setText(f"baking {done}/{total}" if self.running else f"baked {total} rows" if total else "")
 
-    def _target(self):
-        return free_name(self.tool.output_name(self.src, self.params))
-
-    def _describe(self):
-        if self.src is None:
-            self.target.setText("")
-            self.detail.setText("pick a video on the video node")
-            return
-        dst = self._target()
-        self._name = os.path.basename(dst)
-        self._elide()
-        self.target.setToolTip(dst)
-        describe = getattr(self.tool, "describe_output", None)
-        self.detail.setText(describe(self.src, self.params, self.fps) if describe else "")
-
-    _name = ""
-
-    def _elide(self):
-        metrics = QFontMetrics(self.target.font())
-        self.target.setText(metrics.elidedText(self._name, Qt.ElideMiddle, self.target.width() - 12))
-
-    def resizeEvent(self, e):
-        super().resizeEvent(e)
-        if self._name:
-            self._elide()
-
-    def _export(self):
-        if self.proc is not None:
-            self.proc.kill()
-            return
-        dst = self._target()
-        cmd = self.tool.export_command(self.src, dst, self.params, self.fps)
-        self.proc = QProcess(self)
-        self.proc.setProcessChannelMode(QProcess.MergedChannels)
-        self.proc.readyReadStandardOutput.connect(self._progress)
-        self.proc.finished.connect(lambda code, _: self._done(code, dst))
-        self.proc.start(cmd[0], cmd[1:])
-        self.button.setText("Cancel")
-        self.status.setText(f"writing {os.path.basename(dst)}")
-
-    def _progress(self):
-        text = bytes(self.proc.readAllStandardOutput()).decode(errors="replace").replace("\r", "\n")
-        lines = [s for s in text.split("\n") if s.strip()]
-        if lines:
-            self.status.setText(lines[-1].strip())
-
-    def _done(self, code, dst):
-        self.proc = None
-        self.button.setText("Export")
-        if code == 0:
-            self.status.setText(f"wrote {os.path.basename(dst)}")
-        else:
-            if os.path.exists(dst):
-                os.remove(dst)  # a cancelled or failed run leaves no partial file behind
-            self.status.setText(f"exited {code}; nothing written")
-        self._describe()
+    def set_refused(self, why):
+        self.running = False
+        self.button.setText("Bake")
+        self.status.setText(why)
 
 
 class Pane(QWidget):
     """`tools` is the catalogue, name to module. `select(nid)` shows that node's surface, None
     shows nothing. `video` is the video node's widget, `widget(nid)` a tool node's settings widget,
-    `exports[nid]` the Export under a node whose tool exports. Its size hint is the shown card's
+    Its size hint is the shown card's
     height, so a host that stacks it under the canvas gives it only the room its content needs."""
     paramsChanged = Signal(str)   # this node's params in the document changed here
     pinChanged = Signal()         # the document's pinned flag moved here
     videoPicked = Signal(str)
+    bakeAsked = Signal(str)       # the Bake button under this node
+    bakeCancelled = Signal(str)
+    modeToggled = Signal(str)     # the switch under this node: serve its bake, or go live
 
     def __init__(self, tools, parent=None):
         super().__init__(parent)
         self.tools = tools
         self.doc = None
-        self.cards, self.widgets, self.exports, self.notes = {}, {}, {}, {}
+        self.cards, self.widgets, self.notes = {}, {}, {}
         self.standings = {}   # tool node -> the line under its settings, see set_standing
         self.densities = {}   # frame node -> its Density plot, hidden until the window hands it counts
         self.traces = {}      # series node -> its Trace, hidden until the window hands it a result
         self.pins = {}        # series node -> the pin in its card's corner
+        self.bakes = {}       # node whose tool bakes -> its BakeBlock
         self.video = None
         self.current = None
         self._src, self._fps = None, None
@@ -265,12 +195,12 @@ class Pane(QWidget):
     def _drop(self, nid):
         card = self.cards.pop(nid)
         self.widgets.pop(nid, None)
-        self.exports.pop(nid, None)
         self.notes.pop(nid, None)
         self.standings.pop(nid, None)
         self.densities.pop(nid, None)
         self.traces.pop(nid, None)
         self.pins.pop(nid, None)
+        self.bakes.pop(nid, None)
         if self.video is not None and self.video.parent() is card:
             self.video = None
         self._lay.removeWidget(card)
@@ -313,9 +243,10 @@ class Pane(QWidget):
                 if is_selector(tool) or paths(tool):
                     self.notes[node.id] = readout()
                     card.add(self.notes[node.id])
+                kind = getattr(tool, "KIND", "frame")   # "same" takes both plots: the walk fills the one its wire's kind has
                 if is_selector(tool):
                     pass
-                elif getattr(tool, "KIND", "frame") == "frame":
+                if kind in ("frame", "same"):
                     plot = Density()
                     if node.band is not None:
                         plot.levels = [float(v) for v in node.band]
@@ -323,7 +254,7 @@ class Pane(QWidget):
                     plot.hide()
                     card.add(plot)
                     self.densities[node.id] = plot
-                elif getattr(tool, "KIND", "frame") == "series":
+                if kind in ("series", "same"):
                     plot = Trace(rows=5, levels=2)
                     plot.levels[:] = [float(v) for v in node.band] if node.band is not None else list(OPEN)
                     plot.levelDragged.connect(lambda _i, _v, nid=node.id: self._banded(nid))    # the chain reruns on the stack already walked, cheap enough to follow the drag
@@ -336,12 +267,14 @@ class Pane(QWidget):
                     pin.clicked.connect(lambda on, nid=node.id: self._pin(nid, on))
                     card.add_corner(pin)
                     self.pins[node.id] = pin
-            if w is not None and getattr(tool, "export_command", None) is not None:
-                ex = Export(tool)
-                ex.set_params(node.params)
-                ex.set_source(self._src, self._fps)
-                card.add(ex)
-                self.exports[node.id] = ex
+            if w is not None and getattr(tool, "bake", None) is not None:
+                block = BakeBlock()
+                block.set_mode(mode_of(self.doc, self.tools, node.id), node.baked is not None)
+                block.asked.connect(lambda nid=node.id: self.bakeAsked.emit(nid))
+                block.cancelled.connect(lambda nid=node.id: self.bakeCancelled.emit(nid))
+                block.toggled.connect(lambda nid=node.id: self.modeToggled.emit(nid))
+                card.add(block)
+                self.bakes[node.id] = block
         card.hide()
         self._lay.insertWidget(self._lay.count() - 1, card)
         self.cards[node.id] = card
@@ -367,8 +300,6 @@ class Pane(QWidget):
     def _changed(self, nid):
         node = self.doc.node(nid)
         node.params = self.widgets[nid].params()   # the knobs are the whole set; a param a tool dropped goes with it
-        if nid in self.exports:
-            self.exports[nid].set_params(node.params)
         self.paramsChanged.emit(nid)
 
     def select(self, nid):
@@ -426,6 +357,19 @@ class Pane(QWidget):
             else:
                 plot.hide()
 
+    def show_bake(self, nid, done, total):
+        if nid in self.bakes:
+            self.bakes[nid].set_progress(done, total)
+
+    def bake_refused(self, nid, why):
+        if nid in self.bakes:
+            self.bakes[nid].set_refused(why)
+
+    def show_modes(self, stale=()):
+        """Every mode line follows the document, and the plan's `stale` nodes, after a sync."""
+        for nid, block in self.bakes.items():
+            block.set_mode(mode_of(self.doc, self.tools, nid), self.doc.node(nid).baked is not None, nid in stale)
+
     def set_playhead(self, row):
         for plot in (*self.densities.values(), *self.traces.values()):
             plot.set_playhead(row)
@@ -445,8 +389,7 @@ class Pane(QWidget):
             lab.setVisible(bool(text))
 
     def set_source(self, path, fps):
-        """The video every Export, and every settings widget with a `set_source`, writes from; None
-        when nothing is loaded."""
+        """The video every settings widget with a `set_source` writes from; None when nothing is loaded."""
         self._src, self._fps = path, fps
-        for w in (*self.exports.values(), *[w for w in self.widgets.values() if hasattr(w, "set_source")]):
+        for w in [w for w in self.widgets.values() if hasattr(w, "set_source")]:
             w.set_source(path, fps)

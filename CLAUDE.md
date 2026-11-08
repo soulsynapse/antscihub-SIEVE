@@ -22,3 +22,5 @@
 
 ## Running
 - Run Python and pytest through `.venv/Scripts/python.exe`; the anaconda `python` on PATH has no PySide6.
+- Files are LF. A script that rewrites one must open it with `newline="\n"` (or write bytes); Python's
+  default on Windows writes CRLF, and git then warns on every touch.

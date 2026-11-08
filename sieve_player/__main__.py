@@ -12,7 +12,7 @@ def show_plan(path, tools):
     from .plan import base_key, plan, walked
 
     doc = document.load(path, tools)
-    p = plan(doc, tools, base_key(doc.video_path(), document.video_output(doc), document.video_scale(doc)))
+    p = plan(doc, tools, base_key(doc.video_path(), document.video_output(doc)))
     walk = walked(p.entries, p.chain, p.shown)
     width = max(len(n.id) for n in doc.nodes)
     for n in doc.nodes:

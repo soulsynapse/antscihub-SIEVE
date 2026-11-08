@@ -1,29 +1,54 @@
-"""The one thread that runs tools. Serves display requests first, walks the loop window, and walks the
-whole clip when asked in the time the window leaves.
+"""The one thread that runs tools. Serves display requests first, walks the loop window, bakes a node
+one row at a time in the time the window leaves, and walks the whole clip when asked after that.
 
 The clip walk is the window walk over the clip without the densities, behind a finished window
-walk so what is viewed never waits on it; a frame change abandons it and its rows. A stack holds
-images by shape, one row each, and tables in an object array, one table a row, so a walked node
-that hands out a table never reads as a graph changing shape under the walk; there is none without
-a series chain, and either walk stops at STACK_BYTES. The clip's chain runs over the rows so far only
-once the walk has run CHAIN_SHARE times as long as the chain's last run, so a chain of per-row loops
-never makes the walk quadratic in the clip.
-"""
+walk so what is viewed never waits on it; a frame change abandons it and its rows, and a bake whose key it changed. A
+stack holds images by shape, one row each, and tables in an object array, one table a row, so a
+walked node handing out a table never reads as a graph changing shape; there is none without a
+series chain, and either walk stops at STACK_BYTES. The clip's chain runs over the rows so far only
+once the walk has run CHAIN_SHARE times as long as the chain's last run. A bake on a frame wire
+streams the node's input into a store writer, holding only the row it writes; on a series wire it writes from the clip walk's result."""
+import os
 import sys
 import threading
 import time
 import traceback
+from dataclasses import dataclass, field, replace
 
 import numpy as np
 from PySide6.QtCore import QThread, Signal
 
 from . import density
 from .decoder import EndOfStream
+from .document import INPUT
 from .graph import Cancelled, Memo, Series, gated, nbytes
+from .store import Sidecar, current, kinds, writer
 
 STACK_BYTES = 512 << 20   # the most a walk's stack, the window's or the clip's, may take, as nbytes counts it
 CHAIN_SHARE = 9           # walking between two clip chain runs takes at least this many times the last run
 STOP_PATIENCE_MS = 10_000  # how long stop() waits before saying on stderr what it is waiting for
+LOW_DISK = 256 << 20      # a bake stops, whole, when the store's disk has less than this free, rather than when the writer hits the wall
+
+
+@dataclass
+class _Bake:
+    """A bake in progress: the node, the key its file is named by, the rows it writes and the writer."""
+    nid: str
+    key: str
+    kind: str           # the kind flowing into the node, what the file holds
+    series: bool        # written from the clip walk's result, not row by row
+    src: str
+    rows: range         # the plate rows, the tool's answer; its step is the increment
+    writer: object
+    side: Sidecar       # to write at the landing, its shape the writer's to learn
+    store: object       # the Store it lands in: a store chosen while it runs is the next bake's
+    t0: float = field(default_factory=time.perf_counter)
+    i: int = 0
+    held: list = field(default_factory=list)
+
+
+def _log(text):
+    print(f"SIEVE {time.strftime('%H:%M:%S')}: {text}", file=sys.stderr)
 
 
 def _stack_for(n, out):
@@ -48,10 +73,14 @@ class Worker(QThread):
     clipRefused = Signal(str)                 # the clip walk did not start, or stopped short of the clip, and why
     walkRefused = Signal(str)                 # the window walk closed short of the window, and why: its stack passed STACK_BYTES
     shortened = Signal(int)                   # the stream ended short of the container's claim: the count as the decoder now has it
+    baked = Signal(str, int, int)             # a bake's progress: the node, rows written, rows to write
+    bakeDone = Signal(str, object)            # the node's bake landed, as the Bake the node is to save (document.land)
+    bakeRefused = Signal(str, str)            # the bake did not start or did not finish, and why; the node's standing says the same
 
-    def __init__(self, graph, every=30):
+    def __init__(self, graph, every=30, store=None):
+        """`store`, a store.Store, is where a bake lands; the current one unless another is handed in."""
         super().__init__()
-        self.graph, self.every = graph, every
+        self.graph, self.every, self.store = graph, every, current() if store is None else store
         self._cv = threading.Condition()
         self._want = None
         self._stop = False
@@ -70,8 +99,31 @@ class Worker(QThread):
         # fold id -> (the stack's buffer, rows, that head's own folding of the stack), one dict per stack; the buffer
         # is held, not its id, since a freed buffer's address comes back for the next stack of the same shape
         self._folded, self._cfolded = {}, {}
+        self._bake_gen, self._bake_walk_gen = 0, 0   # bumped by bake, cancel_bake and invalidate; what the thread last acted on
+        self._bake_ask = (None, "", "")               # (the node to bake, or None, its document's name, and why the one running is to go)
+        self._bake = None                             # the _Bake in progress
 
     # -- GUI-side calls --------------------------------------------------
+    def bake(self, nid, document=""):
+        """Write `nid`'s input to the store over its range, after the window is walked; one bake at a
+        time. `document` is the name the sidecar records as the one that first wrote the file."""
+        with self._cv:
+            self._bake_ask = (nid, document, "superseded by another bake")
+            self._bake_gen += 1
+            self._cv.notify()
+
+    def cancel_bake(self):
+        with self._cv:
+            self._bake_ask = (None, "", "cancelled")
+            self._bake_gen += 1
+            self._cv.notify()
+
+    @property
+    def bake_bytes(self):
+        """What the bake holds: the row its writer is writing, 0 between rows and with no bake running."""
+        b = self._bake
+        return 0 if b is None else b.writer.bytes
+
     def request_row(self, row):
         with self._cv:
             self._want = row
@@ -85,11 +137,21 @@ class Worker(QThread):
 
     def invalidate(self):
         """A frame tool changed: restart the walk from the window start, and drop the clip walk,
-        whose rows were of a graph that is gone."""
+        whose rows were of a graph that is gone. A bake in progress goes only when its key did,
+        a change upstream of it; one elsewhere in the graph leaves it writing, and a series bake
+        asks for its clip walk again."""
         with self._cv:
             self._gen += 1
             self._clip_gen += 1
             self._clip_on = False
+            b = self._bake
+            if b is not None:
+                e = self.graph.entry(b.nid)
+                if e is None or e.key != b.key:
+                    self._bake_ask = (None, "", "abandoned: a tool upstream changed")
+                    self._bake_gen += 1
+                elif b.series:
+                    self._clip_on = True
             self._cv.notify()
 
     def rerun_series(self):
@@ -128,6 +190,10 @@ class Worker(QThread):
     def _clip_pending(self):
         return self._clip_gen != self._clip_walk_gen or self._ci < self._clen
 
+    def _bake_pending(self):
+        b = self._bake
+        return self._bake_gen != self._bake_walk_gen or (b is not None and not b.series and b.i < len(b.rows))
+
     def run(self):
         threading.current_thread().name = "worker"      # what the probe's events name as their thread
         try:
@@ -140,9 +206,10 @@ class Worker(QThread):
         while True:
             with self._cv:
                 while not (self._stop or self._want is not None or self._series_dirty or self._pending()
-                           or self._clip_pending()):
+                           or self._clip_pending() or self._bake_pending()):
                     self._cv.wait()
                 if self._stop:
+                    self._bake_fail("the video was closed")
                     return
                 want, self._want = self._want, None
                 gen, (start, length) = self._gen, self._window
@@ -150,7 +217,9 @@ class Worker(QThread):
                 if want is None:
                     dirty, self._series_dirty = self._series_dirty, False
                 clip_gen, clip_on = self._clip_gen, self._clip_on
+                bake_gen, (bake_ask, bake_doc, bake_why) = self._bake_gen, self._bake_ask
             which = "window"
+            self.graph.readers.reap()
             try:
                 if want is not None:
                     self.graph.serving("scrub")
@@ -161,12 +230,40 @@ class Worker(QThread):
                     self.rowReady.emit(want)
                     continue
                 self.graph.serving("walk")
+                if bake_gen != self._bake_walk_gen:
+                    self._bake_walk_gen = bake_gen
+                    self._bake_fail(bake_why)
+                    if bake_ask is not None:
+                        self._bake_begin(bake_ask, bake_doc)
+                    continue
+                b = self._bake
+                if b is not None and not b.series and not dirty and gen == self._walk_gen and self._i >= self._length:
+                    which = "bake"
+                    self.graph.serving("bake")
+                    self._bake_one()
+                    continue
                 if not self.graph.fed(self.graph.walk):
-                    self._walk_gen, self._i = gen, self._length   # nothing reaches the walked node; wait for the next change
+                    # nothing reaches a walked node: either nothing to do until the next change, or a served
+                    # series node heads the chain, which then runs on the file's rows with no stack walked
+                    headed = self._served_head()
+                    if gen != self._walk_gen:
+                        self._walk_gen, self._bytes, self._stack, self._dens, self._folded = gen, 0, None, {}, {}
+                        self._start = max(0, min(start, self.graph.count - 1))
+                        self._i = self._length = max(0, min(length, self.graph.count - self._start))
+                        if headed:
+                            self.walked.emit(self._i, self._length)
+                            self._emit_series()
+                    elif dirty and headed:
+                        self._emit_series()
                     if clip_gen != self._clip_walk_gen:
-                        self._clip_walk_gen, self._ci, self._clen, self._cstack, self._cbytes = clip_gen, 0, 0, None, 0
-                        self.clipReady.emit({}, 0, self.graph.fps)
-                        self.clipWalked.emit(0, 0)
+                        self._clip_walk_gen, self._cstack, self._cbytes, self._cfolded = clip_gen, None, 0, {}
+                        self._ci = self._clen = self.graph.count if clip_on and headed else 0
+                        if self._clen:
+                            self.clipWalked.emit(self._ci, self._clen)
+                            self._emit_clip()
+                        else:
+                            self.clipReady.emit({}, 0, self.graph.fps)
+                            self.clipWalked.emit(0, 0)
                     elif self._ci < self._clen:
                         self._clen = self._ci
                         self.clipWalked.emit(self._ci, self._clen)
@@ -194,14 +291,19 @@ class Worker(QThread):
                 elif not clip_on and self._ci < self._clen:
                     self._clen = self._ci       # stopped: the rows it has stand, and the count says so
                     self.clipWalked.emit(self._ci, self._clen)
+                    self._bake_fail("the clip walk was stopped short of the clip")
                 if clip_on and self._ci < self._clen:
                     self._clip_one()
             except Cancelled:
+                if which == "bake":
+                    self._bake_fail("abandoned: the graph moved on")
                 continue        # the graph moved on under the row, or we are stopping: the loop reads the new state
             except EndOfStream:
                 self.shortened.emit(self.graph.count)
                 if want is not None:
                     pass            # the display asked past the end; the window follows the count and asks again
+                elif which == "bake":
+                    self._bake_fail(f"the stream ended at row {self.graph.count}, inside the range")
                 elif which == "window":
                     self._length = self._i  # stream ended early; close the window there
                     self.walked.emit(self._i, self._length)
@@ -216,6 +318,10 @@ class Worker(QThread):
                 nid = getattr(e, "sieve_node", "")
                 if want is not None:
                     self.failed.emit(want, nid)
+                elif which == "bake":
+                    b = self._bake
+                    row = b.rows[b.i] if b is not None and b.i < len(b.rows) else "?"
+                    self._bake_fail(f"{nid or 'the writer'} raised at row {row}: {type(e).__name__}: {e}")
                 elif which == "window":
                     self.failed.emit(self._start + self._i, nid)
                     self._i = self._length  # abandon this walk; the next gen bump restarts it
@@ -269,8 +375,10 @@ class Worker(QThread):
             return
         if self._cstack is None:
             if self._clen * nbytes(out) > STACK_BYTES:
-                self.clipRefused.emit(f"the clip's stack would be {self._clen * nbytes(out) / 2**30:.1f} GB; "
-                                      f"{', '.join(self.graph.heads)} do not share a fold()")
+                why = (f"the clip's stack would be {self._clen * nbytes(out) / 2**30:.1f} GB; "
+                       f"{', '.join(self.graph.heads)} do not share a fold()")
+                self.clipRefused.emit(why)
+                self._bake_fail(f"the clip walk was refused: {why}")
                 self._clen = 0
                 self.clipWalked.emit(0, 0)
                 return
@@ -282,19 +390,24 @@ class Worker(QThread):
             self._clen = self._ci       # tables grew past the first row's forecast: the rows it has stand, as after stop_clip
             self.clipWalked.emit(self._ci, self._clen)
             self._emit_clip()
-            self.clipRefused.emit(f"the clip's stack reached {self._cbytes / 2**30:.1f} GB at row {self._ci}; the rows walked stand")
+            why = f"the clip's stack reached {self._cbytes / 2**30:.1f} GB at row {self._ci}; the rows walked stand"
+            self.clipRefused.emit(why)
+            self._bake_fail(f"the clip walk was refused: {why}")
             return
         self.clipWalked.emit(self._ci, self._clen)
         if self._ci == self._clen or (self._ci % self.every == 0 and time.perf_counter() >= self._clip_due):
             self._emit_clip()
 
+    def _served_head(self):
+        return any(self.graph.entry(h).bake is not None for h in self.graph.heads)
+
     def _emit_series(self):
         if not self._i:
             return
         self.densityReady.emit({nid: d[: self._i] for nid, d in self._dens.items()}, self._start)
-        if self._stack is None:
+        if self._stack is None and not self._served_head():
             return
-        results = self._run_chain(self._stack[: self._i], self._start, self._i, self._folded)
+        results = self._run_chain(None if self._stack is None else self._stack[: self._i], self._start, self._i, self._folded)
         if results is not None:
             self.seriesReady.emit(results, self._start, self.graph.fps)
 
@@ -302,10 +415,126 @@ class Worker(QThread):
         if not self._ci:
             return
         t = time.perf_counter()
-        results = self._run_chain(self._cstack[: self._ci], 0, self._ci, self._cfolded)
+        results = self._run_chain(None if self._cstack is None else self._cstack[: self._ci], 0, self._ci, self._cfolded)
         self._clip_due = time.perf_counter() + CHAIN_SHARE * (time.perf_counter() - t)
         if results is not None:
             self.clipReady.emit(results, 0, self.graph.fps)
+        if self._bake is not None and self._bake.series and self._ci == self._clen:
+            self._bake_series(results)
+
+    # -- baking ----------------------------------------------------------
+    def _bake_begin(self, nid, document=""):
+        """Starts a bake of `nid`'s input, or refuses it with the reason in the node's standing: a
+        node serving its bake, an input unwired or unfed, a kind with no writer, a range that names
+        no row, a store that cannot be written. The rows and quality are the tool's to read off its
+        params, through its `bake` facet. A series bake asks for the clip walk and writes when it completes."""
+        g = self.graph
+        e = g.entry(nid)
+        if e is not None and e.bake is not None:
+            return self._refuse(nid, "serving its bake; go live to rebake")
+        if e is None or e.src is None:
+            return self._refuse(nid, "in is unwired")
+        if not e.fed:
+            return self._refuse(nid, e.standing or f"in waits on {e.src}")
+        kind = e.types.get(INPUT)
+        w = writer(kind)
+        if w is None:
+            return self._refuse(nid, f"no writer for {kind}; a bake writes {', '.join(kinds())}")
+        try:
+            rows, quality = e.tool.bake(e.params, g.count)
+        except (TypeError, ValueError) as exc:
+            return self._refuse(nid, f"the range does not read: {exc}")
+        if not rows:
+            return self._refuse(nid, f"the range names no row of the clip's {g.count}")
+        inc = rows.step
+        store = self.store
+        why = store.probe()
+        if why:
+            return self._refuse(nid, why)
+        ext, cls = w
+        path, side = store.place(e.key, ext), store.sidecar(e.key)
+        if side is not None and os.path.exists(path):
+            # the store has this key already, from this document or another sharing the chain: served, not encoded again
+            g.note(nid, "")
+            self.baked.emit(nid, len(rows), len(rows))
+            _log(f"bake {nid}: {e.key} is in the store at {store.folder}, written {side.written}; serving it")
+            return self.bakeDone.emit(nid, side.bake(g.count))
+        g.readers.release(e.key)        # a reader left on a file of this key would hold it against the landing on Windows
+        side = Sidecar(e.key, kind, document, nid, [rows[0], rows[-1]], inc, g.fps, g.fps / inc, [], quality)
+        self._bake = _Bake(nid, e.key, kind, e.kind == "series", e.src, rows, cls(path, kind, g.fps / inc, quality), side, store)
+        g.note(nid, "")
+        self.baked.emit(nid, 0, len(rows))
+        _log(f"bake {nid}: {kind} rows {rows[0]}..{rows[-1]} every {inc}, {quality}, key {e.key} -> {store.folder}, "
+             f"{store.free() >> 20} MB free")
+        if self._bake.series:
+            with self._cv:
+                self._clip_gen += 1
+                self._clip_on = True
+
+    def _refuse(self, nid, why):
+        self.graph.note(nid, why)
+        self.bakeRefused.emit(nid, why)
+
+    def _bake_one(self):
+        b = self._bake
+        row = b.rows[b.i]
+        v = self.graph.compute(b.src, row)
+        if v is None:
+            return self._bake_fail(f"nothing reaches {b.src} at row {row}")
+        b.writer.write(v)
+        b.i += 1
+        self.baked.emit(b.nid, b.i, len(b.rows))
+        if b.i == len(b.rows):
+            self._bake_finish()
+        elif b.i % self.every == 0 and (free := b.store.free()) < LOW_DISK:
+            self._bake_fail(f"stopped at row {row}: the disk under {b.store.folder} has {free >> 20} MB free")
+
+    def _bake_series(self, results):
+        """Writes a series bake from the clip walk's result for the node: its rows, or its signal.
+        The result must be the chain the bake was asked under; a series change meanwhile, which
+        reruns the chain without restarting the walk, would otherwise be written under the old key."""
+        b = self._bake
+        if self.graph.key(b.nid) != b.key:
+            return self._bake_fail("abandoned: a tool upstream changed")
+        r = None if results is None else results.get(b.nid)
+        if not isinstance(r, dict) or "signal" not in r:
+            return self._bake_fail(f"the clip walk handed {b.nid} no signal")
+        data = r["rows"] if "rows" in r else r["signal"]
+        try:
+            for b.i, row in enumerate(b.rows, 1):
+                b.writer.write(data[row])
+        except Exception as exc:
+            return self._bake_fail(f"the writer raised at row {b.rows[b.i - 1]}: {type(exc).__name__}: {exc}")
+        self.baked.emit(b.nid, b.i, len(b.rows))
+        self._bake_finish()
+
+    def _bake_finish(self):
+        """The document is the GUI's to write: the Bake goes out on bakeDone and no node is touched here."""
+        b = self._bake
+        try:
+            b.writer.close()
+            side = b.store.write_sidecar(replace(b.side, shape=list(b.writer.shape or ())))
+        except Exception as exc:
+            if os.path.exists(b.writer.path) and b.store.sidecar(b.key) is None:
+                os.remove(b.writer.path)        # landed without its sidecar: not ours, so not left
+            return self._bake_fail(f"could not land the file: {type(exc).__name__}: {exc}")
+        self._bake = None
+        _log(f"bake {b.nid}: landed {b.key} after {time.perf_counter() - b.t0:.0f} s, {len(b.rows)} rows, "
+             f"{os.path.getsize(b.writer.path) >> 20} MB")
+        self.bakeDone.emit(b.nid, side.bake(self.graph.count))
+
+    def _bake_fail(self, why):
+        """Abandons the bake in progress, if any, leaving no file, with `why` in the node's standing."""
+        b = self._bake
+        if b is None:
+            return
+        self._bake = None
+        try:
+            b.writer.abort()
+        except OSError:
+            pass
+        _log(f"bake {b.nid}: {why}; nothing written, after {time.perf_counter() - b.t0:.0f} s and {b.i} rows")
+        self._refuse(b.nid, why)
 
     def _run_chain(self, stack, start, done, folds):
         """The series chain over `stack`, the walked node's rows from `start`, `done` of them so
@@ -316,9 +545,13 @@ class Worker(QThread):
             return None
         results, feeds, fps = {}, {}, self.graph.fps
         heads, folded = set(self.graph.heads), self.graph.fold is not None
-        buffer = stack.base if stack.base is not None else stack
+        buffer = None if stack is None else stack.base if stack.base is not None else stack
         for nid, tool, params, band, src in chain:
-            if nid in heads:
+            if nid in heads and self.graph.entry(nid).bake is not None:
+                series = Series(self.graph.baked_series(nid)[start: start + done], self.graph.key(nid), start, fps)
+            elif nid in heads and stack is None:
+                continue        # a head with nothing walked for it: its standing says why
+            elif nid in heads:
                 fold = None if folded else getattr(tool, "fold", None)
                 if fold is not None:
                     held = folds.get(id(fold))
@@ -341,5 +574,5 @@ class Worker(QThread):
                 ev[1] = Memo._size(results[nid])
             self.graph.note(nid, "")
             if isinstance(results[nid], dict):
-                results[nid] = {**results[nid], "key": self.graph.key(nid)}   # the node's key beside its gate: what a tool that writes a file records
+                results[nid] = {**results[nid], "key": self.graph.key(nid), "plate": self.graph.plate}   # beside its gate: what a tool that writes a file records
         return results

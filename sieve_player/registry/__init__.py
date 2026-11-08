@@ -12,7 +12,7 @@ MARKER = "SIEVE_TOOL"
 _HINTS = {
     MARKER: "SIEVE_TOOL = True",
     "NAME": 'NAME = "mytool"',
-    "KIND": 'KIND = "frame"  # or "series"',
+    "KIND": 'KIND = "frame"  # or "series", or "same": the kind of the node wired into its first input',
     "EXPECTS": 'EXPECTS = "gray"  # or a tuple; the report lists the types in use',
     "PRODUCES": 'PRODUCES = "gray"  # or "same": out as in',
     "DEFAULTS": "DEFAULTS = {}",
@@ -20,15 +20,13 @@ _HINTS = {
     "fold": "def fold(frame): ...  # a series tool: what the walk stacks per row in place of the frame",
     "settings": "def settings(parent=None): ...",
     "draw": "def draw(painter, row, result, start, params): ...",
-    "output_name": "def output_name(src, params): ...",
-    "export_command": "def export_command(src, dst, params, fps): ...",
-    "describe_output": "def describe_output(src, params, fps): ...",
     "INPUTS": 'INPUTS = {"bg": "gray"}  # frame inputs after the first: name -> the types it expects; run reads one as frames(row, name)',
     "OPTIONAL": 'OPTIONAL = ("bg",)  # the INPUTS the node computes without; run reads an unwired one as None',
     "STATIC": "STATIC = True  # the same output at every row: computed once per key, held once, counted per change",
     "PATHS": 'PATHS = {"settings": load_settings}  # path inputs: name -> params from the file',
     "select": "def select(folder, params): ...  # a selector: the path it picks under folder, or None",
     "matches": "def matches(folder, params): ...  # a selector: every path its rule matches, picked first",
+    "bake": "def bake(params, count): ...  # the node bakes: (the plate rows a bake writes over a clip of count rows, the frame writer's quality); a Bake button under it",
 }
 FACETS = tuple(_HINTS)
 

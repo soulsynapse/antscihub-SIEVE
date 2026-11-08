@@ -50,7 +50,7 @@ def lines(result, start, fps, footage):
     gate = np.asarray(result.get("gate", np.ones(len(rows), bool)), bool)
     dtype = rows[0].dtype if len(rows) else TRACKS_DTYPE
     names = fields(dtype)
-    yield key_line(result.get("key", ""), start, len(rows), footage) + "\n"
+    yield key_line(result.get("key", ""), start, len(rows), footage, result.get("plate")) + "\n"
     yield ",".join(columns(dtype)) + "\n"
     for i, (t, g) in enumerate(zip(rows, gate)):
         r = start + i

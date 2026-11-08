@@ -1,10 +1,10 @@
-"""Offscreen smoke test of the player: open empty, load, rewire, save, reopen, export, close. No
+"""Offscreen smoke test of the player: open empty, load, rewire, save, reopen, close. No
 display needed.
 
     .venv\\Scripts\\python smoke.py [video]
 
 Runs the example chain (gray -> rescale -> threshold -> motion -> reduce) in a graph built from a list,
-then the same chain and tools/downsample in the window.
+then the same chain in the window.
 Asserts on state at each step and exits non-zero on the first failure. Text renders as boxes
 under the offscreen platform, so there is nothing to look at; this checks wiring, not looks.
 """
@@ -23,7 +23,7 @@ from sieve_player import document  # noqa: E402
 from sieve_player.decoder import Decoder  # noqa: E402
 from sieve_player.graph import Graph, Series, gated  # noqa: E402
 from sieve_player.window import PlayerWindow  # noqa: E402
-from tools import downsample as ds, gray, motion, file, reduce, rescale, threshold  # noqa: E402
+from tools import gray, motion, file, reduce, rescale, threshold  # noqa: E402
 
 path = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else "video-tests/rep3_intermittent_crop.MP4")
 app = QApplication.instance() or QApplication(sys.argv)
@@ -75,7 +75,7 @@ def run_window():
     win.resize(1200, 700)
     win.show()
     check(not win.timeline.isEnabled(), "transport enabled before load")
-    check(win.pane.video is not None and not win.pane.exports, "the pane should hold the video picker and no export")
+    check(win.pane.video is not None, "the pane should hold the video picker")
     win.toggle_play(), win.goto(5, True), win.set_window(0, 10)  # must all be no-ops
     win.load("definitely/not/a/file.mp4")
     check(win.graph is None and "could not open" in win.pane.video.info.text(), "bad path not reported")
@@ -153,32 +153,7 @@ def run_window():
     app.exec()
 
 
-def run_downsample():
-    win = PlayerWindow([ds], "smoke")
-    win.resize(1200, 700)
-    win.show()
-    ex = win.pane.exports["downsample"]
-    check(not ex.button.isEnabled(), "export enabled before load")
-    win.load(path)
-    dst = ex._target()
-    check(not os.path.exists(dst), f"target already exists: {dst}")
-    ex.button.click()
-    check(ex.button.text() == "Cancel", "export did not start")
-
-    def after():
-        check(os.path.exists(dst), "export wrote nothing")
-        check(ex.status.text().startswith("wrote"), f"status: {ex.status.text()}")
-        if os.path.exists(dst):
-            os.remove(dst)
-        win.close()
-        app.quit()
-
-    QTimer.singleShot(20000, after)
-    app.exec()
-
-
 run_graph()
 run_window()
-run_downsample()
 print("smoke:", "ok" if not failures else f"{len(failures)} failure(s)")
 sys.exit(1 if failures else 0)

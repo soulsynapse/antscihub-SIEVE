@@ -13,6 +13,10 @@ MAY_IMPORT = {
     "canvas": {"document", "theme"},
     "pane": {"document", "theme", "widgets"},
     "widgets": {"density", "theme"},
+    "decoder": set(),
+    "writers": {"decoder"},                       # a baked clip reads back through the Decoder
+    "store": {"document", "writers"},             # where files land knows what a Bake is and which kinds write; never the reverse
+    "worker": {"decoder", "density", "document", "graph", "store"},
 }
 
 

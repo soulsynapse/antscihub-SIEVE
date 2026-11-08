@@ -66,10 +66,16 @@ def test_built_from_document_and_decoder():
     doc.video_node().params["output"] = "gray"                        # the video hands out gray: the decoder is told, every key moves
     g.sync()
     assert dec.output == "gray" and g.key("gray") != k and not g.fed("gray") and g.compute("video", 0).shape == (4, 6)
-    k = g.key("gray")
-    doc.video_node().params["scale"] = 0.5
-    g.sync()
-    assert dec.scale == 0.5 and g.key("gray") != k
+    assert g.key("video") == base_key("fake.mp4", "gray") and "scale" not in doc.video_node().params
+
+
+def test_a_document_with_a_scaled_video_node_reads_the_rescaled_plane_through_the_inserted_node():
+    from tools import rescale
+    doc = D.from_tools([gray, add])
+    d = doc.to_dict()
+    d["version"], d["nodes"][0]["params"] = 1, {"scale": 0.5}
+    g = Graph(D.Document.from_dict(d), Dec(), {**TOOLS, "rescale": rescale})
+    assert g.source("gray") == "rescale" and g.compute("rescale", 0).shape == (2, 3, 3) and g.compute("add", 0).shape == (2, 3)
 
 
 def test_a_band_zeroes_the_plane_outside_it_after_run_and_keys_the_node():
@@ -713,7 +719,7 @@ def test_standing_says_why_a_node_does_not_run_and_what_its_run_said():
 def test_the_plan_is_pure_in_the_document_and_the_tools():
     """plan() needs no decoder and says the same twice; the graph's sync holds nothing it does not."""
     doc = fan_out()
-    base = base_key("fake.mp4", "bgr", 1.0)
+    base = base_key("fake.mp4", "bgr")
     p, q = plan(doc, TOOLS, base), plan(doc, TOOLS, base)
     assert p == q and p.shown == doc.display and p.entries["video"].key == base and not p.chain
     g = Graph(doc, Dec(), TOOLS)

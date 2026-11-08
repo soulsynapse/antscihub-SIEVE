@@ -26,7 +26,8 @@ Qt's own printing alone; `SIEVE_C_STDERR=1` leaves C-level stderr alone, so cv2'
 every unconverted frame, and libav says why a stream ended where it did, which the player's own
 line at the correction cannot. `SIEVE_MEMO_GB` and `SIEVE_CACHE_GB` set the memo's and the
 decoder cache's limits; unset or `0`, each is the default in its class, and the line the player prints on
-opening a video says what both are.
+opening a video says what both are. `SIEVE_STORE` names the store, the folder bakes land in, while
+no folder has been chosen in the player; `sieve_player.store.folder` says where it is otherwise.
 
 ## A tool
 
@@ -59,6 +60,10 @@ def settings(parent=None) -> ParamWidget      # optionally show_result(result, s
 # in OPTIONAL = ("diff",) may be unwired and then reads as None (blobs). frames.type(input) is what
 # the node wired into an input produces, for an EXPECTS whose types run() must tell apart (inrange).
 
+# a tool on a wire of any kind: KIND = "same" makes the node a frame node on a frame wire and a
+# series node on a signal or tracks wire, so run is called either way, run(frames, row, params) or
+# run(series, params), and settles which by its arguments (bake).
+
 # a selector: which file, by rule
 NAME = "file"; KIND = "selector"; PRODUCES = "path"
 def select(folder, params) -> str | None      # folder is the document's
@@ -67,9 +72,10 @@ def select(folder, params) -> str | None      # folder is the document's
 How the player treats a tool, as `sieve_player/graph.py`, `pane.py` and `window.py` currently do:
 
 - Types are strings the player compares for equality; it attaches no meaning to them beyond the
-  video node producing `"bgr"`, or `"gray"` when its `output` param says so. That and its `scale`
-  param are the decoder's: both are applied before its cache, so a chain that wants small gray
-  frames never holds the large colour ones, and no gray or rescale node is needed for that. An
+  video node producing `"bgr"`, or `"gray"` when its `output` param says so. That one param is the
+  decoder's, applied before its cache, so a chain that wants gray frames never holds the colour
+  ones and no gray node is needed for that; a smaller frame is tools/rescale's, or a bake's, and a
+  document saved with a scale on the video node loads with a rescale node inserted for it. An
   `EXPECTS` tuple accepts any of its members, and `PRODUCES = "same"` hands out whatever the tool
   reads.
 - Only the worker thread calls `run`, but for any row in any order, since a seek jumps its queue.
@@ -110,9 +116,9 @@ Facets the player reads when a tool has them:
 |---|---|
 | `draw(painter, row, result, start, params)` | paints on the frame, in frame-pixel coordinates (`painter.window()` is the frame's rect), with the node's params as they stand; one that raises is dropped for the session |
 | a `"signal"` array in a series result | the node's trace, drawn as a detector. Its two handles are the node's band, in the signal's units, saved with the node: the player adds `"gate"`, the rows inside it (outside when lo is above hi), washes them on the trace, zeroes the rest of the signal before a series node downstream reads it, and draws a green border on the frame while the playhead is in a row the last chain node gates. Every chain node's result also gets `"key"`, the node's key (`graph`), which hashes its band and everything upstream: a tool that writes a file records it, and can read it back to say whether the file on disk is this graph's (csv) |
-| `output_name`, `export_command`, `describe_output` | an Export button on the node; an existing target gets a numbered sibling, and a failed run leaves no partial file |
 | `INPUTS = {input: types}` | a frame input after the first, with the types it expects; `run` reads it as `frames(row, input)`, and the node's key and `frames.key` follow it |
 | `PATHS = {input: loader}` | a path input a selector feeds; the loader turns the file into params |
+| `def bake(params, count) -> (rows, quality)` | the node bakes: a Bake button under it, and the worker writes the node's input over the plate rows the tool reads off its own params into the store (`sieve_player/store.py`) under the node's key, a row at a time between scrubs, frame kinds as a clip at the quality the tool names and tables and signals as files that read back equal (`sieve_player/writers.py`); a cancelled or failed bake leaves nothing and says why in the node's standing. The node's mode, live or baked, is the document's, saved with the node and drawn on it; baked, the node is a source: fed with nothing wired in, keyed by its bake, handing out the file's kind with nothing upstream run or decoded; a change upstream shows it stale, the plan's verdict and never saved, and the switch under it goes live or serves the bake again, and a document reopens baked while the store has the file. While the display flag is behind a bake with an increment or a range, the document's rows, count and fps are the file's, nodes in the plate's row space are grayed and do not run, and a csv's key line carries `plate=first:increment`; with the flag upstream of every bake the document is the plate's and the nodes behind the bake are the grayed ones |
 | `STATIC = True` | the output is the same at every row: the memo holds it once under the key and never evicts it while the node stands under that key, and the monitor counts its run per change rather than per row |
 | a plane as output | the node's density, v2's plot: its pixels per row counted on a fixed log axis, under its settings, for every fed frame node; a mask or a field has none. Its two handles are the node's band, saved with the node: the player zeroes every pixel outside it (inside it when lo is above hi) before anything downstream reads the node |
 

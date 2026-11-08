@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (QAbstractSpinBox, QApplication, QLineEdit, QListW
 
 from . import theme
 from .document import (INPUT, OPEN, OVERLAYABLE, PATH, VIDEO_PRODUCES, VIDEO_TOOL, expects, fed, fits,
-                       inputs_of, is_selector, paths, produces)
+                       inputs_of, is_selector, kind_of, mode_of, paths, produces)
 from .theme import GAP, PAD, qgray
 
 NODE_W, NODE_H = 140, 28   # a node's box, canvas px
@@ -161,6 +161,8 @@ class Canvas(QWidget):
         self.doc = None
         self.errors = {}                        # node id -> the one line wrong with it, set by the window
         self.standings = {}                     # node id -> why it does not run, set by the window; the node's tooltip
+        self.grayed = set()                     # nodes in the other row space than the display, set by the window; drawn dim
+        self.stale = set()                      # nodes serving a bake the plan says is stale, set by the window; drawn so in place of the mode
         self.selected = []
         self.hover = None                       # the node id under the pointer
         self._drag = None                       # ("move", start, {id: pos}) | ("box", start, shift, base)
@@ -263,9 +265,8 @@ class Canvas(QWidget):
         """Whether the display flag is offered: a node with a frame to show. A series node's output
         is a signal in the Trace and a selector's a path, so neither takes it; an unresolved node
         does, its kind unknown until its tool is found."""
-        tool = self.tools.get(node.tool)
-        return node.tool == VIDEO_TOOL or tool is None \
-            or (not is_selector(tool) and getattr(tool, "KIND", "frame") == "frame")
+        return node.tool == VIDEO_TOOL or self.tools.get(node.tool) is None \
+            or kind_of(self.doc, self.tools, node.id) == "frame"
 
     def can_overlay(self, node):
         """Whether the overlay flag is offered: a resolved node producing one plane (an OVERLAYABLE type)."""
@@ -275,7 +276,8 @@ class Canvas(QWidget):
         """Whether the node has a band, the handles on its pane's density or trace: a resolved frame
         or series node that is neither a selector nor a reader of paths, as the pane builds them."""
         tool = self.tools.get(node.tool)
-        return node.tool != VIDEO_TOOL and tool is not None and not is_selector(tool) and not paths(tool)             and getattr(tool, "KIND", "frame") in ("frame", "series")
+        return node.tool != VIDEO_TOOL and tool is not None and not paths(tool) \
+            and kind_of(self.doc, self.tools, node.id) in ("frame", "series")
 
     def unfed(self, node):
         """The mark: a resolved node the video does not reach through wires whose types fit. The
@@ -744,9 +746,13 @@ class Canvas(QWidget):
         p.setPen(self.hairline(edge))
         p.setBrush(qgray(fill))
         p.drawRoundedRect(box, theme.RADIUS, theme.RADIUS)
-        p.setPen(theme.RED if n.unresolved or n.id in self.errors else qgray(theme.INK))
+        p.setPen(theme.RED if n.unresolved or n.id in self.errors else qgray(theme.INK_2 if n.id in self.grayed else theme.INK))
         text = box.adjusted(PAD, 0, -(4 * PAD + 4 * FLAG_R), 0)
         p.drawText(text, Qt.AlignLeft | Qt.AlignVCenter, f"{n.id} ?" if n.unresolved else n.id)
+        mode = None if n.unresolved else mode_of(self.doc, self.tools, n.id)
+        if mode is not None:
+            p.setPen(qgray(theme.INK_2))
+            p.drawText(text, Qt.AlignRight | Qt.AlignVCenter, "stale" if n.id in self.stale else mode)
         flags = [(self.flag(n), n.id == self.doc.display, theme.ACCENT)] if self.can_display(n) else []
         if self.can_overlay(n):
             flags.append((self.overlay_flag(n), n.id == self.doc.overlay, theme.OVERLAY))

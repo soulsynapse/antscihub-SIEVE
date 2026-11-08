@@ -36,12 +36,6 @@ def test_gray_output_is_converted_before_the_cache_and_a_switch_empties_it(video
     assert d.cached(3) is None and np.abs(d.read(3).astype(int) - bgr).max() <= 2
     with pytest.raises(ValueError):
         d.output = "hsv"
-    d.scale = 0.5
-    assert d.cached(3) is None and d.read(3).shape == (24, 32, 3) and d.cached(3).shape == (24, 32, 3)
-    d.output = "gray"
-    assert d.read(3).shape == (24, 32)
-    with pytest.raises(ValueError):
-        d.scale = 1.5
 
 
 def test_a_raw_stream_is_refused_and_its_remux_opens_with_limited_range_luma(video, tmp_path, monkeypatch):

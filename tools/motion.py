@@ -1,7 +1,7 @@
 """Frame tool: |frame-to-frame difference|, gray or mask in, gray out; row 0 is all zero.
 
 The difference is an image, not a number: what to make of it is downstream's choice (tools/reduce for a
-per-row signal, tools/threshold for a mask of what moved, tools/downsample for a block mean).
+per-row signal, tools/threshold for a mask of what moved, tools/rescale for a block mean).
 """
 import cv2
 import numpy as np

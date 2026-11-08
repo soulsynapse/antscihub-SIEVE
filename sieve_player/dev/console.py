@@ -6,10 +6,9 @@ once the QApplication exists."""
 import faulthandler
 import os
 import sys
-import tempfile
 import time
 
-LOG_ENV = "SIEVE_LOG"       # the log's path; unset: SIEVE/stderr.log under LOCALAPPDATA or the temp dir; 0: no log
+LOG_ENV = "SIEVE_LOG"       # the log's path; unset: stderr.log under store.app_folder(); 0: no log
 
 
 class _Tee:
@@ -50,7 +49,8 @@ def log_path():
         return None
     if want:
         return want
-    return os.path.join(os.environ.get("LOCALAPPDATA") or tempfile.gettempdir(), "SIEVE", "stderr.log")
+    from ..store import app_folder
+    return os.path.join(app_folder(), "stderr.log")
 
 
 def log_stderr(path):

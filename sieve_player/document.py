@@ -11,12 +11,12 @@ import json
 import os
 from dataclasses import dataclass, field
 
-VERSION = 1
+VERSION = 2                 # 2: the video node's scale is a rescale node's; a 1 with one loads with that node inserted
 VIDEO_TOOL = "video"        # the reserved tool name of the node the decoder is
-VIDEO_OUTPUT = "output"     # the video node's params: what the decoder hands out, and at what scale, both applied before its cache
+VIDEO_OUTPUT = "output"     # the video node's one param: what the decoder hands out, applied before its cache
 VIDEO_OUTPUTS = ("bgr", "gray", "luma")    # luma: the decoder's own plane, a gray left in the stream's range
 VIDEO_PRODUCES = "bgr"      # what it hands out unless its output param names another of VIDEO_OUTPUTS
-VIDEO_SCALE = "scale"       # a factor in (0, 1]; 1 is the frame as decoded
+RESCALE_TOOL, RESCALE_PARAM = "rescale", "scale"    # the tool and param a format-1 video node's scale becomes on load
 PATH = "path"               # the type the video node's input expects and a selector produces
 INPUT = "in"                # every tool's first input; INPUTS declares more
 OVERLAYABLE = ("gray", "mask")  # the types the overlay flag is offered on: a single plane the frame can be heated with
@@ -176,9 +176,29 @@ class Document:
             if wd["from"] not in ids or wd["to"] not in ids:
                 raise FormatError(f"wire {wd['from']!r} -> {wd['to']!r} names a node the document lacks")
             doc.wires.append(Wire(wd["from"], wd["to"], wd.get("input", INPUT)))
+        doc._lift_scale()
         if known is not None:
             doc.resolve(known)
         return doc
+
+    def _lift_scale(self):
+        """A video node carrying a scale, format 1's, loses it, and one under 1 becomes a rescale
+        node of that factor between the video node and every node that read it, so what reaches
+        each reader is the plane it read before."""
+        v = self.video_node()
+        if v is None or RESCALE_PARAM not in v.params:
+            return
+        try:
+            s = float(v.params.pop(RESCALE_PARAM))
+        except (TypeError, ValueError):
+            return
+        if not 0.0 < s < 1.0:
+            return
+        readers = [w for w in self.wires if w.src == v.id]
+        node = self.add_node(RESCALE_TOOL, (v.pos[0], v.pos[1] + LAYOUT_STEP / 2), {RESCALE_PARAM: s})
+        for w in readers:
+            w.src = node.id
+        self.wires.append(Wire(v.id, node.id))
 
 
 def save(doc, path):
@@ -376,17 +396,6 @@ def video_output(doc):
     v = doc.video_node()
     out = VIDEO_PRODUCES if v is None else v.params.get(VIDEO_OUTPUT, VIDEO_PRODUCES)
     return out if out in VIDEO_OUTPUTS else VIDEO_PRODUCES
-
-
-def video_scale(doc):
-    """The factor the decoder resizes by, 1.0 unless the video node's param says less; a value
-    outside (0, 1] reads as 1.0."""
-    v = doc.video_node()
-    try:
-        s = 1.0 if v is None else float(v.params.get(VIDEO_SCALE, 1.0))
-    except (TypeError, ValueError):
-        return 1.0
-    return s if 0.0 < s <= 1.0 else 1.0
 
 
 def from_tools(tools, video=None):

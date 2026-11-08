@@ -98,7 +98,7 @@ def test_the_plan_is_the_same_with_the_store_present_and_absent(tmp_path, in_sto
     g = build(clip(tmp_path / "v.avi"), "gray", "bake", "threshold", increment=2)
     done, refused = baked(g)
     assert done and not refused, refused
-    base = base_key(g.decoder.path, "bgr", 1.0)
+    base = base_key(g.decoder.path, "bgr")
     with_store = plan(g.doc, TOOLS, base)
     monkeypatch.setattr(store, "folder", lambda: str(tmp_path / "nowhere"))
     without = plan(g.doc, TOOLS, base)

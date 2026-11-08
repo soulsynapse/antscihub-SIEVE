@@ -16,9 +16,9 @@ def _key(*parts):
     return hashlib.sha1("|".join(map(str, parts)).encode()).hexdigest()[:16]
 
 
-def base_key(path, output, scale):
+def base_key(path, output):
     """The video node's key: the file and what the decoder hands out of it."""
-    return _key("video", path, output, scale)
+    return _key("video", path, output)
 
 
 @dataclass

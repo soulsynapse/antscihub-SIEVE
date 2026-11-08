@@ -9,11 +9,9 @@ runtime, and what it shows of a run, the density, the trace, the standing line, 
 import os
 
 from PySide6.QtCore import QSize, Qt, Signal
-from PySide6.QtWidgets import (QComboBox, QDoubleSpinBox, QFileDialog, QFrame, QPushButton, QScrollArea, QVBoxLayout,
-                               QWidget)
+from PySide6.QtWidgets import QComboBox, QFileDialog, QFrame, QPushButton, QScrollArea, QVBoxLayout, QWidget
 
-from .document import (OPEN, VIDEO_OUTPUT, VIDEO_OUTPUTS, VIDEO_PRODUCES, VIDEO_SCALE, VIDEO_TOOL, is_selector, mode_of,
-                       paths, video_output, video_scale)
+from .document import OPEN, VIDEO_OUTPUT, VIDEO_OUTPUTS, VIDEO_TOOL, is_selector, mode_of, paths, video_output
 from .theme import CONTROL_W, GAP, PAD, WIDE_W, Form, GlyphButton, Layer, readout
 from .widgets import Density, Trace
 
@@ -29,8 +27,8 @@ def _column(parent, spacing=GAP):
 
 class Video(QWidget):
     """The video node's settings: a picker, the chosen path and what cv2 says about it, and the
-    decoder's two params, `output`, bgr as decoded, gray or luma, and `scale`, a factor, both applied
-    before its cache so a chain that wants small gray frames never holds the large colour ones."""
+    decoder's one param, `output`, bgr as decoded, gray or luma, applied before its cache so a chain
+    that wants gray frames never holds the colour ones; a smaller frame is a rescale node's, or a bake's."""
     sourceChanged = Signal(str)
     paramChanged = Signal(str, object)     # (param name, value)
 
@@ -48,17 +46,10 @@ class Video(QWidget):
         form.add_row(VIDEO_OUTPUT, self.output)
         self.output_note = readout()
         form.add_line(self.output_note)
-        self.scale = QDoubleSpinBox()
-        self.scale.setRange(0.05, 1.0)
-        self.scale.setSingleStep(0.05)
-        self.scale.setDecimals(2)
-        self.scale.setFixedWidth(CONTROL_W)
-        form.add_row(VIDEO_SCALE, self.scale)
         lay.addWidget(form)
         self.button.clicked.connect(self._pick)
         self.output.currentTextChanged.connect(self._note_output)
         self.output.currentTextChanged.connect(lambda v: self.paramChanged.emit(VIDEO_OUTPUT, v))
-        self.scale.valueChanged.connect(lambda v: self.paramChanged.emit(VIDEO_SCALE, float(v)))
         self._note_output(self.output.currentText())
 
     OUTPUT_NOTES = {
@@ -72,10 +63,9 @@ class Video(QWidget):
 
     def set_params(self, doc):
         """Moves the knobs to the document's values without reporting a change."""
-        for w, v in ((self.output, video_output(doc)), (self.scale, video_scale(doc))):
-            w.blockSignals(True)
-            w.setCurrentText(v) if w is self.output else w.setValue(v)
-            w.blockSignals(False)
+        self.output.blockSignals(True)
+        self.output.setCurrentText(video_output(doc))
+        self.output.blockSignals(False)
         self._note_output(video_output(doc))
 
     def _pick(self):

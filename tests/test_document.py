@@ -111,11 +111,20 @@ def test_the_video_node_produces_what_its_output_param_says():
     assert [p.where for p in D.validate(doc, TOOLS) if p.kind == "type"] == ["video -> gray"]   # gray expects bgr
     doc.video_node().params["output"] = "nonsense"
     assert D.video_output(doc) == "bgr"
-    assert D.video_scale(doc) == 1.0
-    doc.video_node().params["scale"] = 0.25
-    assert D.video_scale(doc) == 0.25
-    doc.video_node().params["scale"] = 3
-    assert D.video_scale(doc) == 1.0
+
+
+def test_a_scale_on_the_video_node_loads_as_a_rescale_node_before_every_reader():
+    """Format 1 put the decoder's resize on the video node; it is rescale's now, so a saved scale
+    becomes that node between the video and each node that read it, and a scale of 1 just goes."""
+    doc = D.from_tools([gray, motion])
+    doc.connect("video", "motion")
+    d = doc.to_dict()
+    d["version"], d["nodes"][0]["params"] = 1, {"output": "gray", "scale": 0.5}
+    back = D.Document.from_dict(d)
+    assert back.node("video").params == {"output": "gray"} and back.node("rescale").params == {"scale": 0.5}
+    assert sorted((w.src, w.dst) for w in back.wires) == [("rescale", "gray"), ("rescale", "motion"), ("video", "rescale")]
+    d["nodes"][0]["params"] = {"scale": 1.0}
+    assert "rescale" not in {n.id for n in D.Document.from_dict(d).nodes} and "scale" not in D.Document.from_dict(d).node("video").params
 
 
 def test_validate_type_cycle_unfed():

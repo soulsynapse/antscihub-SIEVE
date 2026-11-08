@@ -51,15 +51,15 @@ cache footprint. With a bake to carry the footprint it is a second place a trans
 the rule that keeps the video node from growing again is that a param of its is legitimate only
 where it changes the decoder's work, which `output` does and a resize does not.
 
-- [ ] The video node's params are `output` alone; the decoder has no scale, and the video node's key
+- [x] The video node's params are `output` alone; the decoder has no scale, and the video node's key
   hashes the path and the output.
   Check: a test reads the video node's settings and the plan's base key with no scale in either.
-- [ ] A saved document whose video node carries a scale loads with a rescale node of that factor
+- [x] A saved document whose video node carries a scale loads with a rescale node of that factor
   between the video node and every node that read it, so what reaches each reader is the plane it
   read before; the tuned documents under video-tests/ are such documents.
   Check: a test loads a document with a scaled video node and reads the inserted node and its
   readers' frames.
-- [ ] README's bullet on the video node's params and every docstring that said the scale was the
+- [x] README's bullet on the video node's params and every docstring that said the scale was the
   decoder's say what is now true.
   Check: `tests/test_seams.py` green and a grep for the old claim finding nothing.
 

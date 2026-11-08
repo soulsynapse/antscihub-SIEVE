@@ -15,7 +15,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from . import density
-from .document import INPUT, video_output, video_scale
+from .document import INPUT, video_output
 from .plan import _key, base_key, plan, shared_fold, walked
 
 WINDOW = 64     # rows a running mean spans; the decoder's step and seek means keep their own literal, see Decoder._mean
@@ -248,11 +248,10 @@ class Graph:
 
     def sync(self):
         """Re-read the document: the plan, pure in the document and the tools (see `plan`), and the
-        decoder's output and scale, which the video node's params set."""
-        output, scale = video_output(self.doc), video_scale(self.doc)
+        decoder's output, which the video node's param sets."""
+        output = video_output(self.doc)
         self.decoder.output = output        # a change empties its cache; a read in flight under the old plan is cancelled
-        self.decoder.scale = scale
-        self._base = base_key(self.decoder.path, output, scale)
+        self._base = base_key(self.decoder.path, output)
         p = plan(self.doc, self.tools, self._base)
         for nid, e in p.entries.items():
             if e.bake is None:

@@ -125,7 +125,7 @@ class Decoder:
         fmt = int(cap.get(cv2.CAP_PROP_CODEC_PIXEL_FORMAT)).to_bytes(4, "little", signed=True)
         self.luma = fmt in LUMA_FORMATS and _quiet()
         self._limited = None    # measured at the first gray read, two decodes of row 0
-        self._output, self._scale = "bgr", 1.0
+        self._output = "bgr"
         self._cursors = {"walk": walk, "scrub": None}   # the scrub's opens on its first use
         self._use = "walk"
         self._cache = OrderedDict()
@@ -178,31 +178,9 @@ class Decoder:
     def _luma_read(self):
         return self.luma and self._output != "bgr"
 
-    @property
-    def scale(self):
-        """The factor frames are resized by before they are cached, 1.0 as decoded; INTER_AREA, as
-        tools/rescale does. Setting it empties the cache."""
-        return self._scale
-
-    @scale.setter
-    def scale(self, value):
-        value = float(value)
-        if not 0.0 < value <= 1.0:
-            raise ValueError(f"decoder scale {value}; in (0, 1]")
-        with self._cache_lock:
-            if value == self._scale:
-                return
-            self._scale, self._cache_bytes = value, 0
-            self._cache.clear()
-
-    def _shape(self):
-        """(rows, cols) a frame has after the scale, as cv2.resize rounds it."""
-        s = self._scale
-        return (self.height, self.width) if s == 1.0 else (int(round(self.height * s)), int(round(self.width * s)))
-
     def _fits(self, f):
-        # a frame of the other kind or size, decoded before a switch and landing after it, is not served
-        return (f.ndim == 2) == (self._output != "bgr") and f.shape[:2] == self._shape()
+        # a frame of the other kind, decoded before a switch and landing after it, is not served
+        return (f.ndim == 2) == (self._output != "bgr")
 
     def cached(self, row):
         """Cache-only read; never touches a capture. Safe from the GUI thread."""
@@ -283,8 +261,6 @@ class Decoder:
             f = cv2.cvtColor(f, cv2.COLOR_BGR2GRAY)
         elif self._output == "gray" and self.limited:
             f = cv2.LUT(f, _EXPAND)
-        if self._scale != 1.0:
-            f = cv2.resize(f, None, fx=self._scale, fy=self._scale, interpolation=cv2.INTER_AREA)
         self._put(cur.pos, f)
         cur.pos += 1
         return f

@@ -1,7 +1,7 @@
 # Solver: a series tool that carries state from row to row, and a worker that steps it
 
-Written 2026-11-08, revised the same day after an architecture review; the first deliverable, the
-plan's verdict, the one-walk refactor and the stepping walk were ticked that day.
+Written 2026-11-08, revised the same day after an architecture review; every deliverable was
+ticked that day, the worker's last.
 Read with the registry's facet table and type report (`python -m sieve_player.registry`), the live
 statement of what a tool may offer and what feeds what, and with
 docs/findings/2026-11-08-bake-window-fit.md, the measurement this spec answers. docs/spec/bake.md
@@ -270,15 +270,15 @@ is one cursor. What the DCCs separate is who decides what runs next from what ea
 it runs; the player's thread already is the former and this deliverable is only the latter. A
 split that changes any emitted signal, refusal or order has gone further than the deliverable asks.
 
-- [ ] Every signal the worker emits, every request it answers and every refusal it gives is as it
+- [x] Every signal the worker emits, every request it answers and every refusal it gives is as it
   was: the walk, clip and bake tests pass unchanged, and a test drives the jobs through one
   sequence, a scrub landing mid-walk, a bake asked mid-walk, a clip walk after, and reads the order
   they were served against the ladder.
   Check: the existing tests and the new sequence test.
-- [ ] A job's state is held by the job and reset in one place, and a generation change reaches a
+- [x] A job's state is held by the job and reset in one place, and a generation change reaches a
   job as the scheduler's word and not by each job comparing counters.
   Check: a seams test reads one reset per job and no generation comparison outside the scheduler.
-- [ ] The monitor's `serving` lanes name the job that served each event as they do today.
+- [x] The monitor's `serving` lanes name the job that served each event as they do today.
   Check: tests/test_monitor.py passes unchanged.
 
 ## Non-goals

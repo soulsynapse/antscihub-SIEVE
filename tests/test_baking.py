@@ -300,3 +300,45 @@ def test_tables_and_a_signal_read_back_equal(tmp_path, in_store):
             assert writers.read_signal(store.Store(str(in_store)).place(g.key("bake"), ext)).tolist() == np.asarray(want, np.float32).tolist()
         assert store.Store(str(in_store)).sidecar(g.key("bake")).kind == ("tracks" if pick == "rows" else "signal")
         g.decoder.close()
+
+
+def test_the_ladder_serves_a_scrub_then_a_bakes_start_then_its_rows_behind_the_window_then_the_clip(tmp_path, in_store):
+    """With the walk held inside a tool at row 2, a scrub, a bake and a clip walk are asked; released,
+    the row completes, the scrub is served, the bake says its first word, the walk resumes, the bake
+    writes every row behind the finished window, and the clip walk runs behind the bake's landing."""
+    import threading
+    arrived, gate = threading.Event(), threading.Event()
+
+    def held(frames, row, params):
+        f = frames(row)
+        if row == 2 and not arrived.is_set():
+            arrived.set()
+            gate.wait(5)
+        return f
+    tools = {**TOOLS, "held": Tool(NAME="held", KIND="frame", EXPECTS="gray", PRODUCES="gray", DEFAULTS={}, run=held)}
+    g = graph(clip(tmp_path / "v.avi"), "gray", "held", tools=tools)
+    w = Worker(g)
+    served = []
+    w.walked.connect(lambda d, n: served.append(("walked", d)))
+    w.rowReady.connect(lambda r: served.append(("row", r)))
+    w.baked.connect(lambda n, i, total: served.append(("baked", i)))
+    w.bakeDone.connect(lambda n, b: served.append(("landed", n)))
+    w.bakeRefused.connect(lambda n, why: served.append(("refused", why)))
+    w.clipWalked.connect(lambda d, n: served.append(("clip", d)))
+    w.set_window(0, 6)
+    w.start()
+    assert arrived.wait(5)
+    w.request_row(11)
+    w.bake("bake", "doc.json")
+    w.walk_clip()
+    gate.set()
+    t = time.perf_counter()
+    while ("clip", N) not in served and time.perf_counter() - t < 20:
+        QApplication.processEvents()
+        time.sleep(0.005)
+    w.stop()
+    assert ("landed", "bake") in served and ("clip", N) in served, served
+    at = served.index
+    assert at(("walked", 3)) < at(("row", 11)) < at(("baked", 0)) < at(("walked", 4)), served
+    assert at(("walked", 6)) < at(("baked", 1)) and at(("baked", N)) < at(("landed", "bake")) < at(("clip", 1)), served
+    g.decoder.close()

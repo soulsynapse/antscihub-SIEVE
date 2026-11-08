@@ -85,3 +85,20 @@ def test_a_module_header_states_the_module_not_its_history():
 
     long = {str(p.relative_to(PKG)): n for p in PKG.rglob("*.py") if (n := header_lines(p)) > HEADER_LINES}
     assert not long, long
+
+
+def test_the_scheduler_alone_begins_a_job_and_nothing_compares_a_generation():
+    """A job's reset is its begin(), called once per job and only from _serve, the scheduler; an
+    ask is a flag the scheduler takes under the lock, so no generation counter is compared, by a
+    job or by anyone."""
+    tree = ast.parse((PKG / "worker.py").read_text(encoding="utf-8"))
+    serve = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == "_serve")
+
+    def begins(node):
+        return [n for n in ast.walk(node) if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and n.func.attr == "begin"]
+
+    assert {id(n) for n in begins(tree)} == {id(n) for n in begins(serve)}
+    assert sorted(ast.unparse(n.func.value) for n in begins(serve)) == ["bake", "clip", "win"]
+    compared = [ast.unparse(n) for n in ast.walk(tree) if isinstance(n, ast.Compare)
+                and any(isinstance(o, ast.Attribute) and o.attr in ("gen", "asked") for o in [n.left, *n.comparators])]
+    assert not compared, compared

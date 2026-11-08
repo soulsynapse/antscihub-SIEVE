@@ -193,34 +193,34 @@ increments, has no row space, and the player says so in the standing rather than
 A bake's range and increment are therefore properties of this switch, never a second axis; a
 frame tool still cannot drop a row, so the live node shows every row until it is baked.
 
-- [ ] While the display flag is behind a baked node the document's count and fps are the file's,
+- [x] While the display flag is behind a baked node the document's count and fps are the file's,
   every row the walk and the timeline use is the file's, and the csv key line carries the bake's
   first row and increment; with the flag moved upstream of the bake the document is live in the
   plate's axis, the playhead mapped across, and nodes not behind the bake the display is behind
   read as grayed.
   Check: a test bakes with an increment, reads the count, the fps, the walked rows and a csv's key
   line in each mode, moves the flag, and reads which nodes are grayed.
-- [ ] A baked node is fed with its input unwired, produces the sidecar's kind with a node of another
+- [x] A baked node is fed with its input unwired, produces the sidecar's kind with a node of another
   kind wired into it, and every key downstream hashes the baked key and nothing upstream of it.
   Check: a test cuts the wire into a baked node, then wires a bgr node into a baked gray one, and
   reads fed, the produced type and the sync keys.
-- [ ] The plan of a document with a baked node is the same with the store present and absent.
+- [x] The plan of a document with a baked node is the same with the store present and absent.
   Check: a test plans the saved document twice, the store moved between.
-- [ ] In baked mode a scrub and a walk decode no row of the video and run no node upstream of the
+- [x] In baked mode a scrub and a walk decode no row of the video and run no node upstream of the
   bake; the readers' rows are the file's.
   Check: a test scrubs a baked graph and counts decodes and runs through the probe.
-- [ ] A baked node on a series kind heads the chain: no node is walked for it, and the series nodes
+- [x] A baked node on a series kind heads the chain: no node is walked for it, and the series nodes
   on from it run on the file's rows.
   Check: a test bakes a signal, changes the frame chain above it, and reads the walked node and the
   downstream result through the probe.
-- [ ] A change upstream of a baked node leaves it serving the file, with its mode stale, and the
+- [x] A change upstream of a baked node leaves it serving the file, with its mode stale, and the
   node's key, hence every key downstream, unchanged; switching the node to live serves the chain
   and takes the live key; baking again writes under the new key beside the old file.
   Check: a test changes an upstream knob, reads the mode and the sync keys, switches, and bakes.
-- [ ] A document reopened finds the bake under the key saved with its node and opens baked; a
+- [x] A document reopened finds the bake under the key saved with its node and opens baked; a
   document whose bake is gone from the store opens live and says so in the node's standing.
   Check: a test saves, reopens, and reopens again with the file removed.
-- [ ] A baked frame clip is a file another document opens as its video, at the baked fps and shape,
+- [x] A baked frame clip is a file another document opens as its video, at the baked fps and shape,
   which is sources.md's crop as a source.
   Check: a test opens a baked clip as a new document's video and reads its facts.
 

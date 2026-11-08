@@ -1,7 +1,7 @@
 """The file csv and tracks-csv write and resolve reads back: the key line, the atomic write, and the
 Write widget. Not a tool; a tool imports it and no other tool (tests/test_seams.py).
 
-The first line is a comment, `# sieve key=... rows=a-b footage=...`, the node's key as the player
+The first line is a comment, `# sieve key=... rows=a-b footage=... [plate=first:increment]`, the node's key as the player
 computed it (see `sieve_player.graph`): it hashes the band and everything upstream, so a tool reads
 it back and says whether the file on disk is this graph's or stale. Readers skip the line with
 `comment="#"` (pandas) or `comment.char = "#"` (R). The second line names the columns, and every
@@ -18,8 +18,11 @@ FILTER = "CSV (*.csv);;All (*)"
 _KEY = re.compile(r"# sieve key=(\S*) rows=(\d+)-(\d+)")
 
 
-def key_line(key, start, n, footage):
-    return f"# sieve key={key} rows={start}-{start + n - 1} footage={os.path.basename(str(footage))}"
+def key_line(key, start, n, footage, plate=None):
+    """`plate`, (first row, increment), says the rows are a bake's and how they map to the footage's:
+    footage row = first + increment × row."""
+    line = f"# sieve key={key} rows={start}-{start + n - 1} footage={os.path.basename(str(footage))}"
+    return line if plate is None else f"{line} plate={int(plate[0])}:{int(plate[1])}"
 
 
 def parse_key(line):

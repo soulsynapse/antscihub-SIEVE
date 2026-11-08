@@ -109,19 +109,26 @@ class BakeBlock(QWidget):
     for a bake and cancels one running, and the line that says how far it is or why it stopped."""
     asked = Signal()
     cancelled = Signal()
+    toggled = Signal()      # the switch between serving the bake and going live
 
     def __init__(self, parent=None):
         super().__init__(parent)
         lay = _column(self)
         self.mode, self.button, self.status = readout(mono=True), QPushButton("Bake"), readout()
-        self.form = Form([("mode", self.mode), ("bake", self.button)])
+        self.switch = QPushButton("Go live")
+        self.form = Form([("mode", self.mode), ("bake", self.button), ("serve", self.switch)])
         self.form.add_line(self.status)
         lay.addWidget(self.form)
         self.running = False
         self.button.clicked.connect(lambda: (self.cancelled if self.running else self.asked).emit())
+        self.switch.clicked.connect(self.toggled)
+        self.switch.setEnabled(False)
 
-    def set_mode(self, mode):
+    def set_mode(self, mode, has_bake=False):
+        """`mode` as the node says it; the switch offers the other side only once a bake exists."""
         self.mode.setText(mode or "")
+        self.switch.setEnabled(has_bake)
+        self.switch.setText("Serve bake" if mode == "live" else "Go live")
 
     def set_progress(self, done, total):
         self.running = done < total
@@ -144,6 +151,7 @@ class Pane(QWidget):
     videoPicked = Signal(str)
     bakeAsked = Signal(str)       # the Bake button under this node
     bakeCancelled = Signal(str)
+    modeToggled = Signal(str)     # the switch under this node: serve its bake, or go live
 
     def __init__(self, tools, parent=None):
         super().__init__(parent)
@@ -269,9 +277,10 @@ class Pane(QWidget):
                     self.pins[node.id] = pin
             if w is not None and getattr(tool, "BAKES", None):
                 block = BakeBlock()
-                block.set_mode(mode_of(self.doc, self.tools, node.id))
+                block.set_mode(mode_of(self.doc, self.tools, node.id), node.baked is not None)
                 block.asked.connect(lambda nid=node.id: self.bakeAsked.emit(nid))
                 block.cancelled.connect(lambda nid=node.id: self.bakeCancelled.emit(nid))
+                block.toggled.connect(lambda nid=node.id: self.modeToggled.emit(nid))
                 card.add(block)
                 self.bakes[node.id] = block
         card.hide()
@@ -367,7 +376,7 @@ class Pane(QWidget):
     def show_modes(self):
         """Every mode line follows the document, after a bake lands or a document is reopened."""
         for nid, block in self.bakes.items():
-            block.set_mode(mode_of(self.doc, self.tools, nid))
+            block.set_mode(mode_of(self.doc, self.tools, nid), self.doc.node(nid).baked is not None)
 
     def set_playhead(self, row):
         for plot in (*self.densities.values(), *self.traces.values()):

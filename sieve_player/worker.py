@@ -230,11 +230,27 @@ class Worker(QThread):
                     self._bake_one()
                     continue
                 if not self.graph.fed(self.graph.walk):
-                    self._walk_gen, self._i = gen, self._length   # nothing reaches the walked node; wait for the next change
+                    # nothing reaches a walked node: either nothing to do until the next change, or a served
+                    # series node heads the chain, which then runs on the file's rows with no stack walked
+                    headed = self._served_head()
+                    if gen != self._walk_gen:
+                        self._walk_gen, self._bytes, self._stack, self._dens, self._folded = gen, 0, None, {}, {}
+                        self._start = max(0, min(start, self.graph.count - 1))
+                        self._i = self._length = max(0, min(length, self.graph.count - self._start))
+                        if headed:
+                            self.walked.emit(self._i, self._length)
+                            self._emit_series()
+                    elif dirty and headed:
+                        self._emit_series()
                     if clip_gen != self._clip_walk_gen:
-                        self._clip_walk_gen, self._ci, self._clen, self._cstack, self._cbytes = clip_gen, 0, 0, None, 0
-                        self.clipReady.emit({}, 0, self.graph.fps)
-                        self.clipWalked.emit(0, 0)
+                        self._clip_walk_gen, self._cstack, self._cbytes, self._cfolded = clip_gen, None, 0, {}
+                        self._ci = self._clen = self.graph.count if clip_on and headed else 0
+                        if self._clen:
+                            self.clipWalked.emit(self._ci, self._clen)
+                            self._emit_clip()
+                        else:
+                            self.clipReady.emit({}, 0, self.graph.fps)
+                            self.clipWalked.emit(0, 0)
                     elif self._ci < self._clen:
                         self._clen = self._ci
                         self.clipWalked.emit(self._ci, self._clen)
@@ -369,13 +385,16 @@ class Worker(QThread):
         if self._ci == self._clen or (self._ci % self.every == 0 and time.perf_counter() >= self._clip_due):
             self._emit_clip()
 
+    def _served_head(self):
+        return any(self.graph.entry(h).bake is not None for h in self.graph.heads)
+
     def _emit_series(self):
         if not self._i:
             return
         self.densityReady.emit({nid: d[: self._i] for nid, d in self._dens.items()}, self._start)
-        if self._stack is None:
+        if self._stack is None and not self._served_head():
             return
-        results = self._run_chain(self._stack[: self._i], self._start, self._i, self._folded)
+        results = self._run_chain(None if self._stack is None else self._stack[: self._i], self._start, self._i, self._folded)
         if results is not None:
             self.seriesReady.emit(results, self._start, self.graph.fps)
 
@@ -383,7 +402,7 @@ class Worker(QThread):
         if not self._ci:
             return
         t = time.perf_counter()
-        results = self._run_chain(self._cstack[: self._ci], 0, self._ci, self._cfolded)
+        results = self._run_chain(None if self._cstack is None else self._cstack[: self._ci], 0, self._ci, self._cfolded)
         self._clip_due = time.perf_counter() + CHAIN_SHARE * (time.perf_counter() - t)
         if results is not None:
             self.clipReady.emit(results, 0, self.graph.fps)
@@ -469,7 +488,9 @@ class Worker(QThread):
         except Exception as exc:
             return self._bake_fail(f"could not land the file: {type(exc).__name__}: {exc}")
         node = self.graph.doc.node(b.nid)
-        node.mode, node.baked = "baked", b.key
+        node.mode, node.baked = "baked", {"key": b.key, "series": b.series, "count": self.graph.count,
+                                           **{k: b.fields[k] for k in ("kind", "rows", "increment", "fps", "written_fps")},
+                                           "shape": list(shape) if shape else []}
         self._bake = None
         self.bakeDone.emit(b.nid, b.key)
 
@@ -494,9 +515,13 @@ class Worker(QThread):
             return None
         results, feeds, fps = {}, {}, self.graph.fps
         heads, folded = set(self.graph.heads), self.graph.fold is not None
-        buffer = stack.base if stack.base is not None else stack
+        buffer = None if stack is None else stack.base if stack.base is not None else stack
         for nid, tool, params, band, src in chain:
-            if nid in heads:
+            if nid in heads and self.graph.entry(nid).bake is not None:
+                series = Series(self.graph.baked_series(nid)[start: start + done], self.graph.key(nid), start, fps)
+            elif nid in heads and stack is None:
+                continue        # a head with nothing walked for it: its standing says why
+            elif nid in heads:
                 fold = None if folded else getattr(tool, "fold", None)
                 if fold is not None:
                     held = folds.get(id(fold))
@@ -519,5 +544,5 @@ class Worker(QThread):
                 ev[1] = Memo._size(results[nid])
             self.graph.note(nid, "")
             if isinstance(results[nid], dict):
-                results[nid] = {**results[nid], "key": self.graph.key(nid)}   # the node's key beside its gate: what a tool that writes a file records
+                results[nid] = {**results[nid], "key": self.graph.key(nid), "plate": self.graph.plate}   # beside its gate: what a tool that writes a file records
         return results

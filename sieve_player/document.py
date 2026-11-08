@@ -36,7 +36,7 @@ class Node:
     pos: tuple = (0.0, 0.0)
     band: tuple | None = None                                       # (lo, hi) kept, of a plane's pixels or a signal's rows; None keeps every value
     mode: str | None = None                                         # one of the tool's MODES, for a tool declaring them; None is the first
-    baked: str | None = None                                        # the key the node's bake in the store was written under, once there is one
+    baked: dict | None = None                                       # the bake in the store, once there is one: its key, kind, series, rows, increment, fps, written_fps, shape and the plate's count; see served()
     extra: dict = field(default_factory=dict, repr=False)            # keys this module does not know
     unresolved: bool = field(default=False, compare=False)          # set by resolve(); not saved
 
@@ -313,6 +313,8 @@ def produces(doc, tools, nid, _seen=()):
     if node.tool == VIDEO_TOOL:
         out = video_output(doc)
         return "gray" if out == "luma" else out
+    if served(node):
+        return served(node)["kind"]
     p = getattr(_by_name(tools).get(node.tool), "PRODUCES", None)
     if p != "same":
         return p
@@ -322,13 +324,31 @@ def produces(doc, tools, nid, _seen=()):
     return produces(doc, tools, w.src, (*_seen, nid))
 
 
+SERVING = ("baked", "stale")    # the modes in which a node with a bake serves the file; any other is live
+
+
+def served(node):
+    """The bake `node` serves, the dict saved with it, while its mode is one of SERVING; None for a
+    live node. Everything that makes the node a source is here, so nothing need look in the store."""
+    return node.baked if node.mode in SERVING and node.baked else None
+
+
+def aligned(bake):
+    """Whether a bake's rows are the plate's: every row from the first to the last, so a document
+    is in the same row space served or live."""
+    return int(bake["increment"]) == 1 and list(bake["rows"]) == [0, int(bake["count"]) - 1]
+
+
 def kind_of(doc, tools, nid, _seen=()):
     """The kind the plan gives `nid`: "video", "selector", else the tool's KIND; a KIND of "same"
     is the kind of the node wired into the first input, "frame" under the video node, while nothing
-    is wired or in a cycle. An unresolved tool reads as "frame", as a tool that did not say does."""
+    is wired or in a cycle; a served node's is its bake's. An unresolved tool reads as "frame", as
+    a tool that did not say does."""
     node = doc.node(nid)
     if node.tool == VIDEO_TOOL:
         return "video"
+    if served(node):
+        return "series" if served(node)["series"] else "frame"
     tool = _by_name(tools).get(node.tool)
     if is_selector(tool):
         return "selector"
@@ -394,14 +414,14 @@ def from_tools(tools, video=None):
 
 
 def fed(doc, nid, tools=None):
-    """Whether the video reaches `nid` through every frame input's wires. With `tools`, a node whose
+    """Whether the video, or a served bake, reaches `nid` through every frame input's wires. With `tools`, a node whose
     tool the names do not resolve, or a wire whose types do not fit, breaks the chain: what the
     runtime computes. Without them only the first input is known, and it alone is followed."""
     tools = None if tools is None else _by_name(tools)
 
     def reaches(nid, stack):
         node = doc.node(nid)
-        if node.tool == VIDEO_TOOL:
+        if node.tool == VIDEO_TOOL or served(node):
             return True
         if nid in stack:
             return False

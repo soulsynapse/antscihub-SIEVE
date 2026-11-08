@@ -343,6 +343,7 @@ class PlayerWindow(QMainWindow):
         self.pane.videoPicked.connect(self.load)
         self.pane.bakeAsked.connect(lambda nid: self.worker is not None and self.worker.bake(nid))
         self.pane.bakeCancelled.connect(lambda nid: self.worker is not None and self.worker.cancel_bake())
+        self.pane.modeToggled.connect(self._toggle_mode)
         self.display.drawFailed.connect(self._draw_failed)
         self.header = Header()
         self.header.walk.clicked.connect(self._toggle_clip)
@@ -479,24 +480,62 @@ class PlayerWindow(QMainWindow):
         self.canvas.update()
         if self.graph is None:
             return
+        was = self._axis()
         self.graph.sync()
         self._restate()
         self._invalidate()
+        self._follow_axis(was)
         self.goto(self.row, commit=True)
 
     def reflag(self):
         """A flag moved: the runtime's plan follows and the frame shows the new node at the same row.
-        The memo and the walk stand; nothing a flag names is computed differently."""
+        The memo and the walk stand; nothing a flag names is computed differently, unless the
+        display flag crossed a bake, which moves the document into the other row space."""
         self.canvas.update()
         if self.graph is None:
             return
+        was = self._axis()
         self.graph.sync()
         self._restate()
+        if self._follow_axis(was):
+            self._invalidate()
         self.goto(self.row, commit=True)
+
+    def _axis(self):
+        return (self.graph.axis, self.graph.plate)
+
+    def _follow_axis(self, was):
+        """The document's row space changed with the display flag: the count and fps are the new
+        space's, the playhead and window map across through the plate, and the traces, which were of
+        the other clip, clear. Returns whether it changed."""
+        if self._axis() == was:
+            return False
+        _, old = was
+        to_plate = (lambda r: r) if old is None else (lambda r: old[0] + old[1] * r)
+        new = self.graph.plate
+        from_plate = (lambda r: r) if new is None else (lambda r: max(0, (r - new[0]) // new[1]))
+        row, (s, n) = from_plate(to_plate(self.row)), self.window_
+        self.fps, self.count = self.graph.fps, self.graph.count
+        self.timeline.strip.set_count(self.count, self.fps)
+        self.timeline.controls.set_count(self.count, self.fps)
+        self.results, self.clip_results = {}, {}
+        self.pane.set_source(self.decoder.path, self.fps)
+        if self.playing:
+            self.timer.start(max(1, int(round(1000 / self.fps))))
+        self.set_window(from_plate(to_plate(s)), max(1, round(n * (old[1] if old else 1) / (new[1] if new else 1))), playhead=row)
+        return True
+
+    def _toggle_mode(self, nid):
+        """The switch under a node with a bake: serving it, go live; live, serve it again."""
+        node = self.doc.node(nid)
+        node.mode = "live" if document.served(node) else "baked"
+        self.sync()
 
     def _restate(self):
         if self.graph is None:
             return
+        self.canvas.grayed = set(self.graph.off)
+        self.pane.show_modes()
         for n in self.doc.nodes:
             text = self.graph.standing(n.id)
             self.pane.set_standing(n.id, text)
@@ -686,7 +725,8 @@ class PlayerWindow(QMainWindow):
             return False
         self._unload()
         self.decoder = decoder
-        self.graph = Graph(self.doc, decoder, self.tools, **({"memo_bytes": m} if (m := _gb(MEMO_ENV)) else {}))
+        self.graph = Graph(self.doc, decoder, self.tools, open_bake=store.open_bake,
+                           **({"memo_bytes": m} if (m := _gb(MEMO_ENV)) else {}))
         # the one line a report of this video's run needs beside the log's tracebacks
         print(f"SIEVE {time.strftime('%H:%M:%S')}: opened {path}: {decoder.width}x{decoder.height} at {decoder.fps:.3f} fps, "
               f"{decoder.count} rows claimed, luma plane {'read' if decoder.luma else 'converted'}; "
@@ -738,6 +778,7 @@ class PlayerWindow(QMainWindow):
             self.lateness.stop()
             self.dump.close()
             self.dump = self.lateness = None
+        self.graph.close()
         self.decoder.close()
         self.decoder = self.graph = self.worker = None
         self.results, self.clip_results, self._clip_asked = {}, {}, False

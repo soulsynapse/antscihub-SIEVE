@@ -196,7 +196,7 @@ class Event:
     node: str | None    # the node that ran, or read; None on a boundary
     row: int | None
     key: str | None     # the node's raw key, what the memo holds under
-    kind: str           # "run" | "fold" | "error" | "cancel" | "cache" | "step" | "seek" | "sync" | "evict" | "uncache" | "progress" | "dump"
+    kind: str           # "run" | "fold" | "error" | "cancel" | "cache" | "step" | "seek" | "read" | "sync" | "evict" | "uncache" | "progress" | "dump"
     bytes: int          # the result's; what an eviction freed
     ms: float           # wall, exclusive of the runs this one opened
     t: float            # start, on the probe's clock (perf_counter); orders events across threads
@@ -210,10 +210,15 @@ class Event:
 
 
 class Graph:
-    def __init__(self, doc, decoder, tools, memo_bytes=4 << 30):
+    def __init__(self, doc, decoder, tools, memo_bytes=4 << 30, open_bake=None):
+        """`open_bake(bake, cache_bytes)` opens a served node's file as a reader, or raises IOError;
+        without it a served node reads nothing and goes live at the first sync."""
         self.doc, self.decoder = doc, decoder
         self.tools = tools if hasattr(tools, "get") else {t.NAME: t for t in tools}
-        self.fps = decoder.fps
+        self._open, self._readers = open_bake, {}     # bake key -> its reader, opened once per key
+        self._rows = None                   # (count, fps) of the file the document is in the row space of; None for the plate's
+        self.axis = None                    # the served node whose file that is
+        self.off, self.plate = set(), None  # nodes in the other row space; (first plate row, increment) of the axis, for a csv's key line
         self.memo = Memo(memo_bytes)
         self._lock = threading.Lock()
         self.on_event = None                # the probe's one consumer; see probe() for the event
@@ -232,9 +237,14 @@ class Graph:
 
     @property
     def count(self):
-        """The decoder's, read live: a container's header may claim rows the stream lacks, and the
-        decoder corrects itself at the first read past the end."""
-        return self.decoder.count
+        """The document's rows: the served file's while the display is behind an unaligned bake,
+        else the decoder's, read live, since a container's header may claim rows the stream lacks
+        and the decoder corrects itself at the first read past the end."""
+        return self._rows[0] if self._rows else self.decoder.count
+
+    @property
+    def fps(self):
+        return self._rows[1] if self._rows else self.decoder.fps
 
     def sync(self):
         """Re-read the document: the plan, pure in the document and the tools (see `plan`), and the
@@ -244,7 +254,24 @@ class Graph:
         self.decoder.scale = scale
         self._base = base_key(self.decoder.path, output, scale)
         p = plan(self.doc, self.tools, self._base)
+        for nid, e in p.entries.items():
+            if e.bake is None:
+                continue
+            try:
+                self._reader(e)
+            except (OSError, KeyError) as exc:
+                node = self.doc.node(nid)
+                node.mode = "live"      # the file is asked for here, where the document opens; gone, the node is live and says so
+                p = plan(self.doc, self.tools, self._base)
+                self._notes[nid] = (p.entries[nid].key, f"{exc}; serving live")
+        for nid, e in p.entries.items():
+            if e.bake is not None:
+                self.doc.node(nid).mode = "stale" if nid in p.stale else "baked"
         with self._lock:
+            self._rows, self.axis, self.plate = p.rows, p.axis, None
+            if p.axis is not None:
+                self.plate = (int(p.entries[p.axis].bake["rows"][0]), int(p.entries[p.axis].bake["increment"]))
+            self.off = {nid for nid, e in p.entries.items() if e.off}
             self._plan = p.entries
             self.shown, self.over = p.shown, p.over
             self.series = p.chain[0] if p.chain else None
@@ -252,6 +279,25 @@ class Graph:
         self.memo.unpin({e.raw_key for e in p.entries.values() if e.static})
         # A boundary in the stream: what runs next ran under a new plan, whose keys it carries.
         self._emit("sync", None, None, None, 0, keys={nid: e.key for nid, e in p.entries.items()})
+
+    def _reader(self, e):
+        key = e.bake["key"]
+        if key not in self._readers:
+            if self._open is None:
+                raise IOError("no store to read the bake from")
+            self._readers[key] = self._open(e.bake, self.decoder.cache_limit)
+        return self._readers[key]
+
+    def baked_series(self, nid):
+        """A served series node's whole file: its tables one a row, or its float32 signal. Worker threads only."""
+        with self._lock:
+            e = self._plan.get(nid)
+        return self._reader(e).data
+
+    def close(self):
+        for r in self._readers.values():
+            r.close()
+        self._readers = {}
 
     def standing(self, nid):
         """One line on why `nid` does not run, else what its run said under its current key, else
@@ -424,6 +470,15 @@ class Graph:
                 ev[0] = "seek" if d.seeks != seeks else "step" if d.decodes != decodes else "cache"
                 ev[1] = v.nbytes
             return v
+        if e.bake is not None:
+            r = self._reader(e)
+            d = getattr(r, "decoder", None)
+            with self.probe(nid, row, e.raw_key) as ev:
+                decodes, seeks = (d.decodes, d.seeks) if d else (0, 0)
+                v = r.read(row)
+                ev[0] = "read" if d is None else "seek" if d.seeks != seeks else "step" if d.decodes != decodes else "cache"
+                ev[1] = nbytes(v)
+            return v if raw or e.band is None else banded(v, e.band)
         mk = (e.raw_key, None if e.static else row)
         v = self.memo.get(mk)
         if v is None:
@@ -469,6 +524,11 @@ class Graph:
             return None
         if e.kind == "video":
             return self.decoder.cached(row)
+        if e.bake is not None:
+            r = self._readers.get(e.bake["key"])
+            d = getattr(r, "decoder", None)
+            v = None if d is None else d.cached(row)
+            return v if v is None or e.band is None else banded(v, e.band)
         v = self.memo.get((e.raw_key, None if e.static else row))
         return v if v is None or e.band is None else banded(v, e.band)
 

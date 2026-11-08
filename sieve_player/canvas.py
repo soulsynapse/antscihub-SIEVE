@@ -161,6 +161,7 @@ class Canvas(QWidget):
         self.doc = None
         self.errors = {}                        # node id -> the one line wrong with it, set by the window
         self.standings = {}                     # node id -> why it does not run, set by the window; the node's tooltip
+        self.grayed = set()                     # nodes in the other row space than the display, set by the window; drawn dim
         self.selected = []
         self.hover = None                       # the node id under the pointer
         self._drag = None                       # ("move", start, {id: pos}) | ("box", start, shift, base)
@@ -744,7 +745,7 @@ class Canvas(QWidget):
         p.setPen(self.hairline(edge))
         p.setBrush(qgray(fill))
         p.drawRoundedRect(box, theme.RADIUS, theme.RADIUS)
-        p.setPen(theme.RED if n.unresolved or n.id in self.errors else qgray(theme.INK))
+        p.setPen(theme.RED if n.unresolved or n.id in self.errors else qgray(theme.INK_2 if n.id in self.grayed else theme.INK))
         text = box.adjusted(PAD, 0, -(4 * PAD + 4 * FLAG_R), 0)
         p.drawText(text, Qt.AlignLeft | Qt.AlignVCenter, f"{n.id} ?" if n.unresolved else n.id)
         mode = None if n.unresolved else mode_of(self.doc, self.tools, n.id)

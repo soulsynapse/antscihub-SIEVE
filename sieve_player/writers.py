@@ -1,8 +1,9 @@
-"""What a bake writes, one writer per kind: frame kinds to an H.264 clip through ffmpeg, a table
-kind to a pickle stream, a signal to a csv. Every writer takes a row at a time, holds no more than
-the row it is writing, writes to a .part beside the target and lands it on close(), and abort()
-leaves nothing; `read_tables` and `read_signal` read the last two back. WRITERS says which kinds
-have one and under what extension, which is what the store answers for."""
+"""What a bake writes, one writer per kind, and what reads it back. Frame kinds go to an H.264
+clip through ffmpeg, a table kind to a pickle stream, a signal to a csv. Every writer takes a row
+at a time, holds no more than the row it is writing, writes to a .part beside the target and
+lands it on close(), and abort() leaves nothing. `reader()` opens a file as the graph reads a
+served node: row by row for a frame kind, whole for a series kind. WRITERS says which kinds have a
+writer and under what extension, which is what the store answers for."""
 import os
 import pickle
 import shutil
@@ -163,6 +164,44 @@ class SignalWriter:
 def read_signal(path):
     with open(path, encoding="utf-8") as f:
         return np.array([float(line) for line in f if line.strip()], np.float32)
+
+
+class ClipReader:
+    """A baked clip as a served frame node reads it: a Decoder on the file, handing out gray for
+    gray and mask kinds, which are written lossless as planes, and bgr for bgr. The decoder's
+    counters are the reader's, for the probe."""
+
+    def __init__(self, path, kind, cache_bytes):
+        from .decoder import Decoder
+        self.decoder = Decoder(path, cache_bytes=cache_bytes)
+        self.decoder.output = "bgr" if kind == "bgr" else "gray"
+        self.count, self.fps = self.decoder.count, self.decoder.fps
+
+    def read(self, row):
+        return self.decoder.read(row)
+
+    def close(self):
+        self.decoder.close()
+
+
+class RowsReader:
+    """A baked table file or signal, loaded whole: `data` is the object array of tables or the
+    float32 signal, and read(row) one row of it."""
+
+    def __init__(self, path, kind, cache_bytes=0):
+        self.data = read_signal(path) if kind == "signal" else read_tables(path)
+        self.count, self.fps = len(self.data), None
+
+    def read(self, row):
+        return self.data[row]
+
+    def close(self):
+        pass
+
+
+def reader(path, kind, cache_bytes=0):
+    """What reads a bake of `kind` back from `path`: a ClipReader for a frame kind, a RowsReader otherwise."""
+    return (ClipReader if WRITERS[kind][1] is ClipWriter else RowsReader)(path, kind, cache_bytes)
 
 
 WRITERS = {"gray": (".mp4", ClipWriter), "bgr": (".mp4", ClipWriter), "mask": (".mp4", ClipWriter),

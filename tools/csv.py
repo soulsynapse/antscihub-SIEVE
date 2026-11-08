@@ -42,7 +42,7 @@ def lines(result, start, fps, footage):
     signal value is written as the shortest text that reads back to the same float32."""
     sig = np.asarray(result["signal"], np.float32).reshape(-1)
     gate = np.asarray(result.get("gate", np.ones(len(sig), bool)), bool)
-    yield key_line(result.get("key", ""), start, len(sig), footage) + "\n"
+    yield key_line(result.get("key", ""), start, len(sig), footage, result.get("plate")) + "\n"
     yield ",".join(COLUMNS) + "\n"
     for i, (v, g) in enumerate(zip(sig, gate)):
         r = start + i

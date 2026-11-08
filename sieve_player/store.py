@@ -93,6 +93,16 @@ def kinds():
     return sorted(WRITERS)
 
 
+def open_bake(bake, cache_bytes=0):
+    """What reads `bake`, a node's saved dict, back from the store: IOError when its file is not there."""
+    from .writers import reader
+    ext, _ = writer(bake["kind"])
+    path = place(bake["key"], ext)
+    if not os.path.exists(path):
+        raise IOError(f"bake {bake['key']} is not in the store at {folder()}")
+    return reader(path, bake["kind"], cache_bytes)
+
+
 def place(key, ext, path=None):
     """Where the file baked under `key` lives: `key` with `ext`, its extension with the dot, in the store."""
     return os.path.join(path or folder(), key + ext)

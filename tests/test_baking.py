@@ -52,7 +52,7 @@ def graph(path, *chain, tools=TOOLS, **params):
     doc = D.from_tools([tools[n] for n in chain] + [bake], path)
     doc.node("bake").params.update(params)
     doc.path = os.path.join(os.path.dirname(path), "doc.json")
-    return Graph(doc, Decoder(path), tools)
+    return Graph(doc, Decoder(path), tools, open_bake=store.open_bake)
 
 
 def run_bake(w, nid="bake", timeout=20.0):
@@ -89,7 +89,7 @@ def test_a_bake_lands_the_file_and_sidecar_and_marks_the_node_baked(tmp_path, in
     assert {k: side[k] for k in ("kind", "document", "node", "rows", "increment", "fps", "written_fps", "shape", "quality")} == \
         {"kind": "gray", "document": "doc.json", "node": "bake", "rows": [2, 8], "increment": 2, "fps": 30.0, "written_fps": 15.0,
          "shape": [H, W], "quality": "lossless"}
-    assert g.doc.node("bake").mode == "baked" and g.doc.node("bake").baked == g.key("bake") and g.standing("bake") == ""
+    assert g.doc.node("bake").mode == "baked" and g.doc.node("bake").baked["key"] == g.key("bake") and g.standing("bake") == ""
     g.decoder.close()
 
 

@@ -1,4 +1,4 @@
-# Bake: a node that writes what it receives to a store and reads it back while the stamp holds
+# Bake: a node that writes what it receives to a store and reads it back as a source under the key it wrote
 
 Written 2026-11-07; the ticked boxes below are what the tree has. Read with the registry's type report
 (`python -m sieve_player.registry`), the live statement of what feeds what, and with the facet table
@@ -16,10 +16,11 @@ The player's answer so far was to fold the settled transforms into the video nod
 before the decoder's cache, which buys the footprint and not the decode, and grows a hidden pipeline
 inside one node, knob by knob, in the shape of Blender's VSE proxies. The alternative every DCC
 settled on is the one node that freezes its input to disk, Houdini's File Cache SOP and Blender's
-Geometry Nodes Bake node: placed on any wire, passing its input through until baked, then reading
-the file while a stamp says it is still the file this graph would produce. It knows nothing about
-what is upstream, so it never needs a per-tool roll-up, and the one thing it buys that no setting
-can is the smaller file: after it, the decode is the small frame's.
+Geometry Nodes Bake node: placed on any wire, passing its input through until baked, then serving
+the file. Live, it knows nothing about what is upstream, so it never needs a per-tool roll-up.
+Baked, it is a source, the second the plan has beside the video node: fed with nothing wired into
+it, keyed by the file and not by the chain that made it, handing out the file's kind. The one thing
+it buys that no setting can is the smaller file: after it, the decode is the small frame's.
 
 What it writes is decided by the kind flowing into it, a frame kind to a clip the video node can
 open, a table kind to a table file, a signal to a csv, so the writer scales with the kinds, of
@@ -70,15 +71,16 @@ a rebake under a new key sits beside the old one rather than over it. The key ha
 resolved path with everything upstream, so a moved file is a new key and two machines never
 collide, and sharing by key is settled rather than open. What the key does not hash is a tool's
 code, so the sidecar records the repository commit the bake was written under, for a later check
-to read.
+to read. The sidecar names the document and node that first wrote the file; a second document
+sharing it by key is not recorded there.
 
 - [ ] A module says where the store is: the folder chosen, else `SIEVE_STORE` from the launch
   environment, else the default; the choice survives a relaunch.
   Check: a test resolves each of the three and reads a choice back through a fresh call.
 - [ ] A file in the store is named by the node's key, with a sidecar beside it saying the key, the
-  kind, the document and node it came from, the rows and increment baked, the source's fps and the
-  written one, the plane shape, the quality, the repository commit and the time written; a sidecar
-  is what makes the file ours.
+  kind, the document and node that first wrote it, the rows and increment baked, the source's fps
+  and the written one, the plane shape, the quality, the repository commit and the time written; a
+  sidecar is what makes the file ours.
   Check: a test writes a bake and reads every field back off the sidecar.
 - [ ] The player shows the store's folder, how much it holds and how much the disk has free, and
   lets the user change the folder; a folder that cannot be written is refused with the reason.
@@ -90,11 +92,13 @@ Assumes: nothing.
 
 Placed on a wire of any kind the graph has, it is the identity until baked, so the chain tunes
 exactly as it did without it. Whether one tool serves frame and series kinds or two share a
-module is the builder's call; the user places one thing called bake.
+module is the builder's call; the user places one thing called bake. The node has a mode, live,
+baked or stale, a fact saved with the node and shown on it; its standing stays what standing is
+everywhere, why the node does not run, and a bake node in any mode runs.
 
-- [ ] A bake node accepts every type the registry's report lists and produces the same; wired on a
-  frame kind its reader gets the frame, on a table kind the table, on a signal the signal, and the
-  node's standing says live.
+- [ ] A bake node accepts every frame and series kind the registry's report lists, `path` excepted,
+  and produces the same; wired on a frame kind its reader gets the frame, on a table kind the
+  table, on a signal the signal, and the node's mode is live.
   Check: a test places one on a gray wire, a blobs wire and a signal wire and reads each reader's
   input against the chain without it.
 - [ ] The node's params are the rows to bake, from and to with blank meaning the clip's ends, the
@@ -107,28 +111,42 @@ module is the builder's call; the user places one thing called bake.
 Assumes: The store, A bake node, live.
 
 The action writes the node's input over the whole range, which is the first whole-clip pass in the
-player that produces something; it runs where the clip walk runs, off the GUI thread, with
-progress on the node and a cancel, and a run that does not finish leaves nothing, as every writer
-in tools/ already promises. The increment is where time decimation lives: dropping rows is not a
-thing a frame tool can do, one row in and one out, so tools/downsample.py's hold-every-N preview was
-the sign it belonged here.
+player that produces something. It runs on the worker beside the clip walk, off the GUI thread,
+one row at a time so a scrub is still served between rows, abandoned by a change upstream as the
+clip walk is; unlike the clip walk it holds no rows, its sink is the writer and its bound is the
+disk, since the clip walk's stack refuses a clip of frames by design. The node's action is the
+first that reaches the worker, where Write and Export never did. Progress is on the node with a
+cancel, and a run that does not finish leaves nothing, as every writer in tools/ already promises.
+The increment is where time decimation lives: dropping rows is not a thing a frame tool can do,
+one row in and one out, so tools/downsample.py's hold-every-N preview was the sign it belonged here.
 
 - [ ] Bake on the node writes its input from the first row to the last of the range, every increment
   rows, into the store under the node's key with its sidecar, on the worker, with progress said on
   the node; when it is done the node is baked.
   Check: a test bakes a short chain over a synthetic clip and finds the file, the sidecar and the
   node's mode.
+- [ ] While a bake runs, a scrub is answered between its rows, and the bake holds no more than the
+  row it is writing.
+  Check: a test scrubs during a bake through the probe and reads the worker's bytes held.
 - [ ] Cancel, a tool raising mid-bake, or the store refusing a write leaves no file and no part of
   one, and the node stays live with the reason in its standing.
   Check: a test cancels one bake and fails another and reads the store and the standing.
+- [ ] Bake on a kind with no writer, flow and hsv today, is refused with the reason in the node's
+  standing and the node stays live; which kinds have a writer is what the store says, not a list in
+  the node.
+  Check: a test asks a bake on a flow wire and reads the standing.
 - [ ] A frame kind writes a clip the video node opens: gray and bgr at the node's quality, a mask
   losslessly; the clip's row count is the rows baked and its fps the source's over the increment.
-  Check: a test bakes each of the three, opens the clip through the decoder and reads count, fps,
-  the mask equal and the gray within the quality's tolerance.
+  Lossless means equal on read, so a gray at lossless is written in a range the frame has and not
+  the encoder's default.
+  Check: a test bakes each of the three at each quality, opens the clip through the decoder and
+  reads count, fps, the mask equal, the gray equal at lossless and within the quality's tolerance
+  at standard.
 - [ ] A baked gray clip is in a pixel format the decoder reads through its luma path
   (docs/findings/2026-11-01-luma-read.md), so a row of the bake never pays the conversion the chain
   it replaced had already shed.
-  Check: a test opens a baked gray clip and reads the decoder's luma-read flag.
+  Check: a test opens a baked gray clip with the decoder quiet, as the player runs it, and reads
+  the decoder's luma-read flag.
 - [ ] A table kind reads back equal, every column and its dtype, `contour` included; a signal reads
   back equal.
   Check: a test bakes blobs, tracks and a signal and compares.
@@ -143,22 +161,38 @@ the default is the builder's and the sidecar records which was used.
 
 Assumes: Baking.
 
-Baked, the node is a source: its readers' rows come from the file, nothing upstream of it runs, and
-the plate is not decoded, which is the whole gain. A change upstream does not silently throw that
-away, since a baked node is how two settings of the upstream are compared and how a long run stays
-cheap while the operator keeps tuning; it marks the node stale and the user chooses between
-rebaking and going live, as Houdini's load-from-disk toggle does. While baked, the node's key is the
-file's, so what is downstream is keyed on what it actually receives.
+Baked, the node is a source in the plan's sense, the second after the video node: it is fed with
+nothing wired into it, its key is the file's and not the chain's, and it produces the sidecar's
+kind whatever is wired into it now. Its readers' rows come from the file, nothing upstream of it
+runs, and the plate is not decoded, which is the whole gain. A change upstream does not silently
+throw that away, since a baked node is how two settings of the upstream are compared and how a
+long run stays cheap while the operator keeps tuning; it marks the node stale and the user chooses
+between rebaking and going live, as Houdini's load-from-disk toggle does. Everything that makes the
+node a source is saved with it, the mode and the key it was baked under, so the plan stays pure
+over the document and the tools and never looks in the store; whether the file is there is asked
+where the document is opened. Whether the plan knows the node by a reserved name beside `video` or
+by a facet any tool may declare is the builder's call; the registry's check holds either to being
+read.
 
+- [ ] A baked node is fed with its input unwired, produces the sidecar's kind with a node of another
+  kind wired into it, and every key downstream hashes the baked key and nothing upstream of it.
+  Check: a test cuts the wire into a baked node, then wires a bgr node into a baked gray one, and
+  reads fed, the produced type and the sync keys.
+- [ ] The plan of a document with a baked node is the same with the store present and absent.
+  Check: a test plans the saved document twice, the store moved between.
 - [ ] In baked mode a scrub and a walk decode no row of the video and run no node upstream of the
   bake; the readers' rows are the file's.
   Check: a test scrubs a baked graph and counts decodes and runs through the probe.
-- [ ] A change upstream of a baked node leaves it serving the file, with stale in its standing, and
-  the node's key, hence every key downstream, unchanged; switching the node to live serves the
-  chain and takes the live key; baking again writes under the new key beside the old file.
-  Check: a test changes an upstream knob, reads the standing and the sync keys, switches, and bakes.
-- [ ] A document reopened finds the bake under its node's key in the store and opens baked; a
-  document whose bake is gone from the store opens live and says so.
+- [ ] A baked node on a series kind heads the chain: no node is walked for it, and the series nodes
+  on from it run on the file's rows.
+  Check: a test bakes a signal, changes the frame chain above it, and reads the walked node and the
+  downstream result through the probe.
+- [ ] A change upstream of a baked node leaves it serving the file, with its mode stale, and the
+  node's key, hence every key downstream, unchanged; switching the node to live serves the chain
+  and takes the live key; baking again writes under the new key beside the old file.
+  Check: a test changes an upstream knob, reads the mode and the sync keys, switches, and bakes.
+- [ ] A document reopened finds the bake under the key saved with its node and opens baked; a
+  document whose bake is gone from the store opens live and says so in the node's standing.
   Check: a test saves, reopens, and reopens again with the file removed.
 - [ ] A baked frame clip is a file another document opens as its video, at the baked fps and shape,
   which is sources.md's crop as a source.
@@ -207,3 +241,15 @@ tool, the pane's export block and the three facets go together or not at all.
 - Acting on a bake whose sidecar's commit is older than a change to a tool upstream of it. The
   sidecar carries the commit from the first bake written; whether that becomes a second kind of
   stale, shown on the node, waits on the first time a bake is served fresh after a tool changed.
+- The increment and the range read back in place. A clip baked every N rows is in its own row
+  space, N times shorter than the plate's, and a graph has one row axis, the decoder's count and
+  fps, which any branch not behind the bake still reads. Direct indexing misaligns with the
+  timeline by N; holding every row, as downsample did, keeps the plate's axis and buys no walk.
+  Rows outside the range have the same question in milder form. The clean home for the increment
+  is the last box of Reading back, a baked clip opened as a document's video, where its row space
+  is the document's; whether in-place read-back is then increment 1 and the full range, or two
+  row spaces are resolved some other way, is Kendrick's to decide before Reading back is built.
+- The order of the first deliverable. Removing the decoder's scale before a bake exists loses the
+  live footprint the tuned documents under video-tests/ rely on, since the decoder cache then
+  holds the full frame and the window-fit finding says a cache is binary against the window;
+  whether the deliverable assumes Reading back, or the loss is accepted, is Kendrick's call.

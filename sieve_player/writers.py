@@ -1,23 +1,35 @@
 """What a bake writes, one writer per kind, and what reads it back. Frame kinds go to an H.264
 clip through ffmpeg, a table kind to a pickle stream, a signal to a csv. Every writer takes a row
-at a time, holds no more than the row it is writing, writes to a .part beside the target and
-lands it on close(), and abort() leaves nothing. `reader()` opens a file as the graph reads a
-served node: row by row for a frame kind, whole for a series kind. WRITERS says which kinds have a
-writer and under what extension, which is what the store answers for."""
+at a time, holds no more than the row it is writing, writes to a part file of its own beside the
+target and lands it on close(), and abort() leaves nothing. `reader()` opens a file as the graph
+reads a served node: row by row for a frame kind, whole for a series kind. WRITERS says which kinds
+have a writer and under what extension, which is what the store answers for."""
 import os
 import pickle
 import shutil
 import subprocess
+import tempfile
 
 import numpy as np
+
+from .store import PART
 
 LOSSLESS, STANDARD = "lossless", "standard"
 CRF = "18"          # the standard quality: docs/findings/2026-11-04-remux-encode-and-seek.md's x264 crf 18
 PRESET = "medium"
+SAID_LINES = 5      # how much of ffmpeg's stderr a failure carries
 
 
 def ffmpeg():
     return shutil.which("ffmpeg") or "ffmpeg"
+
+
+def part(path):
+    """A new, empty part file beside `path`, named by it and by a token no other writer of the same
+    target shares, so two bakes of one key never write the same file."""
+    fd, name = tempfile.mkstemp(dir=os.path.dirname(path), prefix=os.path.basename(path) + ".", suffix=PART)
+    os.close(fd)
+    return name
 
 
 class ClipWriter:
@@ -29,7 +41,7 @@ class ClipWriter:
     def __init__(self, path, kind, fps, quality):
         self.path, self.kind, self.fps = path, kind, float(fps)
         self.quality = LOSSLESS if kind == "mask" else quality
-        self.part = path + ".part"
+        self.part = part(path)
         self.proc, self.log, self.shape, self.rows, self.bytes = None, None, None, 0, 0
 
     def command(self, shape):
@@ -66,10 +78,10 @@ class ClipWriter:
         if self.log is None:
             return ""
         self.log.seek(0)
-        return self.log.read().decode(errors="replace").strip().splitlines()[-1:] or ""
+        return " | ".join(self.log.read().decode(errors="replace").strip().splitlines()[-SAID_LINES:])
 
     def close(self):
-        """Finishes the clip and lands it at `path`; OSError, with ffmpeg's last line, when it did not encode."""
+        """Finishes the clip and lands it at `path`; OSError, with ffmpeg's last lines, when it did not encode."""
         if self.proc is None:
             raise OSError("no rows were written")
         self.proc.stdin.close()
@@ -104,7 +116,7 @@ class _FileWriter:
     """A series kind's writer: rows appended to one file opened at the first write."""
 
     def __init__(self, path, kind, fps, quality):
-        self.path, self.part = path, path + ".part"
+        self.path, self.part = path, part(path)
         self.f, self.shape, self.rows, self.bytes = None, None, 0, 0
 
     def close(self):

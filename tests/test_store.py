@@ -33,7 +33,9 @@ def test_the_sidecar_reads_every_field_back(tmp_path):
 def test_status_says_what_a_folder_holds_and_refuses_one_that_cannot_be_written(tmp_path):
     (tmp_path / "f").write_bytes(b"12345")
     path, held, free, why = store.status(str(tmp_path))
-    assert (path, held, why) == (str(tmp_path), 5, "") and free > 0
+    assert (path, held, why) == (str(tmp_path), 5, "") and free > 0 and store.free(str(tmp_path)) > 0
+    (tmp_path / "k.mp4.ab12.part").write_bytes(b"1234567")
+    assert store.strays(str(tmp_path)) == (1, 7) and store.held(str(tmp_path)) == 12 and store.strays(str(tmp_path / "none")) == (0, 0)
     path, held, free, why = store.status(str(tmp_path / "f" / "under"))
     assert held == free == 0 and why.startswith(str(tmp_path / "f" / "under"))
     assert store.fmt_bytes(0) == "0 B" and store.fmt_bytes(1536) == "1.5 KB" and store.fmt_bytes(3 << 30) == "3.0 GB"

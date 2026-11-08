@@ -116,11 +116,15 @@ Assumes: The store, A bake node, live.
 
 The action writes the node's input over the whole range, which is the first whole-clip pass in the
 player that produces something. It runs on the worker beside the clip walk, off the GUI thread,
-one row at a time so a scrub is still served between rows, abandoned by a change upstream as the
-clip walk is; unlike the clip walk it holds no rows, its sink is the writer and its bound is the
-disk, since the clip walk's stack refuses a clip of frames by design. The node's action is the
-first that reaches the worker, where Write and Export never did. Progress is on the node with a
-cancel, and a run that does not finish leaves nothing, as every writer in tools/ already promises.
+one row at a time so a scrub is still served between rows, abandoned by a change upstream of it
+and by nothing elsewhere in the graph. On a frame wire it holds no rows, its sink is the writer and
+its bound is the disk, since the clip walk's stack refuses a clip of frames by design; on a series
+wire it is written from the clip walk's result once the walk completes, so its bound is the walk's
+stack, and a chain that changes under the walk abandons it rather than naming the new result by the
+old key. The node's action is the first that reaches the worker, where Write and Export never did.
+Progress is on the node with a cancel, and a run that does not finish leaves nothing, as every
+writer in tools/ already promises, save a run the process itself dies under, whose part file the
+store reports until the user removes it. A key the store already holds is served, not encoded again.
 The increment is where time decimation lives: dropping rows is not a thing a frame tool can do,
 one row in and one out, so tools/downsample.py's hold-every-N preview was the sign it belonged here.
 

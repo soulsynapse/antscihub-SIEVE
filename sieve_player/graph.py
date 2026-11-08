@@ -215,7 +215,9 @@ class Graph:
         without it a served node reads nothing and goes live at the first sync."""
         self.doc, self.decoder = doc, decoder
         self.tools = tools if hasattr(tools, "get") else {t.NAME: t for t in tools}
-        self._open, self._readers = open_bake, {}     # bake key -> its reader, opened once per key
+        self._open, self._readers = open_bake, {}     # bake key -> its reader, opened once per key, kept while a node serves it
+        self._retired = []                  # readers no served node needs, closed by the worker through reap(); a GUI-side
+                                            # close would pull a file from under a read in flight
         self._rows = None                   # (count, fps) of the file the document is in the row space of; None for the plate's
         self.axis = None                    # the served node whose file that is
         self.off, self.plate = set(), None  # nodes in the other row space; the axis's Plate, for a csv's key line
@@ -269,7 +271,9 @@ class Graph:
         for nid, e in p.entries.items():
             if e.bake is not None:
                 self.doc.node(nid).mode = "stale" if nid in p.stale else "baked"
+        served = {e.bake.key for e in p.entries.values() if e.bake is not None}
         with self._lock:
+            self._retired += [self._readers.pop(k) for k in list(self._readers) if k not in served]
             self._rows, self.axis = p.rows, p.axis
             self.plate = None if p.axis is None else p.entries[p.axis].bake.plate
             self.off = {nid for nid, e in p.entries.items() if e.off}
@@ -289,6 +293,22 @@ class Graph:
             self._readers[key] = self._open(e.bake, self.decoder.cache_limit)
         return self._readers[key]
 
+    def reap(self):
+        """Closes the readers sync() retired. Worker threads only, between computations, so no read is
+        under a file as it closes; close() does the same at the end."""
+        with self._lock:
+            gone, self._retired = self._retired, []
+        for r in gone:
+            r.close()
+
+    def release(self, key):
+        """Closes the reader on the bake `key`, if one is open, so the file can be replaced or removed;
+        a served node reading it opens another at its next read. Worker threads only."""
+        with self._lock:
+            r = self._readers.pop(key, None)
+        if r is not None:
+            r.close()
+
     def baked_series(self, nid):
         """A served series node's whole file: its tables one a row, or its float32 signal. Worker threads only."""
         with self._lock:
@@ -296,6 +316,7 @@ class Graph:
         return self._reader(e).data
 
     def close(self):
+        self.reap()
         for r in self._readers.values():
             r.close()
         self._readers = {}

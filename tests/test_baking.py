@@ -1,4 +1,4 @@
-"""Baking: a bake streams the node's input into the store on the worker with a scrub served between rows, lands a file and sidecar and marks the node baked, leaves nothing on cancel or failure, refuses a kind with no writer, and what it wrote reads back: a clip the decoder opens through its luma path, tables and a signal equal."""
+"""Baking: a bake streams the node's input into the store on the worker with a scrub served between rows, lands a file and sidecar and marks the node baked, serves a key the store already has, leaves nothing on cancel or failure, survives a change elsewhere and goes on one upstream, refuses a kind with no writer, and what it wrote reads back: a clip the decoder opens through its luma path, tables and a signal equal."""
 import os
 import time
 from types import SimpleNamespace as Tool
@@ -82,14 +82,36 @@ def test_a_bake_lands_the_file_and_sidecar_and_marks_the_node_baked(tmp_path, in
     g = graph(clip(tmp_path / "v.avi"), "gray", **{"from": "2", "to": "9", "increment": 2})
     w = Worker(g)
     done, refused = run_bake(w)
-    w.stop()
-    assert done == [("bake", g.key("bake"))] and not refused, refused
-    side = store.sidecar(g.key("bake"), str(in_store))
-    assert os.path.exists(store.place(g.key("bake"), ".mp4", str(in_store))) and not list(in_store.glob("*.part*"))
+    key = g.key("bake")
+    assert done == [("bake", key)] and not refused, refused
+    side = store.sidecar(key, str(in_store))
+    mp4 = store.place(key, ".mp4", str(in_store))
+    assert os.path.exists(mp4) and not list(in_store.glob("*.part*"))
     assert {k: side[k] for k in ("kind", "document", "node", "rows", "increment", "fps", "written_fps", "shape", "quality")} == \
         {"kind": "gray", "document": "doc.json", "node": "bake", "rows": [2, 8], "increment": 2, "fps": 30.0, "written_fps": 15.0,
          "shape": [H, W], "quality": "lossless"}
-    assert g.doc.node("bake").mode == "baked" and g.doc.node("bake").baked.key == g.key("bake") and g.standing("bake") == ""
+    assert g.doc.node("bake").mode == "baked" and g.doc.node("bake").baked.key == key and g.standing("bake") == ""
+    # the store has the key: a second bake of the same chain serves the file rather than encoding it again
+    g.sync()
+    before = os.path.getmtime(mp4)
+    g.doc.node("bake").mode = "live"
+    g.sync()
+    events = []
+    g.on_event = events.append
+    done, refused = run_bake(w)
+    assert done == [("bake", key)] and not refused and os.path.getmtime(mp4) == before and g.doc.node("bake").mode == "baked"
+    assert not [ev for ev in events if ev.serves == "bake"]
+    # without its sidecar the file is not ours: baked again over it, which on Windows needs the reader sync() opened on it closed
+    g.sync()
+    assert g.compute("bake", 0) is not None
+    os.remove(store.sidecar_path(key, str(in_store)))
+    g.doc.node("bake").mode = "live"
+    g.sync()
+    done, refused = run_bake(w)
+    w.stop()
+    assert done == [("bake", key)] and not refused, refused
+    assert store.sidecar(key, str(in_store)) is not None and os.path.getmtime(mp4) > before and not list(in_store.glob("*.part*"))
+    g.close()
     g.decoder.close()
 
 
@@ -131,6 +153,17 @@ def test_cancel_a_raise_and_a_refusing_store_leave_nothing_and_say_why(tmp_path,
     assert not done and refused[0][1].startswith("boom raised at row 5") and g.standing("bake") == refused[0][1]
     assert not list(in_store.iterdir())
     g.decoder.close()
+    def no_sidecar(*a, **k):
+        raise OSError("disk full")
+    monkeypatch.setattr(store, "write_sidecar", no_sidecar)
+    g = graph(path, "gray")
+    w = Worker(g)
+    done, refused = run_bake(w)
+    w.stop()
+    assert not done and refused[0][1].startswith("could not land the file: OSError: disk full")
+    assert not list(in_store.iterdir())    # the clip had landed; without its sidecar it is not left
+    g.decoder.close()
+    monkeypatch.undo()
     (in_store.parent / "f").write_bytes(b"")
     monkeypatch.setattr(store, "folder", lambda: str(in_store.parent / "f" / "under"))
     g = graph(path, "gray")
@@ -138,6 +171,59 @@ def test_cancel_a_raise_and_a_refusing_store_leave_nothing_and_say_why(tmp_path,
     done, refused = run_bake(w)
     w.stop()
     assert not done and "cannot be written" in refused[0][1] and g.doc.node("bake").mode is None
+    g.decoder.close()
+
+
+def test_a_change_elsewhere_leaves_a_bake_writing_and_one_upstream_abandons_it(tmp_path, in_store):
+    path = clip(tmp_path / "v.avi")
+    tools = {**TOOLS, "slow": slow("slow", delay=0.03), "slowmask": slow("slowmask", "mask", "mask", delay=0.03)}
+    g = graph(path, "gray", "slow", tools=tools)
+    down = g.doc.add_node("threshold", params=threshold.DEFAULTS)
+    g.doc.connect("bake", down.id)
+    g.sync()
+    w = Worker(g)
+
+    def elsewhere(n, i, total):
+        if i == 2:
+            g.doc.node(down.id).params["thresh"] = 250
+            g.sync()
+            w.invalidate()
+    w.baked.connect(elsewhere)
+    done, refused = run_bake(w)
+    w.stop()
+    assert done == [("bake", g.key("bake"))] and not refused, refused
+    g.close()
+    g.decoder.close()
+    g = graph(path, "gray", "threshold", "slowmask", tools=tools)
+    w = Worker(g)
+
+    def upstream(n, i, total):
+        if i == 2:
+            g.doc.node("threshold").params["thresh"] = 250
+            g.sync()
+            w.invalidate()
+    w.baked.connect(upstream)
+    done, refused = run_bake(w)
+    w.stop()
+    assert not done and refused == [("bake", "abandoned: a tool upstream changed")] and not list(in_store.glob("*.part*"))
+    assert store.sidecar(g.key("bake"), str(in_store)) is None and len(list(in_store.iterdir())) == 2    # the first bake's two alone
+    g.decoder.close()
+
+
+def test_a_series_bake_is_abandoned_when_the_chain_changes_under_its_walk(tmp_path, in_store):
+    tools = {**TOOLS, "slowmask": slow("slowmask", "mask", "mask", delay=0.03)}
+    g = graph(clip(tmp_path / "v.avi"), "gray", "threshold", "slowmask", "blobs", "count", tools=tools)
+    w = Worker(g)
+
+    def rerun(ci, clen):
+        if ci == 3:
+            g.doc.node("count").band = (0.0, 1.0)    # keyed like a param; the window reruns the chain for it
+            g.sync()
+            w.rerun_series()
+    w.clipWalked.connect(rerun)
+    done, refused = run_bake(w)
+    w.stop()
+    assert not done and refused == [("bake", "abandoned: a tool upstream changed")] and not list(in_store.iterdir())
     g.decoder.close()
 
 

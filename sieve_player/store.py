@@ -11,6 +11,7 @@ import time
 
 STORE_ENV = "SIEVE_STORE"       # the store's folder when none is chosen; unset: `store` under app_folder()
 SIDECAR = ".sieve.json"
+PART = ".part"                  # in the name of every file a writer has open and not yet landed; see writers.part
 FIELDS = ("key", "kind", "document", "node", "rows", "increment", "fps", "written_fps", "shape", "quality", "commit",
           "written")
 
@@ -81,6 +82,26 @@ def status(path=None):
     return path, held(path), free, why
 
 
+def strays(path=None):
+    """(count, bytes) of the part files in the store: what a bake that died with its process left,
+    since a writer removes its own part on any failure it lives to see. Counted in `held()` too."""
+    path = path or folder()
+    try:
+        with os.scandir(path) as it:
+            parts = [e.stat().st_size for e in it if e.is_file() and PART in e.name]
+    except OSError:
+        return 0, 0
+    return len(parts), sum(parts)
+
+
+def free(path=None):
+    """The bytes the disk under the store has free, 0 when it cannot be asked."""
+    try:
+        return shutil.disk_usage(path or folder()).free
+    except OSError:
+        return 0
+
+
 def writer(kind):
     """(the file's extension, the writer class) for `kind`, or None for a kind no bake can write."""
     from .writers import WRITERS
@@ -123,7 +144,7 @@ def write_sidecar(key, path=None, **fields):
     d.setdefault("written", time.strftime("%Y-%m-%dT%H:%M:%S"))
     d = {k: d[k] for k in FIELDS}
     target = sidecar_path(key, path)
-    part = target + ".part"
+    part = target + PART
     try:
         with open(part, "w", encoding="utf-8") as f:
             json.dump(d, f, indent=2)

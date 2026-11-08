@@ -269,7 +269,10 @@ class Header(QWidget):
 
     def show_store(self, refused=""):
         path, held, free, why = store.status()
+        n, stray = store.strays(path)
         line = f"{path}  holds {store.fmt_bytes(held)}, {store.fmt_bytes(free)} free" if not why else why
+        if n:
+            line += f"; {n} part file{'s' if n > 1 else ''} of a bake that died with its process, {store.fmt_bytes(stray)}"
         self.store_note.setText(f"{refused}; {line}" if refused else line)
         self.store_note.setToolTip(path)
 
@@ -928,6 +931,7 @@ class PlayerWindow(QMainWindow):
     def _baked(self, nid, bake):
         """Recorded here, on the GUI thread, since the document is the GUI's and the worker's alone to read."""
         document.land(self.doc.node(nid), bake)
+        self.header.show_store()
         self.sync()
 
     def _bake_refused(self, nid, why):

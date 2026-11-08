@@ -10,6 +10,7 @@ read by the runtime before anything downstream sees the node, so it is saved wit
 import json
 import os
 from dataclasses import dataclass, field
+from typing import NamedTuple
 
 VERSION = 2                 # 2: the video node's scale is a rescale node's; a 1 with one loads with that node inserted
 VIDEO_TOOL = "video"        # the reserved tool name of the node the decoder is
@@ -28,6 +29,59 @@ class FormatError(ValueError):
     """The file is not a document this module can read."""
 
 
+class Plate(NamedTuple):
+    """How a bake's rows lie on the plate's: plate row = first + increment × row. Plate(0, 1) is the
+    plate's own."""
+    first: int
+    increment: int
+
+    def to_plate(self, row):
+        return self.first + self.increment * row
+
+    def from_plate(self, row):
+        return max(0, (row - self.first) // self.increment)
+
+
+@dataclass(frozen=True)
+class Bake:
+    """A bake as the node that serves it saves it: everything that makes the node a source, so
+    nothing need look in the store. `rows` is (first, last) of the plate, `count` the plate's rows,
+    `shape` the plane's or () for a series kind."""
+    key: str
+    kind: str
+    series: bool
+    rows: tuple
+    increment: int
+    fps: float
+    written_fps: float
+    shape: tuple
+    count: int
+
+    @classmethod
+    def from_dict(cls, d):
+        return cls(str(d["key"]), str(d["kind"]), bool(d["series"]), tuple(int(r) for r in d["rows"]), int(d["increment"]),
+                   float(d["fps"]), float(d["written_fps"]), tuple(int(x) for x in d["shape"]), int(d["count"]))
+
+    def to_dict(self):
+        return {"key": self.key, "kind": self.kind, "series": self.series, "rows": list(self.rows), "increment": self.increment,
+                "fps": self.fps, "written_fps": self.written_fps, "shape": list(self.shape), "count": self.count}
+
+    @property
+    def plate(self):
+        return Plate(self.rows[0], self.increment)
+
+    @property
+    def aligned(self):
+        """Whether the rows are the plate's: every row from the first to the last, so a document is
+        in the same row space served or live."""
+        return self.increment == 1 and self.rows == (0, self.count - 1)
+
+    @property
+    def written(self):
+        """The rows the file holds."""
+        return len(range(self.rows[0], self.rows[1] + 1, self.increment))
+
+
 @dataclass
 class Node:
     id: str
@@ -36,7 +90,7 @@ class Node:
     pos: tuple = (0.0, 0.0)
     band: tuple | None = None                                       # (lo, hi) kept, of a plane's pixels or a signal's rows; None keeps every value
     mode: str | None = None                                         # one of the tool's MODES, for a tool declaring them; None is the first
-    baked: dict | None = None                                       # the bake in the store, once there is one: its key, kind, series, rows, increment, fps, written_fps, shape and the plate's count; see served()
+    baked: Bake | None = None                                       # the bake in the store, once there is one; see served()
     extra: dict = field(default_factory=dict, repr=False)            # keys this module does not know
     unresolved: bool = field(default=False, compare=False)          # set by resolve(); not saved
 
@@ -150,7 +204,7 @@ class Document:
             "nodes": [{"id": n.id, "tool": n.tool, "params": n.params, "pos": list(n.pos),
                        **({"band": list(n.band)} if n.band is not None else {}),
                        **({"mode": n.mode} if n.mode is not None else {}),
-                       **({"baked": n.baked} if n.baked is not None else {}), **n.extra} for n in self.nodes],
+                       **({"baked": n.baked.to_dict()} if n.baked is not None else {}), **n.extra} for n in self.nodes],
             "wires": [{"from": w.src, "to": w.dst, "input": w.input} for w in self.wires],
             **self.extra,
         }
@@ -170,7 +224,8 @@ class Document:
             doc.nodes.append(Node(nd["id"], nd["tool"], dict(nd.get("params", {})),
                                   tuple(float(x) for x in nd.get("pos", (0, 0))),
                                   None if nd.get("band") is None else tuple(float(x) for x in nd["band"]),
-                                  nd.get("mode"), nd.get("baked"), {k: v for k, v in nd.items() if k not in node_keys}))
+                                  nd.get("mode"), None if nd.get("baked") is None else Bake.from_dict(nd["baked"]),
+                                  {k: v for k, v in nd.items() if k not in node_keys}))
         ids = {n.id for n in doc.nodes}
         for wd in d.get("wires", []):
             if wd["from"] not in ids or wd["to"] not in ids:
@@ -334,7 +389,7 @@ def produces(doc, tools, nid, _seen=()):
         out = video_output(doc)
         return "gray" if out == "luma" else out
     if served(node):
-        return served(node)["kind"]
+        return served(node).kind
     p = getattr(_by_name(tools).get(node.tool), "PRODUCES", None)
     if p != "same":
         return p
@@ -348,15 +403,13 @@ SERVING = ("baked", "stale")    # the modes in which a node with a bake serves t
 
 
 def served(node):
-    """The bake `node` serves, the dict saved with it, while its mode is one of SERVING; None for a
-    live node. Everything that makes the node a source is here, so nothing need look in the store."""
+    """The Bake `node` serves while its mode is one of SERVING; None for a live node."""
     return node.baked if node.mode in SERVING and node.baked else None
 
 
-def aligned(bake):
-    """Whether a bake's rows are the plate's: every row from the first to the last, so a document
-    is in the same row space served or live."""
-    return int(bake["increment"]) == 1 and list(bake["rows"]) == [0, int(bake["count"]) - 1]
+def land(node, bake):
+    """Records `bake` as written for `node`, which serves it from here on."""
+    node.mode, node.baked = "baked", bake
 
 
 def kind_of(doc, tools, nid, _seen=()):
@@ -368,7 +421,7 @@ def kind_of(doc, tools, nid, _seen=()):
     if node.tool == VIDEO_TOOL:
         return "video"
     if served(node):
-        return "series" if served(node)["series"] else "frame"
+        return "series" if served(node).series else "frame"
     tool = _by_name(tools).get(node.tool)
     if is_selector(tool):
         return "selector"

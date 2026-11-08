@@ -58,7 +58,7 @@ def graph(path, *chain, tools=TOOLS, **params):
 def run_bake(w, nid="bake", timeout=20.0):
     """Starts the worker on a bake and returns (done, refused) once one has been said."""
     done, refused = [], []
-    w.bakeDone.connect(lambda n, k: done.append((n, k)))
+    w.bakeDone.connect(lambda n, b: (done.append((n, b.key)), D.land(w.graph.doc.node(n), b)))   # as the window lands one
     w.bakeRefused.connect(lambda n, why: refused.append((n, why)))
     w.set_window(0, 2)
     w.bake(nid)
@@ -89,7 +89,7 @@ def test_a_bake_lands_the_file_and_sidecar_and_marks_the_node_baked(tmp_path, in
     assert {k: side[k] for k in ("kind", "document", "node", "rows", "increment", "fps", "written_fps", "shape", "quality")} == \
         {"kind": "gray", "document": "doc.json", "node": "bake", "rows": [2, 8], "increment": 2, "fps": 30.0, "written_fps": 15.0,
          "shape": [H, W], "quality": "lossless"}
-    assert g.doc.node("bake").mode == "baked" and g.doc.node("bake").baked["key"] == g.key("bake") and g.standing("bake") == ""
+    assert g.doc.node("bake").mode == "baked" and g.doc.node("bake").baked.key == g.key("bake") and g.standing("bake") == ""
     g.decoder.close()
 
 

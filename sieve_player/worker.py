@@ -20,7 +20,7 @@ from PySide6.QtCore import QThread, Signal
 
 from . import density, store
 from .decoder import EndOfStream
-from .document import INPUT
+from .document import INPUT, Bake
 from .graph import Cancelled, Memo, Series, gated, nbytes
 
 STACK_BYTES = 512 << 20   # the most a walk's stack, the window's or the clip's, may take, as nbytes counts it
@@ -72,7 +72,7 @@ class Worker(QThread):
     walkRefused = Signal(str)                 # the window walk closed short of the window, and why: its stack passed STACK_BYTES
     shortened = Signal(int)                   # the stream ended short of the container's claim: the count as the decoder now has it
     baked = Signal(str, int, int)             # a bake's progress: the node, rows written, rows to write
-    bakeDone = Signal(str, str)               # the node is baked, under this key; its mode says so
+    bakeDone = Signal(str, object)            # the node's bake landed, as the Bake the node is to save (document.land)
     bakeRefused = Signal(str, str)            # the bake did not start or did not finish, and why; the node's standing says the same
 
     def __init__(self, graph, every=30):
@@ -480,19 +480,18 @@ class Worker(QThread):
         self._bake_finish()
 
     def _bake_finish(self):
+        """The document is the GUI's to write: the Bake goes out on bakeDone and no node is touched here."""
         b = self._bake
         try:
             b.writer.close()
-            shape = b.writer.shape
-            store.write_sidecar(b.key, os.path.dirname(b.writer.path), **b.fields, shape=list(shape) if shape else [])
+            shape = tuple(b.writer.shape or ())
+            store.write_sidecar(b.key, os.path.dirname(b.writer.path), **b.fields, shape=list(shape))
         except Exception as exc:
             return self._bake_fail(f"could not land the file: {type(exc).__name__}: {exc}")
-        node = self.graph.doc.node(b.nid)
-        node.mode, node.baked = "baked", {"key": b.key, "series": b.series, "count": self.graph.count,
-                                           **{k: b.fields[k] for k in ("kind", "rows", "increment", "fps", "written_fps")},
-                                           "shape": list(shape) if shape else []}
+        f = b.fields
         self._bake = None
-        self.bakeDone.emit(b.nid, b.key)
+        self.bakeDone.emit(b.nid, Bake(b.key, b.kind, b.series, tuple(f["rows"]), f["increment"], f["fps"], f["written_fps"], shape,
+                                       self.graph.count))
 
     def _bake_fail(self, why):
         """Abandons the bake in progress, if any, leaving no file, with `why` in the node's standing."""

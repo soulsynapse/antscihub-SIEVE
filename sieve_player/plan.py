@@ -8,8 +8,8 @@ import hashlib
 import json
 from dataclasses import dataclass, field
 
-from .document import (INPUT, OVERLAYABLE, VIDEO_TOOL, aligned, fed, fits, frame_inputs, is_selector, kind_of, optional,
-                       produces, served, static, wants)
+from .document import (INPUT, OVERLAYABLE, VIDEO_TOOL, fed, fits, frame_inputs, is_selector, kind_of, optional, produces,
+                       served, static, wants)
 
 
 def _key(*parts):
@@ -38,7 +38,7 @@ class Entry:
     standing: str = ""  # why the node does not run, as the plan sees it; "" when it runs
     types: dict = field(default_factory=dict)   # frame input name -> what the node wired into it produces, or None
     axis: str | None = None                     # the served, unaligned bake at or upstream of the node, whose rows it is in; None in the plate's
-    bake: dict | None = None                    # the bake the node serves (document.served), or None
+    bake: object = None                         # the Bake the node serves (document.served), or None
     off: bool = False                           # in another row space than the display: not fed, the standing says so
 
 
@@ -106,7 +106,7 @@ def plan(doc, tools, base):
             elif bake_of(node.id) and not live:
                 # hashed, not the bake's key itself: the file is not the chain, in its rows or its bytes,
                 # so nothing memoized under the live key is served for it
-                keys[nid] = raw_keys[nid] = _key("served", bake_of(nid)["key"])
+                keys[nid] = raw_keys[nid] = _key("served", bake_of(nid).key)
             else:
                 raw = _key(up_key(nid, (*stack, nid), live), node.tool, json.dumps(node.params, sort_keys=True))
                 if not live:
@@ -117,7 +117,7 @@ def plan(doc, tools, base):
     def axis_of(nid, stack=()):
         """The nearest served, unaligned bake at or upstream of `nid`, or None."""
         b = bake_of(nid)
-        if b and not aligned(b):
+        if b and not b.aligned:
             return nid
         if nid in stack:
             return None
@@ -127,11 +127,7 @@ def plan(doc, tools, base):
         return None
 
     axis = axis_of(doc.display) if doc.display in {n.id for n in doc.nodes} else None
-    rows = None
-    if axis is not None:
-        b = bake_of(axis)
-        lo, hi, inc = int(b["rows"][0]), int(b["rows"][1]), int(b["increment"])
-        rows = (len(range(lo, hi + 1, inc)), float(b["written_fps"]))
+    rows = None if axis is None else (bake_of(axis).written, bake_of(axis).written_fps)
     entries, series, stale = {}, [], set()
     for n in doc.nodes:
         tool = tools.get(n.tool)
@@ -143,7 +139,7 @@ def plan(doc, tools, base):
                               up_key(n.id) if src else None, fed(doc, n.id, tools) and not off, srcs, static(tool),
                               types={name: produces(doc, tools, s) if s else None for name, s in srcs.items()},
                               axis=axis_of(n.id), off=off, bake=bake_of(n.id))
-        if bake_of(n.id) and key_of(n.id, live=True) != bake_of(n.id)["key"]:
+        if bake_of(n.id) and key_of(n.id, live=True) != bake_of(n.id).key:
             stale.add(n.id)
         if kind == "series":
             series.append(n.id)

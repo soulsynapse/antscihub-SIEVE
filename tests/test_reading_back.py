@@ -81,7 +81,7 @@ def test_a_served_node_is_fed_unwired_keyed_by_its_bake_and_produces_the_sidecar
     assert done and not refused, refused
     g.sync()
     key, down = g.key("bake"), g.key("threshold")
-    assert key == _key("served", g.doc.node("bake").baked["key"]) and g.axis is None      # increment 1 over the whole clip: aligned, one row space
+    assert key == _key("served", g.doc.node("bake").baked.key) and g.axis is None      # increment 1 over the whole clip: aligned, one row space
     g.doc.disconnect("bake")
     g.sync()
     assert g.fed("bake") and g.fed("threshold") and (g.key("bake"), g.key("threshold")) == (key, down)
@@ -131,7 +131,7 @@ def test_a_served_series_node_heads_the_chain_on_the_files_rows(tmp_path, in_sto
     g.sync()
     assert g.doc.node("bake").mode == "stale" and g.walk is None and g.heads == ["bake"] and g.chain == ["bake", "smooth"]
     results, events = walk(g, 2, 6)
-    signal = writers.read_signal(store.place(g.doc.node("bake").baked["key"], ".csv"))
+    signal = writers.read_signal(store.place(g.doc.node("bake").baked.key, ".csv"))
     assert results["bake"]["signal"].tolist() == signal[2:8].tolist() and len(results["smooth"]["signal"]) == 6
     assert not [ev for ev in events if ev.node in ("video", "gray", "threshold", "blobs", "count") and ev.serves == "walk"]
     g.close()
@@ -153,7 +153,7 @@ def test_an_upstream_change_marks_stale_live_takes_the_live_key_and_a_rebake_lan
     done, refused = baked(g)
     assert done and not refused, refused
     g.sync()
-    assert g.doc.node("bake").mode == "baked" and g.doc.node("bake").baked["key"] != key
+    assert g.doc.node("bake").mode == "baked" and g.doc.node("bake").baked.key != key
     assert sorted(p.suffix for p in in_store.iterdir()) == [".json", ".json", ".mp4", ".mp4"]
     g.close()
     g.decoder.close()
@@ -163,7 +163,7 @@ def test_a_document_reopens_baked_or_live_as_the_store_has_the_file(tmp_path, in
     g = build(clip(tmp_path / "v.avi"), "gray", "bake", "threshold", increment=2)
     done, refused = baked(g)
     assert done and not refused, refused
-    key = g.doc.node("bake").baked["key"]
+    key = g.doc.node("bake").baked.key
     D.save(g.doc, g.doc.path)
     g.close()
     g.decoder.close()
@@ -186,7 +186,7 @@ def test_a_baked_clip_opens_as_another_documents_video(tmp_path, in_store):
     g.sync()
     done, refused = baked(g)
     assert done and not refused, refused
-    path = store.place(g.doc.node("bake").baked["key"], ".mp4")
+    path = store.place(g.doc.node("bake").baked.key, ".mp4")
     g.close()
     g.decoder.close()
     doc = D.from_tools([threshold], path)

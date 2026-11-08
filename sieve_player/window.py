@@ -510,11 +510,9 @@ class PlayerWindow(QMainWindow):
         the other clip, clear. Returns whether it changed."""
         if self._axis() == was:
             return False
-        _, old = was
-        to_plate = (lambda r: r) if old is None else (lambda r: old[0] + old[1] * r)
-        new = self.graph.plate
-        from_plate = (lambda r: r) if new is None else (lambda r: max(0, (r - new[0]) // new[1]))
-        row, (s, n) = from_plate(to_plate(self.row)), self.window_
+        old, new = was[1] or document.Plate(0, 1), self.graph.plate or document.Plate(0, 1)
+        across = lambda r: new.from_plate(old.to_plate(r))
+        row, (s, n) = across(self.row), self.window_
         self.fps, self.count = self.graph.fps, self.graph.count
         self.timeline.strip.set_count(self.count, self.fps)
         self.timeline.controls.set_count(self.count, self.fps)
@@ -522,7 +520,7 @@ class PlayerWindow(QMainWindow):
         self.pane.set_source(self.decoder.path, self.fps)
         if self.playing:
             self.timer.start(max(1, int(round(1000 / self.fps))))
-        self.set_window(from_plate(to_plate(s)), max(1, round(n * (old[1] if old else 1) / (new[1] if new else 1))), playhead=row)
+        self.set_window(across(s), max(1, round(n * old.increment / new.increment)), playhead=row)
         return True
 
     def _toggle_mode(self, nid):
@@ -927,11 +925,10 @@ class PlayerWindow(QMainWindow):
         self.clip_results = results
         self._show_pinned()
 
-    def _baked(self, nid, key):
-        """The worker landed `nid`'s bake and set its mode on the document; the views follow."""
-        self.pane.show_modes()
-        self.canvas.update()
-        self._restate()
+    def _baked(self, nid, bake):
+        """Recorded here, on the GUI thread, since the document is the GUI's and the worker's alone to read."""
+        document.land(self.doc.node(nid), bake)
+        self.sync()
 
     def _bake_refused(self, nid, why):
         self.pane.bake_refused(nid, why)

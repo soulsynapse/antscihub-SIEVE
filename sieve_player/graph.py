@@ -218,7 +218,7 @@ class Graph:
         self._open, self._readers = open_bake, {}     # bake key -> its reader, opened once per key
         self._rows = None                   # (count, fps) of the file the document is in the row space of; None for the plate's
         self.axis = None                    # the served node whose file that is
-        self.off, self.plate = set(), None  # nodes in the other row space; (first plate row, increment) of the axis, for a csv's key line
+        self.off, self.plate = set(), None  # nodes in the other row space; the axis's Plate, for a csv's key line
         self.memo = Memo(memo_bytes)
         self._lock = threading.Lock()
         self.on_event = None                # the probe's one consumer; see probe() for the event
@@ -253,23 +253,25 @@ class Graph:
         self.decoder.output = output        # a change empties its cache; a read in flight under the old plan is cancelled
         self._base = base_key(self.decoder.path, output)
         p = plan(self.doc, self.tools, self._base)
+        gone = {}
         for nid, e in p.entries.items():
-            if e.bake is None:
-                continue
-            try:
-                self._reader(e)
-            except (OSError, KeyError) as exc:
-                node = self.doc.node(nid)
-                node.mode = "live"      # the file is asked for here, where the document opens; gone, the node is live and says so
-                p = plan(self.doc, self.tools, self._base)
-                self._notes[nid] = (p.entries[nid].key, f"{exc}; serving live")
+            if e.bake is not None:
+                try:
+                    self._reader(e)
+                except (OSError, KeyError) as exc:
+                    gone[nid] = f"{exc}; serving live"
+        if gone:
+            for nid in gone:
+                self.doc.node(nid).mode = "live"    # the file is asked for here, where the document opens; gone, the node is live and says so
+            p = plan(self.doc, self.tools, self._base)
+            for nid, why in gone.items():
+                self._notes[nid] = (p.entries[nid].key, why)
         for nid, e in p.entries.items():
             if e.bake is not None:
                 self.doc.node(nid).mode = "stale" if nid in p.stale else "baked"
         with self._lock:
-            self._rows, self.axis, self.plate = p.rows, p.axis, None
-            if p.axis is not None:
-                self.plate = (int(p.entries[p.axis].bake["rows"][0]), int(p.entries[p.axis].bake["increment"]))
+            self._rows, self.axis = p.rows, p.axis
+            self.plate = None if p.axis is None else p.entries[p.axis].bake.plate
             self.off = {nid for nid, e in p.entries.items() if e.off}
             self._plan = p.entries
             self.shown, self.over = p.shown, p.over
@@ -280,7 +282,7 @@ class Graph:
         self._emit("sync", None, None, None, 0, keys={nid: e.key for nid, e in p.entries.items()})
 
     def _reader(self, e):
-        key = e.bake["key"]
+        key = e.bake.key
         if key not in self._readers:
             if self._open is None:
                 raise IOError("no store to read the bake from")
@@ -524,7 +526,7 @@ class Graph:
         if e.kind == "video":
             return self.decoder.cached(row)
         if e.bake is not None:
-            r = self._readers.get(e.bake["key"])
+            r = self._readers.get(e.bake.key)
             d = getattr(r, "decoder", None)
             v = None if d is None else d.cached(row)
             return v if v is None or e.band is None else banded(v, e.band)

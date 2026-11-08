@@ -461,7 +461,6 @@ class Worker(QThread):
         self._bake_finish()
 
     def _bake_finish(self):
-        """Lands the file and its sidecar, marks the node baked under the key, and says so."""
         b = self._bake
         try:
             b.writer.close()

@@ -40,7 +40,11 @@ box is ticked.
 
 ## The video node hands out frames as decoded
 
-Assumes: nothing.
+Assumes: Reading back. Removing the decoder's scale before a bake can be served loses the live
+footprint the tuned documents under video-tests/ rely on, since the decoder cache then holds the
+full frame and docs/findings/2026-10-31-window-fit-and-lru-thrash.md says a cache is binary
+against the window; on the 5.3K clip no cache setting holds a window of full frames. Decided
+2026-11-07.
 
 `scale` on the video node is tools/rescale.py's resize run inside the decoder, kept there for the
 cache footprint. With a bake to carry the footprint it is a second place a transform can live, and
@@ -174,6 +178,28 @@ where the document is opened. Whether the plan knows the node by a reserved name
 by a facet any tool may declare is the builder's call; the registry's check holds either to being
 read.
 
+The row axis is one at a time, decided 2026-11-07 against Houdini's File Cache and Blender's Bake
+node, which both keep the scene's clock and read a cache written every N frames as sparse in it,
+holding or erroring on the gaps: that buys the decode and never the walk, and here the walk is the
+cost. While the display flag is behind a baked node the document's rows are the file's, its count
+and fps the sidecar's written ones, and the walk, the stacks, the timeline and the csv rows are
+all in that space; the plate's row is `rows[0] + increment × row`, which the csv key line records
+beside the key. With the display flag on a node upstream of every bake the document is live, in
+the plate's axis, as though it were a separate pipeline, and the traces of the other mode are
+cleared, since they are of a different clip; the playhead carries across by the mapping. Nodes not
+behind the bake the display is behind are drawn grayed. A node that reads the plate beside a bake
+in the bake's axis, the video node shown with a bake elsewhere, or two bakes with different
+increments, has no row space, and the player says so in the standing rather than inventing one.
+A bake's range and increment are therefore properties of this switch, never a second axis; a
+frame tool still cannot drop a row, so the live node shows every row until it is baked.
+
+- [ ] While the display flag is behind a baked node the document's count and fps are the file's,
+  every row the walk and the timeline use is the file's, and the csv key line carries the bake's
+  first row and increment; with the flag moved upstream of the bake the document is live in the
+  plate's axis, the playhead mapped across, and nodes not behind the bake the display is behind
+  read as grayed.
+  Check: a test bakes with an increment, reads the count, the fps, the walked rows and a csv's key
+  line in each mode, moves the flag, and reads which nodes are grayed.
 - [ ] A baked node is fed with its input unwired, produces the sidecar's kind with a node of another
   kind wired into it, and every key downstream hashes the baked key and nothing upstream of it.
   Check: a test cuts the wire into a baked node, then wires a bgr node into a baked gray one, and
@@ -241,15 +267,6 @@ tool, the pane's export block and the three facets go together or not at all.
 - Acting on a bake whose sidecar's commit is older than a change to a tool upstream of it. The
   sidecar carries the commit from the first bake written; whether that becomes a second kind of
   stale, shown on the node, waits on the first time a bake is served fresh after a tool changed.
-- The increment and the range read back in place. A clip baked every N rows is in its own row
-  space, N times shorter than the plate's, and a graph has one row axis, the decoder's count and
-  fps, which any branch not behind the bake still reads. Direct indexing misaligns with the
-  timeline by N; holding every row, as downsample did, keeps the plate's axis and buys no walk.
-  Rows outside the range have the same question in milder form. The clean home for the increment
-  is the last box of Reading back, a baked clip opened as a document's video, where its row space
-  is the document's; whether in-place read-back is then increment 1 and the full range, or two
-  row spaces are resolved some other way, is Kendrick's to decide before Reading back is built.
-- The order of the first deliverable. Removing the decoder's scale before a bake exists loses the
-  live footprint the tuned documents under video-tests/ rely on, since the decoder cache then
-  holds the full frame and the window-fit finding says a cache is binary against the window;
-  whether the deliverable assumes Reading back, or the loss is accepted, is Kendrick's call.
+- The increment and the range read back in place, and the order of the first deliverable, were
+  open until 2026-11-07; Reading back's paragraph on the row axis and the video node's Assumes
+  line are the decisions.

@@ -163,6 +163,15 @@ def test_an_upstream_change_marks_stale_live_takes_the_live_key_and_a_rebake_lan
     g.sync()
     assert not g.stale and g.doc.node("bake").mode == "baked" and g.doc.node("bake").baked.key != key
     assert sorted(p.suffix for p in in_store.iterdir()) == [".json", ".json", ".mp4", ".mp4"]
+    second = g.doc.add_node("bake", id="bake2")        # a bake after a served bake was baked under the served key, and is not stale for it
+    g.doc.connect("threshold", second.id)
+    g.sync()
+    D.land(second, D.Bake(g.key(second.id), "mask", False, (0, N - 1), 1, 30.0, 30.0, (36, 48), N))
+    g.sync()
+    assert not g.stale
+    g.doc.node("rescale").params["scale"] = 0.5
+    g.sync()
+    assert g.stale == {"bake"}
     g.close()
     g.decoder.close()
 

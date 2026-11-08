@@ -76,7 +76,8 @@ def plan(doc, tools, base):
     key names what a tool computes from, so the memo holds under it; the key adds the band, which
     is applied on read, so what downstream sees is keyed by it and the node's own run is not. A
     served node (document.served) is a source: fed with nothing wired in, keyed by its bake, and
-    its live key, what the chain would give it, is kept beside to say whether it is stale. The row
+    its live key, what the chain as it stands would give it, every bake upstream still served, is
+    kept beside to say whether it is stale. The row
     axis is the bake the display flag is behind when that bake is not aligned with the plate, else
     the plate's; a node in the other space is not fed, its standing saying so."""
     keys, raw_keys, live_keys = {}, {}, {}
@@ -92,7 +93,8 @@ def plan(doc, tools, base):
         return {name: (w.src if (w := doc.source(nid, name)) else None) for name in names}
 
     def up_key(nid, stack=(), live=False):
-        ups = [key_of(src, stack, live) if src is not None and src not in stack else "none" for src in sources(nid, live).values()]
+        # `live` un-serves `nid` alone: a served bake upstream keeps its served key, which is what the chain gives
+        ups = [key_of(src, stack) if src is not None and src not in stack else "none" for src in sources(nid, live).values()]
         return ups[0] if len(ups) == 1 else _key(*ups)
 
     def key_of(nid, stack=(), live=False):

@@ -100,20 +100,12 @@ class ClipWriter:
         self.bytes = 0
 
 
-class TablesWriter:
-    """One table a row, pickled in sequence, the dtype's plane metadata and the contour column with it."""
+class _FileWriter:
+    """A series kind's writer: rows appended to one file opened at the first write."""
 
     def __init__(self, path, kind, fps, quality):
         self.path, self.part = path, path + ".part"
         self.f, self.shape, self.rows, self.bytes = None, None, 0, 0
-
-    def write(self, t):
-        if self.f is None:
-            self.f = open(self.part, "wb")
-            self.shape = (t.dtype.metadata or {}).get("plane")
-        pickle.dump(t, self.f, protocol=pickle.HIGHEST_PROTOCOL)
-        self.bytes = t.nbytes
-        self.rows += 1
 
     def close(self):
         if self.f is None:
@@ -130,6 +122,18 @@ class TablesWriter:
         self.bytes = 0
 
 
+class TablesWriter(_FileWriter):
+    """One table a row, pickled in sequence, the dtype's plane metadata and the contour column with it."""
+
+    def write(self, t):
+        if self.f is None:
+            self.f = open(self.part, "wb")
+            self.shape = (t.dtype.metadata or {}).get("plane")
+        pickle.dump(t, self.f, protocol=pickle.HIGHEST_PROTOCOL)
+        self.bytes = t.nbytes
+        self.rows += 1
+
+
 def read_tables(path):
     """The tables a TablesWriter wrote, as an object array one table a row."""
     out = []
@@ -144,12 +148,8 @@ def read_tables(path):
     return rows
 
 
-class SignalWriter:
+class SignalWriter(_FileWriter):
     """One value a row, as the shortest text that reads back to the same float32."""
-
-    def __init__(self, path, kind, fps, quality):
-        self.path, self.part = path, path + ".part"
-        self.f, self.shape, self.rows, self.bytes = None, None, 0, 0
 
     def write(self, v):
         if self.f is None:
@@ -157,8 +157,6 @@ class SignalWriter:
         self.f.write(np.format_float_positional(np.float32(v), trim="-") + "\n")
         self.bytes = 4
         self.rows += 1
-
-    close, abort = TablesWriter.close, TablesWriter.abort
 
 
 def read_signal(path):

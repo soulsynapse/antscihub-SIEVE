@@ -75,9 +75,11 @@ class Worker(QThread):
     bakeDone = Signal(str, object)            # the node's bake landed, as the Bake the node is to save (document.land)
     bakeRefused = Signal(str, str)            # the bake did not start or did not finish, and why; the node's standing says the same
 
-    def __init__(self, graph, every=30):
+    def __init__(self, graph, every=30, store=store):
+        """`store` is where a bake lands, anything with the store module's folder, writable, writer,
+        kinds, place and write_sidecar; the module itself unless a test hands another."""
         super().__init__()
-        self.graph, self.every = graph, every
+        self.graph, self.every, self.store = graph, every, store
         self._cv = threading.Condition()
         self._want = None
         self._stop = False
@@ -421,9 +423,9 @@ class Worker(QThread):
         if not e.fed:
             return self._refuse(nid, e.standing or f"in waits on {e.src}")
         kind = e.types.get(INPUT)
-        w = store.writer(kind)
+        w = self.store.writer(kind)
         if w is None:
-            return self._refuse(nid, f"no writer for {kind}; a bake writes {', '.join(store.kinds())}")
+            return self._refuse(nid, f"no writer for {kind}; a bake writes {', '.join(self.store.kinds())}")
         try:
             lo, hi = _bound(e.params.get("from", ""), 0), _bound(e.params.get("to", ""), g.count - 1)
             inc = max(1, int(e.params.get("increment", 1)))
@@ -432,15 +434,15 @@ class Worker(QThread):
         rows = list(range(max(lo, 0), min(hi, g.count - 1) + 1, inc))
         if not rows:
             return self._refuse(nid, f"rows {lo} to {hi} name no row of the clip's {g.count}")
-        folder = store.folder()
-        why = store.writable(folder)
+        folder = self.store.folder()
+        why = self.store.writable(folder)
         if why:
             return self._refuse(nid, why)
         ext, cls = w
         quality = str(e.params.get("quality", "lossless"))
         fields = dict(kind=kind, document=os.path.basename(g.doc.path or ""), node=nid, rows=[rows[0], rows[-1]],
                       increment=inc, fps=g.fps, written_fps=g.fps / inc, quality=quality)
-        self._bake = _Bake(nid, e.key, kind, e.kind == "series", e.src, rows, cls(store.place(e.key, ext, folder), kind, g.fps / inc, quality), fields)
+        self._bake = _Bake(nid, e.key, kind, e.kind == "series", e.src, rows, cls(self.store.place(e.key, ext, folder), kind, g.fps / inc, quality), fields)
         g.note(nid, "")
         self.baked.emit(nid, 0, len(rows))
         if self._bake.series:
@@ -485,7 +487,7 @@ class Worker(QThread):
         try:
             b.writer.close()
             shape = tuple(b.writer.shape or ())
-            store.write_sidecar(b.key, os.path.dirname(b.writer.path), **b.fields, shape=list(shape))
+            self.store.write_sidecar(b.key, os.path.dirname(b.writer.path), **b.fields, shape=list(shape))
         except Exception as exc:
             return self._bake_fail(f"could not land the file: {type(exc).__name__}: {exc}")
         f = b.fields

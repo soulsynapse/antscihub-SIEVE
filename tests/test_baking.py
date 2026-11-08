@@ -87,9 +87,8 @@ def test_a_bake_lands_the_file_and_sidecar_and_marks_the_node_baked(tmp_path, in
     side = store.sidecar(key, str(in_store))
     mp4 = store.place(key, ".mp4", str(in_store))
     assert os.path.exists(mp4) and not list(in_store.glob("*.part*"))
-    assert {k: side[k] for k in ("kind", "document", "node", "rows", "increment", "fps", "written_fps", "shape", "quality")} == \
-        {"kind": "gray", "document": "doc.json", "node": "bake", "rows": [2, 8], "increment": 2, "fps": 30.0, "written_fps": 15.0,
-         "shape": [H, W], "quality": "lossless"}
+    assert side == store.Sidecar(key, "gray", "doc.json", "bake", [2, 8], 2, 30.0, 15.0, [H, W], "lossless", side.commit, side.written)
+    assert side.bake(N) == g.doc.node("bake").baked and side.written
     assert g.doc.node("bake").mode == "baked" and g.doc.node("bake").baked.key == key and g.standing("bake") == ""
     # the store has the key: a second bake of the same chain serves the file rather than encoding it again
     g.sync()
@@ -252,7 +251,7 @@ def test_a_frame_kind_writes_a_clip_the_video_node_opens(tmp_path, in_store, qua
         assert done and not refused, refused
         want = [g.compute(chain[-1] if chain else "video", r) for r in range(0, 11, 3)]
         d = Decoder(store.place(g.key("bake"), ".mp4", str(in_store)))
-        assert (d.count, d.fps, (d.height, d.width)) == (len(want), 10.0, (H, W)) and store.sidecar(g.key("bake"), str(in_store))["kind"] == kind
+        assert (d.count, d.fps, (d.height, d.width)) == (len(want), 10.0, (H, W)) and store.sidecar(g.key("bake"), str(in_store)).kind == kind
         if kind != "bgr":
             d.output = "gray"
             assert d.luma, "a baked gray is read through the luma path"
@@ -299,5 +298,5 @@ def test_tables_and_a_signal_read_back_equal(tmp_path, in_store):
             assert len(back) == N and all(a.dtype == b.dtype and (a["id"] == b["id"]).all() and (a["cx"] == b["cx"]).all() for a, b in zip(back, want))
         else:
             assert writers.read_signal(store.place(g.key("bake"), ext, str(in_store))).tolist() == np.asarray(want, np.float32).tolist()
-        assert store.sidecar(g.key("bake"), str(in_store))["kind"] == ("tracks" if pick == "rows" else "signal")
+        assert store.sidecar(g.key("bake"), str(in_store)).kind == ("tracks" if pick == "rows" else "signal")
         g.decoder.close()

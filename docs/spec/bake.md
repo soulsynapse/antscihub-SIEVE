@@ -96,9 +96,11 @@ Assumes: nothing.
 
 Placed on a wire of any kind the graph has, it is the identity until baked, so the chain tunes
 exactly as it did without it. Whether one tool serves frame and series kinds or two share a
-module is the builder's call; the user places one thing called bake. The node has a mode, live,
-baked or stale, a fact saved with the node and shown on it; its standing stays what standing is
-everywhere, why the node does not run, and a bake node in any mode runs.
+module is the builder's call; the user places one thing called bake. The node has a mode, live or
+baked, the user's choice, saved with the node and shown on it; stale is the plan's verdict on a
+baked node, shown in the mode's place and never saved (decided 2026-11-08, after an architecture
+review found the runtime writing a derived value into the document on every sync). Its standing
+stays what standing is everywhere, why the node does not run, and a bake node in any mode runs.
 
 - [x] A bake node accepts every frame and series kind the registry's report lists, `path` excepted,
   and produces the same; wired on a frame kind its reader gets the frame, on a table kind the
@@ -174,11 +176,13 @@ nothing wired into it, its key is the file's and not the chain's, and it produce
 kind whatever is wired into it now. Its readers' rows come from the file, nothing upstream of it
 runs, and the plate is not decoded, which is the whole gain. A change upstream does not silently
 throw that away, since a baked node is how two settings of the upstream are compared and how a
-long run stays cheap while the operator keeps tuning; it marks the node stale and the user chooses
+long run stays cheap while the operator keeps tuning; it shows the node stale and the user chooses
 between rebaking and going live, as Houdini's load-from-disk toggle does. Everything that makes the
 node a source is saved with it, the mode and the key it was baked under, so the plan stays pure
 over the document and the tools and never looks in the store; whether the file is there is asked
-where the document is opened. Whether the plan knows the node by a reserved name beside `video` or
+where the document is opened, `store.missing` in the window's open path, and the runtime never
+writes the document. The box below that reads "its mode stale" is met by the plan's stale set,
+which the node shows; the saved mode stays baked. Whether the plan knows the node by a reserved name beside `video` or
 by a facet any tool may declare is the builder's call; the registry's check holds either to being
 read.
 

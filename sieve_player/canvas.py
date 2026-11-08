@@ -162,6 +162,7 @@ class Canvas(QWidget):
         self.errors = {}                        # node id -> the one line wrong with it, set by the window
         self.standings = {}                     # node id -> why it does not run, set by the window; the node's tooltip
         self.grayed = set()                     # nodes in the other row space than the display, set by the window; drawn dim
+        self.stale = set()                      # nodes serving a bake the plan says is stale, set by the window; drawn so in place of the mode
         self.selected = []
         self.hover = None                       # the node id under the pointer
         self._drag = None                       # ("move", start, {id: pos}) | ("box", start, shift, base)
@@ -751,7 +752,7 @@ class Canvas(QWidget):
         mode = None if n.unresolved else mode_of(self.doc, self.tools, n.id)
         if mode is not None:
             p.setPen(qgray(theme.INK_2))
-            p.drawText(text, Qt.AlignRight | Qt.AlignVCenter, mode)
+            p.drawText(text, Qt.AlignRight | Qt.AlignVCenter, "stale" if n.id in self.stale else mode)
         flags = [(self.flag(n), n.id == self.doc.display, theme.ACCENT)] if self.can_display(n) else []
         if self.can_overlay(n):
             flags.append((self.overlay_flag(n), n.id == self.doc.overlay, theme.OVERLAY))

@@ -13,14 +13,14 @@ import sys
 import threading
 import time
 import traceback
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 import numpy as np
 from PySide6.QtCore import QThread, Signal
 
 from . import density, store
 from .decoder import EndOfStream
-from .document import INPUT, Bake
+from .document import INPUT
 from .graph import Cancelled, Memo, Series, gated, nbytes
 
 STACK_BYTES = 512 << 20   # the most a walk's stack, the window's or the clip's, may take, as nbytes counts it
@@ -37,9 +37,9 @@ class _Bake:
     kind: str           # the kind flowing into the node, what the file holds
     series: bool        # written from the clip walk's result, not row by row
     src: str
-    rows: list
+    rows: range         # the plate rows, the tool's answer; its step is the increment
     writer: object
-    fields: dict        # the sidecar's, less what the writer learns
+    side: object        # the store.Sidecar to write, its shape the writer's to learn
     folder: str
     t0: float = field(default_factory=time.perf_counter)
     i: int = 0
@@ -48,12 +48,6 @@ class _Bake:
 
 def _log(text):
     print(f"SIEVE {time.strftime('%H:%M:%S')}: {text}", file=sys.stderr)
-
-
-def _bound(text, default):
-    """A row bound off a param: `default` when blank, else the integer it names; ValueError otherwise."""
-    text = str(text).strip()
-    return default if text == "" else int(text)
 
 
 def _stack_for(n, out):
@@ -84,7 +78,7 @@ class Worker(QThread):
 
     def __init__(self, graph, every=30, store=store):
         """`store` is where a bake lands, anything with the store module's folder, writable, free,
-        writer, kinds, place, sidecar and write_sidecar; the module itself unless a test hands another."""
+        writer, kinds, place, sidecar, write_sidecar and Sidecar; the module itself unless a test hands another."""
         super().__init__()
         self.graph, self.every, self.store = graph, every, store
         self._cv = threading.Condition()
@@ -224,7 +218,7 @@ class Worker(QThread):
                 clip_gen, clip_on = self._clip_gen, self._clip_on
                 bake_gen, (bake_ask, bake_why) = self._bake_gen, self._bake_ask
             which = "window"
-            self.graph.reap()
+            self.graph.readers.reap()
             try:
                 if want is not None:
                     self.graph.serving("scrub")
@@ -431,7 +425,8 @@ class Worker(QThread):
     def _bake_begin(self, nid):
         """Starts a bake of `nid`'s input, or refuses it with the reason in the node's standing: an
         input unwired or unfed, a kind with no writer, a range that names no row, a store that
-        cannot be written. A series bake asks for the clip walk and writes when it completes."""
+        cannot be written. The rows and quality are the tool's to read off its params, through its
+        `bake` facet. A series bake asks for the clip walk and writes when it completes."""
         g = self.graph
         e = g.entry(nid)
         if e is None or e.src is None:
@@ -443,13 +438,12 @@ class Worker(QThread):
         if w is None:
             return self._refuse(nid, f"no writer for {kind}; a bake writes {', '.join(self.store.kinds())}")
         try:
-            lo, hi = _bound(e.params.get("from", ""), 0), _bound(e.params.get("to", ""), g.count - 1)
-            inc = max(1, int(e.params.get("increment", 1)))
+            rows, quality = e.tool.bake(e.params, g.count)
         except (TypeError, ValueError) as exc:
             return self._refuse(nid, f"the range does not read: {exc}")
-        rows = list(range(max(lo, 0), min(hi, g.count - 1) + 1, inc))
         if not rows:
-            return self._refuse(nid, f"rows {lo} to {hi} name no row of the clip's {g.count}")
+            return self._refuse(nid, f"the range names no row of the clip's {g.count}")
+        inc = rows.step
         folder = self.store.folder()
         why = self.store.writable(folder)
         if why:
@@ -460,14 +454,12 @@ class Worker(QThread):
             # the store has this key already, from this document or another sharing the chain: served, not encoded again
             g.note(nid, "")
             self.baked.emit(nid, len(rows), len(rows))
-            _log(f"bake {nid}: {e.key} is in the store at {folder}, written {side['written']}; serving it")
-            return self.bakeDone.emit(nid, Bake(e.key, kind, e.kind == "series", tuple(side["rows"]), side["increment"], side["fps"],
-                                                side["written_fps"], tuple(side["shape"]), g.count))
-        g.release(e.key)        # a reader left on a file of this key would hold it against the landing on Windows
-        quality = str(e.params.get("quality", "lossless"))
-        fields = dict(kind=kind, document=os.path.basename(g.doc.path or ""), node=nid, rows=[rows[0], rows[-1]],
-                      increment=inc, fps=g.fps, written_fps=g.fps / inc, quality=quality)
-        self._bake = _Bake(nid, e.key, kind, e.kind == "series", e.src, rows, cls(path, kind, g.fps / inc, quality), fields, folder)
+            _log(f"bake {nid}: {e.key} is in the store at {folder}, written {side.written}; serving it")
+            return self.bakeDone.emit(nid, side.bake(g.count))
+        g.readers.release(e.key)        # a reader left on a file of this key would hold it against the landing on Windows
+        side = self.store.Sidecar(e.key, kind, os.path.basename(g.doc.path or ""), nid, [rows[0], rows[-1]], inc, g.fps, g.fps / inc,
+                                  [], quality)
+        self._bake = _Bake(nid, e.key, kind, e.kind == "series", e.src, rows, cls(path, kind, g.fps / inc, quality), side, folder)
         g.note(nid, "")
         self.baked.emit(nid, 0, len(rows))
         _log(f"bake {nid}: {kind} rows {rows[0]}..{rows[-1]} every {inc}, {quality}, key {e.key} -> {folder}, "
@@ -519,18 +511,15 @@ class Worker(QThread):
         b = self._bake
         try:
             b.writer.close()
-            shape = tuple(b.writer.shape or ())
-            self.store.write_sidecar(b.key, b.folder, **b.fields, shape=list(shape))
+            side = self.store.write_sidecar(replace(b.side, shape=list(b.writer.shape or ())), b.folder)
         except Exception as exc:
             if os.path.exists(b.writer.path) and self.store.sidecar(b.key, b.folder) is None:
                 os.remove(b.writer.path)        # landed without its sidecar: not ours, so not left
             return self._bake_fail(f"could not land the file: {type(exc).__name__}: {exc}")
-        f = b.fields
         self._bake = None
         _log(f"bake {b.nid}: landed {b.key} after {time.perf_counter() - b.t0:.0f} s, {len(b.rows)} rows, "
              f"{os.path.getsize(b.writer.path) >> 20} MB")
-        self.bakeDone.emit(b.nid, Bake(b.key, b.kind, b.series, tuple(f["rows"]), f["increment"], f["fps"], f["written_fps"], shape,
-                                       self.graph.count))
+        self.bakeDone.emit(b.nid, side.bake(self.graph.count))
 
     def _bake_fail(self, why):
         """Abandons the bake in progress, if any, leaving no file, with `why` in the node's standing."""

@@ -11,7 +11,7 @@ import os
 from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtWidgets import QComboBox, QFileDialog, QFrame, QPushButton, QScrollArea, QVBoxLayout, QWidget
 
-from .document import OPEN, VIDEO_OUTPUT, VIDEO_OUTPUTS, VIDEO_TOOL, is_selector, mode_of, paths, video_output
+from .document import LIVE, OPEN, VIDEO_OUTPUT, VIDEO_OUTPUTS, VIDEO_TOOL, is_selector, mode_of, paths, video_output
 from .theme import CONTROL_W, GAP, PAD, WIDE_W, Form, GlyphButton, Layer, readout
 from .widgets import Density, Trace
 
@@ -95,7 +95,7 @@ class Video(QWidget):
 
 
 class BakeBlock(QWidget):
-    """The block under a tool declaring BAKES: the node's mode, the button that asks the window
+    """The block under a tool with a `bake` facet: the node's mode, the button that asks the window
     for a bake and cancels one running, and the line that says how far it is or why it stopped."""
     asked = Signal()
     cancelled = Signal()
@@ -114,11 +114,12 @@ class BakeBlock(QWidget):
         self.switch.clicked.connect(self.toggled)
         self.switch.setEnabled(False)
 
-    def set_mode(self, mode, has_bake=False):
-        """`mode` as the node says it; the switch offers the other side only once a bake exists."""
-        self.mode.setText(mode or "")
+    def set_mode(self, mode, has_bake=False, stale=False):
+        """`mode` as the document says it, shown as stale when the plan says so; the switch offers
+        the other side only once a bake exists."""
+        self.mode.setText("stale" if stale else mode or "")
         self.switch.setEnabled(has_bake)
-        self.switch.setText("Serve bake" if mode == "live" else "Go live")
+        self.switch.setText("Serve bake" if mode == LIVE else "Go live")
 
     def set_progress(self, done, total):
         self.running = done < total
@@ -152,7 +153,7 @@ class Pane(QWidget):
         self.densities = {}   # frame node -> its Density plot, hidden until the window hands it counts
         self.traces = {}      # series node -> its Trace, hidden until the window hands it a result
         self.pins = {}        # series node -> the pin in its card's corner
-        self.bakes = {}       # node whose tool BAKES -> its BakeBlock
+        self.bakes = {}       # node whose tool bakes -> its BakeBlock
         self.video = None
         self.current = None
         self._src, self._fps = None, None
@@ -265,7 +266,7 @@ class Pane(QWidget):
                     pin.clicked.connect(lambda on, nid=node.id: self._pin(nid, on))
                     card.add_corner(pin)
                     self.pins[node.id] = pin
-            if w is not None and getattr(tool, "BAKES", None):
+            if w is not None and getattr(tool, "bake", None) is not None:
                 block = BakeBlock()
                 block.set_mode(mode_of(self.doc, self.tools, node.id), node.baked is not None)
                 block.asked.connect(lambda nid=node.id: self.bakeAsked.emit(nid))
@@ -363,10 +364,10 @@ class Pane(QWidget):
         if nid in self.bakes:
             self.bakes[nid].set_refused(why)
 
-    def show_modes(self):
-        """Every mode line follows the document, after a bake lands or a document is reopened."""
+    def show_modes(self, stale=()):
+        """Every mode line follows the document, and the plan's `stale` nodes, after a sync."""
         for nid, block in self.bakes.items():
-            block.set_mode(mode_of(self.doc, self.tools, nid), self.doc.node(nid).baked is not None)
+            block.set_mode(mode_of(self.doc, self.tools, nid), self.doc.node(nid).baked is not None, nid in stale)
 
     def set_playhead(self, row):
         for plot in (*self.densities.values(), *self.traces.values()):

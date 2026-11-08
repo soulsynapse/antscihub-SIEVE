@@ -26,8 +26,7 @@ _HINTS = {
     "PATHS": 'PATHS = {"settings": load_settings}  # path inputs: name -> params from the file',
     "select": "def select(folder, params): ...  # a selector: the path it picks under folder, or None",
     "matches": "def matches(folder, params): ...  # a selector: every path its rule matches, picked first",
-    "MODES": 'MODES = ("live", "baked", "stale")  # the node has a mode, saved with it and shown on it; the first is the default',
-    "BAKES": "BAKES = True  # the node bakes: a Bake button under it, and the worker writes its input to the store",
+    "bake": "def bake(params, count): ...  # the node bakes: (the plate rows a bake writes over a clip of count rows, the frame writer's quality); a Bake button under it",
 }
 FACETS = tuple(_HINTS)
 

@@ -89,7 +89,7 @@ class Node:
     params: dict = field(default_factory=dict)
     pos: tuple = (0.0, 0.0)
     band: tuple | None = None                                       # (lo, hi) kept, of a plane's pixels or a signal's rows; None keeps every value
-    mode: str | None = None                                         # one of the tool's MODES, for a tool declaring them; None is the first
+    mode: str | None = None                                         # BAKED while the node serves its bake; None or LIVE is live
     baked: Bake | None = None                                       # the bake in the store, once there is one; see served()
     extra: dict = field(default_factory=dict, repr=False)            # keys this module does not know
     unresolved: bool = field(default=False, compare=False)          # set by resolve(); not saved
@@ -224,7 +224,8 @@ class Document:
             doc.nodes.append(Node(nd["id"], nd["tool"], dict(nd.get("params", {})),
                                   tuple(float(x) for x in nd.get("pos", (0, 0))),
                                   None if nd.get("band") is None else tuple(float(x) for x in nd["band"]),
-                                  nd.get("mode"), None if nd.get("baked") is None else Bake.from_dict(nd["baked"]),
+                                  BAKED if nd.get("mode") == "stale" else nd.get("mode"),    # stale was once saved; it serves
+                                  None if nd.get("baked") is None else Bake.from_dict(nd["baked"]),
                                   {k: v for k, v in nd.items() if k not in node_keys}))
         ids = {n.id for n in doc.nodes}
         for wd in d.get("wires", []):
@@ -399,17 +400,17 @@ def produces(doc, tools, nid, _seen=()):
     return produces(doc, tools, w.src, (*_seen, nid))
 
 
-SERVING = ("baked", "stale")    # the modes in which a node with a bake serves the file; any other is live
+LIVE, BAKED = "live", "baked"   # a node's two modes: serving the chain, or the bake it holds; whether the bake is stale is the plan's to say
 
 
 def served(node):
-    """The Bake `node` serves while its mode is one of SERVING; None for a live node."""
-    return node.baked if node.mode in SERVING and node.baked else None
+    """The Bake `node` serves while its mode is BAKED; None for a live node."""
+    return node.baked if node.mode == BAKED and node.baked else None
 
 
 def land(node, bake):
     """Records `bake` as written for `node`, which serves it from here on."""
-    node.mode, node.baked = "baked", bake
+    node.mode, node.baked = BAKED, bake
 
 
 def kind_of(doc, tools, nid, _seen=()):
@@ -436,12 +437,10 @@ def kind_of(doc, tools, nid, _seen=()):
 
 
 def mode_of(doc, tools, nid):
-    """The node's mode, for a tool declaring MODES: what is saved on the node, else the first of them; None for any other node."""
-    modes = getattr(_by_name(tools).get(doc.node(nid).tool), "MODES", None)
-    if not modes:
+    """LIVE or BAKED for a node whose tool bakes; None for any other node."""
+    if getattr(_by_name(tools).get(doc.node(nid).tool), "bake", None) is None:
         return None
-    node = doc.node(nid)
-    return node.mode if node.mode in modes else modes[0]
+    return BAKED if served(doc.node(nid)) else LIVE
 
 
 def video_output(doc):

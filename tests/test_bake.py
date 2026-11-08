@@ -47,6 +47,10 @@ def test_the_identity_on_a_gray_a_blobs_and_a_signal_wire():
     doc.node("bake").mode = "baked"
     back = D.Document.from_dict(json.loads(json.dumps(doc.to_dict())))
     assert back.node("bake").mode == "baked" and "mode" not in doc.to_dict()["nodes"][1]
+    assert D.mode_of(doc, TOOLS, "bake") == "live"      # a mode with no bake behind it serves nothing
+    assert bake.bake({"from": "2", "to": "9", "increment": 2}, 12) == (range(2, 10, 2), "lossless")
+    assert bake.bake(bake.DEFAULTS, 12) == (range(0, 12), "lossless") and not bake.bake({"from": "20"}, 12)[0]
+    assert bake.bake({"quality": "standard"}, 12)[1] == "standard"
     expected = {t for t, (p, ex) in types(discover("tools"), [VIDEO]).items()} - {D.PATH}
     assert set(bake.EXPECTS) == expected
     doc.disconnect("bake_3")

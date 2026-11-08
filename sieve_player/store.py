@@ -1,19 +1,48 @@
-"""The store: the folder bakes land in, each a file named by its node's key with a sidecar beside it
+"""The store: the folder bakes land in, each a file named by its node's key with a Sidecar beside it
 that says what the file is, the rule for where the folder is, and which kinds have a writer. The
-window shows what `status()` says and `choose()`s on the user's behalf, a bake writes through
-`writer()`, `place()` and `write_sidecar()`, and a reader asks `sidecar()`."""
+window shows what `status()` says, `choose()`s on the user's behalf and asks `missing()` where a
+document opens; a bake writes through `writer()`, `place()` and `write_sidecar()`, and a reader asks
+`sidecar()`."""
 import json
 import os
 import shutil
 import subprocess
 import tempfile
 import time
+from dataclasses import asdict, dataclass, fields, replace
+
+from .document import Bake, served
+from .writers import PART, WRITERS, is_series, reader
 
 STORE_ENV = "SIEVE_STORE"       # the store's folder when none is chosen; unset: `store` under app_folder()
 SIDECAR = ".sieve.json"
-PART = ".part"                  # in the name of every file a writer has open and not yet landed; see writers.part
-FIELDS = ("key", "kind", "document", "node", "rows", "increment", "fps", "written_fps", "shape", "quality", "commit",
-          "written")
+
+
+@dataclass(frozen=True)
+class Sidecar:
+    """What makes a file in the store ours: everything a bake was written under. `rows` is (first,
+    last) of the plate, `shape` the plane's or [] for a series kind; `commit` and `written` are
+    filled in by `write_sidecar` when left empty."""
+    key: str
+    kind: str
+    document: str
+    node: str
+    rows: list
+    increment: int
+    fps: float
+    written_fps: float
+    shape: list
+    quality: str
+    commit: str = ""
+    written: str = ""
+
+    def bake(self, count):
+        """The Bake a node saves to serve this file, over a plate of `count` rows."""
+        return Bake(self.key, self.kind, is_series(self.kind), tuple(self.rows), self.increment, self.fps, self.written_fps,
+                    tuple(self.shape), count)
+
+
+FIELDS = tuple(f.name for f in fields(Sidecar))
 
 
 def app_folder():
@@ -104,24 +133,41 @@ def free(path=None):
 
 def writer(kind):
     """(the file's extension, the writer class) for `kind`, or None for a kind no bake can write."""
-    from .writers import WRITERS
     return WRITERS.get(kind)
 
 
 def kinds():
     """The kinds a bake can write, sorted."""
-    from .writers import WRITERS
     return sorted(WRITERS)
 
 
+def absent(bake, path=None):
+    """Why `bake`, a node's saved Bake, cannot be read from the store, or "" when its file is there."""
+    w = writer(bake.kind)
+    if w is None:
+        return f"no reader for a {bake.kind} bake"
+    if not os.path.exists(place(bake.key, w[0], path)):
+        return f"bake {bake.key} is not in the store at {path or folder()}"
+    return ""
+
+
+def missing(doc, path=None):
+    """{node id: why} for every node of `doc` serving a bake the store cannot read: what whoever
+    opens the document asks, so a node whose file is gone can be set live with the reason said."""
+    out = {}
+    for n in doc.nodes:
+        b = served(n)
+        if b is not None and (why := absent(b, path)):
+            out[n.id] = f"{why}; serving live"
+    return out
+
+
 def open_bake(bake, cache_bytes=0):
-    """What reads `bake`, a node's saved Bake, back from the store: IOError when its file is not there."""
-    from .writers import reader
-    ext, _ = writer(bake.kind)
-    path = place(bake.key, ext)
-    if not os.path.exists(path):
-        raise IOError(f"bake {bake.key} is not in the store at {folder()}")
-    return reader(path, bake.kind, cache_bytes)
+    """What reads `bake`, a node's saved Bake, back from the store: IOError when it cannot be read."""
+    why = absent(bake)
+    if why:
+        raise IOError(why)
+    return reader(place(bake.key, writer(bake.kind)[0]), bake.kind, cache_bytes)
 
 
 def place(key, ext, path=None):
@@ -133,36 +179,31 @@ def sidecar_path(key, path=None):
     return os.path.join(path or folder(), key + SIDECAR)
 
 
-def write_sidecar(key, path=None, **fields):
-    """Writes the sidecar for `key`, whole or not at all, from `fields`, which must name every one
-    of FIELDS but `key`, `commit` and `written`, filled in here when not given. Returns what it wrote."""
-    missing = set(FIELDS) - {"key", "commit", "written"} - set(fields)
-    if missing or set(fields) - set(FIELDS):
-        raise ValueError(f"a sidecar has {FIELDS}; missing {sorted(missing)}, unknown {sorted(set(fields) - set(FIELDS))}")
-    d = {"key": key, **fields}
-    d.setdefault("commit", commit())
-    d.setdefault("written", time.strftime("%Y-%m-%dT%H:%M:%S"))
-    d = {k: d[k] for k in FIELDS}
-    target = sidecar_path(key, path)
+def write_sidecar(side, path=None):
+    """Writes `side`, a Sidecar, beside its file, whole or not at all, with the commit and the time
+    filled in where it left them empty. Returns what it wrote."""
+    side = replace(side, commit=side.commit or commit(), written=side.written or time.strftime("%Y-%m-%dT%H:%M:%S"))
+    target = sidecar_path(side.key, path)
     part = target + PART
     try:
         with open(part, "w", encoding="utf-8") as f:
-            json.dump(d, f, indent=2)
+            json.dump(asdict(side), f, indent=2)
             f.write("\n")
         os.replace(part, target)
     except OSError:
         if os.path.exists(part):
             os.remove(part)
         raise
-    return d
+    return side
 
 
 def sidecar(key, path=None):
-    """The sidecar's fields for `key`, or None when the store has none for it; a sidecar is what makes a file ours."""
+    """The Sidecar for `key`, or None when the store has none for it, or one this module cannot read."""
     try:
         with open(sidecar_path(key, path), encoding="utf-8") as f:
-            return json.load(f)
-    except (OSError, ValueError):
+            d = json.load(f)
+        return Sidecar(**{k: d[k] for k in FIELDS})
+    except (OSError, ValueError, KeyError, TypeError):
         return None
 
 

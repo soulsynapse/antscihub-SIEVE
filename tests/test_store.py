@@ -1,7 +1,7 @@
 """The store: where its folder is resolved from and that the choice outlives the call, the sidecar's fields reading back, and what the display reads of a folder that can and cannot be written."""
 import os
 
-from sieve_player import store
+from sieve_player import document, store
 
 
 def test_the_folder_is_chosen_else_the_environment_else_the_default(tmp_path, monkeypatch):
@@ -19,15 +19,19 @@ def test_the_folder_is_chosen_else_the_environment_else_the_default(tmp_path, mo
 def test_the_sidecar_reads_every_field_back(tmp_path):
     key = "0123456789abcdef"
     (tmp_path / (key + ".mp4")).write_bytes(b"clip")
-    fields = dict(kind="gray", document="ants.json", node="bake", rows=[0, 589], increment=1, fps=59.94, written_fps=59.94,
-                  shape=[540, 960], quality="standard")
-    wrote = store.write_sidecar(key, str(tmp_path), **fields)
+    side = store.Sidecar(key, "gray", "ants.json", "bake", [0, 589], 1, 59.94, 59.94, [540, 960], "standard")
+    wrote = store.write_sidecar(side, str(tmp_path))
     back = store.sidecar(key, str(tmp_path))
-    assert back == wrote and tuple(back) == store.FIELDS and all(back[k] == v for k, v in fields.items())
-    assert back["key"] == key and back["written"] and back["commit"] == store.commit()
+    assert back == wrote and back != side and back.written and back.commit == store.commit()
+    assert back.bake(590) == document.Bake(key, "gray", False, (0, 589), 1, 59.94, 59.94, (540, 960), 590) and back.bake(590).aligned
     assert store.sidecar("none", str(tmp_path)) is None and not list(tmp_path.glob("*.part"))
+    assert store.absent(back.bake(590), str(tmp_path)) == "" and store.absent(back.bake(590), str(tmp_path / "none")).startswith(f"bake {key} is not in the store")
+    doc = document.Document(nodes=[document.Node("bake", "bake", mode=document.BAKED, baked=back.bake(590))])
+    assert store.missing(doc, str(tmp_path)) == {} and list(store.missing(doc, str(tmp_path / "none"))) == ["bake"]
     assert store.place(key, ".mp4", str(tmp_path)) == str(tmp_path / (key + ".mp4"))
     assert store.held(str(tmp_path)) == 4 + os.path.getsize(store.sidecar_path(key, str(tmp_path)))
+    (tmp_path / "bad.sieve.json").write_text("{}", encoding="utf-8")
+    assert store.sidecar("bad", str(tmp_path)) is None
 
 
 def test_status_says_what_a_folder_holds_and_refuses_one_that_cannot_be_written(tmp_path):

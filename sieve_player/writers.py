@@ -12,8 +12,9 @@ import tempfile
 
 import numpy as np
 
-from .store import PART
+from .decoder import Decoder
 
+PART = ".part"      # in the name of every file a writer has open and not yet landed; see part()
 LOSSLESS, STANDARD = "lossless", "standard"
 CRF = "18"          # the standard quality: docs/findings/2026-11-04-remux-encode-and-seek.md's x264 crf 18
 PRESET = "medium"
@@ -182,7 +183,6 @@ class ClipReader:
     counters are the reader's, for the probe."""
 
     def __init__(self, path, kind, cache_bytes):
-        from .decoder import Decoder
         self.decoder = Decoder(path, cache_bytes=cache_bytes)
         self.decoder.output = "bgr" if kind == "bgr" else "gray"
         self.count, self.fps = self.decoder.count, self.decoder.fps
@@ -209,8 +209,13 @@ class RowsReader:
         pass
 
 
+def is_series(kind):
+    """Whether a bake of `kind` is written whole from the clip walk and read whole, rather than a row at a time."""
+    return WRITERS[kind][1] is not ClipWriter
+
+
 def reader(path, kind, cache_bytes=0):
-    return (ClipReader if WRITERS[kind][1] is ClipWriter else RowsReader)(path, kind, cache_bytes)
+    return (RowsReader if is_series(kind) else ClipReader)(path, kind, cache_bytes)
 
 
 WRITERS = {"gray": (".mp4", ClipWriter), "bgr": (".mp4", ClipWriter), "mask": (".mp4", ClipWriter),

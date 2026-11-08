@@ -209,18 +209,70 @@ class Event:
     keys: dict | None   # sync only: every node's key under the new plan, band included; diff two to see what a drag changed
 
 
+class Readers:
+    """The readers open on served bakes, one per key, opened on the worker at the first read and
+    kept while a node serves the key. `keep()` retires the rest at sync and `reap()` closes them on
+    the worker between computations, since a close from the GUI thread would pull a file from under
+    a read in flight; `release()` closes one so its file can be replaced or removed, which on
+    Windows a file open in cv2 refuses."""
+
+    def __init__(self, open_bake):
+        self._open, self._held, self._retired = open_bake, {}, []
+        self._lock = threading.Lock()
+
+    def get(self, bake, cache_bytes):
+        """The reader on `bake`, opened here when none is: IOError when it cannot be. Worker threads only."""
+        with self._lock:
+            r = self._held.get(bake.key)
+        if r is None:
+            if self._open is None:
+                raise IOError("no store to read the bake from")
+            r = self._open(bake, cache_bytes)
+            with self._lock:
+                self._held[bake.key] = r
+        return r
+
+    def held(self, key):
+        """The reader open on `key`, or None; never opens one. GUI-safe."""
+        with self._lock:
+            return self._held.get(key)
+
+    def keep(self, keys):
+        with self._lock:
+            self._retired += [self._held.pop(k) for k in list(self._held) if k not in keys]
+
+    def reap(self):
+        with self._lock:
+            gone, self._retired = self._retired, []
+        for r in gone:
+            r.close()
+
+    def release(self, key):
+        with self._lock:
+            r = self._held.pop(key, None)
+        if r is not None:
+            r.close()
+
+    def close(self):
+        self.reap()
+        with self._lock:
+            gone, self._held = list(self._held.values()), {}
+        for r in gone:
+            r.close()
+
+
 class Graph:
     def __init__(self, doc, decoder, tools, memo_bytes=4 << 30, open_bake=None):
         """`open_bake(bake, cache_bytes)` opens a served node's file as a reader, or raises IOError;
-        without it a served node reads nothing and goes live at the first sync."""
+        without it a served node's read raises. Whether the file is there is asked where the document
+        opens, store.missing, not here."""
         self.doc, self.decoder = doc, decoder
         self.tools = tools if hasattr(tools, "get") else {t.NAME: t for t in tools}
-        self._open, self._readers = open_bake, {}     # bake key -> its reader, opened once per key, kept while a node serves it
-        self._retired = []                  # readers no served node needs, closed by the worker through reap(); a GUI-side
-                                            # close would pull a file from under a read in flight
+        self.readers = Readers(open_bake)
         self._rows = None                   # (count, fps) of the file the document is in the row space of; None for the plate's
         self.axis = None                    # the served node whose file that is
         self.off, self.plate = set(), None  # nodes in the other row space; the axis's Plate, for a csv's key line
+        self.stale = set()                  # served nodes whose live key is not the one they were baked under; the plan's verdict, shown and never saved
         self.memo = Memo(memo_bytes)
         self._lock = threading.Lock()
         self.on_event = None                # the probe's one consumer; see probe() for the event
@@ -255,28 +307,11 @@ class Graph:
         self.decoder.output = output        # a change empties its cache; a read in flight under the old plan is cancelled
         self._base = base_key(self.decoder.path, output)
         p = plan(self.doc, self.tools, self._base)
-        gone = {}
-        for nid, e in p.entries.items():
-            if e.bake is not None:
-                try:
-                    self._reader(e)
-                except (OSError, KeyError) as exc:
-                    gone[nid] = f"{exc}; serving live"
-        if gone:
-            for nid in gone:
-                self.doc.node(nid).mode = "live"    # the file is asked for here, where the document opens; gone, the node is live and says so
-            p = plan(self.doc, self.tools, self._base)
-            for nid, why in gone.items():
-                self._notes[nid] = (p.entries[nid].key, why)
-        for nid, e in p.entries.items():
-            if e.bake is not None:
-                self.doc.node(nid).mode = "stale" if nid in p.stale else "baked"
-        served = {e.bake.key for e in p.entries.values() if e.bake is not None}
+        self.readers.keep({e.bake.key for e in p.entries.values() if e.bake is not None})
         with self._lock:
-            self._retired += [self._readers.pop(k) for k in list(self._readers) if k not in served]
             self._rows, self.axis = p.rows, p.axis
             self.plate = None if p.axis is None else p.entries[p.axis].bake.plate
-            self.off = {nid for nid, e in p.entries.items() if e.off}
+            self.off, self.stale = {nid for nid, e in p.entries.items() if e.off}, set(p.stale)
             self._plan = p.entries
             self.shown, self.over = p.shown, p.over
             self.series = p.chain[0] if p.chain else None
@@ -285,41 +320,23 @@ class Graph:
         # A boundary in the stream: what runs next ran under a new plan, whose keys it carries.
         self._emit("sync", None, None, None, 0, keys={nid: e.key for nid, e in p.entries.items()})
 
-    def _reader(self, e):
-        key = e.bake.key
-        if key not in self._readers:
-            if self._open is None:
-                raise IOError("no store to read the bake from")
-            self._readers[key] = self._open(e.bake, self.decoder.cache_limit)
-        return self._readers[key]
-
-    def reap(self):
-        """Closes the readers sync() retired. Worker threads only, between computations, so no read is
-        under a file as it closes; close() does the same at the end."""
-        with self._lock:
-            gone, self._retired = self._retired, []
-        for r in gone:
-            r.close()
-
-    def release(self, key):
-        """Closes the reader on the bake `key`, if one is open, so the file can be replaced or removed;
-        a served node reading it opens another at its next read. Worker threads only."""
-        with self._lock:
-            r = self._readers.pop(key, None)
-        if r is not None:
-            r.close()
+    def _reader(self, nid, e):
+        """The reader on `nid`'s bake; a file that cannot be read is the node's to say, in its standing."""
+        try:
+            return self.readers.get(e.bake, self.decoder.cache_limit)
+        except OSError as exc:
+            exc.sieve_node = nid
+            self.note(nid, str(exc))
+            raise
 
     def baked_series(self, nid):
         """A served series node's whole file: its tables one a row, or its float32 signal. Worker threads only."""
         with self._lock:
             e = self._plan.get(nid)
-        return self._reader(e).data
+        return self._reader(nid, e).data
 
     def close(self):
-        self.reap()
-        for r in self._readers.values():
-            r.close()
-        self._readers = {}
+        self.readers.close()
 
     def standing(self, nid):
         """One line on why `nid` does not run, else what its run said under its current key, else
@@ -493,7 +510,7 @@ class Graph:
                 ev[1] = v.nbytes
             return v
         if e.bake is not None:
-            r = self._reader(e)
+            r = self._reader(nid, e)
             d = getattr(r, "decoder", None)
             with self.probe(nid, row, e.raw_key) as ev:
                 decodes, seeks = (d.decodes, d.seeks) if d else (0, 0)
@@ -547,8 +564,7 @@ class Graph:
         if e.kind == "video":
             return self.decoder.cached(row)
         if e.bake is not None:
-            r = self._readers.get(e.bake.key)
-            d = getattr(r, "decoder", None)
+            d = getattr(self.readers.held(e.bake.key), "decoder", None)
             v = None if d is None else d.cached(row)
             return v if v is None or e.band is None else banded(v, e.band)
         v = self.memo.get((e.raw_key, None if e.static else row))

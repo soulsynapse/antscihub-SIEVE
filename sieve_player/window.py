@@ -332,6 +332,7 @@ class PlayerWindow(QMainWindow):
         self._driven = {}      # (node id, path input) -> (the keys its loader set, the selector's id)
         self.traces = []
         self._hooked = set()   # ids of traces already wired to the strip's cursor
+        self._gone = {}        # node -> why its bake could not be read when the document opened, for the graph's notes
 
         self.display = Display()
         self.canvas = Canvas(self.tools, broken)
@@ -411,6 +412,9 @@ class PlayerWindow(QMainWindow):
         self._unload()
         self.doc = doc
         doc.resolve(self.tools)
+        self._gone = store.missing(doc)     # asked here, where the document opens; said on the graph once there is one
+        for nid in self._gone:
+            doc.node(nid).mode = document.LIVE
         self.canvas.set_document(doc)
         self.pane.set_document(doc)
         self._hook_traces()
@@ -528,14 +532,20 @@ class PlayerWindow(QMainWindow):
 
     def _toggle_mode(self, nid):
         node = self.doc.node(nid)
-        node.mode = "live" if document.served(node) else "baked"
+        node.mode = document.LIVE if document.served(node) else document.BAKED
+        gone = store.missing(self.doc).get(nid)
+        if gone:
+            node.mode = document.LIVE
         self.sync()
+        if gone:
+            self.graph.note(nid, gone)
+            self._restate()
 
     def _restate(self):
         if self.graph is None:
             return
-        self.canvas.grayed = set(self.graph.off)
-        self.pane.show_modes()
+        self.canvas.grayed, self.canvas.stale = set(self.graph.off), set(self.graph.stale)
+        self.pane.show_modes(self.graph.stale)
         for n in self.doc.nodes:
             text = self.graph.standing(n.id)
             self.pane.set_standing(n.id, text)
@@ -727,6 +737,9 @@ class PlayerWindow(QMainWindow):
         self.decoder = decoder
         self.graph = Graph(self.doc, decoder, self.tools, open_bake=store.open_bake,
                            **({"memo_bytes": m} if (m := _gb(MEMO_ENV)) else {}))
+        for nid, why in self._gone.items():
+            self.graph.note(nid, why)
+        self._gone = {}
         # the one line a report of this video's run needs beside the log's tracebacks
         print(f"SIEVE {time.strftime('%H:%M:%S')}: opened {path}: {decoder.width}x{decoder.height} at {decoder.fps:.3f} fps, "
               f"{decoder.count} rows claimed, luma plane {'read' if decoder.luma else 'converted'}; "

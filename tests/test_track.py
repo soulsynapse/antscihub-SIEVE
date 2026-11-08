@@ -3,6 +3,7 @@ vanishes past lost_rows comes back as a new id; travel reads their steps."""
 import numpy as np
 
 from sieve_player.graph import Series, gated
+from tests.stepping import hold
 from tools import blobs, track, travel
 
 
@@ -20,7 +21,7 @@ def test_ids_follow_the_animals_and_a_long_absence_ends_a_track():
     tables[5] = table([b[5]])                                     # a misses a row
     tables[8:11] = [table([b[r]]) for r in range(8, 11)]          # then three in a row, past lost_rows
     params = {"max_step": 5.0, "lost_rows": 2, "min_rows": 3, "min_p": 0.1}
-    out = track.run(Series(tables, "k", 0, 30.0), params)
+    out = hold(track, tables, params)
     rows, signal = out["rows"], out["signal"]
     ids = lambda r, x: int(rows[r][rows[r]["cx"] == x]["id"][0])  # noqa: E731
     assert rows.dtype == object and rows[0].dtype == track.DTYPE and signal.shape == (12,)

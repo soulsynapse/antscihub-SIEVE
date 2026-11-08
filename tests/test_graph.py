@@ -349,7 +349,7 @@ def test_probe_emits_once_per_run_exclusive_of_what_the_run_reads():
     assert {(ev.kind, ev.bytes) for ev in events if ev.node == "add"} == {("run", 4 * 6)} and events[0].key == g.key("video")
     g.compute("add", 0)
     g.compute("video", 0)
-    assert [(ev.node, ev.kind) for ev in events[9:]] == [("video", "step")]   # a memo hit is not a run; the video's read is a read
+    assert [(ev.node, ev.kind) for ev in events[9:]] == [("video", "decode")]   # a memo hit is not a run; the video's read is a read
     g.sync()
     assert events[-1].kind == "sync" and len(events) == 11                     # a boundary, between the runs either side
     g.doc.node("add").params["k"] = 2

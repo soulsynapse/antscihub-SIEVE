@@ -44,51 +44,67 @@ class _Track:
         self.pos, self.seen, self.hits = pos, row, self.hits + 1
 
 
+def _link_row(live, next_id, t, r, max_step, lost_rows, min_rows, min_p, merge_ratio):
+    """Row `r`'s table linked onto `live`: the tracks still live after it, the next free id, the table
+    with its ids and the count of tracks seen in it with at least `min_rows` hits."""
+    t = np.asarray(t)
+    rec = with_column(t, "id", np.full(len(t), -1, np.int32))
+    live = [k for k in live if r - k.seen <= lost_rows]
+    pos = np.stack([t["cx"], t["cy"]], axis=1).astype(np.float64) if len(t) else np.zeros((0, 2))
+    area = t["area"].astype(np.float64) if len(t) else np.zeros(0)
+    pairs, refused = [], set()
+    for i, k in enumerate(live):
+        gap = r - k.seen
+        d = np.hypot(*(pos - k.predict(r, max_step)).T) / gap
+        p = (1.0 / (1.0 + d / max_step) ** 2) * (1.0 - 0.75 * min(1.0, (gap - 1) / max(lost_rows, 1)))
+        p[d > max_step] = 0
+        if merge_ratio > 0:
+            unfit = (area > merge_ratio * k.area) | (area < k.area / merge_ratio)
+            if np.any(unfit & (d <= max_step)):
+                refused.add(i)
+            p[unfit] = 0
+        pairs += [(p[j], i, j) for j in np.flatnonzero(p >= min_p)]
+    pairs.sort(reverse=True)
+    used_t, used_b = set(), set()
+    for p, i, j in pairs:
+        if i in used_t or j in used_b:
+            continue
+        used_t.add(i), used_b.add(j)
+        live[i].take(pos[j], r, area[j])
+        rec["id"][j] = live[i].id
+    live = [k for i, k in enumerate(live) if i in used_t or i not in refused]
+    for j in range(len(t)):
+        if j not in used_b:
+            live.append(_Track(next_id, pos[j], r, area[j]))
+            rec["id"][j] = next_id
+            next_id += 1
+    return live, next_id, rec, sum(1 for k in live if k.seen == r and k.hits >= min_rows)
+
+
 def link(tables, max_step, lost_rows, min_rows, min_p, merge_ratio=0.0):
     out, signal, live, next_id = [], np.zeros(len(tables), np.float32), [], 0
     for r, t in enumerate(tables):
-        t = np.asarray(t)
-        rec = with_column(t, "id", np.full(len(t), -1, np.int32))
-        live = [k for k in live if r - k.seen <= lost_rows]
-        pos = np.stack([t["cx"], t["cy"]], axis=1).astype(np.float64) if len(t) else np.zeros((0, 2))
-        area = t["area"].astype(np.float64) if len(t) else np.zeros(0)
-        pairs, refused = [], set()
-        for i, k in enumerate(live):
-            gap = r - k.seen
-            d = np.hypot(*(pos - k.predict(r, max_step)).T) / gap
-            p = (1.0 / (1.0 + d / max_step) ** 2) * (1.0 - 0.75 * min(1.0, (gap - 1) / max(lost_rows, 1)))
-            p[d > max_step] = 0
-            if merge_ratio > 0:
-                unfit = (area > merge_ratio * k.area) | (area < k.area / merge_ratio)
-                if np.any(unfit & (d <= max_step)):
-                    refused.add(i)
-                p[unfit] = 0
-            pairs += [(p[j], i, j) for j in np.flatnonzero(p >= min_p)]
-        pairs.sort(reverse=True)
-        used_t, used_b = set(), set()
-        for p, i, j in pairs:
-            if i in used_t or j in used_b:
-                continue
-            used_t.add(i), used_b.add(j)
-            live[i].take(pos[j], r, area[j])
-            rec["id"][j] = live[i].id
-        live = [k for i, k in enumerate(live) if i in used_t or i not in refused]
-        for j in range(len(t)):
-            if j not in used_b:
-                live.append(_Track(next_id, pos[j], r, area[j]))
-                rec["id"][j] = next_id
-                next_id += 1
-        signal[r] = sum(1 for k in live if k.seen == r and k.hits >= min_rows)
+        live, next_id, rec, signal[r] = _link_row(live, next_id, t, r, max_step, lost_rows, min_rows, min_p, merge_ratio)
         out.append(rec)
     rows = np.empty(len(out), object)
     rows[:] = out
     return rows, signal
 
 
+def _knobs(params):
+    return (float(params["max_step"]), int(params["lost_rows"]), int(params["min_rows"]), float(params["min_p"]),
+            float(params.get("merge_ratio", 0.0)))
+
+
 def run(series, params):
-    rows, signal = link(series.data, float(params["max_step"]), int(params["lost_rows"]),
-                        int(params["min_rows"]), float(params["min_p"]), float(params.get("merge_ratio", 0.0)))
+    rows, signal = link(series.data, *_knobs(params))
     return {"rows": rows, "signal": signal}
+
+
+def step(state, row, i, params):
+    live, next_id = ([], 0) if state is None else state
+    live, next_id, rec, n = _link_row(live, next_id, row, i, *_knobs(params))
+    return (live, next_id), {"rows": rec, "signal": np.float32(n)}
 
 
 def draw(painter, row, result, start, params):

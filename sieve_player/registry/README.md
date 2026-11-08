@@ -8,7 +8,12 @@ supply it. No facet has a meaningful None (pass-through is `PRODUCES = "same"`).
 `FACETS` only if something in `sieve_player` outside this package reads it. A selector, a tool
 whose `PRODUCES` is `"path"` with no `EXPECTS`, says `select` instead of `run`, and `matches` if
 it can count what its rule covers. A tool with `PATHS` has a path input per key, which a selector
-feeds; the value is called with the picked file and answers the params to merge. A module that fails
+feeds; the value is called with the picked file and answers the params to merge. A series tool
+that steps says `step` beside `run`: handed the state it returned for the row before, None at the
+first, one folded row and its index, it returns the next state and that row's share of `run`'s
+result, so the shares accumulated over a series equal `run` over it; `run` stays mandatory and is
+the oracle, tests/stepping.py holds a tool to it, and the registry only reports that `step` is
+offered. A module that fails
 to import is still an `Entry`, with the exception in `error`, so a broken tool shows up instead
 of vanishing.
 

@@ -1,6 +1,7 @@
 # Solver: a series tool that carries state from row to row, and a worker that steps it
 
-Written 2026-11-08, revised the same day after an architecture review; no box below is ticked.
+Written 2026-11-08, revised the same day after an architecture review; the first boxes were ticked
+that day.
 Read with the registry's facet table and type report (`python -m sieve_player.registry`), the live
 statement of what a tool may offer and what feeds what, and with
 docs/findings/2026-11-08-bake-window-fit.md, the measurement this spec answers. docs/spec/bake.md
@@ -63,7 +64,8 @@ Words. A node is *fed* when the plan finds it wired and typed, as today. A stepp
 *stepped* a row: handed one folded row and the state it returned for the row before, it returns the
 next state and that row's share of its result. A node that is not stepped *runs whole*, the
 contract every series tool meets today. The *prefix* is the stepped part of the chain and the
-*suffix* the rest.
+*suffix* the rest. The probe's event for the decoder decoding one row forward is "decode", renamed
+from "step" on 2026-11-08 so that the word is the tool's alone.
 
 ## A series tool may step
 
@@ -96,25 +98,20 @@ shared buffer, and a state with references into the stack would count the stack 
 registry reads facets and never calls a tool, as its README says, so the oracle is a test
 helper over the tools' own fixtures and the registry only reports that a tool offers the facet.
 
-- [ ] The registry's facet table lists the step facet with the hint line a tool adds to supply
+- [x] The registry's facet table lists the step facet with the hint line a tool adds to supply
   it, and the type report says of each series tool whether it steps; the registry's check does
   not run a tool.
   Check: a test reads the facets and the report for a tool that steps and one that does not.
-- [ ] A helper in tests/ holds a stepping tool to its oracle over a series: the row returned at
+- [x] A helper in tests/ holds a stepping tool to its oracle over a series: the row returned at
   each index equals `run`'s result at that index over the rows up to it, every field and dtype,
   and the accumulated rows equal `run`'s result over the whole; a tool that steps but peeks ahead
   fails with the first row it diverged at.
   Check: a test runs the helper over a tool that steps correctly and over one built to peek, and
   reads pass and the named row.
-- [ ] track, kinematics and transitions step and pass the helper over their existing fixtures;
+- [x] track, kinematics and transitions step and pass the helper over their existing fixtures;
   count, size, spacing, reduce, csv, tracks-csv, smooth, tracks-filter and resolve do not step and
   their behaviour is unchanged.
   Check: the three tools' tests call the helper; the others' tests pass unchanged.
-- [ ] A stepping tool's state is the tool's own and opaque to the player: nothing in the player
-  reads into it, sizes it, memoizes it, or keeps it past the walk that made it; the accumulated
-  result is the player's, counted toward the walk's bytes as the stack is.
-  Check: a test walks a stepping chain and reads the memo's entries and the probe's bytes for the
-  stepped node, finding no state held under its key and the result's bytes in the walk's count.
 
 ## The plan knows where stepping ends
 
@@ -228,6 +225,11 @@ chain's, and nothing here touches them.
 - [ ] The result cadence is one setting in one place, read by the walk over either range and not
   encoded in a worker constant per range; the time-share throttle is gone.
   Check: a test changes the setting and reads the emit count over a fixed window and over a clip.
+- [ ] A stepping tool's state is the tool's own and opaque to the player: nothing in the player
+  reads into it, sizes it, memoizes it, or keeps it past the walk that made it; the accumulated
+  result is the player's, counted toward the walk's bytes as the stack is.
+  Check: a test walks a stepping chain and reads the memo's entries and the probe's bytes for the
+  stepped node, finding no state held under its key and the result's bytes in the walk's count.
 
 Worth a look: the crossings document's window walk, cold and rewalk, through
 `sieve_player/dev/monitor.py`, beside the finding's 7 s and 4–5 s, as the second half of

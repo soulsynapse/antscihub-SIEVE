@@ -71,7 +71,7 @@ def test_the_trace_has_a_timestamp_duration_and_thread_on_every_event(tmp_path):
     assert sum(e["ph"] == "C" and e["name"] == "rss" for e in doc["traceEvents"]) == 12
     _, events, _ = read_dump(path)
     total = totals(events)
-    first = {ev.node: ev for ev in events if ev.row == 0 and ev.kind in ("run", "step")}
+    first = {ev.node: ev for ev in events if ev.row == 0 and ev.kind in ("run", "decode")}
     assert total[id(first["add"])] >= first["add"].ms + total[id(first["gray"])]           # a run's total holds its reads
     assert total[id(first["video"])] == first["video"].ms                                 # a read opens nothing
 

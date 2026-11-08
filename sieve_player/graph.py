@@ -196,7 +196,7 @@ class Event:
     node: str | None    # the node that ran, or read; None on a boundary
     row: int | None
     key: str | None     # the node's raw key, what the memo holds under
-    kind: str           # "run" | "fold" | "error" | "cancel" | "cache" | "step" | "seek" | "read" | "sync" | "evict" | "uncache" | "progress" | "dump"
+    kind: str           # "run" | "fold" | "error" | "cancel" | "cache" | "decode" | "seek" | "read" | "sync" | "evict" | "uncache" | "progress" | "dump"
     bytes: int          # the result's; what an eviction freed
     ms: float           # wall, exclusive of the runs this one opened
     t: float            # start, on the probe's clock (perf_counter); orders events across threads
@@ -470,7 +470,7 @@ class Graph:
         runs it opened in turn, so a cold row charges the decode to the video node and each tool its
         own work. The body sets `kind` and `bytes` on the yielded
         list, what only the call site knows: a tool's kind is "run", since a memo hit is not a run
-        and emits nothing; the video read's is "cache", "step" or "seek", read off the decoder's
+        and emits nothing; the video read's is "cache", "decode" or "seek", read off the decoder's
         counters; a body that raises emits "error", or "cancel" for Cancelled, with the time it took and
         no bytes, so a reader tells a failed run from one that returned. Nothing when `on_event` is unset. `sync()` emits a "sync" event into the same
         stream, a boundary with no node, row or time, and the memo and decoder cache emit "evict"
@@ -508,7 +508,7 @@ class Graph:
             with self.probe(nid, row, e.raw_key) as ev:
                 decodes, seeks = d.decodes, d.seeks
                 v = d.read(row)
-                ev[0] = "seek" if d.seeks != seeks else "step" if d.decodes != decodes else "cache"
+                ev[0] = "seek" if d.seeks != seeks else "decode" if d.decodes != decodes else "cache"
                 ev[1] = v.nbytes
             return v
         if e.bake is not None:
@@ -517,7 +517,7 @@ class Graph:
             with self.probe(nid, row, e.raw_key) as ev:
                 decodes, seeks = (d.decodes, d.seeks) if d else (0, 0)
                 v = r.read(row)
-                ev[0] = "read" if d is None else "seek" if d.seeks != seeks else "step" if d.decodes != decodes else "cache"
+                ev[0] = "read" if d is None else "seek" if d.seeks != seeks else "decode" if d.decodes != decodes else "cache"
                 ev[1] = nbytes(v)
             return v if raw or e.band is None else banded(v, e.band)
         mk = (e.raw_key, None if e.static else row)

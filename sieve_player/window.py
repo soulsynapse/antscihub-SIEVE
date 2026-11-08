@@ -340,7 +340,8 @@ class PlayerWindow(QMainWindow):
         self.pane.paramsChanged.connect(self._params_changed)
         self.pane.pinChanged.connect(self._show_pinned)
         self.pane.videoPicked.connect(self.load)
-        self.pane.bakeAsked.connect(lambda nid: self.worker is not None and self.worker.bake(nid))
+        self.pane.bakeAsked.connect(lambda nid: self.worker is not None
+                                    and self.worker.bake(nid, os.path.basename(self.doc.path or "")))
         self.pane.bakeCancelled.connect(lambda nid: self.worker is not None and self.worker.cancel_bake())
         self.pane.modeToggled.connect(self._toggle_mode)
         self.display.drawFailed.connect(self._draw_failed)

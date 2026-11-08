@@ -242,6 +242,8 @@ class Readers:
             self._retired += [self._held.pop(k) for k in list(self._held) if k not in keys]
 
     def reap(self):
+        """Closes the retired readers; the worker's alone, between computations, since a close under a read in flight pulls the file from it."""
+        assert threading.current_thread().name == "worker", "Readers.reap off the worker thread"
         with self._lock:
             gone, self._retired = self._retired, []
         for r in gone:
@@ -254,9 +256,9 @@ class Readers:
             r.close()
 
     def close(self):
-        self.reap()
+        """Closes every reader, held or retired: for the owner once the worker has stopped."""
         with self._lock:
-            gone, self._held = list(self._held.values()), {}
+            gone, self._held, self._retired = [*self._retired, *self._held.values()], {}, []
         for r in gone:
             r.close()
 

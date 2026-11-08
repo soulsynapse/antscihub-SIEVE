@@ -11,7 +11,7 @@ import os
 from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtWidgets import QComboBox, QFileDialog, QFrame, QPushButton, QScrollArea, QVBoxLayout, QWidget
 
-from .document import LIVE, OPEN, VIDEO_OUTPUT, VIDEO_OUTPUTS, VIDEO_TOOL, is_selector, mode_of, paths, video_output
+from .document import BAKED, LIVE, OPEN, VIDEO_OUTPUT, VIDEO_OUTPUTS, VIDEO_TOOL, is_selector, mode_of, paths, video_output
 from .theme import CONTROL_W, GAP, PAD, WIDE_W, Form, GlyphButton, Layer, readout
 from .widgets import Density, Trace
 
@@ -116,9 +116,10 @@ class BakeBlock(QWidget):
 
     def set_mode(self, mode, has_bake=False, stale=False):
         """`mode` as the document says it, shown as stale when the plan says so; the switch offers
-        the other side only once a bake exists."""
+        the other side only once a bake exists, and Bake is offered only live, since a bake is of the chain."""
         self.mode.setText("stale" if stale else mode or "")
         self.switch.setEnabled(has_bake)
+        self.button.setEnabled(mode != BAKED)
         self.switch.setText("Serve bake" if mode == LIVE else "Go live")
 
     def set_progress(self, done, total):

@@ -64,7 +64,7 @@ def run_bake(w, nid="bake", timeout=20.0):
     w.bakeDone.connect(lambda n, b: (done.append((n, b.key)), D.land(w.graph.doc.node(n), b)))   # as the window lands one
     w.bakeRefused.connect(lambda n, why: refused.append((n, why)))
     w.set_window(0, 2)
-    w.bake(nid)
+    w.bake(nid, os.path.basename(w.graph.doc.path or ""))     # as the window asks, naming the document
     if not w.isRunning():
         w.start()
     t = time.perf_counter()

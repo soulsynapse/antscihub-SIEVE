@@ -155,6 +155,8 @@ def test_an_upstream_change_marks_stale_live_takes_the_live_key_and_a_rebake_lan
     assert g.stale == {"bake"} and g.doc.node("bake").mode == "baked"     # stale is the plan's verdict; the saved mode is the choice
     assert (g.key("bake"), g.key("threshold")) == (key, down) and g.compute("threshold", 0).shape == (H // 2, W // 2)
     assert "mode" in D.Document.from_dict(g.doc.to_dict()).node("bake").__dict__ and D.Document.from_dict(g.doc.to_dict()).node("bake").mode == "baked"
+    done, refused = baked(g)       # a bake is of the chain, so a node serving its bake is told the way to one
+    assert not done and refused == [("bake", "serving its bake; go live to rebake")] and g.standing("bake") == refused[0][1]
     g.doc.node("bake").mode = "live"
     g.sync()
     assert not g.stale and g.key("bake") != key and g.key("threshold") != down and g.compute("threshold", 0).shape == (36, 48)

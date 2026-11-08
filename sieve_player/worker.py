@@ -100,20 +100,21 @@ class Worker(QThread):
         # is held, not its id, since a freed buffer's address comes back for the next stack of the same shape
         self._folded, self._cfolded = {}, {}
         self._bake_gen, self._bake_walk_gen = 0, 0   # bumped by bake, cancel_bake and invalidate; what the thread last acted on
-        self._bake_ask = (None, "")                   # (the node to bake, or None, and why the one running is to go)
+        self._bake_ask = (None, "", "")               # (the node to bake, or None, its document's name, and why the one running is to go)
         self._bake = None                             # the _Bake in progress
 
     # -- GUI-side calls --------------------------------------------------
-    def bake(self, nid):
-        """Write `nid`'s input to the store over its range, after the window is walked; one bake at a time."""
+    def bake(self, nid, document=""):
+        """Write `nid`'s input to the store over its range, after the window is walked; one bake at a
+        time. `document` is the name the sidecar records as the one that first wrote the file."""
         with self._cv:
-            self._bake_ask = (nid, "superseded by another bake")
+            self._bake_ask = (nid, document, "superseded by another bake")
             self._bake_gen += 1
             self._cv.notify()
 
     def cancel_bake(self):
         with self._cv:
-            self._bake_ask = (None, "cancelled")
+            self._bake_ask = (None, "", "cancelled")
             self._bake_gen += 1
             self._cv.notify()
 
@@ -147,7 +148,7 @@ class Worker(QThread):
             if b is not None:
                 e = self.graph.entry(b.nid)
                 if e is None or e.key != b.key:
-                    self._bake_ask = (None, "abandoned: a tool upstream changed")
+                    self._bake_ask = (None, "", "abandoned: a tool upstream changed")
                     self._bake_gen += 1
                 elif b.series:
                     self._clip_on = True
@@ -216,7 +217,7 @@ class Worker(QThread):
                 if want is None:
                     dirty, self._series_dirty = self._series_dirty, False
                 clip_gen, clip_on = self._clip_gen, self._clip_on
-                bake_gen, (bake_ask, bake_why) = self._bake_gen, self._bake_ask
+                bake_gen, (bake_ask, bake_doc, bake_why) = self._bake_gen, self._bake_ask
             which = "window"
             self.graph.readers.reap()
             try:
@@ -233,7 +234,7 @@ class Worker(QThread):
                     self._bake_walk_gen = bake_gen
                     self._bake_fail(bake_why)
                     if bake_ask is not None:
-                        self._bake_begin(bake_ask)
+                        self._bake_begin(bake_ask, bake_doc)
                     continue
                 b = self._bake
                 if b is not None and not b.series and not dirty and gen == self._walk_gen and self._i >= self._length:
@@ -422,13 +423,15 @@ class Worker(QThread):
             self._bake_series(results)
 
     # -- baking ----------------------------------------------------------
-    def _bake_begin(self, nid):
-        """Starts a bake of `nid`'s input, or refuses it with the reason in the node's standing: an
-        input unwired or unfed, a kind with no writer, a range that names no row, a store that
-        cannot be written. The rows and quality are the tool's to read off its params, through its
-        `bake` facet. A series bake asks for the clip walk and writes when it completes."""
+    def _bake_begin(self, nid, document=""):
+        """Starts a bake of `nid`'s input, or refuses it with the reason in the node's standing: a
+        node serving its bake, an input unwired or unfed, a kind with no writer, a range that names
+        no row, a store that cannot be written. The rows and quality are the tool's to read off its
+        params, through its `bake` facet. A series bake asks for the clip walk and writes when it completes."""
         g = self.graph
         e = g.entry(nid)
+        if e is not None and e.bake is not None:
+            return self._refuse(nid, "serving its bake; go live to rebake")
         if e is None or e.src is None:
             return self._refuse(nid, "in is unwired")
         if not e.fed:
@@ -457,7 +460,7 @@ class Worker(QThread):
             _log(f"bake {nid}: {e.key} is in the store at {store.folder}, written {side.written}; serving it")
             return self.bakeDone.emit(nid, side.bake(g.count))
         g.readers.release(e.key)        # a reader left on a file of this key would hold it against the landing on Windows
-        side = Sidecar(e.key, kind, os.path.basename(g.doc.path or ""), nid, [rows[0], rows[-1]], inc, g.fps, g.fps / inc, [], quality)
+        side = Sidecar(e.key, kind, document, nid, [rows[0], rows[-1]], inc, g.fps, g.fps / inc, [], quality)
         self._bake = _Bake(nid, e.key, kind, e.kind == "series", e.src, rows, cls(path, kind, g.fps / inc, quality), side, store)
         g.note(nid, "")
         self.baked.emit(nid, 0, len(rows))

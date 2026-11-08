@@ -235,6 +235,7 @@ frame tool still cannot drop a row, so the live node shows every row until it is
 Worth a look: the window fit on the crossings clip with rescale live, then baked, read off the
 monitor's store lanes, since that is the claim this spec rests on and the one figure that says
 whether the branch did what it was for. It belongs in a finding beside the window-fit one.
+Measured 2026-11-08: docs/findings/2026-11-08-bake-window-fit.md.
 
 ## Downsample retired
 

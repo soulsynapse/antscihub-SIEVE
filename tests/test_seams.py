@@ -64,6 +64,20 @@ def test_a_tool_imports_what_tools_share_and_never_another_tool():
     assert not bad, bad
 
 
+def test_the_worker_walks_the_clip_with_no_twin_of_a_window_field_or_method():
+    """One _Walk serves the window and the clip; a private worker name beside its `_c` or `_clip`
+    prefixed twin is the second copy of the walk coming back."""
+    tree = ast.parse((PKG / "worker.py").read_text(encoding="utf-8"))
+    names = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name) and node.value.id == "self":
+            names.add(node.attr)
+        elif isinstance(node, ast.FunctionDef):
+            names.add(node.name)
+    twins = {n for n in names if n.startswith("_") and (f"_c{n[1:]}" in names or f"_clip{n}" in names)}
+    assert not twins, twins
+
+
 def test_a_module_header_states_the_module_not_its_history():
     def header_lines(path):
         doc = ast.get_docstring(ast.parse(path.read_text(encoding="utf-8")), clean=False) or ""

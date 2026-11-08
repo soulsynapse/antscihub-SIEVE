@@ -1,13 +1,13 @@
 """The one thread that runs tools. Serves display requests first, walks the loop window, bakes a node
 one row at a time in the time the window leaves, and walks the whole clip when asked after that.
 
-The clip walk is the window walk over the clip without the densities, behind a finished window
-walk so what is viewed never waits on it; a frame change abandons it and its rows, and a bake whose key it changed. A
+The window walk and the clip walk are one job, _Walk, over two ranges: the window's keeps the
+densities and reports to the probe, the clip's runs behind a finished window walk so what is viewed
+never waits on it, and a frame change abandons it and its rows, and a bake whose key it changed. A
 stack holds images by shape, one row each, and tables in an object array, one table a row, so a
 walked node handing out a table never reads as a graph changing shape; there is none without a
-series chain, and either walk stops at STACK_BYTES. The clip's chain runs over the rows so far only
-once the walk has run CHAIN_SHARE times as long as the chain's last run. A bake on a frame wire
-streams the node's input into a store writer, holding only the row it writes; on a series wire it writes from the clip walk's result."""
+series chain, and either range stops at STACK_BYTES. A bake on a frame wire streams the node's
+input into a store writer, holding only the row it writes; on a series wire it writes from the clip walk's result."""
 import os
 import sys
 import threading
@@ -28,6 +28,41 @@ STACK_BYTES = 512 << 20   # the most a walk's stack, the window's or the clip's,
 CHAIN_SHARE = 9           # walking between two clip chain runs takes at least this many times the last run
 STOP_PATIENCE_MS = 10_000  # how long stop() waits before saying on stderr what it is waiting for
 LOW_DISK = 256 << 20      # a bake stops, whole, when the store's disk has less than this free, rather than when the writer hits the wall
+
+
+@dataclass
+class _Walk:
+    """One range of the walk, the window's or the clip's: what it was asked under and walked under,
+    the rows it holds, and the signals its progress, chain result and refusal go out on."""
+    name: str
+    densities: bool     # whether the walk folds and hands out each frame node's plane densities
+    probes: bool        # whether its rows reach the probe as progress events; the monitor's walk scope is the window's
+    share: float        # the chain runs again only once walking since its last run took this many times as long; 0 runs it at every cadence row
+    progress: object    # Signal(int, int): rows done, rows in the range
+    ready: object       # Signal(object, int, float): the chain's {node: result}, start, fps
+    refused: object     # Signal(str): the range closed short, and why
+    asked: int = 0      # bumped under the worker's lock by anything that restarts this range
+    gen: int = -1       # what the stack was walked under
+    start: int = 0
+    length: int = 0
+    i: int = 0
+    bytes: int = 0
+    stack: object = None
+    dens: dict = field(default_factory=dict)      # node -> (length, BINS) counts, for the planes the walk computes
+    # fold id -> (the stack's buffer, rows, that head's own folding of the stack); the buffer is held, not
+    # its id, since a freed buffer's address comes back for the next stack of the same shape
+    folded: dict = field(default_factory=dict)
+    due: float = 0.0    # when the chain may next run, on perf_counter's clock
+
+    def begin(self, gen, start, length):
+        """Starts over under `gen` over `length` rows from `start`, dropping every row held."""
+        self.gen, self.start, self.length = gen, start, length
+        self.i = self.bytes = 0
+        self.due = 0.0
+        self.stack, self.dens, self.folded = None, {}, {}
+
+    def pending(self):
+        return self.asked != self.gen or self.i < self.length
 
 
 @dataclass
@@ -78,27 +113,18 @@ class Worker(QThread):
     bakeRefused = Signal(str, str)            # the bake did not start or did not finish, and why; the node's standing says the same
 
     def __init__(self, graph, every=30, store=None):
-        """`store`, a store.Store, is where a bake lands; the current one unless another is handed in."""
+        """`every` is the cadence, in rows walked, at which either range runs its chain; `store`, a
+        store.Store, is where a bake lands, the current one unless another is handed in."""
         super().__init__()
         self.graph, self.every, self.store = graph, every, current() if store is None else store
         self._cv = threading.Condition()
         self._want = None
         self._stop = False
-        self._gen = 0                         # bumped by anything that restarts the walk
         self._series_dirty = False
         self._window = (0, 0)
-        self._walk_gen = -1
-        self._start = self._length = self._i = self._bytes = 0
-        self._stack = None
-        self._dens = {}                       # node -> (length, BINS) counts, for the planes the walk computes
-        self._clip_gen, self._clip_walk_gen = 0, 0   # bumped by walk_clip and invalidate; what the clip stack was walked under
+        self._win = _Walk("window", True, True, 0, self.walked, self.seriesReady, self.walkRefused)
+        self._clip = _Walk("clip", False, False, CHAIN_SHARE, self.clipWalked, self.clipReady, self.clipRefused)
         self._clip_on = False                 # whether a clip walk is wanted
-        self._clen = self._ci = self._cbytes = 0
-        self._cstack = None
-        self._clip_due = 0.0                  # when the clip's chain may next run, on perf_counter's clock
-        # fold id -> (the stack's buffer, rows, that head's own folding of the stack), one dict per stack; the buffer
-        # is held, not its id, since a freed buffer's address comes back for the next stack of the same shape
-        self._folded, self._cfolded = {}, {}
         self._bake_gen, self._bake_walk_gen = 0, 0   # bumped by bake, cancel_bake and invalidate; what the thread last acted on
         self._bake_ask = (None, "", "")               # (the node to bake, or None, its document's name, and why the one running is to go)
         self._bake = None                             # the _Bake in progress
@@ -132,7 +158,7 @@ class Worker(QThread):
     def set_window(self, start, length):
         with self._cv:
             self._window = (start, length)
-            self._gen += 1
+            self._win.asked += 1
             self._cv.notify()
 
     def invalidate(self):
@@ -141,8 +167,8 @@ class Worker(QThread):
         a change upstream of it; one elsewhere in the graph leaves it writing, and a series bake
         asks for its clip walk again."""
         with self._cv:
-            self._gen += 1
-            self._clip_gen += 1
+            self._win.asked += 1
+            self._clip.asked += 1
             self._clip_on = False
             b = self._bake
             if b is not None:
@@ -163,7 +189,7 @@ class Worker(QThread):
     def walk_clip(self):
         """Walk the whole clip, from its first row, once the window is walked."""
         with self._cv:
-            self._clip_gen += 1
+            self._clip.asked += 1
             self._clip_on = True
             self._cv.notify()
 
@@ -184,12 +210,6 @@ class Worker(QThread):
             self.wait()
 
     # -- thread side -----------------------------------------------------
-    def _pending(self):
-        return self._gen != self._walk_gen or self._i < self._length
-
-    def _clip_pending(self):
-        return self._clip_gen != self._clip_walk_gen or self._ci < self._clen
-
     def _bake_pending(self):
         b = self._bake
         return self._bake_gen != self._bake_walk_gen or (b is not None and not b.series and b.i < len(b.rows))
@@ -203,20 +223,21 @@ class Worker(QThread):
             raise
 
     def _serve(self):
+        win, clip = self._win, self._clip
         while True:
             with self._cv:
-                while not (self._stop or self._want is not None or self._series_dirty or self._pending()
-                           or self._clip_pending() or self._bake_pending()):
+                while not (self._stop or self._want is not None or self._series_dirty or win.pending()
+                           or clip.pending() or self._bake_pending()):
                     self._cv.wait()
                 if self._stop:
                     self._bake_fail("the video was closed")
                     return
                 want, self._want = self._want, None
-                gen, (start, length) = self._gen, self._window
+                gen, (start, length) = win.asked, self._window
                 dirty = False
                 if want is None:
                     dirty, self._series_dirty = self._series_dirty, False
-                clip_gen, clip_on = self._clip_gen, self._clip_on
+                clip_gen, clip_on = clip.asked, self._clip_on
                 bake_gen, (bake_ask, bake_doc, bake_why) = self._bake_gen, self._bake_ask
             which = "window"
             self.graph.readers.reap()
@@ -237,63 +258,61 @@ class Worker(QThread):
                         self._bake_begin(bake_ask, bake_doc)
                     continue
                 b = self._bake
-                if b is not None and not b.series and not dirty and gen == self._walk_gen and self._i >= self._length:
+                if b is not None and not b.series and not dirty and gen == win.gen and win.i >= win.length:
                     which = "bake"
                     self.graph.serving("bake")
                     self._bake_one()
                     continue
+                count = self.graph.count
                 if not self.graph.fed(self.graph.walk):
                     # nothing reaches a walked node: either nothing to do until the next change, or a served
                     # series node heads the chain, which then runs on the file's rows with no stack walked
                     headed = self._served_head()
-                    if gen != self._walk_gen:
-                        self._walk_gen, self._bytes, self._stack, self._dens, self._folded = gen, 0, None, {}, {}
-                        self._start = max(0, min(start, self.graph.count - 1))
-                        self._i = self._length = max(0, min(length, self.graph.count - self._start))
+                    if gen != win.gen:
+                        s = max(0, min(start, count - 1))
+                        win.begin(gen, s, max(0, min(length, count - s)))
+                        win.i = win.length
                         if headed:
-                            self.walked.emit(self._i, self._length)
-                            self._emit_series()
+                            win.progress.emit(win.i, win.length)
+                            self._emit(win)
                     elif dirty and headed:
-                        self._emit_series()
-                    if clip_gen != self._clip_walk_gen:
-                        self._clip_walk_gen, self._cstack, self._cbytes, self._cfolded = clip_gen, None, 0, {}
-                        self._ci = self._clen = self.graph.count if clip_on and headed else 0
-                        if self._clen:
-                            self.clipWalked.emit(self._ci, self._clen)
-                            self._emit_clip()
+                        self._emit(win)
+                    if clip_gen != clip.gen:
+                        clip.begin(clip_gen, 0, count if clip_on and headed else 0)
+                        clip.i = clip.length
+                        if clip.length:
+                            clip.progress.emit(clip.i, clip.length)
+                            self._emit(clip)
                         else:
-                            self.clipReady.emit({}, 0, self.graph.fps)
-                            self.clipWalked.emit(0, 0)
-                    elif self._ci < self._clen:
-                        self._clen = self._ci
-                        self.clipWalked.emit(self._ci, self._clen)
+                            clip.ready.emit({}, 0, self.graph.fps)
+                            clip.progress.emit(0, 0)
+                    elif clip.i < clip.length:
+                        clip.length = clip.i
+                        clip.progress.emit(clip.i, clip.length)
                     continue
-                if gen != self._walk_gen:
-                    self._walk_gen, self._i, self._bytes, self._stack, self._dens, self._folded = gen, 0, 0, None, {}, {}
-                    self._start = max(0, min(start, self.graph.count - 1))
-                    self._length = max(0, min(length, self.graph.count - self._start))
-                if dirty and self._i:
-                    self._emit_series()
-                    if self._ci:
-                        self._emit_clip()
+                if gen != win.gen:
+                    s = max(0, min(start, count - 1))
+                    win.begin(gen, s, max(0, min(length, count - s)))
+                if dirty and win.i:
+                    self._emit(win)
+                    if clip.i:
+                        self._emit(clip)
                     continue
-                if self._i < self._length:
-                    self._walk_one()
+                if win.i < win.length:
+                    self._walk_one(win)
                     continue
                 which = "clip"
-                if clip_gen != self._clip_walk_gen:
-                    self._clip_walk_gen, self._ci, self._cstack, self._cbytes, self._clip_due = clip_gen, 0, None, 0, 0.0
-                    self._cfolded = {}
-                    self._clen = self.graph.count if clip_on else 0
+                if clip_gen != clip.gen:
+                    clip.begin(clip_gen, 0, count if clip_on else 0)
                     if not clip_on:
-                        self.clipReady.emit({}, 0, self.graph.fps)
-                    self.clipWalked.emit(self._ci, self._clen)
-                elif not clip_on and self._ci < self._clen:
-                    self._clen = self._ci       # stopped: the rows it has stand, and the count says so
-                    self.clipWalked.emit(self._ci, self._clen)
+                        clip.ready.emit({}, 0, self.graph.fps)
+                    clip.progress.emit(clip.i, clip.length)
+                elif not clip_on and clip.i < clip.length:
+                    clip.length = clip.i        # stopped: the rows it has stand, and the count says so
+                    clip.progress.emit(clip.i, clip.length)
                     self._bake_fail("the clip walk was stopped short of the clip")
-                if clip_on and self._ci < self._clen:
-                    self._clip_one()
+                if clip_on and clip.i < clip.length:
+                    self._walk_one(clip)
             except Cancelled:
                 if which == "bake":
                     self._bake_fail("abandoned: the graph moved on")
@@ -304,15 +323,8 @@ class Worker(QThread):
                     pass            # the display asked past the end; the window follows the count and asks again
                 elif which == "bake":
                     self._bake_fail(f"the stream ended at row {self.graph.count}, inside the range")
-                elif which == "window":
-                    self._length = self._i  # stream ended early; close the window there
-                    self.walked.emit(self._i, self._length)
-                    self.graph.progress(self._i, self._length)
-                    self._emit_series()
                 else:
-                    self._clen = self._ci
-                    self.clipWalked.emit(self._ci, self._clen)
-                    self._emit_clip()
+                    self._close(clip if which == "clip" else win)
             except Exception as e:
                 traceback.print_exc()
                 nid = getattr(e, "sieve_node", "")
@@ -322,104 +334,75 @@ class Worker(QThread):
                     b = self._bake
                     row = b.rows[b.i] if b is not None and b.i < len(b.rows) else "?"
                     self._bake_fail(f"{nid or 'the writer'} raised at row {row}: {type(e).__name__}: {e}")
-                elif which == "window":
-                    self.failed.emit(self._start + self._i, nid)
-                    self._i = self._length  # abandon this walk; the next gen bump restarts it
                 else:
-                    self.failed.emit(self._ci, nid)
-                    self._clen = self._ci
-                    self.clipWalked.emit(self._ci, self._clen)
+                    job = clip if which == "clip" else win
+                    self.failed.emit(job.start + job.i, nid)
+                    if job is win:
+                        job.i = job.length      # abandoned where it stands, the count still the window's; the next ask restarts it
+                    else:
+                        job.length = job.i      # closed at the rows it has, so the header reads it done
+                        job.progress.emit(job.i, job.length)
 
-    def _walk_one(self):
-        row = self._start + self._i
+    def _walk_one(self, job):
+        row = job.start + job.i
         out = np.asarray(self.graph.walk_row(row))
-        planes = {nid: v for nid in self.graph.frame_nodes() if (v := self.graph.density(nid, row)) is not None}
+        planes = {nid: v for nid in self.graph.frame_nodes() if (v := self.graph.density(nid, row)) is not None} if job.densities else {}
         stacked = bool(self.graph.chain)      # without a chain nothing reads the stack, and the rows are not held
-        if self._i and ((self._stack is not None) != stacked or (stacked and not _fits(self._stack, out))
-                        or planes.keys() != self._dens.keys()):
-            self._stack, self._dens, self._i, self._bytes = None, {}, 0, 0   # the nodes or the shape changed under the walk; start over
+        if job.i and ((job.stack is not None) != stacked or (stacked and not _fits(job.stack, out))
+                      or planes.keys() != job.dens.keys()):
+            job.stack, job.dens, job.i, job.bytes = None, {}, 0, 0   # the nodes or the shape changed under the walk; start over
             return
-        if not self._i:
-            if stacked and self._length * nbytes(out) > STACK_BYTES:
-                self._refuse_walk(f"the window's stack would be {self._length * nbytes(out) / 2**30:.1f} GB; "
-                                  f"{', '.join(self.graph.heads)} do not share a fold()")
+        if not job.i:
+            if stacked and job.length * nbytes(out) > STACK_BYTES:
+                self._refuse_walk(job, f"the {job.name}'s stack would be {job.length * nbytes(out) / 2**30:.1f} GB; "
+                                       f"{', '.join(self.graph.heads)} do not share a fold()")
                 return
-            self._stack = _stack_for(self._length, out) if stacked else None
-            self._dens = {nid: np.zeros((self._length, density.BINS), np.uint32) for nid in planes}
+            job.stack = _stack_for(job.length, out) if stacked else None
+            job.dens = {nid: np.zeros((job.length, density.BINS), np.uint32) for nid in planes}
         if stacked:
-            self._stack[self._i] = out
-            self._bytes += nbytes(out)
+            job.stack[job.i] = out
+            job.bytes += nbytes(out)
         for nid, v in planes.items():
-            self._dens[nid][self._i] = v
-        self._i += 1
-        if self._bytes > STACK_BYTES:
-            self._refuse_walk(f"the window's stack reached {self._bytes / 2**30:.1f} GB at row {row}; the rows walked stand")
+            job.dens[nid][job.i] = v
+        job.i += 1
+        if job.bytes > STACK_BYTES:
+            self._refuse_walk(job, f"the {job.name}'s stack reached {job.bytes / 2**30:.1f} GB at row {row}; the rows walked stand")
             return
-        self.walked.emit(self._i, self._length)
-        self.graph.progress(self._i, self._length)
-        if self._i % self.every == 0 or self._i == self._length:
-            self._emit_series()
+        job.progress.emit(job.i, job.length)
+        if job.probes:
+            self.graph.progress(job.i, job.length)
+        if job.i == job.length or (job.i % self.every == 0 and time.perf_counter() >= job.due):
+            self._emit(job)
 
-    def _refuse_walk(self, why):
-        """Closes the window walk at the rows it has, as a short stream does, and says why."""
-        self._length = self._i
-        self.walked.emit(self._i, self._length)
-        self.graph.progress(self._i, self._length)
-        self._emit_series()
-        self.walkRefused.emit(why)
+    def _close(self, job):
+        job.length = job.i
+        job.progress.emit(job.i, job.length)
+        if job.probes:
+            self.graph.progress(job.i, job.length)
+        self._emit(job)
 
-    def _clip_one(self):
-        out = np.asarray(self.graph.walk_row(self._ci))
-        if self._cstack is not None and not _fits(self._cstack, out):
-            self._cstack, self._ci, self._cbytes = None, 0, 0
-            return
-        if self._cstack is None:
-            if self._clen * nbytes(out) > STACK_BYTES:
-                why = (f"the clip's stack would be {self._clen * nbytes(out) / 2**30:.1f} GB; "
-                       f"{', '.join(self.graph.heads)} do not share a fold()")
-                self.clipRefused.emit(why)
-                self._bake_fail(f"the clip walk was refused: {why}")
-                self._clen = 0
-                self.clipWalked.emit(0, 0)
-                return
-            self._cstack = _stack_for(self._clen, out)
-        self._cstack[self._ci] = out
-        self._cbytes += nbytes(out)
-        self._ci += 1
-        if self._cbytes > STACK_BYTES:
-            self._clen = self._ci       # tables grew past the first row's forecast: the rows it has stand, as after stop_clip
-            self.clipWalked.emit(self._ci, self._clen)
-            self._emit_clip()
-            why = f"the clip's stack reached {self._cbytes / 2**30:.1f} GB at row {self._ci}; the rows walked stand"
-            self.clipRefused.emit(why)
+    def _refuse_walk(self, job, why):
+        self._close(job)
+        job.refused.emit(why)
+        if job is self._clip:
             self._bake_fail(f"the clip walk was refused: {why}")
-            return
-        self.clipWalked.emit(self._ci, self._clen)
-        if self._ci == self._clen or (self._ci % self.every == 0 and time.perf_counter() >= self._clip_due):
-            self._emit_clip()
 
     def _served_head(self):
         return any(self.graph.entry(h).bake is not None for h in self.graph.heads)
 
-    def _emit_series(self):
-        if not self._i:
+    def _emit(self, job):
+        if not job.i:
             return
-        self.densityReady.emit({nid: d[: self._i] for nid, d in self._dens.items()}, self._start)
-        if self._stack is None and not self._served_head():
-            return
-        results = self._run_chain(None if self._stack is None else self._stack[: self._i], self._start, self._i, self._folded)
+        if job.densities:
+            self.densityReady.emit({nid: d[: job.i] for nid, d in job.dens.items()}, job.start)
+        results = None
+        if job.stack is not None or self._served_head():
+            t = time.perf_counter()
+            results = self._run_chain(None if job.stack is None else job.stack[: job.i], job.start, job.i, job.folded)
+            job.due = time.perf_counter() + job.share * (time.perf_counter() - t)
         if results is not None:
-            self.seriesReady.emit(results, self._start, self.graph.fps)
-
-    def _emit_clip(self):
-        if not self._ci:
-            return
-        t = time.perf_counter()
-        results = self._run_chain(None if self._cstack is None else self._cstack[: self._ci], 0, self._ci, self._cfolded)
-        self._clip_due = time.perf_counter() + CHAIN_SHARE * (time.perf_counter() - t)
-        if results is not None:
-            self.clipReady.emit(results, 0, self.graph.fps)
-        if self._bake is not None and self._bake.series and self._ci == self._clen:
+            job.ready.emit(results, job.start, self.graph.fps)
+        if job is self._clip and self._bake is not None and self._bake.series and job.i == job.length:
             self._bake_series(results)
 
     # -- baking ----------------------------------------------------------
@@ -468,7 +451,7 @@ class Worker(QThread):
              f"{store.free() >> 20} MB free")
         if self._bake.series:
             with self._cv:
-                self._clip_gen += 1
+                self._clip.asked += 1
                 self._clip_on = True
 
     def _refuse(self, nid, why):

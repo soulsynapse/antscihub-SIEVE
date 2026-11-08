@@ -513,6 +513,40 @@ def test_the_clip_walk_runs_behind_the_window_and_a_frame_change_drops_it():
     assert clips[-1] == ({}, 0) and walked[-1] == (0, 0)
 
 
+def test_the_window_and_the_clip_are_one_walk_over_two_ranges():
+    """Under the probe the clip walk runs each node as the window walk does: a frame node once per
+    row the memo does not hold, the chain at each cadence row and at the range's end; the densities
+    are the window's alone. The clip's time-share gate is set to nothing so the cadence reads exactly."""
+    from PySide6.QtWidgets import QApplication
+    from sieve_player.worker import Worker
+    QApplication.instance() or QApplication([])
+    head = tool("head", kind="series", produces="signal")
+    head.run = lambda series, params: {"signal": np.asarray(series.data, np.float64).reshape(len(series.data), -1)[:, 0]}
+    head.fold = lambda frame: np.asarray([float(frame.mean())])
+    doc = D.from_tools([gray, head])
+    g = Graph(doc, Dec(), {**TOOLS, "head": head})
+    events = []
+    g.on_event = events.append
+    w = Worker(g, every=3)
+    w._clip.share = 0
+    clips = []
+    w.clipReady.connect(lambda r, s, fps: clips.append(r))
+    w.set_window(0, 6)
+    w.walk_clip()
+    w.start()
+    for _ in range(500):
+        QApplication.processEvents()
+        if clips and len(clips[-1].get("head", {}).get("signal", ())) == 10:
+            break
+        time.sleep(0.01)
+    w.stop()
+    runs = [(ev.node, ev.row) for ev in events if ev.kind == "run" and ev.serves == "walk"]
+    assert [r for n, r in runs if n == "gray"] == list(range(10))              # the window's six, then the clip's four the memo lacks
+    assert [r for n, r in runs if n == "head"] == [2, 5, 2, 5, 8, 9]
+    assert [ev.row for ev in events if ev.kind == "fold"] == list(range(6))
+    assert [(ev.row, ev.length) for ev in events if ev.kind == "progress"] == [(i, 6) for i in range(1, 7)]
+
+
 def test_a_tool_raising_indexerror_fails_the_walk_and_only_the_stream_end_closes_it():
     """The worker closes a window early on EndOfStream alone; a tool's own IndexError is a failure
     said on the node, never a shorter clip with a clean trace."""
@@ -610,7 +644,7 @@ def test_a_shown_table_walks_without_a_series_node():
             break
         time.sleep(0.01)
     w.stop()
-    assert walked[-1] == (6, 6) and len(walked) <= 7 and w._stack is None     # nothing reads a stack, so none is held
+    assert walked[-1] == (6, 6) and len(walked) <= 7 and w._win.stack is None     # nothing reads a stack, so none is held
 
 
 def test_a_window_stack_stops_at_the_byte_limit_as_the_clip_stack_does():

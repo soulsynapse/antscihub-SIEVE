@@ -1,7 +1,7 @@
 # Solver: a series tool that carries state from row to row, and a worker that steps it
 
-Written 2026-11-08, revised the same day after an architecture review; the first deliverable and
-the plan's verdict were ticked that day.
+Written 2026-11-08, revised the same day after an architecture review; the first deliverable, the
+plan's verdict and the one-walk refactor were ticked that day.
 Read with the registry's facet table and type report (`python -m sieve_player.registry`), the live
 statement of what a tool may offer and what feeds what, and with
 docs/findings/2026-11-08-bake-window-fit.md, the measurement this spec answers. docs/spec/bake.md
@@ -177,11 +177,11 @@ seams test is the cheapest witness that the drift does not come back. The Open i
 bake writing row by row would give the clip range no stack at all; the job holding a stack or none
 is the shape that leaves that door open without building it.
 
-- [ ] The window walk and the clip walk are one job with one state and one reset, instantiated
+- [x] The window walk and the clip walk are one job with one state and one reset, instantiated
   over the window with densities and over the clip without, each under its own cadence rule.
   Check: a test walks a window and then a clip under the probe and reads the same per-node run
   pattern over both up to cadence; a seams test reads no clip-only twin of a walk field or method.
-- [ ] Everything the clip walk promised stands: it waits behind the window walk, a frame change
+- [x] Everything the clip walk promised stands: it waits behind the window walk, a frame change
   abandons it and its rows, stopping it short leaves its rows standing with the count saying so,
   and a series bake writing from its result is abandoned with it.
   Check: tests/test_baking.py's clip-walk cases pass unchanged.

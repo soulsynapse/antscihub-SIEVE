@@ -35,6 +35,10 @@ A tool is one Python file with `SIEVE_TOOL = True` and a `NAME`. Everything else
 or may not declare; `sieve_player/registry/README.md` says how tools are found and what a missing
 facet means, and `python -m sieve_player.registry` lists the facets the player reads.
 
+A tool does one thing, and a wanted variation is a second tool wired beside it, never a knob on
+the first: applying one node's output to another's is a node of its own that reads both, not a
+setting hidden on either. Chains get longer; tools do not get wider.
+
 ```python
 # a frame tool: one row in, one array out
 NAME = "threshold"; KIND = "frame"; EXPECTS = "gray"; PRODUCES = "mask"
@@ -51,6 +55,8 @@ def run(series, params) -> dict               # series.data is (T, ...), the rea
                                               # a (T,) array; the gate is the player's, never the tool's
 def settings(parent=None) -> ParamWidget      # optionally show_result(result, start, fps), set_playhead(row),
                                               # set_source(path, fps): the video, for a tool that writes a file (csv)
+def step(state, row, i, params) -> (state, dict)  # optional: the tool steps row by row where the plan lets it,
+                                              # state None at the first row; equal to run over the same rows (travel)
 
 # a series tool reading another: EXPECTS = "signal", and series.data is the upstream result's
 # "signal" with the rows its band shuts out zeroed (smooth); or, when the upstream result also
@@ -69,7 +75,7 @@ NAME = "file"; KIND = "selector"; PRODUCES = "path"
 def select(folder, params) -> str | None      # folder is the document's
 ```
 
-How the player treats a tool, as `sieve_player/graph.py`, `pane.py` and `window.py` currently do:
+How the player treats a tool, as `sieve_player/graph.py`, `pane.py` and `window.py` do:
 
 - Types are strings the player compares for equality; it attaches no meaning to them beyond the
   video node producing `"bgr"`, or `"gray"` when its `output` param says so. That one param is the
@@ -138,6 +144,6 @@ upstream, and the display shows what the memo holds.
 
 Each module's docstring says what it does: `document` (the saved form; imports no Qt or cv2),
 `graph` (the runtime), `worker`, `canvas`, `pane`, `window`, `timeline`, `theme` (the design
-language from `mock-up/design-language`). `tests/test_seams.py` checks which imports which.
+language). `tests/test_seams.py` checks which imports which.
 
 This file describes the code; where the two disagree, the code is what SIEVE does.

@@ -16,6 +16,7 @@ from sieve_player import document as D
 from sieve_player import registry
 from sieve_player.graph import Graph, nbytes
 from sieve_player.plan import base_key, plan
+from sieve_player.worker import run_chain
 from sieve_player.registry.__main__ import check, report
 from tests import stepping
 from tools import bake, blobs, gray, kinematics, smooth, track, tracks_filter, transitions
@@ -170,7 +171,7 @@ def test_the_walk_steps_the_prefix_once_a_row_runs_the_suffix_per_emit_and_match
     assert [len(r["track"]["signal"]) for r in got] == [3, 6, 7]
     for r in got:
         n = len(r["track"]["signal"])
-        assert equal(r, w._run_chain(w._win.stack[:n], 0, n, {}))
+        assert equal(r, run_chain(w.graph, w._win.stack[:n], 0, n, {}))
     raw = g.entry("track").raw_key
     assert not [k for d in (g.memo._big, g.memo._small, g.memo._pinned) for k in d if k[0] == raw]
     stack_bytes = sum(nbytes(row) for row in w._win.stack)
@@ -192,7 +193,7 @@ def test_the_walk_steps_the_prefix_once_a_row_runs_the_suffix_per_emit_and_match
     wait_for(lambda: got)
     steps, runs = steps_and_runs(events, g.chain)
     assert [r for n, r in steps if n == "track"] == list(range(7)) and [r for n, r in steps if n == "kinematics"] == list(range(7))
-    assert runs == [("tracks-filter", 6)] and equal(got[-1], w._run_chain(w._win.stack, 0, 7, {}))
+    assert runs == [("tracks-filter", 6)] and equal(got[-1], run_chain(w.graph, w._win.stack, 0, 7, {}))
     events.clear()
     got.clear()
     doc.node("tracks-filter").params["lo"] = "2"
@@ -200,7 +201,7 @@ def test_the_walk_steps_the_prefix_once_a_row_runs_the_suffix_per_emit_and_match
     w.rerun_series()
     wait_for(lambda: got)
     steps, runs = steps_and_runs(events, g.chain)
-    assert steps == [] and runs == [("tracks-filter", 6)] and equal(got[-1], w._run_chain(w._win.stack, 0, 7, {}))
+    assert steps == [] and runs == [("tracks-filter", 6)] and equal(got[-1], run_chain(w.graph, w._win.stack, 0, 7, {}))
     w.stop()
 
 
@@ -230,7 +231,7 @@ def test_a_served_series_heads_rows_step_the_chain_under_it_one_at_a_time(in_sto
     assert sorted(steps) == sorted([(n, r) for n in ("bake", "track") for r in range(10)]) and runs == []
     assert not [ev for ev in events if ev.node in ("gray", "table") and ev.serves == "walk"]
     assert [len(r["track"]["signal"]) for r in got] == [4, 8, 10]
-    assert equal(got[-1], w._run_chain(None, 0, 10, {}))
+    assert equal(got[-1], run_chain(w.graph, None, 0, 10, {}))
     w.stop()
     g.close()
 

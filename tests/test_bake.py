@@ -8,7 +8,7 @@ from sieve_player import document as D
 from sieve_player.graph import Graph
 from sieve_player.registry import discover, types
 from sieve_player.registry.__main__ import VIDEO
-from sieve_player.worker import Worker
+from sieve_player.worker import run_chain
 from tests import stepping
 from tests.test_graph import Dec
 from tools import bake, blobs, gray, reduce, smooth, threshold
@@ -31,7 +31,7 @@ def chain(*names):
 
 def series(g):
     stack = np.stack([g.walk_row(r) for r in range(ROWS)])
-    return Worker(g)._run_chain(stack, 0, ROWS, {})
+    return run_chain(g, stack, 0, ROWS, {})
 
 
 def test_the_identity_on_a_gray_a_blobs_and_a_signal_wire():

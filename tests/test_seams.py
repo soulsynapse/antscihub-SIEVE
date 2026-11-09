@@ -109,3 +109,22 @@ def test_the_scheduler_alone_begins_a_job_and_nothing_compares_a_generation():
         return {id(n) for n in ast.walk(node) if isinstance(n, ast.Attribute) and n.attr in ("asked", "due") and isinstance(n.ctx, ast.Load)}
 
     assert reads(tree) == reads(turn)
+
+
+def test_a_job_holds_what_it_reads_and_emits_and_reaches_nothing_through_the_worker():
+    """A job is built from the graph, the cadence and the signals it is handed, named, so a test can
+    drive one with a graph and a few signals and no QThread: no field or attribute of a job names the
+    worker, the chain run and the served-head test are functions over a graph, and a _Walk is
+    constructed with every field past the graph named."""
+    tree = ast.parse((PKG / "worker.py").read_text(encoding="utf-8"))
+    jobs = [n for n in tree.body if isinstance(n, ast.ClassDef) and n.name in ("_Scrub", "_Walk", "_Bake")]
+    assert len(jobs) == 3
+    for job in jobs:
+        named = {n.attr for n in ast.walk(job) if isinstance(n, ast.Attribute) and isinstance(n.value, ast.Name) and n.value.id == "self"}
+        named |= {n.target.id for n in job.body if isinstance(n, ast.AnnAssign)}
+        assert not named & {"w", "worker"}, (job.name, named & {"w", "worker"})
+        assert "Worker" not in ast.unparse(job), job.name
+    functions = {n.name for n in tree.body if isinstance(n, ast.FunctionDef)}
+    assert {"run_chain", "served_head"} <= functions
+    walks = [n for n in ast.walk(tree) if isinstance(n, ast.Call) and ast.unparse(n.func) == "_Walk"]
+    assert walks and all(len(n.args) <= 1 for n in walks), [ast.unparse(n) for n in walks]

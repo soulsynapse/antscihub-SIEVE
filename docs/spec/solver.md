@@ -2,8 +2,7 @@
 
 Written 2026-11-08, revised the same day after an architecture review; the first five
 deliverables were ticked that day, the worker's last. The two after it were added the same day,
-from an architect review of the branch at b588358c; the wait predicate's was ticked that day and
-the last is open.
+from an architect review of the branch at b588358c and ticked that day; every box is ticked.
 Read with the registry's facet table and type report (`python -m sieve_player.registry`), the live
 statement of what a tool may offer and what feeds what, and with
 docs/findings/2026-11-08-bake-window-fit.md, the measurement this spec answers. docs/spec/bake.md
@@ -331,13 +330,13 @@ are built by position at `Worker.__init__`, two booleans and three signals in a 
 rebuild of their construction should name. The seams test pins `begin` to `_serve` and no
 generation comparison anywhere, and both pins stand through this.
 
-- [ ] Each job holds the graph it reads, the cadence and the signals it emits, and reaches nothing
+- [x] Each job holds the graph it reads, the cadence and the signals it emits, and reaches nothing
   through the worker; the chain run and the served-head test are functions over a graph; the
   walks are constructed with every field named.
   Check: the seams test reads no field or attribute of a job that names the worker and no
   positional argument past the first in a `_Walk` construction; tests/test_bake.py's call of the
   chain run follows it.
-- [ ] Every signal, request and refusal is as it was, and the `serving` lanes name the job as they
+- [x] Every signal, request and refusal is as it was, and the `serving` lanes name the job as they
   do today.
   Check: the walk, clip, bake, ladder and monitor tests pass unchanged.
 

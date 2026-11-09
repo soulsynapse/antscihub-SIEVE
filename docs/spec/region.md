@@ -93,9 +93,18 @@ monitor, so a node that is the same at every row says so and pays its raster onc
 carries no shape metadata, so the node learns the plate's shape from the frame it reads and can
 only compare it to the file's; the two differing means the node is wired after a rescale or a crop,
 and refusing with a standing that says so is the whole of coordinate handling, since the mask the
-table paints goes through rescale and crop like any frame.
+table paints goes through rescale and crop like any frame. A refusal is a raise, the tree's one way
+for a run to say something about its node: the standing carries the two shapes and everything
+downstream computes as None, as combine's two shapes do and as a Houdini SOP in error stops the
+cook below it, rather than an empty table flowing on to fail two nodes later as a blank mask or an
+empty roi. The second box's attach clause asks for the region's name on the ant inside it, and attach
+joins the other way: a mark's centroid in a record's contour, so attach(region, ants) counts the ants in
+the region and no argument order names the ant. Blender's Sample Nearest and Houdini's Attribute
+Transfer and Group by Bounding Object each fix a join's direction by input order and treat the two
+containment questions as two nodes, so the ant's side is the tool of Inside below, and the clause is
+met there. Decided 2026-11-09.
 
-- [ ] A frame tool, a frame of any plane kind in for its shape, blobs out, STATIC, with a path
+- [x] A frame tool, a frame of any plane kind in for its shape, blobs out, STATIC, with a path
   input whose loader reads a geometry file into its params: the plate's shape and its shapes,
   each named, a polygon as its vertices or a circle as its centre and radius, in plate pixels. A
   file with any other geometry, a shape outside the plate, a repeated name or a malformed one
@@ -103,20 +112,20 @@ table paints goes through rescale and crop like any frame.
   Check: a test loads a file of one polygon and one circle and reads the params; tests load a
   file with a triangle named twice, one with a shape past the plate's edge and one of another
   geometry, and read the reason in each exception.
-- [ ] Its table has one record per shape, the plane the frame's shape, the record's position and
+- [x] Its table has one record per shape, the plane the frame's shape, the record's position and
   moment columns those of the filled shape and its contour the shape's outline, with the shape's
   name on the record; blobs-to-mask of the table paints the shapes, a circle's area within a
   one-pixel ring of πr², and attach, sample and filter read the table unchanged.
   Check: a test builds a region over a frame and compares the painted mask of a rotated square to
   its fill and a circle's painted area to πr²; a test attaches the region to a blobs table of two
   points, one inside, and reads the name on the inside one and NaN on the other.
-- [ ] A `choice` param, empty for every shape or a name for one, narrows the table to that record;
+- [x] A `choice` param, empty for every shape or a name for one, narrows the table to that record;
   the card lists the names with the chosen one marked, clicking a name chooses it and clicking it
   again clears it, as the file selector's card does; a name no longer in the file is treated as
   empty and the card says so.
   Check: a test sets choice to a name and reads one record, clears it and reads all, and sets a
   name the file lacks and reads all with the standing's line.
-- [ ] A frame of another shape than the file's plate gives no records and a standing saying which
+- [x] A frame of another shape than the file's plate gives no records and a standing saying which
   two shapes disagreed, so a region wired after a rescale or a crop is seen and never silently
   scaled.
   Check: a test wires the region after a rescale and reads the empty table and the standing.
@@ -125,6 +134,30 @@ Worth a look: a geometry file drawn by the utility over the crossings clip's fir
 nest, loaded into a region on the purb document, its shapes drawn on the frame and the mask painted
 from it; whether the drawn outline sits where it was drawn is the one thing a test cannot say.
 
+## Inside
+
+Assumes: Region.
+
+Which region an ant is in is a column on the ant, feeding track, transitions and the csv, where a
+count of ants on the region feeds a signal; attach gives the count, and this gives the label, with
+the join's direction fixed by input order as Blender's Sample nodes and Houdini's Attribute Transfer
+fix theirs.
+
+Facts to weigh, to be verified. tools/attach.py relates two tables through `footprint`, scaling
+by the ratio of the planes when they differ, and raises on a text column; `name` is the first text
+column a tool meets, and where a record is in no region the column needs a value that is not a
+number. An ant inside two overlapping regions is in the more specific one, the smaller by area,
+where attach picks the largest mark.
+
+- [x] A frame tool, blobs in and a second blobs table on `regions`, the first table out with the
+  columns named in the params written onto each record whose centroid lies in a region's filled
+  contour, or box by a knob, under a prefix the params give, `name` among them when the regions
+  carry it: a record in no region reads NaN in a numeric column and None in a text one, and one in
+  several reads the smallest by area; planes of two shapes relate in the first table's coordinates.
+  Check: a test puts two points to a region table of a nest and a dish inside a larger yard and
+  reads the nest's name on the point in both, None on the point in neither, and the count of
+  regions each is in.
+
 ## A mask applied to a frame
 
 Assumes: nothing.
@@ -132,7 +165,7 @@ Assumes: nothing.
 Letting a frame through a mask is its own node reading both, by the README's rule, and it is what
 makes region's mask a masking of the frame rather than a knob on crop or on threshold.
 
-- [ ] A frame tool, a frame of any plane kind in and a mask on a second input, out as in, every
+- [x] A frame tool, a frame of any plane kind in and a mask on a second input, out as in, every
   pixel the mask is zero at zeroed and every other pixel as it was; two shapes raise, as combine's
   do, and the node reports it.
   Check: a test masks a BGR frame and a gray frame against a mask with a hole and reads the hole
@@ -160,7 +193,7 @@ crop; the shapes alone cannot say which the user did. The plate offset a crop ap
 function of its params and its roi, which is where an export could find it later, and the bake
 knows nothing upstream of itself by design, so the sidecar is not where it lands.
 
-- [ ] A frame tool, a frame of any plane kind in and a mask on a second input named for the roi,
+- [x] A frame tool, a frame of any plane kind in and a mask on a second input named for the roi,
   out as in: the frame cut to the bounding box of the roi's nonzero pixels at the first row of the
   node's row space, grown by a `border` in pixels and clipped to the frame; the cut is the same at
   every row under one key, and a roi with no nonzero pixel gives nothing with a standing that says
@@ -169,11 +202,11 @@ knows nothing upstream of itself by design, so the sidecar is not where it lands
   pixels against the frame; a test with a border past the frame's edge reads the clipped cut; a
   test whose roi differs between row 0 and row 5 reads the same cut at both; a test with an empty
   roi reads the standing.
-- [ ] A mask cropped against itself as roi is the roi's own cut, so the frame and the mask that
+- [x] A mask cropped against itself as roi is the roi's own cut, so the frame and the mask that
   bounded it crop to one shape and meet downstream.
   Check: a test crops a frame and the same mask against that mask and reads equal shapes and the
   mask's nonzero pixels inside the cut.
-- [ ] A crop with the display flag shows the cut frame at its own shape, the row space unchanged,
+- [x] A crop with the display flag shows the cut frame at its own shape, the row space unchanged,
   and the plan lists it as a frame node with its standing; a bake after a crop writes the cut
   frames and reads back at the cut's shape.
   Check: a test displays a crop offscreen and reads the shown frame's shape; a test bakes a
@@ -192,7 +225,7 @@ The derived roi, everywhere the animals were ever seen, is the union of a detect
 clip, and the tree's static union over sampled rows is background with `max`; it wants only to
 accept the mask kind.
 
-- [ ] background accepts a mask and hands out a mask: `max` over its samples is their union and
+- [x] background accepts a mask and hands out a mask: `max` over its samples is their union and
   `min` their intersection, and `mean` and `median` on a mask are what they are on gray, so a
   thresholded chain into background into crop is the derived region with no new tool.
   Check: a test runs background with max over a mask that is nonzero in a different corner at
@@ -219,18 +252,18 @@ plane is wrong on that frame, which is an existing property of every drawer and 
 fix, so a pick on such a frame answers nothing. A draw that raises is dropped for the session, and
 a pick is treated the same.
 
-- [ ] The registry's facet table lists a pick facet with its hint line: given the point in the
+- [x] The registry's facet table lists a pick facet with its hint line: given the point in the
   displayed frame's pixels, the row, the node's result and its params, a tool answers the params
   to merge, or None for a click it does not claim; the registry's check does not call it.
   Check: a test reads the facet from the table and the hint.
-- [ ] A left click on the frame is offered to the drawing nodes whose results are on it, the one
+- [x] A left click on the frame is offered to the drawing nodes whose results are on it, the one
   drawn last first, and the first that answers has its params merged through the document as a
   card's change is, so the key, the pane and the frame follow; a click no node claims does nothing,
   and a pick that raises is dropped for the session as a draw is, the line in the node's standing.
   Check: an offscreen test with two drawers, one that answers and one that does not, clicks and
   reads the document's params and the pane's card; a test with a pick that raises reads the
   standing and that the next click reaches the other drawer.
-- [ ] region picks: a click inside one of its shapes on a frame of its plane's shape makes that
+- [x] region picks: a click inside one of its shapes on a frame of its plane's shape makes that
   shape the choice, a click inside the chosen shape clears it, a click inside none or on a frame
   of another shape answers nothing; its draw marks the chosen shape apart from the rest.
   Check: a test picks at a point inside a shape and reads the choice, picks it again and reads it
@@ -243,7 +276,7 @@ Assumes: nothing.
 Looking at a dish means moving the display flag to the crop and coming back to the plate to pick the
 next, so the frame keeps where it has been and a right click walks back; it knows nothing of crops.
 
-- [ ] A right click on the frame moves the display flag to the node it showed before the current
+- [x] A right click on the frame moves the display flag to the node it showed before the current
   one, and again to the one before that; the memory is the document's session, cleared when a
   document loads, a node gone from the document is skipped, and with nothing before there is
   nothing to do.

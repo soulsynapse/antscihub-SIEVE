@@ -3,7 +3,7 @@ back, per row across a gap, NaN with none, heading in blobs' angle convention; t
 import numpy as np
 import pytest
 
-from sieve_player.graph import Series
+from tests.stepping import hold
 from tests.test_tracks_filter import DTYPE, table
 from tools import kinematics
 from tools import _table
@@ -18,7 +18,7 @@ def col(rows, name):
 
 
 def test_motion_per_row_across_a_gap_nan_on_a_first_record():
-    out = kinematics.run(Series(ROWS, "k", 0, 30.0), {"span": 1})
+    out = hold(kinematics, ROWS, {"span": 1})
     rows = out["rows"]
     assert rows[0].dtype.names[-4:] == kinematics.COLUMNS and _table.plane(rows[0]) == (20, 100)
     assert col(rows, "dx") == [[None, None], [3.0, None], [3.0, 0.0, -3.0]]

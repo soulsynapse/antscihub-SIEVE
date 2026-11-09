@@ -36,11 +36,17 @@ def changed(prev, cur, column, lo=None, hi=None):
 
 
 def run(series, params):
-    lo, hi, rows = _value(params["from"]), _value(params["to"]), series.data
-    out = np.zeros(len(rows), np.float32)
-    for r in range(1, len(rows)):
-        out[r] = changed(rows[r - 1], rows[r], params["column"], lo, hi)
+    out, state = np.zeros(len(series.data), np.float32), None
+    for r, t in enumerate(series.data):
+        state, share = step(state, t, r, params)
+        out[r] = share["signal"]
     return {"signal": out}
+
+
+def step(state, row, i, params):
+    """The state is the row before, None at the first, which counts nothing."""
+    n = 0 if state is None else changed(state, row, params["column"], _value(params["from"]), _value(params["to"]))
+    return row, {"signal": np.float32(n)}
 
 
 def settings(parent=None):

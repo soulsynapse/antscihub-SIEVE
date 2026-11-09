@@ -3,7 +3,7 @@ blank for any; an id absent the row before, or reading NaN, counts nothing; a mi
 import numpy as np
 import pytest
 
-from sieve_player.graph import Series
+from tests.stepping import hold
 from tools import track, transitions
 
 DTYPE = np.dtype(track.DTYPE.descr + [("nest", np.float64)])
@@ -23,11 +23,10 @@ ROWS = [table([(1, 0), (2, 1)]),
         table([(1, 1), (2, 0), (3, np.nan)]),      # 2 exits; 3 loses its value
         table([(1, 0), (2, 0), (3, 2)]),           # 1 exits; 3 reads 2 from nothing
         table([(2, 2)])]                           # 2 goes to 2, an entry under neither bound
-SERIES = Series(ROWS, "k", 0, 30.0)
 
 
 def signal(column="nest", lo="", hi=""):
-    return transitions.run(SERIES, {"column": column, "from": lo, "to": hi})["signal"].tolist()
+    return hold(transitions, ROWS, {"column": column, "from": lo, "to": hi})["signal"].tolist()
 
 
 def test_entries_exits_and_any_change_between_consecutive_rows():

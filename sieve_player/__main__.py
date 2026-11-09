@@ -1,6 +1,6 @@
 """`python -m sieve_player document.json [root ...]`: open a saved document against the tools the
 registry finds under the roots (default: tools/). With `--plan`, print the plan instead: each node,
-its kind, its key, its role in the walk and its standing, and exit."""
+its kind, its key, its role in the walk, whether the walk steps it, and its standing, and exit."""
 import sys
 
 from . import play
@@ -18,7 +18,8 @@ def show_plan(path, tools):
     for n in doc.nodes:
         e = p.entries[n.id]
         role = "walked" if n.id == walk else "head" if n.id in p.heads else "chain" if n.id in p.chain else ""
-        print(f"{n.id:<{width}}  {'?' if n.unresolved else e.kind:<8} {e.key}  {role:<6} {e.standing}")
+        steps = "" if n.id not in p.chain else "step" if e.steps else f"whole after {e.whole_by}" if e.whole_by else "whole"
+        print(f"{n.id:<{width}}  {'?' if n.unresolved else e.kind:<8} {e.key}  {role:<6} {steps:<6} {e.standing}")
     return 0
 
 

@@ -47,7 +47,7 @@ def test_shares_are_this_walks_and_the_means_outlive_a_restart():
     assert all(n["row_ms"] == n["run_ms"] + n["fold_ms"] for n in s["nodes"]) and s["nodes"][1]["fold_ms"] == 0   # gray's density is not asked for here
     assert s["clip_s"] == g.count * s["cold_row_ms"] / 1000 and s["multiple"] == s["footage_s"] / s["clip_s"]
     video, gray, add = s["nodes"][:3]
-    assert video["kinds"]["step"] == 5 and video["run_bytes"] == 4 * 6 * 3
+    assert video["kinds"]["decode"] == 5 and video["run_bytes"] == 4 * 6 * 3
     assert gray["change_s"] >= add["change_s"]              # gray reruns add and same too
     assert s["memo"]["windows"] < 1 and s["cache"]["windows"] is None    # Dec has no limit
     g.memo.limit = 1 << 30
@@ -61,7 +61,7 @@ def test_shares_are_this_walks_and_the_means_outlive_a_restart():
     assert s["nodes"][0]["run_ms"] and s["memo"]["row_bytes"] and s["clip_s"]      # still read, from the latest walk each ran in
     assert "x realtime" in summary(s) and "5 / 5 rows" in summary(s)
     assert "changes 1, last touched add" in summary(s)
-    assert table(s).splitlines()[2].startswith("video") and f"{runs['video']} step" in table(s)   # the reads are this walk's
+    assert table(s).splitlines()[2].startswith("video") and f"{runs['video']} decode" in table(s)   # the reads are this walk's
     g.serving("walk")
     for r in range(5):
         g.compute("add", r)                                 # a third walk, every row held: nothing runs, nothing is unprobed

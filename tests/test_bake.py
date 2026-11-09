@@ -8,7 +8,8 @@ from sieve_player import document as D
 from sieve_player.graph import Graph
 from sieve_player.registry import discover, types
 from sieve_player.registry.__main__ import VIDEO
-from sieve_player.worker import Worker
+from sieve_player.worker import run_chain
+from tests import stepping
 from tests.test_graph import Dec
 from tools import bake, blobs, gray, reduce, smooth, threshold
 
@@ -30,7 +31,7 @@ def chain(*names):
 
 def series(g):
     stack = np.stack([g.walk_row(r) for r in range(ROWS)])
-    return Worker(g)._run_chain(stack, 0, ROWS, {})
+    return run_chain(g, stack, 0, ROWS, {})
 
 
 def test_the_identity_on_a_gray_a_blobs_and_a_signal_wire():
@@ -51,6 +52,10 @@ def test_the_identity_on_a_gray_a_blobs_and_a_signal_wire():
     assert bake.bake({"from": "2", "to": "9", "increment": 2}, 12) == (range(2, 10, 2), "lossless")
     assert bake.bake(bake.DEFAULTS, 12) == (range(0, 12), "lossless") and not bake.bake({"from": "20"}, 12)[0]
     assert bake.bake({"quality": "standard"}, 12)[1] == "standard"
+    tables = np.empty(ROWS, object)
+    tables[:] = [plain.compute("blobs", r) for r in range(ROWS)]
+    for data in (tables, np.arange(ROWS, dtype=np.float32)):      # the identity steps on both series kinds, held to run by the oracle
+        stepping.hold(bake, data, {})
     expected = {t for t, (p, ex) in types(discover("tools"), [VIDEO]).items()} - {D.PATH}
     assert set(bake.EXPECTS) == expected
     doc.disconnect("bake_3")

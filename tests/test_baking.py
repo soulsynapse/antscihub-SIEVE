@@ -237,6 +237,30 @@ def test_a_kind_with_no_writer_is_refused_by_what_the_store_says(tmp_path, in_st
     g.decoder.close()
 
 
+def test_a_writer_that_cannot_open_refuses_the_bake_and_leaves_the_window_walk_alone(tmp_path, in_store, monkeypatch):
+    """A raise while the bake starts is the bake's: it is refused naming the node, the window walks to its
+    end and nothing is reported failed, where a walk closing at the bake's raise would stop it short."""
+    class Shut:
+        def __init__(self, *a, **k):
+            raise OSError("the file is held")
+    ext, _ = store.writer("gray")
+    monkeypatch.setitem(store.WRITERS, "gray", (ext, Shut))
+    g = graph(clip(tmp_path / "v.avi"), "gray")
+    w = Worker(g)
+    walked, failed = [], []
+    w.walked.connect(lambda d, n: walked.append((d, n)))
+    w.failed.connect(lambda r, nid: failed.append((r, nid)))
+    done, refused = run_bake(w)          # asks a window of 2 beside the bake
+    t = time.perf_counter()
+    while (2, 2) not in walked and time.perf_counter() - t < 10:
+        QApplication.processEvents()
+        time.sleep(0.005)
+    w.stop()
+    assert not done and refused == [("bake", "did not start: OSError: the file is held")]
+    assert (2, 2) in walked and not failed, (walked, failed)
+    g.decoder.close()
+
+
 @pytest.mark.parametrize("quality", ["lossless", "standard"])
 def test_a_frame_kind_writes_a_clip_the_video_node_opens(tmp_path, in_store, quality, monkeypatch):
     monkeypatch.setattr(decoder_mod, "QUIET", True)
@@ -300,3 +324,99 @@ def test_tables_and_a_signal_read_back_equal(tmp_path, in_store):
             assert writers.read_signal(store.Store(str(in_store)).place(g.key("bake"), ext)).tolist() == np.asarray(want, np.float32).tolist()
         assert store.Store(str(in_store)).sidecar(g.key("bake")).kind == ("tracks" if pick == "rows" else "signal")
         g.decoder.close()
+
+
+def test_the_ladder_serves_a_scrub_then_a_bakes_start_then_its_rows_behind_the_window_then_the_clip(tmp_path, in_store):
+    """With the walk held inside a tool at row 2, a scrub, a bake and a clip walk are asked; released,
+    the row completes, the scrub is served, the bake says its first word, the walk resumes, the bake
+    writes every row behind the finished window, and the clip walk runs behind the bake's landing."""
+    import threading
+    arrived, gate = threading.Event(), threading.Event()
+
+    def held(frames, row, params):
+        f = frames(row)
+        if row == 2 and not arrived.is_set():
+            arrived.set()
+            gate.wait(5)
+        return f
+    tools = {**TOOLS, "held": Tool(NAME="held", KIND="frame", EXPECTS="gray", PRODUCES="gray", DEFAULTS={}, run=held)}
+    g = graph(clip(tmp_path / "v.avi"), "gray", "held", tools=tools)
+    w = Worker(g)
+    served = []
+    w.walked.connect(lambda d, n: served.append(("walked", d)))
+    w.rowReady.connect(lambda r: served.append(("row", r)))
+    w.baked.connect(lambda n, i, total: served.append(("baked", i)))
+    w.bakeDone.connect(lambda n, b: served.append(("landed", n)))
+    w.bakeRefused.connect(lambda n, why: served.append(("refused", why)))
+    w.clipWalked.connect(lambda d, n: served.append(("clip", d)))
+    w.set_window(0, 6)
+    w.start()
+    assert arrived.wait(5)
+    w.request_row(11)
+    w.bake("bake", "doc.json")
+    w.walk_clip()
+    gate.set()
+    t = time.perf_counter()
+    while ("clip", N) not in served and time.perf_counter() - t < 20:
+        QApplication.processEvents()
+        time.sleep(0.005)
+    w.stop()
+    assert ("landed", "bake") in served and ("clip", N) in served, served
+    at = served.index
+    assert at(("walked", 3)) < at(("row", 11)) < at(("baked", 0)) < at(("walked", 4)), served
+    assert at(("walked", 6)) < at(("baked", 1)) and at(("baked", N)) < at(("landed", "bake")) < at(("clip", 1)), served
+    g.decoder.close()
+
+
+def test_a_window_stalled_unfed_with_a_bake_due_behind_it_waits_instead_of_spinning(tmp_path, in_store):
+    """With a frame bake started and the walk held inside a tool at row 4 of 6, the walked node is unwired
+    and the graph synced with no invalidate behind it, as a GUI edit leaves it for a moment; released, the
+    ladder finds no rung due, the window unfed with rows left and the bake behind an unfinished window, and
+    passes no more, where it once spun through the lock. invalidate then abandons the bake, whose key went."""
+    import threading
+    arrived = {2: threading.Event(), 4: threading.Event()}
+    gate = {2: threading.Event(), 4: threading.Event()}
+
+    def held(frames, row, params):
+        f = frames(row)
+        if row in arrived and not arrived[row].is_set():
+            arrived[row].set()
+            gate[row].wait(5)
+        return f
+    tools = {**TOOLS, "held": Tool(NAME="held", KIND="frame", EXPECTS="gray", PRODUCES="gray", DEFAULTS={}, run=held)}
+    g = graph(clip(tmp_path / "v.avi"), "gray", "held", tools=tools)
+    w = Worker(g)
+    passes, served = [], []
+    reap = g.readers.reap
+    g.readers.reap = lambda: (passes.append(1), reap())
+    w.walked.connect(lambda d, n: served.append(("walked", d)))
+    w.baked.connect(lambda n, i, total: served.append(("baked", i)))
+    w.bakeRefused.connect(lambda n, why: served.append(("refused", why)))
+    w.set_window(0, 6)
+    w.start()
+    assert arrived[2].wait(5)
+    w.bake("bake", "doc.json")
+    gate[2].set()
+    assert arrived[4].wait(5)
+    g.doc.disconnect("gray")
+    g.sync()
+    gate[4].set()
+    t = time.perf_counter()
+    while time.perf_counter() - t < 1.0:
+        QApplication.processEvents()
+        time.sleep(0.005)
+    before = len(passes)
+    t = time.perf_counter()
+    while time.perf_counter() - t < 0.5:
+        QApplication.processEvents()
+        time.sleep(0.005)
+    assert len(passes) == before, f"{len(passes) - before} passes with nothing asked"
+    assert ("baked", 0) in served and ("baked", 1) not in served and ("walked", 6) not in served, served
+    w.invalidate()
+    t = time.perf_counter()
+    while not any(k == "refused" for k, _ in served) and time.perf_counter() - t < 5:
+        QApplication.processEvents()
+        time.sleep(0.005)
+    w.stop()
+    assert any(k == "refused" and "upstream" in why for k, why in served), served
+    g.decoder.close()

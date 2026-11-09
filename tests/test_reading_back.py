@@ -37,8 +37,8 @@ def baked(g):
 
 def walk(g, start, length, timeout=10.0):
     """One window walk: the chain's results and every probe event it raised. The walk is over when the
-    worker says it walked every row and, with a chain, the chain's result is in, which a walk headed by a
-    served series node says without a probe progress event; fails when that is not within `timeout`."""
+    worker says it walked every row and, with a chain, the chain's result is in; fails when that is
+    not within `timeout`."""
     events, series, walked = [], [], []
     g.on_event = events.append
     w = Worker(g)
@@ -121,8 +121,8 @@ def test_baked_mode_decodes_no_video_row_and_runs_nothing_upstream(tmp_path, in_
     assert done and not refused, refused
     g.sync()
     _, events = walk(g, 0, N)
-    assert not [ev for ev in events if ev.node in ("video", "gray", "up") and ev.kind in ("run", "cache", "step", "seek")]
-    assert {ev.row for ev in events if ev.node == "bake" and ev.kind in ("cache", "step", "seek")} == set(range(N))
+    assert not [ev for ev in events if ev.node in ("video", "gray", "up") and ev.kind in ("run", "cache", "decode", "seek")]
+    assert {ev.row for ev in events if ev.node == "bake" and ev.kind in ("cache", "decode", "seek")} == set(range(N))
     assert {ev.row for ev in events if ev.node == "threshold" and ev.kind == "run"} == set(range(N))
     assert all((g.compute("threshold", r) == live[r]).all() for r in range(N))
     g.close()

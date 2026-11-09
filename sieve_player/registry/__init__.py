@@ -18,6 +18,7 @@ _HINTS = {
     "DEFAULTS": "DEFAULTS = {}",
     "run": "def run(frames, row, params): ...",
     "fold": "def fold(frame): ...  # a series tool: what the walk stacks per row in place of the frame",
+    "step": "def step(state, row, i, params): ...  # a series tool that steps: (the next state, {field: this row's share of run's result}); state is None at the first row",
     "settings": "def settings(parent=None): ...",
     "draw": "def draw(painter, row, result, start, params): ...",
     "INPUTS": 'INPUTS = {"bg": "gray"}  # frame inputs after the first: name -> the types it expects; run reads one as frames(row, name)',

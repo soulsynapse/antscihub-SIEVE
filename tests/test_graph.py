@@ -349,7 +349,7 @@ def test_probe_emits_once_per_run_exclusive_of_what_the_run_reads():
     assert {(ev.kind, ev.bytes) for ev in events if ev.node == "add"} == {("run", 4 * 6)} and events[0].key == g.key("video")
     g.compute("add", 0)
     g.compute("video", 0)
-    assert [(ev.node, ev.kind) for ev in events[9:]] == [("video", "step")]   # a memo hit is not a run; the video's read is a read
+    assert [(ev.node, ev.kind) for ev in events[9:]] == [("video", "decode")]   # a memo hit is not a run; the video's read is a read
     g.sync()
     assert events[-1].kind == "sync" and len(events) == 11                     # a boundary, between the runs either side
     g.doc.node("add").params["k"] = 2
@@ -513,15 +513,51 @@ def test_the_clip_walk_runs_behind_the_window_and_a_frame_change_drops_it():
     assert clips[-1] == ({}, 0) and walked[-1] == (0, 0)
 
 
+def test_the_window_and_the_clip_are_one_walk_over_two_ranges():
+    """Under the probe the clip walk runs each node as the window walk does: a frame node once per
+    row the memo does not hold, the chain at each cadence row and at the range's end; the densities
+    are the window's alone."""
+    from PySide6.QtWidgets import QApplication
+    from sieve_player.worker import Worker
+    QApplication.instance() or QApplication([])
+    head = tool("head", kind="series", produces="signal")
+    head.run = lambda series, params: {"signal": np.asarray(series.data, np.float64).reshape(len(series.data), -1)[:, 0]}
+    head.fold = lambda frame: np.asarray([float(frame.mean())])
+    doc = D.from_tools([gray, head])
+    g = Graph(doc, Dec(), {**TOOLS, "head": head})
+    events = []
+    g.on_event = events.append
+    w = Worker(g, every=3)
+    clips = []
+    w.clipReady.connect(lambda r, s, fps: clips.append(r))
+    w.set_window(0, 6)
+    w.walk_clip()
+    w.start()
+    for _ in range(500):
+        QApplication.processEvents()
+        if clips and len(clips[-1].get("head", {}).get("signal", ())) == 10:
+            break
+        time.sleep(0.01)
+    w.stop()
+    runs = [(ev.node, ev.row) for ev in events if ev.kind == "run" and ev.serves == "walk"]
+    assert [r for n, r in runs if n == "gray"] == list(range(10))              # the window's six, then the clip's four the memo lacks
+    assert [r for n, r in runs if n == "head"] == [2, 5, 2, 5, 8, 9]
+    assert [ev.row for ev in events if ev.kind == "fold"] == list(range(6))
+    assert [(ev.row, ev.length) for ev in events if ev.kind == "progress"] == [(i, 6) for i in range(1, 7)]
+
+
 def test_a_tool_raising_indexerror_fails_the_walk_and_only_the_stream_end_closes_it():
-    """The worker closes a window early on EndOfStream alone; a tool's own IndexError is a failure
-    said on the node, never a shorter clip with a clean trace."""
+    """A tool's own IndexError is a failure said on the node, never a shorter clip with a clean
+    trace: the walk closes at the rows it has, as a refused one does, and only EndOfStream closes
+    it with no node blamed."""
     from PySide6.QtWidgets import QApplication
     from sieve_player.worker import Worker
     QApplication.instance() or QApplication([])
     bad = tool("bad", fn=lambda f, p: f[99] if int(f.flat[0]) == 3 else f)
+    always = tool("always", kind="series", produces="signal")      # a series tool raising at every run, wired in below
+    always.run = lambda series, params: 1 / 0
     doc = D.from_tools([gray, bad])
-    g = Graph(doc, Dec(), {**TOOLS, "bad": bad})
+    g = Graph(doc, Dec(), {**TOOLS, "bad": bad, "always": always})
     w = Worker(g)
     failed, walked = [], []
     w.failed.connect(lambda r, n: failed.append((r, n)))
@@ -533,7 +569,7 @@ def test_a_tool_raising_indexerror_fails_the_walk_and_only_the_stream_end_closes
         if failed:
             break
         time.sleep(0.01)
-    assert failed == [(2, "bad")] and walked[-1] == (2, 8) and g.standing("bad").startswith("raised at row 2: IndexError")
+    assert failed == [(2, "bad")] and walked[-1] == (2, 2) and g.standing("bad").startswith("raised at row 2: IndexError")
     w.request_row(2)                            # the display asking for the row fails the same way, and says so
     for _ in range(300):
         QApplication.processEvents()
@@ -547,8 +583,28 @@ def test_a_tool_raising_indexerror_fails_the_walk_and_only_the_stream_end_closes
         if walked[-1] == (2, 2):
             break
         time.sleep(0.01)
-    w.stop()
     assert walked[-1] == (2, 2) and len(failed) == 2
+    doc.add_node("always", (0, 300))            # the close's own chain run now raises too, and the thread must survive it
+    doc.connect("bad", "always")
+    g.sync()
+    w.invalidate()
+    w.set_window(0, 4)
+    for _ in range(300):
+        QApplication.processEvents()
+        if len(failed) == 3:
+            break
+        time.sleep(0.01)
+    assert failed[-1] == (2, "always") and walked[-1] == (2, 2) and w.isRunning()
+    rows = []
+    w.rowReady.connect(rows.append)
+    w.request_row(1)                            # the thread survived the double raise and still serves
+    for _ in range(300):
+        QApplication.processEvents()
+        if rows:
+            break
+        time.sleep(0.01)
+    w.stop()
+    assert rows == [1] and len(failed) == 3
 
 
 def test_a_clip_stack_of_tables_is_counted_through_its_object_columns():
@@ -610,7 +666,7 @@ def test_a_shown_table_walks_without_a_series_node():
             break
         time.sleep(0.01)
     w.stop()
-    assert walked[-1] == (6, 6) and len(walked) <= 7 and w._stack is None     # nothing reads a stack, so none is held
+    assert walked[-1] == (6, 6) and len(walked) <= 7 and w._win.stack is None     # nothing reads a stack, so none is held
 
 
 def test_a_window_stack_stops_at_the_byte_limit_as_the_clip_stack_does():

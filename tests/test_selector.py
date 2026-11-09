@@ -263,3 +263,23 @@ def test_clicking_a_match_makes_it_the_choice_and_a_stale_choice_falls_back(tmp_
     w.list.itemClicked.emit(w.list.item(1))                         # clicking the choice clears it
     assert win.doc.node("file").params["choice"] == "" and w.status.text() == ""
     win.close()
+
+
+def test_browsing_to_a_file_makes_it_the_rule_and_lands_as_one_change(tmp_path):
+    tree(tmp_path)
+    (tmp_path / "else").mkdir()
+    (tmp_path / "else" / "d.avi").write_bytes(b"")
+    from tools import gray as real_gray
+    win = open_window(tmp_path, [file, real_gray])
+    w = win.pane.widget("file")
+    changes = []
+    w.changed.connect(lambda: changes.append(1))
+    w.choose(str(tmp_path / "else" / "d.avi"))
+    p = win.doc.node("file").params
+    assert (p["folder"], p["pattern"], p["choice"], p["recurse"]) == ("else", "*.avi", "d.avi", False)
+    assert win.doc.video == os.path.join("else", "d.avi") and len(changes) == 1
+    w.choose(str(tmp_path / "sub" / "c.mp4"))                      # c.mp4 is no *.avi: the pattern follows the suffix
+    assert win.doc.node("file").params["pattern"] == "*.mp4"
+    assert win.doc.node("file").params["folder"] == "sub" and win.doc.video == os.path.join("sub", "c.mp4")
+    assert file.rule_for(str(tmp_path / "a.mp4"), str(tmp_path), file.DEFAULTS)["folder"] == "."
+    win.close()

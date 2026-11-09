@@ -13,7 +13,7 @@ import cv2
 import numpy as np
 
 from tools._draw import draw as draw_table
-from tools._table import DTYPE, OUTLINES, plane_dtype
+from tools._table import DTYPE, OUTLINES, moments, plane_dtype
 
 SIEVE_TOOL = True
 NAME, KIND, EXPECTS, PRODUCES = "blobs", "frame", ("mask", "gray"), "blobs"
@@ -33,17 +33,12 @@ def _records(labels, ids, stats, diff, core_threshold, offset=(0, 0), dtype=DTYP
         x, y, w, h, area = (int(v) for v in stats[i])
         win = (slice(y, y + h), slice(x, x + w))
         sub = labels[win] == i
-        ys, xs = np.nonzero(sub)
-        xs, ys = xs.astype(np.float64), ys.astype(np.float64)
-        cx, cy = xs.sum() / area, ys.sum() / area
-        mu20, mu02, mu11 = (xs * xs).sum() / area - cx * cx, (ys * ys).sum() / area - cy * cy, (xs * ys).sum() / area - cx * cy
-        half, spread = (mu20 + mu02) / 2, np.sqrt(4 * mu11 * mu11 + (mu20 - mu02) ** 2) / 2
+        cx, cy, angle, major, minor = moments(sub)
         contours, _ = cv2.findContours(sub.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         r = out[k]
         r["x"], r["y"], r["w"], r["h"], r["area"] = x + offset[0], y + offset[1], w, h, area
         r["cx"], r["cy"] = x + offset[0] + cx, y + offset[1] + cy
-        r["angle"] = np.degrees(0.5 * np.arctan2(2 * mu11, mu20 - mu02))
-        r["major"], r["minor"] = 4 * np.sqrt(max(half + spread, 0)), 4 * np.sqrt(max(half - spread, 0))
+        r["angle"], r["major"], r["minor"] = angle, major, minor
         r["contour"] = max(contours, key=len)[:, 0, :] + np.array((x + offset[0], y + offset[1]), np.int32)
         if diff is None:
             r["mean"], r["peak"], r["core"] = np.nan, np.nan, -1

@@ -132,11 +132,14 @@ def heat(a, top):
 
 
 class Display(QWidget):
-    drawFailed = Signal(str, str)   # a tool's draw() raised: the node, the line
+    drawFailed = Signal(str, str)   # a tool's draw() or pick() raised: the node, the line
+    picked = Signal(str, dict)      # a drawer claimed a left click: the node, the params to merge
+    back = Signal()                 # a right click: show the node shown before this one
 
     """The frame, the overlay heated over it, the gate border, and each drawing node's draw() on
     top, in node order, each handed its own node's result: a series node's over the window, a
-    frame node's at the row."""
+    frame node's at the row. A left click is offered to the drawers whose pick() claims it, the
+    one drawn last first; a right click asks for the node shown before."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -199,9 +202,8 @@ class Display(QWidget):
             return
         shrinking = self._pix.width() > self.width() or self._pix.height() > self.height()
         # nearest-neighbour drops rows and columns when shrinking, which reads as stripes; grown, it shows each pixel as it is
-        pix = self._pix.scaled(self.size(), Qt.KeepAspectRatio,
-                               Qt.SmoothTransformation if shrinking else Qt.FastTransformation)
-        x, y = (self.width() - pix.width()) // 2, (self.height() - pix.height()) // 2
+        x, y, w, h = self.frame_rect()
+        pix = self._pix.scaled(w, h, Qt.KeepAspectRatio, Qt.SmoothTransformation if shrinking else Qt.FastTransformation)
         p.drawPixmap(x, y, pix)
         if self._over is not None:
             p.drawImage(QRectF(x, y, pix.width(), pix.height()), self._over)   # stretched to the frame, as draw() is
@@ -223,6 +225,44 @@ class Display(QWidget):
                 self.drawers = [d for d in self.drawers if d[1] is not tool]  # once, not every repaint
                 self.drawFailed.emit(nid, f"draw() raised: {type(e).__name__}: {e}")
         p.restore()
+
+    def frame_rect(self):
+        """Where the frame sits in the widget, (x, y, width, height): fit inside, centred, or None with no frame."""
+        if self._pix is None:
+            return None
+        scaled = self._pix.size().scaled(self.size(), Qt.KeepAspectRatio)
+        return (self.width() - scaled.width()) // 2, (self.height() - scaled.height()) // 2, scaled.width(), scaled.height()
+
+    def to_frame(self, pos):
+        """A widget point as (x, y) in the frame's pixels, or None off the frame."""
+        r = self.frame_rect()
+        if r is None:
+            return None
+        x, y, w, h = r
+        fx, fy = (pos.x() - x) * self._pix.width() / w, (pos.y() - y) * self._pix.height() / h
+        return (fx, fy) if 0 <= fx < self._pix.width() and 0 <= fy < self._pix.height() else None
+
+    def mousePressEvent(self, e):
+        if e.button() == Qt.RightButton:
+            self.back.emit()
+            return
+        if e.button() != Qt.LeftButton or (point := self.to_frame(e.position())) is None:
+            return
+        shape = (self._pix.height(), self._pix.width())
+        for nid, tool, node in reversed(self.drawers):
+            pick, result = getattr(tool, "pick", None), self.frame_results.get(nid, self.results.get(nid))
+            if pick is None or result is None:
+                continue
+            try:
+                answer = pick(point, shape, self.row, result, node.params)
+            except Exception as exc:
+                traceback.print_exc()
+                self.drawers = [d for d in self.drawers if d[1] is not tool]  # as a draw that raises: dropped for the session
+                self.drawFailed.emit(nid, f"pick() raised: {type(exc).__name__}: {exc}")
+                continue
+            if answer is not None:
+                self.picked.emit(nid, dict(answer))
+                return
 
 
 def catalogue(items):
@@ -345,6 +385,10 @@ class PlayerWindow(QMainWindow):
         self.pane.bakeCancelled.connect(lambda nid: self.worker is not None and self.worker.cancel_bake())
         self.pane.modeToggled.connect(self._toggle_mode)
         self.display.drawFailed.connect(self._draw_failed)
+        self.display.picked.connect(self._picked)
+        self.display.back.connect(self._back)
+        self._shown_before = []    # the display flag's past, most recent last, for a right click; the document's session
+        self._shown_last = None
         self.header = Header()
         self.header.show_store(self.store)
         self.header.store.clicked.connect(self._choose_store)
@@ -409,6 +453,7 @@ class PlayerWindow(QMainWindow):
         names, if any, is opened."""
         self._unload()
         self.doc = doc
+        self._shown_before, self._shown_last = [], doc.display
         doc.resolve(self.tools)
         self._gone = self.store.missing(doc)    # asked here, where the document opens; said on the graph once there is one
         for nid in self._gone:
@@ -496,6 +541,10 @@ class PlayerWindow(QMainWindow):
         """A flag moved: the runtime's plan follows and the frame shows the new node at the same row.
         The memo and the walk stand; nothing a flag names is computed differently, unless the
         display flag crossed a bake, which moves the document into the other row space."""
+        if self.doc.display != self._shown_last:
+            if self._shown_last is not None:
+                self._shown_before.append(self._shown_last)
+            self._shown_last = self.doc.display
         self.canvas.update()
         if self.graph is None:
             return
@@ -505,6 +554,28 @@ class PlayerWindow(QMainWindow):
         if self._follow_axis(was):
             self._invalidate()
         self.goto(self.row, commit=True)
+
+    def _back(self):
+        """A right click on the frame: the display flag returns to the node it showed before, skipping
+        any since removed; nothing with nothing before."""
+        ids = {n.id for n in self.doc.nodes} if self.doc is not None else set()
+        while self._shown_before:
+            nid = self._shown_before.pop()
+            if nid in ids and nid != self.doc.display:
+                self.doc.display = self._shown_last = nid
+                self.reflag()
+                return
+
+    def _picked(self, nid, params):
+        """A drawer answered a click: its params land in the document as a card's change does, through
+        the node's widget when it has one, so the key, the pane and the frame follow."""
+        node = self.doc.node(nid)
+        node.params = {**node.params, **params}
+        w = self.pane.widget(nid)
+        if w is not None:
+            w.set_params(node.params)       # moves the knobs; each move is a change the pane reports
+        else:
+            self._params_changed(nid)
 
     def _axis(self):
         return (self.graph.axis, self.graph.plate)

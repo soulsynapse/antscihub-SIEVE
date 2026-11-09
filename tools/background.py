@@ -1,4 +1,4 @@
-"""Frame tool: a static composite of the whole clip, the same image at every row; gray or BGR in, out as in.
+"""Frame tool: a static composite of the whole clip, the same image at every row; gray, BGR or mask in, out as in.
 
 `samples` rows spaced evenly over the clip are read through the upstream node and folded to one
 image per pixel by `stat`. `mean` and `max` and `min` stream; `median` holds the sample stack while
@@ -6,16 +6,18 @@ it partitions and takes the lower middle value, so it stays in the frame's dtype
 keep an animal that sat in one place for half the samples, and the composite then carries it: a
 dark animal on pale ground wants `max`, the brightest each pixel ever showed, which drops it if it
 was away in any one sample, and a pale animal on dark ground wants `min`. Show the node to see
-which this clip gets. STATIC says the output is one image at every row, so the player holds it
-once and keeps it while the node stands, a rebuild being seconds of seeks paid on the worker inside
-the first row asked for, see docs/findings/2026-10-31-background-composite-cost.md.
+which this clip gets. On a mask `max` is the union of the samples and `min` their intersection, so a
+detection mask through `max` is everywhere the animals were seen. STATIC says the output is one
+image at every row, so the player holds it once and keeps it while the node stands, a rebuild being
+seconds of seeks paid on the worker inside the first row asked for, see
+docs/findings/2026-10-31-background-composite-cost.md.
 """
 import numpy as np
 
 from sieve_player.decoder import EndOfStream
 
 SIEVE_TOOL = True
-NAME, KIND, EXPECTS, PRODUCES = "background", "frame", ("gray", "bgr"), "same"
+NAME, KIND, EXPECTS, PRODUCES = "background", "frame", ("gray", "bgr", "mask"), "same"
 STATIC = True
 STATS = ("mean", "median", "max", "min")
 DEFAULTS = {"stat": "median", "samples": 50}

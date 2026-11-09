@@ -88,17 +88,24 @@ def test_a_module_header_states_the_module_not_its_history():
 
 
 def test_the_scheduler_alone_begins_a_job_and_nothing_compares_a_generation():
-    """A job's reset is its begin(), called once per job and only from _serve, the scheduler; an
-    ask is a flag the scheduler takes under the lock, so no generation counter is compared, by a
-    job or by anyone."""
+    """A job's reset is its begin(), called once per job and only from _turn, the ladder; an ask is
+    a flag the ladder takes under the lock, so no generation counter is compared, by a job or by
+    anyone. A job's due-ness is read in one place, _turn, which is both what the loop waits on and
+    what it serves: no job answers `pending`, and nothing outside _turn reads an ask or a `due`."""
     tree = ast.parse((PKG / "worker.py").read_text(encoding="utf-8"))
-    serve = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == "_serve")
+    turn = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == "_turn")
 
     def begins(node):
         return [n for n in ast.walk(node) if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and n.func.attr == "begin"]
 
-    assert {id(n) for n in begins(tree)} == {id(n) for n in begins(serve)}
-    assert sorted(ast.unparse(n.func.value) for n in begins(serve)) == ["bake", "clip", "win"]
+    assert {id(n) for n in begins(tree)} == {id(n) for n in begins(turn)}
+    assert sorted(ast.unparse(n.func.value) for n in begins(turn)) == ["bake", "clip", "win"]
     compared = [ast.unparse(n) for n in ast.walk(tree) if isinstance(n, ast.Compare)
                 and any(isinstance(o, ast.Attribute) and o.attr in ("gen", "asked") for o in [n.left, *n.comparators])]
     assert not compared, compared
+    assert not [n.name for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == "pending"]
+
+    def reads(node):
+        return {id(n) for n in ast.walk(node) if isinstance(n, ast.Attribute) and n.attr in ("asked", "due") and isinstance(n.ctx, ast.Load)}
+
+    assert reads(tree) == reads(turn)

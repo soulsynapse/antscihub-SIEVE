@@ -2,7 +2,8 @@
 
 Written 2026-11-08, revised the same day after an architecture review; the first five
 deliverables were ticked that day, the worker's last. The two after it were added the same day,
-from an architect review of the branch at b588358c, and are open.
+from an architect review of the branch at b588358c; the wait predicate's was ticked that day and
+the last is open.
 Read with the registry's facet table and type report (`python -m sieve_player.registry`), the live
 statement of what a tool may offer and what feeds what, and with
 docs/findings/2026-11-08-bake-window-fit.md, the measurement this spec answers. docs/spec/bake.md
@@ -300,13 +301,13 @@ nothing turning. The pre-refactor loop had the same gap, so no test pins it eith
 `fed` test is made once per pass in `_serve` and the bake's rung reads `win.i >= win.length`
 beside it; the duplication is where the disagreement lives.
 
-- [ ] The condition `_serve` waits on is true only when the next pass of the ladder will begin or
+- [x] The condition `_serve` waits on is true only when the next pass of the ladder will begin or
   turn some job, and each job's due-ness is read in one place by the predicate and the ladder
   alike.
   Check: a test stalls a window unfed with rows left while a frame bake has rows to write, holds
   there, and reads the ladder passed no more times than asks were made; the seams test reads one
   due-ness per job.
-- [ ] Every signal, request and refusal is as it was.
+- [x] Every signal, request and refusal is as it was.
   Check: the walk, clip, bake and ladder tests pass unchanged.
 
 ## A job is built from what it reads and emits

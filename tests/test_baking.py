@@ -366,3 +366,57 @@ def test_the_ladder_serves_a_scrub_then_a_bakes_start_then_its_rows_behind_the_w
     assert at(("walked", 3)) < at(("row", 11)) < at(("baked", 0)) < at(("walked", 4)), served
     assert at(("walked", 6)) < at(("baked", 1)) and at(("baked", N)) < at(("landed", "bake")) < at(("clip", 1)), served
     g.decoder.close()
+
+
+def test_a_window_stalled_unfed_with_a_bake_due_behind_it_waits_instead_of_spinning(tmp_path, in_store):
+    """With a frame bake started and the walk held inside a tool at row 4 of 6, the walked node is unwired
+    and the graph synced with no invalidate behind it, as a GUI edit leaves it for a moment; released, the
+    ladder finds no rung due, the window unfed with rows left and the bake behind an unfinished window, and
+    passes no more, where it once spun through the lock. invalidate then abandons the bake, whose key went."""
+    import threading
+    arrived = {2: threading.Event(), 4: threading.Event()}
+    gate = {2: threading.Event(), 4: threading.Event()}
+
+    def held(frames, row, params):
+        f = frames(row)
+        if row in arrived and not arrived[row].is_set():
+            arrived[row].set()
+            gate[row].wait(5)
+        return f
+    tools = {**TOOLS, "held": Tool(NAME="held", KIND="frame", EXPECTS="gray", PRODUCES="gray", DEFAULTS={}, run=held)}
+    g = graph(clip(tmp_path / "v.avi"), "gray", "held", tools=tools)
+    w = Worker(g)
+    passes, served = [], []
+    reap = g.readers.reap
+    g.readers.reap = lambda: (passes.append(1), reap())
+    w.walked.connect(lambda d, n: served.append(("walked", d)))
+    w.baked.connect(lambda n, i, total: served.append(("baked", i)))
+    w.bakeRefused.connect(lambda n, why: served.append(("refused", why)))
+    w.set_window(0, 6)
+    w.start()
+    assert arrived[2].wait(5)
+    w.bake("bake", "doc.json")
+    gate[2].set()
+    assert arrived[4].wait(5)
+    g.doc.disconnect("gray")
+    g.sync()
+    gate[4].set()
+    t = time.perf_counter()
+    while time.perf_counter() - t < 1.0:
+        QApplication.processEvents()
+        time.sleep(0.005)
+    before = len(passes)
+    t = time.perf_counter()
+    while time.perf_counter() - t < 0.5:
+        QApplication.processEvents()
+        time.sleep(0.005)
+    assert len(passes) == before, f"{len(passes) - before} passes with nothing asked"
+    assert ("baked", 0) in served and ("baked", 1) not in served and ("walked", 6) not in served, served
+    w.invalidate()
+    t = time.perf_counter()
+    while not any(k == "refused" for k, _ in served) and time.perf_counter() - t < 5:
+        QApplication.processEvents()
+        time.sleep(0.005)
+    w.stop()
+    assert any(k == "refused" and "upstream" in why for k, why in served), served
+    g.decoder.close()

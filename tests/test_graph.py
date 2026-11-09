@@ -595,9 +595,9 @@ def test_a_tool_raising_indexerror_fails_the_walk_and_only_the_stream_end_closes
             break
         time.sleep(0.01)
     assert failed[-1] == (2, "always") and walked[-1] == (2, 2) and w.isRunning()
-    w.request_row(1)                            # the thread survived the double raise and still serves
     rows = []
     w.rowReady.connect(rows.append)
+    w.request_row(1)                            # the thread survived the double raise and still serves
     for _ in range(300):
         QApplication.processEvents()
         if rows:

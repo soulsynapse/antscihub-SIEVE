@@ -113,9 +113,6 @@ class _Walk:
         self.i = self.bytes = 0
         self.stack, self.dens, self.folded, self.stepped = None, {}, {}, {}
 
-    def pending(self):
-        return self.asked or self.i < self.length
-
     def turn(self):
         g = self.w.graph
         row = self.start + self.i
@@ -276,9 +273,6 @@ class _Bake:
         self.ask = (None, "", "")       # (the node to bake, or None, its document's name, and why the one running is to go)
         self.at = None                  # the _Writing in progress
         self.starting = None            # the node begin() last tried to start: what a raise before `at` exists is refused on
-
-    def pending(self):
-        return self.asked or (self.at is not None and not self.at.series and self.at.i < len(self.at.rows))
 
     def due(self):
         """Whether a frame bake has a row to write; a series bake waits on the clip walk."""
@@ -534,73 +528,21 @@ class Worker(QThread):
             raise
 
     def _serve(self):
-        """The ladder: a scrub, then a bake's change of state, then a bake row behind a finished
-        window, then the window walk, then the clip walk; one turn of the first rung due, and the
-        loop reads the asks again."""
-        scrub, bake, win, clip = self._scrub, self._bake, self._win, self._clip
+        """The loop: waits until a rung is due, takes its turn, and reads the asks again."""
         while True:
             with self._cv:
-                while not (self._stop or self._want is not None or self._series_dirty or win.pending()
-                           or clip.pending() or bake.pending()):
+                while not self._stop and (turn := self._turn()) is None:
                     self._cv.wait()
                 if self._stop:
-                    bake.abandon("the video was closed")
+                    self._bake.abandon("the video was closed")
                     return
-                want, self._want = self._want, None
-                dirty = False
-                if want is None:
-                    dirty, self._series_dirty = self._series_dirty, False
-                win_asked, clip_asked, bake_asked, clip_on = win.asked, clip.asked, bake.asked, self._clip_on
-            job = win
+            lane, steps = turn
             self.graph.readers.reap()
+            self.graph.serving(lane)
+            job = None
             try:
-                if want is not None:
-                    job = scrub
-                    self.graph.serving("scrub")
-                    scrub.turn(want)
-                    continue
-                self.graph.serving("walk")
-                if bake_asked:
-                    job = bake
-                    with self._cv:      # an ask is taken as the job begins, so one landing meanwhile is not lost
-                        ask, bake.asked = bake.ask, False
-                    bake.begin(*ask)
-                    continue
-                if bake.due() and not dirty and not win_asked and win.i >= win.length:
-                    job = bake
-                    self.graph.serving("bake")
-                    bake.turn()
-                    continue
-                count = self.graph.count
-                fed = self.graph.fed(self.graph.walk) or self._served_head()
-                if win_asked:
-                    with self._cv:
-                        (start, length), win.asked = win.ask, False
-                    s = max(0, min(start, count - 1))
-                    win.begin(s, max(0, min(length, count - s)) if fed else 0)   # nothing reaches a walked node and no served series node heads the chain: nothing to walk until the next change
-                if fed and dirty and win.i:
-                    win.emit()
-                    if clip.i:
-                        job = clip
-                        clip.emit()
-                    continue
-                if fed and win.i < win.length:
-                    win.turn()
-                    continue
-                job = clip
-                if clip_asked:
-                    with self._cv:
-                        clip_on, clip.asked = self._clip_on, False
-                    clip.begin(0, count if clip_on and fed else 0)
-                    if not clip.length:
-                        clip.ready.emit({}, 0, self.graph.fps)
-                    clip.progress.emit(clip.i, clip.length)
-                elif clip.i < clip.length and not (clip_on and fed):
-                    clip.halt()
-                    if not clip_on:
-                        bake.abandon("the clip walk was stopped short of the clip")
-                if fed and clip_on and clip.i < clip.length:
-                    clip.turn()
+                for job, act in steps:
+                    act()
             except Cancelled:
                 job.cancelled()     # the graph moved on under the row, or we are stopping: the loop reads the new state
             except EndOfStream:
@@ -609,6 +551,55 @@ class Worker(QThread):
             except Exception as e:
                 traceback.print_exc()
                 job.raised(e)
+
+    def _turn(self):
+        """The ladder: a scrub, then a bake's change of state, then a bake row behind a finished
+        window, then the window walk, then the clip walk. Returns the first rung due as the lane
+        its events serve under and the (job, call) steps that are its turn, or None when no rung
+        is, which is the condition the loop waits on, so waking means turning. Called under the
+        lock; the ask of the rung picked is taken here, so one landing meanwhile is not lost."""
+        scrub, bake, win, clip, g = self._scrub, self._bake, self._win, self._clip, self.graph
+        if self._want is not None:
+            row, self._want = self._want, None
+            return "scrub", [(scrub, lambda: scrub.turn(row))]
+        if bake.asked:
+            ask, bake.asked = bake.ask, False
+            return "walk", [(bake, lambda: bake.begin(*ask))]
+        count = g.count
+        fed = g.fed(g.walk) or self._served_head()
+        if win.asked:
+            (start, length), win.asked = win.ask, False
+            s = max(0, min(start, count - 1))
+            n = max(0, min(length, count - s)) if fed else 0   # nothing reaches a walked node and no served series node heads the chain: nothing to walk until the next change
+            return "walk", [(win, lambda: win.begin(s, n))]
+        if self._series_dirty:
+            self._series_dirty = False
+            if fed and win.i:
+                return "walk", [(win, win.emit)] + ([(clip, clip.emit)] if clip.i else [])
+        if bake.due() and win.i >= win.length:
+            return "bake", [(bake, bake.turn)]
+        if fed and win.i < win.length:
+            return "walk", [(win, win.turn)]
+        if clip.asked:
+            on, clip.asked = self._clip_on, False
+
+            def begin():
+                clip.begin(0, count if on and fed else 0)
+                if not clip.length:
+                    clip.ready.emit({}, 0, g.fps)
+                clip.progress.emit(clip.i, clip.length)
+            return "walk", [(clip, begin)]
+        if clip.i < clip.length:
+            if self._clip_on and fed:
+                return "walk", [(clip, clip.turn)]
+            on = self._clip_on
+
+            def halt():
+                clip.halt()
+                if not on:
+                    bake.abandon("the clip walk was stopped short of the clip")
+            return "walk", [(clip, halt)]
+        return None
 
     def _served_head(self):
         return any(self.graph.entry(h).bake is not None for h in self.graph.heads)

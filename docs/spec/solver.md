@@ -121,8 +121,8 @@ Assumes: A series tool may step.
 The chain in run order has a longest prefix every node of which steps, and a suffix that runs
 whole, and which is which is decided by the chain's shape and not by a tool alone: a stepping tool
 whose source does not step runs whole, and the first node that runs whole ends the prefix for
-every node after it. The verdict is the plan's, made at sync, shown beside the standing, and never
-saved.
+every node after it. The verdict is the plan's, made at sync, printed beside the standing in the
+`--plan` table, and never saved; nothing in the GUI reads it yet.
 
 Facts to weigh. The plan already walks the chain in run order and already decides, per node, fed
 or unrun with a standing that says why, so the verdict is one more thing read off a pass it makes;
@@ -135,9 +135,9 @@ run travel under track, with none of tracks-filter, resolve or kinematics in the
 rule their whole chain is prefix once travel steps, which it did not when this was written; the
 Why above says what is and is not measured of a suffix's cost. If a whole-window
 tool heavy enough to matter arrives, the
-plan's verdict is what makes its cost legible on the node rather than hidden in the chain, which
+plan's verdict is what can make its cost legible on the node rather than hidden in the chain, which
 is the Houdini and Blender case: the non-stepping node is a visible kind of thing, not a slow
-version of the same thing.
+version of the same thing. Showing it on the canvas or in the pane is open, below.
 
 - [x] The plan names, for each node in the chain, whether the walk steps it or runs it whole, and
   a stepping tool downstream of a whole-run node is run whole.
@@ -395,6 +395,9 @@ generation comparison anywhere, and both pins stand through this.
   tool whose answer needs the absolute row rather than the range index, a per-row timestamp
   column say, and that is the export's to add at write time, where it has the Series, as resolve
   reads `start` and runs whole. Noted from the architect review of the branch.
+- Whether the plan's step-or-whole verdict reaches the GUI, the canvas tooltip or the pane's line
+  beside the standing, where today only the `--plan` table prints it. Noted from the architect
+  review of the branch at 02911112.
 - Whether a fast window walk changes the default window length, which is 10 s for the stack and
   the decoder cache and not for the chain. docs/findings/2026-11-08-bake-window-fit.md has the
   fit numbers; the chain's are the Worth a look above.

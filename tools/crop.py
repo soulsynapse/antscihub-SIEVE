@@ -9,6 +9,7 @@ frame and the mask that bounded it meet downstream at one shape. `rect(roi, bord
 cut sits on the frame, (y0, y1, x0, x1), the offset an export placing a table back on the plate
 would add.
 """
+import cv2
 import numpy as np
 
 SIEVE_TOOL = True
@@ -21,13 +22,15 @@ MAX_BORDER = 500
 def rect(roi, border=0):
     """(y0, y1, x0, x1) of the roi's nonzero pixels grown by `border` and clipped to the roi's
     shape; ValueError when no pixel is set."""
-    set_ = np.asarray(roi) != 0
-    ys, xs = np.flatnonzero(set_.any(axis=1)), np.flatnonzero(set_.any(axis=0))
-    if len(ys) == 0:
+    m = np.asarray(roi)
+    if m.ndim != 2 or m.dtype != np.uint8:
+        m = (m.reshape(m.shape[0], m.shape[1], -1) != 0).any(axis=2).view(np.uint8)
+    x, y, bw, bh = cv2.boundingRect(m)
+    if bw == 0:
         raise ValueError("roi has no nonzero pixel at row 0; nothing to cut")
-    h, w = roi.shape[:2]
+    h, w = m.shape
     b = max(0, int(border))
-    return max(int(ys[0]) - b, 0), min(int(ys[-1]) + 1 + b, h), max(int(xs[0]) - b, 0), min(int(xs[-1]) + 1 + b, w)
+    return max(y - b, 0), min(y + bh + b, h), max(x - b, 0), min(x + bw + b, w)
 
 
 def run(frames, row, params):

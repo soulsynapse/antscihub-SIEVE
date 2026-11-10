@@ -11,10 +11,10 @@ whether the types fit; only a node's own connectors are refused, a longer cycle 
 """
 import zlib
 
-from PySide6.QtCore import QCoreApplication, QEvent, QLineF, QPointF, QRectF, Qt, Signal
-from PySide6.QtGui import QColor, QCursor, QPainter, QPainterPath, QPen
-from PySide6.QtWidgets import (QAbstractSpinBox, QApplication, QLineEdit, QListWidget, QListWidgetItem,
-                               QPlainTextEdit, QSizePolicy, QTextEdit, QToolTip, QWidget)
+from PySide6.QtCore import QCoreApplication, QEvent, QLineF, QPointF, QRectF, QSize, Qt, Signal
+from PySide6.QtGui import QColor, QCursor, QFontMetrics, QPainter, QPainterPath, QPen
+from PySide6.QtWidgets import (QAbstractSpinBox, QApplication, QHBoxLayout, QLabel, QLineEdit, QListWidget,
+                               QListWidgetItem, QPlainTextEdit, QSizePolicy, QTextEdit, QToolTip, QWidget)
 
 from . import theme
 from .document import (INPUT, OPEN, OVERLAYABLE, PATH, VIDEO_PRODUCES, VIDEO_TOOL, expects, fed, fits,
@@ -35,8 +35,9 @@ DIM = 70                   # alpha of a connector it may not
 ZOOM_MIN, ZOOM_MAX = 0.25, 4.0
 ZOOM_STEP = 1.15           # per wheel notch
 FRAME_PAD = 2 * PAD        # view px kept clear around what H frames
-MENU_W = 200               # the Tab menu's width, view px
-MENU_ROWS = 10             # the most tools the Tab menu shows before it scrolls
+MENU_W = 340               # the Tab menu's width, view px: a name, then room for a description
+MENU_ROWS = 14             # the most rows, group heads counted, the Tab menu shows before it scrolls
+UNLOADED = "not loaded"    # the menu's last group: tools the registry listed but could not import
 BUTTON = theme.ROW_H       # a button in the column: a square this wide, its glyph centred
 # the column, top to bottom: (glyph, tooltip, the key it stands in for). The key is the gesture and
 # the button the same action for the mouse hand, so there is one per key that is an action and
@@ -60,16 +61,39 @@ def type_color(t):
     return QColor.fromHsv(h, *theme.TYPE_SV)
 
 
+class _Row(QWidget):
+    """A menu entry's face: the name, then its description in tertiary ink, elided to the room left.
+    Mouse events pass through to the list, which owns hover and the click."""
+
+    def __init__(self, name, desc, greyed):
+        super().__init__()
+        self.setAttribute(Qt.WA_TransparentForMouseEvents)
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(6, 0, 6, 0)
+        lay.setSpacing(GAP)
+        self.name, self.desc = QLabel(name), QLabel()
+        self.name.setStyleSheet(f"color: {theme.gray(theme.INK_2 - 50 if greyed else theme.INK)}")
+        self.desc.setStyleSheet(f"color: {theme.gray(theme.INK_2)}")
+        room = MENU_W - 2 * PAD - 40 - GAP - QFontMetrics(self.name.font()).horizontalAdvance(name)   # 40: the list's scrollbar and padding
+        self.desc.setText(QFontMetrics(self.desc.font()).elidedText(desc, Qt.ElideRight, room))
+        lay.addWidget(self.name)
+        lay.addWidget(self.desc, 1)
+
+
 class TabMenu(theme.Layer):
-    """Houdini's Tab menu: a filter line over the tools, at the cursor. `entries` is [(name, error)],
+    """Houdini's Tab menu grouped as Blender's Shift+A is: a filter line over the tools, at the
+    cursor, each entry under its category with its description beside it, the typed text matching
+    group, name and description alike and a group it empties gone. `entries` is [(name, error)],
     error "" for a tool that imported; one that did not is greyed, says its error on hover and
-    cannot be chosen. `chosen` carries the name; `closed` follows every way out."""
+    cannot be chosen. `info` is name -> (category, description) for every name an entry may carry,
+    and `order` the categories as the groups read, any other after them. `chosen` carries the name;
+    `closed` follows every way out."""
     chosen = Signal(str)
     closed = Signal()
 
-    def __init__(self, entries, parent):
+    def __init__(self, entries, info, order, parent):
         super().__init__(2, "", parent)
-        self.entries = entries
+        self.entries, self.info, self.order = entries, info, tuple(order)
         self.setFixedWidth(MENU_W)
         self.setStyleSheet(f"""
             QListWidget {{ background: transparent; border: none; outline: none; }}
@@ -95,15 +119,26 @@ class TabMenu(theme.Layer):
     def refill(self, text):
         text = text.strip().lower()
         self.list.clear()
+        groups = {}
         for name, err in self.entries:
-            if text not in name.lower():
-                continue
-            item = QListWidgetItem(name)
-            if err:
-                item.setFlags(Qt.NoItemFlags)
-                item.setForeground(qgray(theme.INK_2 - 50))
-                item.setToolTip(err)
-            self.list.addItem(item)
+            cat, desc = self.info.get(name, ("", ""))
+            if any(text in s.lower() for s in (cat, name, desc)):
+                groups.setdefault(cat, []).append((name, err, desc))
+        rank = lambda c: self.order.index(c) if c in self.order else len(self.order)  # noqa: E731
+        for cat in sorted(groups, key=rank):
+            head = QListWidgetItem(cat)
+            head.setFlags(Qt.NoItemFlags)
+            head.setForeground(qgray(theme.INK_2))
+            head.setSizeHint(QSize(0, theme.ROW_H))
+            self.list.addItem(head)
+            for name, err, desc in groups[cat]:
+                item = QListWidgetItem(name)   # the text sits under the row's face; _pick reads it
+                item.setSizeHint(QSize(0, theme.ROW_H))
+                item.setToolTip(err or desc)
+                if err:
+                    item.setFlags(Qt.NoItemFlags)
+                self.list.addItem(item)
+                self.list.setItemWidget(item, _Row(name, desc, bool(err)))
         for i in range(self.list.count()):
             if self.list.item(i).flags() & Qt.ItemIsEnabled:
                 self.list.setCurrentRow(i)
@@ -111,6 +146,20 @@ class TabMenu(theme.Layer):
         rows = max(1, min(MENU_ROWS, self.list.count()))
         self.list.setFixedHeight(rows * self.list.sizeHintForRow(0) + 2 if self.list.count() else theme.ROW_H)
         self.adjustSize()
+
+    def shown(self):
+        """[(category, [name, ...])] as the list stands, group heads read as the categories."""
+        out = []
+        for i in range(self.list.count()):
+            item = self.list.item(i)
+            if self.list.itemWidget(item) is None:
+                out.append((item.text(), []))
+            else:
+                out[-1][1].append(item.text())
+        return out
+
+    def description(self, name):
+        return self.info.get(name, ("", ""))[1]
 
     def _step(self, d):
         rows = [i for i in range(self.list.count()) if self.list.item(i).flags() & Qt.ItemIsEnabled]
@@ -149,15 +198,18 @@ class TabMenu(theme.Layer):
 
 class Canvas(QWidget):
     """`tools` is the catalogue, name to module; the document's node names index it. `broken` is
-    name to error for every tool the registry listed but could not import."""
+    name to error for every tool the registry listed but could not import. `info` is name to
+    (category, description) for the Tab menu and `order` its categories as the groups read; the
+    canvas derives neither, the registry does."""
     selectionChanged = Signal(list)   # the selected node ids, in selection order
     changed = Signal()                # the document's nodes or wires changed here: what is computed
     flagged = Signal()                # a flag moved: what is looked at, nothing to recompute
 
-    def __init__(self, tools, broken=None, parent=None):
+    def __init__(self, tools, broken=None, info=None, order=(), parent=None):
         super().__init__(parent)
         self.tools = tools
         self.broken = dict(broken or {})
+        self.info, self.order = dict(info or {}), tuple(order)
         self.doc = None
         self.errors = {}                        # node id -> the one line wrong with it, set by the window
         self.standings = {}                     # node id -> why it does not run, set by the window; the node's tooltip
@@ -531,6 +583,15 @@ class Canvas(QWidget):
                 out.append((name, ""))
         return out
 
+    def menu_info(self):
+        """name -> (category, description) for every name `menu_entries` may offer: `info` as given
+        for a tool, the first category for the video node, and the last group with the error as its
+        description for a tool that did not import."""
+        info = {VIDEO_TOOL: (self.order[0] if self.order else "", "the footage the document reads")}
+        info.update({name: (UNLOADED, err) for name, err in self.broken.items()})
+        info.update(self.info)
+        return info
+
     def _offers(self, name):
         if self._pending is not None:
             return self._joins(name)
@@ -588,7 +649,7 @@ class Canvas(QWidget):
         if self._menu is not None:
             self.close_menu()
         where = self.to_doc(at if place_at is None else place_at)
-        self._menu = TabMenu(self.menu_entries(), self)
+        self._menu = TabMenu(self.menu_entries(), self.menu_info(), self.order, self)
         self._menu.chosen.connect(lambda name: self.place(name, where))
         self._menu.closed.connect(self.close_menu)
         self._menu.adjustSize()

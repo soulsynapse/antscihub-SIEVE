@@ -296,7 +296,7 @@ enough to read at a glance. The look, the order, the row's layout and how a desc
 then expected to move with Kendrick's feedback through the branch and after; the boxes below assert
 what the menu offers and never where or how, so the polish is free to move without unticking one.
 
-- [ ] The registry derives a category per tool from its facets by the ordered list above and prints
+- [x] The registry derives a category per tool from its facets by the ordered list above and prints
   it in the report beside the tool. (Amended 2026-11-10 with Kendrick's go-ahead: the line for a
   tool fitting no rule is dropped, since the list ends in the rest and so every tool fits, and a
   standing line is what he withdrew.)
@@ -304,7 +304,7 @@ what the menu offers and never where or how, so the polish is free to move witho
   transform reads each category, reads measure for an entry that is a measure and a convert by
   shape and cache for one that is a cache and a transform by shape; a test over `tools/` reads
   bake as a cache and csv as a transform.
-- [ ] The Tab menu offers every entry under its category, with the first sentence of the tool's
+- [x] The Tab menu offers every entry under its category, with the first sentence of the tool's
   docstring as its description, the categories flattening to the matches as text is typed, and
   the pending-wire narrowing of `_joins` and `_splices` as it is.
   Check: a test builds the menu over a catalogue of two categories and reads the two groups, each

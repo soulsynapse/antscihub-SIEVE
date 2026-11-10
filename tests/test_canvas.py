@@ -16,6 +16,7 @@ from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from sieve_player import document as D  # noqa: E402
 from sieve_player import canvas as canvas_mod  # noqa: E402
+from sieve_player import registry  # noqa: E402
 from sieve_player.canvas import Canvas  # noqa: E402
 
 gray = Tool(NAME="gray", KIND="frame", EXPECTS="bgr", PRODUCES="gray", DEFAULTS={})
@@ -87,6 +88,28 @@ def test_a_button_does_what_its_key_does_and_starts_no_gesture():
     assert [n.id for n in doc.nodes] == [D.VIDEO_TOOL]
     _press(canvas, delete_at)
     assert [n.id for n in doc.nodes] == [D.VIDEO_TOOL]
+
+
+def test_the_menu_groups_by_category_with_a_description_and_flattens_to_the_typed_text():
+    QApplication.instance() or QApplication([])
+    thin = Tool(NAME="thin", KIND="frame", EXPECTS="mask", PRODUCES="mask", DEFAULTS={},
+                __doc__="Frame tool: a mask thinned to its skeleton; mask in, mask out.\n\nMore below.")
+    tools = {**TOOLS, "thin": thin}
+    info = {n: (registry.category(t), registry.description(t)) for n, t in tools.items()}
+    canvas = Canvas(tools, {"bad": "ImportError: no"}, info, registry.CATEGORIES)
+    entries = [("gray", ""), ("reduce", ""), ("thin", ""), ("bad", "ImportError: no")]
+    menu = canvas_mod.TabMenu(entries, canvas.menu_info(), canvas.order, canvas)
+    assert menu.shown() == [("convert", ["gray"]), ("transform", ["thin"]), ("measure", ["reduce"]), (canvas_mod.UNLOADED, ["bad"])]
+    assert menu.description("thin") == "a mask thinned to its skeleton; mask in, mask out" and menu.description("gray") == ""
+    assert menu.list.currentItem().text() == "gray"
+    menu.edit.setText("reduce")
+    assert menu.shown() == [("measure", ["reduce"])] and menu.list.currentItem().text() == "reduce"
+    menu.edit.setText("skeleton")     # the description matches
+    assert menu.shown() == [("transform", ["thin"])]
+    menu.edit.setText("measure")      # and so does the group
+    assert menu.shown() == [("measure", ["reduce"])]
+    menu.edit.setText("zzz")
+    assert menu.shown() == []
 
 
 def test_the_video_node_is_in_the_menu_only_while_the_document_lacks_one():

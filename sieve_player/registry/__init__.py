@@ -1,6 +1,7 @@
 """The catalogue of tools. README.md beside this file is the spec; `__all__` is what it names."""
 import importlib
 import os
+import re
 import sys
 import traceback
 from dataclasses import dataclass
@@ -107,4 +108,42 @@ def types(entries, extra=()):
     return out
 
 
-__all__ = ["MARKER", "FACETS", "Entry", "is_tool", "probe", "hint", "discover", "types"]
+CATEGORIES = ("source", "convert", "relate", "transform", "cache", "measure")   # the Tab menu's order: a pipeline's
+
+
+def category(tool):
+    """The group `tool` falls in, read off its facets by the first rule that fits: a source has no
+    `EXPECTS`; a cache has `bake`; a measure produces signal and does not expect it; a relate has
+    `INPUTS` and produces `same` or a type it expects; a convert produces a type it does not expect;
+    the rest transform. Measure sits before convert and cache before transform because each is the
+    other by shape."""
+    ex = probe(tool, "EXPECTS")
+    if ex is None:
+        return "source"
+    ex = {ex} if isinstance(ex, str) else set(ex)
+    p = probe(tool, "PRODUCES")
+    if probe(tool, "bake") is not None:
+        return "cache"
+    if p == "signal" and "signal" not in ex:
+        return "measure"
+    if probe(tool, "INPUTS") and (p == "same" or p in ex):
+        return "relate"
+    if p != "same" and p not in ex:
+        return "convert"
+    return "transform"
+
+
+_LABEL = re.compile(r"^[A-Za-z ]{1,20}:\s+")
+_SENTENCE = re.compile(r"(.*?[.!?])(?=\s+[A-Z`(]|\s*$)", re.S)
+
+
+def description(tool):
+    """The first sentence of `tool`'s own docstring, its leading label ("Frame tool:", "Selector:")
+    and final period dropped; "" for a tool without one."""
+    doc = (vars(tool).get("__doc__") or "").strip()
+    first = " ".join(doc.split("\n\n", 1)[0].split())
+    m = _SENTENCE.match(first)
+    return _LABEL.sub("", m.group(1) if m else first).rstrip(".")
+
+
+__all__ = ["MARKER", "FACETS", "Entry", "is_tool", "probe", "hint", "discover", "types", "CATEGORIES", "category", "description"]

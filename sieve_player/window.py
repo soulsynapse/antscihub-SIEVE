@@ -22,7 +22,7 @@ from .canvas import Canvas
 from .decoder import Decoder
 from .graph import Graph
 from .pane import Pane
-from .registry import Entry
+from .registry import CATEGORIES, Entry, category, description
 from .theme import GAP, PAD, ROW_H, readout
 from .timeline import Timeline
 from .trace import Dump
@@ -387,7 +387,7 @@ class PlayerWindow(QMainWindow):
         self.store = store.current()   # where bakes land and are read from; Store… replaces it
 
         self.display = Display()
-        self.canvas = Canvas(self.tools, broken)
+        self.canvas = Canvas(self.tools, broken, {n: (category(t), description(t)) for n, t in self.tools.items()}, CATEGORIES)
         self.pane = Pane(self.tools)
         self.timeline = Timeline()
         # an empty selection leaves the pane on its last node, so a click on empty canvas never blanks it

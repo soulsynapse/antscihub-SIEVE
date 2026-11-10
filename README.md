@@ -35,6 +35,9 @@ A tool is one Python file with `SIEVE_TOOL = True` and a `NAME`. Everything else
 or may not declare; `sieve_player/registry/README.md` says how tools are found and what a missing
 facet means, and `python -m sieve_player.registry` lists the facets the player reads.
 
+The same facets answer questions about the catalogue as a whole; docs/findings/2026-11-09-tool-report-canaries.md
+has two reports derived from them, what each found and what it could not see.
+
 A tool does one thing, and a wanted variation is a second tool wired beside it, never a knob on
 the first: applying one node's output to another's is a node of its own that reads both, not a
 setting hidden on either. Chains get longer; tools do not get wider.

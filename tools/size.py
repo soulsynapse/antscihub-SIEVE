@@ -1,14 +1,14 @@
-"""Series tool: the `method` over a numeric column of each row's blob table; blobs in, signal out.
+"""Series tool: the `method` over a numeric column of each row's table; a blobs or a tracks table in, signal out.
 
 `field` is `area`, `major`, `minor`, `w` or `h`, in px, or any numeric column added upstream;
-`method` reduces the row's column to one number. A row with no blobs reads 0, as count's does,
+`method` reduces the row's column to one number. A row with no records reads 0, as count's does,
 since the trace scales by the signal's max and a NaN there would blank it. No fold: the median needs the whole column, so the window holds
 the tables, as it does for track.
 """
 import numpy as np
 
 SIEVE_TOOL = True
-NAME, KIND, EXPECTS, PRODUCES = "size", "series", "blobs", "signal"
+NAME, KIND, EXPECTS, PRODUCES = "size", "series", ("blobs", "tracks"), "signal"
 FIELDS = ("area", "major", "minor", "w", "h")
 METHODS = ("mean", "median", "min", "max", "sum", "std")
 DEFAULTS = {"field": "area", "method": "mean"}

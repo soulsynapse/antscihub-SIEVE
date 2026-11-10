@@ -33,6 +33,12 @@ def plane(table):
     return (table.dtype.metadata or {}).get("plane")
 
 
+def is_tables(data):
+    """Whether a series' rows are tables, read off the first; False for an empty series or a signal.
+    A Series carries no type, so a tool over both reads the shape."""
+    return len(data) > 0 and getattr(data[0], "dtype", None) is not None and data[0].dtype.names is not None
+
+
 def with_column(table, name, values):
     """The table with `values` as a column named `name`, the plane kept; a name the table already
     has raises ValueError, since overwriting a producer's column would silently change its meaning."""

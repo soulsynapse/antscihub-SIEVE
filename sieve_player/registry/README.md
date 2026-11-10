@@ -21,6 +21,13 @@ The types are whatever the tools say: `types(entries)` maps each to who produces
 and the report prints that first. `--check` fails if this list and `__all__` differ, if a facet is
 read by nothing, or if a type under `tools/` is produced or expected by nothing.
 
+A tool's category is derived, never declared: `category(tool)` reads the facets by an ordered list,
+source, cache, measure, relate, convert, transform, the first rule that fits deciding, so a tool
+lands in a Tab menu group the day it is written and nobody files it; docs/spec/tool-naming.md
+argues the list. `description(tool)` is the first sentence of its docstring less its label, and
+`signature(tool)` its types in and out, what the menu shows beside the name. The report prints the
+category beside each tool.
+
 ## Exports
 
 - `MARKER`
@@ -31,6 +38,10 @@ read by nothing, or if a type under `tools/` is produced or expected by nothing.
 - `hint(facet)`
 - `discover(*roots)` -- imports each `.py` under `roots` as `<dirname>.<stem>`, skipping a stem that begins with `_`: those are what tools share, never tools
 - `types(entries, extra=())` -- type -> (producers, expecters)
+- `CATEGORIES` -- the groups in the Tab menu's order
+- `category(tool)` -- the group a tool's facets put it in
+- `description(tool)` -- the first sentence of its docstring, unlabelled
+- `signature(tool)` -- what it reads and hands out, as "gray, mask → blobs"
 
 ```
 python -m sieve_player.registry [root ...]   # report; default root is tools/

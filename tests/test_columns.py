@@ -1,5 +1,5 @@
 """A table carries columns added downstream and the shape of the plane it was found in: an added column
-reaches filter, size, track, travel and tracks-csv by the table's own names; a name the table has is
+reaches filter, size, track, travel and csv by the table's own names; a name the table has is
 refused; the plane survives blobs, filter and track."""
 import os
 
@@ -11,7 +11,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from sieve_player.graph import Series
 from tests.test_blobs import fed, m
 from tests.test_track import table
-from tools import blobs, filter, size, track, tracks_csv, travel
+from tools import blobs, csv, filter, size, track, travel
 from tools import _draw, _table
 
 
@@ -31,7 +31,7 @@ def test_an_added_column_reaches_every_reader_by_the_tables_names(tmp_path):
     assert out[0].dtype.names[-2:] == ("purple", "id") and out[3]["purple"].tolist() == [3.0, 13.0]
     assert len(set(out[r]["id"][out[r]["purple"] >= 10][0] for r in range(4))) == 1         # b keeps its id and its column
     assert travel.run(Series(out, "k", 0, 30.0), travel.DEFAULTS)["signal"].shape == (4,)
-    text = tracks_csv.text({"rows": out}, 0, 30.0, "ants.mp4")
+    text = csv.text({"rows": out}, 0, 30.0, "ants.mp4")
     header, first = text.splitlines()[1:3]
     assert header.endswith(",core,purple,gate") and first.endswith(",0,1") and first.split(",")[-2] in ("0", "10")
     with pytest.raises(ValueError):

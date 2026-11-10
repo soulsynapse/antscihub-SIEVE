@@ -1,14 +1,15 @@
-"""The file csv and tracks-csv write and resolve reads back: the key line, the atomic write, and the
-Write widget. Not a tool; a tool imports it and no other tool (tests/test_seams.py).
+"""The file csv writes and resolve reads back: the key line, the atomic write, and the Write widget.
+Not a tool; a tool imports it and no other tool (tests/test_seams.py).
 
-The first line is a comment, `# sieve key=... rows=a-b footage=... [plate=first:increment]`, the node's key as the player
-computed it (see `sieve_player.graph`): it hashes the band and everything upstream, so a tool reads
-it back and says whether the file on disk is this graph's or stale. Readers skip the line with
-`comment="#"` (pandas) or `comment.char = "#"` (R). The second line names the columns, and every
-line after is one row, or one record of a row, comma separated.
+The first line is a comment, `# sieve key=... rows=a-b footage=... [plate=first:increment] [kind=type]`, the node's key
+as the player computed it (see `sieve_player.graph`): it hashes the band and everything upstream, so
+a tool reads it back and says whether the file on disk is this graph's or stale; `kind` is the type
+the rows were written from, absent on a file written before it was carried. Readers skip the line
+with `comment="#"` (pandas) or `comment.char = "#"` (R). The second line names the columns, and
+every line after is one row, or one record of a row, comma separated.
 
-A tool using the widget gives it a module with `count(result)`, `default_name(footage, start, n)`,
-`write(path, result, start, fps, footage)` and `FILTER`. Qt is imported inside `widget` alone.
+A tool using the widget gives it a module with `count(result)`, `default_name(footage, start, n,
+result)`, `write(path, result, start, fps, footage)` and `FILTER`. Qt is imported inside `widget` alone.
 """
 import os
 import re
@@ -16,19 +17,27 @@ import re
 DEFAULTS = {"beside footage": True}
 FILTER = "CSV (*.csv);;All (*)"
 _KEY = re.compile(r"# sieve key=(\S*) rows=(\d+)-(\d+)")
+_KIND = re.compile(r" kind=(\S+)")
 
 
-def key_line(key, start, n, footage, plate=None):
+def key_line(key, start, n, footage, plate=None, kind=None):
     """`plate`, (first row, increment), says the rows are a bake's and how they map to the footage's:
-    footage row = first + increment × row."""
+    footage row = first + increment × row; `kind` is the type the rows were written from."""
     line = f"# sieve key={key} rows={start}-{start + n - 1} footage={os.path.basename(str(footage))}"
-    return line if plate is None else f"{line} plate={int(plate[0])}:{int(plate[1])}"
+    line = line if plate is None else f"{line} plate={int(plate[0])}:{int(plate[1])}"
+    return line if kind is None else f"{line} kind={kind}"
 
 
 def parse_key(line):
     """(key, start, last) off a key line, or None when the line is not one."""
     m = _KEY.match(line)
     return None if m is None else (m.group(1), int(m.group(2)), int(m.group(3)))
+
+
+def parse_kind(line):
+    """The kind a key line carries, or None for a line without one."""
+    m = _KIND.search(line)
+    return None if m is None else m.group(1)
 
 
 def written_key(path):
@@ -60,9 +69,9 @@ def replace(path, text):
 
 
 def read(path):
-    """(key line, start, n, header, lines) of a file this module's writers wrote: the header as a
-    list of names, the lines each split on commas, blank ones dropped; ValueError when the first
-    line is not a key line."""
+    """(key line, start, n, header, lines, kind) of a file this module's writers wrote: the header as
+    a list of names, the lines each split on commas, blank ones dropped, the kind None when the key
+    line carries none; ValueError when the first line is not a key line."""
     with open(path, encoding="utf-8") as f:
         key = f.readline().rstrip("\n")
         header = f.readline().rstrip("\n").split(",")
@@ -71,7 +80,7 @@ def read(path):
     if parsed is None:
         raise ValueError(f"{os.path.basename(path)} has no sieve key line; is it a csv a SIEVE node wrote?")
     _, start, last = parsed
-    return key, start, last - start + 1, header, lines
+    return key, start, last - start + 1, header, lines, parse_kind(key)
 
 
 def widget(parent, export):
@@ -114,7 +123,7 @@ def widget(parent, export):
             return self.export.count(self.result)
 
         def _default(self):
-            return self.export.default_name(self.footage, self.start, self._count())
+            return self.export.default_name(self.footage, self.start, self._count(), self.result)
 
         def _path(self):
             """Where Write would write, or None while it is not known: no footage, no rows yet, or

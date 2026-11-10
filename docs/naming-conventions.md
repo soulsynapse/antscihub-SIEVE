@@ -1,5 +1,7 @@
 # Tool names under five conventions
 
+-- Kendrick's notes: The look ahead for potential features that could be shaped by what this file is gesturing at in the future: tool filters and views, a searchable recipe library eventually, visual changes to how nodes/edges are represented. None of these are guaranteed.
+
 A view, not a decision. Each column renames the whole catalogue under one convention that users of
 the source tool praise; where a convention has no good answer the least-bad name is written so the
 strain shows. Written 2026-11-09 against the tree at 4203efbc.

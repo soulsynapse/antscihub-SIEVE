@@ -4,7 +4,7 @@ import os
 import re
 import sys
 
-from . import FACETS, MARKER, __all__, discover, hint, is_tool, types
+from . import FACETS, MARKER, __all__, category, discover, hint, is_tool, types
 
 VIDEO = ("video", "bgr", "path")   # the one node that is not a tool: what it produces and expects
 
@@ -20,10 +20,11 @@ def report(roots):
     for t, (p, ex) in sorted(types(discover(*roots), [VIDEO]).items()):
         print(f"{t:<8} from {', '.join(sorted(p)) or 'nothing'}  to {', '.join(sorted(ex)) or 'nothing'}")
     for e in discover(*roots):
-        print(f"{e.name}  ({e.path})")
         if not e.ok:
+            print(f"{e.name}  ({e.path})")
             print(f"    could not import: {e.error}")
             continue
+        print(f"{e.name}  ({e.path})  {category(e.module)}")
         for f in FACETS:
             v = e.get(f)
             if v is None:

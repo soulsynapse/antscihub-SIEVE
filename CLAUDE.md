@@ -24,3 +24,5 @@
 - Run Python and pytest through `.venv/Scripts/python.exe`; the anaconda `python` on PATH has no PySide6.
 - Files are LF. A script that rewrites one must open it with `newline="\n"` (or write bytes); Python's
   default on Windows writes CRLF, and git then warns on every touch.
+- A Python script fed to the Bash tool by heredoc has its `\n` escapes turned into real newlines;
+  write or edit files with the Write and Edit tools instead.

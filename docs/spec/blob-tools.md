@@ -55,12 +55,13 @@ mean area, any of them bounded. filter reads one record at a time and cannot, so
 tool, with filter's blank-is-none bounds. Ids are not renumbered; a dropped track's records leave the
 table.
 
-## Tracks to a file (series; tracks in, tracks out): built, tools/tracks_csv.py
+## Tracks to a file (series; tracks in, tracks out): built as tools/tracks_csv.py, merged into tools/csv.py on 2026-11-09
 
-Positions per id per row are what tracking is for; csv takes a signal, so this is its sibling,
+Positions per id per row are what tracking is for; csv took a signal, so this was its sibling,
 sharing its Write widget and key line. Long format, one line per record, row, time, id, the blob
 columns less contour, gate; a row with no records writes nothing. The signal is the records per
-row, so the band gates by count.
+row, so the band gates by count. docs/spec/tool-naming.md's One csv folded it into csv, which now
+writes a signal, a blobs series or a tracks series and names the kind on the key line.
 
 ## Morphology on the mask (frame; mask in, mask out): built, tools/morphology.py
 

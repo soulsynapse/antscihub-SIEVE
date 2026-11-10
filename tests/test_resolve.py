@@ -9,7 +9,7 @@ import pytest
 from sieve_player import document as D
 from sieve_player.graph import Series
 from tests.test_selector import open_window, tree
-from tools import blobs, resolve, track, tracks_csv
+from tools import blobs, csv, resolve, track
 from tools import _table
 
 DTYPE = _table.plane_dtype((100, 100), np.dtype(track.DTYPE.descr + [("tag", np.float64)]))
@@ -99,14 +99,26 @@ def test_the_same_pass_rewrites_a_tracks_csv_under_its_key_line(tmp_path):
     p = tmp_path / "ants_20-29_tracks.csv"
     stack = np.empty(10, object)
     stack[:] = rows
-    tracks_csv.write(p, {"rows": stack, "signal": np.full(10, 2.0), "key": "k1"}, 20, 30.0, "ants.mp4")
+    csv.write(p, {"rows": stack, "signal": np.full(10, 2.0), "key": "k1"}, 20, 30.0, "ants.mp4")
     before = p.read_text(encoding="utf-8").splitlines()
     assert resolve.main([str(p), "--columns", "tag"]) == 0
     lines = p.read_text(encoding="utf-8").splitlines()
-    assert lines[0] == before[0] == "# sieve key=k1 rows=20-29 footage=ants.mp4"
+    assert lines[0] == before[0] == "# sieve key=k1 rows=20-29 footage=ants.mp4 kind=tracks"
     assert lines[1] == before[1].replace(",gate", ",identity,conflict,gate") and len(lines) == len(before)
     assert lines[2].startswith("20,0.666667,1,") and lines[2].endswith(",5,0,1") and lines[3].endswith(",nan,0,1")
     (tmp_path / "l.csv").write_text("20,29,2,3\n", encoding="utf-8")
     resolve.main([str(p), "--columns", "tag", "--labels", str(tmp_path / "l.csv"), "--out", str(tmp_path / "o.csv")])
     out = (tmp_path / "o.csv").read_text(encoding="utf-8").splitlines()
     assert out[1] == lines[1] and out[3].endswith(",3,0,1") and os.path.exists(p)
+
+
+def test_a_csv_of_another_kind_is_refused_by_name_and_one_of_no_kind_reads_as_tracks(tmp_path):
+    sig = tmp_path / "ants_0-1.csv"
+    csv.write(sig, {"signal": np.array([1.0, 2.0], np.float32), "key": "k1"}, 0, 30.0, "ants.mp4")
+    with pytest.raises(ValueError, match="is a signal csv"):
+        resolve.rewrite(sig, ["tag"])
+    old = tmp_path / "old.csv"
+    old.write_text("# sieve key=k1 rows=20-20 footage=ants.mp4\nrow,time,id,cx,cy,tag,gate\n20,0.666667,1,10,10,5,1\n", encoding="utf-8")
+    resolve.rewrite(old, ["tag"], min_reads=1)
+    lines = old.read_text(encoding="utf-8").splitlines()
+    assert lines[0] == "# sieve key=k1 rows=20-20 footage=ants.mp4" and lines[1].endswith(",tag,identity,conflict,gate") and lines[2].endswith(",5,5,0,1")

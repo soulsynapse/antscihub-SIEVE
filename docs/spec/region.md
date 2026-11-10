@@ -181,9 +181,12 @@ frame it cut.
 
 Facts to weigh, as the tree stands at 705aa7dc and to be verified against it. The window stack and
 a table's plane both assume one shape per node under one key, so a crop's rect cannot follow a
-mask that changes per row; STATIC is declared per tool and not propagated through a chain, so a
-region through a combine is static in fact and not in declaration, and the plan cannot tell the
-crop whether its roi will hold still. A rect that is a function of the roi at one fixed row is the
+mask that changes per row; STATIC was declared per tool and not propagated through a chain, so a
+region through a combine was static in fact and not in declaration, and the plan could not tell
+the crop whether its roi would hold still (since 2026-11-09 the plan inherits static through a
+frame node fed only by static nodes, as Houdini propagates time dependence through a SOP chain, and
+docs/findings/2026-11-09-crop-cold-walk.md says why; the crop's design below does not lean on it
+either way). A rect that is a function of the roi at one fixed row is the
 same for every row by construction, needs no propagation and holds no state, and for a static roi
 it is the rect at every row anyway. A table found in a cropped frame has its columns in the crop's
 pixels; draw paints in the displayed frame's pixels and the exports write the columns as they are,
@@ -215,7 +218,8 @@ knows nothing upstream of itself by design, so the sidecar is not where it lands
 Worth a look: the crossings document with a region around the nest and the blobs chain after a
 crop, cold walk and rewalk through `sieve_player/dev/monitor.py`, beside the uncropped figures in
 docs/findings/2026-11-08-bake-window-fit.md, as a finding of its own; it is the claim the Why
-rests on and the one number that says whether the branch did what it was for.
+rests on and the one number that says whether the branch did what it was for. Measured 2026-11-09 in
+docs/findings/2026-11-09-crop-cold-walk.md; the eye's part, the drawn outline on the frame, is still open.
 
 ## Background folds a mask
 
@@ -316,10 +320,11 @@ next, so the frame keeps where it has been and a right click walks back; it know
   say it is slow.
 - Whether a pick may carry the display flag to the node that consumes the region's mask when
   exactly one does. Held until the two-click version has been lived with.
-- When a `PATHS` loader re-reads a changed file: on reopen, on the selector's rescan, or on a
-  change to the file. Redrawing a shape and expecting the graph to follow depends on the answer,
-  and the tree's answer is to be read off tools/file.py and the pane before anything is built on
-  it.
+- ~~When a `PATHS` loader re-reads a changed file~~: settled 2026-11-09 by be59a820, on a change
+  to the file. The window remembers the path and mtime it last handed each loader, watches every
+  taken file, and re-asks the loaders once the writes settle; the settle time and the memory live
+  in sieve_player/window.py. A reopen reads afresh; whatever repicks the path, the selector's
+  rescan among them, runs the loader only when the path or its mtime moved.
 - A drawer's shapes painted on a frame of another shape than its plane, which every table tool
   does today when the display flag is upstream or downstream of a rescale. A pick refuses such a
   frame; whether a draw should is its own question.

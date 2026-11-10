@@ -1,10 +1,10 @@
 """`python -m sieve_player.registry [root ...]` reports; `--check` holds the package to its README
-and fails on a type nothing produces or nothing expects, or a class naming one no tool uses."""
+and fails on a type nothing produces or nothing expects."""
 import os
 import re
 import sys
 
-from . import CLASSES, FACETS, MARKER, __all__, discover, expects, hint, is_tool, pairs, strains, types, verb
+from . import FACETS, MARKER, __all__, discover, hint, is_tool, types
 
 VIDEO = ("video", "bgr", "path")   # the one node that is not a tool: what it produces and expects
 
@@ -17,17 +17,9 @@ def orphans(roots):
 
 
 def report(roots):
-    entries = discover(*roots)
-    for t, (p, ex) in sorted(types(entries, [VIDEO]).items()):
+    for t, (p, ex) in sorted(types(discover(*roots), [VIDEO]).items()):
         print(f"{t:<8} from {', '.join(sorted(p)) or 'nothing'}  to {', '.join(sorted(ex)) or 'nothing'}")
-    for cls, members in CLASSES.items():
-        print(f"class {cls}: {', '.join(sorted(members))}")
-    by_name = {e.name: e for e in entries}
-    for name, cls, lacks in strains(entries):
-        print(f"strain   {name} expects {', '.join(sorted(expects(by_name[name])))} of {cls} and not {', '.join(sorted(lacks))}")
-    for a, b, same, inter, union in pairs(entries):
-        print(f"pair     {a}, {b}  {f'verb {verb(a)}  ' if same else ''}names {inter}/{union}")
-    for e in entries:
+    for e in discover(*roots):
         print(f"{e.name}  ({e.path})")
         if not e.ok:
             print(f"    could not import: {e.error}")
@@ -53,9 +45,8 @@ def report(roots):
             print(f"not tools under {root} (no {hint(MARKER)!r}): {', '.join(others)}")
 
 
-def failures(roots=("tools",), classes=CLASSES):
-    """Every way the package breaks its README: Exports differ from `__all__`, a facet nothing in
-    sieve_player reads, an orphan type under `roots`, or a class naming a type no tool there uses."""
+def check():
+    """README's Exports == __all__; every facet is read by some sieve_player module outside here."""
     failures = []
     with open(os.path.join(HERE, "README.md"), encoding="utf-8") as f:
         readme = f.read()
@@ -74,21 +65,12 @@ def failures(roots=("tools",), classes=CLASSES):
             continue  # read here, by discovery; nothing else needs to
         if not re.search(rf"""[.\"']{facet}\b""", sources):
             failures.append(f"facet {facet!r} is probed but nothing in sieve_player reads it")
-    for t, p, ex in orphans(list(roots)):
+    for t, p, ex in orphans(["tools"]):
         failures.append(f"type {t!r} is {'produced' if p else 'expected'} by {', '.join(sorted(p or ex))} and {'expected' if p else 'produced'} by nothing")
-    used = set(types(discover(*roots)))
-    for cls, members in classes.items():
-        for t in sorted(members - used):
-            failures.append(f"class {cls!r} names {t!r}, which no tool under {', '.join(roots)} produces or expects")
-    return failures
-
-
-def check():
-    found = failures()
-    for msg in found:
+    for msg in failures:
         print("FAIL", msg)
-    print("registry check:", "ok" if not found else f"{len(found)} failure(s)")
-    return 1 if found else 0
+    print("registry check:", "ok" if not failures else f"{len(failures)} failure(s)")
+    return 1 if failures else 0
 
 
 if __name__ == "__main__":

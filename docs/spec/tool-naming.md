@@ -5,7 +5,12 @@ their tests pass, the first deliverable's the same day.
 Amended the same day, still at e17fe0fc, after an architectural review ran its Facts against the
 tree: the category derivation is an ordered list with no write group, the csv file carries its kind
 on the key line, strain excludes a single type, and hsv keeps its name under the rule it had
-contradicted. Read with sieve_player/registry/README.md, which says what a facet is and when one earns a place in
+contradicted. Amended 2026-11-10 after Kendrick withdrew the standing reports: a line printed on
+every registry read becomes noise that is ignored, since it is never the most pressing thing, so the
+registry prints no strain, pair or wire-name line, the two scripts under docs/findings/experiments/
+are the back pocket to run when a merge is wondered about, and the deliverables that built the
+reports in are marked withdrawn below, their boxes history and outside the branch's done condition;
+what the canaries found once, the csv merge and the widened count and size, stays built. Read with sieve_player/registry/README.md, which says what a facet is and when one earns a place in
 `FACETS`, with the root README's rule that a tool does one thing and a variation is a second tool
 beside it, with docs/naming-conventions.md, the five-column view the rule was chosen from, with
 docs/naming-generated.md, the table that showed a contract grammar failing in the right places, and
@@ -74,6 +79,10 @@ words removed. A *pair* is two tools the registry reports as possibly one tool d
 
 Assumes: nothing.
 
+Withdrawn 2026-11-10: built at 94f42b86 and unbuilt the next day, so the boxes below read as
+history; the strain column is docs/findings/experiments/2026-11-09-tool-naming-table.py's, run when
+wanted.
+
 The one declared thing: a table of classes in the registry, and a report line per tool that
 strains a class, so a refusal is seen the day it is written and
 answered by the tool's author rather than found by a naming exercise.
@@ -106,6 +115,9 @@ own test, not this spec's.
 ## The pair report
 
 Assumes: The class table and the strain report.
+
+Withdrawn 2026-11-10: built at 01baa096 and unbuilt the next day, so the box below reads as
+history; docs/findings/experiments/2026-11-09-tool-pair-report.py is the report, run when wanted.
 
 A second report line: two tools sharing a verb, or sharing most of their top-level names, so a
 tool written fast beside its twin is seen the next time the registry is read and nobody ponders
@@ -207,6 +219,10 @@ hold the blobs case; the tracks case extends them.
 ## Tools no longer named for a wire
 
 Assumes: The pair report.
+
+Withdrawn 2026-11-10 as a report, before it was built: no wire-name line is owed. The renames and
+the README's rule are naming decisions and Kendrick's words, and whether they are still wanted
+without the report that would have checked them is his call, recorded under Open.
 
 `gray` and `mask` are tool files whose names are a type they do not alone produce, so the tree
 reads them as wires; Houdini writes a conversion as `a-to-b` and an application as the verb. The
@@ -331,3 +347,9 @@ Kendrick's to change without one.
   mechanism, if one is minted.
 - Whether a csv of unknown kind, written before the key line carried one, should go on reading
   into resolve forever, or the first release that must not accept one dates the leniency.
+- Whether gray and mask are still renamed, and the root README still gains the naming rule, now
+  that the wire-name report is withdrawn; the words were always Kendrick's, and so is this.
+- The One csv box over docs: its Check wants every line `rg tracks-csv` finds in docs/ to date the
+  name, and three of them are ticked assertions in identity.md and solver.md a session never
+  rewrites, the rest sitting in Facts, findings and views dated to a tree at the file's head.
+  Whether file-level dating satisfies it is Kendrick's reading; the box stays unticked until then.

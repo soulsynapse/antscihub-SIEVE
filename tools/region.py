@@ -4,8 +4,10 @@ frame of any plane kind in for its shape, blobs out.
 The file, written by a drawing utility and found by a `file` selector wired into `geometry`, is
 JSON: `{"plate": [height, width], "shapes": [{"name": ..., "polygon": [[x, y], ...]} or
 {"name": ..., "circle": [cx, cy, r]}, ...]}`, every number in plate pixels, a polygon's vertices
-and a circle's extent within the plate's edges. `load_geometry` raises on any other geometry, a
-shape past the edge, a repeated name or a malformed file, saying what was wrong. A record is the
+and a circle's extent within the plate's edges. A top-level key other than `plate` and `shapes`,
+the drawing utility's own, is ignored, and the loader's answer is the same with it as without.
+`load_geometry` raises on any other geometry, a shape past the edge, a repeated name or a
+malformed file, saying what was wrong. A record is the
 filled shape's position and moment columns, its outline as `contour` and its name in `name`;
 `choice`, empty or a name, narrows the table to that record, and a name the file lacks reads as
 empty. A frame whose shape is not the plate's raises with the two shapes, so a region wired after

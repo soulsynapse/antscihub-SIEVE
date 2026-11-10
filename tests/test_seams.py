@@ -5,6 +5,7 @@ from pathlib import Path
 
 PKG = Path(__file__).resolve().parents[1] / "sieve_player"
 TOOLS = PKG.parent / "tools"
+UTILITIES = PKG.parent / "utilities"
 HEADER_LINES = 10   # a module docstring states the module and its seams; past this it is a changelog, see CLAUDE.md
 MAY_IMPORT = {
     "document": set(),
@@ -65,6 +66,24 @@ def test_a_tool_imports_what_tools_share_and_never_another_tool():
     assert not bad, bad
 
 
+def test_a_utility_imports_neither_the_player_nor_a_tool():
+    """A utility runs as its own process on what its command line hands it, so it can be run,
+    copied or replaced without the player."""
+    def roots(path):
+        out = set()
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if isinstance(node, ast.ImportFrom) and node.level == 0:
+                out.add(node.module.split(".")[0])
+            elif isinstance(node, ast.Import):
+                out |= {a.name.split(".")[0] for a in node.names}
+        return out
+
+    files = list(UTILITIES.rglob("*.py"))
+    assert files
+    bad = {str(p.relative_to(UTILITIES)): sorted(m) for p in files if (m := roots(p) & {"sieve_player", "tools"})}
+    assert not bad, bad
+
+
 def test_the_worker_walks_the_clip_with_no_twin_of_a_window_field_or_method():
     """One _Walk serves the window and the clip; a private worker name beside its `_c` or `_clip`
     prefixed twin is the second copy of the walk coming back."""
@@ -84,7 +103,8 @@ def test_a_module_header_states_the_module_not_its_history():
         doc = ast.get_docstring(ast.parse(path.read_text(encoding="utf-8")), clean=False) or ""
         return len(doc.splitlines())
 
-    long = {str(p.relative_to(PKG)): n for p in PKG.rglob("*.py") if (n := header_lines(p)) > HEADER_LINES}
+    files = [*PKG.rglob("*.py"), *UTILITIES.rglob("*.py")]
+    long = {str(p.relative_to(PKG.parent)): n for p in files if (n := header_lines(p)) > HEADER_LINES}
     assert not long, long
 
 

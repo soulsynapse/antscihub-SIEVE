@@ -39,6 +39,7 @@ def frame(shape=(H, W)):
 def test_the_loader_reads_a_polygon_and_a_circle_and_refuses_what_is_not_one(tmp_path):
     got = region.load_geometry(write(tmp_path, GEOMETRY))
     assert got["plate"] == [H, W] and [s["name"] for s in got["shapes"]] == ["nest", "dish"]
+    assert region.load_geometry(write(tmp_path, {**GEOMETRY, "drawing": {"nest": {"kind": "square"}}}, "drawn.json")) == got
     assert got["shapes"][0]["polygon"] == [[float(x), float(y)] for x, y in SQUARE] and got["shapes"][1]["circle"] == CIRCLE
     twice = {"plate": [H, W], "shapes": [{"name": "t", "polygon": [[1, 1], [5, 1], [3, 4]]}, {"name": "t", "polygon": [[1, 1], [5, 1], [3, 4]]}]}
     with pytest.raises(ValueError, match="two shapes are named 't'"):

@@ -1,7 +1,7 @@
 # Geometry: a drawing utility for the file a region reads, opened from the node it feeds
 
 Written 2026-11-10, from Kendrick's request of that day and his reading of the first draft the same
-day; no box is ticked. Amended the same day after an architect review ran its Facts against the tree
+day; no box was ticked then. Amended the same day after an architect review ran its Facts against the tree
 at 9f3ea91a and its deliverables against one another: the card's button reaches the wired file by
 its path, which the window hands the card, where it had matched the region's shapes against files
 on disk and a configuration kept in the library made two matches of every file saved from it; a
@@ -99,7 +99,7 @@ player's look lives in sieve_player/theme.py; a utility that may not import it c
 colours and its own font choice, and a later change to the theme does not reach it, which is the
 price of the seam.
 
-- [ ] `utilities/` holds one subfolder per utility, each runnable as `python -m utilities.<name>`
+- [x] `utilities/` holds one subfolder per utility, each runnable as `python -m utilities.<name>`
   from the repo's root, with a README of a few lines saying what file it writes and which tool
   reads it; nothing under `utilities/` imports `sieve_player` or `tools`.
   Check: tests/test_seams.py walks every `.py` under `utilities/` and reads no import of either.
@@ -119,7 +119,7 @@ which is why the drawing is a top-level key and not one on each shape. The loade
 `plate` and `shapes` as params, so the drawing never reaches the node's params or its key, and
 editing a shape's kind without moving it re-keys nothing.
 
-- [ ] region's module docstring says a geometry file's top-level keys other than `plate` and
+- [x] region's module docstring says a geometry file's top-level keys other than `plate` and
   `shapes` are ignored, and the loader's answer is the same with them as without.
   Check: a test loads a file with a further top-level key and reads params equal to the file's
   without it.
@@ -142,14 +142,14 @@ backend by name, and a region refuses a frame of any shape but its plate, so a u
 OpenCV picked another backend, or turned a frame the Decoder does not, would write files every
 region refuses; the two may not share code, so a test holds them to one answer.
 
-- [ ] Launched with `--video PATH`, the utility shows the video's first frame; with no video it
+- [x] Launched with `--video PATH`, the utility shows the video's first frame; with no video it
   asks for one, and the plate is the frame's height and width either way, the shape the player's
   Decoder reads for the same file. A seek bar across the bottom moves to any frame, with the
   frame's index and time beside it.
   Check: an offscreen test opens a short clip, reads the plate as the clip's shape and as the
   shape of `sieve_player.decoder.Decoder`'s first frame of it, seeks to the last frame and reads
   its index.
-- [ ] Ctrl and the wheel zoom about the cursor; zooming out stops at the whole frame fitting the
+- [x] Ctrl and the wheel zoom about the cursor; zooming out stops at the whole frame fitting the
   view, and zooming in has no practical floor. A Fit button fits the whole frame and a 100% button
   shows one frame pixel to one screen pixel; the view pans by dragging with the middle button or
   with space held. The cursor's position in plate pixels is shown.

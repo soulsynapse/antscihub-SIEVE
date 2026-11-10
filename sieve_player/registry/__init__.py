@@ -1,5 +1,7 @@
 """The catalogue of tools. README.md beside this file is the spec; `__all__` is what it names."""
+import ast
 import importlib
+import itertools
 import os
 import sys
 import traceback
@@ -32,7 +34,7 @@ _HINTS = {
 }
 FACETS = tuple(_HINTS)
 
-# class -> the types one body may serve alike; `strains` reads it, nothing else does
+# class -> the types one body may serve alike; `strains` and `verb` read it, nothing else does
 CLASSES = {
     "plane": frozenset({"bgr", "gray", "hsv", "mask", "flow"}),
     "table": frozenset({"blobs", "tracks"}),
@@ -131,4 +133,40 @@ def strains(entries, classes=CLASSES):
     return out
 
 
-__all__ = ["MARKER", "FACETS", "CLASSES", "Entry", "is_tool", "probe", "hint", "discover", "types", "strains"]
+def verb(name, classes=CLASSES):
+    """`name` less every hyphenated word that is a type or a class of `classes`; a name of such words
+    alone is its own verb, so the tools named for a wire do not all share an empty one."""
+    words = set(classes).union(*classes.values())
+    return "-".join(w for w in name.split("-") if w not in words) or name
+
+
+def names(entry):
+    """The names the tool's file binds at top level by def, class or assignment, less `FACETS`. Read
+    from the source and not the module, where a constant imported from a shared module looks defined."""
+    with open(entry.path, encoding="utf-8") as f:
+        tree = ast.parse(f.read())
+    out = set()
+    for node in tree.body:
+        if isinstance(node, (ast.FunctionDef, ast.ClassDef)):
+            out.add(node.name)
+        elif isinstance(node, ast.Assign):
+            for t in node.targets:
+                out |= {n.id for n in (t.elts if isinstance(t, ast.Tuple) else [t]) if isinstance(n, ast.Name)}
+    return out - set(FACETS)
+
+
+def pairs(entries, classes=CLASSES, share=0.6, floor=3):
+    """[(a, b, same verb, names shared, names in union)] for every two imported tools whose verbs are
+    equal under `classes`, or which share at least `share` of their top-level names and `floor` of
+    them at least, in entry order. A pair is a question, one tool declared twice or two operations."""
+    tools = [(e.name, names(e)) for e in entries if e.ok]
+    out = []
+    for (a, na), (b, nb) in itertools.combinations(tools, 2):
+        same = verb(a, classes) == verb(b, classes)
+        inter, union = len(na & nb), len(na | nb)
+        if same or (inter >= floor and inter >= share * union):
+            out.append((a, b, same, inter, union))
+    return out
+
+
+__all__ = ["MARKER", "FACETS", "CLASSES", "Entry", "is_tool", "probe", "hint", "discover", "types", "strains", "verb", "pairs"]

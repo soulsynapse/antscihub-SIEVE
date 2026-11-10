@@ -4,7 +4,7 @@ import os
 import re
 import sys
 
-from . import CLASSES, FACETS, MARKER, __all__, discover, expects, hint, is_tool, strains, types
+from . import CLASSES, FACETS, MARKER, __all__, discover, expects, hint, is_tool, pairs, strains, types, verb
 
 VIDEO = ("video", "bgr", "path")   # the one node that is not a tool: what it produces and expects
 
@@ -25,6 +25,8 @@ def report(roots):
     by_name = {e.name: e for e in entries}
     for name, cls, lacks in strains(entries):
         print(f"strain   {name} expects {', '.join(sorted(expects(by_name[name])))} of {cls} and not {', '.join(sorted(lacks))}")
+    for a, b, same, inter, union in pairs(entries):
+        print(f"pair     {a}, {b}  {f'verb {verb(a)}  ' if same else ''}names {inter}/{union}")
     for e in entries:
         print(f"{e.name}  ({e.path})")
         if not e.ok:

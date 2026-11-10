@@ -114,12 +114,14 @@ before writing it.
 Facts to weigh, read off the tree at e17fe0fc. The finding's second script names the two pairs at
 this tree with a lexical verb over the kind words and a names-shared fraction with a threshold tuned
 on one pair; its docstring says why a source ratio was tried and dropped. The registry imports a
-tool to probe it, so the module is at hand and its top-level names need no second read of the
-file; the facets in `FACETS` are excluded from the shared set, since every tool has them. A pair
+tool to probe it, but the module at hand cannot say which of its names it bound and which it
+imported, and both csv tools import a constant from tools/_csvfile.py that would read as shared, so
+the names are read from the source by `ast` as the finding's script read them; the facets in
+`FACETS` are excluded from the shared set, since every tool has them. A pair
 line is a question and prints no verdict: the finding shows one pair is a merge and the other two
 operations, and only the bodies say which.
 
-- [ ] The report prints each pair of tools whose verbs are equal once the types and classes of the
+- [x] The report prints each pair of tools whose verbs are equal once the types and classes of the
   table are removed from `NAME`, and each pair sharing most of their top-level names outside
   `FACETS`, with the fraction, and prints neither for pairs that do not.
   Check: a test over a root with a tool, its kind-prefixed twin sharing its sink functions, and

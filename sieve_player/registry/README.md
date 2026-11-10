@@ -22,7 +22,12 @@ and the report prints that first. `CLASSES` is the one table written by hand: a 
 types one body may serve alike, and `strains(entries)` lists each tool whose `EXPECTS` names more
 than one type of a class and not all of them, with what it lacks. The report prints those lines
 after the types; a line is a question for the tool's author, not a failure, since a refusal may be
-principled, and a tool naming one type alone never strains. `--check` fails if this list and
+principled, and a tool naming one type alone never strains. `pairs(entries)` then lists each two
+tools that look like one tool declared twice: their `NAME`s equal once the table's types and classes
+are removed, which is `verb(name)`, or most of the names their files bind at top level outside
+`FACETS` shared, with the fraction. That line too is a question, since the bodies alone say whether
+a pair is a merge or two operations over two units, and the names-shared threshold was tuned on one
+pair, see docs/spec/tool-naming.md's Open items. `--check` fails if this list and
 `__all__` differ, if a facet is read by nothing, if a type under `tools/` is produced or expected
 by nothing, or if a class names a type no tool under `tools/` uses.
 
@@ -38,6 +43,8 @@ by nothing, or if a class names a type no tool under `tools/` uses.
 - `types(entries, extra=())` -- type -> (producers, expecters)
 - `CLASSES` -- class -> the types one body may serve alike
 - `strains(entries, classes=CLASSES)` -- [(tool, class, the types it lacks)]
+- `verb(name, classes=CLASSES)` -- the name less the table's types and classes
+- `pairs(entries, classes=CLASSES, share=0.6, floor=3)` -- [(a, b, same verb, names shared, names in union)]
 
 ```
 python -m sieve_player.registry [root ...]   # report; default root is tools/

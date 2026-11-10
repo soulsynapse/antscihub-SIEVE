@@ -2,10 +2,49 @@
 import numpy as np
 from PySide6.QtCore import QPointF, QRectF, Qt, Signal
 from PySide6.QtGui import QColor, QImage, QPainter, QPen, QPolygonF
-from PySide6.QtWidgets import QCheckBox, QComboBox, QHBoxLayout, QLabel, QLineEdit, QSlider, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QCheckBox, QComboBox, QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem, QSlider, QVBoxLayout, QWidget
 
 from . import density, theme
-from .theme import CONTROL_W, GAP, ROW_H, VALUE_W, Form, mono_font, qgray
+from .theme import CONTROL_W, GAP, ROW_H, VALUE_W, Form, mono_font, qgray, readout
+
+
+class ChoiceList(QWidget):
+    """A param that is one key of a listed set, or empty: clicking a row makes its key the value,
+    clicking the value's row again clears it. `show(items, marked, status)` fills the list with
+    (key, text, tooltip) rows, marks the row whose key is `marked`, which need not be the value,
+    since a selector marks what its rule picked, and sets the status line beneath. The list does
+    not refill itself when the value moves; the owner shows it again."""
+    changed = Signal()
+
+    def __init__(self, value="", rows=4, parent=None):
+        super().__init__(parent)
+        self.value = value
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(GAP)
+        self.list = QListWidget()
+        self.list.setFixedHeight(ROW_H * rows)
+        self.list.setSelectionMode(QListWidget.NoSelection)
+        self.list.setFocusPolicy(Qt.NoFocus)
+        self.list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.list.itemClicked.connect(lambda it: self.set_value("" if it.data(Qt.UserRole) == self.value else it.data(Qt.UserRole)))
+        self.status = readout()
+        lay.addWidget(self.list)
+        lay.addWidget(self.status)
+
+    def set_value(self, v):
+        if v != self.value:
+            self.value = v
+            self.changed.emit()
+
+    def show(self, items, marked=None, status=""):
+        self.list.clear()
+        for key, text, tip in items:
+            it = QListWidgetItem(("● " if key == marked else "   ") + text)
+            it.setData(Qt.UserRole, key)
+            it.setToolTip(tip)
+            self.list.addItem(it)
+        self.status.setText(status)
 
 
 class Slider(QSlider):
@@ -20,11 +59,12 @@ class Slider(QSlider):
 
 class ParamWidget(QWidget):
     """Has .changed and .params(). Add rows with add_int / add_float / add_bool / add_text /
-    add_choice; each is one line of the form, a knob: slider and its mono readout together fill the
-    one control width. The int and float rows return their slider, for a tool that also sets the
-    value from elsewhere. A text row commits on Enter or focus loss, as a Houdini field does, so a
-    half-typed pattern is never a change. `set_driven(names, by)` greys the rows a wire drives, as
-    Blender does a driven property: they take no typed value until the wire is broken."""
+    add_choice / add_list; each is one line of the form, a knob: slider and its mono readout together
+    fill the one control width. The int and float rows return their slider, for a tool that also
+    sets the value from elsewhere, and add_list its ChoiceList, which the tool fills. A text row
+    commits on Enter or focus loss, as a Houdini field does, so a half-typed pattern is never a
+    change. `set_driven(names, by)` greys the rows a wire drives, as Blender does a driven property:
+    they take no typed value until the wire is broken."""
     changed = Signal()
 
     def __init__(self, parent=None):
@@ -127,6 +167,14 @@ class ParamWidget(QWidget):
         self.form.add_row(name, c)
         self._rows[name] = c
         self._get[name], self._set[name] = c.currentText, lambda v: c.setCurrentText(str(v))
+        return c
+
+    def add_list(self, name, value="", rows=4):
+        c = ChoiceList(str(value), rows)
+        c.changed.connect(self.changed.emit)
+        self.form.add_line(c)
+        self._rows[name] = c
+        self._get[name], self._set[name] = lambda: c.value, lambda v: c.set_value(str(v))
         return c
 
 

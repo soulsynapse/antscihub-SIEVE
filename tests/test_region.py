@@ -91,13 +91,13 @@ def test_the_choice_narrows_to_one_record_a_missing_name_reads_as_every_shape_an
     assert region.run(fed(frame()), 0, params("gone"))["name"].tolist() == ["nest", "dish"]
     w = region.settings()
     w.set_params(params("gone"))
-    assert "gone is not in the file" in w.status.text()
+    assert "gone is not in the file" in w.chooser.status.text()
     w.set_params(params("dish"))
-    assert [w.list.item(i).text() for i in range(w.list.count())] == ["   nest", "● dish"]
+    assert [w.chooser.list.item(i).text() for i in range(w.chooser.list.count())] == ["   nest", "● dish"]
     changed = []
     w.changed.connect(lambda: changed.append(w.params()["choice"]))
-    w.list.itemClicked.emit(w.list.item(1))
-    w.list.itemClicked.emit(w.list.item(0))
+    w.chooser.list.itemClicked.emit(w.chooser.list.item(1))
+    w.chooser.list.itemClicked.emit(w.chooser.list.item(0))
     assert changed == ["", "nest"] and w.params()["plate"] == [H, W] and w.params()["shapes"] == params()["shapes"]
     result = region.run(fed(frame()), 0, params())
     assert region.pick((20, 20), (H, W), 0, result, params()) == {"choice": "nest"}

@@ -252,16 +252,16 @@ def test_clicking_a_match_makes_it_the_choice_a_stale_choice_falls_back_and_brow
     D.save(doc, tmp_path / "doc.json")
     win = open_window(tmp_path, [file, real_gray])
     w = win.pane.widget("file")
-    assert [w.list.item(i).data(Qt.UserRole) for i in range(w.list.count())] == ["a.mp4", "b.mp4"]
-    assert win.doc.video == "a.mp4" and w.status.text() == ""
-    w.list.itemClicked.emit(w.list.item(1))
+    assert [w.chooser.list.item(i).data(Qt.UserRole) for i in range(w.chooser.list.count())] == ["a.mp4", "b.mp4"]
+    assert win.doc.video == "a.mp4" and w.chooser.status.text() == ""
+    w.chooser.list.itemClicked.emit(w.chooser.list.item(1))
     assert win.doc.node("file").params["choice"] == "b.mp4" and win.doc.video == "b.mp4"
     w.set_params({**w.params(), "pattern": "a*"})                   # the choice is no longer a match
     assert win.doc.video == "a.mp4" and win.doc.node("file").params["choice"] == "b.mp4"
-    assert w.status.text()                                          # and the card says so
+    assert w.chooser.status.text()                                          # and the card says so
     w.set_params({**w.params(), "pattern": "*.mp4"})
-    w.list.itemClicked.emit(w.list.item(1))                         # clicking the choice clears it
-    assert win.doc.node("file").params["choice"] == "" and w.status.text() == ""
+    w.chooser.list.itemClicked.emit(w.chooser.list.item(1))                         # clicking the choice clears it
+    assert win.doc.node("file").params["choice"] == "" and w.chooser.status.text() == ""
     (tmp_path / "else").mkdir()
     (tmp_path / "else" / "d.avi").write_bytes(b"")
     changes = []
@@ -301,6 +301,19 @@ def test_a_changed_settings_file_is_read_again_and_an_unchanged_one_is_not(tmp_p
             time.sleep(0.01)
         assert H() == [50, 60] and win.pane.widget("inrange").params()["h_hi"] == 60
         assert reads == [path] and os.path.normcase(path) in map(os.path.normcase, win._watch.files())
+        os.remove(path)                                                 # an editor's save: the file goes, then the new one is renamed over
+        t = time.time()
+        while os.path.normcase(str(tmp_path)) not in map(os.path.normcase, win._watch.directories()) and time.time() - t < 5:
+            QApplication.processEvents()
+            time.sleep(0.01)
+        assert H() == [50, 60] and "settings" in win.canvas.errors["inrange"]    # the params stand; the node says the file is gone
+        (tmp_path / "colour.tmp").write_text(json.dumps({"bounds": {"H": [70, 80], "S": [1, 2], "V": [3, 4]}}), encoding="utf-8")
+        os.replace(tmp_path / "colour.tmp", path)
+        t = time.time()
+        while H() != [70, 80] and time.time() - t < 5:
+            QApplication.processEvents()
+            time.sleep(0.01)
+        assert H() == [70, 80] and reads[-1] == path and os.path.normcase(path) in map(os.path.normcase, win._watch.files())
     finally:
         inrange.PATHS["settings"] = loader
     win.close()

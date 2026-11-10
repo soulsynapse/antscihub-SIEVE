@@ -21,16 +21,17 @@ MAX_BORDER = 500
 def rect(roi, border=0):
     """(y0, y1, x0, x1) of the roi's nonzero pixels grown by `border` and clipped to the roi's
     shape; ValueError when no pixel is set."""
-    ys, xs = np.nonzero(roi)
+    set_ = np.asarray(roi) != 0
+    ys, xs = np.flatnonzero(set_.any(axis=1)), np.flatnonzero(set_.any(axis=0))
     if len(ys) == 0:
         raise ValueError("roi has no nonzero pixel at row 0; nothing to cut")
     h, w = roi.shape[:2]
     b = max(0, int(border))
-    return max(int(ys.min()) - b, 0), min(int(ys.max()) + 1 + b, h), max(int(xs.min()) - b, 0), min(int(xs.max()) + 1 + b, w)
+    return max(int(ys[0]) - b, 0), min(int(ys[-1]) + 1 + b, h), max(int(xs[0]) - b, 0), min(int(xs[-1]) + 1 + b, w)
 
 
 def run(frames, row, params):
-    roi = frames(0, "roi")          # the memo holds row 0 of the roi, so this is a lookup, not a run
+    roi = frames(0, "roi")
     y0, y1, x0, x1 = rect(roi, int(params["border"]))
     f = frames(row)
     if f.shape[:2] != roi.shape[:2]:

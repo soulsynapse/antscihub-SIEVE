@@ -68,6 +68,8 @@ def test_a_click_is_offered_last_drawn_first_a_raising_pick_is_dropped_and_said_
     assert win.graph.standing("boom").startswith("pick() raised: ZeroDivisionError") and "boom" not in [nid for nid, *_ in win.display.drawers]
     assert win.doc.node("loud").params["choice"] == "32,24" and win.pane.widget("loud").params()["choice"] == "32,24"
     assert win.graph.key("loud") != key and seen == []
+    win.sync()                                                          # the drawers are rebuilt from the document; boom stays out
+    assert "boom" not in [nid for nid, *_ in win.display.drawers]
     loud.pick = lambda *a: None
     click(win)
     assert seen == [("quiet", (48, 64))] and win.doc.node("quiet").params["choice"] == ""   # unclaimed: nothing lands

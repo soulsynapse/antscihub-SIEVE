@@ -150,6 +150,7 @@ class Display(QWidget):
         self._over, self._over_key, self._top = None, None, 0.0   # the overlay image, whose node's key, its running max
         self._frame_key, self._frame_top = None, 0.0               # the shown node's key and running max, for a measured plane
         self.drawers, self.row, self.results, self.start = [], 0, {}, 0   # drawers: [(node id, tool, node)]
+        self.dropped = set()                                       # id() of each tool whose draw() or pick() raised; the window keeps them out of drawers
         self.frame_results = {}                                    # node id -> a drawing frame node's output at the row
         self.setMinimumSize(160, 120)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
@@ -225,9 +226,15 @@ class Display(QWidget):
                 tool.draw(p, self.row, self.frame_results.get(nid, self.results.get(nid)), self.start, node.params)
             except Exception as e:
                 traceback.print_exc()
-                self.drawers = [d for d in self.drawers if d[1] is not tool]  # once, not every repaint
+                self.drop(tool)
                 self.drawFailed.emit(nid, f"draw() raised: {type(e).__name__}: {e}")
         p.restore()
+
+    def drop(self, tool):
+        """A tool whose draw() or pick() raised is out of the drawers for the session, through every
+        rebuild of the list."""
+        self.dropped.add(id(tool))
+        self.drawers = [d for d in self.drawers if d[1] is not tool]
 
     def frame_rect(self):
         """Where the frame sits in the widget, (x, y, width, height): fit inside, centred, or None with no frame."""
@@ -260,7 +267,7 @@ class Display(QWidget):
                 answer = pick(point, shape, self.row, result, node.params)
             except Exception as exc:
                 traceback.print_exc()
-                self.drawers = [d for d in self.drawers if d[1] is not tool]  # as a draw that raises: dropped for the session
+                self.drop(tool)
                 self.drawFailed.emit(nid, f"pick() raised: {type(exc).__name__}: {exc}")
                 continue
             if answer is not None:
@@ -368,6 +375,7 @@ class PlayerWindow(QMainWindow):
         self._taken = {}      # (node id, path input) -> (the file last handed to its loader, its mtime)
         self._watch = QFileSystemWatcher(self)
         self._watch.fileChanged.connect(self._path_changed)
+        self._watch.directoryChanged.connect(self._path_changed)
         self._reload = QTimer(self)      # a save is often several writes; the loaders run once they settle
         self._reload.setSingleShot(True)
         self._reload.setInterval(RELOAD_SETTLE_MS)
@@ -462,6 +470,7 @@ class PlayerWindow(QMainWindow):
         names, if any, is opened."""
         self._unload()
         self.doc = doc
+        self._taken, self._driven = {}, {}     # the loaders' memory is the document's: its files are read anew
         self._shown_before, self._shown_last = [], doc.display
         doc.resolve(self.tools)
         self._gone = self.store.missing(doc)    # asked here, where the document opens; said on the graph once there is one
@@ -535,7 +544,8 @@ class PlayerWindow(QMainWindow):
         self._hook_traces()
         self._pick_video()
         self.display.drawers = [(n.id, self.tools[n.tool], n) for n in self.doc.nodes
-                                if n.tool in self.tools and hasattr(self.tools[n.tool], "draw")]
+                                if n.tool in self.tools and hasattr(self.tools[n.tool], "draw")
+                                and id(self.tools[n.tool]) not in self.display.dropped]
         self.canvas.update()
         if self.graph is None:
             return
@@ -735,6 +745,7 @@ class PlayerWindow(QMainWindow):
         """Every tool node's path inputs: what the selector wired into each picks goes through the
         tool's loader into the node's params, once per file and again when the file changes on disk,
         which the window watches for; a miss is said on the node."""
+        asked = set()
         for n in self.doc.nodes:
             tool = self.tools.get(n.tool)
             loaders = document.paths(tool)
@@ -752,13 +763,14 @@ class PlayerWindow(QMainWindow):
                 if why:
                     errors.append(f"{name}: {why}")
                     continue
+                asked.add(path)
                 notes.append(f"{name}: {os.path.basename(path)}")
-                stamp = (path, os.path.getmtime(path))
-                if self._taken.get((n.id, name)) == stamp:
-                    continue
                 try:
+                    stamp = (path, os.path.getmtime(path))
+                    if self._taken.get((n.id, name)) == stamp:
+                        continue
                     params = loader(path)
-                except Exception as e:  # the file is the user's; say what was wrong with it
+                except Exception as e:  # the file is the user's; say what was wrong with it, or that it is mid-save
                     errors.append(f"{name}: {type(e).__name__}: {e}")
                     continue
                 self._taken[(n.id, name)] = stamp
@@ -777,16 +789,20 @@ class PlayerWindow(QMainWindow):
                 self.canvas.errors.pop(n.id, None)
             self.pane.note(n.id, "; ".join(errors or notes))
         self.canvas.update()
-        self._watch_taken()
+        self._watch_taken(asked)
 
-    def _watch_taken(self):
-        """Watch every file a loader last read and no other. An editor that saves by replacing the
-        file leaves the watcher holding the old inode, so the path is re-added each time."""
-        wanted = {path for path, _ in self._taken.values() if os.path.exists(path)}
-        if self._watch.files():
-            self._watch.removePaths(self._watch.files())
-        if wanted:
-            self._watch.addPaths(sorted(wanted))
+    def _watch_taken(self, asked):
+        """Watch every file a loader last read or was asked for and no other, and the folder of one
+        that is not there, so a save that deletes and renames is seen when the new file lands. An
+        editor that saves by replacing the file leaves the watcher holding the old inode, so the
+        paths are re-added each time."""
+        wanted = asked | {path for path, _ in self._taken.values()}
+        watch = {p if os.path.exists(p) else os.path.dirname(p) for p in wanted}
+        for had in (self._watch.files(), self._watch.directories()):
+            if had:
+                self._watch.removePaths(had)
+        if watch:
+            self._watch.addPaths(sorted(watch))
 
     def _path_changed(self, path):
         self._reload.start()

@@ -169,28 +169,16 @@ def draw(painter, row, result, start, params):
 
 
 def settings(parent=None):
-    from PySide6.QtCore import Qt
-    from PySide6.QtWidgets import QListWidget, QListWidgetItem
-
     from sieve_player import ParamWidget
-    from sieve_player.theme import ROW_H, readout
 
     class _Widget(ParamWidget):
         def __init__(self, parent=None):
             super().__init__(parent)
-            self.plate, self.shapes, self.choice = list(DEFAULTS["plate"]), list(DEFAULTS["shapes"]), DEFAULTS["choice"]
+            self.plate, self.shapes = list(DEFAULTS["plate"]), list(DEFAULTS["shapes"])
             self._get["plate"], self._set["plate"] = lambda: self.plate, lambda v: self._set_geometry(v, self.shapes)
             self._get["shapes"], self._set["shapes"] = lambda: self.shapes, lambda v: self._set_geometry(self.plate, v)
-            self._get["choice"], self._set["choice"] = lambda: self.choice, self._set_choice
-            self.list = QListWidget()
-            self.list.setFixedHeight(ROW_H * 4)
-            self.list.setSelectionMode(QListWidget.NoSelection)
-            self.list.setFocusPolicy(Qt.NoFocus)
-            self.list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-            self.list.itemClicked.connect(self._clicked)
-            self.status = readout()
-            self.form.add_line(self.list)
-            self.form.add_line(self.status)
+            self.chooser = self.add_list("choice", DEFAULTS["choice"])
+            self.chooser.changed.connect(self._show)
             self._show()
 
         def _set_geometry(self, plate, shapes):
@@ -199,31 +187,17 @@ def settings(parent=None):
                 self._show()
                 self.changed.emit()
 
-        def _set_choice(self, v):
-            if v != self.choice:
-                self.choice = v
-                self._show()
-                self.changed.emit()
-
-        def _clicked(self, item):
-            name = item.data(Qt.UserRole)
-            self._set_choice("" if name == self.choice else name)
-
         def _show(self):
-            self.list.clear()
-            names = [s["name"] for s in self.shapes]
-            for name in names:
-                it = QListWidgetItem(("● " if name == self.choice else "   ") + name)
-                it.setData(Qt.UserRole, name)
-                self.list.addItem(it)
-            if self.choice and self.choice not in names:
-                self.status.setText(f"{self.choice} is not in the file; every shape")
-            elif self.choice:
-                self.status.setText("chosen; click again for every shape")
+            names, choice = [s["name"] for s in self.shapes], self.chooser.value
+            if choice and choice not in names:
+                status = f"{choice} is not in the file; every shape"
+            elif choice:
+                status = "chosen; click again for every shape"
             elif self.plate:
-                self.status.setText(f"plate {self.plate[1]}x{self.plate[0]}, {len(names)} shape{'s' if len(names) != 1 else ''}")
+                status = f"plate {self.plate[1]}x{self.plate[0]}, {len(names)} shape{'s' if len(names) != 1 else ''}"
             else:
-                self.status.setText("no geometry; wire a file selector into geometry")
+                status = "no geometry; wire a file selector into geometry"
+            self.chooser.show([(n, n, "") for n in names], choice, status)
 
     return _Widget(parent)
 

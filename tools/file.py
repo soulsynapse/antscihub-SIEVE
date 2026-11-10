@@ -60,11 +60,9 @@ def rule_for(path, base, params):
 
 
 def settings(parent=None):
-    from PySide6.QtCore import Qt
-    from PySide6.QtWidgets import QFileDialog, QListWidget, QListWidgetItem, QPushButton
+    from PySide6.QtWidgets import QFileDialog, QPushButton
 
     from sieve_player import ParamWidget
-    from sieve_player.theme import ROW_H, readout
 
     class _Widget(ParamWidget):
         def __init__(self, parent=None):
@@ -73,30 +71,11 @@ def settings(parent=None):
             self.add_text("pattern", DEFAULTS["pattern"])
             self.add_bool("recurse", DEFAULTS["recurse"])
             self.add_choice("order", ORDERS, DEFAULTS["order"])
-            self.choice = DEFAULTS["choice"]
-            self._get["choice"], self._set["choice"] = lambda: self.choice, self._set_choice
             self.base = os.getcwd()         # the document's folder, as the window last reported it
             self.browse = QPushButton("Browse…")
             self.browse.clicked.connect(self._browse)
             self.form.add_row("file", self.browse)
-            self.list = QListWidget()
-            self.list.setFixedHeight(ROW_H * 4)
-            self.list.setSelectionMode(QListWidget.NoSelection)
-            self.list.setFocusPolicy(Qt.NoFocus)
-            self.list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-            self.list.itemClicked.connect(self._clicked)
-            self.status = readout()
-            self.form.add_line(self.list)
-            self.form.add_line(self.status)
-
-        def _set_choice(self, v):
-            if v != self.choice:
-                self.choice = v
-                self.changed.emit()
-
-        def _clicked(self, item):
-            name = item.data(Qt.UserRole)
-            self._set_choice("" if name == self.choice else name)   # clicking the choice again clears it
+            self.chooser = self.add_list("choice", DEFAULTS["choice"])
 
         def _browse(self):
             start = os.path.join(self.base, self.params()["folder"])
@@ -116,19 +95,12 @@ def settings(parent=None):
         def show_matches(self, folder, found, picked):
             """The window's report: every file the rule matched and the one it picked."""
             self.base = folder
-            self.list.clear()
             shown = names(folder, self.params(), found)
-            for p, name in zip(found, shown):
-                it = QListWidgetItem(("● " if p == picked else "   ") + name)
-                it.setData(Qt.UserRole, name)
-                it.setToolTip(p)
-                self.list.addItem(it)
-            if self.choice and self.choice not in shown:
-                self.status.setText(f"{self.choice} is not among the matches; picked by {self.params()['order']}")
-            elif self.choice:
-                self.status.setText(f"chosen; click again to pick by {self.params()['order']}")
-            else:
-                self.status.setText("")
+            choice, order = self.chooser.value, self.params()["order"]
+            status = (f"{choice} is not among the matches; picked by {order}" if choice and choice not in shown
+                      else f"chosen; click again to pick by {order}" if choice else "")
+            self.chooser.show([(name, name, p) for p, name in zip(found, shown)],
+                              next((name for p, name in zip(found, shown) if p == picked), None), status)
 
     return _Widget(parent)
 

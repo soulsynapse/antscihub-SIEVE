@@ -265,7 +265,7 @@ in the region with no step between. A file node's `folder` is joined to the docu
 an absolute folder survives the join, and its Browse turns a picked file into the rule, so a saved
 file reaches a node by Browse or by pasting its folder and its name into the two fields.
 
-- [ ] Save writes the geometry file, plate, shapes and drawing, every circle as region.md's circle
+- [x] Save writes the geometry file, plate, shapes and drawing, every circle as region.md's circle
   and every other kind as a polygon of its vertices in plate pixels; Open reads it back with its
   kinds and groups. Launched with `--file PATH`, the utility opens that file, and a path not yet on
   disk is where the first save lands; with neither, the first save asks, beside the video by
@@ -274,11 +274,11 @@ file reaches a node by Browse or by pasting its folder and its name into the two
   Check: a test draws one of each kind and a stamp group, saves, reads the file through
   `tools.region.load_geometry` and compares each shape's vertices or circle, then reopens and
   reads the kinds and the group back.
-- [ ] A geometry file with no drawing, or one whose drawing disagrees with a shape, opens with that
+- [x] A geometry file with no drawing, or one whose drawing disagrees with a shape, opens with that
   shape rebuilt from its primitive as the Facts say, and the utility says the kinds were inferred.
   Check: a test writes a geometry file by hand of a circle, a rotated square and a triangle, opens
   it and reads circle, square and polygon.
-- [ ] A geometry file whose plate is not the open video's shape opens with a line saying the two
+- [x] A geometry file whose plate is not the open video's shape opens with a line saying the two
   shapes, every shape past the new plate's edge marked, and the save refused while any is, so a
   file drawn on one camera's frame is never silently written against another's. A marked shape
   moves and resizes with no edge holding it until it is within the plate, where the mark goes and

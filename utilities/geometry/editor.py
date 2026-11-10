@@ -104,6 +104,18 @@ class Editor:
         self.shapes.append(new)
         self.selected = new.name
 
+    def load(self, shapes):
+        """Starts over on `shapes`: nothing selected, select mode, no undo behind it."""
+        self.shapes, self.selected, self.stamp_from = list(shapes), None, None
+        self.mode, self.pending, self._drag = "select", [], None
+        self._regrouped()
+        self._undo, self._redo, self._saved = [], [], tuple(self.shapes)
+        self._changed()
+
+    def outside(self):
+        """The names of the shapes past the plate's edge, which are held nowhere and never saved."""
+        return [s.name for s in self.shapes if not self.within(s)]
+
     def select(self, name):
         """Selects the shape of that name, or none for None or a name no shape holds."""
         self.selected = name if self.shape(name) is not None else None

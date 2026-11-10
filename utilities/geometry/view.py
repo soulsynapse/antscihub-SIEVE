@@ -14,6 +14,7 @@ GROUND = QColor(31, 31, 31)
 SHAPE = QColor(80, 220, 120)
 CHOSEN = QColor(255, 200, 80)
 DRAFT = QColor(120, 190, 255)
+OUTSIDE = QColor(255, 90, 90)
 
 
 def pixmap_of(bgr):
@@ -171,7 +172,8 @@ class FrameView(QGraphicsView):
             return
         px = 1 / self.scale_now()
         for s in ed.shapes:
-            self._outline(painter, s, CHOSEN if s.name == ed.selected else SHAPE, 2 if s.name == ed.selected else 1)
+            colour = OUTSIDE if not ed.within(s) else CHOSEN if s.name == ed.selected else SHAPE
+            self._outline(painter, s, colour, 2 if s.name == ed.selected else 1)
         draft = ed.preview()
         if draft is not None:
             self._outline(painter, draft, DRAFT, 1)

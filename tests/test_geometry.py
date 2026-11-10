@@ -1,6 +1,6 @@
 """The geometry utility: a video opened at the plate the player's Decoder reads, seeked to any frame,
 a view zoomed no smaller than fit and shown at 100%, the shapes edited by their handles, and the
-table that lists, names, orders and deletes them, and the stamp groups."""
+table that lists, names, orders and deletes them, the stamp groups, and the file saved and reopened."""
 import json
 import math
 import os
@@ -287,3 +287,68 @@ def test_stamps_are_one_group_a_linked_rotation_turns_every_member_and_a_solo_re
     ed.release((edge[0] + 0.01, edge[1] + 5), 1)
     assert ed.current.group == "" and len({t.group for t in ed.shapes if t is not ed.current}) == 1
     assert len({t.w for t in ed.shapes}) == 2
+
+
+def _draw(ed, mode, *points):
+    ed.set_mode(mode)
+    for p in points:
+        ed.press(p, 1)
+        ed.release(p, 1)
+
+
+def test_save_writes_what_region_loads_and_reopening_gives_back_kinds_and_groups(clip, tmp_path):
+    path = str(tmp_path / "new.json")
+    win = GeometryWindow(clip, path)
+    ed = win.editor
+    _draw(ed, "circle", (10, 10), (15, 10))
+    _draw(ed, "square", (20, 5), (30, 15))
+    _draw(ed, "rectangle", (35, 5), (60, 12))
+    _draw(ed, "polygon", (5, 30), (20, 30), (12, 45))
+    ed.finish()
+    ed.select(ed.shapes[1].name)
+    _draw(ed, "stamp", (40, 35))
+    assert win.save() and win.name_label.text() == "new.json"
+    loaded = load_geometry(path)["shapes"]
+    for s, d in zip(ed.shapes, loaded):
+        key = "circle" if s.kind == "circle" else "polygon"
+        assert d["name"] == s.name and np.allclose(d[key], s.primitive()[key])
+    win.close()
+    again = GeometryWindow(clip, path)
+    assert [(s.name, s.kind, s.group) for s in again.editor.shapes] == [(s.name, s.kind, s.group) for s in ed.shapes]
+    assert again.editor.shapes[-1].group and again.message.text() == ""
+    again.close()
+
+
+def test_a_file_without_a_drawing_opens_with_its_kinds_inferred(clip, tmp_path):
+    path = tmp_path / "hand.json"
+    path.write_text(json.dumps({"plate": [H, W], "shapes": [
+        {"name": "dish", "circle": [10, 10, 5]},
+        {"name": "box", "polygon": [[30, 10], [40, 20], [30, 30], [20, 20]]},
+        {"name": "tri", "polygon": [[45, 40], [60, 40], [50, 30]]}]}), encoding="utf-8")
+    win = GeometryWindow(clip, str(path))
+    assert [s.kind for s in win.editor.shapes] == ["circle", "square", "polygon"]
+    assert "inferred" in win.message.text() and "box" in win.message.text()
+    win.close()
+
+
+def test_a_file_of_another_plate_marks_what_is_past_the_edge_and_refuses_the_save(clip, tmp_path):
+    path = tmp_path / "big.json"
+    path.write_text(json.dumps({"plate": [200, 200], "shapes": [
+        {"name": "far", "circle": [180, 180, 10]}, {"name": "near", "circle": [10, 10, 5]}]}), encoding="utf-8")
+    win = GeometryWindow(clip, str(path))
+    ed = win.editor
+    assert "200×200" in win.message.text() and f"{W}×{H}" in win.message.text()
+    assert ed.outside() == ["far"]
+    before = path.read_text(encoding="utf-8")
+    assert not win.save() and path.read_text(encoding="utf-8") == before
+    _draw(ed, "select")
+    ed.press((180, 180), 1)
+    ed.move((30, 24), 1)
+    ed.release((30, 24), 1)
+    assert ed.outside() == [] and win.save()
+    assert load_geometry(str(path))["plate"] == [H, W]
+    ed.press((30, 24), 1)
+    ed.move((1e4, 24), 1)
+    ed.release((1e4, 24), 1)
+    assert ed.shape("far").box()[2] == pytest.approx(W)
+    win.close()

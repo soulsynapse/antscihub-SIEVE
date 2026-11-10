@@ -16,7 +16,7 @@ from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import QComboBox, QFrame, QHBoxLayout, QScrollArea, QVBoxLayout, QWidget
 
 from .. import theme
-from ..document import produces, static
+from ..document import produces
 from ..theme import GAP, PAD
 
 READ_KINDS = ("cache", "decode", "seek")
@@ -140,11 +140,11 @@ class Monitor:
         order = frame + [n for n in chain if n in life]
         run_ms = {n: life[n][0] / life[n][1] if life[n][1] else 0.0 for n in order}        # the tool's, per run
         fold_ms = {n: life[n][3] / life[n][4] if life[n][4] else 0.0 for n in order}       # the density's, per fold
-        fixed = {n for n in order if static(g.tools.get(g.doc.node(n).tool))}             # run once per key: a row pays nothing
+        fixed = {n for n in order if (e := g.entry(n)) is not None and e.static}          # run once per key: a row pays nothing
         row_ms = {n: 0.0 if n in fixed else run_ms[n] + fold_ms[n] for n in order}         # what a cold row pays the node
         run_bytes = {n: life[n][2] / max(life[n][1], life[n][4], 1) for n in order}
         cache_row = run_bytes.get(video, 0.0)
-        memo_row = sum(run_bytes[n] for n in frame if n != video)
+        memo_row = sum(run_bytes[n] for n in frame if n != video and n not in fixed)
         cache_windows = _windows(getattr(d, "cache_limit", None), cache_row, length)
         memo_windows = _windows(m.limit, memo_row, length)
         down = downstream(g.doc)

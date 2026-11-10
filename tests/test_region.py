@@ -109,7 +109,7 @@ def test_the_choice_narrows_to_one_record_a_missing_name_reads_as_every_shape_an
 
 def test_a_frame_of_another_shape_than_the_plate_is_refused_and_said():
     bgr = tool("bgr", "bgr", "bgr", lambda f, p: np.zeros((H, W, 3), np.uint8))
-    tools = {t.NAME: t for t in (bgr, rescale, region)}
+    tools = {t.NAME: t for t in (bgr, rescale, region, blobs_to_mask)}
     doc = D.from_tools([bgr, rescale, region])
     doc.node("region").params.update(params())
     doc.node("rescale").params["scale"] = 0.5
@@ -122,6 +122,11 @@ def test_a_frame_of_another_shape_than_the_plate_is_refused_and_said():
     g.sync()
     assert g.standing("region") == "" and len(g.compute("region", 0)) == 2 and len(g.compute("region", 5)) == 2
     assert region.STATIC and g.entry("region").static
+    doc.add_node("blobs-to-mask", (0, 0), blobs_to_mask.DEFAULTS)
+    doc.connect("region", "blobs-to-mask")
+    g.sync()
+    assert not getattr(blobs_to_mask, "STATIC", False) and g.entry("blobs-to-mask").static and not g.entry("rescale").static
+    assert g.compute("blobs-to-mask", 0) is g.compute("blobs-to-mask", 7)
     doc.node("region").params["plate"] = []
     g.sync()
     with pytest.raises(ValueError, match="no geometry"):

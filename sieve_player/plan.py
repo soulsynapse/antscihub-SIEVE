@@ -34,7 +34,7 @@ class Entry:
     src_key: str | None  # what its run() sees as frames.key: every frame input's key, hashed together when there are several
     fed: bool
     srcs: dict          # frame input name -> the node wired into it, or None
-    static: bool        # the same output at every row: memoized under the raw key alone, row None
+    static: bool        # the same output at every row, declared or inherited from every input: memoized under the raw key alone, row None
     standing: str = ""  # why the node does not run, as the plan sees it; "" when it runs
     types: dict = field(default_factory=dict)   # frame input name -> what the node wired into it produces, or None
     axis: str | None = None                     # the served, unaligned bake at or upstream of the node, whose rows it is in; None in the plate's
@@ -97,6 +97,15 @@ def plan(doc, tools, base):
             return {name: None for name in names}
         return {name: (w.src if (w := doc.source(nid, name)) else None) for name in names}
 
+    def static_of(nid, stack=()):
+        """Declared by the tool, or inherited: a frame node fed on every input by static nodes is
+        static in fact, since no frame tool reads the row itself. A served bake reads its file per row."""
+        tool = tools.get(doc.node(nid).tool)
+        if static(tool) or tool is None or kind_of(doc, tools, nid) != "frame" or bake_of(nid) or nid in stack:
+            return static(tool)
+        srcs = sources(nid).values()
+        return bool(srcs) and all(s is not None and static_of(s, (*stack, nid)) for s in srcs)
+
     def up_key(nid, stack=(), live=False):
         # `live` un-serves `nid` alone: a served bake upstream keeps its served key, which is what the chain gives
         ups = [key_of(src, stack) if src is not None and src not in stack else "none" for src in sources(nid, live).values()]
@@ -143,7 +152,7 @@ def plan(doc, tools, base):
         src = srcs[INPUT]
         off = kind not in ("video", "selector") and axis_of(n.id) != axis
         entries[n.id] = Entry(tool, kind, dict(n.params), n.band, src, key_of(n.id), raw_keys[n.id],
-                              up_key(n.id) if src else None, fed(doc, n.id, tools) and not off, srcs, static(tool),
+                              up_key(n.id) if src else None, fed(doc, n.id, tools) and not off, srcs, static_of(n.id),
                               types={name: produces(doc, tools, s) if s else None for name, s in srcs.items()},
                               axis=axis_of(n.id), off=off, bake=bake_of(n.id))
         if bake_of(n.id) and key_of(n.id, live=True) != bake_of(n.id).key:

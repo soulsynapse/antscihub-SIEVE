@@ -175,8 +175,11 @@ def tables_of(header, lines, start, n):
 
 def rewrite(path, columns, min_reads=2, labels=(), out=None):
     """The tracks csv at `path` with `identity` and `conflict` written before `gate` on every line,
-    replacing a previous pass's, the key line kept; written to `out` or over `path`."""
-    key, start, n, header, lines = read(path)
+    replacing a previous pass's, the key line kept; written to `out` or over `path`. A file whose key
+    line names a kind other than tracks raises ValueError; one naming none is read as tracks."""
+    key, start, n, header, lines, kind = read(path)
+    if kind not in (None, "tracks"):
+        raise ValueError(f"{os.path.basename(path)} is a {kind} csv; resolve reads the one csv writes from a tracks series")
     keep = [i for i, c in enumerate(header) if c not in (IDENTITY, CONFLICT)]
     header, lines = [header[i] for i in keep], [[p[i] for i in keep] for p in lines]
     rows = resolve(tables_of(header, lines, start, n), columns, min_reads, labels, start)
@@ -194,7 +197,7 @@ def main(argv=None):
 
     ap = argparse.ArgumentParser(prog="python -m tools.resolve",
                                  description="the identity pass over a tracks csv, written back with identity and conflict columns")
-    ap.add_argument("tracks", help="a csv tracks-csv wrote")
+    ap.add_argument("tracks", help="a csv the csv node wrote from a tracks series")
     ap.add_argument("--columns", default=DEFAULTS["columns"], help="observation columns, comma separated")
     ap.add_argument("--min-reads", type=int, default=DEFAULTS["min_reads"])
     ap.add_argument("--labels", help="a csv of first row, last row, id, identity")

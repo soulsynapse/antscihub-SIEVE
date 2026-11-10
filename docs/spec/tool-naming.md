@@ -163,14 +163,14 @@ pinning the header shape resolve reads. Documents store `NAME`, so a saved docum
 tracks-csv stops loading; the gitignored purb documents in video-tests are rewritten by hand and no
 alias table is owed before alpha.
 
-- [ ] One tool writes a csv from a signal, a blobs series or a tracks series, pass-through, with
+- [x] One tool writes a csv from a signal, a blobs series or a tracks series, pass-through, with
   the per-row line for a signal, the per-record line with `id` for tracks and without it for
   blobs, no non-numeric column on either, the key line carrying `kind=` as the type written,
   and tracks-csv is no longer a tool under `tools/`.
   Check: a test writes a two-row signal, a blobs series with a string column and a tracks series
   through the tool and reads back the three kinds on the key lines, the three column headers and
   the line counts; a test reads the registry over `tools/` and finds no tool named tracks-csv.
-- [ ] `_csvfile.read` answers the kind, unknown for a file without one, and resolve refuses a
+- [x] `_csvfile.read` answers the kind, unknown for a file without one, and resolve refuses a
   file whose kind is not tracks with a sentence naming the kind it found, and reads a file of
   unknown kind as it does today.
   Check: tests/test_resolve.py's read-back, moved to the merged tool, still passes; a test hands

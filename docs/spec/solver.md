@@ -29,8 +29,8 @@ makes the stateful analysis, Tracker, CameraTracker, an explicit pass that write
 the node as data; the player's series bake is that shape already. What none of them does is
 re-simulate from the first frame each time the viewer refreshes.
 
-The player's series tools split three ways by what a row needs. count, size, spacing, reduce,
-csv and tracks-csv read one row. track, kinematics, transitions and travel read the row and state
+The player's series tools split three ways by what a row needs. count, size, spacing, reduce and
+csv (which absorbed tracks-csv on 2026-11-09) read one row. track, kinematics, transitions and travel read the row and state
 carried from the rows before it, and are written as steps; travel's state is the row before, as
 transitions' is, and it was the last of the four written so, on 2026-11-08 after the walk stepped.
 smooth, tracks-filter and resolve read the whole window, rows not yet walked included, and change

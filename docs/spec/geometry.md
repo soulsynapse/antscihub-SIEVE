@@ -169,7 +169,7 @@ a stamp that would carry a shape past the edge stops it at the edge, as v2's sli
 gesture begun inside the plate is held inside it. A rotated circle is the same circle, so a circle
 has no rotation handle.
 
-- [ ] A circle is drawn from its centre by dragging out its radius, or through three clicks on its
+- [x] A circle is drawn from its centre by dragging out its radius, or through three clicks on its
   rim, and edited by a dot on its rim that sets the radius and by dragging its body to move it. A
   square is drawn by two clicks on opposite corners, the diagonal setting its side and angle, as
   mask-and-count's is; a rectangle by two points corner to corner, upright. Each has corner and

@@ -1,13 +1,14 @@
 """The utility's window: the frame view, a row of view controls above it with the cursor's plate
-position, and a seek bar below with the frame's index and time. Its look is its own, since the
-player's theme is the player's."""
+position, the drawing modes as one exclusive row of buttons, and a seek bar below with the frame's
+index and time. Its look is its own, since the player's theme is the player's."""
 import os
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QFont, QFontDatabase
-from PySide6.QtWidgets import (QFileDialog, QHBoxLayout, QLabel, QMainWindow, QPushButton,
+from PySide6.QtGui import QAction, QFont, QFontDatabase, QKeySequence
+from PySide6.QtWidgets import (QButtonGroup, QFileDialog, QHBoxLayout, QLabel, QMainWindow, QPushButton,
                                QSlider, QVBoxLayout, QWidget)
 
+from .editor import MODES, Editor
 from .video import Video
 from .view import FrameView
 
@@ -16,10 +17,13 @@ STYLE = """
 QWidget { background: rgb(31,31,31); color: rgb(200,200,200); }
 QPushButton { background: rgb(49,49,49); border: 1px solid rgb(69,69,69); border-radius: 4px; padding: 3px 10px; }
 QPushButton:hover { background: rgb(58,58,58); }
+QPushButton:checked { background: rgb(70,62,40); border-color: rgb(255,200,80); }
 QSlider::groove:horizontal { height: 4px; background: rgb(58,58,58); border-radius: 2px; }
 QSlider::handle:horizontal { width: 12px; margin: -5px 0; background: rgb(140,140,140); border-radius: 6px; }
 QLabel#readout { color: rgb(140,140,140); }
 """
+MODE_LABELS = {"select": "Select", "circle": "Circle", "circle3": "Circle by 3", "square": "Square",
+               "rectangle": "Rectangle", "polygon": "Polygon"}
 VIDEO_FILTER = "Video (*.mp4 *.mov *.avi *.mts *.m2ts *.mkv *.MP4 *.MOV *.AVI *.MTS);;All files (*)"
 
 
@@ -44,7 +48,18 @@ class GeometryWindow(QMainWindow):
         self.video = None
         self.index = 0
         self.frame = None
-        self.view = FrameView()
+        self.editor = Editor()
+        self.view = FrameView(self.editor)
+        self.editor.on_change = self._drawing_changed
+        self.modes = QButtonGroup(self)
+        self.mode_buttons = {}
+        for m in MODES:
+            b = QPushButton(MODE_LABELS[m])
+            b.setCheckable(True)
+            self.modes.addButton(b)
+            self.mode_buttons[m] = b
+            b.clicked.connect(lambda _=False, m=m: self.editor.set_mode(m))
+        self.mode_buttons["select"].setChecked(True)
         self.fit_button, self.actual_button = QPushButton("Fit"), QPushButton("100%")
         self.open_button = QPushButton("Open video…")
         self.cursor_label, self.frame_label = QLabel(), QLabel()
@@ -59,11 +74,16 @@ class GeometryWindow(QMainWindow):
             top.addWidget(w)
         top.addWidget(self.message, 1)
         top.addWidget(self.cursor_label)
+        tools = QHBoxLayout()
+        for b in self.mode_buttons.values():
+            tools.addWidget(b)
+        tools.addStretch(1)
         bottom = QHBoxLayout()
         bottom.addWidget(self.seek_bar, 1)
         bottom.addWidget(self.frame_label)
         body = QVBoxLayout()
         body.addLayout(top)
+        body.addLayout(tools)
         body.addWidget(self.view, 1)
         body.addLayout(bottom)
         central = QWidget()
@@ -77,6 +97,10 @@ class GeometryWindow(QMainWindow):
         self.actual_button.clicked.connect(self.view.actual)
         self.seek_bar.valueChanged.connect(self.seek)
         self.view.moved.connect(self._show_cursor)
+        delete = QAction(self)
+        delete.setShortcut(QKeySequence.StandardKey.Delete)
+        delete.triggered.connect(self.editor.delete_selected)
+        self.addAction(delete)
         if video is not None:
             self.open_video(video)
 
@@ -99,6 +123,7 @@ class GeometryWindow(QMainWindow):
         if self.video is not None:
             self.video.close()
         self.video = video
+        self.editor.plate = video.plate
         self.message.setText("")
         self.setWindowTitle(f"Geometry — {os.path.basename(video.path)}  {video.plate[1]}×{video.plate[0]}")
         self.seek_bar.blockSignals(True)
@@ -120,6 +145,10 @@ class GeometryWindow(QMainWindow):
         self.frame_label.setText(f"{self.index} / {self.video.count - 1}   {clock(self.index, self.video.fps)}")
         if self.seek_bar.value() != self.index:
             self.seek_bar.setValue(self.index)
+
+    def _drawing_changed(self):
+        self.mode_buttons[self.editor.mode].setChecked(True)
+        self.view.viewport().update()
 
     def _show_cursor(self, p):
         self.cursor_label.setText("" if p is None else f"x {int(p.x())}  y {int(p.y())}")

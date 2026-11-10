@@ -1,4 +1,4 @@
-"""The design language, settled from mock-up/design-language: dark first, four grays, forms as tables.
+"""The design language: dark first, four grays, forms as tables.
 
 Ground is a dark gray and everything sits on it. Each surface layered on top is one STEP lighter;
 nothing is inset past layer 3, so there are exactly four grays. A form is a table: descriptions

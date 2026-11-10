@@ -38,7 +38,6 @@ class Editor:
         self._saved = ()
         self.on_change = None
         self.stem = ""
-        self.squared = False    # Shift held: the rectangle mode draws an upright square
         self.stamp_from = None
         self.links_off = set()
 
@@ -307,7 +306,7 @@ class Editor:
         self.pending = []
         if math.dist(a, p) < sh.MIN_SIZE:
             return
-        new = self._drawn(self.mode, self._name(self._kind_drawn()), a, p)
+        new = self._drawn(self.mode, self._name(self.mode), a, p)
         if new is not None and (new.kind != "rectangle" or (new.w >= sh.MIN_SIZE and new.h >= sh.MIN_SIZE)):
             self._add(new)
 
@@ -320,18 +319,8 @@ class Editor:
             c = sh.circle_through(name, a, self.pending[1], p)
             return None if c is None else self._limited(c)
         if mode == "square":
-            return self._held(lambda t: sh.square_from_diagonal(name, a, _toward(a, p, t)))
-        if self.squared:
             return self._held(lambda t: sh.square_from_corners(name, a, _toward(a, p, t)))
         return sh.rectangle_from_corners(name, a, p)
-
-    def _kind_drawn(self):
-        return "square" if self.mode == "rectangle" and self.squared else self.mode
-
-    def set_squared(self, on):
-        if on != self.squared:
-            self.squared = on
-            self._changed()
 
     def _stamped(self, p):
         """The stamp's copy centred at `p`, slid within the plate, named and in no group; None with

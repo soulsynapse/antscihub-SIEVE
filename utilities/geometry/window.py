@@ -22,8 +22,8 @@ from .view import FrameView
 
 MODE_GLYPHS = {"select": ("pointer", "Select", "V"), "circle": ("circle", "Circle from its centre", "C"),
                "circle3": ("circle-3", "Circle through three points", "Shift+C"),
-               "square": ("square", "Square, corner to corner", "S"),
-               "rectangle": ("rectangle", "Rectangle, corner to corner; Shift held, an upright square", "R"),
+               "square": ("square", "Square, corner to corner; its top handle turns it", "S"),
+               "rectangle": ("rectangle", "Rectangle, corner to corner", "R"),
                "polygon": ("polygon", "Polygon: click each vertex, Enter or the first closes", "P"),
                "stamp": ("rubber-stamp", "Stamp the selected shape at each click", "T")}
 SIDE_W = 340

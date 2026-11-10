@@ -171,10 +171,12 @@ has no rotation handle.
 
 - [x] A circle is drawn from its centre by dragging out its radius, or through three clicks on its
   rim, and edited by a dot on its rim that sets the radius and by dragging its body to move it. A
-  square is drawn by two clicks on opposite corners, the diagonal setting its side and angle, as
-  mask-and-count's is; a rectangle by two points corner to corner, upright. Each has corner and
-  edge handles to resize, shown on the selected shape alone, a square keeping its sides equal
-  under every handle, a handle above it to rotate it about its centre, and its body to move it. A
+  square is drawn by two points corner to corner, upright, its side the larger of the two offsets,
+  and turned by its rotation handle as a rectangle is (amended 2026-11-10 at Kendrick's word, from
+  mask-and-count's diagonal setting side and angle); a rectangle by two points corner to corner,
+  upright. Each has corner and edge handles to resize, shown on the selected shape alone, a square
+  keeping its sides equal under every handle, a handle above it to rotate it about its centre,
+  and its body to move it. A
   polygon is drawn by clicking its vertices and closed by clicking the first again or by Enter;
   each vertex drags, a click on an edge adds a vertex, and a vertex is removed while the polygon
   keeps three; it moves and rotates as the rects do. The drawing mode is one state, shown in one

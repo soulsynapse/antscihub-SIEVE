@@ -82,7 +82,7 @@ def test_zooming_out_stops_at_fit_and_100_percent_is_one_to_one(window):
 
 
 def test_a_square_stays_square_a_rectangle_turns_a_circle_grows_from_its_rim_and_a_polygon_gains_and_loses_vertices():
-    sq = sh.square_from_diagonal("s", (10, 10), (30, 30))
+    sq = sh.square_from_corners("s", (30, 30), (10, 12))
     assert sq.w == pytest.approx(20) and sq.angle == pytest.approx(0)
     by_corner = sq.dragged((1, 1), (45, 38))
     assert by_corner.w == by_corner.h == pytest.approx(35)
@@ -131,15 +131,9 @@ def test_no_shape_drawn_or_edited_within_the_plate_leaves_it_and_each_loads_thro
     gesture("square", (110, 40), (125, 70))
     gesture("circle3", (190, 90), (199, 50), (150, 99))
     gesture("square", (5, 95), (195, 5))
-    ed.squared = True
-    gesture("rectangle", (170, 20), (150, 25))
-    ed.squared = False
-    assert len(ed.shapes) == 5 and all(ed.within(s) for s in ed.shapes)
-    upright = ed.shapes.pop()
-    assert (upright.name, upright.kind, upright.angle, upright.w, upright.h) == ("square-3", "square", 0, 20, 20)
-    assert upright.box() == pytest.approx((150, 20, 170, 40))
-    circle, square = ed.shapes[0], ed.shapes[1]
-    assert square.angle != pytest.approx(0)
+    assert len(ed.shapes) == 4 and all(ed.within(s) for s in ed.shapes)
+    circle, square = ed.shapes[0], ed.shapes[1].rotated(0.4)
+    assert ed.shapes[1].angle == 0 and ed.shapes[1].box() == pytest.approx((110, 40, 140, 70))
     ed.shapes = [circle, square]
     loads()
     for name in (circle.name, square.name):

@@ -218,13 +218,6 @@ def circle_through(name, a, b, c):
     return Circle(name, ux, uy, math.hypot(ax - ux, ay - uy))
 
 
-def square_from_diagonal(name, a, b):
-    """The square with `a` and `b` at opposite corners, the diagonal setting its side and angle."""
-    dx, dy = b[0] - a[0], b[1] - a[1]
-    side = math.hypot(dx, dy) / math.sqrt(2)
-    return Rect(name, "square", (a[0] + b[0]) / 2, (a[1] + b[1]) / 2, side, side, math.atan2(dy, dx) - math.pi / 4)
-
-
 def square_from_corners(name, a, b):
     """The upright square with a corner at `a`, reaching toward `b` by the larger of the two offsets."""
     dx, dy = b[0] - a[0], b[1] - a[1]

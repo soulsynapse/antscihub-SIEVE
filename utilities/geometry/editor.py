@@ -1,6 +1,8 @@
 """The drawing's state with no window: the shapes, the one selected, the drawing mode and the gesture
 under way, driven by presses, moves and releases at plate points. `px` on each call is plate pixels
-per screen pixel, so a handle is hit at a fixed size on screen whatever the zoom."""
+per screen pixel, so a handle is hit at a fixed size on screen whatever the zoom. With a plate set,
+a shape drawn, or edited from within the plate, is held within it; a shape already past its edge
+moves free."""
 import math
 
 from . import shapes as sh
@@ -9,6 +11,11 @@ MODES = ("select", "circle", "circle3", "square", "rectangle", "polygon")
 HANDLE_PX = 6     # half a handle's side on screen, and the reach of a click on one
 ROTATE_PX = 24    # how far above its top edge a shape's rotation handle stands
 DRAG_PX = 4       # a press released further than this is a drag, closing a two-point shape on release
+HOLD_STEPS = 40   # bisections finding how far toward the cursor a gesture goes before the edge
+
+
+def _toward(a, b, t):
+    return (a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1]))
 
 
 class Editor:
@@ -70,6 +77,37 @@ class Editor:
         h, w = self.plate
         return (min(max(0.0, p[0]), w), min(max(0.0, p[1]), h))
 
+    def within(self, s):
+        if self.plate is None:
+            return True
+        h, w = self.plate
+        x0, y0, x1, y1 = s.box()
+        return x0 >= 0 and y0 >= 0 and x1 <= w and y1 <= h
+
+    def _held(self, make):
+        """`make(1)` when it is within the plate or `make(0)`, the gesture's start, is not; otherwise
+        `make(t)` at the largest t bisection finds within."""
+        whole = make(1.0)
+        if self.within(whole) or not self.within(make(0.0)):
+            return whole
+        lo, hi = 0.0, 1.0
+        for _ in range(HOLD_STEPS):
+            mid = (lo + hi) / 2
+            lo, hi = (mid, hi) if self.within(make(mid)) else (lo, mid)
+        return make(lo)
+
+    def _limited(self, c):
+        """`c` with its radius cut to the room its centre has to the plate's edges; None when that
+        is under MIN_SIZE."""
+        if self.plate is None:
+            return c
+        h, w = self.plate
+        r = min(c.r, c.cx, c.cy, w - c.cx, h - c.cy)
+        out = sh.Circle(c.name, c.cx, c.cy, r)
+        if not self.within(out):
+            out = sh.Circle(c.name, c.cx, c.cy, r * (1 - 1e-12))
+        return out if out.r >= sh.MIN_SIZE else None
+
     def _name(self, kind):
         return sh.next_name(kind, {s.name for s in self.shapes})
 
@@ -119,7 +157,7 @@ class Editor:
         if self.mode == "circle3":
             self.pending.append(p)
             if len(self.pending) == 3:
-                self._add(sh.circle_through(self._name("circle"), *self.pending))
+                self._add(self._drawn("circle3", self._name("circle"), self.pending[0], self.pending[2]))
                 self.pending = []
         elif self.mode == "polygon":
             if len(self.pending) >= 3 and math.dist(p, self.pending[0]) <= HANDLE_PX * px:
@@ -136,25 +174,28 @@ class Editor:
         self.pending = []
         if math.dist(a, p) < sh.MIN_SIZE:
             return
-        make = {"circle": sh.circle_from_centre, "square": sh.square_from_diagonal,
-                "rectangle": sh.rectangle_from_corners}[self.mode]
-        new = make(self._name(self.mode), a, p)
-        if self.mode != "rectangle" or (new.w >= sh.MIN_SIZE and new.h >= sh.MIN_SIZE):
+        new = self._drawn(self.mode, self._name(self.mode), a, p)
+        if new is not None and (new.kind != "rectangle" or (new.w >= sh.MIN_SIZE and new.h >= sh.MIN_SIZE)):
             self._add(new)
+
+    def _drawn(self, mode, name, a, p):
+        """The shape `mode` makes from its first point `a` and its last `p`, held within the plate,
+        or None; a three-point circle's middle point is `pending[1]`."""
+        if mode == "circle":
+            return self._limited(sh.circle_from_centre(name, a, p))
+        if mode == "circle3":
+            c = sh.circle_through(name, a, self.pending[1], p)
+            return None if c is None else self._limited(c)
+        if mode == "square":
+            return self._held(lambda t: sh.square_from_diagonal(name, a, _toward(a, p, t)))
+        return sh.rectangle_from_corners(name, a, p)
 
     def preview(self):
         """The shape the gesture under way would make at the cursor, or None."""
         if not self.pending or self.cursor is None:
             return None
-        a, p = self.pending[0], self.cursor
-        if self.mode == "circle":
-            return sh.circle_from_centre("", a, p)
-        if self.mode == "square":
-            return sh.square_from_diagonal("", a, p)
-        if self.mode == "rectangle":
-            return sh.rectangle_from_corners("", a, p)
-        if self.mode == "circle3" and len(self.pending) == 2:
-            return sh.circle_through("", *self.pending, p)
+        if self.mode in ("circle", "square", "rectangle") or (self.mode == "circle3" and len(self.pending) == 2):
+            return self._drawn(self.mode, "", self.pending[0], self.cursor)
         return None
 
     def _press_select(self, p, px, button):
@@ -196,11 +237,22 @@ class Editor:
 
     def _apply_drag(self, p):
         what, origin, arg = self._drag
+        held = self.plate is not None and self.within(origin)
         if what == "move":
-            new = origin.moved(p[0] - arg[0], p[1] - arg[1])
-        elif what == "handle":
+            dx, dy = p[0] - arg[0], p[1] - arg[1]
+            if held:
+                h, w = self.plate
+                x0, y0, x1, y1 = origin.box()
+                dx, dy = min(max(dx, -x0), w - x1), min(max(dy, -y0), h - y1)
+            new = self._held(lambda t: origin.moved(t * dx, t * dy))
+        elif what == "handle" and origin.kind == "circle":
             new = origin.dragged(arg, p)
+            new = (self._limited(new) or origin) if held else new
+        elif what == "handle":
+            start, q = origin.handles()[arg], self._clamp(p) if held else p
+            new = self._held(lambda t: origin.dragged(arg, _toward(start, q, t)))
         else:
             c = origin.centre
-            new = origin.rotated(math.atan2(p[1] - c[1], p[0] - c[0]) - arg)
+            theta = math.remainder(math.atan2(p[1] - c[1], p[0] - c[0]) - arg, 2 * math.pi)
+            new = self._held(lambda t: origin.rotated(t * theta))
         self._replace(new)

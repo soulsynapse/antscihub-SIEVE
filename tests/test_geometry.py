@@ -1,5 +1,6 @@
 """The geometry utility: a video opened at the plate the player's Decoder reads, seeked to any frame,
 a view zoomed no smaller than fit and shown at 100%, and the shapes edited by their handles."""
+import json
 import math
 import os
 
@@ -14,7 +15,9 @@ from PySide6.QtGui import QWheelEvent  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from sieve_player.decoder import Decoder  # noqa: E402
+from tools.region import load_geometry  # noqa: E402
 from utilities.geometry import shapes as sh  # noqa: E402
+from utilities.geometry.editor import Editor  # noqa: E402
 from utilities.geometry.video import EXACT_DECODE_BELOW  # noqa: E402
 from utilities.geometry.window import GeometryWindow  # noqa: E402
 
@@ -99,3 +102,51 @@ def test_a_square_stays_square_a_rectangle_turns_a_circle_grows_from_its_rim_and
     quad = tri.with_vertex(tri.edge_near((6, 5), 1), (6, 5))
     assert quad.points == ((0, 0), (10, 0), (6, 5), (0, 10))
     assert quad.without_vertex(2) == tri and tri.without_vertex(0) == tri
+
+
+def test_no_shape_drawn_or_edited_within_the_plate_leaves_it_and_each_loads_through_region(tmp_path):
+    ph, pw = 100, 200
+    ed = Editor(plate=(ph, pw))
+
+    def gesture(mode, *points):
+        ed.set_mode(mode)
+        for a in points:
+            ed.press(a, 1)
+            ed.release(a, 1)
+
+    def drag(a, b):
+        ed.set_mode("select")
+        ed.press(a, 1)
+        ed.move(b, 1)
+        ed.release(b, 1)
+
+    def loads():
+        path = tmp_path / "g.json"
+        path.write_text(json.dumps({"plate": [ph, pw], "shapes": [s.primitive() for s in ed.shapes]}), encoding="utf-8")
+        assert len(load_geometry(str(path))["shapes"]) == len(ed.shapes)
+
+    gesture("circle", (50, 50), (65, 50))
+    gesture("square", (110, 40), (125, 70))
+    gesture("circle3", (190, 90), (199, 50), (150, 99))
+    gesture("square", (5, 95), (195, 5))
+    assert len(ed.shapes) == 4 and all(ed.within(s) for s in ed.shapes)
+    circle, square = ed.shapes[0], ed.shapes[1]
+    assert square.angle != pytest.approx(0)
+    ed.shapes = [circle, square]
+    loads()
+    for name in (circle.name, square.name):
+        for far, side in (((-1e4, 0), 0), ((0, -1e4), 1), ((1e4, 0), 2), ((0, 1e4), 3)):
+            c = ed.shape(name).centre
+            drag(c, (c[0] + far[0], c[1] + far[1] + 3))
+            box = ed.shape(name).box()
+            assert ed.within(ed.shape(name)) and box[side] == pytest.approx((0, 0, pw, ph)[side], abs=1e-6)
+            loads()
+    ed.selected = square.name
+    drag(ed.shape(square.name).handles()[(1, 1)], (1e4, 1e4))
+    ed.selected = circle.name
+    drag(ed.shape(circle.name).handles()["rim"], (-1e4, 50))
+    ed.selected = square.name
+    s = ed.shape(square.name)
+    drag(ed.rotation_handle(1), (s.cx + 300, s.cy))
+    assert all(ed.within(s) for s in ed.shapes)
+    loads()

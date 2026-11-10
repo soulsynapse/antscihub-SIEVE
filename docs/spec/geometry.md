@@ -183,7 +183,7 @@ has no rotation handle.
   reads its sides equal, rotates a rectangle a quarter turn and reads its vertices, drags a
   circle's rim dot and reads the radius, fits a circle through three points of a known circle and
   reads its centre and radius, and adds and removes a polygon's vertex.
-- [ ] No shape within the plate leaves it: a move, a resize, a rotation or a three-point circle that
+- [x] No shape within the plate leaves it: a move, a resize, a rotation or a three-point circle that
   would pass the edge stops at it, and every shape the utility writes is one region's loader
   accepts. The one shape held past an edge is a shape of a file opened over another plate, which
   Saving and reopening marks.

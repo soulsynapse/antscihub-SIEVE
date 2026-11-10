@@ -16,7 +16,7 @@ from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from sieve_player import document as D  # noqa: E402
 from sieve_player import canvas as canvas_mod  # noqa: E402
-from sieve_player import registry  # noqa: E402
+from sieve_player import menu as menu_mod  # noqa: E402
 from sieve_player.canvas import Canvas  # noqa: E402
 
 gray = Tool(NAME="gray", KIND="frame", EXPECTS="bgr", PRODUCES="gray", DEFAULTS={})
@@ -79,37 +79,15 @@ def test_a_button_does_what_its_key_does_and_starts_no_gesture():
     assert (list(canvas.selected), node.pos, canvas.pan) == state and len(doc.nodes) == 2
     # the Tab menu opens; closing it places nothing
     _press(canvas, tab_at)
-    assert canvas.findChildren(canvas_mod.TabMenu)
+    assert canvas.findChildren(menu_mod.TabMenu)
     canvas.close_menu()
-    assert not canvas.findChildren(canvas_mod.TabMenu) and len(doc.nodes) == 2
+    assert not canvas.findChildren(menu_mod.TabMenu) and len(doc.nodes) == 2
     # delete: the selection goes, as Delete would; with nothing selected the button does nothing
     canvas.select([node.id])
     _press(canvas, delete_at)
     assert [n.id for n in doc.nodes] == [D.VIDEO_TOOL]
     _press(canvas, delete_at)
     assert [n.id for n in doc.nodes] == [D.VIDEO_TOOL]
-
-
-def test_the_menu_groups_by_category_with_a_description_and_flattens_to_the_typed_text():
-    QApplication.instance() or QApplication([])
-    thin = Tool(NAME="thin", KIND="frame", EXPECTS="mask", PRODUCES="mask", DEFAULTS={},
-                __doc__="Frame tool: a mask thinned to its skeleton; mask in, mask out.\n\nMore below.")
-    tools = {**TOOLS, "thin": thin}
-    info = {n: (registry.category(t), registry.description(t), registry.signature(t)) for n, t in tools.items()}
-    canvas = Canvas(tools, {"bad": "ImportError: no"}, info, registry.CATEGORIES)
-    entries = [("gray", ""), ("reduce", ""), ("thin", ""), ("bad", "ImportError: no")]
-    menu = canvas_mod.TabMenu(entries, canvas.menu_info(), canvas.order, canvas)
-    assert menu.shown() == [("convert", ["gray"]), ("transform", ["thin"]), ("measure", ["reduce"]), (canvas_mod.UNLOADED, ["bad"])]
-    assert menu.description("thin") == "a mask thinned to its skeleton; mask in, mask out" and menu.description("gray") == ""
-    assert menu.list.currentItem().data(Qt.UserRole) == "gray"
-    menu.edit.setText("reduce")
-    assert menu.shown() == [("measure", ["reduce"])] and menu.list.currentItem().data(Qt.UserRole) == "reduce"
-    menu.edit.setText("skeleton")     # the description matches
-    assert menu.shown() == [("transform", ["thin"])]
-    menu.edit.setText("measure")      # and so does the group
-    assert menu.shown() == [("measure", ["reduce"])]
-    menu.edit.setText("zzz")
-    assert menu.shown() == []
 
 
 def test_the_video_node_is_in_the_menu_only_while_the_document_lacks_one():
@@ -158,7 +136,7 @@ def test_a_pulled_wire_offers_what_may_sit_in_it_and_splices_the_choice():
     canvas.mouseMoveEvent(e)
     e = QMouseEvent(QEvent.MouseButtonRelease, to, canvas.mapToGlobal(to.toPoint()), Qt.LeftButton, Qt.NoButton, Qt.NoModifier)
     canvas.mouseReleaseEvent(e)
-    assert canvas.findChildren(canvas_mod.TabMenu) and canvas._pull[0] is w
+    assert canvas.findChildren(menu_mod.TabMenu) and canvas._pull[0] is w
     # between a bgr output and a bgr input only a pass-through fits; gray, thresh and reader hand out something else
     assert {n for n, err in canvas.menu_entries() if not err} == {"passthru"}
     # closing the menu leaves the wire as it was
@@ -166,11 +144,11 @@ def test_a_pulled_wire_offers_what_may_sit_in_it_and_splices_the_choice():
     assert doc.source("gray") is w and canvas._pull is None
     canvas.mousePressEvent(QMouseEvent(QEvent.MouseButtonPress, at, canvas.mapToGlobal(at.toPoint()), Qt.LeftButton, Qt.LeftButton, Qt.NoModifier))
     canvas.mouseReleaseEvent(QMouseEvent(QEvent.MouseButtonRelease, to, canvas.mapToGlobal(to.toPoint()), Qt.LeftButton, Qt.NoButton, Qt.NoModifier))
-    menu = canvas.findChildren(canvas_mod.TabMenu)[0]
+    menu = canvas.findChildren(menu_mod.TabMenu)[0]
     menu._pick(menu.item_of("passthru"))
     assert [(x.src, x.dst) for x in doc.wires] == [("gray", "thresh"), ("video", "passthru"), ("passthru", "gray")]
     assert canvas.box(doc.node("passthru")).center() == canvas.to_doc(to)
-    assert not canvas.findChildren(canvas_mod.TabMenu) and canvas._pull is None
+    assert not canvas.findChildren(menu_mod.TabMenu) and canvas._pull is None
 
 
 def test_the_overlay_flag_toggles_and_is_offered_only_on_one_plane_nodes():

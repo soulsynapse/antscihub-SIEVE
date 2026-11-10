@@ -10,7 +10,8 @@ MAY_IMPORT = {
     "document": set(),
     "plan": {"document"},
     "graph": {"document", "density", "plan"},     # Graph.density folds planes; sync holds a plan
-    "canvas": {"document", "theme"},
+    "canvas": {"document", "menu", "theme"},
+    "menu": {"theme"},
     "pane": {"document", "theme", "widgets"},
     "widgets": {"density", "theme"},
     "decoder": set(),

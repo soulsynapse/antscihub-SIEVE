@@ -1,13 +1,15 @@
 # Geometry: a drawing utility for the file a region reads, opened from the node it feeds
 
-Written 2026-11-10, from Kendrick's request of that day; no box is ticked. Read with
-docs/spec/region.md, which settled the geometry file's shape, that it is drawn outside the player,
-and that a region refuses a frame of another shape than its plate; with tools/region.py, whose
-`load_geometry` is the live statement of what the file may hold; with tools/file.py, the selector
-that finds the file; and with the root README's facet table, where `PATHS` says how a file reaches
-a node's params. A crop reads a mask and never a geometry file: the chain that feeds a crop from
-drawn shapes is file into region, region into blobs-to-mask, the mask into the crop's `roi`, so the
-node the utility serves is the region, and a crop is fed through it.
+Written 2026-11-10, from Kendrick's request of that day and his reading of the first draft the same
+day; no box is ticked. Read with docs/spec/region.md, which settled the geometry file's shape, that
+it is drawn outside the player, and that a region refuses a frame of another shape than its plate;
+with tools/region.py, whose `load_geometry` is the live statement of what the file may hold; with
+tools/file.py, the selector that finds the file; and with the root README's facet table, where
+`PATHS` says how a file reaches a node's params. A crop reads a mask and never a geometry file: the
+chain that feeds a crop from drawn shapes is file into region, region into blobs-to-mask, the mask
+into the crop's `roi`, so the node the utility serves is the region, and a crop is fed through it.
+Nothing here changes `sieve_player`; the changes are a new folder, a button on region's card and a
+line of region's contract.
 
 ## Why
 
@@ -19,17 +21,14 @@ made today but by hand. A region with nothing wired into `geometry` already says
 that makes the file. The utility is what turns the standing into an action: the card that says the
 node is not fed carries the button that opens the tool that feeds it.
 
-A utility is a program of its own and not a tool or a mode of the player. What it hands back is
-the config, not how the config was arrived at, as kendrick-scratch.md puts it: the region reads a
-file and never learns that a drawing program exists, so the same file can be written by this
-utility, by a script, or by hand, and the player's contract with it is the one region.md already
-tested. The utility runs as a separate process launched by the node's button, which passes it the
-video, the file and the document's folder on its command line, so it imports nothing of
-`sieve_player` or `tools`, and a crash or a long drawing session in it costs the player nothing.
-Fiji's ROI Manager, napari's shapes layer and the CVAT and LabelMe annotators are the drawing
-vocabulary copied here: a shape is drawn by kind, edited by handles, listed by name in a table
-beside the image, and saved as a file another program reads; none of those programs is the
-consumer of its own ROI file, which is the arrangement this spec keeps.
+A utility is a program of its own and not a tool or a mode of the player. The region reads a file
+and never learns that a drawing program exists, so the same file can be written by this utility,
+by a script, or by hand, and the player's contract with it is the one region.md already tested. The
+utility runs as a separate process launched by the node's button, which passes it what the card
+knows on its command line, so it imports nothing of `sieve_player` or `tools`, and a crash or a long
+drawing session in it costs the player nothing. Fiji's ROI Manager, napari's shapes layer and the
+CVAT and LabelMe annotators are the drawing vocabulary copied here: a shape is drawn by kind, edited
+by handles, listed by name in a table beside the image, and saved as a file another program reads.
 
 Three earlier drawing tools of Kendrick's are the evidence for the gestures. antscihub-mask-and-count's
 box editor (mask_and_count/box_editor.py) draws a rotated square by two clicks on opposite corners,
@@ -37,27 +36,21 @@ the diagonal setting side and angle in one gesture, lists centre, side and angle
 table, and decodes forward rather than seeking inside an .MTS file's first group of pictures,
 where OpenCV's seek misses. SIEVE v2's crop tools (src/sieve/gui/video_view.py) drew axis-aligned
 rects with eight handles shown on the selection alone, stamped the selected replicate's size, slid
-a stamp or a move against the frame's edge rather than trimming it, and recorded in docs/SETTLED.md
-that the drawing mode wants one owner or its buttons go stale and that a number field committing
-only on Enter keeps shortcuts from firing mid-typing. The optical-flow detector's replicate tab
-derived the stamp's size from the selected box after a stored stamp size drifted from it. None of
-the three drew a circle or a polygon, and the geometry files under video-tests/ were written by
-hand (4203efbc), so nothing is reused as code.
+a stamp or a move against the frame's edge rather than trimming it, took one drag as one undo
+step, and recorded in docs/SETTLED.md that the drawing mode wants one owner or its buttons go stale
+and that a number field committing only on Enter keeps shortcuts from firing mid-typing. The
+optical-flow detector's replicate tab derived the stamp's size from the selected box after a stored
+stamp size drifted from it. None of the three drew a circle or a polygon, and the geometry files
+under video-tests/ were written by hand (4203efbc), so nothing is reused as code.
 
 The shapes a user will reasonably want reduce to the two primitives the file holds. A circle is a
 dish or a round arena. A square, a rectangle and any polygon, rotated or not, are polygons, since a
 rotated rect is four vertices and region.md's fill treats every polygon alike. What the primitives
 lose is the editing intent: a square written as four vertices no longer says it should stay square
-when resized, and six dishes stamped from one template no longer say they are one template. That
-intent is the utility's and is kept in a session file of its own beside the geometry file, never
-in the file the region reads.
-
-Which file a region reads for which video is the selector's rule, and the rule as it stands cannot
-say "the file named for this video". A file node's `folder` and `pattern` are fixed strings, so one
-file for every video is expressible today and one file per video is not: the second needs the rule
-to name the video the document has open. That is the one place this spec reaches into the player,
-and it is a token in the rule rather than a new kind of selector, as Houdini's `$HIPNAME` and
-`$OS` are expanded inside a path parameter and not by a node of their own.
+when resized, and six dishes stamped from one template no longer say they are one group. That
+intent rides in the same file under a key of its own, which the region ignores; one file is the
+thing a user copies, moves and wires, and a second beside it is one more thing to lose. Decided
+2026-11-10.
 
 ## How to read this
 
@@ -73,10 +66,11 @@ box is ticked.
 Words. A *utility* is a program under `utilities/`, one subfolder each, that writes a file a tool
 reads through a path input. The *geometry file* and the *plate* are region.md's. A *shape* in the
 utility is one of its four *kinds*, circle, square, rectangle and polygon; it is written to the
-geometry file as region.md's circle or polygon. The *session* is the utility's own file beside the
-geometry file, holding each shape's kind and its stamp group. A *stamp* is a copy of a template
-shape placed by a click, identical in kind, size and rotation. The *rule* is a file node's folder
-and pattern.
+geometry file as region.md's circle or polygon. The *drawing* is the top-level key of the geometry
+file that holds each shape's kind and stamp group, the utility's and never the region's. A *stamp*
+is a copy of a shape placed by a click, identical in kind, size and rotation. A *saved
+configuration* is a geometry file kept in the utility's own library, which every later run of the
+utility lists.
 
 ## The utilities folder
 
@@ -98,6 +92,26 @@ the theme does not reach it, which is the price of the seam.
   `utilities/` imports `sieve_player` or `tools`.
   Check: tests/test_seams.py walks every `.py` under `utilities/` and reads no import of either.
 
+## Region's file holds the drawing
+
+Assumes: nothing.
+
+The one file carries the drawing beside the plate and the shapes, so the region's tolerance of a
+key it does not read becomes its stated contract rather than an accident a later tightening of the
+loader would undo.
+
+Facts to weigh, read off the tree at e17fe0fc. `load_geometry` checks that `plate` and `shapes`
+are present and reads nothing else at the top level, so a further key already passes; its
+docstring does not say so. It refuses a shape carrying any key beyond its name and its primitive,
+which is why the drawing is a top-level key and not one on each shape. The loader answers only
+`plate` and `shapes` as params, so the drawing never reaches the node's params or its key, and
+editing a shape's kind without moving it re-keys nothing.
+
+- [ ] region's module docstring says a geometry file's top-level keys other than `plate` and
+  `shapes` are ignored, and the loader's answer is the same with them as without.
+  Check: a test loads a file with a further top-level key and reads params equal to the file's
+  without it.
+
 ## Opening a video and moving through it
 
 Assumes: The utilities folder.
@@ -109,9 +123,9 @@ Facts to weigh. The video node hands out the decoded frame at its native size si
 format 2 moved scale onto a rescale node, so the plate is the video's width and height. The
 player's Decoder refuses a raw elementary stream for want of an index (docs/spec/sources.md); the
 utility reads through OpenCV alone, where a seek in such a stream lands near rather than on the
-asked frame, which costs drawing nothing, since the arena does not move between neighbouring frames;
-inside an .MTS file's first group of pictures the seek misses badly enough that mask-and-count
-decodes forward there instead.
+asked frame, which costs drawing nothing, since the arena does not move between neighbouring
+frames; inside an .MTS file's first group of pictures the seek misses badly enough that
+mask-and-count decodes forward there instead.
 
 - [ ] Launched with `--video PATH`, the utility shows the video's first frame; with no video it
   asks for one, and the plate is the frame's height and width either way. A seek bar across the
@@ -133,25 +147,33 @@ The four kinds are the ones a user reaches for, and each edits the way it was dr
 resized stays a square and a circle grows from its rim.
 
 Facts to weigh. tools/region.py's `load_geometry` refuses a shape whose extent passes the plate's
-edge, a circle by its bounding box, so a dish drawn at the frame's edge is refused by the region
-and not clipped; the utility says so before the region does. A rotated circle is the same circle,
-so a circle has no rotation handle.
+edge, a circle by its bounding box, so a shape off the plate is never written: a move, a resize or
+a stamp that would carry a shape past the edge stops it at the edge, as v2's slid, and a drawing
+gesture begun inside the plate is held inside it. A rotated circle is the same circle, so a circle
+has no rotation handle.
 
-- [ ] A circle is drawn from its centre by dragging out its radius, and edited by a dot on its rim
-  that sets the radius and by dragging its body to move it. A square is drawn by two clicks on
-  opposite corners, the diagonal setting its side and angle, as mask-and-count's is; a rectangle
-  by two points corner to corner, upright. Each has corner and edge handles to resize, shown on
-  the selected shape alone, a square keeping its sides equal under every handle, a handle above it
-  to rotate it about its centre, and its body to move it. The drawing mode is one state, shown in
-  one place. A polygon is drawn by clicking its vertices and closed by clicking the first again or by
-  Enter; each vertex drags, a click on an edge adds a vertex, and a vertex is removed while the
-  polygon keeps three; it moves and rotates as the rects do.
+- [ ] A circle is drawn from its centre by dragging out its radius, or through three clicks on its
+  rim, and edited by a dot on its rim that sets the radius and by dragging its body to move it. A
+  square is drawn by two clicks on opposite corners, the diagonal setting its side and angle, as
+  mask-and-count's is; a rectangle by two points corner to corner, upright. Each has corner and
+  edge handles to resize, shown on the selected shape alone, a square keeping its sides equal
+  under every handle, a handle above it to rotate it about its centre, and its body to move it. A
+  polygon is drawn by clicking its vertices and closed by clicking the first again or by Enter;
+  each vertex drags, a click on an edge adds a vertex, and a vertex is removed while the polygon
+  keeps three; it moves and rotates as the rects do. The drawing mode is one state, shown in one
+  place.
   Check: a test of the shapes alone, no window, resizes a square by a corner and by an edge and
   reads its sides equal, rotates a rectangle a quarter turn and reads its vertices, drags a
-  circle's rim dot and reads the radius, and adds and removes a polygon's vertex.
-- [ ] A shape past the plate's edge is marked as such where it is drawn and in its table row, and
-  a save with one refuses and names it, the reason region.md's loader would give.
-  Check: a test places a circle reaching past the plate's edge and reads the save's refusal naming it.
+  circle's rim dot and reads the radius, fits a circle through three points of a known circle and
+  reads its centre and radius, and adds and removes a polygon's vertex.
+- [ ] No shape leaves the plate: a move, a resize, a rotation or a three-point circle that would
+  pass the edge stops at it, and every shape the utility holds is one region's loader accepts.
+  Check: a test drags a circle and a rotated square toward each edge and reads every extent within
+  the plate; a test saves after each and loads the file through `tools.region.load_geometry`.
+- [ ] Every draw, edit, rename, stamp and delete is one undo step, a drag being one step however
+  long; Ctrl+Z undoes and Ctrl+Shift+Z redoes.
+  Check: a test draws a square, drags it twice and deletes it, undoes three times and reads the
+  square at its first drag's end, and redoes once.
 
 ## The table, names and deletion
 
@@ -161,9 +183,9 @@ The table on the right is the list of what the file will hold, the place a name 
 selection's second handle, as Fiji's ROI Manager is beside its image.
 
 Facts to weigh. A geometry file refuses two shapes of one name and a name that is not a non-empty
-string, and region's `choice` and inside's `region_name` column, under its default prefix, carry the name downstream, so a
-name is what the user later reads in a csv. Order in the file is what region's `pick` reads last
-first and draw paints in order.
+string, and region's `choice` and inside's `region_name` column, under its default prefix, carry
+the name downstream, so a name is what the user later reads in a csv. Order in the file is what
+region's `pick` reads last first and draw paints in order.
 
 - [ ] The table lists every shape, one row each, with its name, its kind and its centre and size in
   plate pixels; selecting a row selects the shape and selecting a shape selects its row; a name is
@@ -177,129 +199,113 @@ first and draw paints in order.
   Check: a test sets the stem, draws three shapes and reads their names; deletes the second, draws
   one and reads the free index taken.
 
-## Stamping and saved shapes
+## Stamping
 
 Assumes: The table, names and deletion.
 
-Identical arenas on one plate, six dishes or a well plate, want one shape placed many times, and a
-shape drawn once well is worth keeping beyond the session that drew it.
+Identical arenas on one plate, six dishes or a row of nest boxes, want one shape placed many times
+and kept identical after.
 
-Facts to weigh. A stamp group is editing intent the geometry file cannot hold, so it lives in the
-session. The stamp's size is read off the template each time it is placed and never stored
-apart from it, the optical-flow detector's drift. A stamp placed near the plate's edge slides
-inside it, as v2's did, rather than being refused at save. Kendrick's request names "save a given ROI" beside the stamp; this spec reads it as
-saving a shape as a template, kept in a template file of the utility's that any later session
-offers to stamp from, and not as a geometry file of one shape, which the save already makes when
-one shape is drawn. That reading is the spec's, and the Open section holds the other.
+Facts to weigh. A stamp group is editing intent the shapes cannot hold, so it lives in the
+drawing. The stamp's size is read off the selected shape each time it is placed and never stored
+apart from it, the optical-flow detector's drift.
 
 - [ ] A selected shape becomes the stamp: each click places a copy of its kind, size and rotation
-  centred at the click, named by the stem's next index, and the copies are one group; resizing or
-  rotating one member, with the group's link on, does the same to every member about its own centre.
-  Check: a test stamps a square three times, rotates one with the link on and reads all three
+  centred at the click, held inside the plate, named by the stem's next index, and the copies and
+  the original are one group; resizing or rotating one member, with the group's link on, does the
+  same to every member about its own centre, a member the change would carry off the plate
+  stopping the change for all.
+  Check: a test stamps a square three times, rotates one with the link on and reads all four
   rotated and each centre where it was placed.
-- [ ] A selected shape saves as a named template to the utility's template file, and a later
-  session lists the templates and stamps from one.
-  Check: a test saves a circle as a template, opens a fresh session over the same template file and
-  stamps it, reading the radius.
 
 ## Saving and reopening
 
-Assumes: Drawing and editing shapes.
+Assumes: Region's file holds the drawing, Drawing and editing shapes.
 
-The file written is the one region.md's loader reads, and reopening it gives back what was drawn,
+The file written is the one region's loader reads, and reopening it gives back what was drawn,
 kinds and groups included, so a later edit starts where the last one stopped.
 
-Facts to weigh. tools/region.py refuses a shape carrying a key beyond its name and its primitive,
-so the kind and the group cannot ride in the geometry file without changing region's loader and
-its ticked box in region.md. The session beside it, named for the geometry file, holds them, with
-a digest of the geometry file it was written with; a geometry file edited elsewhere then no longer
-matches its session, and the utility rebuilds the shapes from the file alone, a circle as a circle,
-a polygon of four right angles as a rectangle or a square, any other as a polygon, every group
-dissolved, and says that it did. The player's window watches every file a loader read and re-reads
-it on a change (region.md's Open, settled by be59a820), so a save while the player is open shows in
-the region with no step between.
+Facts to weigh. The drawing names each shape it describes, so a geometry file edited elsewhere can
+disagree with it: a shape the drawing does not name, or whose primitive no longer fits the kind the
+drawing gives it, is rebuilt from the primitive alone, a circle as a circle, a polygon of four
+right angles as a rectangle or a square, any other as a polygon, out of any group, and the utility
+says which it inferred. The player's window watches every file a loader read and re-reads it on a
+change (region.md's Open, settled by be59a820), so a save over the file a region is wired to shows
+in the region with no step between. A file node's `folder` is joined to the document's folder and
+an absolute folder survives the join, and its Browse turns a picked file into the rule, so a saved
+file reaches a node by Browse or by pasting its folder and its name into the two fields.
 
-- [ ] Save writes the geometry file, plate and shapes, every circle as region.md's circle and every
-  other kind as a polygon of its vertices in plate pixels, and the session beside it; Open reads
-  both back. Launched with `--file PATH`, the utility opens that file, and a path not yet on disk is
-  where the first save lands.
-  Check: a test draws one of each kind, saves, reads the file through `tools.region.load_geometry`
-  and compares each shape's vertices or circle, then reopens and reads the kinds back.
-- [ ] A geometry file with no session, or whose session's digest does not match, opens with the
-  shapes rebuilt from the file as the Facts say, and the utility says the kinds were inferred.
+- [ ] Save writes the geometry file, plate, shapes and drawing, every circle as region.md's circle
+  and every other kind as a polygon of its vertices in plate pixels; Open reads it back with its
+  kinds and groups. Launched with `--file PATH`, the utility opens that file, and a path not yet on
+  disk is where the first save lands; with neither, the first save asks, beside the video by
+  default. The utility shows the saved file's folder and name, each with a copy button, for a file
+  node's two fields.
+  Check: a test draws one of each kind and a stamp group, saves, reads the file through
+  `tools.region.load_geometry` and compares each shape's vertices or circle, then reopens and
+  reads the kinds and the group back.
+- [ ] A geometry file with no drawing, or one whose drawing disagrees with a shape, opens with that
+  shape rebuilt from its primitive as the Facts say, and the utility says the kinds were inferred.
   Check: a test writes a geometry file by hand of a circle, a rotated square and a triangle, opens
   it and reads circle, square and polygon.
 - [ ] A geometry file whose plate is not the open video's shape opens with a line saying the two
-  shapes and saves refused until the shapes are moved to the new plate or the video is changed,
-  so a file drawn on one camera's frame is never silently written against another's.
-  Check: a test opens a file of a 100×100 plate over a clip of another shape and reads the line and
-  the refused save.
+  shapes, every shape past the new plate's edge marked, and the save refused while any is, so a
+  file drawn on one camera's frame is never silently written against another's.
+  Check: a test opens a file of a 200×200 plate holding a shape near its far corner over a
+  100×100 clip and reads the line, the marked shape and the refused save.
 
-## The rule, and a file per video
+## Saved configurations
 
 Assumes: Saving and reopening.
 
-Kendrick names the cases a user will want, one file for many videos and one file per video, and the
-utility says the rule for the case chosen in the form a file node takes, so the user pastes it into
-the node rather than composing a glob.
+A configuration drawn once, the arena of a rig, is wanted again on the next video and in the next
+document, so the utility keeps what it saves where every later run of it can list it, whichever
+SIEVE document opened it.
 
-Facts to weigh, read off the tree at e17fe0fc. tools/file.py's `select(folder, params)` is handed
-the document's folder and the node's params and nothing of the video, and
-`sieve_player.document.pick_path` is the one caller the window uses, with `_note_selectors` calling
-`select` and `matches` for the card's list. sieve_player/window.py's `_pick_video` runs
-`_pick_paths` before `pick_video`, so the path inputs are resolved against the video picked on the
-previous pass; a rule that names the video needs the video picked first. A token expanded before
-`select` is called keeps the selector's contract unchanged: the file tool never learns a token
-exists. `rule_for` in tools/file.py already turns a path into folder and pattern for Browse.
+Facts to weigh. A saved configuration is a geometry file like any other, drawing included, so
+loading one is opening it and the plate check of the deliverable before covers a configuration
+saved on another camera's frame. The library is the utility's and not a document's, so it lives in
+one folder per user outside the repo and outside any document's folder, where Qt's per-user
+application data location puts it; the README names where.
 
-- [ ] The utility offers three scopes and shows the rule for the one chosen as a single line,
-  relative to the document's folder passed as `--folder`: one file for every video, a fixed name;
-  one file per video, named for the video's stem beside it, `{video}.geometry.json`; and one file
-  per folder of videos, a fixed name in the video's folder, `{dir}/geometry.json`. Choosing a scope
-  sets where Save writes, and a copy button puts the line on the clipboard.
-  Check: a test sets each scope over a clip in a subfolder of the document's and reads the line and
-  the save path.
-- [ ] A file node's pattern and folder expand `{video}` to the stem of the video the document has
-  open and `{dir}` to that video's folder relative to the document, before the rule is asked; a
-  document with no video expands neither and the node says so. The video is picked before the path
-  inputs are, so a region reads the file named for the video just opened.
-  Check: a test builds a document with a file node on the video and a second on a region's
-  geometry with the pattern `{video}.geometry.json`, switches the video and reads the region's
-  plate change to the second file's.
-- [ ] A path pasted into a file node's pattern that carries a folder splits on commit into folder
-  and pattern, as Browse's `rule_for` does, so the utility's one line is one paste.
-  Check: a test sets the pattern to `geometry/{video}.geometry.json` and reads folder `geometry`
-  and pattern `{video}.geometry.json`.
+- [ ] Saving to the library keeps the current configuration under a name the user gives, with the
+  plate and the date; the library lists every configuration kept, with those, on every run of the
+  utility, and choosing one loads its shapes onto the open video under the plate check. A kept
+  configuration is renamed or removed from the list.
+  Check: a test saves a configuration to a library folder it names, starts a fresh utility over
+  the same folder and another clip of the same shape, reads it listed, loads it and reads the
+  shapes; a test loads one kept on another plate and reads the line.
 
 ## The region card's button
 
 Assumes: Saving and reopening.
 
 The node that is not fed is where the user is when they learn it, so its card carries the way to
-feed it, and the button hands the utility everything the player knows: the video, the file the rule
-picked or would pick, and the document's folder.
+feed it, and the button hands the utility what the card knows.
 
 Facts to weigh, read off the tree at e17fe0fc. sieve_player/pane.py hands every settings widget
-with `set_source` the open video's path and fps, which is tools/_csvfile.py's Write widget's way of
-knowing the footage, so the video reaches a region's card through an existing seam. No seam hands a
-widget the path its selector picked; `_pick_paths` writes it only into the pane's note line as a
-basename. A path input that matched nothing has no path, but a rule with no wildcard after its
-tokens are expanded names one file, which is where the utility saves. One utility exists, so the
-button is region's own, built in its settings widget as csv's Write is, and no facet for "a path
-input has a utility" is minted until a second tool wants one, as the Tab menu's presentation waited
-on a second (cd7fac9f, on the unmerged v5-naming branch). The process is launched with the interpreter the player runs under and is
-not waited on.
+with `set_source` the open video's path and fps, and calls it again whenever the video changes,
+which is tools/_csvfile.py's Write widget's way of knowing the footage, so the video reaches a
+region's card with no change to the player. What no seam hands a widget is the path its geometry
+selector picked: `_pick_paths` in sieve_player/window.py writes it only into the pane's note line,
+as a basename. The card holds the region's plate and shapes, which are the picked file's as its
+loader read them, so the button hands those to the utility as a file of its own, and the utility,
+which lists the geometry files beside the video and in the library, opens the one whose plate and
+shapes equal them; with no such file, or two, it opens the shapes unsaved and the first save asks
+where. A save over the file the region is wired to then reaches the region through the watcher.
+One utility exists, so the button is region's own, built in its settings widget as csv's Write is,
+and no facet for "a path input has a utility" is minted until a second tool wants one. The process
+is launched with the interpreter the player runs under and is not waited on.
 
-- [ ] The window hands a settings widget that asks for it the document's folder and, per path
-  input, the path its selector picked or, matching nothing, the one file its rule names, or None.
-  Check: an offscreen test wires a file node into a region's geometry with a rule naming a file not
-  on disk and reads that path handed to the region's widget.
 - [ ] A region's card shows, under its standing, a button that opens the geometry utility with the
-  open video, the path its geometry input is handed and the document's folder; with nothing wired
-  into `geometry` the button still opens the utility on the video, its scope unset. Saving in the
-  utility while the region is wired to that file updates the region's shapes in the open player.
-  Check: a test replaces the launch with a recorder, presses the button and reads the command
-  line; an offscreen test writes the region's geometry file and reads the region's params follow.
+  video `set_source` handed the card and the region's current plate and shapes; with no geometry
+  loaded it opens the utility on the video alone. With the region's shapes those of a file beside
+  the video, the utility opens that file, and a save there updates the region's shapes in the open
+  player.
+  Check: a test replaces the launch with a recorder, presses the button and reads the command line
+  and the shapes handed; a test starts the utility with the handed shapes and a matching file
+  beside the clip and reads that file open; an offscreen test rewrites the region's wired file and
+  reads the region's params follow.
 
 Worth a look: region.md's open one, a geometry file drawn in the utility over the crossings clip
 (video-tests/00000_168-178.mp4) around the nest, loaded into a region on the purb document, its
@@ -307,41 +313,26 @@ outline on the frame where it was drawn, and a crop fed from it.
 
 ## Non-goals
 
-- The utility writing anything but the geometry file, its session and its template file. A mask
-  image, a crop rect or a document node is the player's to derive from the file.
+- Any change to `sieve_player`. The video reaches the card through `set_source`, and the saved file
+  reaches the region through the watcher the window already has. Decided 2026-11-10.
+- One file per video, a rule that names the video the document has open. It is a change to the
+  selector's contract or the window, and waits. Decided 2026-11-10.
+- A shape off the plate, written or held. Decided 2026-11-10.
+- The utility writing anything but geometry files, in place or in its library. A mask image, a crop
+  rect or a document node is the player's to derive from the file, and the rule is pasted or
+  browsed, never written into the document.
 - An ellipse, an annulus or a shape with a hole as a kind. The file has circle and polygon;
-  region.md settles a hole as one region less another through combine, and an ellipse is a polygon
-  the utility does not yet offer to draw.
+  region.md settles a hole as one region less another through combine.
 - Shapes that move over the video. A geometry file is one plate's, the same at every row, as
   region's STATIC says.
-- The utility editing the document, placing a file node or wiring it. The rule is pasted.
+- A grid stamp, a background to draw over in place of a frame, and a pixels-per-millimetre scale.
+  Kendrick's reading of the first draft found none needed. Decided 2026-11-10.
 - A facet for utilities in the registry, until a second tool has one.
 
 ## Open
 
-- Whether "save a given ROI" means a template to stamp from, which this spec builds, or a geometry
-  file of one shape written beside the full one. Kendrick's reading decides; the second is a save
-  of the selection and costs little.
-- Whether the button, with nothing wired into `geometry`, places and wires a file node with the
-  rule of the scope chosen, so that the paste is unneeded. Held: it is the utility writing the
-  document, the Non-goal above, and waits until the paste has been lived with.
-- A grid stamp, rows and columns at a pitch, for well plates; whether stamping by clicks is slow
-  enough to want it is Kendrick's to say after use.
-- A circle through three points on its rim, for an arena whose centre is hidden or whose edge is
-  all that is visible; drawing from the centre is the spec's default and this is the common second.
-- Drawing over a background rather than one frame, the median of sampled frames, so animals on
-  the arena's edge do not hide it. The utility may not import background, so it would carry its
-  own median.
-- Undo. Every annotator named in the Why has it, and v2's took one drag as one step; it is not a
-  box because nothing here is destructive past Delete, and Delete's loss is one shape.
-- Whether "a two point square" means mask-and-count's diagonal, which sets the angle in the same
-  gesture and is what this spec builds, or an upright square from two corners, rotated after.
-- A scale, pixels per millimetre from a drawn length, carried in the geometry file for exports in
-  physical units, as the optical-flow detector's calibration dialog drew one. Region's loader refuses an unknown key on a shape but passes one at the top
-  level, unstated in its docstring; whether that tolerance is a contract is decided with the next
-  item, and the scale waits on the first export that asks.
-- The session as its own file or as a top-level key of the geometry file. The loader's tolerance
-  of a top-level key would let the kinds and groups ride in the one file, with no second file to
-  lose and no change to region; it puts how the config was arrived at into the config, against
-  kendrick-scratch.md's line, and makes a tolerance nobody declared into a contract. The spec
-  builds the separate file; Kendrick's reading of the scratch line decides.
+- The hand-off by matching shapes finds the wired file only where the utility looks, beside the
+  video and in the library; a file wired from anywhere else, or two files of equal shapes, opens
+  the shapes unsaved and the first save asks where. If that is met often, the remedy is the window
+  handing a widget the path its selector picked, a change to the player held under the first
+  Non-goal.

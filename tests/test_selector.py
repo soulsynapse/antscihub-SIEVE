@@ -243,7 +243,7 @@ def test_a_driven_knob_is_greyed_until_the_wire_is_broken(tmp_path):
     win.close()
 
 
-def test_clicking_a_match_makes_it_the_choice_and_a_stale_choice_falls_back(tmp_path):
+def test_clicking_a_match_makes_it_the_choice_a_stale_choice_falls_back_and_browsing_rewrites_the_rule(tmp_path):
     from PySide6.QtCore import Qt
 
     tree(tmp_path)
@@ -262,19 +262,11 @@ def test_clicking_a_match_makes_it_the_choice_and_a_stale_choice_falls_back(tmp_
     w.set_params({**w.params(), "pattern": "*.mp4"})
     w.list.itemClicked.emit(w.list.item(1))                         # clicking the choice clears it
     assert win.doc.node("file").params["choice"] == "" and w.status.text() == ""
-    win.close()
-
-
-def test_browsing_to_a_file_makes_it_the_rule_and_lands_as_one_change(tmp_path):
-    tree(tmp_path)
     (tmp_path / "else").mkdir()
     (tmp_path / "else" / "d.avi").write_bytes(b"")
-    from tools import gray as real_gray
-    win = open_window(tmp_path, [file, real_gray])
-    w = win.pane.widget("file")
     changes = []
     w.changed.connect(lambda: changes.append(1))
-    w.choose(str(tmp_path / "else" / "d.avi"))
+    w.choose(str(tmp_path / "else" / "d.avi"))                      # browsing to a file makes it the rule, as one change
     p = win.doc.node("file").params
     assert (p["folder"], p["pattern"], p["choice"], p["recurse"]) == ("else", "*.avi", "d.avi", False)
     assert win.doc.video == os.path.join("else", "d.avi") and len(changes) == 1

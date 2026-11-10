@@ -82,7 +82,7 @@ def test_each_shape_is_a_filled_record_the_mask_paints_back_and_the_tools_read()
     assert filter_.keep(out, "area", "", str(nest["area"]))["name"].tolist() == ["nest"]
 
 
-def test_the_choice_narrows_to_one_record_and_a_name_the_file_lacks_reads_as_every_shape():
+def test_the_choice_narrows_to_one_record_a_missing_name_reads_as_every_shape_and_a_click_picks():
     from PySide6.QtWidgets import QApplication
 
     QApplication.instance() or QApplication([])
@@ -99,6 +99,12 @@ def test_the_choice_narrows_to_one_record_and_a_name_the_file_lacks_reads_as_eve
     w.list.itemClicked.emit(w.list.item(1))
     w.list.itemClicked.emit(w.list.item(0))
     assert changed == ["", "nest"] and w.params()["plate"] == [H, W] and w.params()["shapes"] == params()["shapes"]
+    result = region.run(fed(frame()), 0, params())
+    assert region.pick((20, 20), (H, W), 0, result, params()) == {"choice": "nest"}
+    assert region.pick((20, 20), (H, W), 0, result, params("nest")) == {"choice": ""}
+    assert region.pick((45, 20), (H, W), 0, result, params("nest")) == {"choice": "dish"}
+    assert region.pick((2, 2), (H, W), 0, result, params()) is None
+    assert region.pick((10, 10), (H // 2, W // 2), 0, result, params()) is None
 
 
 def test_a_frame_of_another_shape_than_the_plate_is_refused_and_said():
@@ -120,12 +126,3 @@ def test_a_frame_of_another_shape_than_the_plate_is_refused_and_said():
     g.sync()
     with pytest.raises(ValueError, match="no geometry"):
         g.compute("region", 0)
-
-
-def test_a_click_inside_a_shape_picks_it_and_inside_the_choice_clears_it():
-    result = region.run(fed(frame()), 0, params())
-    assert region.pick((20, 20), (H, W), 0, result, params()) == {"choice": "nest"}
-    assert region.pick((20, 20), (H, W), 0, result, params("nest")) == {"choice": ""}
-    assert region.pick((45, 20), (H, W), 0, result, params("nest")) == {"choice": "dish"}
-    assert region.pick((2, 2), (H, W), 0, result, params()) is None
-    assert region.pick((10, 10), (H // 2, W // 2), 0, result, params()) is None

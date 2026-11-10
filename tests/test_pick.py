@@ -48,51 +48,29 @@ def click(win, button=Qt.LeftButton):
     QApplication.processEvents()
 
 
-def test_the_facet_is_in_the_table_with_its_hint():
+def test_a_click_is_offered_last_drawn_first_a_raising_pick_is_dropped_and_said_and_the_answer_lands_through_the_card(tmp_path):
     assert "pick" in FACETS and "point" in hint("pick") and "None" in hint("pick")
-
-
-def test_a_click_reaches_the_last_drawer_first_and_the_answer_lands_through_the_card(tmp_path):
     QApplication.instance() or QApplication([])
     seen = []
     quiet = drawer("quiet", lambda point, shape, row, result, params: seen.append(("quiet", shape)))
     loud = drawer("loud", lambda point, shape, row, result, params: {"choice": f"{int(point[0])},{int(point[1])}"})
-    tools = [gray, quiet, loud]
+    boom = drawer("boom", lambda *a: 1 / 0)
+    tools = [gray, quiet, loud, boom]
     doc = D.from_tools(tools, clip(tmp_path / "v.avi"))
-    doc.connect("gray", "loud")
+    doc.connect("gray", "boom")
     doc.display = "quiet"
     D.save(doc, tmp_path / "doc.json")
     win = PlayerWindow(str(tmp_path / "doc.json"), "t", tools)
     win.resize(640, 480)
-    shown(win, "quiet", "loud")
+    shown(win, "quiet", "loud", "boom")
     key = win.graph.key("loud")
-    click(win)
+    click(win)                                                          # boom is drawn last, so asked first: it raises and is dropped; loud is next and claims
+    assert win.graph.standing("boom").startswith("pick() raised: ZeroDivisionError") and "boom" not in [nid for nid, *_ in win.display.drawers]
     assert win.doc.node("loud").params["choice"] == "32,24" and win.pane.widget("loud").params()["choice"] == "32,24"
-    assert win.graph.key("loud") != key and seen == []                          # loud is drawn last, so it is asked first and claims it
+    assert win.graph.key("loud") != key and seen == []
     loud.pick = lambda *a: None
     click(win)
     assert seen == [("quiet", (48, 64))] and win.doc.node("quiet").params["choice"] == ""   # unclaimed: nothing lands
-    win.close()
-
-
-def test_a_pick_that_raises_is_dropped_and_said_and_the_next_click_reaches_the_other(tmp_path):
-    QApplication.instance() or QApplication([])
-    boom = drawer("boom", lambda *a: 1 / 0)
-    other = drawer("other", lambda point, shape, row, result, params: {"choice": "mine"})
-    tools = [gray, other, boom]
-    doc = D.from_tools(tools, clip(tmp_path / "v.avi"))
-    doc.connect("gray", "boom")
-    D.save(doc, tmp_path / "doc.json")
-    win = PlayerWindow(str(tmp_path / "doc.json"), "t", tools)
-    win.resize(640, 480)
-    shown(win, "boom", "other")
-    click(win)
-    assert win.graph.standing("boom").startswith("pick() raised: ZeroDivisionError") and win.doc.node("other").params["choice"] == "mine"
-    assert "boom" not in [nid for nid, *_ in win.display.drawers]
-    win.doc.node("other").params["choice"] = ""
-    shown(win, "other")                                                # the pick re-keyed other; its result comes back with the walk
-    click(win)
-    assert win.doc.node("other").params["choice"] == "mine"
     win.close()
 
 

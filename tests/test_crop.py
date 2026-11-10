@@ -35,7 +35,7 @@ def build(at, border=0):
     return doc, Graph(doc, Dec(), {"crop": crop, "roi": roi_tool(at)})
 
 
-def test_the_cut_is_the_roi_box_at_row_0_grown_and_clipped_and_held_across_rows():
+def test_the_cut_is_the_roi_box_at_row_0_grown_clipped_and_held_a_mask_cuts_itself_and_an_empty_roi_is_said():
     doc, g = build(lambda r: (1, 2) if r == 0 else (0, 0))
     out = g.compute("crop", 0)
     assert out.shape == (2, 2, 3) and np.array_equal(out, g.compute("video", 0)[1:3, 2:4])
@@ -44,19 +44,13 @@ def test_the_cut_is_the_roi_box_at_row_0_grown_and_clipped_and_held_across_rows(
     g.sync()
     assert g.compute("crop", 3).shape == (4, 6, 3)                     # grown past the frame's edge: the whole frame
     assert crop.rect(g.compute("roi", 0), 1) == (0, 4, 1, 5)
-
-
-def test_a_mask_cropped_against_itself_is_its_own_cut():
-    doc, g = build(lambda r: (1, 2))
+    doc.node("crop").params["border"] = 0
     doc.add_node("crop", (0, 600), crop.DEFAULTS, id="crop_2")
     doc.connect("roi", "crop_2")
     doc.connect("roi", "crop_2", "roi")
     g.sync()
     frame, mask = g.compute("crop", 0), g.compute("crop_2", 0)
     assert frame.shape[:2] == mask.shape == (2, 2) and (mask == 255).all()
-
-
-def test_an_empty_roi_is_said_on_the_node():
     doc, g = build(lambda r: None)
     with pytest.raises(ValueError):
         g.compute("crop", 0)

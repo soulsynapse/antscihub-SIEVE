@@ -209,8 +209,15 @@ def test_the_table_selects_with_the_frame_refuses_a_taken_name_and_deletes(windo
 
 def test_new_shapes_take_the_stems_least_free_index(window):
     ed = window.editor
-    window.stem_field.setText("dish")
-    ed.set_mode("circle")
+    window.show()
+    window.activateWindow()
+    assert QTest.qWaitForWindowActive(window)
+    window.stem_field.setFocus()
+    QTest.keyClicks(window.stem_field, "dish")              # a mode's letter typed into a field is the field's
+    assert window.stem_field.text() == "dish" and ed.mode == "select"
+    window.view.setFocus()
+    QTest.keyClick(window.view, Qt.Key.Key_C)
+    assert ed.mode == "circle" and window.mode_buttons["circle"].isChecked()
 
     def circle(x):
         for p in ((x, 20), (x + 5, 20)):

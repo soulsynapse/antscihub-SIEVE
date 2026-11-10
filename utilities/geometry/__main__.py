@@ -6,7 +6,8 @@ import sys
 from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QApplication
 
-from .window import GeometryWindow, styled
+from .look import styled
+from .window import GeometryWindow
 
 
 def parser():

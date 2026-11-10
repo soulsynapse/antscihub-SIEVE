@@ -1,50 +1,34 @@
-"""The utility's window: the frame view, a row of view controls above it with the cursor's plate
-position, the drawing modes as one exclusive row of buttons with the selected stamp group's link
-beside them, the shapes' table on the right under the name stem and the buttons moving a row, the
-library's configurations below it, and a seek bar below with the frame's index and time, over the
-saved file's folder and name. Opening and saving the file sit with the view controls. Its look is
-its own, since the player's theme is the player's."""
+"""The utility's window, each control beside what it acts on: the drawing modes and the stamp group's
+link in a rail of glyphs at the left; the frame view in the middle, the video's name and seek bar
+under it, and under those the message line with the cursor, the zoom and its two buttons; and at the
+right three panels, File (the saved file's name and folder, opening and saving), Shapes (the name
+stem, the table and the order) and Library (the kept configurations). Its look is look.py's."""
 import os
 
 from . import document, library
 from .library import default_folder
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QAction, QFont, QFontDatabase, QKeySequence
-from PySide6.QtWidgets import (QApplication, QButtonGroup, QFileDialog, QHBoxLayout, QInputDialog, QLabel, QLineEdit,
-                               QListWidget, QListWidgetItem, QMainWindow, QMessageBox, QPushButton, QSlider,
-                               QVBoxLayout, QWidget)
+from PySide6.QtGui import QAction, QKeySequence
+from PySide6.QtWidgets import (QApplication, QButtonGroup, QFileDialog, QFrame, QGridLayout, QHBoxLayout,
+                               QInputDialog, QLineEdit, QListWidget, QListWidgetItem, QMainWindow, QMessageBox,
+                               QSlider, QVBoxLayout, QWidget)
 
 from .editor import MODES, Editor
+from .look import RAIL_BUTTON, ElidedLabel, GlyphButton, Panel, label
 from .table import ShapeTable
 from .video import Video
 from .view import FrameView
 
-FAMILIES = ["Inter", "Segoe UI Variable Text", "Segoe UI", "SF Pro Text", "Helvetica Neue", "Arial"]
-STYLE = """
-QWidget { background: rgb(31,31,31); color: rgb(200,200,200); }
-QPushButton { background: rgb(49,49,49); border: 1px solid rgb(69,69,69); border-radius: 4px; padding: 3px 10px; }
-QPushButton:hover { background: rgb(58,58,58); }
-QPushButton:checked { background: rgb(70,62,40); border-color: rgb(255,200,80); }
-QSlider::groove:horizontal { height: 4px; background: rgb(58,58,58); border-radius: 2px; }
-QSlider::handle:horizontal { width: 12px; margin: -5px 0; background: rgb(140,140,140); border-radius: 6px; }
-QLabel#readout { color: rgb(140,140,140); }
-QLineEdit { background: rgb(24,24,24); border: 1px solid rgb(69,69,69); border-radius: 4px; padding: 2px 6px; }
-QTableWidget { gridline-color: rgb(58,58,58); selection-background-color: rgb(70,62,40); }
-QHeaderView::section { background: rgb(40,40,40); border: none; border-bottom: 1px solid rgb(69,69,69); padding: 3px 6px; }
-"""
-MODE_LABELS = {"select": "Select", "circle": "Circle", "circle3": "Circle by 3", "square": "Square",
-               "rectangle": "Rectangle", "polygon": "Polygon", "stamp": "Stamp"}
+MODE_GLYPHS = {"select": ("pointer", "Select", "V"), "circle": ("circle", "Circle from its centre", "C"),
+               "circle3": ("circle-3", "Circle through three points", "Shift+C"),
+               "square": ("square", "Square, corner to corner", "S"),
+               "rectangle": ("rectangle", "Rectangle, corner to corner", "R"),
+               "polygon": ("polygon", "Polygon: click each vertex, Enter or the first closes", "P"),
+               "stamp": ("rubber-stamp", "Stamp the selected shape at each click", "T")}
+SIDE_W = 340
 GEOMETRY_FILTER = "Geometry (*.json);;All files (*)"
 VIDEO_FILTER = "Video (*.mp4 *.mov *.avi *.mts *.m2ts *.mkv *.MP4 *.MOV *.AVI *.MTS);;All files (*)"
-
-
-def styled(app):
-    have = set(QFontDatabase.families())
-    font = QFont(next((f for f in FAMILIES if f in have), app.font().family()))
-    font.setPixelSize(12)
-    app.setFont(font)
-    app.setStyleSheet(STYLE)
 
 
 def clock(index, fps):
@@ -69,83 +53,134 @@ class GeometryWindow(QMainWindow):
         self.editor = Editor()
         self.view = FrameView(self.editor)
         self.table = ShapeTable(self.editor)
-        self.table.setMinimumWidth(300)
-        self.stem_field = QLineEdit()
-        self.stem_field.setPlaceholderText("name stem: the kind")
-        self.up_button, self.down_button = QPushButton("Up"), QPushButton("Down")
         self.editor.on_change = self._drawing_changed
+
         self.modes = QButtonGroup(self)
         self.mode_buttons = {}
         for m in MODES:
-            b = QPushButton(MODE_LABELS[m])
-            b.setCheckable(True)
+            name, tip, keys = MODE_GLYPHS[m]
+            b = GlyphButton(name, f"{tip}  ({keys})", checkable=True, side=RAIL_BUTTON)
             self.modes.addButton(b)
             self.mode_buttons[m] = b
             b.clicked.connect(lambda _=False, m=m: self.editor.set_mode(m))
         self.mode_buttons["select"].setChecked(True)
-        self.link_button = QPushButton("Link group")
-        self.link_button.setCheckable(True)
+        self.link_button = GlyphButton("unlink", "The selected stamp group's link: on, an edit to one member "
+                                       "but a move is made to every member", checkable=True, on="link",
+                                       side=RAIL_BUTTON)
         self.link_button.setEnabled(False)
-        self.fit_button, self.actual_button = QPushButton("Fit"), QPushButton("100%")
-        self.open_button = QPushButton("Open video…")
-        self.open_file_button, self.save_button = QPushButton("Open file…"), QPushButton("Save")
-        self.save_as_button = QPushButton("Save as…")
-        self.folder_label, self.name_label = QLabel(), QLabel()
-        self.copy_folder, self.copy_name = QPushButton("Copy folder"), QPushButton("Copy name")
-        self.cursor_label, self.frame_label = QLabel(), QLabel()
-        self.message = QLabel()
-        for lab in (self.cursor_label, self.frame_label, self.message, self.folder_label, self.name_label):
-            lab.setObjectName("readout")
+
+        self.open_button = GlyphButton("movie", "Open a video…")
+        self.video_label = ElidedLabel("no video", "name")
         self.seek_bar = QSlider(Qt.Orientation.Horizontal)
         self.seek_bar.setEnabled(False)
-        self.kept_list = QListWidget()
-        self.keep_button, self.load_button = QPushButton("Keep…"), QPushButton("Load")
-        self.rename_kept_button, self.remove_kept_button = QPushButton("Rename…"), QPushButton("Remove…")
+        self.frame_label = label()
+        self.message = ElidedLabel()
+        self.cursor_label, self.zoom_label = label(), label()
+        self.fit_button = GlyphButton("maximize", "Fit the frame to the view")
+        self.actual_button = GlyphButton("zoom-reset", "100%: one frame pixel to one screen pixel")
 
-        top = QHBoxLayout()
-        for w in (self.open_button, self.open_file_button, self.save_button, self.save_as_button,
-                  self.fit_button, self.actual_button):
-            top.addWidget(w)
-        top.addWidget(self.message, 1)
-        top.addWidget(self.cursor_label)
-        tools = QHBoxLayout()
-        for b in self.mode_buttons.values():
-            tools.addWidget(b)
-        tools.addWidget(self.link_button)
-        tools.addStretch(1)
-        bottom = QHBoxLayout()
-        bottom.addWidget(self.seek_bar, 1)
-        bottom.addWidget(self.frame_label)
-        saved = QHBoxLayout()
-        for w in (self.folder_label, self.copy_folder, self.name_label, self.copy_name):
-            saved.addWidget(w)
-        saved.addStretch(1)
-        body = QVBoxLayout()
-        body.addLayout(top)
-        body.addLayout(tools)
-        middle = QHBoxLayout()
-        middle.addWidget(self.view, 1)
+        self.open_file_button = GlyphButton("folder-open", "Open a geometry file…")
+        self.save_button = GlyphButton("device-floppy", "Save  (Ctrl+S)")
+        self.save_as_button = GlyphButton("file-export", "Save as…")
+        self.name_label = ElidedLabel("", "name")
+        self.folder_label = ElidedLabel()
+        self.copy_name = GlyphButton("copy", "Copy the file's name, for a file node's pattern")
+        self.copy_folder = GlyphButton("copy", "Copy the file's folder, for a file node's folder")
+
+        self.stem_field = QLineEdit()
+        self.stem_field.setPlaceholderText("the kind, then -1, -2…")
+        self.stem_field.setToolTip("The stem a new shape is named by, with the least free index")
+        self.up_button = GlyphButton("arrow-up", "Move the selected shape up: drawn earlier, picked later")
+        self.down_button = GlyphButton("arrow-down", "Move the selected shape down: drawn later, picked first")
+        self.delete_button = GlyphButton("trash", "Delete the selected shape  (Delete)")
+
+        self.kept_list = QListWidget()
+        self.keep_button = GlyphButton("bookmark-plus", "Keep the drawing in the library…")
+        self.load_button = GlyphButton("file-import", "Load the chosen configuration onto this video")
+        self.rename_kept_button = GlyphButton("pencil", "Rename the chosen configuration…")
+        self.remove_kept_button = GlyphButton("trash", "Remove the chosen configuration…")
+
+        rail = QFrame()
+        rail.setObjectName("rail")
+        rail_col = QVBoxLayout(rail)
+        rail_col.setContentsMargins(4, 6, 4, 6)
+        rail_col.setSpacing(2)
+        for m in MODES:
+            rail_col.addWidget(self.mode_buttons[m])
+            if m == "select":
+                rail_col.addSpacing(8)
+        rail_col.addSpacing(8)
+        rail_col.addWidget(self.link_button)
+        rail_col.addStretch(1)
+
+        transport = QHBoxLayout()
+        transport.setSpacing(8)
+        transport.addWidget(self.open_button)
+        self.video_label.setMinimumWidth(80)
+        self.video_label.setMaximumWidth(220)
+        transport.addWidget(self.video_label, 1)
+        transport.addWidget(self.seek_bar, 4)
+        transport.addWidget(self.frame_label)
+        status = QHBoxLayout()
+        status.setSpacing(10)
+        status.addWidget(self.message, 1)
+        status.addWidget(self.cursor_label)
+        status.addWidget(self.zoom_label)
+        status.addWidget(self.fit_button)
+        status.addWidget(self.actual_button)
+        centre = QVBoxLayout()
+        centre.setSpacing(6)
+        centre.addWidget(self.view, 1)
+        centre.addLayout(transport)
+        centre.addLayout(status)
+
+        file_panel = Panel("File")
+        for b in (self.open_file_button, self.save_button, self.save_as_button):
+            file_panel.head.addWidget(b)
+        where = QGridLayout()
+        where.setHorizontalSpacing(6)
+        where.setVerticalSpacing(0)
+        where.setColumnStretch(0, 1)
+        where.addWidget(self.name_label, 0, 0)
+        where.addWidget(self.copy_name, 0, 1)
+        where.addWidget(self.folder_label, 1, 0)
+        where.addWidget(self.copy_folder, 1, 1)
+        file_panel.body.addLayout(where)
+        shapes_panel = Panel("Shapes")
+        for b in (self.up_button, self.down_button, self.delete_button):
+            shapes_panel.head.addWidget(b)
+        stem_row = QHBoxLayout()
+        stem_row.setSpacing(8)
+        stem_row.addWidget(label("New names"))
+        stem_row.addWidget(self.stem_field, 1)
+        shapes_panel.body.addLayout(stem_row)
+        shapes_panel.body.addWidget(self.table, 1)
+        library_panel = Panel("Library")
+        for b in (self.keep_button, self.load_button, self.rename_kept_button, self.remove_kept_button):
+            library_panel.head.addWidget(b)
+        library_panel.body.addWidget(self.kept_list, 1)
         side = QVBoxLayout()
-        above = QHBoxLayout()
-        for w in (self.stem_field, self.up_button, self.down_button):
-            above.addWidget(w)
-        side.addLayout(above)
-        side.addWidget(self.table, 2)
-        side.addWidget(QLabel("Configurations kept"))
-        side.addWidget(self.kept_list, 1)
-        kept_row = QHBoxLayout()
-        for w in (self.keep_button, self.load_button, self.rename_kept_button, self.remove_kept_button):
-            kept_row.addWidget(w)
-        side.addLayout(kept_row)
-        middle.addLayout(side)
-        body.addLayout(middle, 1)
-        body.addLayout(bottom)
-        body.addLayout(saved)
+        side.setSpacing(8)
+        side.addWidget(file_panel)
+        side.addWidget(shapes_panel, 3)
+        side.addWidget(library_panel, 2)
+        side_box = QWidget()
+        side_box.setFixedWidth(SIDE_W)
+        side_box.setLayout(side)
+        side.setContentsMargins(0, 0, 0, 0)
+
+        root = QHBoxLayout()
+        root.setContentsMargins(8, 8, 8, 8)
+        root.setSpacing(8)
+        root.addWidget(rail, 0, Qt.AlignmentFlag.AlignTop)
+        root.addLayout(centre, 1)
+        root.addWidget(side_box)
         central = QWidget()
-        central.setLayout(body)
+        central.setObjectName("ground")
+        central.setLayout(root)
         self.setCentralWidget(central)
         self.setWindowTitle("Geometry")
-        self.resize(1100, 760)
+        self.resize(1280, 800)
 
         self.open_button.clicked.connect(self.ask_video)
         self.open_file_button.clicked.connect(self.ask_file)
@@ -157,22 +192,28 @@ class GeometryWindow(QMainWindow):
         self.actual_button.clicked.connect(self.view.actual)
         self.seek_bar.valueChanged.connect(self.seek)
         self.view.moved.connect(self._show_cursor)
+        self.view.zoomed.connect(lambda s: self.zoom_label.setText(f"{s * 100:.0f}%"))
         self.table.refused.connect(self.message.setText)
         self.stem_field.textChanged.connect(lambda t: setattr(self.editor, "stem", t.strip()))
         self.link_button.clicked.connect(lambda on: self.editor.set_link(self.editor.current.group, on))
         self.up_button.clicked.connect(lambda: self.editor.move_shape(self.editor.selected, -1))
         self.down_button.clicked.connect(lambda: self.editor.move_shape(self.editor.selected, 1))
+        self.delete_button.clicked.connect(self.editor.delete_selected)
         self.keep_button.clicked.connect(self.ask_keep)
         self.load_button.clicked.connect(lambda: self._chosen() and self.load_configuration(self._chosen()))
         self.kept_list.itemDoubleClicked.connect(lambda item: self.load_configuration(item.data(Qt.ItemDataRole.UserRole)))
+        self.kept_list.currentItemChanged.connect(self._show_file)
         self.rename_kept_button.clicked.connect(self.ask_rename_kept)
         self.remove_kept_button.clicked.connect(self.ask_remove_kept)
         self.refresh_library()
+        self._show_file()
         delete = QAction(self)
         delete.setShortcut(QKeySequence.StandardKey.Delete)
         delete.triggered.connect(self.editor.delete_selected)
         self.addAction(delete)
-        for keys, act in (("Ctrl+Z", self.editor.undo), ("Ctrl+Shift+Z", self.editor.redo), ("Ctrl+S", self.save)):
+        keyed = [("Ctrl+Z", self.editor.undo), ("Ctrl+Shift+Z", self.editor.redo), ("Ctrl+S", self.save)]
+        keyed += [(MODE_GLYPHS[m][2], lambda _=False, m=m: self.editor.set_mode(m)) for m in MODES]
+        for keys, act in keyed:
             a = QAction(self)
             a.setShortcut(QKeySequence(keys))
             a.triggered.connect(act)
@@ -208,6 +249,8 @@ class GeometryWindow(QMainWindow):
         self.message.setText(self._plate_line())
         self.view.viewport().update()
         self.setWindowTitle(f"Geometry — {os.path.basename(video.path)}  {video.plate[1]}×{video.plate[0]}")
+        self.video_label.setText(os.path.basename(video.path))
+        self.video_label.setToolTip(video.path)
         self.seek_bar.blockSignals(True)
         self.seek_bar.setRange(0, video.count - 1)
         self.seek_bar.setValue(0)
@@ -249,9 +292,11 @@ class GeometryWindow(QMainWindow):
         self.kept_list.clear()
         for k in library.listed(self.library):
             plate = "unreadable" if k.plate is None else f"{k.plate[1]}×{k.plate[0]}"
-            item = QListWidgetItem(f"{k.name}    {plate}    {k.date:%Y-%m-%d %H:%M}")
+            item = QListWidgetItem(f"{k.name}    {plate} · {k.date:%Y-%m-%d}")
             item.setData(Qt.ItemDataRole.UserRole, k.name)
+            item.setToolTip(f"{k.path}, kept {k.date:%Y-%m-%d %H:%M}")
             self.kept_list.addItem(item)
+        self._show_file()
 
     def kept_names(self):
         return [self.kept_list.item(i).data(Qt.ItemDataRole.UserRole) for i in range(self.kept_list.count())]
@@ -332,8 +377,22 @@ class GeometryWindow(QMainWindow):
 
     def _set_file(self, path):
         self.file = path
-        self.folder_label.setText(os.path.dirname(path))
-        self.name_label.setText(os.path.basename(path))
+        self._show_file()
+
+    def _show_file(self):
+        """The File panel's name and folder, and which file and library buttons have something to act on."""
+        if self.file is None:
+            self.name_label.setText("not saved yet")
+            self.folder_label.setText("Save asks where, beside the video by default")
+        else:
+            self.name_label.setText(os.path.basename(self.file))
+            self.folder_label.setText(os.path.dirname(self.file))
+        self.folder_label.setToolTip(self.file or "")
+        self.copy_name.setEnabled(self.file is not None)
+        self.copy_folder.setEnabled(self.file is not None)
+        chosen = self._chosen() is not None
+        for b in (self.load_button, self.rename_kept_button, self.remove_kept_button):
+            b.setEnabled(chosen)
 
     def save(self):
         """True when written; refused while a shape is past the plate's edge or there is no plate."""
@@ -385,6 +444,8 @@ class GeometryWindow(QMainWindow):
         s = self.editor.current
         self.link_button.setEnabled(s is not None and bool(s.group))
         self.link_button.setChecked(s is not None and self.editor.linked(s))
+        for b in (self.up_button, self.down_button, self.delete_button):
+            b.setEnabled(s is not None)
         self.view.viewport().update()
         self.table.refresh()
 

@@ -12,7 +12,7 @@ statement of what that file may hold. Run it from the repo's root:
 `plate` and `shapes` with a `drawing` key beside them, each shape's kind and stamp group, which region
 ignores; a file without one, or written elsewhere, opens with each kind inferred from its shape.
 
-Keep… saves the drawing to the library under a name, and every later run lists it with its plate and
+The Library panel's bookmark keeps the drawing under a name, and every later run lists it with its plate and
 date to load onto the open video. The library is Qt's per-user application data folder for
 organization `SIEVE` and application `geometry`: `%APPDATA%\SIEVE\geometry` on Windows,
 `~/Library/Application Support/SIEVE/geometry` on macOS, `~/.local/share/SIEVE/geometry` on Linux.

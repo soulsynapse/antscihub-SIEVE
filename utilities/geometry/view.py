@@ -23,8 +23,10 @@ def pixmap_of(bgr):
 
 
 class FrameView(QGraphicsView):
-    """`moved` carries the cursor's position in plate pixels, or None off the frame."""
+    """`moved` carries the cursor's position in plate pixels, or None off the frame; `zoomed` the
+    scale, screen pixels per plate pixel, after each change of it."""
     moved = Signal(object)
+    zoomed = Signal(float)
 
     def __init__(self, editor=None, parent=None):
         super().__init__(parent)
@@ -82,10 +84,12 @@ class FrameView(QGraphicsView):
         else:
             self.scale(target / self.scale_now(), target / self.scale_now())
             self._fitted = False
+            self.zoomed.emit(self.scale_now())
 
     def _set_scale(self, s):
         self.resetTransform()
         self.scale(s, s)
+        self.zoomed.emit(s)
 
     def wheelEvent(self, e):
         if e.modifiers() & Qt.KeyboardModifier.ControlModifier:

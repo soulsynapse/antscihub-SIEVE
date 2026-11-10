@@ -13,7 +13,7 @@ import traceback
 
 import cv2
 import numpy as np
-from PySide6.QtCore import QRectF, Qt, QTimer, Signal
+from PySide6.QtCore import QFileSystemWatcher, QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import QFontMetrics, QImage, QKeySequence, QPainter, QPen, QPixmap, QShortcut
 from PySide6.QtWidgets import QFileDialog, QHBoxLayout, QMainWindow, QPushButton, QSizePolicy, QVBoxLayout, QWidget
 
@@ -131,12 +131,18 @@ def heat(a, top):
     return QImage(bgra.data, a.shape[1], a.shape[0], bgra.strides[0], QImage.Format_ARGB32).copy()
 
 
+RELOAD_SETTLE_MS = 150   # a loader re-reads a changed file this long after the last write seen
+
+
 class Display(QWidget):
-    drawFailed = Signal(str, str)   # a tool's draw() raised: the node, the line
+    drawFailed = Signal(str, str)   # a tool's draw() or pick() raised: the node, the line
+    picked = Signal(str, dict)      # a drawer claimed a left click: the node, the params to merge
+    back = Signal()                 # a right click: show the node shown before this one
 
     """The frame, the overlay heated over it, the gate border, and each drawing node's draw() on
     top, in node order, each handed its own node's result: a series node's over the window, a
-    frame node's at the row."""
+    frame node's at the row. A left click is offered to the drawers whose pick() claims it, the
+    one drawn last first; a right click asks for the node shown before."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -144,6 +150,7 @@ class Display(QWidget):
         self._over, self._over_key, self._top = None, None, 0.0   # the overlay image, whose node's key, its running max
         self._frame_key, self._frame_top = None, 0.0               # the shown node's key and running max, for a measured plane
         self.drawers, self.row, self.results, self.start = [], 0, {}, 0   # drawers: [(node id, tool, node)]
+        self.dropped = set()                                       # id() of each tool whose draw() or pick() raised; the window keeps them out of drawers
         self.frame_results = {}                                    # node id -> a drawing frame node's output at the row
         self.setMinimumSize(160, 120)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
@@ -199,9 +206,8 @@ class Display(QWidget):
             return
         shrinking = self._pix.width() > self.width() or self._pix.height() > self.height()
         # nearest-neighbour drops rows and columns when shrinking, which reads as stripes; grown, it shows each pixel as it is
-        pix = self._pix.scaled(self.size(), Qt.KeepAspectRatio,
-                               Qt.SmoothTransformation if shrinking else Qt.FastTransformation)
-        x, y = (self.width() - pix.width()) // 2, (self.height() - pix.height()) // 2
+        x, y, w, h = self.frame_rect()
+        pix = self._pix.scaled(w, h, Qt.KeepAspectRatio, Qt.SmoothTransformation if shrinking else Qt.FastTransformation)
         p.drawPixmap(x, y, pix)
         if self._over is not None:
             p.drawImage(QRectF(x, y, pix.width(), pix.height()), self._over)   # stretched to the frame, as draw() is
@@ -220,9 +226,53 @@ class Display(QWidget):
                 tool.draw(p, self.row, self.frame_results.get(nid, self.results.get(nid)), self.start, node.params)
             except Exception as e:
                 traceback.print_exc()
-                self.drawers = [d for d in self.drawers if d[1] is not tool]  # once, not every repaint
+                self.drop(tool)
                 self.drawFailed.emit(nid, f"draw() raised: {type(e).__name__}: {e}")
         p.restore()
+
+    def drop(self, tool):
+        """A tool whose draw() or pick() raised is out of the drawers for the session, through every
+        rebuild of the list."""
+        self.dropped.add(id(tool))
+        self.drawers = [d for d in self.drawers if d[1] is not tool]
+
+    def frame_rect(self):
+        """Where the frame sits in the widget, (x, y, width, height): fit inside, centred, or None with no frame."""
+        if self._pix is None:
+            return None
+        scaled = self._pix.size().scaled(self.size(), Qt.KeepAspectRatio)
+        return (self.width() - scaled.width()) // 2, (self.height() - scaled.height()) // 2, scaled.width(), scaled.height()
+
+    def to_frame(self, pos):
+        """A widget point as (x, y) in the frame's pixels, or None off the frame."""
+        r = self.frame_rect()
+        if r is None:
+            return None
+        x, y, w, h = r
+        fx, fy = (pos.x() - x) * self._pix.width() / w, (pos.y() - y) * self._pix.height() / h
+        return (fx, fy) if 0 <= fx < self._pix.width() and 0 <= fy < self._pix.height() else None
+
+    def mousePressEvent(self, e):
+        if e.button() == Qt.RightButton:
+            self.back.emit()
+            return
+        if e.button() != Qt.LeftButton or (point := self.to_frame(e.position())) is None:
+            return
+        shape = (self._pix.height(), self._pix.width())
+        for nid, tool, node in reversed(self.drawers):
+            pick, result = getattr(tool, "pick", None), self.frame_results.get(nid, self.results.get(nid))
+            if pick is None or result is None:
+                continue
+            try:
+                answer = pick(point, shape, self.row, result, node.params)
+            except Exception as exc:
+                traceback.print_exc()
+                self.drop(tool)
+                self.drawFailed.emit(nid, f"pick() raised: {type(exc).__name__}: {exc}")
+                continue
+            if answer is not None:
+                self.picked.emit(nid, dict(answer))
+                return
 
 
 def catalogue(items):
@@ -322,7 +372,14 @@ class PlayerWindow(QMainWindow):
         self.results, self.result_start = {}, 0   # node id -> the series chain's results, and the row they start at
         self.clip_results = {}                    # the same over the clip walk's rows, from row 0; {} when there are none
         self._clip_asked = False                  # a clip walk was asked for and has not finished or been stopped
-        self._taken = {}      # (node id, path input) -> the file last handed to its loader
+        self._taken = {}      # (node id, path input) -> (the file last handed to its loader, its mtime)
+        self._watch = QFileSystemWatcher(self)
+        self._watch.fileChanged.connect(self._path_changed)
+        self._watch.directoryChanged.connect(self._path_changed)
+        self._reload = QTimer(self)      # a save is often several writes; the loaders run once they settle
+        self._reload.setSingleShot(True)
+        self._reload.setInterval(RELOAD_SETTLE_MS)
+        self._reload.timeout.connect(self._pick_paths)
         self._driven = {}      # (node id, path input) -> (the keys its loader set, the selector's id)
         self.traces = []
         self._hooked = set()   # ids of traces already wired to the strip's cursor
@@ -345,6 +402,10 @@ class PlayerWindow(QMainWindow):
         self.pane.bakeCancelled.connect(lambda nid: self.worker is not None and self.worker.cancel_bake())
         self.pane.modeToggled.connect(self._toggle_mode)
         self.display.drawFailed.connect(self._draw_failed)
+        self.display.picked.connect(self._picked)
+        self.display.back.connect(self._back)
+        self._shown_before = []    # the display flag's past, most recent last, for a right click; the document's session
+        self._shown_last = None
         self.header = Header()
         self.header.show_store(self.store)
         self.header.store.clicked.connect(self._choose_store)
@@ -409,6 +470,8 @@ class PlayerWindow(QMainWindow):
         names, if any, is opened."""
         self._unload()
         self.doc = doc
+        self._taken, self._driven = {}, {}     # the loaders' memory is the document's: its files are read anew
+        self._shown_before, self._shown_last = [], doc.display
         doc.resolve(self.tools)
         self._gone = self.store.missing(doc)    # asked here, where the document opens; said on the graph once there is one
         for nid in self._gone:
@@ -481,7 +544,8 @@ class PlayerWindow(QMainWindow):
         self._hook_traces()
         self._pick_video()
         self.display.drawers = [(n.id, self.tools[n.tool], n) for n in self.doc.nodes
-                                if n.tool in self.tools and hasattr(self.tools[n.tool], "draw")]
+                                if n.tool in self.tools and hasattr(self.tools[n.tool], "draw")
+                                and id(self.tools[n.tool]) not in self.display.dropped]
         self.canvas.update()
         if self.graph is None:
             return
@@ -496,6 +560,10 @@ class PlayerWindow(QMainWindow):
         """A flag moved: the runtime's plan follows and the frame shows the new node at the same row.
         The memo and the walk stand; nothing a flag names is computed differently, unless the
         display flag crossed a bake, which moves the document into the other row space."""
+        if self.doc.display != self._shown_last:
+            if self._shown_last is not None:
+                self._shown_before.append(self._shown_last)
+            self._shown_last = self.doc.display
         self.canvas.update()
         if self.graph is None:
             return
@@ -505,6 +573,28 @@ class PlayerWindow(QMainWindow):
         if self._follow_axis(was):
             self._invalidate()
         self.goto(self.row, commit=True)
+
+    def _back(self):
+        """A right click on the frame: the display flag returns to the node it showed before, skipping
+        any since removed; nothing with nothing before."""
+        ids = {n.id for n in self.doc.nodes} if self.doc is not None else set()
+        while self._shown_before:
+            nid = self._shown_before.pop()
+            if nid in ids and nid != self.doc.display:
+                self.doc.display = self._shown_last = nid
+                self.reflag()
+                return
+
+    def _picked(self, nid, params):
+        """A drawer answered a click: its params land in the document as a card's change does, through
+        the node's widget when it has one, so the key, the pane and the frame follow."""
+        node = self.doc.node(nid)
+        node.params = {**node.params, **params}
+        w = self.pane.widget(nid)
+        if w is not None:
+            w.set_params(node.params)       # moves the knobs; each move is a change the pane reports
+        else:
+            self._params_changed(nid)
 
     def _axis(self):
         return (self.graph.axis, self.graph.plate)
@@ -653,7 +743,9 @@ class PlayerWindow(QMainWindow):
 
     def _pick_paths(self):
         """Every tool node's path inputs: what the selector wired into each picks goes through the
-        tool's loader into the node's params, once per file; a miss is said on the node."""
+        tool's loader into the node's params, once per file and again when the file changes on disk,
+        which the window watches for; a miss is said on the node."""
+        asked = set()
         for n in self.doc.nodes:
             tool = self.tools.get(n.tool)
             loaders = document.paths(tool)
@@ -671,15 +763,17 @@ class PlayerWindow(QMainWindow):
                 if why:
                     errors.append(f"{name}: {why}")
                     continue
+                asked.add(path)
                 notes.append(f"{name}: {os.path.basename(path)}")
-                if self._taken.get((n.id, name)) == path:
-                    continue
                 try:
+                    stamp = (path, os.path.getmtime(path))
+                    if self._taken.get((n.id, name)) == stamp:
+                        continue
                     params = loader(path)
-                except Exception as e:  # the file is the user's; say what was wrong with it
+                except Exception as e:  # the file is the user's; say what was wrong with it, or that it is mid-save
                     errors.append(f"{name}: {type(e).__name__}: {e}")
                     continue
-                self._taken[(n.id, name)] = path
+                self._taken[(n.id, name)] = stamp
                 self._driven[(n.id, name)] = (tuple(params), sel.id)
                 n.params = {**n.params, **params}
                 if w is not None:
@@ -695,6 +789,23 @@ class PlayerWindow(QMainWindow):
                 self.canvas.errors.pop(n.id, None)
             self.pane.note(n.id, "; ".join(errors or notes))
         self.canvas.update()
+        self._watch_taken(asked)
+
+    def _watch_taken(self, asked):
+        """Watch every file a loader last read or was asked for and no other, and the folder of one
+        that is not there, so a save that deletes and renames is seen when the new file lands. An
+        editor that saves by replacing the file leaves the watcher holding the old inode, so the
+        paths are re-added each time."""
+        wanted = asked | {path for path, _ in self._taken.values()}
+        watch = {p if os.path.exists(p) else os.path.dirname(p) for p in wanted}
+        for had in (self._watch.files(), self._watch.directories()):
+            if had:
+                self._watch.removePaths(had)
+        if watch:
+            self._watch.addPaths(sorted(watch))
+
+    def _path_changed(self, path):
+        self._reload.start()
 
     def _note_selectors(self):
         """Every selector node's card: the count line, and the match list if its widget shows one."""

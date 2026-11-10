@@ -21,6 +21,7 @@ _HINTS = {
     "step": "def step(state, row, i, params): ...  # a series tool that steps: (the next state, {field: this row's share of run's result}); state is None at the first row",
     "settings": "def settings(parent=None): ...",
     "draw": "def draw(painter, row, result, start, params): ...",
+    "pick": "def pick(point, shape, row, result, params): ...  # a drawer answers a left click at point, (x, y) in the displayed frame's pixels, on a frame of shape (height, width): the params to merge, or None for a click it does not claim",
     "INPUTS": 'INPUTS = {"bg": "gray"}  # frame inputs after the first: name -> the types it expects; run reads one as frames(row, name)',
     "OPTIONAL": 'OPTIONAL = ("bg",)  # the INPUTS the node computes without; run reads an unwired one as None',
     "STATIC": "STATIC = True  # the same output at every row: computed once per key, held once, counted per change",

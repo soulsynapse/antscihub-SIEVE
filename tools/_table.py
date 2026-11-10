@@ -1,8 +1,8 @@
 """The table kind the blob tools share: its dtype, the plane it was found in, how a column is added,
-how a record meets a plane and how a bound knob reads. Not a tool; the registry skips a stem
-beginning with `_`, and a tool imports from here and from no other tool (tests/test_seams.py). What
-a column means, a statistic over a table or a linker's state belongs to the tool that computes it,
-never here; how a table is drawn is `_draw.py`'s.
+how a record meets a plane, the moments of a filled region and how a bound knob reads. Not a tool;
+the registry skips a stem beginning with `_`, and a tool imports from here and from no other tool
+(tests/test_seams.py). What a column means, a statistic over a table or a linker's state belongs to
+the tool that computes it, never here; how a table is drawn is `_draw.py`'s.
 
 A table is a structured array, one record a region; its dtype carries the (height, width) of the
 plane it was found in as metadata, `plane(table)`, so a tool relating it to a plane or table of
@@ -45,6 +45,20 @@ def with_column(table, name, values):
         out[n] = table[n]
     out[name] = values
     return out
+
+
+def moments(inside):
+    """The centroid and moment ellipse of the set pixels of `inside`, a bool plane, as regionprops
+    defines them: (cx, cy, angle, major, minor) in the plane's own pixels, angle in degrees from
+    the x axis. At least one pixel must be set."""
+    ys, xs = np.nonzero(inside)
+    area = len(xs)
+    xs, ys = xs.astype(np.float64), ys.astype(np.float64)
+    cx, cy = xs.sum() / area, ys.sum() / area
+    mu20, mu02, mu11 = (xs * xs).sum() / area - cx * cx, (ys * ys).sum() / area - cy * cy, (xs * ys).sum() / area - cx * cy
+    half, spread = (mu20 + mu02) / 2, np.sqrt(4 * mu11 * mu11 + (mu20 - mu02) ** 2) / 2
+    angle = np.degrees(0.5 * np.arctan2(2 * mu11, mu20 - mu02))
+    return cx, cy, angle, 4 * np.sqrt(max(half + spread, 0)), 4 * np.sqrt(max(half - spread, 0))
 
 
 def footprint(b, shape, scale=(1.0, 1.0), outline="contour"):

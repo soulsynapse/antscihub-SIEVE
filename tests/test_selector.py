@@ -243,7 +243,7 @@ def test_a_driven_knob_is_greyed_until_the_wire_is_broken(tmp_path):
     win.close()
 
 
-def test_clicking_a_match_makes_it_the_choice_and_a_stale_choice_falls_back(tmp_path):
+def test_clicking_a_match_makes_it_the_choice_a_stale_choice_falls_back_and_browsing_rewrites_the_rule(tmp_path):
     from PySide6.QtCore import Qt
 
     tree(tmp_path)
@@ -252,14 +252,68 @@ def test_clicking_a_match_makes_it_the_choice_and_a_stale_choice_falls_back(tmp_
     D.save(doc, tmp_path / "doc.json")
     win = open_window(tmp_path, [file, real_gray])
     w = win.pane.widget("file")
-    assert [w.list.item(i).data(Qt.UserRole) for i in range(w.list.count())] == ["a.mp4", "b.mp4"]
-    assert win.doc.video == "a.mp4" and w.status.text() == ""
-    w.list.itemClicked.emit(w.list.item(1))
+    assert [w.chooser.list.item(i).data(Qt.UserRole) for i in range(w.chooser.list.count())] == ["a.mp4", "b.mp4"]
+    assert win.doc.video == "a.mp4" and w.chooser.status.text() == ""
+    w.chooser.list.itemClicked.emit(w.chooser.list.item(1))
     assert win.doc.node("file").params["choice"] == "b.mp4" and win.doc.video == "b.mp4"
     w.set_params({**w.params(), "pattern": "a*"})                   # the choice is no longer a match
     assert win.doc.video == "a.mp4" and win.doc.node("file").params["choice"] == "b.mp4"
-    assert w.status.text()                                          # and the card says so
+    assert w.chooser.status.text()                                          # and the card says so
     w.set_params({**w.params(), "pattern": "*.mp4"})
-    w.list.itemClicked.emit(w.list.item(1))                         # clicking the choice clears it
-    assert win.doc.node("file").params["choice"] == "" and w.status.text() == ""
+    w.chooser.list.itemClicked.emit(w.chooser.list.item(1))                         # clicking the choice clears it
+    assert win.doc.node("file").params["choice"] == "" and w.chooser.status.text() == ""
+    (tmp_path / "else").mkdir()
+    (tmp_path / "else" / "d.avi").write_bytes(b"")
+    changes = []
+    w.changed.connect(lambda: changes.append(1))
+    w.choose(str(tmp_path / "else" / "d.avi"))                      # browsing to a file makes it the rule, as one change
+    p = win.doc.node("file").params
+    assert (p["folder"], p["pattern"], p["choice"], p["recurse"]) == ("else", "*.avi", "d.avi", False)
+    assert win.doc.video == os.path.join("else", "d.avi") and len(changes) == 1
+    w.choose(str(tmp_path / "sub" / "c.mp4"))                      # c.mp4 is no *.avi: the pattern follows the suffix
+    assert win.doc.node("file").params["pattern"] == "*.mp4"
+    assert win.doc.node("file").params["folder"] == "sub" and win.doc.video == os.path.join("sub", "c.mp4")
+    assert file.rule_for(str(tmp_path / "a.mp4"), str(tmp_path), file.DEFAULTS)["folder"] == "."
+    win.close()
+
+
+def test_a_changed_settings_file_is_read_again_and_an_unchanged_one_is_not(tmp_path):
+    import json
+    from PySide6.QtWidgets import QApplication
+
+    doc, tools = settings_tree(tmp_path)
+    win = open_window(tmp_path, tools)
+    path = str(tmp_path / "colour.json")
+    H = lambda: [win.doc.node("inrange").params["h_lo"], win.doc.node("inrange").params["h_hi"]]  # noqa: E731
+    assert H() == [20, 40] and os.path.normcase(path) in map(os.path.normcase, win._watch.files())
+    reads = []
+    loader = inrange.PATHS["settings"]
+    inrange.PATHS["settings"] = lambda p: reads.append(p) or loader(p)
+    try:
+        win._pick_paths()
+        assert reads == []                                             # same file, same mtime: not read again
+        (tmp_path / "colour.json").write_text(json.dumps({"bounds": {"H": [50, 60], "S": [1, 2], "V": [3, 4]}}), encoding="utf-8")
+        later = os.path.getmtime(path) + 5
+        os.utime(path, (later, later))                                 # a save inside the mtime's grain still counts as a change
+        t = time.time()
+        while H() != [50, 60] and time.time() - t < 5:
+            QApplication.processEvents()
+            time.sleep(0.01)
+        assert H() == [50, 60] and win.pane.widget("inrange").params()["h_hi"] == 60
+        assert reads == [path] and os.path.normcase(path) in map(os.path.normcase, win._watch.files())
+        os.remove(path)                                                 # an editor's save: the file goes, then the new one is renamed over
+        t = time.time()
+        while os.path.normcase(str(tmp_path)) not in map(os.path.normcase, win._watch.directories()) and time.time() - t < 5:
+            QApplication.processEvents()
+            time.sleep(0.01)
+        assert H() == [50, 60] and "settings" in win.canvas.errors["inrange"]    # the params stand; the node says the file is gone
+        (tmp_path / "colour.tmp").write_text(json.dumps({"bounds": {"H": [70, 80], "S": [1, 2], "V": [3, 4]}}), encoding="utf-8")
+        os.replace(tmp_path / "colour.tmp", path)
+        t = time.time()
+        while H() != [70, 80] and time.time() - t < 5:
+            QApplication.processEvents()
+            time.sleep(0.01)
+        assert H() == [70, 80] and reads[-1] == path and os.path.normcase(path) in map(os.path.normcase, win._watch.files())
+    finally:
+        inrange.PATHS["settings"] = loader
     win.close()

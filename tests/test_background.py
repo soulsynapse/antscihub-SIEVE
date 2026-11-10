@@ -51,3 +51,20 @@ def test_max_erases_a_dark_sitter_the_median_keeps():
     frames = Sitter(key="lied", count=24, fps=1.0)         # the header claims rows 20-23 the stream lacks
     assert background.run(frames, 0, {"stat": "mean", "samples": 5})[2, 2] == 0   # rows 0, 6, 12, 17; the 23rd is dropped
     assert background.run(frames, 0, {"stat": "median", "samples": 5}).shape == (4, 4)
+
+
+def test_max_over_a_mask_is_the_union_of_the_samples_and_min_their_intersection():
+    d = np.zeros((20, 4, 4), np.uint8)
+    for r, (y, x) in zip((0, 5, 10, 14, 19), ((0, 0), (0, 3), (3, 0), (3, 3), (1, 1))):
+        d[r, y, x] = 255                                       # a different corner set at each sampled row
+    d[:, 2, 2] = 255                                           # one pixel set in every row
+
+    class Frames(SimpleNamespace):
+        def __call__(self, r, input="in"):
+            return d[r]
+
+    frames = Frames(key="m", count=20, fps=1.0)
+    union = background.run(frames, 0, {"stat": "max", "samples": 5})
+    assert union.dtype == np.uint8 and sorted(zip(*np.nonzero(union))) == [(0, 0), (0, 3), (1, 1), (2, 2), (3, 0), (3, 3)]
+    assert sorted(zip(*np.nonzero(background.run(frames, 0, {"stat": "min", "samples": 5})))) == [(2, 2)]
+    assert "mask" in background.EXPECTS

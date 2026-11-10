@@ -35,6 +35,10 @@ A tool is one Python file with `SIEVE_TOOL = True` and a `NAME`. Everything else
 or may not declare; `sieve_player/registry/README.md` says how tools are found and what a missing
 facet means, and `python -m sieve_player.registry` lists the facets the player reads.
 
+A tool does one thing, and a wanted variation is a second tool wired beside it, never a knob on
+the first: applying one node's output to another's is a node of its own that reads both, not a
+setting hidden on either. Chains get longer; tools do not get wider.
+
 ```python
 # a frame tool: one row in, one array out
 NAME = "threshold"; KIND = "frame"; EXPECTS = "gray"; PRODUCES = "mask"
@@ -51,6 +55,8 @@ def run(series, params) -> dict               # series.data is (T, ...), the rea
                                               # a (T,) array; the gate is the player's, never the tool's
 def settings(parent=None) -> ParamWidget      # optionally show_result(result, start, fps), set_playhead(row),
                                               # set_source(path, fps): the video, for a tool that writes a file (csv)
+def step(state, row, i, params) -> (state, dict)  # optional: the tool steps row by row where the plan lets it,
+                                              # state None at the first row; equal to run over the same rows (travel)
 
 # a series tool reading another: EXPECTS = "signal", and series.data is the upstream result's
 # "signal" with the rows its band shuts out zeroed (smooth); or, when the upstream result also
@@ -69,7 +75,7 @@ NAME = "file"; KIND = "selector"; PRODUCES = "path"
 def select(folder, params) -> str | None      # folder is the document's
 ```
 
-How the player treats a tool, as `sieve_player/graph.py`, `pane.py` and `window.py` currently do:
+How the player treats a tool, as `sieve_player/graph.py`, `pane.py` and `window.py` do:
 
 - Types are strings the player compares for equality; it attaches no meaning to them beyond the
   video node producing `"bgr"`, or `"gray"` when its `output` param says so. That one param is the
@@ -115,6 +121,7 @@ Facets the player reads when a tool has them:
 | facet | what the player does with it |
 |---|---|
 | `draw(painter, row, result, start, params)` | paints on the frame, in frame-pixel coordinates (`painter.window()` is the frame's rect), with the node's params as they stand; one that raises is dropped for the session |
+| `pick(point, shape, row, result, params)` | a drawer answers a left click on the frame: `point` is (x, y) in the displayed frame's pixels and `shape` that frame's (height, width); it returns the params to merge into the node, landed as a card's change is, or None for a click it does not claim. The drawers are asked last-drawn first and the first answer wins; one that raises is dropped for the session, as a draw is, through every change of the graph. A right click moves the display flag back to the node shown before |
 | a `"signal"` array in a series result | the node's trace, drawn as a detector. Its two handles are the node's band, in the signal's units, saved with the node: the player adds `"gate"`, the rows inside it (outside when lo is above hi), washes them on the trace, zeroes the rest of the signal before a series node downstream reads it, and draws a green border on the frame while the playhead is in a row the last chain node gates. Every chain node's result also gets `"key"`, the node's key (`graph`), which hashes its band and everything upstream: a tool that writes a file records it, and can read it back to say whether the file on disk is this graph's (csv) |
 | `INPUTS = {input: types}` | a frame input after the first, with the types it expects; `run` reads it as `frames(row, input)`, and the node's key and `frames.key` follow it |
 | `PATHS = {input: loader}` | a path input a selector feeds; the loader turns the file into params |
@@ -138,6 +145,6 @@ upstream, and the display shows what the memo holds.
 
 Each module's docstring says what it does: `document` (the saved form; imports no Qt or cv2),
 `graph` (the runtime), `worker`, `canvas`, `pane`, `window`, `timeline`, `theme` (the design
-language from `mock-up/design-language`). `tests/test_seams.py` checks which imports which.
+language). `tests/test_seams.py` checks which imports which.
 
 This file describes the code; where the two disagree, the code is what SIEVE does.

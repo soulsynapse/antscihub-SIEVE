@@ -1,17 +1,19 @@
 """The utility's window: the frame view, a row of view controls above it with the cursor's plate
 position, the drawing modes as one exclusive row of buttons with the selected stamp group's link
-beside them, the shapes' table on the right under the name stem and the buttons moving a row, and a
-seek bar below with the frame's index and time, over the saved file's folder and name. Opening and
-saving the file sit with the view controls. Its look is its own, since the player's theme is the
-player's."""
+beside them, the shapes' table on the right under the name stem and the buttons moving a row, the
+library's configurations below it, and a seek bar below with the frame's index and time, over the
+saved file's folder and name. Opening and saving the file sit with the view controls. Its look is
+its own, since the player's theme is the player's."""
 import os
 
-from . import document
+from . import document, library
+from .library import default_folder
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction, QFont, QFontDatabase, QKeySequence
-from PySide6.QtWidgets import (QApplication, QButtonGroup, QFileDialog, QHBoxLayout, QLabel, QLineEdit, QMainWindow,
-                               QPushButton, QSlider, QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (QApplication, QButtonGroup, QFileDialog, QHBoxLayout, QInputDialog, QLabel, QLineEdit,
+                               QListWidget, QListWidgetItem, QMainWindow, QMessageBox, QPushButton, QSlider,
+                               QVBoxLayout, QWidget)
 
 from .editor import MODES, Editor
 from .table import ShapeTable
@@ -53,10 +55,12 @@ def clock(index, fps):
 class GeometryWindow(QMainWindow):
     """Opens `video` when given one; `ask_video` asks for one by a file dialog. `file` is opened
     when it is on disk and is otherwise where the first save lands; with none the first save asks,
-    beside the video by default."""
+    beside the video by default. `library` is the configurations' folder, by default the per-user
+    one, made on the first configuration kept."""
 
-    def __init__(self, video=None, file=None):
+    def __init__(self, video=None, file=None, library=None):
         super().__init__()
+        self.library = library if library is not None else default_folder()
         self.video = None
         self.file = None
         self.file_plate = None
@@ -94,6 +98,9 @@ class GeometryWindow(QMainWindow):
             lab.setObjectName("readout")
         self.seek_bar = QSlider(Qt.Orientation.Horizontal)
         self.seek_bar.setEnabled(False)
+        self.kept_list = QListWidget()
+        self.keep_button, self.load_button = QPushButton("Keep…"), QPushButton("Load")
+        self.rename_kept_button, self.remove_kept_button = QPushButton("Rename…"), QPushButton("Remove…")
 
         top = QHBoxLayout()
         for w in (self.open_button, self.open_file_button, self.save_button, self.save_as_button,
@@ -123,7 +130,13 @@ class GeometryWindow(QMainWindow):
         for w in (self.stem_field, self.up_button, self.down_button):
             above.addWidget(w)
         side.addLayout(above)
-        side.addWidget(self.table, 1)
+        side.addWidget(self.table, 2)
+        side.addWidget(QLabel("Configurations kept"))
+        side.addWidget(self.kept_list, 1)
+        kept_row = QHBoxLayout()
+        for w in (self.keep_button, self.load_button, self.rename_kept_button, self.remove_kept_button):
+            kept_row.addWidget(w)
+        side.addLayout(kept_row)
         middle.addLayout(side)
         body.addLayout(middle, 1)
         body.addLayout(bottom)
@@ -149,6 +162,12 @@ class GeometryWindow(QMainWindow):
         self.link_button.clicked.connect(lambda on: self.editor.set_link(self.editor.current.group, on))
         self.up_button.clicked.connect(lambda: self.editor.move_shape(self.editor.selected, -1))
         self.down_button.clicked.connect(lambda: self.editor.move_shape(self.editor.selected, 1))
+        self.keep_button.clicked.connect(self.ask_keep)
+        self.load_button.clicked.connect(lambda: self._chosen() and self.load_configuration(self._chosen()))
+        self.kept_list.itemDoubleClicked.connect(lambda item: self.load_configuration(item.data(Qt.ItemDataRole.UserRole)))
+        self.rename_kept_button.clicked.connect(self.ask_rename_kept)
+        self.remove_kept_button.clicked.connect(self.ask_remove_kept)
+        self.refresh_library()
         delete = QAction(self)
         delete.setShortcut(QKeySequence.StandardKey.Delete)
         delete.triggered.connect(self.editor.delete_selected)
@@ -205,6 +224,12 @@ class GeometryWindow(QMainWindow):
 
     def open_file(self, path):
         """True when the file opened; otherwise the message line says why and the drawing stays."""
+        if not self._load_drawing(path, ""):
+            return False
+        self._set_file(os.path.abspath(path))
+        return True
+
+    def _load_drawing(self, path, said):
         try:
             plate, shapes, inferred = document.load(path)
         except ValueError as e:
@@ -214,12 +239,88 @@ class GeometryWindow(QMainWindow):
         if self.video is None:
             self.editor.plate = plate
         self.editor.load(shapes)
-        self._set_file(os.path.abspath(path))
-        lines = [self._plate_line()]
+        lines = [said, self._plate_line()]
         if inferred:
             lines.append(f"kind inferred from the shape for {', '.join(inferred)}")
         self.message.setText("; ".join(t for t in lines if t))
         return True
+
+    def refresh_library(self):
+        self.kept_list.clear()
+        for k in library.listed(self.library):
+            plate = "unreadable" if k.plate is None else f"{k.plate[1]}×{k.plate[0]}"
+            item = QListWidgetItem(f"{k.name}    {plate}    {k.date:%Y-%m-%d %H:%M}")
+            item.setData(Qt.ItemDataRole.UserRole, k.name)
+            self.kept_list.addItem(item)
+
+    def kept_names(self):
+        return [self.kept_list.item(i).data(Qt.ItemDataRole.UserRole) for i in range(self.kept_list.count())]
+
+    def _chosen(self):
+        item = self.kept_list.currentItem()
+        return item.data(Qt.ItemDataRole.UserRole) if item is not None else None
+
+    def keep_configuration(self, name, replace=False):
+        """True when the drawing was kept under `name`; refused as a save is, and for a name already
+        kept unless `replace`."""
+        if not self._savable():
+            return False
+        try:
+            library.keep(self.library, name, self.editor.plate, self.editor.shapes, replace)
+        except (ValueError, OSError) as e:
+            self.message.setText(f"not kept: {e}")
+            return False
+        self.refresh_library()
+        self.message.setText(f"kept configuration {name}")
+        return True
+
+    def load_configuration(self, name):
+        """Opens the kept configuration's shapes onto the open video under the plate check; the file
+        a save writes is unchanged, so a configuration is never overwritten by a save."""
+        return self._load_drawing(os.path.join(self.library, f"{name}.json"), f"loaded configuration {name}")
+
+    def rename_configuration(self, old, new):
+        try:
+            library.rename(self.library, old, new)
+        except (ValueError, OSError) as e:
+            self.message.setText(f"not renamed: {e}")
+            return False
+        self.refresh_library()
+        return True
+
+    def remove_configuration(self, name):
+        try:
+            library.remove(self.library, name)
+        except OSError as e:
+            self.message.setText(f"not removed: {e}")
+            return False
+        self.refresh_library()
+        return True
+
+    def ask_keep(self):
+        name, ok = QInputDialog.getText(self, "Keep configuration", "Name:", text=self._chosen() or "")
+        name = name.strip()
+        if not ok or not name:
+            return
+        taken = name in self.kept_names()
+        if taken and QMessageBox.question(self, "Keep configuration", f"Replace the kept {name}?") \
+                != QMessageBox.StandardButton.Yes:
+            return
+        self.keep_configuration(name, replace=taken)
+
+    def ask_rename_kept(self):
+        old = self._chosen()
+        if old is None:
+            return
+        new, ok = QInputDialog.getText(self, "Rename configuration", "Name:", text=old)
+        if ok and new.strip() != old:
+            self.rename_configuration(old, new.strip())
+
+    def ask_remove_kept(self):
+        name = self._chosen()
+        if name is not None and QMessageBox.question(self, "Remove configuration", f"Remove the kept {name}?") \
+                == QMessageBox.StandardButton.Yes:
+            self.remove_configuration(name)
 
     def _plate_line(self):
         if self.file_plate is None or self.video is None or tuple(self.file_plate) == tuple(self.video.plate):
@@ -248,13 +349,18 @@ class GeometryWindow(QMainWindow):
         path, _ = QFileDialog.getSaveFileName(self, "Save the geometry file", start or "", GEOMETRY_FILTER)
         return self.save_to(path) if path else False
 
-    def save_to(self, path):
+    def _savable(self):
         if self.editor.plate is None:
             self.message.setText("nothing to save against: open a video first")
             return False
         out = self.editor.outside()
         if out:
             self.message.setText(f"not saved: {', '.join(out)} past the plate's edge")
+            return False
+        return True
+
+    def save_to(self, path):
+        if not self._savable():
             return False
         document.save(path, self.editor.plate, self.editor.shapes)
         self.file_plate = tuple(self.editor.plate)

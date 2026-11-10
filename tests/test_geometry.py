@@ -1,6 +1,6 @@
 """The geometry utility: a video opened at the plate the player's Decoder reads, seeked to any frame,
 a view zoomed no smaller than fit and shown at 100%, the shapes edited by their handles, and the
-table that lists, names, orders and deletes them, the stamp groups, and the file saved and reopened."""
+table that lists, names, orders and deletes them, the stamp groups, the file saved and reopened, and the library of kept configurations."""
 import json
 import math
 import os
@@ -352,3 +352,31 @@ def test_a_file_of_another_plate_marks_what_is_past_the_edge_and_refuses_the_sav
     ed.release((1e4, 24), 1)
     assert ed.shape("far").box()[2] == pytest.approx(W)
     win.close()
+
+
+def test_a_kept_configuration_is_listed_on_the_next_run_and_loads_under_the_plate_check(clip, tmp_path):
+    other = str(tmp_path / "other.avi")
+    w = cv2.VideoWriter(other, cv2.VideoWriter_fourcc(*"MJPG"), 30, (W, H))
+    for _ in range(3):
+        w.write(np.zeros((H, W, 3), np.uint8))
+    w.release()
+    lib = str(tmp_path / "library")
+    win = GeometryWindow(clip, library=lib)
+    _draw(win.editor, "circle", (10, 10), (15, 10))
+    _draw(win.editor, "square", (20, 5), (30, 15))
+    assert win.keep_configuration("rig") and not win.keep_configuration("rig")
+    drawn = [(s.name, s.kind, s.primitive()) for s in win.editor.shapes]
+    win.close()
+    again = GeometryWindow(other, str(tmp_path / "doc.json"), library=lib)
+    assert again.kept_names() == ["rig"] and f"{W}×{H}" in again.kept_list.item(0).text()
+    assert again.load_configuration("rig") and again.file.endswith("doc.json")
+    assert [(s.name, s.kind, s.primitive()) for s in again.editor.shapes] == drawn
+    assert again.rename_configuration("rig", "arena") and not again.rename_configuration("arena", "a/b")
+    (tmp_path / "library" / "big.json").write_text(json.dumps(
+        {"plate": [200, 200], "shapes": [{"name": "far", "circle": [180, 180, 10]}]}), encoding="utf-8")
+    again.refresh_library()
+    assert again.kept_names() == ["arena", "big"]
+    assert again.load_configuration("big") and "200×200" in again.message.text()
+    assert again.editor.outside() == ["far"]
+    assert again.remove_configuration("arena") and again.kept_names() == ["big"]
+    again.close()

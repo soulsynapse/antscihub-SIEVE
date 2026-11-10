@@ -302,7 +302,7 @@ saved on another camera's frame. The library is the utility's and not a document
 one folder per user outside the repo and outside any document's folder, where Qt's per-user
 application data location puts it; the README names where.
 
-- [ ] Saving to the library keeps the current configuration under a name the user gives, with the
+- [x] Saving to the library keeps the current configuration under a name the user gives, with the
   plate and the date; the library lists every configuration kept, with those, on every run of the
   utility, and choosing one loads its shapes onto the open video under the plate check. A kept
   configuration is renamed or removed from the list.

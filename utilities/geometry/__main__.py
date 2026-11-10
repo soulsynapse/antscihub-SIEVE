@@ -20,6 +20,8 @@ def parser():
 def main(argv=None):
     args = parser().parse_args(argv)
     app = QApplication.instance() or QApplication(sys.argv[:1])
+    app.setOrganizationName("SIEVE")
+    app.setApplicationName("geometry")
     styled(app)
     win = GeometryWindow(args.video, args.file)
     win.show()

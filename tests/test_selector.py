@@ -283,3 +283,32 @@ def test_browsing_to_a_file_makes_it_the_rule_and_lands_as_one_change(tmp_path):
     assert win.doc.node("file").params["folder"] == "sub" and win.doc.video == os.path.join("sub", "c.mp4")
     assert file.rule_for(str(tmp_path / "a.mp4"), str(tmp_path), file.DEFAULTS)["folder"] == "."
     win.close()
+
+
+def test_a_changed_settings_file_is_read_again_and_an_unchanged_one_is_not(tmp_path):
+    import json
+    from PySide6.QtWidgets import QApplication
+
+    doc, tools = settings_tree(tmp_path)
+    win = open_window(tmp_path, tools)
+    path = str(tmp_path / "colour.json")
+    H = lambda: [win.doc.node("inrange").params["h_lo"], win.doc.node("inrange").params["h_hi"]]  # noqa: E731
+    assert H() == [20, 40] and os.path.normcase(path) in map(os.path.normcase, win._watch.files())
+    reads = []
+    loader = inrange.PATHS["settings"]
+    inrange.PATHS["settings"] = lambda p: reads.append(p) or loader(p)
+    try:
+        win._pick_paths()
+        assert reads == []                                             # same file, same mtime: not read again
+        (tmp_path / "colour.json").write_text(json.dumps({"bounds": {"H": [50, 60], "S": [1, 2], "V": [3, 4]}}), encoding="utf-8")
+        later = os.path.getmtime(path) + 5
+        os.utime(path, (later, later))                                 # a save inside the mtime's grain still counts as a change
+        t = time.time()
+        while H() != [50, 60] and time.time() - t < 5:
+            QApplication.processEvents()
+            time.sleep(0.01)
+        assert H() == [50, 60] and win.pane.widget("inrange").params()["h_hi"] == 60
+        assert reads == [path] and os.path.normcase(path) in map(os.path.normcase, win._watch.files())
+    finally:
+        inrange.PATHS["settings"] = loader
+    win.close()

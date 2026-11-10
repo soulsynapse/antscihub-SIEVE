@@ -13,7 +13,7 @@ import traceback
 
 import cv2
 import numpy as np
-from PySide6.QtCore import QRectF, Qt, QTimer, Signal
+from PySide6.QtCore import QFileSystemWatcher, QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import QFontMetrics, QImage, QKeySequence, QPainter, QPen, QPixmap, QShortcut
 from PySide6.QtWidgets import QFileDialog, QHBoxLayout, QMainWindow, QPushButton, QSizePolicy, QVBoxLayout, QWidget
 
@@ -129,6 +129,9 @@ def heat(a, top):
     v = a.view(np.uint8) * np.uint8(255) if a.dtype == bool else over(a, top)
     bgra = cv2.LUT(cv2.merge((v, v, v, v)), _HEAT)   # GRAY2BGRA would fix alpha at 255, so merge
     return QImage(bgra.data, a.shape[1], a.shape[0], bgra.strides[0], QImage.Format_ARGB32).copy()
+
+
+RELOAD_SETTLE_MS = 150   # a loader re-reads a changed file this long after the last write seen
 
 
 class Display(QWidget):
@@ -362,7 +365,13 @@ class PlayerWindow(QMainWindow):
         self.results, self.result_start = {}, 0   # node id -> the series chain's results, and the row they start at
         self.clip_results = {}                    # the same over the clip walk's rows, from row 0; {} when there are none
         self._clip_asked = False                  # a clip walk was asked for and has not finished or been stopped
-        self._taken = {}      # (node id, path input) -> the file last handed to its loader
+        self._taken = {}      # (node id, path input) -> (the file last handed to its loader, its mtime)
+        self._watch = QFileSystemWatcher(self)
+        self._watch.fileChanged.connect(self._path_changed)
+        self._reload = QTimer(self)      # a save is often several writes; the loaders run once they settle
+        self._reload.setSingleShot(True)
+        self._reload.setInterval(RELOAD_SETTLE_MS)
+        self._reload.timeout.connect(self._pick_paths)
         self._driven = {}      # (node id, path input) -> (the keys its loader set, the selector's id)
         self.traces = []
         self._hooked = set()   # ids of traces already wired to the strip's cursor
@@ -724,7 +733,8 @@ class PlayerWindow(QMainWindow):
 
     def _pick_paths(self):
         """Every tool node's path inputs: what the selector wired into each picks goes through the
-        tool's loader into the node's params, once per file; a miss is said on the node."""
+        tool's loader into the node's params, once per file and again when the file changes on disk,
+        which the window watches for; a miss is said on the node."""
         for n in self.doc.nodes:
             tool = self.tools.get(n.tool)
             loaders = document.paths(tool)
@@ -743,14 +753,15 @@ class PlayerWindow(QMainWindow):
                     errors.append(f"{name}: {why}")
                     continue
                 notes.append(f"{name}: {os.path.basename(path)}")
-                if self._taken.get((n.id, name)) == path:
+                stamp = (path, os.path.getmtime(path))
+                if self._taken.get((n.id, name)) == stamp:
                     continue
                 try:
                     params = loader(path)
                 except Exception as e:  # the file is the user's; say what was wrong with it
                     errors.append(f"{name}: {type(e).__name__}: {e}")
                     continue
-                self._taken[(n.id, name)] = path
+                self._taken[(n.id, name)] = stamp
                 self._driven[(n.id, name)] = (tuple(params), sel.id)
                 n.params = {**n.params, **params}
                 if w is not None:
@@ -766,6 +777,19 @@ class PlayerWindow(QMainWindow):
                 self.canvas.errors.pop(n.id, None)
             self.pane.note(n.id, "; ".join(errors or notes))
         self.canvas.update()
+        self._watch_taken()
+
+    def _watch_taken(self):
+        """Watch every file a loader last read and no other. An editor that saves by replacing the
+        file leaves the watcher holding the old inode, so the path is re-added each time."""
+        wanted = {path for path, _ in self._taken.values() if os.path.exists(path)}
+        if self._watch.files():
+            self._watch.removePaths(self._watch.files())
+        if wanted:
+            self._watch.addPaths(sorted(wanted))
+
+    def _path_changed(self, path):
+        self._reload.start()
 
     def _note_selectors(self):
         """Every selector node's card: the count line, and the match list if its widget shows one."""

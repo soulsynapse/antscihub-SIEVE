@@ -24,14 +24,11 @@ import sys
 import numpy as np
 
 from tools._csvfile import DEFAULTS, FILTER, key_line, replace  # noqa: F401  DEFAULTS and FILTER are this tool's facets
+from tools._table import is_tables
 
 SIEVE_TOOL = True
 NAME, KIND, EXPECTS, PRODUCES = "csv", "series", ("signal", "blobs", "tracks"), "same"
 COLUMNS = ("row", "time", "signal", "gate")
-
-
-def is_tables(data):
-    return len(data) > 0 and getattr(data[0], "dtype", None) is not None and data[0].dtype.names is not None
 
 
 def run(series, params):

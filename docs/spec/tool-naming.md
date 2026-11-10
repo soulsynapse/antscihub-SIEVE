@@ -188,7 +188,7 @@ alias table is owed before alpha.
   Check: tests/test_resolve.py's read-back, moved to the merged tool, still passes; a test hands
   resolve a signal csv the tool wrote and reads the sentence, and a file whose key line has no
   kind and reads it as before.
-- [ ] tools/_csvfile.py's docstring, the root README and every spec and finding that names
+- [x] tools/_csvfile.py's docstring, the root README and every spec and finding that names
   tracks-csv as a tool say what is now so, or say it was so at the tree they were written against.
   Check: `rg tracks-csv` over docs/ and README.md finds only lines that date the name.
 
@@ -352,7 +352,7 @@ Kendrick's to change without one.
   mechanism, if one is minted.
 - Whether a csv of unknown kind, written before the key line carried one, should go on reading
   into resolve forever, or the first release that must not accept one dates the leniency.
-- The One csv box over docs: its Check wants every line `rg tracks-csv` finds in docs/ to date the
-  name, and three of them are ticked assertions in identity.md and solver.md a session never
-  rewrites, the rest sitting in Facts, findings and views dated to a tree at the file's head.
-  Whether file-level dating satisfies it is Kendrick's reading; the box stays unticked until then.
+- The One csv box over docs, closed 2026-11-10 on Kendrick's reading that file-level dating
+  satisfies its Check: the three ticked assertions in identity.md and solver.md that name tracks-csv
+  undated are records of what was built when they were ticked, and the rest sit in Facts, findings
+  and views dated to a tree at the file's head.

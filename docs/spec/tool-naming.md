@@ -1,6 +1,7 @@
 # Tool naming: a tool is named for its operation, declares the class it serves, the registry says where the catalogue strains, and the Tab menu groups it by what it derives
 
-Written 2026-11-09 from the naming conversation of that day, on v5 at e17fe0fc; no box ticked.
+Written 2026-11-09 from the naming conversation of that day, on v5 at e17fe0fc; the boxes tick as
+their tests pass, the first deliverable's the same day.
 Amended the same day, still at e17fe0fc, after an architectural review ran its Facts against the
 tree: the category derivation is an ordered list with no write group, the csv file carries its kind
 on the key line, strain excludes a single type, and hsv keeps its name under the rule it had
@@ -87,13 +88,13 @@ strain and never the verdict, since the verdict is a reading of the body. The fi
 strained only tools naming several types, which is why its count is ten and not the thirty a
 proper-subset reading gives, and the Words above write that choice down.
 
-- [ ] The registry holds a class table, each class a name and the set of types it covers, with
+- [x] The registry holds a class table, each class a name and the set of types it covers, with
   `plane` and `table` in it at least, and the report prints, after the types, each tool whose
   declared `EXPECTS` names more than one type of a class and not all of them, with the class and
   the types it lacks, and prints nothing for a tool naming one type alone.
   Check: a test builds entries whose `EXPECTS` is one class whole, a proper subset of it, and a
   single type, and reads the subset alone in the strain lines.
-- [ ] `--check` fails on a class whose types are not all types some tool under `tools/` produces
+- [x] `--check` fails on a class whose types are not all types some tool under `tools/` produces
   or expects, so the table cannot name a type the catalogue has left.
   Check: a test runs the check over a root with one tool and a class table naming a type no tool
   there uses and reads the failure.

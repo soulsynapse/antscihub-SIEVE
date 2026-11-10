@@ -18,8 +18,13 @@ to import is still an `Entry`, with the exception in `error`, so a broken tool s
 of vanishing.
 
 The types are whatever the tools say: `types(entries)` maps each to who produces and who expects it,
-and the report prints that first. `--check` fails if this list and `__all__` differ, if a facet is
-read by nothing, or if a type under `tools/` is produced or expected by nothing.
+and the report prints that first. `CLASSES` is the one table written by hand: a class names the
+types one body may serve alike, and `strains(entries)` lists each tool whose `EXPECTS` names more
+than one type of a class and not all of them, with what it lacks. The report prints those lines
+after the types; a line is a question for the tool's author, not a failure, since a refusal may be
+principled, and a tool naming one type alone never strains. `--check` fails if this list and
+`__all__` differ, if a facet is read by nothing, if a type under `tools/` is produced or expected
+by nothing, or if a class names a type no tool under `tools/` uses.
 
 ## Exports
 
@@ -31,6 +36,8 @@ read by nothing, or if a type under `tools/` is produced or expected by nothing.
 - `hint(facet)`
 - `discover(*roots)` -- imports each `.py` under `roots` as `<dirname>.<stem>`, skipping a stem that begins with `_`: those are what tools share, never tools
 - `types(entries, extra=())` -- type -> (producers, expecters)
+- `CLASSES` -- class -> the types one body may serve alike
+- `strains(entries, classes=CLASSES)` -- [(tool, class, the types it lacks)]
 
 ```
 python -m sieve_player.registry [root ...]   # report; default root is tools/

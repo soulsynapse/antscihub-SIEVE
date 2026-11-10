@@ -32,6 +32,12 @@ _HINTS = {
 }
 FACETS = tuple(_HINTS)
 
+# class -> the types one body may serve alike; `strains` reads it, nothing else does
+CLASSES = {
+    "plane": frozenset({"bgr", "gray", "hsv", "mask", "flow"}),
+    "table": frozenset({"blobs", "tracks"}),
+}
+
 
 def probe(tool, facet):
     """The attribute, or None: the tool did not say. Reads only; never calls."""
@@ -107,4 +113,22 @@ def types(entries, extra=()):
     return out
 
 
-__all__ = ["MARKER", "FACETS", "Entry", "is_tool", "probe", "hint", "discover", "types"]
+def expects(entry):
+    """The set of types `EXPECTS` names; empty for a source."""
+    ex = entry.get("EXPECTS")
+    return {ex} if isinstance(ex, str) else set(ex or ())
+
+
+def strains(entries, classes=CLASSES):
+    """[(tool, class, the class's types it lacks)] for every imported tool whose `EXPECTS` names more
+    than one type of a class and not all of them, in entry order. One type alone never strains."""
+    out = []
+    for e in (e for e in entries if e.ok):
+        ex = expects(e)
+        for cls, members in classes.items():
+            if len(ex & members) > 1 and not members <= ex:
+                out.append((e.name, cls, members - ex))
+    return out
+
+
+__all__ = ["MARKER", "FACETS", "CLASSES", "Entry", "is_tool", "probe", "hint", "discover", "types", "strains"]

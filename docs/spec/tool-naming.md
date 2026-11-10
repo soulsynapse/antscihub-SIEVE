@@ -220,9 +220,11 @@ hold the blobs case; the tracks case extends them.
 
 Assumes: The pair report.
 
-Withdrawn 2026-11-10 as a report, before it was built: no wire-name line is owed. The renames and
-the README's rule are naming decisions and Kendrick's words, and whether they are still wanted
-without the report that would have checked them is his call, recorded under Open.
+Withdrawn 2026-11-10, whole, before it was built: no wire-name line is owed, and Kendrick cancelled
+the renames the same day, since renaming gray and mask invalidates every saved document, spec and
+finding that names them for no change in what they do. gray.py being the one producer of gray is
+where a reader looks, which is the ground the amended rule had already granted hsv and flow. The
+box below reads as a proposal that was declined.
 
 `gray` and `mask` are tool files whose names are a type they do not alone produce, so the tree
 reads them as wires; Houdini writes a conversion as `a-to-b` and an application as the verb. The
@@ -252,7 +254,8 @@ proposals. Module files take underscores where `NAME` takes hyphens, as tracks_f
 
 ## The catalogue derives its categories
 
-Assumes: The class table and the strain report.
+Assumes: nothing; the derivation reads facets alone, and the class table it was written to follow
+is withdrawn.
 
 The family the naming script assigned by hand is nearly all the contract's shape, read as an
 ordered list where the first rule that fits decides, so no tool fits two: a source has no
@@ -267,10 +270,10 @@ pass-through with a writer, and it is gone: `write` is a module name tools/_csvf
 not a facet, and the registry's rule is that a facet exists when the player reads it, so a group
 derived from `write` would be a declaration no README states. csv files as a transform, which to
 the graph it is, until a second sink family shows what a sink declares. So the category is derived
-in the registry as the strain is, a report line before it is a declaration, and the Tab menu
-reads it; a tool lands in a group the day it is written and nobody files it. Where the derivation
-and a tool disagree, the disagreement is the report's to show and a hand-set facet is the
-override, minted when the first such tool exists; the two disagreements known at this tree are
+in the registry from the facets, a derivation before it is a declaration, and the Tab menu reads
+it; a tool lands in a group the day it is written and nobody files it. Where the derivation and a
+tool disagree, the disagreement is seen in the menu and a hand-set facet is the override, minted
+when the first such tool exists; the two disagreements known at this tree are
 region, a source to the hand table and a convert to the derivation since it expects a plane, and
 resolve, a transfer to the table and a transform to the derivation since a path input is not an
 `INPUTS` entry. Both derived answers are kept.
@@ -284,7 +287,7 @@ tool's docstring opens with its contract in one sentence, "Frame tool: ..." or "
 which is the description at hand. Houdini's Tab menu nests by category and TouchDesigner's OP
 Create dialog shows a column per family; Blender's Shift+A groups by category with a search line
 that flattens the groups on typing. The derived categories' names are the session's proposals and
-Kendrick's to change; the registry's `CLASSES` and the derivation are the one place they live.
+Kendrick's to change; the registry's derivation is the one place they live.
 The menu is built for a user's fluency, as polished as the session can make it, with Houdini's Tab
 menu, Blender's Shift+A and TouchDesigner's OP Create as the models for what fluent feels like:
 the typed text matches across group and name and description, the first match is chosen on Enter,
@@ -293,12 +296,14 @@ enough to read at a glance. The look, the order, the row's layout and how a desc
 then expected to move with Kendrick's feedback through the branch and after; the boxes below assert
 what the menu offers and never where or how, so the polish is free to move without unticking one.
 
-- [ ] The registry derives a category per tool from its facets by the ordered list above, prints
-  it in the report beside the tool, and prints a line for each tool whose facets fit no rule.
+- [ ] The registry derives a category per tool from its facets by the ordered list above and prints
+  it in the report beside the tool. (Amended 2026-11-10 with Kendrick's go-ahead: the line for a
+  tool fitting no rule is dropped, since the list ends in the rest and so every tool fits, and a
+  standing line is what he withdrew.)
   Check: a test over entries shaped as a source, a cache, a measure, a relate, a convert and a
   transform reads each category, reads measure for an entry that is a measure and a convert by
-  shape and cache for one that is a cache and a transform by shape, and an entry fitting none
-  reads in the line; a test over `tools/` reads bake as a cache and csv as a transform.
+  shape and cache for one that is a cache and a transform by shape; a test over `tools/` reads
+  bake as a cache and csv as a transform.
 - [ ] The Tab menu offers every entry under its category, with the first sentence of the tool's
   docstring as its description, the categories flattening to the matches as text is typed, and
   the pending-wire narrowing of `_joins` and `_splices` as it is.
@@ -347,8 +352,6 @@ Kendrick's to change without one.
   mechanism, if one is minted.
 - Whether a csv of unknown kind, written before the key line carried one, should go on reading
   into resolve forever, or the first release that must not accept one dates the leniency.
-- Whether gray and mask are still renamed, and the root README still gains the naming rule, now
-  that the wire-name report is withdrawn; the words were always Kendrick's, and so is this.
 - The One csv box over docs: its Check wants every line `rg tracks-csv` finds in docs/ to date the
   name, and three of them are ticked assertions in identity.md and solver.md a session never
   rewrites, the rest sitting in Facts, findings and views dated to a tree at the file's head.

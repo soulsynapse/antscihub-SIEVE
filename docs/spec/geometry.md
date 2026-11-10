@@ -212,12 +212,12 @@ region's `pick` reads last first and draw paints in order.
   selected shape.
   Check: an offscreen test draws two shapes, selects the second's row and reads it selected on the
   frame, renames it to the first's name and reads the refusal, and deletes it and reads one row.
-- [ ] A new shape is named by a stem and the next free index, the stem a field above the table and
+- [x] A new shape is named by a stem and the next free index, the stem a field above the table and
   by default the kind, so six dishes drawn after typing `dish` are dish-1 to dish-6 without a
   keystroke each.
   Check: a test sets the stem, draws three shapes and reads their names; deletes the second, draws
   one and reads the free index taken.
-- [ ] A row moves up and down the table, one undo step a move, and the file's order is the
+- [x] A row moves up and down the table, one undo step a move, and the file's order is the
   table's, so of two shapes one inside the other the inner is put after the outer and is the one a
   click in the player picks.
   Check: a test draws a small circle and then a large one around it, saves and reads

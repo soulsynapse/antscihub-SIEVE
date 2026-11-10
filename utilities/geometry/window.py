@@ -1,12 +1,12 @@
 """The utility's window: the frame view, a row of view controls above it with the cursor's plate
-position, the drawing modes as one exclusive row of buttons, the shapes' table on the right, and a
-seek bar below with the frame's index and time. Its look is its own, since the player's theme is the player's."""
+position, the drawing modes as one exclusive row of buttons, the shapes' table on the right under the
+name stem and the buttons moving a row, and a seek bar below with the frame's index and time. Its look is its own, since the player's theme is the player's."""
 import os
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction, QFont, QFontDatabase, QKeySequence
-from PySide6.QtWidgets import (QButtonGroup, QFileDialog, QHBoxLayout, QLabel, QMainWindow, QPushButton,
-                               QSlider, QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (QButtonGroup, QFileDialog, QHBoxLayout, QLabel, QLineEdit, QMainWindow,
+                               QPushButton, QSlider, QVBoxLayout, QWidget)
 
 from .editor import MODES, Editor
 from .table import ShapeTable
@@ -22,6 +22,7 @@ QPushButton:checked { background: rgb(70,62,40); border-color: rgb(255,200,80); 
 QSlider::groove:horizontal { height: 4px; background: rgb(58,58,58); border-radius: 2px; }
 QSlider::handle:horizontal { width: 12px; margin: -5px 0; background: rgb(140,140,140); border-radius: 6px; }
 QLabel#readout { color: rgb(140,140,140); }
+QLineEdit { background: rgb(24,24,24); border: 1px solid rgb(69,69,69); border-radius: 4px; padding: 2px 6px; }
 QTableWidget { gridline-color: rgb(58,58,58); selection-background-color: rgb(70,62,40); }
 QHeaderView::section { background: rgb(40,40,40); border: none; border-bottom: 1px solid rgb(69,69,69); padding: 3px 6px; }
 """
@@ -55,6 +56,9 @@ class GeometryWindow(QMainWindow):
         self.view = FrameView(self.editor)
         self.table = ShapeTable(self.editor)
         self.table.setMinimumWidth(300)
+        self.stem_field = QLineEdit()
+        self.stem_field.setPlaceholderText("name stem: the kind")
+        self.up_button, self.down_button = QPushButton("Up"), QPushButton("Down")
         self.editor.on_change = self._drawing_changed
         self.modes = QButtonGroup(self)
         self.mode_buttons = {}
@@ -91,7 +95,13 @@ class GeometryWindow(QMainWindow):
         body.addLayout(tools)
         middle = QHBoxLayout()
         middle.addWidget(self.view, 1)
-        middle.addWidget(self.table)
+        side = QVBoxLayout()
+        above = QHBoxLayout()
+        for w in (self.stem_field, self.up_button, self.down_button):
+            above.addWidget(w)
+        side.addLayout(above)
+        side.addWidget(self.table, 1)
+        middle.addLayout(side)
         body.addLayout(middle, 1)
         body.addLayout(bottom)
         central = QWidget()
@@ -106,6 +116,9 @@ class GeometryWindow(QMainWindow):
         self.seek_bar.valueChanged.connect(self.seek)
         self.view.moved.connect(self._show_cursor)
         self.table.refused.connect(self.message.setText)
+        self.stem_field.textChanged.connect(lambda t: setattr(self.editor, "stem", t.strip()))
+        self.up_button.clicked.connect(lambda: self.editor.move_shape(self.editor.selected, -1))
+        self.down_button.clicked.connect(lambda: self.editor.move_shape(self.editor.selected, 1))
         delete = QAction(self)
         delete.setShortcut(QKeySequence.StandardKey.Delete)
         delete.triggered.connect(self.editor.delete_selected)

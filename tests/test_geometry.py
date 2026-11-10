@@ -1,6 +1,6 @@
 """The geometry utility: a video opened at the plate the player's Decoder reads, seeked to any frame,
 a view zoomed no smaller than fit and shown at 100%, the shapes edited by their handles, and the
-table that lists, names and deletes them."""
+table that lists, names, orders and deletes them."""
 import json
 import math
 import os
@@ -17,7 +17,7 @@ from PySide6.QtTest import QTest  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from sieve_player.decoder import Decoder  # noqa: E402
-from tools.region import load_geometry  # noqa: E402
+from tools.region import load_geometry, pick as region_pick  # noqa: E402
 from utilities.geometry import shapes as sh  # noqa: E402
 from utilities.geometry.editor import Editor  # noqa: E402
 from utilities.geometry.video import EXACT_DECODE_BELOW  # noqa: E402
@@ -205,3 +205,49 @@ def test_the_table_selects_with_the_frame_refuses_a_taken_name_and_deletes(windo
     assert ed.shapes[1].name == ed.selected == "arena" and table.marked is None
     QTest.keyClick(table, Qt.Key.Key_Delete)
     assert table.rowCount() == 1 and [s.name for s in ed.shapes] == [first]
+
+
+def test_new_shapes_take_the_stems_least_free_index(window):
+    ed = window.editor
+    window.stem_field.setText("dish")
+    ed.set_mode("circle")
+
+    def circle(x):
+        for p in ((x, 20), (x + 5, 20)):
+            ed.press(p, 1)
+            ed.release(p, 1)
+
+    for x in (10, 25, 40):
+        circle(x)
+    assert [s.name for s in ed.shapes] == ["dish-1", "dish-2", "dish-3"]
+    ed.select("dish-2")
+    ed.delete_selected()
+    ed.set_mode("circle")
+    circle(25)
+    assert [s.name for s in ed.shapes] == ["dish-1", "dish-3", "dish-2"]
+    window.stem_field.setText("")
+    circle(55)
+    assert ed.shapes[-1].name == "circle-1"
+
+
+def test_the_files_order_is_the_tables_and_a_click_picks_the_last_shape_under_it(window, tmp_path):
+    ed = window.editor
+    ed.set_mode("circle")
+    for a, b in (((30, 24), (34, 24)), ((30, 24), (50, 24))):
+        for p in (a, b):
+            ed.press(p, 1)
+            ed.release(p, 1)
+    small, large = (s.name for s in ed.shapes)
+
+    def picked():
+        path = tmp_path / "g.json"
+        path.write_text(json.dumps({"plate": [H, W], "shapes": [s.primitive() for s in ed.shapes]}), encoding="utf-8")
+        return region_pick((30, 24), (H, W), 0, None, {**load_geometry(str(path)), "choice": ""})["choice"]
+
+    assert picked() == large
+    ed.set_mode("select")
+    window.table.selectRow(0)
+    window.down_button.click()
+    assert [window.table.name_at(r) for r in range(2)] == [large, small] and picked() == small
+    ed.undo()
+    assert [s.name for s in ed.shapes] == [small, large]

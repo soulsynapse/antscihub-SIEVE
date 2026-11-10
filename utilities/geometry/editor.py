@@ -20,7 +20,8 @@ def _toward(a, b, t):
 
 
 class Editor:
-    """`on_change`, when set, is called after anything a view would draw differently."""
+    """`on_change`, when set, is called after anything a view would draw differently. A new shape is
+    named by `stem`, or by its kind while `stem` is empty, and the least free index."""
 
     def __init__(self, plate=None):
         self.plate = plate
@@ -34,6 +35,7 @@ class Editor:
         self._undo, self._redo = [], []
         self._saved = ()
         self.on_change = None
+        self.stem = ""
 
     def _changed(self):
         if self.on_change is not None:
@@ -86,6 +88,18 @@ class Editor:
             self._commit()
             self._changed()
         return True
+
+    def move_shape(self, name, step):
+        """Moves the shape `step` places later in the order, stopping at either end; one undo step."""
+        s = self.shape(name)
+        if s is None:
+            return
+        i = self.shapes.index(s)
+        j = min(max(0, i + step), len(self.shapes) - 1)
+        if i != j:
+            self.shapes.insert(j, self.shapes.pop(i))
+            self._commit()
+            self._changed()
 
     def delete_selected(self):
         if self.selected is not None:
@@ -157,7 +171,7 @@ class Editor:
         return out if out.r >= sh.MIN_SIZE else None
 
     def _name(self, kind):
-        return sh.next_name(kind, {s.name for s in self.shapes})
+        return sh.next_name(self.stem or kind, {s.name for s in self.shapes})
 
     def press(self, p, px, button="left"):
         p = tuple(p)

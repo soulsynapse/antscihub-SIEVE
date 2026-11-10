@@ -13,9 +13,15 @@ filled shape's position and moment columns, its outline as `contour` and its nam
 empty. A frame whose shape is not the plate's raises with the two shapes, so a region wired after
 a rescale or a crop is seen and never scaled. `pick` answers a click on a frame of the plate's
 shape inside a shape with that name as the choice, or with empty when it is the choice already.
+The card's Draw button opens the geometry utility, `python -m utilities.geometry`, on the open
+video and the file wired into `geometry`, in a process of its own; a save there reaches the region
+through the window's watch on the file.
 """
 import json
 import math
+import os
+import subprocess
+import sys
 
 import cv2
 import numpy as np
@@ -28,6 +34,7 @@ NAME, KIND, EXPECTS, PRODUCES = "region", "frame", ("bgr", "gray", "mask", "hsv"
 STATIC = True
 DEFAULTS = {"plate": [], "shapes": [], "choice": ""}
 PATHS = {"geometry": lambda path: load_geometry(path)}
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))   # where `utilities` is found
 MIN_ARC_POINTS = 16     # a circle's contour has at least this many vertices, and one per pixel of circumference past it
 
 
@@ -170,8 +177,26 @@ def draw(painter, row, result, start, params):
         draw_outline(painter, {"contour": contour_of(s)}, "contour")
 
 
+def utility_command(video, file):
+    """The geometry utility's command line under the player's interpreter, with `--video` and `--file`
+    for each that is not None."""
+    argv = [sys.executable, "-m", "utilities.geometry"]
+    for flag, path in (("--video", video), ("--file", file)):
+        if path is not None:
+            argv += [flag, os.path.abspath(path)]
+    return argv
+
+
+def launch(argv, cwd):
+    """Starts `argv` in `cwd` and does not wait on it."""
+    subprocess.Popen(argv, cwd=cwd)
+
+
 def settings(parent=None):
+    from PySide6.QtWidgets import QPushButton
+
     from sieve_player import ParamWidget
+    from sieve_player.theme import readout
 
     class _Widget(ParamWidget):
         def __init__(self, parent=None):
@@ -181,7 +206,26 @@ def settings(parent=None):
             self._get["shapes"], self._set["shapes"] = lambda: self.shapes, lambda v: self._set_geometry(self.plate, v)
             self.chooser = self.add_list("choice", DEFAULTS["choice"])
             self.chooser.changed.connect(self._show)
+            self.video = self.file = None
+            self.draw, self.launched = QPushButton("Draw…"), readout()
+            self.form.add_row("geometry", self.draw)
+            self.form.add_line(self.launched)
+            self.draw.clicked.connect(self._open_utility)
             self._show()
+
+        def set_source(self, path, fps):
+            self.video = path
+
+        def set_paths(self, paths):
+            self.file = paths.get("geometry")
+
+        def _open_utility(self):
+            try:
+                launch(utility_command(self.video, self.file), ROOT)
+            except OSError as e:
+                self.launched.setText(f"the geometry utility did not start: {e}")
+                return
+            self.launched.setText("")
 
         def _set_geometry(self, plate, shapes):
             if (list(plate), list(shapes)) != (self.plate, self.shapes):

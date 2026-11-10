@@ -1,5 +1,6 @@
 """region: a geometry file's shapes as one STATIC table, each record a filled shape with its name, the
-choice narrowing to one, a frame that is not the plate refused, and a click inside a shape picking it."""
+choice narrowing to one, a frame that is not the plate refused, a click inside a shape picking it, and the
+card's button opening the geometry utility on the video and the wired file."""
 import json
 import os
 
@@ -132,3 +133,57 @@ def test_a_frame_of_another_shape_than_the_plate_is_refused_and_said():
     g.sync()
     with pytest.raises(ValueError, match="no geometry"):
         g.compute("region", 0)
+
+
+def test_the_cards_button_opens_the_utility_on_the_video_and_the_wired_file_from_any_directory(tmp_path, monkeypatch):
+    import subprocess
+
+    from PySide6.QtWidgets import QApplication
+
+    from utilities.geometry.__main__ import parser
+
+    QApplication.instance() or QApplication([])
+    monkeypatch.chdir(tmp_path)
+    launched = []
+    monkeypatch.setattr(region, "launch", lambda argv, cwd: launched.append((argv, cwd)))
+    video, geometry = str(tmp_path / "clip.mp4"), write(tmp_path, GEOMETRY)
+    w = region.settings()
+    w.set_source(video, 30.0)
+    w.set_paths({"geometry": geometry})
+    w.draw.click()
+    w.set_paths({})
+    w.draw.click()
+    (argv, cwd), (alone, _) = launched
+    args = parser().parse_args(argv[3:])
+    assert (args.video, args.file) == (video, geometry) and parser().parse_args(alone[3:]).file is None
+    assert subprocess.run([*argv[:3], "--help"], cwd=cwd, capture_output=True).returncode == 0
+
+
+def test_a_rewritten_wired_file_moves_the_regions_params(tmp_path):
+    import time
+
+    from PySide6.QtWidgets import QApplication
+
+    from sieve_player.window import PlayerWindow
+    from tools import file
+
+    QApplication.instance() or QApplication([])
+    (tmp_path / "clip.mp4").write_bytes(b"")
+    write(tmp_path, GEOMETRY)
+    doc = D.from_tools([region])
+    doc.add_node("file", params={**file.DEFAULTS, "pattern": "geometry.json"})
+    doc.connect("file", "region", "geometry")
+    D.save(doc, tmp_path / "doc.json")
+    win = PlayerWindow(str(tmp_path / "doc.json"), "t", [file, region])
+    names = lambda: [s["name"] for s in win.doc.node("region").params["shapes"]]  # noqa: E731
+    assert names() == ["nest", "dish"]
+    path = tmp_path / "geometry.json"
+    path.write_text(json.dumps({**GEOMETRY, "shapes": GEOMETRY["shapes"][1:]}), encoding="utf-8")
+    later = os.path.getmtime(path) + 5
+    os.utime(path, (later, later))
+    t = time.time()
+    while names() != ["dish"] and time.time() - t < 5:
+        QApplication.processEvents()
+        time.sleep(0.01)
+    assert names() == ["dish"]
+    win.close()

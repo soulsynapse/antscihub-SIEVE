@@ -351,7 +351,7 @@ is minted until a second tool wants one. The process is launched with the interp
 runs under and is not waited on; the player's working directory is wherever it was started, so
 the launch says where `utilities` is found and never leans on the directory it inherits.
 
-- [ ] A region's card shows, under its standing, a button that opens the geometry utility with
+- [x] A region's card shows, under its standing, a button that opens the geometry utility with
   `--video`, the video `set_source` handed the card, and `--file`, the file `set_paths` handed it
   for `geometry`; with no file handed it opens the utility on the video alone. A save there
   updates the region's shapes in the open player.

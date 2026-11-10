@@ -1,6 +1,6 @@
 """The utility's window: the frame view, a row of view controls above it with the cursor's plate
-position, the drawing modes as one exclusive row of buttons, and a seek bar below with the frame's
-index and time. Its look is its own, since the player's theme is the player's."""
+position, the drawing modes as one exclusive row of buttons, the shapes' table on the right, and a
+seek bar below with the frame's index and time. Its look is its own, since the player's theme is the player's."""
 import os
 
 from PySide6.QtCore import Qt
@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (QButtonGroup, QFileDialog, QHBoxLayout, QLabel, Q
                                QSlider, QVBoxLayout, QWidget)
 
 from .editor import MODES, Editor
+from .table import ShapeTable
 from .video import Video
 from .view import FrameView
 
@@ -21,6 +22,8 @@ QPushButton:checked { background: rgb(70,62,40); border-color: rgb(255,200,80); 
 QSlider::groove:horizontal { height: 4px; background: rgb(58,58,58); border-radius: 2px; }
 QSlider::handle:horizontal { width: 12px; margin: -5px 0; background: rgb(140,140,140); border-radius: 6px; }
 QLabel#readout { color: rgb(140,140,140); }
+QTableWidget { gridline-color: rgb(58,58,58); selection-background-color: rgb(70,62,40); }
+QHeaderView::section { background: rgb(40,40,40); border: none; border-bottom: 1px solid rgb(69,69,69); padding: 3px 6px; }
 """
 MODE_LABELS = {"select": "Select", "circle": "Circle", "circle3": "Circle by 3", "square": "Square",
                "rectangle": "Rectangle", "polygon": "Polygon"}
@@ -50,6 +53,8 @@ class GeometryWindow(QMainWindow):
         self.frame = None
         self.editor = Editor()
         self.view = FrameView(self.editor)
+        self.table = ShapeTable(self.editor)
+        self.table.setMinimumWidth(300)
         self.editor.on_change = self._drawing_changed
         self.modes = QButtonGroup(self)
         self.mode_buttons = {}
@@ -84,7 +89,10 @@ class GeometryWindow(QMainWindow):
         body = QVBoxLayout()
         body.addLayout(top)
         body.addLayout(tools)
-        body.addWidget(self.view, 1)
+        middle = QHBoxLayout()
+        middle.addWidget(self.view, 1)
+        middle.addWidget(self.table)
+        body.addLayout(middle, 1)
         body.addLayout(bottom)
         central = QWidget()
         central.setLayout(body)
@@ -97,6 +105,7 @@ class GeometryWindow(QMainWindow):
         self.actual_button.clicked.connect(self.view.actual)
         self.seek_bar.valueChanged.connect(self.seek)
         self.view.moved.connect(self._show_cursor)
+        self.table.refused.connect(self.message.setText)
         delete = QAction(self)
         delete.setShortcut(QKeySequence.StandardKey.Delete)
         delete.triggered.connect(self.editor.delete_selected)
@@ -154,6 +163,7 @@ class GeometryWindow(QMainWindow):
     def _drawing_changed(self):
         self.mode_buttons[self.editor.mode].setChecked(True)
         self.view.viewport().update()
+        self.table.refresh()
 
     def _show_cursor(self, p):
         self.cursor_label.setText("" if p is None else f"x {int(p.x())}  y {int(p.y())}")

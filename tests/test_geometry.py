@@ -1,5 +1,6 @@
 """The geometry utility: a video opened at the plate the player's Decoder reads, seeked to any frame,
-a view zoomed no smaller than fit and shown at 100%, and the shapes edited by their handles."""
+a view zoomed no smaller than fit and shown at 100%, the shapes edited by their handles, and the
+table that lists, names and deletes them."""
 import json
 import math
 import os
@@ -12,6 +13,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtCore import QPoint, QPointF, Qt  # noqa: E402
 from PySide6.QtGui import QWheelEvent  # noqa: E402
+from PySide6.QtTest import QTest  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from sieve_player.decoder import Decoder  # noqa: E402
@@ -176,3 +178,30 @@ def test_a_draw_each_drag_and_a_delete_are_one_undo_step_each():
     assert ed.shapes == [drawn]
     ed.redo()
     assert ed.shapes == [first]
+
+
+def test_the_table_selects_with_the_frame_refuses_a_taken_name_and_deletes(window):
+    ed, table = window.editor, window.table
+    window.show()
+    window.activateWindow()
+    assert QTest.qWaitForWindowActive(window)
+    for mode, a, b in (("circle", (10, 10), (15, 10)), ("rectangle", (30, 20), (50, 40))):
+        ed.set_mode(mode)
+        for p in (a, b):
+            ed.press(p, 1)
+            ed.release(p, 1)
+    first, second = (s.name for s in ed.shapes)
+    assert table.rowCount() == 2 and [table.name_at(r) for r in range(2)] == [first, second]
+    ed.set_mode("select")
+    table.selectRow(1)
+    assert ed.selected == second
+    ed.select(first)
+    assert {i.row() for i in table.selectedItems()} == {0}
+    table.selectRow(1)
+    table.item(1, 0).setText(first)
+    assert [s.name for s in ed.shapes] == [first, second] and table.item(1, 0).text() == second
+    assert table.marked[0] == second and first in window.message.text()
+    table.item(1, 0).setText("arena")
+    assert ed.shapes[1].name == ed.selected == "arena" and table.marked is None
+    QTest.keyClick(table, Qt.Key.Key_Delete)
+    assert table.rowCount() == 1 and [s.name for s in ed.shapes] == [first]

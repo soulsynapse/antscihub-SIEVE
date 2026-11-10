@@ -206,10 +206,10 @@ string, and region's `choice` and inside's `region_name` column, under its defau
 the name downstream, so a name is what the user later reads in a csv. Order in the file is what
 region's `pick` reads last first and draw paints in order.
 
-- [ ] The table lists every shape, one row each, with its name, its kind and its centre and size in
+- [x] The table lists every shape, one row each, with its name, its kind and its centre and size in
   plate pixels; selecting a row selects the shape and selecting a shape selects its row; a name is
   edited in place, and a name already taken is refused with the row marked. Delete removes the
-  selected shapes.
+  selected shape.
   Check: an offscreen test draws two shapes, selects the second's row and reads it selected on the
   frame, renames it to the first's name and reads the refusal, and deletes it and reads one row.
 - [ ] A new shape is named by a stem and the next free index, the stem a field above the table and

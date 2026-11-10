@@ -4,6 +4,7 @@ per screen pixel, so a handle is hit at a fixed size on screen whatever the zoom
 a shape drawn, or edited from within the plate, is held within it; a shape already past its edge
 moves free."""
 import math
+from dataclasses import replace
 
 from . import shapes as sh
 
@@ -66,6 +67,25 @@ class Editor:
             return
         self.shapes.append(new)
         self.selected = new.name
+
+    def select(self, name):
+        """Selects the shape of that name, or none for None or a name no shape holds."""
+        self.selected = name if self.shape(name) is not None else None
+        self._changed()
+
+    def rename(self, old, new):
+        """False, nothing changed, when `new` is empty or another shape's name; a selection follows
+        the rename."""
+        s = self.shape(old)
+        if s is None or not isinstance(new, str) or not new or (new != old and self.shape(new) is not None):
+            return False
+        if new != old:
+            self.shapes = [replace(t, name=new) if t is s else t for t in self.shapes]
+            if self.selected == old:
+                self.selected = new
+            self._commit()
+            self._changed()
+        return True
 
     def delete_selected(self):
         if self.selected is not None:

@@ -146,4 +146,12 @@ def description(tool):
     return _LABEL.sub("", m.group(1) if m else first).rstrip(".")
 
 
-__all__ = ["MARKER", "FACETS", "Entry", "is_tool", "probe", "hint", "discover", "types", "CATEGORIES", "category", "description"]
+def signature(tool):
+    """What `tool` reads and hands out, as "gray, mask → blobs": a source reads nothing and a
+    pass-through hands out "same"."""
+    ex = probe(tool, "EXPECTS")
+    ins = [ex] if isinstance(ex, str) else list(ex or ())
+    return f"{', '.join(ins)} → {probe(tool, 'PRODUCES')}".strip()
+
+
+__all__ = ["MARKER", "FACETS", "Entry", "is_tool", "probe", "hint", "discover", "types", "CATEGORIES", "category", "description", "signature"]

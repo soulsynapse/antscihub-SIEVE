@@ -95,7 +95,7 @@ def test_the_menu_groups_by_category_with_a_description_and_flattens_to_the_type
     thin = Tool(NAME="thin", KIND="frame", EXPECTS="mask", PRODUCES="mask", DEFAULTS={},
                 __doc__="Frame tool: a mask thinned to its skeleton; mask in, mask out.\n\nMore below.")
     tools = {**TOOLS, "thin": thin}
-    info = {n: (registry.category(t), registry.description(t)) for n, t in tools.items()}
+    info = {n: (registry.category(t), registry.description(t), registry.signature(t)) for n, t in tools.items()}
     canvas = Canvas(tools, {"bad": "ImportError: no"}, info, registry.CATEGORIES)
     entries = [("gray", ""), ("reduce", ""), ("thin", ""), ("bad", "ImportError: no")]
     menu = canvas_mod.TabMenu(entries, canvas.menu_info(), canvas.order, canvas)

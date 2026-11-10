@@ -1,7 +1,7 @@
 """The registry's derived category: the ordered list over shaped entries, and bake and csv over tools/."""
 from types import SimpleNamespace as Tool
 
-from sieve_player.registry import category, description, discover
+from sieve_player.registry import category, description, discover, signature
 
 
 def test_the_first_rule_that_fits_decides_the_category():
@@ -20,3 +20,4 @@ def test_over_the_catalogue_bake_is_a_cache_and_csv_a_transform():
     assert category(by_name["bake"]) == "cache" and category(by_name["csv"]) == "transform"
     assert description(by_name["gray"]) == "BGR to gray by luma (cv2's Rec. 601 weights)"
     assert description(Tool()) == ""
+    assert signature(by_name["blobs"]) == "mask, gray → blobs" and signature(by_name["file"]) == "→ path"

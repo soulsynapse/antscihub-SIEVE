@@ -30,6 +30,8 @@ class Editor:
         self.cursor = None
         self._drag = None
         self._press = None
+        self._undo, self._redo = [], []
+        self._saved = ()
         self.on_change = None
 
     def _changed(self):
@@ -69,7 +71,33 @@ class Editor:
         if self.selected is not None:
             self.shapes = [s for s in self.shapes if s.name != self.selected]
             self.selected = None
+            self._commit()
             self._changed()
+
+    def _commit(self):
+        """Ends an undo step at the shapes as they now are, when they differ from the last step's end."""
+        now = tuple(self.shapes)
+        if now != self._saved:
+            self._undo.append(self._saved)
+            self._redo.clear()
+            self._saved = now
+
+    def undo(self):
+        """Back one step; a gesture under way is dropped first."""
+        self._step(self._undo, self._redo)
+
+    def redo(self):
+        self._step(self._redo, self._undo)
+
+    def _step(self, src, dst):
+        self._drag, self.pending = None, []
+        if src:
+            dst.append(self._saved)
+            self._saved = src.pop()
+        self.shapes = list(self._saved)
+        if self.current is None:
+            self.selected = None
+        self._changed()
 
     def _clamp(self, p):
         if self.plate is None:
@@ -117,6 +145,8 @@ class Editor:
             self._press_select(p, px, button)
         elif button == "left":
             self._press_draw(self._clamp(p), px)
+        if self._drag is None:
+            self._commit()
         self._changed()
 
     def move(self, p, px):
@@ -135,6 +165,7 @@ class Editor:
               and math.dist(self._press, p) > DRAG_PX * px):
             self._finish_two(self._clamp(p))
         self._press = None
+        self._commit()
         self._changed()
 
     def finish(self):
@@ -142,6 +173,7 @@ class Editor:
         if self.mode == "polygon" and len(self.pending) >= 3:
             self._add(sh.Polygon(self._name("polygon"), tuple(self.pending)))
         self.pending = []
+        self._commit()
         self._changed()
 
     def cancel(self):

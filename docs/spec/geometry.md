@@ -189,10 +189,10 @@ has no rotation handle.
   Saving and reopening marks.
   Check: a test drags a circle and a rotated square toward each edge and reads every extent within
   the plate; a test saves after each and loads the file through `tools.region.load_geometry`.
-- [ ] Every draw, edit, rename, stamp and delete is one undo step, a drag being one step however
+- [x] Every draw, edit, rename, stamp and delete is one undo step, a drag being one step however
   long; Ctrl+Z undoes and Ctrl+Shift+Z redoes.
-  Check: a test draws a square, drags it twice and deletes it, undoes three times and reads the
-  square at its first drag's end, and redoes once.
+  Check: a test draws a square, drags it twice and deletes it, undoes twice and reads the square
+  at its first drag's end, undoes once more and reads it as drawn, and redoes once.
 
 ## The table, names and deletion
 

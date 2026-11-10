@@ -101,6 +101,11 @@ class GeometryWindow(QMainWindow):
         delete.setShortcut(QKeySequence.StandardKey.Delete)
         delete.triggered.connect(self.editor.delete_selected)
         self.addAction(delete)
+        for keys, act in (("Ctrl+Z", self.editor.undo), ("Ctrl+Shift+Z", self.editor.redo)):
+            a = QAction(self)
+            a.setShortcut(QKeySequence(keys))
+            a.triggered.connect(act)
+            self.addAction(a)
         if video is not None:
             self.open_video(video)
 

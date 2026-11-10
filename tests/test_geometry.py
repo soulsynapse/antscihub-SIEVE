@@ -150,3 +150,29 @@ def test_no_shape_drawn_or_edited_within_the_plate_leaves_it_and_each_loads_thro
     drag(ed.rotation_handle(1), (s.cx + 300, s.cy))
     assert all(ed.within(s) for s in ed.shapes)
     loads()
+
+
+def test_a_draw_each_drag_and_a_delete_are_one_undo_step_each():
+    ed = Editor(plate=(100, 200))
+    ed.set_mode("square")
+    for a in ((20, 20), (40, 40)):
+        ed.press(a, 1)
+        ed.release(a, 1)
+    drawn = ed.shapes[0]
+    ed.set_mode("select")
+    for a, b in (((30, 30), (60, 50)), ((60, 50), (90, 70))):
+        ed.press(a, 1)
+        for t in (0.25, 0.5, 1):
+            ed.move((a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])), 1)
+        ed.release(b, 1)
+        if a == (30, 30):
+            first = ed.shapes[0]
+    ed.delete_selected()
+    assert ed.shapes == []
+    ed.undo()
+    ed.undo()
+    assert ed.shapes == [first] and first.centre == pytest.approx((60, 50))
+    ed.undo()
+    assert ed.shapes == [drawn]
+    ed.redo()
+    assert ed.shapes == [first]

@@ -132,7 +132,8 @@ class TabMenu(theme.Layer):
             head.setSizeHint(QSize(0, theme.ROW_H))
             self.list.addItem(head)
             for name, err, desc in groups[cat]:
-                item = QListWidgetItem(name)   # the text sits under the row's face; _pick reads it
+                item = QListWidgetItem()       # no text of its own: the row's face draws the name, the data carries it
+                item.setData(Qt.UserRole, name)
                 item.setSizeHint(QSize(0, theme.ROW_H))
                 item.setToolTip(err or desc)
                 if err:
@@ -155,11 +156,15 @@ class TabMenu(theme.Layer):
             if self.list.itemWidget(item) is None:
                 out.append((item.text(), []))
             else:
-                out[-1][1].append(item.text())
+                out[-1][1].append(item.data(Qt.UserRole))
         return out
 
     def description(self, name):
         return self.info.get(name, ("", ""))[1]
+
+    def item_of(self, name):
+        """The list item carrying `name`, or None while the filter hides it."""
+        return next((self.list.item(i) for i in range(self.list.count()) if self.list.item(i).data(Qt.UserRole) == name), None)
 
     def _step(self, d):
         rows = [i for i in range(self.list.count()) if self.list.item(i).flags() & Qt.ItemIsEnabled]
@@ -176,7 +181,7 @@ class TabMenu(theme.Layer):
 
     def _pick(self, item):
         if item is not None and item.flags() & Qt.ItemIsEnabled:
-            self.chosen.emit(item.text())
+            self.chosen.emit(item.data(Qt.UserRole))
             self.closed.emit()
 
     def eventFilter(self, obj, e):

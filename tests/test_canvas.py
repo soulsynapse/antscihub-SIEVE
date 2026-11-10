@@ -101,9 +101,9 @@ def test_the_menu_groups_by_category_with_a_description_and_flattens_to_the_type
     menu = canvas_mod.TabMenu(entries, canvas.menu_info(), canvas.order, canvas)
     assert menu.shown() == [("convert", ["gray"]), ("transform", ["thin"]), ("measure", ["reduce"]), (canvas_mod.UNLOADED, ["bad"])]
     assert menu.description("thin") == "a mask thinned to its skeleton; mask in, mask out" and menu.description("gray") == ""
-    assert menu.list.currentItem().text() == "gray"
+    assert menu.list.currentItem().data(Qt.UserRole) == "gray"
     menu.edit.setText("reduce")
-    assert menu.shown() == [("measure", ["reduce"])] and menu.list.currentItem().text() == "reduce"
+    assert menu.shown() == [("measure", ["reduce"])] and menu.list.currentItem().data(Qt.UserRole) == "reduce"
     menu.edit.setText("skeleton")     # the description matches
     assert menu.shown() == [("transform", ["thin"])]
     menu.edit.setText("measure")      # and so does the group
@@ -167,7 +167,7 @@ def test_a_pulled_wire_offers_what_may_sit_in_it_and_splices_the_choice():
     canvas.mousePressEvent(QMouseEvent(QEvent.MouseButtonPress, at, canvas.mapToGlobal(at.toPoint()), Qt.LeftButton, Qt.LeftButton, Qt.NoModifier))
     canvas.mouseReleaseEvent(QMouseEvent(QEvent.MouseButtonRelease, to, canvas.mapToGlobal(to.toPoint()), Qt.LeftButton, Qt.NoButton, Qt.NoModifier))
     menu = canvas.findChildren(canvas_mod.TabMenu)[0]
-    menu._pick(menu.list.findItems("passthru", Qt.MatchExactly)[0])
+    menu._pick(menu.item_of("passthru"))
     assert [(x.src, x.dst) for x in doc.wires] == [("gray", "thresh"), ("video", "passthru"), ("passthru", "gray")]
     assert canvas.box(doc.node("passthru")).center() == canvas.to_doc(to)
     assert not canvas.findChildren(canvas_mod.TabMenu) and canvas._pull is None

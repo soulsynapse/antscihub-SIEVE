@@ -211,7 +211,7 @@ size's, which iterates tables, answers. The body change is count reading a table
 `run` meets tables. The tools' docstrings say blobs in. tests/test_count.py and tests/test_size.py
 hold the blobs case; the tracks case extends them.
 
-- [ ] count and size declare `EXPECTS` over the table types and compute the same numbers over a
+- [x] count and size declare `EXPECTS` over the table types and compute the same numbers over a
   tracks series as over the blobs series it was tracked from, and their docstrings say so.
   Check: a test runs each over a blobs series and the tracks series track produces from it and
   compares the two signals row for row.

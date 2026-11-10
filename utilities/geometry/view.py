@@ -108,12 +108,16 @@ class FrameView(QGraphicsView):
             self.editor.finish()
         elif self.editor is not None and e.key() == Qt.Key.Key_Escape:
             self.editor.cancel()
+        elif self.editor is not None and e.key() == Qt.Key.Key_Shift:
+            self.editor.set_squared(True)
         elif e.key() == Qt.Key.Key_Space and not e.isAutoRepeat():
             self._space = True
             self.viewport().setCursor(Qt.CursorShape.OpenHandCursor)
         super().keyPressEvent(e)
 
     def keyReleaseEvent(self, e):
+        if self.editor is not None and e.key() == Qt.Key.Key_Shift:
+            self.editor.set_squared(False)
         if e.key() == Qt.Key.Key_Space and not e.isAutoRepeat():
             self._space = False
             self.viewport().unsetCursor()
@@ -127,6 +131,7 @@ class FrameView(QGraphicsView):
             return
         button = {Qt.MouseButton.LeftButton: "left", Qt.MouseButton.RightButton: "right"}.get(e.button())
         if self.editor is not None and button is not None:
+            self.editor.squared = bool(e.modifiers() & Qt.KeyboardModifier.ShiftModifier)
             self.editor.press(self._at(e), 1 / self.scale_now(), button)
             e.accept()
             return
@@ -147,6 +152,7 @@ class FrameView(QGraphicsView):
         p = self.mapToScene(e.position().toPoint())
         self.moved.emit(p if self._pix.boundingRect().contains(p) else None)
         if self.editor is not None:
+            self.editor.squared = bool(e.modifiers() & Qt.KeyboardModifier.ShiftModifier)
             self.editor.move((p.x(), p.y()), 1 / self.scale_now())
         super().mouseMoveEvent(e)
 
@@ -160,6 +166,7 @@ class FrameView(QGraphicsView):
             e.accept()
             return
         if self.editor is not None and e.button() == Qt.MouseButton.LeftButton:
+            self.editor.squared = bool(e.modifiers() & Qt.KeyboardModifier.ShiftModifier)
             self.editor.release(self._at(e), 1 / self.scale_now())
             e.accept()
             return

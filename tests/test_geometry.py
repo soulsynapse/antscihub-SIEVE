@@ -131,7 +131,13 @@ def test_no_shape_drawn_or_edited_within_the_plate_leaves_it_and_each_loads_thro
     gesture("square", (110, 40), (125, 70))
     gesture("circle3", (190, 90), (199, 50), (150, 99))
     gesture("square", (5, 95), (195, 5))
-    assert len(ed.shapes) == 4 and all(ed.within(s) for s in ed.shapes)
+    ed.squared = True
+    gesture("rectangle", (170, 20), (150, 25))
+    ed.squared = False
+    assert len(ed.shapes) == 5 and all(ed.within(s) for s in ed.shapes)
+    upright = ed.shapes.pop()
+    assert (upright.name, upright.kind, upright.angle, upright.w, upright.h) == ("square-3", "square", 0, 20, 20)
+    assert upright.box() == pytest.approx((150, 20, 170, 40))
     circle, square = ed.shapes[0], ed.shapes[1]
     assert square.angle != pytest.approx(0)
     ed.shapes = [circle, square]

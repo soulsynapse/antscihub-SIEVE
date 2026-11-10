@@ -225,6 +225,14 @@ def square_from_diagonal(name, a, b):
     return Rect(name, "square", (a[0] + b[0]) / 2, (a[1] + b[1]) / 2, side, side, math.atan2(dy, dx) - math.pi / 4)
 
 
+def square_from_corners(name, a, b):
+    """The upright square with a corner at `a`, reaching toward `b` by the larger of the two offsets."""
+    dx, dy = b[0] - a[0], b[1] - a[1]
+    side = max(abs(dx), abs(dy))
+    sx, sy = math.copysign(1, dx), math.copysign(1, dy)
+    return Rect(name, "square", a[0] + sx * side / 2, a[1] + sy * side / 2, side, side)
+
+
 def rectangle_from_corners(name, a, b):
     return Rect(name, "rectangle", (a[0] + b[0]) / 2, (a[1] + b[1]) / 2, abs(b[0] - a[0]), abs(b[1] - a[1]))
 

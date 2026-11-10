@@ -57,7 +57,9 @@ def run(series, params) -> dict               # series.data is (T, ...), the rea
                                               # through fold() if there is one; the dict carries "signal",
                                               # a (T,) array; the gate is the player's, never the tool's
 def settings(parent=None) -> ParamWidget      # optionally show_result(result, start, fps), set_playhead(row),
-                                              # set_source(path, fps): the video, for a tool that writes a file (csv)
+                                              # set_source(path, fps): the video, for a tool that writes a file (csv),
+                                              # set_paths({input: path}): the file each wired path input picked,
+                                              # for a card that opens the file in another program
 def step(state, row, i, params) -> (state, dict)  # optional: the tool steps row by row where the plan lets it,
                                               # state None at the first row; equal to run over the same rows (travel)
 

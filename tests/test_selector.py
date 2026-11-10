@@ -317,3 +317,22 @@ def test_a_changed_settings_file_is_read_again_and_an_unchanged_one_is_not(tmp_p
     finally:
         inrange.PATHS["settings"] = loader
     win.close()
+
+
+def test_a_widget_with_set_paths_is_handed_each_picked_file_and_nothing_once_unwired(tmp_path, monkeypatch):
+    doc, tools = settings_tree(tmp_path)
+    handed = []
+    made = inrange.settings
+
+    def recording(parent=None):
+        w = made(parent)
+        w.set_paths = lambda paths: handed.append(dict(paths))
+        return w
+
+    monkeypatch.setattr(inrange, "settings", recording)
+    win = open_window(tmp_path, tools)
+    assert handed[-1] == {"settings": os.path.abspath(tmp_path / "colour.json")}
+    win.doc.disconnect("inrange", "settings")
+    win.sync()
+    assert handed[-1] == {}
+    win.close()

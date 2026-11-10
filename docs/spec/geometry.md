@@ -326,7 +326,7 @@ root README lists them beside `settings`. The path cannot ride in the loader's a
 a hook: what a loader answers becomes the node's params, sieve_player/plan.py keys a node on its
 params, and a geometry file renamed would re-key the region and everything after it.
 
-- [ ] A settings widget with a `set_paths` is handed, each time the window picks the path inputs,
+- [x] A settings widget with a `set_paths` is handed, each time the window picks the path inputs,
   a dict of input name to the absolute path of the file its selector picked, an input with nothing
   wired or nothing matched absent from it; the root README names the hook beside `set_source`.
   Check: an offscreen test wires a file selector into a path input of a tool whose widget records

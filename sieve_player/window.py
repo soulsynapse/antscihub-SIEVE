@@ -744,14 +744,15 @@ class PlayerWindow(QMainWindow):
     def _pick_paths(self):
         """Every tool node's path inputs: what the selector wired into each picks goes through the
         tool's loader into the node's params, once per file and again when the file changes on disk,
-        which the window watches for; a miss is said on the node."""
+        which the window watches for; a miss is said on the node. A widget with `set_paths` is handed
+        each input's picked file, whether or not its loader took it."""
         asked = set()
         for n in self.doc.nodes:
             tool = self.tools.get(n.tool)
             loaders = document.paths(tool)
             if not loaders:
                 continue
-            notes, errors = [], []
+            notes, errors, picked = [], [], {}
             w = self.pane.widget(n.id)
             for name, loader in loaders.items():
                 sel = self.doc.selector(n.id, name)
@@ -764,6 +765,7 @@ class PlayerWindow(QMainWindow):
                     errors.append(f"{name}: {why}")
                     continue
                 asked.add(path)
+                picked[name] = os.path.abspath(path)
                 notes.append(f"{name}: {os.path.basename(path)}")
                 try:
                     stamp = (path, os.path.getmtime(path))
@@ -783,6 +785,8 @@ class PlayerWindow(QMainWindow):
             if w is not None and hasattr(w, "set_driven"):
                 held = [(keys, by) for (nid, _), (keys, by) in self._driven.items() if nid == n.id]
                 w.set_driven({k for keys, _ in held for k in keys}, held[0][1] if held else None)
+            if w is not None and hasattr(w, "set_paths"):
+                w.set_paths(picked)
             if errors:
                 self.canvas.errors[n.id] = "; ".join(errors)
             else:

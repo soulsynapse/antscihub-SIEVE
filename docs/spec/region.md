@@ -1,6 +1,6 @@
 # Region and crop: drawn geometry as a table, a mask cut out of the frame, and a frame click that picks
 
-Written 2026-11-09, from the design conversation of that day; no box is ticked. Read with the
+Written 2026-11-09, from the design conversation of that day; every box ticked the same day. Read with the
 registry's facet table and type report (`python -m sieve_player.registry`), the live statement of
 what a tool may offer and what feeds what, with the root README's rule that a tool does one thing
 and a variation is a second tool beside it, and with docs/spec/identity.md, whose Attach already
@@ -78,7 +78,7 @@ and sample relate it to the animals, filter narrows it by a column, and identity
 blobs already. A drawn shape is a record in every sense the kind has, a centroid, an area, a box
 and a `contour` holding its vertices, so the region node produces blobs and no new kind.
 
-Facts to weigh, as the tree stands at 705aa7dc and to be verified against it. tools/_table.py's
+Facts to weigh, read off the tree at 705aa7dc and verified while building. tools/_table.py's
 DTYPE has the position columns, the moment columns and `contour` as an object column, and
 `with_column` adds a column of any dtype, so a shape's name can ride on the record; nothing in the
 tree yet holds text in a table and the dtype's descr is what the writers serialize, so a name
@@ -143,7 +143,7 @@ count of ants on the region feeds a signal; attach gives the count, and this giv
 the join's direction fixed by input order as Blender's Sample nodes and Houdini's Attribute Transfer
 fix theirs.
 
-Facts to weigh, to be verified. tools/attach.py relates two tables through `footprint`, scaling
+Facts to weigh, verified while building. tools/attach.py relates two tables through `footprint`, scaling
 by the ratio of the planes when they differ, and raises on a text column; `name` is the first text
 column a tool meets, and where a record is in no region the column needs a value that is not a
 number. An ant inside two overlapping regions is in the more specific one, the smaller by area,
@@ -179,7 +179,7 @@ The rect is read off a mask so that a drawn region, a thresholded background and
 detections are all one tool's input, and the mask kind crops too so that the roi can follow the
 frame it cut.
 
-Facts to weigh, as the tree stands at 705aa7dc and to be verified against it. The window stack and
+Facts to weigh, read off the tree at 705aa7dc and verified while building. The window stack and
 a table's plane both assume one shape per node under one key, so a crop's rect cannot follow a
 mask that changes per row; STATIC was declared per tool and not propagated through a chain, so a
 region through a combine was static in fact and not in declaration, and the plan could not tell
@@ -243,7 +243,7 @@ Assumes: Region.
 A node that draws on the frame may answer a click on it, and the answer is new params, so the
 frame becomes a chooser for whatever a tool draws without the player learning what any shape is.
 
-Facts to weigh, as the tree stands at 705aa7dc and to be verified against it. The display in
+Facts to weigh, read off the tree at 705aa7dc and verified while building. The display in
 sieve_player/window.py holds `drawers`, every node whose tool has draw, and pulls each one's
 result at the shown row into `frame_results` before painting, so the result a pick would read is
 already at hand; a table node with the flag shows the nearest image upstream with its own draw over

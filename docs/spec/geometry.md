@@ -233,9 +233,14 @@ and kept identical after.
 
 Facts to weigh. A stamp group is editing intent the shapes cannot hold, so it lives in the
 drawing. The stamp's size is read off the selected shape each time it is placed and never stored
-apart from it, the optical-flow detector's drift.
+apart from it, the optical-flow detector's drift. A group holds identical members alone, so "the
+same" change is never asked across different sizes: with the link on, any edit to one member but a
+move, a polygon's vertex dragged, added or removed included, gives every member the edited form at
+its own centre, and with the link off the edited member leaves the group, as does any member that
+no longer matches the rest, a group left with one member being none. A move is a member's own.
+Decided 2026-11-10.
 
-- [ ] A selected shape becomes the stamp: each click places a copy of its kind, size and rotation
+- [x] A selected shape becomes the stamp: each click places a copy of its kind, size and rotation
   centred at the click, held inside the plate, named by the stem's next index, and the copies and
   the original are one group; resizing or rotating one member, with the group's link on, does the
   same to every member about its own centre, a member the change would carry off the plate
@@ -384,12 +389,6 @@ outline on the frame where it was drawn, and a crop fed from it.
 
 ## Open
 
-- What a stamp group is once its members differ. The link propagates a resize and a rotation, and
-  with it off one member is resized alone, so a group is not a promise that its members are
-  identical; a polygon member's vertex dragged, added or removed is neither a resize nor a
-  rotation, and whether that propagates, is refused under the link, or takes the member out of its
-  group is not said, nor what "the same" resize means across members of different sizes. Kendrick's
-  to decide before Stamping is built past a group of identical members.
 - The first save after a launch with no file handed lands beside the video by default, and a file
   selector's `folder` is read against the document's folder, which region's card is never told. A
   document kept apart from its footage wires the saved file by the copy buttons and an absolute

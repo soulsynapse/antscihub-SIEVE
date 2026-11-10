@@ -1,6 +1,8 @@
 """The utility's window: the frame view, a row of view controls above it with the cursor's plate
-position, the drawing modes as one exclusive row of buttons, the shapes' table on the right under the
-name stem and the buttons moving a row, and a seek bar below with the frame's index and time. Its look is its own, since the player's theme is the player's."""
+position, the drawing modes as one exclusive row of buttons with the selected stamp group's link
+beside them, the shapes' table on the right under the name stem and the buttons moving a row, and a
+seek bar below with the frame's index and time. Its look is its own, since the player's theme is the
+player's."""
 import os
 
 from PySide6.QtCore import Qt
@@ -27,7 +29,7 @@ QTableWidget { gridline-color: rgb(58,58,58); selection-background-color: rgb(70
 QHeaderView::section { background: rgb(40,40,40); border: none; border-bottom: 1px solid rgb(69,69,69); padding: 3px 6px; }
 """
 MODE_LABELS = {"select": "Select", "circle": "Circle", "circle3": "Circle by 3", "square": "Square",
-               "rectangle": "Rectangle", "polygon": "Polygon"}
+               "rectangle": "Rectangle", "polygon": "Polygon", "stamp": "Stamp"}
 VIDEO_FILTER = "Video (*.mp4 *.mov *.avi *.mts *.m2ts *.mkv *.MP4 *.MOV *.AVI *.MTS);;All files (*)"
 
 
@@ -69,6 +71,9 @@ class GeometryWindow(QMainWindow):
             self.mode_buttons[m] = b
             b.clicked.connect(lambda _=False, m=m: self.editor.set_mode(m))
         self.mode_buttons["select"].setChecked(True)
+        self.link_button = QPushButton("Link group")
+        self.link_button.setCheckable(True)
+        self.link_button.setEnabled(False)
         self.fit_button, self.actual_button = QPushButton("Fit"), QPushButton("100%")
         self.open_button = QPushButton("Open video…")
         self.cursor_label, self.frame_label = QLabel(), QLabel()
@@ -86,6 +91,7 @@ class GeometryWindow(QMainWindow):
         tools = QHBoxLayout()
         for b in self.mode_buttons.values():
             tools.addWidget(b)
+        tools.addWidget(self.link_button)
         tools.addStretch(1)
         bottom = QHBoxLayout()
         bottom.addWidget(self.seek_bar, 1)
@@ -117,6 +123,7 @@ class GeometryWindow(QMainWindow):
         self.view.moved.connect(self._show_cursor)
         self.table.refused.connect(self.message.setText)
         self.stem_field.textChanged.connect(lambda t: setattr(self.editor, "stem", t.strip()))
+        self.link_button.clicked.connect(lambda on: self.editor.set_link(self.editor.current.group, on))
         self.up_button.clicked.connect(lambda: self.editor.move_shape(self.editor.selected, -1))
         self.down_button.clicked.connect(lambda: self.editor.move_shape(self.editor.selected, 1))
         delete = QAction(self)
@@ -175,6 +182,9 @@ class GeometryWindow(QMainWindow):
 
     def _drawing_changed(self):
         self.mode_buttons[self.editor.mode].setChecked(True)
+        s = self.editor.current
+        self.link_button.setEnabled(s is not None and bool(s.group))
+        self.link_button.setChecked(s is not None and self.editor.linked(s))
         self.view.viewport().update()
         self.table.refresh()
 

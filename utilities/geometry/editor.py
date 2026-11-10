@@ -2,13 +2,15 @@
 under way, driven by presses, moves and releases at plate points. `px` on each call is plate pixels
 per screen pixel, so a handle is hit at a fixed size on screen whatever the zoom. With a plate set,
 a shape drawn, or edited from within the plate, is held within it; a shape already past its edge
-moves free."""
+moves free. A stamp group holds identical members alone: with its link on, an edit to one other than
+a move gives every member the edited form at its own centre, and with it off the edited member
+leaves the group at the step's end, as does any member that no longer matches the rest."""
 import math
 from dataclasses import replace
 
 from . import shapes as sh
 
-MODES = ("select", "circle", "circle3", "square", "rectangle", "polygon")
+MODES = ("select", "circle", "circle3", "square", "rectangle", "polygon", "stamp")
 HANDLE_PX = 6     # half a handle's side on screen, and the reach of a click on one
 ROTATE_PX = 24    # how far above its top edge a shape's rotation handle stands
 DRAG_PX = 4       # a press released further than this is a drag, closing a two-point shape on release
@@ -36,16 +38,48 @@ class Editor:
         self._saved = ()
         self.on_change = None
         self.stem = ""
+        self.stamp_from = None
+        self.links_off = set()
 
     def _changed(self):
         if self.on_change is not None:
             self.on_change()
 
     def set_mode(self, mode):
+        """"stamp" makes the selected shape the stamp, and is select while none is selected."""
         if mode not in MODES:
             raise ValueError(f"{mode!r} is not one of {MODES}")
+        if mode == "stamp":
+            self.stamp_from = self.selected
+            mode = "stamp" if self.selected is not None else "select"
         self.mode, self.pending, self._drag = mode, [], None
         self._changed()
+
+    def linked(self, s):
+        return bool(s.group) and s.group not in self.links_off
+
+    def set_link(self, group, on):
+        if on:
+            self.links_off.discard(group)
+        else:
+            self.links_off.add(group)
+        self._changed()
+
+    def _members(self, s):
+        """The other members an edit to `s` carries, none while its group's link is off."""
+        if not self.linked(s):
+            return []
+        return [m for m in self.shapes if m.group == s.group and m.name != s.name]
+
+    def _set(self, new):
+        """`new` in place of its namesake, and in place of each member it carries its form at that
+        member's centre."""
+        forms = {m.name: replace(sh.placed(new, m.centre), name=m.name) for m in self._members(new)}
+        forms[new.name] = new
+        self.shapes = [forms.get(s.name, s) for s in self.shapes]
+
+    def _fits(self, s):
+        return self.within(s) and all(self.within(sh.placed(s, m.centre)) for m in self._members(s))
 
     def shape(self, name):
         return next((s for s in self.shapes if s.name == name), None)
@@ -108,8 +142,24 @@ class Editor:
             self._commit()
             self._changed()
 
+    def _regrouped(self):
+        """Each group cut to its largest set of identical members, the earliest of equal sets, and
+        dropped when that is one."""
+        keep = {}
+        for g in sorted({s.group for s in self.shapes if s.group}):
+            classes = {}
+            for s in self.shapes:
+                if s.group == g:
+                    classes.setdefault(sh.form(s), []).append(s.name)
+            best = max(classes.values(), key=len)
+            if len(best) > 1:
+                keep.update((n, g) for n in best)
+        self.shapes = [s if keep.get(s.name, "") == s.group else replace(s, group=keep.get(s.name, ""))
+                       for s in self.shapes]
+
     def _commit(self):
         """Ends an undo step at the shapes as they now are, when they differ from the last step's end."""
+        self._regrouped()
         now = tuple(self.shapes)
         if now != self._saved:
             self._undo.append(self._saved)
@@ -150,24 +200,25 @@ class Editor:
         """`make(1)` when it is within the plate or `make(0)`, the gesture's start, is not; otherwise
         `make(t)` at the largest t bisection finds within."""
         whole = make(1.0)
-        if self.within(whole) or not self.within(make(0.0)):
+        if self._fits(whole) or not self._fits(make(0.0)):
             return whole
         lo, hi = 0.0, 1.0
         for _ in range(HOLD_STEPS):
             mid = (lo + hi) / 2
-            lo, hi = (mid, hi) if self.within(make(mid)) else (lo, mid)
+            lo, hi = (mid, hi) if self._fits(make(mid)) else (lo, mid)
         return make(lo)
 
     def _limited(self, c):
-        """`c` with its radius cut to the room its centre has to the plate's edges; None when that
-        is under MIN_SIZE."""
+        """`c` with its radius cut to the room its centre, and each member's it carries, has to the
+        plate's edges; None when that is under MIN_SIZE."""
         if self.plate is None:
             return c
         h, w = self.plate
-        r = min(c.r, c.cx, c.cy, w - c.cx, h - c.cy)
-        out = sh.Circle(c.name, c.cx, c.cy, r)
-        if not self.within(out):
-            out = sh.Circle(c.name, c.cx, c.cy, r * (1 - 1e-12))
+        centres = [c.centre] + [m.centre for m in self._members(c)]
+        r = min([c.r] + [min(x, y, w - x, h - y) for x, y in centres])
+        out = replace(c, r=r)
+        if not self._fits(out):
+            out = replace(c, r=r * (1 - 1e-12))
         return out if out.r >= sh.MIN_SIZE else None
 
     def _name(self, kind):
@@ -177,6 +228,9 @@ class Editor:
         p = tuple(p)
         if self.mode == "select":
             self._press_select(p, px, button)
+        elif self.mode == "stamp":
+            if button == "left":
+                self._press_stamp(p)
         elif button == "left":
             self._press_draw(self._clamp(p), px)
         if self._drag is None:
@@ -256,8 +310,38 @@ class Editor:
             return self._held(lambda t: sh.square_from_diagonal(name, a, _toward(a, p, t)))
         return sh.rectangle_from_corners(name, a, p)
 
+    def _stamped(self, p):
+        """The stamp's copy centred at `p`, slid within the plate, named and in no group; None with
+        no stamp, or one too large for the plate."""
+        src = self.shape(self.stamp_from) if self.stamp_from is not None else None
+        if src is None:
+            return None
+        copy = replace(sh.placed(src, p), name=self._name(src.kind), group="")
+        if self.plate is not None:
+            h, w = self.plate
+            x0, y0, x1, y1 = copy.box()
+            copy = copy.moved(min(max(0, -x0), w - x1), min(max(0, -y0), h - y1))
+        return copy if self.within(copy) else None
+
+    def _press_stamp(self, p):
+        src = self.shape(self.stamp_from) if self.stamp_from is not None else None
+        if src is None:
+            self.mode = "select"
+            return
+        copy = self._stamped(p)
+        if copy is None:
+            return
+        group = src.group
+        if not group:
+            group = sh.next_name("group", {s.group for s in self.shapes})
+            self.links_off.discard(group)
+            self._replace(replace(src, group=group))
+        self.shapes.append(replace(copy, group=group))
+
     def preview(self):
-        """The shape the gesture under way would make at the cursor, or None."""
+        """The shape the gesture under way, or the stamp, would make at the cursor, or None."""
+        if self.mode == "stamp" and self.cursor is not None:
+            return self._stamped(self.cursor)
         if not self.pending or self.cursor is None:
             return None
         if self.mode in ("circle", "square", "rectangle") or (self.mode == "circle3" and len(self.pending) == 2):
@@ -271,7 +355,7 @@ class Editor:
             if button == "right" and s.kind == "polygon":
                 hit = self._handle_at(s, p, tol)
                 if hit is not None:
-                    self._replace(s.without_vertex(hit))
+                    self._set(s.without_vertex(hit))
                 return
             rot = self.rotation_handle(px)
             if button == "left" and rot is not None and math.dist(p, rot) <= tol:
@@ -286,7 +370,7 @@ class Editor:
                 edge = s.edge_near(p, tol)
                 if edge is not None:
                     s = s.with_vertex(edge, p)
-                    self._replace(s)
+                    self._set(s)
                     self._drag = ("handle", s, edge + 1)
                     return
         if button != "left":
@@ -310,8 +394,9 @@ class Editor:
                 h, w = self.plate
                 x0, y0, x1, y1 = origin.box()
                 dx, dy = min(max(dx, -x0), w - x1), min(max(dy, -y0), h - y1)
-            new = self._held(lambda t: origin.moved(t * dx, t * dy))
-        elif what == "handle" and origin.kind == "circle":
+            self._replace(self._held(lambda t: origin.moved(t * dx, t * dy)))
+            return
+        if what == "handle" and origin.kind == "circle":
             new = origin.dragged(arg, p)
             new = (self._limited(new) or origin) if held else new
         elif what == "handle":
@@ -321,4 +406,4 @@ class Editor:
             c = origin.centre
             theta = math.remainder(math.atan2(p[1] - c[1], p[0] - c[0]) - arg, 2 * math.pi)
             new = self._held(lambda t: origin.rotated(t * theta))
-        self._replace(new)
+        self._set(new)

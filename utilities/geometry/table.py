@@ -21,7 +21,8 @@ def size_text(s):
 
 
 def row_texts(s):
-    return (s.name, s.kind, f"{s.centre[0]:.1f}, {s.centre[1]:.1f}", size_text(s))
+    kind = f"{s.kind} · {s.group}" if s.group else s.kind
+    return (s.name, kind, f"{s.centre[0]:.1f}, {s.centre[1]:.1f}", size_text(s))
 
 
 class ShapeTable(QTableWidget):

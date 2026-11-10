@@ -1,6 +1,6 @@
 """The geometry utility: a video opened at the plate the player's Decoder reads, seeked to any frame,
 a view zoomed no smaller than fit and shown at 100%, the shapes edited by their handles, and the
-table that lists, names, orders and deletes them."""
+table that lists, names, orders and deletes them, and the stamp groups."""
 import json
 import math
 import os
@@ -251,3 +251,39 @@ def test_the_files_order_is_the_tables_and_a_click_picks_the_last_shape_under_it
     assert [window.table.name_at(r) for r in range(2)] == [large, small] and picked() == small
     ed.undo()
     assert [s.name for s in ed.shapes] == [small, large]
+
+
+def test_stamps_are_one_group_a_linked_rotation_turns_every_member_and_a_solo_resize_leaves_it():
+    ed = Editor(plate=(100, 200))
+    ed.set_mode("square")
+    for p in ((10, 10), (30, 30)):
+        ed.press(p, 1)
+        ed.release(p, 1)
+    ed.set_mode("stamp")
+    at = [(60, 50), (100, 50), (198, 98)]
+    for p in at:
+        ed.press(p, 1)
+        ed.release(p, 1)
+    assert len(ed.shapes) == 4 and len({s.group for s in ed.shapes}) == 1 and ed.shapes[0].group
+    assert ed.within(ed.shapes[3]) and ed.shapes[3].centre != pytest.approx(at[2])
+    centres = [s.centre for s in ed.shapes]
+    ed.set_mode("select")
+    ed.select(ed.shapes[1].name)
+    s = ed.current
+    ed.press(ed.rotation_handle(1), 1)
+    ed.move((s.cx + 50, s.cy), 1)
+    ed.release((s.cx + 50, s.cy), 1)
+    assert [t.angle for t in ed.shapes] == pytest.approx([math.pi / 2] * 4, abs=1e-3)
+    assert [t.centre for t in ed.shapes] == [pytest.approx(c) for c in centres]
+    ed.press(ed.rotation_handle(1), 1)
+    ed.release((s.cx + 50, s.cy - 50), 1)
+    turned = [t.angle for t in ed.shapes]
+    assert all(ed.within(t) for t in ed.shapes) and len(set(turned)) == 1
+    assert turned[0] == pytest.approx(math.pi / 2, abs=1e-6)
+    ed.set_link(s.group, False)
+    edge = ed.current.handles()[(1, 0)]
+    ed.press(edge, 1)
+    ed.move((edge[0] + 0.01, edge[1] + 5), 1)
+    ed.release((edge[0] + 0.01, edge[1] + 5), 1)
+    assert ed.current.group == "" and len({t.group for t in ed.shapes if t is not ed.current}) == 1
+    assert len({t.w for t in ed.shapes}) == 2

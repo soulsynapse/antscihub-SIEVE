@@ -1,6 +1,7 @@
 """The four kinds as values with no window: a circle, a square and a rectangle as a centre, a size
 and an angle, a polygon as its vertices, each edited by returning a new shape, and each written as
-region's circle or polygon by `primitive`. Points are (x, y) in plate pixels; angles in radians."""
+region's circle or polygon by `primitive`. Points are (x, y) in plate pixels; angles in radians. A
+shape's `group` names the stamp group it is in, empty for none, and every edit keeps it."""
 import math
 from dataclasses import dataclass, replace
 
@@ -9,7 +10,7 @@ MIN_SIZE = 1.0   # plate pixels; a handle dragged through its anchor stops a pix
 
 
 def _rotate(p, about, theta):
-    c, s = math.cos(theta), math.sin(theta)
+    c, s = (0.0 if abs(v) < 1e-12 else v for v in (math.cos(theta), math.sin(theta)))   # a quarter turn exact, so a shape flush with the plate's edge stays within it
     dx, dy = p[0] - about[0], p[1] - about[1]
     return (about[0] + c * dx - s * dy, about[1] + s * dx + c * dy)
 
@@ -36,6 +37,7 @@ class Circle:
     cx: float
     cy: float
     r: float
+    group: str = ""
     kind = "circle"
 
     @property
@@ -72,6 +74,7 @@ class Rect:
     w: float
     h: float
     angle: float = 0.0
+    group: str = ""
 
     @property
     def centre(self):
@@ -139,6 +142,7 @@ class Rect:
 class Polygon:
     name: str
     points: tuple
+    group: str = ""
     kind = "polygon"
 
     @property
@@ -223,6 +227,22 @@ def square_from_diagonal(name, a, b):
 
 def rectangle_from_corners(name, a, b):
     return Rect(name, "rectangle", (a[0] + b[0]) / 2, (a[1] + b[1]) / 2, abs(b[0] - a[0]), abs(b[1] - a[1]))
+
+
+def form(s):
+    """What two shapes share when one is the other moved: kind, size, rotation and, for a polygon,
+    its vertices about its centre, rounded so that a copy moved there and back still matches."""
+    if s.kind == "circle":
+        return ("circle", round(s.r, 6))
+    if s.kind == "polygon":
+        cx, cy = s.centre
+        return ("polygon",) + tuple((round(x - cx, 6), round(y - cy, 6)) for x, y in s.points)
+    return (s.kind, round(s.w, 6), round(s.h, 6), round(math.remainder(s.angle, 2 * math.pi), 6))
+
+
+def placed(s, at):
+    """`s` moved so its centre is at `at`."""
+    return s.moved(at[0] - s.centre[0], at[1] - s.centre[1])
 
 
 def next_name(stem, taken):

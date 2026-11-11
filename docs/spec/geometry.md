@@ -323,8 +323,11 @@ holds `[*]` and shows it while the window is set modified.
 
 Words. The *file* is the geometry file Save writes, settled at launch and moved by Save as and by
 Open alone. The drawing *differs from the file* when the geometry file Save would write, read as
-JSON values, is not the file on disk read the same way, the plate included, or when the file is not
-on disk and the drawing holds a shape. A file opened over another plate, and a file whose kinds were
+JSON values, is not the file as the utility last read or wrote it, the plate included, or when the
+file is not on disk and the drawing holds a shape. A change to the file on disk from elsewhere while
+the window is open is not watched for, and Save writes over it (amended 2026-11-10 at Kendrick's
+word, from "the file on disk": the utility is the file's writer and the region its reader, and the
+player's watcher is where a changed file is noticed). A file opened over another plate, and a file whose kinds were
 inferred, therefore differ from the moment they open, since the save would write the video's plate
 or add the drawing; that is the honest state and is shown as any other.
 

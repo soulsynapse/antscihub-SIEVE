@@ -51,6 +51,7 @@ class GeometryWindow(QMainWindow):
         self.file = None
         self.source = None
         self.file_plate = None
+        self._differed = (None, None)
         self.index = 0
         self.frame = None
         self.editor = Editor()
@@ -406,7 +407,10 @@ class GeometryWindow(QMainWindow):
         last read or written, or the file is not on disk and the drawing holds a shape."""
         if self.source is None or self.editor.plate is None:
             return bool(self.editor.shapes)
-        return document.to_json(self.editor.plate, self.editor.shapes, self.source) != self.source.top
+        key = (tuple(self.editor.shapes), self.source, self.editor.plate)
+        if key != self._differed[0]:   # asked on every cursor move; written out once per change of the drawing
+            self._differed = (key, document.to_json(self.editor.plate, self.editor.shapes, self.source) != self.source.top)
+        return self._differed[1]
 
     def _show_file(self):
         """The File panel's name and folder, the unsaved mark on the title, the name line and the

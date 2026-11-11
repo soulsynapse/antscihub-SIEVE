@@ -169,7 +169,6 @@ class FrameView(QGraphicsView):
         self.moved.emit(None)
         super().leaveEvent(e)
 
-
     def drawForeground(self, painter, rect):
         ed = self.editor
         if ed is None:

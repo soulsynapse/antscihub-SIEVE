@@ -105,7 +105,8 @@ class Editor:
         self.selected = new.name
 
     def load(self, shapes):
-        """Starts over on `shapes`: nothing selected, select mode, no undo behind it."""
+        """Starts over on `shapes`: nothing selected, select mode, no undo behind it. Groups are cut
+        as at a step's end, so a member the cut touches is no longer the shape its file holds."""
         self.shapes, self.selected, self.stamp_from = list(shapes), None, None
         self.mode, self.pending, self._drag = "select", [], None
         self._regrouped()

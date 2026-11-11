@@ -328,7 +328,7 @@ on disk and the drawing holds a shape. A file opened over another plate, and a f
 inferred, therefore differ from the moment they open, since the save would write the video's plate
 or add the drawing; that is the honest state and is shown as any other.
 
-- [ ] Save asks nothing. The file is `--file` when one was handed; otherwise it is
+- [x] Save asks nothing. The file is `--file` when one was handed; otherwise it is
   `<stem>-geometry.json` beside the first video the utility opens, where `<stem>` is the video's
   name without its extension: when that file is on disk it is opened as the launch does, with a
   line saying the file beside the video was opened, and when it is not it is where Save lands.
@@ -340,7 +340,7 @@ or add the drawing; that is the honest state and is shown as any other.
   shapes and the line; launches on a clip beside none, draws, saves and reads the file beside the
   clip; saves as elsewhere, draws again, saves and reads the second path written and the first
   unchanged.
-- [ ] Save is the one thing that writes the file: no save on close, on a timer or on a change. Save
+- [x] Save is the one thing that writes the file: no save on close, on a timer or on a change. Save
   with a drawing that does not differ from the file writes nothing and says so on the message line.
   A shape not edited since the file was read is written back as the file had it, byte for byte,
   and a top-level key the utility does not read is written back as it was.
@@ -348,14 +348,14 @@ or add the drawing; that is the honest state and is shown as any other.
   winding of its own and a further top-level key; opens it, saves at once and reads the file's
   bytes unchanged; moves one shape, saves and reads the other shapes' entries and the key byte for
   byte as written, the moved shape's changed.
-- [ ] While the drawing differs from the file the window's title carries the platform's unsaved
+- [x] While the drawing differs from the file the window's title carries the platform's unsaved
   mark, the Save button is lit and the File panel's name line says there are unsaved changes; when
   the drawing returns to the file's state, by undo, redo or a save, the mark goes, the button dims
   and the line is the name alone. Ctrl+S with nothing to write says so on the message line.
   Check: an offscreen test opens a file and reads the window unmodified and Save dim; drags a
   shape and reads it modified, Save lit and the line; undoes and reads it unmodified; drags again,
   saves and reads it unmodified and the file written.
-- [ ] Closing, opening a geometry file and loading a configuration, while the drawing differs from
+- [x] Closing, opening a geometry file and loading a configuration, while the drawing differs from
   the file, each ask Save, Discard or Cancel first, since each loses the drawing the same way
   (decided 2026-11-10). The ask names the file and says what each does: Save writes it, and a
   region wired to it re-reads it; Discard goes on and loses every change since the file was read

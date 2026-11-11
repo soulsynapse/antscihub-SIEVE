@@ -2,28 +2,61 @@
 `drawing`, each shape's name to its kind and, when it has one, its stamp group. A shape the drawing
 does not name, or whose primitive does not fit the kind it is given, is rebuilt from the primitive
 alone: a circle as a circle, a polygon of four right angles as a square or a rectangle, any other as
-a polygon, in no group. The checks here are the ones rebuilding needs; region's loader stays the
-judge of what a region accepts."""
+a polygon, in no group. A `Source` is what a file held when it was read or written, so that a save
+writes a shape not edited since, and a top-level key the utility does not read, back as the file had
+them. The checks here are the ones rebuilding needs; region's loader stays the judge of what a
+region accepts."""
 import json
 import math
-from dataclasses import replace
+from dataclasses import dataclass, replace
 
 from . import shapes as sh
 
 FIT_PX = 1e-3   # how far a vertex may sit from the square or rectangle rebuilt through it
 
 
-def to_json(plate, shapes):
-    drawing = {}
+@dataclass(frozen=True)
+class Source:
+    """`top` is the file's top-level object; `entries` maps each shape's name to its entry in
+    `shapes`, its entry in `drawing` or None where the kind was inferred, and the shape read from
+    them."""
+    top: dict
+    entries: dict
+
+
+def _source(top, shapes, drawing):
+    return Source(top, {s.name: (top["shapes"][i], drawing.get(s.name), s) for i, s in enumerate(shapes)})
+
+
+def _drawn(s):
+    return {"kind": s.kind, **({"group": s.group} if s.group else {})}
+
+
+def to_json(plate, shapes, source=None):
+    """The file to write: `source`'s top-level object, when given, with plate, shapes and drawing set
+    over it, a shape still as `source` read it written back as its entry."""
+    kept = source.entries if source is not None else {}
+    items, drawing = [], {}
     for s in shapes:
-        drawing[s.name] = {"kind": s.kind, **({"group": s.group} if s.group else {})}
-    return {"plate": list(plate), "shapes": [s.primitive() for s in shapes], "drawing": drawing}
+        entry, drawn, loaded = kept.get(s.name, (None, None, None))
+        if loaded == s:
+            items.append(entry)
+            drawing[s.name] = drawn if drawn is not None else _drawn(s)
+        else:
+            items.append(s.primitive())
+            drawing[s.name] = _drawn(s)
+    out = dict(source.top) if source is not None else {}
+    out["plate"], out["shapes"], out["drawing"] = list(plate), items, drawing
+    return out
 
 
-def save(path, plate, shapes):
+def save(path, plate, shapes, source=None):
+    """Writes the file and returns the Source a later save reads it back as."""
+    d = to_json(plate, shapes, source)
     with open(path, "w", encoding="utf-8", newline="\n") as f:
-        json.dump(to_json(plate, shapes), f, indent=1)
+        json.dump(d, f, indent=1)
         f.write("\n")
+    return _source(d, shapes, d["drawing"])
 
 
 def _rect(name, pts):
@@ -68,8 +101,8 @@ def _as_drawn(d, entry):
 
 
 def load(path):
-    """(plate, shapes, the names whose kind was inferred), the plate as (height, width). Raises
-    ValueError on a file it cannot read shapes from, saying why."""
+    """(plate, shapes, the names whose kind was inferred, the Source), the plate as (height, width).
+    Raises ValueError on a file it cannot read shapes from, saying why."""
     try:
         with open(path, encoding="utf-8") as f:
             d = json.load(f)
@@ -94,4 +127,5 @@ def load(path):
         shapes.append(s)
     if len({s.name for s in shapes}) != len(shapes):
         raise ValueError(f"{path} names two shapes alike")
-    return (plate[0], plate[1]), shapes, inferred
+    drawn = {n: e for n, e in drawing.items() if n not in inferred}
+    return (plate[0], plate[1]), shapes, inferred, _source(d, shapes, drawn)

@@ -1,9 +1,12 @@
 """The geometry utility: a video opened at the plate the player's Decoder reads, seeked to any frame,
 a view zoomed no smaller than fit and shown at 100%, the shapes edited by their handles, and the
-table that lists, names, orders and deletes them, the stamp groups, the file saved and reopened, and the library of kept configurations."""
+table that lists, names, orders and deletes them, the stamp groups, the file saved and reopened, the
+file settled at launch and what differs from it, and the library of kept configurations. A window
+made here answers the unsaved ask with Discard unless a test puts its own answer in."""
 import json
 import math
 import os
+import shutil
 
 import cv2
 import numpy as np
@@ -36,10 +39,16 @@ def clip(tmp_path_factory):
     return str(path)
 
 
+def opened(*args, **kwargs):
+    QApplication.instance() or QApplication([])
+    win = GeometryWindow(*args, **kwargs)
+    win.ask_unsaved = lambda: "discard"
+    return win
+
+
 @pytest.fixture
 def window(clip):
-    QApplication.instance() or QApplication([])
-    win = GeometryWindow(clip)
+    win = opened(clip)
     yield win
     win.close()
 
@@ -305,7 +314,7 @@ def _draw(ed, mode, *points):
 
 def test_save_writes_what_region_loads_and_reopening_gives_back_kinds_and_groups(clip, tmp_path):
     path = str(tmp_path / "new.json")
-    win = GeometryWindow(clip, path)
+    win = opened(clip, path)
     ed = win.editor
     _draw(ed, "circle", (10, 10), (15, 10))
     _draw(ed, "square", (20, 5), (30, 15))
@@ -320,7 +329,7 @@ def test_save_writes_what_region_loads_and_reopening_gives_back_kinds_and_groups
         key = "circle" if s.kind == "circle" else "polygon"
         assert d["name"] == s.name and np.allclose(d[key], s.primitive()[key])
     win.close()
-    again = GeometryWindow(clip, path)
+    again = opened(clip, path)
     assert [(s.name, s.kind, s.group) for s in again.editor.shapes] == [(s.name, s.kind, s.group) for s in ed.shapes]
     assert again.editor.shapes[-1].group and again.message.text() == ""
     again.close()
@@ -332,7 +341,7 @@ def test_a_file_without_a_drawing_opens_with_its_kinds_inferred(clip, tmp_path):
         {"name": "dish", "circle": [10, 10, 5]},
         {"name": "box", "polygon": [[30, 10], [40, 20], [30, 30], [20, 20]]},
         {"name": "tri", "polygon": [[45, 40], [60, 40], [50, 30]]}]}), encoding="utf-8")
-    win = GeometryWindow(clip, str(path))
+    win = opened(clip, str(path))
     assert [s.kind for s in win.editor.shapes] == ["circle", "square", "polygon"]
     assert "inferred" in win.message.text() and "box" in win.message.text()
     win.close()
@@ -342,7 +351,7 @@ def test_a_file_of_another_plate_marks_what_is_past_the_edge_and_refuses_the_sav
     path = tmp_path / "big.json"
     path.write_text(json.dumps({"plate": [200, 200], "shapes": [
         {"name": "far", "circle": [180, 180, 10]}, {"name": "near", "circle": [10, 10, 5]}]}), encoding="utf-8")
-    win = GeometryWindow(clip, str(path))
+    win = opened(clip, str(path))
     ed = win.editor
     assert "200×200" in win.message.text() and f"{W}×{H}" in win.message.text()
     assert ed.outside() == ["far"]
@@ -361,6 +370,136 @@ def test_a_file_of_another_plate_marks_what_is_past_the_edge_and_refuses_the_sav
     win.close()
 
 
+def _drag(ed, a, b):
+    _draw(ed, "select")
+    ed.press(a, 1)
+    ed.move(b, 1)
+    ed.release(b, 1)
+
+
+def test_the_file_is_settled_at_launch_beside_the_video_and_moved_by_save_as_alone(clip, tmp_path):
+    video = str(tmp_path / "clip.avi")
+    shutil.copy(clip, video)
+    beside = tmp_path / "clip-geometry.json"
+    beside.write_text(json.dumps({"plate": [H, W], "shapes": [{"name": "dish", "circle": [10, 10, 5]}],
+                                  "drawing": {"dish": {"kind": "circle"}}}), encoding="utf-8")
+    win = opened(video)
+    assert win.file == str(beside) and [s.name for s in win.editor.shapes] == ["dish"]
+    assert "clip-geometry.json beside the video" in win.message.text()
+    assert not win.differs() and not win.save()
+    win.close()
+    beside.unlink()
+    win = opened(video)
+    assert win.file == str(beside) and win.name_label.text() == "clip-geometry.json" and not beside.exists()
+    _draw(win.editor, "circle", (10, 10), (15, 10))
+    assert win.save() and load_geometry(str(beside))["shapes"][0]["name"] == "circle-1"
+    first = beside.read_text(encoding="utf-8")
+    elsewhere = tmp_path / "far" / "other.json"
+    elsewhere.parent.mkdir()
+    assert win.save_to(str(elsewhere)) and win.file == str(elsewhere)
+    _draw(win.editor, "circle", (30, 30), (35, 30))
+    assert win.save() and len(load_geometry(str(elsewhere))["shapes"]) == 2
+    assert beside.read_text(encoding="utf-8") == first
+    assert win.open_video(clip) and win.file == str(elsewhere)
+    win.close()
+
+
+def test_save_alone_writes_the_file_and_writes_back_what_was_not_touched_as_it_was(clip, tmp_path):
+    path = tmp_path / "hand.json"
+    hand = {"plate": [H, W], "note": "by hand", "shapes": [
+        {"name": "dish", "circle": [10, 10, 5]},
+        {"name": "box", "polygon": [[20, 20], [20, 30], [30, 30], [30, 20]]},
+        {"name": "tri", "polygon": [[45, 40], [60, 40], [50, 30]]}],
+        "drawing": {"dish": {"kind": "circle"}, "box": {"kind": "square"}, "tri": {"kind": "polygon"}}}
+    text = json.dumps(hand, indent=1) + "\n"
+    path.write_text(text, encoding="utf-8")
+    win = opened(clip, str(path))
+    ed = win.editor
+    box = ed.shape("box")
+    assert box.kind == "square" and box.primitive()["polygon"] != hand["shapes"][1]["polygon"]
+    assert not win.save() and "nothing to save" in win.message.text()
+    assert path.read_text(encoding="utf-8") == text
+    _drag(ed, (50, 35), (52, 37))
+    assert win.save()
+    after = json.loads(path.read_text(encoding="utf-8"))
+    assert list(after) == list(hand) and after["note"] == "by hand"
+    for i in (0, 1):
+        assert json.dumps(after["shapes"][i]) == json.dumps(hand["shapes"][i])
+    assert after["drawing"] == hand["drawing"]
+    assert np.allclose(after["shapes"][2]["polygon"], [[47, 42], [62, 42], [52, 32]])
+    win.close()
+
+
+def test_the_unsaved_mark_the_save_button_and_the_name_line_follow_whether_the_drawing_is_the_files(clip, tmp_path):
+    path = str(tmp_path / "g.json")
+    win = opened(clip, path)
+    _draw(win.editor, "circle", (10, 10), (15, 10))
+    assert win.save()
+    win.close()
+    win = opened(clip, path)
+    ed = win.editor
+
+    def clean():
+        return not win.isWindowModified() and not win.save_button.isEnabled() and win.name_label.text() == "g.json"
+
+    assert clean()
+    _drag(ed, (10, 10), (20, 12))
+    assert win.isWindowModified() and win.save_button.isEnabled() and "unsaved changes" in win.name_label.text()
+    ed.undo()
+    assert clean()
+    ed.redo()
+    assert win.isWindowModified()
+    assert win.save() and clean()
+    assert load_geometry(path)["shapes"][0]["circle"][:2] == pytest.approx([20, 12])
+    win.close()
+
+
+def test_closing_opening_and_loading_over_a_changed_drawing_ask_and_the_file_is_written_by_save_alone(clip, tmp_path):
+    path = tmp_path / "g.json"
+    lib = str(tmp_path / "library")
+    asked = []
+
+    def answering(answer, file=path):
+        win = opened(clip, str(file), library=lib)
+        win.ask_unsaved = lambda: asked.append(answer) or answer
+        win.show()
+        return win
+
+    win = answering("discard")
+    _draw(win.editor, "circle", (10, 10), (15, 10))
+    assert win.save() and win.keep_configuration("rig")
+    assert win.close() and asked == []
+    text = path.read_text(encoding="utf-8")
+    for answer in ("cancel", "discard"):
+        win = answering(answer)
+        _draw(win.editor, "circle", (30, 30), (35, 30))
+        assert win.close() == (answer == "discard") and win.isVisible() == (answer == "cancel")
+        assert asked[-1] == answer and path.read_text(encoding="utf-8") == text
+        win.ask_unsaved = lambda: "discard"
+        win.close()
+    win = answering("save")
+    _draw(win.editor, "circle", (30, 30), (35, 30))
+    assert win.close() and not win.isVisible() and len(load_geometry(str(path))["shapes"]) == 2
+    text = path.read_text(encoding="utf-8")
+
+    win = answering("cancel")
+    _draw(win.editor, "square", (40, 5), (50, 15))
+    names = [s.name for s in win.editor.shapes]
+    assert not win.load_configuration("rig") and [s.name for s in win.editor.shapes] == names
+    assert not win.open_file(str(path)) and [s.name for s in win.editor.shapes] == names
+    win.ask_unsaved = lambda: "discard"
+    assert win.load_configuration("rig") and [s.name for s in win.editor.shapes] == ["circle-1"]
+    assert path.read_text(encoding="utf-8") == text
+    win.close()
+
+    big = tmp_path / "big.json"
+    big.write_text(json.dumps({"plate": [200, 200], "shapes": [{"name": "far", "circle": [180, 180, 10]}]}), encoding="utf-8")
+    win = answering("save", big)
+    assert not win.close() and win.isVisible() and "past the plate's edge" in win.message.text()
+    win.ask_unsaved = lambda: "discard"
+    win.close()
+
+
 def test_a_kept_configuration_is_listed_on_the_next_run_and_loads_under_the_plate_check(clip, tmp_path):
     other = str(tmp_path / "other.avi")
     w = cv2.VideoWriter(other, cv2.VideoWriter_fourcc(*"MJPG"), 30, (W, H))
@@ -368,13 +507,13 @@ def test_a_kept_configuration_is_listed_on_the_next_run_and_loads_under_the_plat
         w.write(np.zeros((H, W, 3), np.uint8))
     w.release()
     lib = str(tmp_path / "library")
-    win = GeometryWindow(clip, library=lib)
+    win = opened(clip, library=lib)
     _draw(win.editor, "circle", (10, 10), (15, 10))
     _draw(win.editor, "square", (20, 5), (30, 15))
     assert win.keep_configuration("rig") and not win.keep_configuration("rig")
     drawn = [(s.name, s.kind, s.primitive()) for s in win.editor.shapes]
     win.close()
-    again = GeometryWindow(other, str(tmp_path / "doc.json"), library=lib)
+    again = opened(other, str(tmp_path / "doc.json"), library=lib)
     assert again.kept_names() == ["rig"] and f"{W}×{H}" in again.kept_list.item(0).text()
     assert again.load_configuration("rig") and again.file.endswith("doc.json")
     assert [(s.name, s.kind, s.primitive()) for s in again.editor.shapes] == drawn

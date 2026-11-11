@@ -14,7 +14,8 @@ def parser():
     p = argparse.ArgumentParser(prog="python -m utilities.geometry",
                                 description="Draw shapes over a video's frame for the geometry file a region reads.")
     p.add_argument("--video", help="the video to draw over; asked for when absent")
-    p.add_argument("--file", help="the geometry file to open, or where the first save lands when it is not on disk")
+    p.add_argument("--file", help="the geometry file Save writes, opened when it is on disk; "
+                                  "by default <stem>-geometry.json beside the video")
     return p
 
 

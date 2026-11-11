@@ -8,9 +8,15 @@ statement of what that file may hold. Run it from the repo's root:
 .venv\Scripts\python -m utilities.geometry --video PATH [--file PATH]
 ```
 
-`--file` is opened when it is on disk and is otherwise where the first save lands. The file is region's
-`plate` and `shapes` with a `drawing` key beside them, each shape's kind and stamp group, which region
-ignores; a file without one, or written elsewhere, opens with each kind inferred from its shape.
+`--file` is the file Save writes, opened when it is on disk; without it the file is
+`<stem>-geometry.json` beside the first video opened, likewise opened when on disk. Save as and Open
+alone move it. Save is the one thing that writes it, and writes nothing while the drawing is the
+file's; a shape not edited since the file was read, and a top-level key the utility does not read,
+are written back as the file had them. While the drawing differs from the file the title carries the
+unsaved mark and the File panel says so, and closing, Open and loading a configuration ask Save,
+Discard or Cancel first. The file is region's `plate` and `shapes` with a `drawing` key beside them,
+each shape's kind and stamp group, which region ignores; a file without one, or written elsewhere,
+opens with each kind inferred from its shape.
 
 The Library panel's bookmark keeps the drawing under a name, and every later run lists it with its plate and
 date to load onto the open video. The library is Qt's per-user application data folder for

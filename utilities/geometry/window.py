@@ -37,16 +37,19 @@ def clock(index, fps):
 
 
 class GeometryWindow(QMainWindow):
-    """Opens `video` when given one; `ask_video` asks for one by a file dialog. `file` is opened
-    when it is on disk and is otherwise where the first save lands; with none the first save asks,
-    beside the video by default. `library` is the configurations' folder, by default the per-user
-    one, made on the first configuration kept."""
+    """Opens `video` when given one; `ask_video` asks for one by a file dialog. The file Save writes
+    is `file` when given, opened when it is on disk; otherwise it is `<stem>-geometry.json` beside
+    the first video opened, likewise opened when on disk. Save as and Open alone move it. Save
+    writes it only when the drawing differs from it, and closing, Open and loading a configuration
+    over a drawing that differs go through `ask_unsaved` first. `library` is the configurations'
+    folder, by default the per-user one, made on the first configuration kept."""
 
     def __init__(self, video=None, file=None, library=None):
         super().__init__()
         self.library = library if library is not None else default_folder()
         self.video = None
         self.file = None
+        self.source = None
         self.file_plate = None
         self.index = 0
         self.frame = None
@@ -179,7 +182,7 @@ class GeometryWindow(QMainWindow):
         central.setObjectName("ground")
         central.setLayout(root)
         self.setCentralWidget(central)
-        self.setWindowTitle("Geometry")
+        self.setWindowTitle("Geometry[*]")
         self.resize(1280, 800)
 
         self.open_button.clicked.connect(self.ask_video)
@@ -200,7 +203,7 @@ class GeometryWindow(QMainWindow):
         self.down_button.clicked.connect(lambda: self.editor.move_shape(self.editor.selected, 1))
         self.delete_button.clicked.connect(self.editor.delete_selected)
         self.keep_button.clicked.connect(self.ask_keep)
-        self.load_button.clicked.connect(lambda: self._chosen() and self.load_configuration(self._chosen()))
+        self.load_button.clicked.connect(lambda: self._chosen() is not None and self.load_configuration(self._chosen()))
         self.kept_list.itemDoubleClicked.connect(lambda item: self.load_configuration(item.data(Qt.ItemDataRole.UserRole)))
         self.kept_list.currentItemChanged.connect(self._show_file)
         self.rename_kept_button.clicked.connect(self.ask_rename_kept)
@@ -218,13 +221,12 @@ class GeometryWindow(QMainWindow):
             a.setShortcut(QKeySequence(keys))
             a.triggered.connect(act)
             self.addAction(a)
+        if file is not None:
+            self._set_file(os.path.abspath(file))
         if video is not None:
             self.open_video(video)
-        if file is not None:
-            if os.path.exists(file):
-                self.open_file(file)
-            else:
-                self._set_file(os.path.abspath(file))
+        if file is not None and os.path.exists(file):
+            self._open(file, "")
 
     @property
     def plate(self):
@@ -248,7 +250,7 @@ class GeometryWindow(QMainWindow):
         self.editor.plate = video.plate
         self.message.setText(self._plate_line())
         self.view.viewport().update()
-        self.setWindowTitle(f"Geometry — {os.path.basename(video.path)}  {video.plate[1]}×{video.plate[0]}")
+        self.setWindowTitle(f"Geometry — {os.path.basename(video.path)}  {video.plate[1]}×{video.plate[0]}[*]")
         self.video_label.setText(os.path.basename(video.path))
         self.video_label.setToolTip(video.path)
         self.seek_bar.blockSignals(True)
@@ -257,27 +259,43 @@ class GeometryWindow(QMainWindow):
         self.seek_bar.blockSignals(False)
         self.seek_bar.setEnabled(True)
         self.seek(0)
+        if self.file is None:
+            beside = os.path.abspath(f"{os.path.splitext(video.path)[0]}-geometry.json")
+            if os.path.exists(beside):
+                self._open(beside, f"opened {os.path.basename(beside)} beside the video")
+            else:
+                self._set_file(beside)
+        self._show_file()
         return True
 
     def ask_file(self):
+        if not self._leaving():
+            return
         start = self.file or (os.path.dirname(self.video.path) if self.video is not None else "")
         path, _ = QFileDialog.getOpenFileName(self, "Open a geometry file", start, GEOMETRY_FILTER)
         if path:
-            self.open_file(path)
+            self._open(path, "")
 
     def open_file(self, path):
-        """True when the file opened; otherwise the message line says why and the drawing stays."""
-        if not self._load_drawing(path, ""):
+        """True when the file opened, after `ask_unsaved` where the drawing differs from the file;
+        otherwise the message line says why and the drawing stays."""
+        return self._leaving() and self._open(path, "")
+
+    def _open(self, path, said):
+        source = self._load_drawing(path, said)
+        if source is None:
             return False
-        self._set_file(os.path.abspath(path))
+        self._set_file(os.path.abspath(path), source)
         return True
 
     def _load_drawing(self, path, said):
+        """The Source of the file at `path` once its shapes are the drawing, or None, the message line
+        saying why, with the drawing as it was."""
         try:
-            plate, shapes, inferred = document.load(path)
+            plate, shapes, inferred, source = document.load(path)
         except ValueError as e:
             self.message.setText(str(e))
-            return False
+            return None
         self.file_plate = plate
         if self.video is None:
             self.editor.plate = plate
@@ -286,7 +304,7 @@ class GeometryWindow(QMainWindow):
         if inferred:
             lines.append(f"kind inferred from the shape for {', '.join(inferred)}")
         self.message.setText("; ".join(t for t in lines if t))
-        return True
+        return source
 
     def refresh_library(self):
         self.kept_list.clear()
@@ -320,9 +338,12 @@ class GeometryWindow(QMainWindow):
         return True
 
     def load_configuration(self, name):
-        """Opens the kept configuration's shapes onto the open video under the plate check; the file
-        a save writes is unchanged, so a configuration is never overwritten by a save."""
-        return self._load_drawing(os.path.join(self.library, f"{name}.json"), f"loaded configuration {name}")
+        """Opens the kept configuration's shapes onto the open video under the plate check, after
+        `ask_unsaved` where the drawing differs from the file; the file a save writes is unchanged,
+        so a configuration is never overwritten by a save."""
+        if not self._leaving():
+            return False
+        return self._load_drawing(os.path.join(self.library, f"{name}.json"), f"loaded configuration {name}") is not None
 
     def rename_configuration(self, old, new):
         try:
@@ -375,18 +396,31 @@ class GeometryWindow(QMainWindow):
         past = f", {len(out)} past its edge marked until brought within" if out else ""
         return f"the file's plate is {fw}×{fh} and the video's {vw}×{vh}{past}"
 
-    def _set_file(self, path):
-        self.file = path
+    def _set_file(self, path, source=None):
+        """`path` is the file Save writes, `source` what it holds, None when it is not on disk."""
+        self.file, self.source = path, source
         self._show_file()
 
+    def differs(self):
+        """Whether Save would change the file: what it would write is not what the file held when
+        last read or written, or the file is not on disk and the drawing holds a shape."""
+        if self.source is None or self.editor.plate is None:
+            return bool(self.editor.shapes)
+        return document.to_json(self.editor.plate, self.editor.shapes, self.source) != self.source.top
+
     def _show_file(self):
-        """The File panel's name and folder, and which file and library buttons have something to act on."""
+        """The File panel's name and folder, the unsaved mark on the title, the name line and the
+        Save button, and which file and library buttons have something to act on."""
+        dirty = self.differs()
         if self.file is None:
-            self.name_label.setText("not saved yet")
-            self.folder_label.setText("Save asks where, beside the video by default")
+            self.name_label.setText("no file")
+            self.folder_label.setText("the first video opened settles it, or Save as")
         else:
-            self.name_label.setText(os.path.basename(self.file))
+            name = os.path.basename(self.file)
+            self.name_label.setText(f"{name} — unsaved changes" if dirty else name)
             self.folder_label.setText(os.path.dirname(self.file))
+        self.setWindowModified(dirty)
+        self.save_button.setEnabled(dirty)
         self.folder_label.setToolTip(self.file or "")
         self.copy_name.setEnabled(self.file is not None)
         self.copy_folder.setEnabled(self.file is not None)
@@ -395,18 +429,42 @@ class GeometryWindow(QMainWindow):
             b.setEnabled(chosen)
 
     def save(self):
-        """True when written; refused while a shape is past the plate's edge or there is no plate."""
+        """True when written; nothing is written, and the message line says so, while the drawing
+        does not differ from the file, and the save is refused while a shape is past the plate's
+        edge or there is no plate."""
         if self.file is None:
-            return self.save_as()
+            self.message.setText("no file to save to: open a video, or Save as")
+            return False
+        if not self.differs():
+            self.message.setText(f"nothing to save: {os.path.basename(self.file)} holds the drawing")
+            return False
         return self.save_to(self.file)
 
     def save_as(self):
-        start = self.file
-        if start is None and self.video is not None:
-            stem = os.path.splitext(self.video.path)[0]
-            start = f"{stem}-geometry.json"
-        path, _ = QFileDialog.getSaveFileName(self, "Save the geometry file", start or "", GEOMETRY_FILTER)
+        path, _ = QFileDialog.getSaveFileName(self, "Save the geometry file", self.file or "", GEOMETRY_FILTER)
         return self.save_to(path) if path else False
+
+    def ask_unsaved(self):
+        """"save", "discard" or "cancel", asked by a dialog naming the file and what each does."""
+        name = os.path.basename(self.file) if self.file is not None else "the drawing"
+        box = QMessageBox(self)
+        box.setWindowTitle("Unsaved changes")
+        box.setText(f"{name} has unsaved changes.")
+        box.setInformativeText(f"Save writes {name}, and a region wired to it re-reads it. Discard goes on and "
+                               "loses every change since the file was read or saved. Cancel leaves the window as it was.")
+        buttons = QMessageBox.StandardButton
+        box.setStandardButtons(buttons.Save | buttons.Discard | buttons.Cancel)
+        box.setDefaultButton(buttons.Save)
+        box.exec()
+        return {buttons.Save: "save", buttons.Discard: "discard"}.get(box.standardButton(box.clickedButton()), "cancel")
+
+    def _leaving(self):
+        """True when the drawing may be left behind: it is the file's, or the user chose Discard, or
+        chose Save and the save was taken."""
+        if not self.differs():
+            return True
+        answer = self.ask_unsaved()
+        return self.save() if answer == "save" else answer == "discard"
 
     def _savable(self):
         if self.editor.plate is None:
@@ -421,9 +479,9 @@ class GeometryWindow(QMainWindow):
     def save_to(self, path):
         if not self._savable():
             return False
-        document.save(path, self.editor.plate, self.editor.shapes)
+        source = document.save(path, self.editor.plate, self.editor.shapes, self.source)
         self.file_plate = tuple(self.editor.plate)
-        self._set_file(os.path.abspath(path))
+        self._set_file(os.path.abspath(path), source)
         self.message.setText(f"saved {os.path.basename(path)}")
         return True
 
@@ -448,11 +506,15 @@ class GeometryWindow(QMainWindow):
             b.setEnabled(s is not None)
         self.view.viewport().update()
         self.table.refresh()
+        self._show_file()
 
     def _show_cursor(self, p):
         self.cursor_label.setText("" if p is None else f"x {int(p.x())}  y {int(p.y())}")
 
     def closeEvent(self, e):
+        if not self._leaving():
+            e.ignore()
+            return
         if self.video is not None:
             self.video.close()
         super().closeEvent(e)

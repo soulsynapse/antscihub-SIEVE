@@ -8,7 +8,10 @@ on disk and a configuration kept in the library made two matches of every file s
 shape past the plate is never written, and is held only as the marked shape of a file opened over
 another plate; the launch is checked from a working directory that is not the repo's root; the
 table reorders, file order being what a click in the player reads; and the plate is checked against
-the player's Decoder. Read with docs/spec/region.md, which settled the geometry file's shape, that
+the player's Decoder. Amended again 2026-11-10 from Kendrick's request after the first build: Save
+asks nothing and the file it writes is settled at launch, a drawing is marked while it differs from
+its file and the close asks before losing it, and a file is written only by Save and only when it
+would change; The file and what differs from it below. Read with docs/spec/region.md, which settled the geometry file's shape, that
 it is drawn outside the player, and that a region refuses a frame of another shape than its plate;
 with tools/region.py, whose `load_geometry` is the live statement of what the file may hold; with
 tools/file.py, the selector that finds the file; and with the root README's facet table, where
@@ -271,8 +274,9 @@ file reaches a node by Browse or by pasting its folder and its name into the two
   and every other kind as a polygon of its vertices in plate pixels; Open reads it back with its
   kinds and groups. Launched with `--file PATH`, the utility opens that file, and a path not yet on
   disk is where the first save lands; with neither, the first save asks, beside the video by
-  default. The utility shows the saved file's folder and name, each with a copy button, for a file
-  node's two fields.
+  default (superseded 2026-11-10 at Kendrick's word: Save never asks, and the file it writes is
+  The file and what differs from it's). The utility shows the saved file's folder and name, each
+  with a copy button, for a file node's two fields.
   Check: a test draws one of each kind and a stamp group, saves, reads the file through
   `tools.region.load_geometry` and compares each shape's vertices or circle, then reopens and
   reads the kinds and the group back.
@@ -289,6 +293,79 @@ file reaches a node by Browse or by pasting its folder and its name into the two
   100×100 clip and reads the line, the marked shape and the refused save; drags the shape within
   the plate and reads the mark gone, the save taken, and a further drag toward the edge stopped at
   it.
+
+## The file and what differs from it
+
+Assumes: Saving and reopening.
+
+The file a region is wired to is the user's, so the utility writes it on Save alone, writes it only
+when the drawing would change it, writes back what was not touched as it found it, and says plainly,
+before the write and before the close, when the drawing and the file have come apart.
+
+Facts to weigh, read off the tree at efc13e2f. Save with no file falls into Save as, a dialog, and
+the File panel says so; with `--file` not on disk the first save lands there without asking, so the
+dialog is reached only from a launch on a video alone, which is the region card's launch when
+nothing is wired. Save as sets the file and every later save goes there. `document.save` is the
+one writer of a geometry file outside the library, and `library.keep` writes to the library alone;
+nothing writes on close or on a timer. Shapes are frozen dataclasses compared by value and the
+editor's undo keeps a tuple of them at each step's end, so whether the shapes are the ones loaded is
+one comparison. Loading reads every vertex into a float and rebuilds a square or a rectangle from
+its vertices as a centre, a size and an angle, from which `primitive()` recomputes the vertices, so
+an untouched square can come back a few bits from where the file had it and a hand-written integer
+comes back a float; a shape that is written back as it was read has to carry what it was read from
+until an edit. `to_json` writes `plate`, `shapes` and `drawing` and nothing else, so a further
+top-level key, which Region's file holds the drawing made region's stated contract to ignore, would
+not survive a save. The utility's look is layered grays with no accent colour, and every button
+with nothing to act on is already dim, so a Save that is lit while there is something to write and
+dim while there is not is a signal the user already reads, where a coloured dot would be the one
+colour in the window and read as an error. Qt puts the platform's unsaved mark into a title that
+holds `[*]` and shows it while the window is set modified.
+
+Words. The *file* is the geometry file Save writes, settled at launch and moved by Save as and by
+Open alone. The drawing *differs from the file* when the geometry file Save would write, read as
+JSON values, is not the file on disk read the same way, the plate included, or when the file is not
+on disk and the drawing holds a shape. A file opened over another plate, and a file whose kinds were
+inferred, therefore differ from the moment they open, since the save would write the video's plate
+or add the drawing; that is the honest state and is shown as any other.
+
+- [ ] Save asks nothing. The file is `--file` when one was handed; otherwise it is
+  `<stem>-geometry.json` beside the first video the utility opens, where `<stem>` is the video's
+  name without its extension: when that file is on disk it is opened as the launch does, with a
+  line saying the file beside the video was opened, and when it is not it is where Save lands.
+  The File panel shows the file from launch. Save as writes to a chosen path and later saves go
+  there; loading a configuration leaves the file where it was, and so does a video opened later,
+  so a drawing is never re-pointed at another file by a video change (decided 2026-11-10; Save as
+  is the deliberate way).
+  Check: an offscreen test launches on a clip beside a geometry file of its stem and reads the
+  shapes and the line; launches on a clip beside none, draws, saves and reads the file beside the
+  clip; saves as elsewhere, draws again, saves and reads the second path written and the first
+  unchanged.
+- [ ] Save is the one thing that writes the file: no save on close, on a timer or on a change. Save
+  with a drawing that does not differ from the file writes nothing and says so on the message line.
+  A shape not edited since the file was read is written back as the file had it, byte for byte,
+  and a top-level key the utility does not read is written back as it was.
+  Check: a test writes a geometry file by hand with integer vertices, a square's vertices in a
+  winding of its own and a further top-level key; opens it, saves at once and reads the file's
+  bytes unchanged; moves one shape, saves and reads the other shapes' entries and the key byte for
+  byte as written, the moved shape's changed.
+- [ ] While the drawing differs from the file the window's title carries the platform's unsaved
+  mark, the Save button is lit and the File panel's name line says there are unsaved changes; when
+  the drawing returns to the file's state, by undo, redo or a save, the mark goes, the button dims
+  and the line is the name alone. Ctrl+S with nothing to write says so on the message line.
+  Check: an offscreen test opens a file and reads the window unmodified and Save dim; drags a
+  shape and reads it modified, Save lit and the line; undoes and reads it unmodified; drags again,
+  saves and reads it unmodified and the file written.
+- [ ] Closing, opening a geometry file and loading a configuration, while the drawing differs from
+  the file, each ask Save, Discard or Cancel first, since each loses the drawing the same way
+  (decided 2026-11-10). The ask names the file and says what each does: Save writes it, and a
+  region wired to it re-reads it; Discard goes on and loses every change since the file was read
+  or saved; Cancel leaves the window as it was. Save when the save is refused, a shape past the
+  plate's edge, cancels and says why.
+  Check: an offscreen test replaces the ask with a recorder; closing with a changed drawing and
+  Cancel answered reads the window open and the file untouched, with Discard the window closed and
+  the file untouched, with Save the file written and the window closed; loading a configuration
+  over a changed drawing with Cancel answered reads the shapes unchanged, with Discard the
+  configuration's shapes; closing with the drawing the file's asks nothing.
 
 ## Saved configurations
 
@@ -388,10 +465,14 @@ outline on the frame where it was drawn, and a crop fed from it.
 - A grid stamp, a background to draw over in place of a frame, and a pixels-per-millimetre scale.
   Kendrick's reading of the first draft found none needed. Decided 2026-11-10.
 - A facet for utilities in the registry, until a second tool has one.
+- Saving for the user: on close, on a timer or on each change. A write the user did not ask for
+  reaches the wired region through the watcher as surely as one they did. Decided 2026-11-10.
+- A dialog on Save. The file is settled at launch; Save as is where a path is chosen. Decided
+  2026-11-10.
 
 ## Open
 
-- The first save after a launch with no file handed lands beside the video by default, and a file
-  selector's `folder` is read against the document's folder, which region's card is never told. A
-  document kept apart from its footage wires the saved file by the copy buttons and an absolute
-  folder. Whether the card should know the document's folder waits on that being met.
+- A launch with no file handed adopts the file beside the video, and a file selector's `folder` is
+  read against the document's folder, which region's card is never told. A document kept apart
+  from its footage wires the file by the copy buttons and an absolute folder. Whether the card
+  should know the document's folder waits on that being met.

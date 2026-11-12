@@ -176,7 +176,7 @@ def test_the_walk_steps_the_prefix_once_a_row_runs_the_suffix_per_emit_and_match
     assert not [k for d in (g.memo._big, g.memo._small, g.memo._pinned) for k in d if k[0] == raw]
     stack_bytes = sum(nbytes(row) for row in w._win.stack)
     assert w._win.bytes == stack_bytes + sum(ev.bytes for ev in events if ev.kind == "step") and w._win.bytes > stack_bytes
-    held = {n: id(w._win.stepped[n]) for n in ("track", "kinematics")}
+    held = {n: w._win.stepped[n] for n in ("track", "kinematics")}      # the objects, since a freed one's id comes back
     events.clear()
     got.clear()
     w.invalidate()
@@ -184,7 +184,7 @@ def test_the_walk_steps_the_prefix_once_a_row_runs_the_suffix_per_emit_and_match
     steps, runs = steps_and_runs(events, g.chain)
     assert sorted(steps) == sorted([(n, r) for n in ("track", "kinematics") for r in range(7)]) and not [r for r in runs if r[0] != "tracks-filter"]
     assert not [ev for ev in events if ev.kind == "run" and ev.node in ("gray", "table")]        # the memo held the frames
-    assert {n: id(w._win.stepped[n]) for n in held} != held
+    assert not [n for n in held if w._win.stepped[n] is held[n]]
     events.clear()
     got.clear()
     doc.node("track").params["max_step"] = 9.0

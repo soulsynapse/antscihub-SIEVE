@@ -23,6 +23,7 @@ MAY_IMPORT = {
     "worker": {"decoder", "density", "document", "graph", "store"},
     "trace": {"graph"},
     "ledger": {"trace"},                          # the span kinds and a dump's reader; no graph is held and no Qt reached
+    "catalogue": {"ledger"},                      # a detector reads a view and nothing else
 }
 
 

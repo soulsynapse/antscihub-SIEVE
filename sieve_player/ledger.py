@@ -4,9 +4,10 @@ samples and nothing else, holding no graph and importing no Qt, so a dump replay
 only queues; the bookkeeping is done by whoever takes a `view()`, or by the emitting thread once the
 queue is long and no reader is at it, so an emit never waits on a reader.
 """
+import json
 import threading
 from collections import deque
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field, fields, replace
 
 from .trace import SPANS, read_dump
 
@@ -47,9 +48,11 @@ class Node:
     held: int = 0
     served: int = 0
     parts: list = field(default_factory=lambda: [0.0] * PARTS)     # ms in order along the range
+    counts: list = field(default_factory=lambda: [0] * PARTS)      # the spans those ms were of
 
     def copy(self):
-        return Node({k: list(v) for k, v in self.runs.items()}, self.ran, self.held, self.served, list(self.parts))
+        return Node({k: list(v) for k, v in self.runs.items()}, self.ran, self.held, self.served, list(self.parts),
+                    list(self.counts))
 
 
 @dataclass
@@ -70,9 +73,12 @@ class Walk:
     replanned: bool = False                         # it went on after a later sync: what it holds is of more than one plan
     nodes: dict = field(default_factory=dict)       # node -> Node
     recomputed: dict = field(default_factory=dict)  # store -> count, as a bucket's
+    recomputed_ms: dict = field(default_factory=dict)   # store -> what those took
+    unprobed: float = 0.0                           # ms between its rows that no span covers, as the buckets'
 
     def copy(self):
-        return replace(self, nodes={n: v.copy() for n, v in self.nodes.items()}, recomputed=dict(self.recomputed))
+        return replace(self, nodes={n: v.copy() for n, v in self.nodes.items()}, recomputed=dict(self.recomputed),
+                       recomputed_ms=dict(self.recomputed_ms))
 
 
 @dataclass
@@ -224,6 +230,7 @@ class Ledger:
             return
         if store is not None:
             walk.recomputed[store] = walk.recomputed.get(store, 0) + 1
+            walk.recomputed_ms[store] = walk.recomputed_ms.get(store, 0.0) + ev.ms
         if lane.synced and ev.kind != "cancel":     # a cancelled run was the old plan's
             walk.replanned = True
         node = walk.nodes.setdefault(ev.node, Node())
@@ -231,7 +238,9 @@ class Ledger:
         run[0] += 1
         run[1] += ev.ms
         run[2] += ev.bytes
-        node.parts[min(PARTS - 1, walk.done * PARTS // max(walk.length, 1))] += ev.ms
+        part = min(PARTS - 1, walk.done * PARTS // max(walk.length, 1))
+        node.parts[part] += ev.ms
+        node.counts[part] += 1
         lane.kinds.setdefault(ev.node, set()).add(ev.kind)
 
     def _progress(self, ev):
@@ -246,6 +255,7 @@ class Ledger:
             for bucket, share in self._over(lane.t, ev.t):
                 bucket.unprobed += gap * share
             spent = self._spent[ev.thread] = spent + gap
+            walk.unprobed += gap
         lane.t, lane.at = ev.t, spent
         rows = ev.row - walk.done
         walk.done, walk.length, walk.t1 = ev.row, ev.length, ev.t
@@ -280,3 +290,32 @@ def replay(path, **kwargs):
     for s in samples:
         ledger.sample(s["sample"], s["value"], s["t"])
     return ledger
+
+
+def save(view, path, **more):
+    """Writes `view` to `path` as one JSON file `saved` reads back, with `more` beside it: plain
+    values, the document and whatever else a reader of the history needs that no walk's plan holds."""
+    def plain(x, also):
+        return {f.name: getattr(x, f.name) for f in fields(x) if f.name != "shared"} | also
+    out = {"width": view.width, "first": view.first, "more": more,
+           "buckets": [plain(b, {"rows": list(b.rows.items())}) for b in view.buckets],     # a lane may be None, which is no JSON key
+           "walks": [plain(w, {"nodes": {n: plain(x, {"runs": [[*k, *v] for k, v in x.runs.items()]})
+                                         for n, x in w.nodes.items()}}) for w in view.walks]}
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(out, f)
+
+
+def saved(path):
+    """(a Ledger holding the buckets and walks `save` wrote to `path`, every walk closed, and the
+    `more` written beside them)."""
+    with open(path, encoding="utf-8") as f:
+        d = json.load(f)
+    ledger = Ledger(width=d["width"], history=max(len(d["buckets"]), 1), walks=max(len(d["walks"]), 1))
+    for i, b in enumerate(d["buckets"], d["first"]):
+        ledger._buckets[i] = Bucket(**b | {"rows": {lane: n for lane, n in b["rows"]},
+                                           "stores": {k: tuple(v) for k, v in b["stores"].items()}})
+        ledger._newest = i
+    for w in d["walks"]:
+        nodes = {n: Node(**x | {"runs": {tuple(r[:3]): r[3:] for r in x["runs"]}}) for n, x in w["nodes"].items()}
+        ledger._walks.append(Walk(**w | {"nodes": nodes}))
+    return ledger, d["more"]

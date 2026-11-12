@@ -6,7 +6,7 @@ import pytest
 
 from sieve_player import document as D
 from sieve_player.graph import Event, Graph
-from sieve_player.ledger import PARTS, Ledger, replay
+from sieve_player.ledger import PARTS, Ledger, replay, save, saved
 from sieve_player.trace import FIELDS, Dump
 from tests.test_graph import TOOLS, Dec, add, gray
 
@@ -52,6 +52,9 @@ def test_a_dump_replays_into_the_ledger_the_live_one_was(tmp_path):
     assert {n: runs(v) for n, v in second.nodes.items() if v.runs} == {"add": 6}       # gray was held: only what changed ran, and all of it
     assert set(first.nodes["gray"].runs) == {("run", "walk", "add")} and not (first.replanned or second.replanned)
     assert sum(b.rows.get("window", 0) for b in seen.buckets) == 12 and seen.buckets[-1].stores["memo"] == (g.memo.bytes, g.memo.limit)
+    save(seen, tmp_path / "history.json", document=doc.to_dict())      # the hand-over for a slowdown of no class: history, plans, document
+    back, more = saved(tmp_path / "history.json")
+    assert back.view() == seen and D.Document.from_dict(more["document"]).node("add").params["k"] == 2
 
 
 def test_a_walk_says_how_cold_it_was_and_what_a_store_made_it_compute_again():
@@ -75,7 +78,7 @@ def test_a_walk_says_how_cold_it_was_and_what_a_store_made_it_compute_again():
     walk(g, range(6))
     first, second = led.view().walks
     # Under an LRU the second walk discards, before it reaches them, the rows the first left held: every row is computed again.
-    assert not first.recomputed and discarded == 6 and second.recomputed == {"memo": 12}
+    assert not first.recomputed and discarded == 6 and second.recomputed == {"memo": 12} and second.recomputed_ms["memo"] > 0
     assert sum(b.recomputed.get("memo", 0) for b in led.view().buckets) == 12
 
 
@@ -101,8 +104,9 @@ def test_a_span_is_spread_over_its_buckets_and_a_cost_keeps_its_place_along_the_
     assert [w.start for w in led.view().walks] == [0]
     nodes = led.view().walks[0].nodes
     assert len(nodes["grows"].parts) == PARTS and nodes["grows"].parts[-1] == 128 * nodes["grows"].parts[0]
-    assert set(nodes["flat"].parts) == {24.0} and nodes["flat"].ran == 64
-    assert sum(b.unprobed for b in led.view().buckets) == pytest.approx(63900.0 - sum(2.0 ** (r // 8) + 3.0 for r in range(64)))   # from the begin to the last progress
+    assert set(nodes["flat"].parts) == {24.0} and nodes["flat"].counts == [8] * PARTS and nodes["flat"].ran == 64
+    unprobed = 63900.0 - sum(2.0 ** (r // 8) + 3.0 for r in range(64))      # from the begin to the last progress
+    assert sum(b.unprobed for b in led.view().buckets) == pytest.approx(unprobed) == led.view().walks[0].unprobed
 
 
 def test_a_view_is_the_readers_to_hold_while_another_thread_feeds():

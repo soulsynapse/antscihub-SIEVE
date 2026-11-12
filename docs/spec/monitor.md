@@ -226,14 +226,20 @@ nothing. The finding's own table shows a decode's wall well above the worker's C
 fault, the decoder's own threads. A walk driven by hand, as `bench.py` and the experiments under
 `docs/findings/experiments/` drive theirs, emits progress and no begin; the ledger then opens a record at
 the first progress, without the runs before it and without the range's first row, so a script whose
-record is read calls `Graph.began` as the worker does.
+record is read calls `Graph.began` as the worker does. A walk's wall is not comparable with another's: a
+walk half held costs less a row than a cold one with nothing wrong, and a lane's wall holds the turns the
+ladder gave the other lanes; what two walks under one plan have in common is each node's cost a run. The
+sync's plan carries the pinned set and not the selection. A served reader has one cursor, where the plate's
+decoder keeps a second for the scrub.
 
 Fork: whether a density folded for a node nothing shows is the same problem when the walk reaches the
 node anyway. The class is built as work no watched node and no walked node asked for, with one threshold,
 a named constant beside the detector. Observed on the purb document live and served, by the last box
 below: where one threshold leaves the live walk silent and the served one flagged, it is one class; where
 none does, the fold of a reached node becomes a second class with its own subject and threshold, so the
-first can be set for the served case alone.
+first can be set for the served case alone. Observed 2026-11-12, in the second half of
+`docs/findings/2026-11-12-served-bake-upstream-walk.md`: one threshold separates them, so it is one class,
+and the served walk's log then lists the folds of the nodes it reaches beside those it does not.
 
 Fork: whether a class is quiet on healthy documents, which no simulation shows. Observed in Kendrick's
 ordinary use, under the Worth a look below: a class that fires on a document with nothing wrong has its
@@ -245,28 +251,28 @@ Open: where simulations live and whether they are tests. Recommended, and what a
 one module under `sieve_player/dev/`, each simulation runnable by name from the command line, and one test
 that runs them all.
 
-- [ ] A problem is a value: its class, its subject, one line, its cost per row of the walk and as a share
+- [x] A problem is a value: its class, its subject, one line, its cost per row of the walk and as a share
   of it where it has one, the evidence the line was drawn from, and where in the code the class has come
   from before. A detector is a function from a ledger's view to problems and reads nothing else.
   Check: a catalogue test builds a view by hand for each class and reads the problem off it.
-- [ ] Each class has a simulation that builds the fault with the player's own Graph and Worker on a clip
+- [x] Each class has a simulation that builds the fault with the player's own Graph and Worker on a clip
   it writes for itself, needing no file of Kendrick's and no store of his. Run alone, it surfaces its
   class and no other.
   Check: one catalogue test per simulation, each asserting the set of classes surfaced is the one.
-- [ ] A healthy simulation, the same graph as the faults' with no fault, surfaces nothing; neither does a
+- [x] A healthy simulation, the same graph as the faults' with no fault, surfaces nothing; neither does a
   rewalk the memo holds, a walk beginning mid-clip, a scrub during a walk, or a bake behind one.
   Check: a catalogue test runs each and reads an empty log.
-- [ ] The classes present: work nothing reads; a store recomputing what it discarded, the memo, the plate
+- [x] The classes present: work nothing reads; a store recomputing what it discarded, the memo, the plate
   decoder's cache and a served reader's each as their own subject; a node whose cost grows along the
   range; and the walk's cursor seeking. The worker waiting on the GUI thread is The GUI thread's turn's
   to add.
   Check: the simulations' test names each.
-- [ ] The log holds one entry per class and subject: a problem seen again updates its entry's cost and
+- [x] The log holds one entry per class and subject: a problem seen again updates its entry's cost and
   count and does not add one, an entry whose problem is no longer found says so and stays, and the
   entries order by cost. A walk with five faults at once is five entries.
   Check: a catalogue test feeds the same fault over ten walks and reads one entry counting ten, then a
   clean walk and reads the entry cleared and present.
-- [ ] An entry gives one block of text sufficient to begin on the fault without the session it was seen
+- [x] An entry gives one block of text sufficient to begin on the fault without the session it was seen
   in: the class and the line, the figures and the evidence, the walk's lane, range and per-node table, the
   plan's lines for the subject and what it reads and is read by, the document itself as it would be
   saved, the video's path, the decoder's facts and the stores' limits, the commit, the dump's path when
@@ -274,19 +280,26 @@ that runs them all.
   has come from.
   Check: a catalogue test takes the text for the served-bake simulation's entry, finds in it each of
   those by its label and the nodes the fault names, and loads the document back out of it.
-- [ ] A walk that costs more a row than the last walk of the same lane under the same plan, past a
+- [x] A walk that costs more a row than the last walk of the same lane under the same plan, past a
   threshold, is a problem of its own class whatever the cause, its evidence the nodes whose cost moved
   and by how much; a walk under a changed plan is compared with nothing.
   Check: a simulation runs one plan twice with a tool made slower between, and surfaces the class naming
   the tool; a catalogue test changes a param between two walks and reads nothing.
-- [ ] With no entry at all, the ledger's recent history, the plan and the document can be written to
+- [x] With no entry at all, the ledger's recent history, the plan and the document can be written to
   one file that replays into a ledger, so a slowdown of no known class is handed over as it happened.
   Check: a ledger test saves, replays the file, and reads the same buckets and walks back.
-- [ ] `video-tests/purb-settings.json`, its bake served on a fresh graph, surfaces work nothing reads,
+- [x] `video-tests/purb-settings.json`, its bake served on a fresh graph, surfaces work nothing reads,
   naming crop and rescale, at a cost that agrees with the finding's table; the same document live
   surfaces nothing.
   Check: the finding's experiment, extended to attach a ledger and print the log; it is run by hand, the
   clip being Kendrick's, and its output is recorded as a second half of the finding.
+- [x] The slower-than-last-walk class sees a walk slowed in the time no span covers. Added 2026-11-12 on
+  building it: the class is built on each node's cost a run, in what ran in both walks, the wall of a
+  walk being comparable with no other's, and so read nothing in a walk slowed between its spans, by the
+  GUI thread's turn or a wait the probe does not time. A walk's record keeps its unprobed time, and the
+  class compares it a row under the subject "unprobed".
+  Check: a simulation holds the worker between rows for the second of two walks under one plan and
+  surfaces the class, alone.
 
 Worth a look: the thresholds, each a named constant beside its detector, against the purb and GoPro
 documents in ordinary use for a session; a class that fires on a healthy document is a wrong threshold or
@@ -475,6 +488,12 @@ read arriving stays in the default list; one on which none was leaves the defaul
   2026-11-12 on driving The ledger.
   Check: a monitor test opens the window on a synced graph, walks, and reads the plan on the walk's
   record.
+- [ ] The selection is in the stream beside the pinned set, so a fold of the selected node is work a
+  watched node asked for. Added 2026-11-12 on building The catalogue: the plan a sync carries holds the
+  pinned set alone, and the work-nothing-reads class takes pinned for watched, so a node selected to
+  look at its density reads as unwatched.
+  Check: a monitor test selects a node whose fold the catalogue had surfaced, walks, and reads the entry
+  cleared.
 
 Worth a look: the window full screen on the second monitor through a session on the purb document and one
 on the GoPro clip, bake live and served; and small beside the player.

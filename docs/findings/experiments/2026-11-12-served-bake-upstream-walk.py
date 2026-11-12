@@ -6,7 +6,8 @@ one window, its bake node live and then serving its file, read off the monitor a
 A fresh Graph, Decoder and Monitor per phase, twice over, so each walk is cold in every store; then one Graph
 and one Monitor across the switch, as a session that toggles the node has them. The bake is read from the
 current store and must be there already. Per phase: the monitor's summary and table, then the events summed
-per (node, kind), the wall they leave unprobed, and the plate decoder's and the served reader's counters.
+per (node, kind), the wall they leave unprobed, and the plate decoder's and the served reader's counters; then
+the catalogue's log off a ledger attached to the same graph, the finding's second half.
 """
 import os
 import sys
@@ -23,9 +24,11 @@ from PySide6.QtWidgets import QApplication  # noqa: E402
 from sieve_player import decoder as decmod  # noqa: E402
 from sieve_player import document as D  # noqa: E402
 from sieve_player import store  # noqa: E402
+from sieve_player.catalogue import Log, line  # noqa: E402
 from sieve_player.decoder import Decoder  # noqa: E402
 from sieve_player.dev.monitor import Monitor, summary, table  # noqa: E402
 from sieve_player.graph import Graph  # noqa: E402
+from sieve_player.ledger import Ledger  # noqa: E402
 from sieve_player.registry import discover  # noqa: E402
 from sieve_player.worker import Worker  # noqa: E402
 
@@ -57,6 +60,7 @@ def walk(g, length):
 
 
 def report(label, g, mon, s, length):
+    mon, led = mon
     snap = mon.snapshot()
     print(f"\n== {label}: {s:.2f} s wall for {length} rows, {s / length * 1000:.2f} ms/row, "
           f"{length / g.fps / s:.2f}x realtime measured")
@@ -85,6 +89,10 @@ def report(label, g, mon, s, length):
             print(f"   reader {key}: {rd.width}x{rd.height} luma={rd.luma} limited={rd._limited}, {rd.decodes} decodes, "
                   f"{rd.seeks} seeks, {rd.reads} reads, {rd.cache_hits} cached, step {rd.step_ms or 0:.3f} ms")
     print(f"   memo {g.memo.bytes >> 20} MB, {g.memo.hits} hits, {g.memo.misses} misses, {g.memo.evictions} evictions")
+    log = Log()
+    log.read(led.view())
+    print(f"   the catalogue, pinned {g.doc.pinned}:")
+    print("\n".join("      " + line(e) for e in log.ordered()) or "      nothing found")
 
 
 def build(tools, st, mode):
@@ -92,8 +100,10 @@ def build(tools, st, mode):
     doc.node("bake").mode = mode
     dec = Decoder(doc.video)
     g = Graph(doc, dec, tools, open_bake=lambda bk, c: st.open_bake(bk, c))
-    g.on_event = EVENTS.append
-    return g, dec, Monitor(g)
+    led = Ledger()
+    g.on_event = lambda ev: (EVENTS.append(ev), led.event(ev))
+    g.sync()        # the plan, into the ledger; EVENTS' sync is not summed
+    return g, dec, (Monitor(g), led)
 
 
 def main():

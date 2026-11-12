@@ -81,3 +81,47 @@ The player's own figures were lower than these throughout, 5.1× live against 7.
 loaded directly read 6× there where the third row here reads 14×. The offscreen run has no GUI taking its
 turn: no plot, no frame paint, no clip walk behind the window. What the player adds per row is the
 unprobed line's to say and was not measured.
+
+## Second half: what the catalogue says of the same walks
+
+2026-11-12, on v5-monitor, the same script with a `Ledger` attached to each graph and the catalogue's log
+printed after each phase (`sieve_player/catalogue.py`; the box under The catalogue and its simulations in
+`docs/spec/monitor.md`). The document's pinned set is empty, so every fold is one no pinned node asked for.
+The machine ran every phase slower than the first half's did, 3.2 to 4.5 ms a row live and cold across four
+runs with the ledger attached or not, the two overlapping; the plate's decode was 1.41 to 1.55 ms a row where
+the first half has 1.05 to 1.13. What the ledger costs is not readable off this and is What the trace costs'
+to measure.
+
+| walk | the log |
+|---|---|
+| fresh graph, live, cold, twice | nothing |
+| fresh graph, baked, cold, twice | unread, six entries, below |
+| one session, live, cold | nothing |
+| one session, switched to baked | nothing |
+
+The served walk's entries, the first of the two runs, the second in brackets:
+
+| subject | ms a row | share of the walk's nodes | what ran under its fold |
+|---|---|---|---|
+| crop | 1.91 (2.26) | 56% (55%) | 599 video decodes, 600 crop runs, 600 crop folds |
+| threshold | 0.09 (0.10) | 3% (2%) | 600 folds |
+| region | 0.09 (0.09) | 3% (2%) | 1 video decode, the file's first, and its one run |
+| rescale | 0.04 (0.05) | 1% | 600 folds, 600 runs |
+| bake | 0.04 (0.05) | 1% | 600 folds over rows its reader held |
+| blobs-to-mask | 0.01 | 0% | 1 fold, 1 run |
+
+crop's 1.91 is that run's own table summed, the plate's decode at 1.55, crop's run at 0.38 and its fold at
+0.06, less the file's first decode, about 50 ms, which fell under region's fold because region is folded
+first. It is the first half's upstream line, 1.05 + 0.26 + 0.04, on a slower day: the same three rows of the
+table and the same half of the walk. rescale is named, at the cost of its fold and a run that is nearly
+free, as the first half has it.
+
+The fork under the catalogue, whether a fold of a node the walk reaches anyway is the same problem: the live
+walk's folds under the same reading are crop's, rescale's, bake's and threshold's, 0.25 ms a row of 2.9 in
+its nodes, 9%, and the served walk's are 60%. `UNREAD` at 0.25 leaves the live walk silent and flags the
+served one, so it is one class by the fork's own rule. What that rule leaves in the log is threshold's and
+bake's folds as entries of the served walk, nodes the walk does reach, at 3% and 1%: they are listed because
+the threshold is the class's total and every subject under it is then an entry.
+
+The session that walked live first reads nothing, which is right for it: the memo held every upstream fold,
+the arrangement the first half names as the only one in which the bake's saving was seen.

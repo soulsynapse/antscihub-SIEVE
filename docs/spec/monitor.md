@@ -1,0 +1,508 @@
+# Monitor: the stream carries why, a ledger keeps it over time, a catalogue names what is wrong, and one window shows the three
+
+Written 2026-11-12 from the conversation that read `docs/findings/2026-11-12-served-bake-upstream-walk.md`,
+on v5-monitor, branched from v5 at cce7cb8e; no box is ticked. Read with that finding, which is the case
+this spec is argued from; with `sieve_player/graph.py`, whose `Event` and `Graph.probe` are the stream as it
+stands; with `sieve_player/worker.py`, whose ladder decides what each event served; with
+`sieve_player/trace.py`, the stream's file and the GUI thread's lateness sampler's reader; with
+`sieve_player/dev/monitor.py` and `monitor_views.py`, the monitor this one succeeds; and with
+`docs/findings/2026-10-31-window-fit-and-lru-thrash.md`, `2026-11-08-bake-window-fit.md` and
+`2026-11-09-crop-cold-walk.md`, where every class of trouble named below was first met by hand.
+
+## Why
+
+A served bake that spared its walk nothing read as a slightly slower walk, and nothing on screen said
+why. The finding took a script, a second table summed off the raw events, and a reading of `_Walk.turn` to
+say that crop ran six hundred times for no reader but its own density. Each of the three things that hid
+it is a property of the monitor as built, not of that fault: the stream does not carry why a run happened,
+so a run nobody needed is the same event as one the walk asked for; the monitor accumulates per node under
+one fixed reading, the latest walk a node ran in, and that reading is wrong the moment the plan stops
+reaching the node; and it shows a state, the figures now, where a slowdown is a change, something that was
+one figure and became another.
+
+So three layers, each usable without the one above it. The stream gains the facts a reader cannot
+reconstruct: the demand a run answered, the plan a walk ran under, the hits that emit nothing today, and
+which range a row belonged to. A ledger keeps the stream over time, in buckets of wall time and in one
+record per walk, and holds no opinion. A catalogue is a list of detectors, each a function from what the
+ledger holds to the problems it can show, each problem attached to a node or a store and carrying its cost
+in the walk's own unit, so problems rank against each other and against the walk. The window draws the
+ledger as it scrolls and lists the catalogue's problems beside it. A detector is written once and read in
+three places: the window, the terminal, and a dump replayed after the fact.
+
+The separation Kendrick asked for, surfacing apart from analysis, is the line between the ledger and the
+catalogue. The frame it borrows without naming is a query planner's: `plan()` is pure, so it states what a
+row should cost before anything runs, and a problem is most often a disagreement between that statement
+and what the stream then says ran. A monitor that only observes cannot see an unused resource; one that
+holds a prediction can. The per-resource half is Gregg's USE reading, utilization, saturation and errors
+asked of each store in turn.
+
+Four things bound what that buys, and each has its own place below. A catalogue holds only what was
+once found by hand, so a slowdown of no known class must still leave something to hand over. The stream is
+the worker's, and a slowdown that is felt is as often the GUI thread's; the player's figures on
+purb-settings sit well under the offscreen ones for a reason no finding has taken apart. A monitor
+repainting on the GUI thread is a load on the thing it reports, and has to show its own. And a history
+that begins when the window opens misses whatever prompted opening it, which makes what a continuously
+attached ledger costs a measurement to take before deciding when it is attached.
+
+A catalogue is only as good as its proof that each entry fires on its fault and on nothing else. Each
+class therefore has a simulation, a small script that builds the fault on purpose with the player's own
+Graph and Worker, and the check for a class is that its simulation surfaces it, alone, and that a healthy
+walk surfaces nothing. The served-bake fault is left in the tree on this branch for exactly that reason:
+it is the first entry's real-footage witness, and whether the walk stops folding behind a served node is a
+decision this spec does not make.
+
+## How to read this
+
+Each `##` below is a deliverable: an `Assumes:` line naming what it builds on, a sentence of why, facts
+read off the tree, then done-when assertions, each a box with a `Check:` that is a test in `tests/` or a
+simulation's exit. A box is ticked by a session once its check passes in the tree; a session never unticks
+or rewrites an assertion, and before building toward an unticked box checks whether the tree already meets
+it. Where a result is worth Kendrick's eye before the next deliverable leans on it, a `Worth a look:` line
+says what to look at; it is not a gate. Nothing here says how. Any deliverable whose `Assumes:` are all
+done is available; among those the earlier one in the file first. The branch is done when every box is
+ticked. `Open:` lines are choices of form, Kendrick's to settle by editing the line; a session builds on
+the recommendation they carry only where the line says it may.
+
+Much of what would help is not known until a part is driven, and this spec does not guess it. A `Fork:`
+line names something a session or Kendrick can observe once the part before it exists, and what holds on
+each side. A session that reaches a fork makes the observation, writes it where the line says, a finding
+or the check's own output, and takes the side it gives; it does not take a side unobserved, and a fork
+whose observation is Kendrick's use waits for him. What driving a part shows to be missing is added as a
+box under its deliverable, with the observation that prompted it; the assertions already there are not
+rewritten to fit.
+
+Words. The *stream* is what `Graph.on_event` receives. A *demand* is what asked for a computation at the
+top: the walk's row, a density's fold, the display's scrub, a bake's row. A *lane* is which of the worker's
+ranges a row belonged to, the window's or the clip's, or the scrub or the bake beside them. A *walk* is one
+pass of a lane over its range, from a start or restart to its last row. The *ledger* is the stream's
+consumer that keeps it over time. A *bucket* is one fixed slice of wall time in the ledger. A *problem* is
+one thing a detector found: its class, its *subject*, the node or store it is about, a line saying what,
+and its cost. The *catalogue* is the detectors. The *log* is the problems the catalogue has surfaced in
+this session, one entry per class and subject. A *simulation* is a script that builds one fault on
+purpose. A node is *watched* when the plot shows it: the selection, or pinned. The *old monitor* is
+`Monitor`, `MonitorWindow` and `monitor_views.py` as they stand at the branch point.
+
+## The stream says why
+
+Assumes: nothing.
+
+Three faults in the finding could not be told from the events, and each for a missing fact rather than a
+missing analysis.
+
+Facts to weigh. `Event` is frozen with every field required, and `trace.FIELDS` is read off it, so a dump
+gains whatever the record gains and `read_dump` refuses a file with other fields. `Graph.probe` emits
+nothing on a memo hit, by its docstring's own statement, so hits exist only as `Memo.hits`, one count for
+every node. `_compute` is entered from four places, `compute`, `walk_row`, `density` and a `Frames` read,
+and none says which to the probe. `serving()` sets "walk" for the window's turns and the clip's alike, and
+the clip walk is built with `probes=False`, so it emits no progress event: the old monitor's rows, rate and
+unprobed time are the window's, and a clip walk's runs land in whichever window row is open. The `sync`
+event carries every node's key and nothing else of the plan. A served reader's decoder has `on_evict`
+unset, so its cache discards silently; the plate decoder's and the memo's discards are events already.
+
+Open: whether the new facts are fields on `Event` or one payload field per kind. Recommended, and what a
+session may build on: the reader and the demand as fields, since every run and read carries them, and one
+`facts` field for what only a boundary carries, the plan on a sync and the counters on a progress. The
+existing `keys` and `length` stay as they are.
+
+- [ ] Every run, read and fold event names the demand it answered, at any depth: the walk, a fold and
+  whose, the display, a bake. A computation a fold opened is told from one the walk opened even when the
+  node and row are the same.
+  Check: a graph test walks a row and folds a node off the walked path, and reads the walked node's run
+  under the walk's demand and the off-path node's run, and the read it opened, under that fold's.
+- [ ] Every run and read a `Frames` read opened names the reading node, so the reads across one wire can
+  be counted.
+  Check: the same test reads, for a node with two readers, a run naming the reader that reached it first.
+- [ ] A sync event carries the plan it began: for each node its kind, whether it is fed, static, served,
+  stepped or run whole and by which node, and what each input reads; beside them the walked node, the
+  shown and overlaid nodes and the pinned set.
+  Check: a graph test serves a node, syncs, and reads from the event alone that the node is served and
+  that the node upstream of it is fed and read by nothing the walk reaches.
+- [ ] Memo hits are counted per node and leave on the next progress event, with each store's bytes held,
+  limit, hits, misses and discards as that event found them; no event is emitted per hit.
+  Check: a graph test walks twice, and reads zero hits for a node on the first walk's events and one a row
+  on the second's, and the memo's held bytes on a progress event equal to `Memo.bytes` then.
+- [ ] The clip walk's rows are their own lane and it emits progress as the window does; no event of a
+  clip row reads as the window's.
+  Check: a worker test runs a window then a clip walk and partitions every event by lane, with each lane's
+  progress rows counting from one to its range.
+- [ ] A served reader's cache reports what it discards into the stream under the served node's key.
+  Check: a reading-back test reads a baked clip through a reader whose cache holds two rows and finds a
+  discard event for the first.
+- [ ] The old monitor and `Stats` read the same figures off a window walk as before the lane and the
+  clip's progress existed.
+  Check: `tests/test_monitor.py` and the Stats tests pass unchanged but for the fields an `Event` built by
+  hand must now carry.
+
+Worth a look: what the probe costs with the new facts, by `bench.py`'s cold fill beside the figure it
+gives on v5; the dump finding of 2026-10-31 is where a later figure sits beside the earlier.
+
+## The ledger
+
+Assumes: The stream says why.
+
+The old monitor's figures are right for the question it was built on and cannot be asked another, because
+what it keeps is already the answer. The ledger keeps what happened, cut two ways, and every reading is a
+function over it.
+
+Facts to weigh. The old monitor resets on a progress row below the last and holds each node's latest walk
+in `_last`, which is the reading that kept video, crop and rescale in the cold line after they stopped
+running. It buffers the runs between a restart and the next progress event so they count toward the new
+walk's first row; the same boundary exists for any consumer. Its unprobed figure is the wall between two
+progress events less what was probed inside them. `Dump` appends on the emitting thread and does
+everything else on its own, after the GIL-handoff cost its docstring records; a consumer the GUI reads
+from has the same constraint from the other side, a painter must not hold a lock the worker's emit waits
+on. `window.Lateness` measures how late the GUI thread's timer fires and exists only while a dump is
+attached.
+
+- [ ] The ledger is fed events and samples and nothing else: it imports no Qt, holds no reference to a
+  graph, and replaying a dump's events and samples into a fresh one gives the same buckets and walks as
+  the live one held.
+  Check: a ledger test records a two-walk run to a dump with a ledger attached, replays the file into a
+  second ledger, and compares them.
+- [ ] Wall time is kept in buckets of one fixed width over a bounded history: per bucket, each node's
+  exclusive time, the rows each lane finished, the time between rows that no probe covers, each store's
+  bytes held against its limit, the recomputations and seeks, and the worst lateness sampled. A span
+  longer than a bucket is spread over the buckets it covers.
+  Check: a ledger test feeds a hand-built span of three buckets' length and reads a third of it in each;
+  and feeds more buckets than the history and reads the bound.
+- [ ] Each walk is one record: its lane, range, start and end, the plan it ran under, and per node what
+  ran, by kind and by demand, with the time and bytes; a restart closes one record and opens the next, and
+  the runs between a restart and its first row are the new walk's.
+  Check: a ledger test walks, changes a param, walks again, and reads two records whose second holds
+  only the changed node's runs and all of them.
+- [ ] A walk's record says how cold it was: per node, the rows that ran, the rows a store held and the
+  rows a served file answered, so a rate is never read without what it was a rate of.
+  Check: a ledger test walks a window cold, walks it again, then walks one overlapping it by half, and
+  reads all ran, all held, and half of each.
+- [ ] A computation or decode of a key and row a store had discarded is counted as a recomputation
+  against that store, in the walk and the bucket it happened in.
+  Check: a ledger test walks a window twice over a memo that holds half of it and reads the second walk's
+  recomputations as the rows the first discarded, and none on a memo that holds it.
+- [ ] A walk's record keeps each node's cost in order along the range, coarsely, so a cost that grows
+  with the rows is told from one that is flat.
+  Check: a ledger test steps a tool whose cost doubles over the range and reads a last part several times
+  the first, and a flat tool's parts equal within noise.
+- [ ] What a reader on another thread is handed is a copy it may hold while the stream continues, and
+  taking it costs the emitting thread no wait longer than a bucket's bookkeeping.
+  Check: a ledger test feeds from one thread while another takes views in a loop, with no error and the
+  final view equal to a view taken after the feeder stopped.
+
+## The catalogue and its simulations
+
+Assumes: The ledger.
+
+A class of trouble enters the catalogue with a detector and a simulation together, and the simulation is
+the detector's proof in both directions.
+
+Facts to weigh. The classes below have each been met and measured by hand: work nothing reads, in the
+finding of 2026-11-12; a store discarding what the next walk recomputes, in 2026-10-31 and 2026-11-08; a
+chain node run whole at every emit, its cost growing with the range, in 2026-11-08's second half; the
+walk's cursor seeking, which the decoder's docstring is written to avoid; and the GUI thread's turn, the
+unprobed residual no finding has yet taken apart, which has its own deliverable below. A static node charged per row, 2026-11-09's fault, is not
+among them: since static is inherited in the plan, the fault is a tool that should declare STATIC and does
+not, which the stream cannot tell from a tool whose output differs by row without comparing outputs.
+`time.thread_time` ticks at the scheduler quantum on Windows, so a wait is a sum over many events or it is
+nothing. The finding's own table shows a decode's wall well above the worker's CPU for a reason that is no
+fault, the decoder's own threads.
+
+Fork: whether a density folded for a node nothing shows is the same problem when the walk reaches the
+node anyway. The class is built as work no watched node and no walked node asked for, with one threshold,
+a named constant beside the detector. Observed on the purb document live and served, by the last box
+below: where one threshold leaves the live walk silent and the served one flagged, it is one class; where
+none does, the fold of a reached node becomes a second class with its own subject and threshold, so the
+first can be set for the served case alone.
+
+Fork: whether a class is quiet on healthy documents, which no simulation shows. Observed in Kendrick's
+ordinary use, under the Worth a look below: a class that fires on a document with nothing wrong has its
+threshold moved past what was seen, the sighting recorded beside the constant's finding; where no
+threshold separates the healthy sighting from the simulation's, the class leaves the log and its figures
+stay in the saved history.
+
+Open: where simulations live and whether they are tests. Recommended, and what a session may build on:
+one module under `sieve_player/dev/`, each simulation runnable by name from the command line, and one test
+that runs them all.
+
+- [ ] A problem is a value: its class, its subject, one line, its cost per row of the walk and as a share
+  of it where it has one, the evidence the line was drawn from, and where in the code the class has come
+  from before. A detector is a function from a ledger's view to problems and reads nothing else.
+  Check: a catalogue test builds a view by hand for each class and reads the problem off it.
+- [ ] Each class has a simulation that builds the fault with the player's own Graph and Worker on a clip
+  it writes for itself, needing no file of Kendrick's and no store of his. Run alone, it surfaces its
+  class and no other.
+  Check: one catalogue test per simulation, each asserting the set of classes surfaced is the one.
+- [ ] A healthy simulation, the same graph as the faults' with no fault, surfaces nothing; neither does a
+  rewalk the memo holds, a walk beginning mid-clip, a scrub during a walk, or a bake behind one.
+  Check: a catalogue test runs each and reads an empty log.
+- [ ] The classes present: work nothing reads; a store recomputing what it discarded, the memo, the plate
+  decoder's cache and a served reader's each as their own subject; a node whose cost grows along the
+  range; and the walk's cursor seeking. The worker waiting on the GUI thread is The GUI thread's turn's
+  to add.
+  Check: the simulations' test names each.
+- [ ] The log holds one entry per class and subject: a problem seen again updates its entry's cost and
+  count and does not add one, an entry whose problem is no longer found says so and stays, and the
+  entries order by cost. A walk with five faults at once is five entries.
+  Check: a catalogue test feeds the same fault over ten walks and reads one entry counting ten, then a
+  clean walk and reads the entry cleared and present.
+- [ ] An entry gives one block of text sufficient to begin on the fault without the session it was seen
+  in: the class and the line, the figures and the evidence, the walk's lane, range and per-node table, the
+  plan's lines for the subject and what it reads and is read by, the document itself as it would be
+  saved, the video's path, the decoder's facts and the stores' limits, the commit, the dump's path when
+  one is being written, the simulation that builds the same class, and the place in the code the class
+  has come from.
+  Check: a catalogue test takes the text for the served-bake simulation's entry, finds in it each of
+  those by its label and the nodes the fault names, and loads the document back out of it.
+- [ ] A walk that costs more a row than the last walk of the same lane under the same plan, past a
+  threshold, is a problem of its own class whatever the cause, its evidence the nodes whose cost moved
+  and by how much; a walk under a changed plan is compared with nothing.
+  Check: a simulation runs one plan twice with a tool made slower between, and surfaces the class naming
+  the tool; a catalogue test changes a param between two walks and reads nothing.
+- [ ] With no entry at all, the ledger's recent history, the plan and the document can be written to
+  one file that replays into a ledger, so a slowdown of no known class is handed over as it happened.
+  Check: a ledger test saves, replays the file, and reads the same buckets and walks back.
+- [ ] `video-tests/purb-settings.json`, its bake served on a fresh graph, surfaces work nothing reads,
+  naming crop and rescale, at a cost that agrees with the finding's table; the same document live
+  surfaces nothing.
+  Check: the finding's experiment, extended to attach a ledger and print the log; it is run by hand, the
+  clip being Kendrick's, and its output is recorded as a second half of the finding.
+
+Worth a look: the thresholds, each a named constant beside its detector, against the purb and GoPro
+documents in ordinary use for a session; a class that fires on a healthy document is a wrong threshold or
+a wrong class, and which is his to say.
+
+## What the trace costs
+
+Assumes: The ledger.
+
+Whether the ledger runs from the moment a video opens or only under an open window is decided by what it
+costs the walk, and that is not known.
+
+Facts to weigh. With `on_event` unset the probe yields and returns, so an unwatched graph pays nothing
+today. `bench.py` times a cold fill bare and with a dump attached; the dump's first writer cost the walk
+through GIL handoffs rather than through its own work, the finding of 2026-10-31 and `Dump`'s docstring
+say, so a consumer's cost is not its CPU time. The new facts add work at every probe and a payload at
+every progress event whether or not anything consumes them.
+
+- [ ] The walk's rate is measured on Kendrick's footage with nothing attached, with the new facts
+  emitted to no consumer, with the ledger attached, and with the ledger and the window open at each of
+  its sizes, and stated as a finding beside the dump's figures.
+  Check: an experiment under `docs/findings/experiments/` and its finding.
+
+Fork: whether the ledger is attached for the life of a video or of the window. Until the finding is in,
+a session builds the window-lifetime attachment and nothing that forecloses the other. Observed in the
+finding: where the walk's rate with the ledger attached sits inside the run-to-run spread of the rate
+with nothing attached, the ledger is attached when a video opens and the window finds its history
+waiting; where it sits outside, the attachment stays the window's, and the cost is stated in the window
+itself beside the monitor's own band. On either side the figure on the player attaches nothing.
+
+## The GUI thread's turn
+
+Assumes: The ledger.
+
+A slowdown that is felt is a late frame or a dragging handle before it is a slow walk, and those are the
+GUI thread's, which the stream does not see.
+
+Facts to weigh. `window.Lateness` says how long the GUI thread went without turning its loop and nothing
+of what held it, and exists only under a dump. `qt_trace.watchdog` dumps every thread's stack, at a hang
+of seconds. The worker's signals land on the GUI thread as queued slots: `rowReady` per scrub,
+`walked` and `clipWalked` per row, `seriesReady`, `densityReady` and `clipReady` per emit, each ending in
+a repaint of the frame, the plot or the strip. The old monitor's unprobed line names "the GUI's turn"
+among four things it cannot separate. The worker's own spans carry wall and CPU, and the two part for two
+reasons the stream does not tell apart: waiting for the GIL, and a decoder's threads working.
+
+Fork: how fine the attribution is. It begins at one span per slot a worker signal lands in, named by the
+signal, and one per paint of each of the player's top-level parts, the frame, the plot, the strip, the
+canvas, the pane and the monitor. Observed on the purb document in the player, under the Worth a look
+below: where those spans cover the time the lateness says the GUI thread was held, less than the largest
+single span left over, the attribution stops there; where more is left uncovered than that, the part
+holding the most is split one level finer, or the uncovered time is given its own span by what the loop
+was doing, and the observation is made again.
+
+- [ ] The GUI thread's time is in the stream as spans on its own thread, each naming what it was: the
+  slot a worker signal landed in, or the part that painted; the lateness is sampled into the ledger
+  whenever one is attached, with or without a dump.
+  Check: a window test, offscreen, walks a window and reads a span for each signal that fired and a paint
+  span for the plot, on the GUI thread's name.
+- [ ] The ledger keeps the GUI thread's spans in the same buckets as the worker's and apart from them,
+  and the time view draws them as their own stack on the shared axis.
+  Check: a monitor test feeds both threads' spans and reads two stacks.
+- [ ] How long the worker's spans spent off their own CPU is summed per bucket and per walk, read
+  kinds apart from tool kinds, since a decode's wait is its own threads.
+  Check: a ledger test feeds spans with wall above CPU and reads the sum, and reads none from decodes.
+- [ ] The worker waiting on a blocked GUI thread is a class in the catalogue: a walk in which the GUI
+  thread's spans and the worker's tool-kind waits coincide past a threshold, its subject the GUI span
+  that took the most, its simulation a slot made slow on purpose.
+  Check: the simulation's test, and the healthy simulation still surfacing nothing.
+
+Worth a look: the GUI stack on the purb document in the player against the offscreen figures of the
+finding of 2026-11-12; the gap between the two is what this deliverable is for, and whether it closes is
+a second half of that finding.
+
+## The figure on the player
+
+Assumes: nothing.
+
+The one figure a user wants without opening anything is how fast the walk is going and how long the clip
+will take, and the player is told both already.
+
+Facts to weigh. The worker's `walked` and `clipWalked` signals reach the window per row with rows done and
+rows in the range; a rate is two of them and a clock, with no consumer on the probe. `Header` is the
+player's top bar and holds the walk's state. The old monitor's multiple is the cold projection, a
+different number.
+
+- [ ] The player shows, on one control, the measured rate of the lane now walking as a multiple of
+  realtime and the clip's length beside the time it takes or has left at that rate; idle, the last walk's.
+  It reads the worker's own signals and attaches nothing to the probe.
+  Check: a window test walks a window offscreen with `on_event` unset throughout and reads the control's
+  text against the rows and the clock.
+- [ ] Beside the rate the control says what the walk was: cold, held in part and by how much, or served
+  from a bake, read off the counters the memo, the decoder and a served reader already keep, across the
+  walk. A rate from a walk that was not cold is not shown as the clip's time.
+  Check: the same test walks a window cold, again, and one overlapping it by half, and reads the three
+  labels; and reads no clip time beside the second and third.
+- [ ] Pressing it opens the monitor, the same window Dev opens.
+  Check: the same test presses it and reads the window shown.
+- [ ] The figure is the one the monitor's header leads with, by one definition both read.
+  Check: a monitor test reads the two equal over a walk.
+
+## The window
+
+Assumes: The catalogue and its simulations.
+
+If a slowdown is felt with the window open, where it came from is on screen as it scrolls past, how it
+grew is readable back along the same axis, and what it is is one line with a button.
+
+Facts to weigh. The old window is a drop-down of views over one scroll area, polled on a timer, each view
+a painted widget sized for a snapshot; none has a time axis. `monitor_views.py` states the colour rule
+this window keeps: hue is the product type's, the canvas's connector hue, never a node's, and unprobed is
+the neutral gray; the plot's spec decided the same for series on 2026-11-10 and names its fallback. A
+window opened from Dev is kept on the main window and outlives the menu action. The player's selection is
+`Player.selection` and the pinned set is the document's; the two together are what is watched.
+
+The figure at the top is the player's, the measured rate of the lane now walking, by The figure on the
+player. The cold projection is a different number, and the finding has the two at twice one another on
+one walk; it is not drawn here until The old monitor goes has rebuilt it on the plan's reach.
+
+The old monitor goes, Kendrick's word of 2026-11-12. Until the last deliverable it stays reachable under
+its own Dev entry, since the window is not yet there to replace it.
+
+Fork: which tracks earn their place. The tracks begin as the first box lists them. Observed by watching
+each simulation shown, under the last-but-one box, and in Kendrick's use: a track on which some class was
+read arriving stays in the default list; one on which none was leaves the default and stays addable.
+
+- [ ] The window's default is time across: where the worker's time went, stacked by node in walk order in
+  each node's type hue with unprobed in gray and idle empty, scrolling with the wall clock; under it on
+  the same axis the cost of a row, each store's bytes held against its limit with a mark at each
+  recomputation, and the GUI thread's lateness; the GUI thread's own stack joins them with The GUI
+  thread's turn.
+  Check: a monitor test feeds a ledger a walk whose second half costs twice its first and reads, off the
+  painted image, a taller stack in the later columns and the row cost's line higher there.
+- [ ] A node's band is told by pointing and by a name at the right edge where the band is tall enough to
+  take one; no node has a colour of its own.
+  Check: the same test hovers a column and reads the node and its figure in the tip.
+- [ ] The axis holds more than the window is wide: it can be drawn out to the ledger's whole history and
+  back in, and scrolled back along while the stream continues.
+  Check: a monitor test feeds more history than the widget's width, draws out, and reads the first
+  bucket's column.
+- [ ] The log is beside the time view, each entry its line, its cost, how long since it was first and
+  last seen, whether it still holds, and a button that puts the entry's text on the clipboard. A problem's
+  first sighting is marked on the time axis at the moment it was seen.
+  Check: a monitor test surfaces one problem, presses its button and reads the clipboard; and reads the
+  mark's column.
+- [ ] A problem's first sighting is one line on stderr in the player's log form, and nothing is printed
+  for a sighting after the first.
+  Check: a monitor test surfaces a problem over three walks and reads one line.
+- [ ] The window goes full screen and back by a key and by a control, and holds together small: as it
+  narrows the log moves under the time view, and as it shortens the tracks leave in a stated order, the
+  lateness first and the stack last, until the header, the stack and the log's newest entries remain.
+  Check: a monitor test sizes the window to a full-screen size and to the stated smallest and reads which
+  parts are visible at each.
+- [ ] The monitor's own work, its ledger's bookkeeping on the emitting thread and its painting and
+  detecting on the GUI thread, is in the stream as spans under its own name and is drawn as a band like
+  any other, as the dump's writer already is.
+  Check: a monitor test runs the window over a walk and reads the monitor's band nonzero in the image
+  and its spans in the ledger.
+- [ ] A control writes the recent history to a file, the catalogue's hand-over for a slowdown with no
+  entry, and puts the file's path on the clipboard.
+  Check: a monitor test presses it and replays the file.
+- [ ] The parts are a list: a track or a panel is added by adding one to it, and the window lays out what
+  the list holds.
+  Check: a monitor test adds a track that paints one colour and reads it in the image.
+- [ ] A simulation run with its show flag opens this window on the simulation's graph and repeats the
+  fault, so each class can be watched arriving.
+  Check: a monitor test starts a simulation shown, offscreen, and reads its class in the window's log.
+- [ ] The window watches whatever graph the player holds, through a video closing and another opening,
+  and with no video says so.
+  Check: a monitor test swaps the player's graph and reads the new walk's rows.
+
+Worth a look: the window full screen on the second monitor through a session on the purb document and one
+on the GoPro clip, bake live and served; and small beside the player.
+
+## The old monitor goes
+
+Assumes: The window.
+
+Two accumulators over one stream are two answers to keep agreeing.
+
+Facts to weigh. `summary` and `table` are imported by every experiment under `docs/findings/experiments/`
+from 2026-11-08 on, each pinned in its finding to the commit it ran at. `tests/test_monitor.py` asserts the
+old snapshot's arithmetic.
+
+Fork: what becomes of an experiment that imports it. An experiment a box of this spec reruns, the
+finding of 2026-11-12's, reads the ledger's table from then on; one no box reruns is left as the script
+of the commit its finding names, and says so in its docstring's first line.
+
+Kendrick's reading of 2026-11-12 is that a jump of the window to rows nothing holds is a cold walk taken
+for free, and the best sample of how the clip will go. Four things stand between a cold window and the
+clip, each seen in a finding or in the code: the window walk folds densities and the clip walk does not;
+a walk's first rows pay a seek, a reader's opening and each static node's one run; a whole-run chain node
+costs by the range, so six hundred rows say little of thirty-eight thousand; and what a row costs follows
+what is in it, the blobs and tracks of that stretch of the clip.
+
+Fork: whether a cold window predicts the clip. Observed on the purb document, as a finding: cold windows
+taken at several places along the clip, each projected to the clip with the folds and the first rows left
+out, beside a clip walk's measured time. Where the projections agree with the clip walk and with one
+another inside the walks' own spread, the projection is one figure from the latest cold window; where
+they agree with the clip walk only together, it is stated as the range the cold windows so far span, with
+how many there were; where a whole-run node's growth is what separates them, the projection carries that
+node's cost by its growth and not by its mean.
+
+Fork: whether the cold projection is worth keeping at all. Observed once it sums only what the plan
+reaches: where it agrees with the measured rate of a cold walk on the simulations and on the purb
+document, it is drawn beside the measured rate and a disagreement past a threshold is a class in the
+catalogue; where it does not agree on a healthy walk, it is not drawn, and the finding says by how much
+it missed.
+
+- [ ] The per-node table, a walk's shares and the cold projection, is a reading of the ledger, and the
+  cold projection sums only the nodes the plan reaches.
+  Check: a test switches a node to served after a live walk and reads a projection without the nodes
+  behind it.
+- [ ] Each node's cold cost is taken from the rows of it that ran, in whichever walk they ran, and the
+  projection says which walk each node's figure is from; a node whose figure is from before the last
+  change upstream of it is marked so.
+  Check: a test walks cold, changes a param mid-chain, walks again, and reads the changed node's and its
+  readers' figures from the second walk and the rest from the first, unmarked.
+- [ ] A control empties the memo, the decoder's cache and every reader's and walks the window again, for
+  a cold figure on demand; it says before it does that what is held will be recomputed.
+  Check: a monitor test presses it and reads a walk whose every row ran.
+- [ ] `Monitor`, `MonitorWindow` and `monitor_views.py` are gone and nothing imports them.
+  Check: the seams test.
+
+## Non-goals
+
+The fault itself. Whether the window walk folds a density for a node behind a served bake, or for any node
+nothing shows, is a decision about the walk and is made elsewhere; this branch leaves the walk as it is and
+is judged by whether it says so.
+
+What a bake would buy at each wire. The saving is the cost of the nodes only that wire reaches, which
+the ledger and the plan hold; the cost is a served read, and the two measured so far, in the findings of
+2026-11-08 and 2026-11-12, are not proportional to their pixels, so there is no model to subtract. The
+monitor says when a bake is not paying; where one would is a later spec's, after a finding on the read.
+
+An overlay on the canvas's nodes and wires. It reads the ledger and the log and wants this branch's
+window looked at first.
+
+Problems that are not costs: a stale bake, an unfed node, a tool that raised. A node's standing says
+those already.
+
+Detection of a tool that is static in fact and undeclared. It needs outputs compared, which the stream
+does not carry and should not.

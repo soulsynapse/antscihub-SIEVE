@@ -108,9 +108,11 @@ class _Walk:
     stepped: dict = field(default_factory=dict)   # node -> _Stepped
 
     def begin(self, start, length):
-        """Starts over `length` rows from `start`, dropping every row held."""
+        """Starts over `length` rows from `start`, dropping every row held, and tells the probe a walk began."""
         self.start, self.length = start, length
         self.drop()
+        if length:
+            self.graph.began(start, length)
 
     def drop(self):
         self.i = self.bytes = 0
@@ -126,6 +128,7 @@ class _Walk:
         if self.i and ((self.stack is not None) != stacked or (stacked and not _fits(self.stack, out))
                        or planes.keys() != self.dens.keys()):
             self.drop()      # the nodes or the shape changed under the walk; start over
+            g.began(self.start, self.length)
             return
         if not self.i:
             if stacked and self.length * nbytes(out) > STACK_BYTES:

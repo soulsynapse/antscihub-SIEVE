@@ -209,7 +209,7 @@ class Event:
     node: str | None    # the node that ran, or read; None on a boundary
     row: int | None
     key: str | None     # the node's raw key, what the memo holds under
-    kind: str           # "run" | "step" | "fold" | "error" | "cancel" | "cache" | "decode" | "seek" | "read" | "sync" | "evict" | "uncache" | "progress" | "dump"
+    kind: str           # "run" | "step" | "fold" | "error" | "cancel" | "cache" | "decode" | "seek" | "read" | "sync" | "evict" | "uncache" | "begin" | "progress" | "dump"
     bytes: int          # the result's; what an eviction freed
     ms: float           # wall, exclusive of the runs this one opened
     t: float            # start, on the probe's clock (perf_counter); orders events across threads
@@ -218,7 +218,7 @@ class Event:
                         # Windows thread_time ticks at the scheduler quantum (~16 ms), so one event's is 0 or a tick and
                         # only a sum over many events is a figure
     serves: str | None  # "scrub" | "walk" | "bake": what the worker was doing; None off the worker (bench, tests)
-    length: int | None  # progress only: rows in the lane's range, `row` being the rows done
+    length: int | None  # progress and begin: rows in the lane's range, `row` being the rows done, or on a begin the range's first
     keys: dict | None   # sync only: every node's key under the new plan, band included; diff two to see what a drag changed
     reader: str | None  # the node whose read opened this run or read; None for one no node's read opened
     demand: str | None  # "walk" | "fold" | "display" | "bake": what asked at the top for everything under it; see Graph.demand()
@@ -508,6 +508,12 @@ class Graph:
             "caches": {k: {"bytes": d.cache_bytes, "limit": getattr(d, "cache_limit", None), "hits": d.cache_hits,
                            "misses": d.reads - d.cache_hits, "discards": getattr(d, "evictions", 0)} for k, d in caches.items()}})
 
+    def began(self, start, length):
+        """A walk of this thread's lane began, over `length` rows from `start`: a "begin" event with
+        the range's first row as its row. Whoever drives the walk says so as it starts or starts over,
+        so a reader tells the walk's first row from what the walk before ran after its last."""
+        self._emit("begin", None, start, None, 0, length=length)
+
     def _hit(self, nid, fold):
         self._hits.setdefault(getattr(self._probing, "lane", None), {}).setdefault(nid, [0, 0])[fold] += 1
 
@@ -665,7 +671,7 @@ class Stats:
     def event(self, ev):
         if self._prev is not None:
             self._prev(ev)
-        if ev.kind in ("sync", "evict", "uncache", "error", "fold") or ev.kind == "progress" and ev.lane == "clip":
+        if ev.kind in ("sync", "evict", "uncache", "begin", "error", "fold") or ev.kind == "progress" and ev.lane == "clip":
             return                          # the means are the tool's; a fold is not. The rate is the window's
         with self._lock:
             if ev.kind == "progress":

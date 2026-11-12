@@ -21,6 +21,8 @@ MAY_IMPORT = {
     "writers": {"decoder"},                       # a baked clip reads back through the Decoder
     "store": {"document", "writers"},             # where files land knows what a Bake is and which kinds write; never the reverse
     "worker": {"decoder", "density", "document", "graph", "store"},
+    "trace": {"graph"},
+    "ledger": {"trace"},                          # the span kinds and a dump's reader; no graph is held and no Qt reached
 }
 
 

@@ -566,7 +566,8 @@ def test_the_clip_walk_runs_behind_the_window_and_a_frame_change_drops_it():
 def test_the_window_and_the_clip_are_one_walk_over_two_ranges():
     """Under the probe the clip walk runs each node as the window walk does: a frame node once per
     row the memo does not hold, the chain at each cadence row and at the range's end; the densities
-    are the window's alone, and each range's events and progress are in its own lane."""
+    are the window's alone, each range's events and progress are in its own lane, and each range's
+    beginning is an event."""
     from PySide6.QtWidgets import QApplication
     from sieve_player.worker import Worker
     QApplication.instance() or QApplication([])
@@ -598,6 +599,13 @@ def test_the_window_and_the_clip_are_one_walk_over_two_ranges():
         assert [(ev.row, ev.length) for ev in events if ev.kind == "progress" and ev.lane == lane] == [(i, n) for i in range(1, n + 1)]
     assert {ev.lane for ev in events if ev.kind == "fold" or ev.node == "gray" and ev.row < 6} == {"window"}
     assert {ev.lane for ev in events if ev.node == "gray" and ev.row >= 6} == {"clip"}
+    assert [(ev.lane, ev.row, ev.length) for ev in events if ev.kind == "begin"] == [("window", 0, 6), ("clip", 0, 10)]
+    from sieve_player.ledger import Ledger
+    led = Ledger()
+    for ev in events:
+        led.event(ev)
+    window, clip = led.view().walks       # head's run after a range's last row is that range's, by the begin between them
+    assert [sum(r[0] for r in walk.nodes["head"].runs.values()) for walk in (window, clip)] == [2, 4]
 
 
 def test_a_tool_raising_indexerror_fails_the_walk_and_only_the_stream_end_closes_it():

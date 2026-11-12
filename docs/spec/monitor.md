@@ -132,6 +132,12 @@ existing `keys` and `length` stay as they are.
   clip's progress existed.
   Check: `tests/test_monitor.py` and the Stats tests pass unchanged but for the fields an `Event` built by
   hand must now carry.
+- [x] A walk's beginning is in the stream: a begin event in the walk's lane, carrying the range's first
+  row and its length, at each start and each start over. Added 2026-11-12 on driving The ledger: the
+  chain's run at a range's end is emitted after the range's last progress, so with no mark it read as
+  the next walk's first row, and a progress event says how long a range is and not where it starts.
+  Check: the worker test of the two lanes reads one begin for each range, and a ledger fed its events
+  gives the window's last chain run to the window's record.
 
 Worth a look: what the probe costs with the new facts, by `bench.py`'s cold fill beside the figure it
 gives on v5; `docs/findings/2026-11-12-probe-cost-with-the-stream-facts.md` holds the figures, and is where
@@ -155,23 +161,23 @@ from has the same constraint from the other side, a painter must not hold a lock
 on. `window.Lateness` measures how late the GUI thread's timer fires and exists only while a dump is
 attached.
 
-- [ ] The ledger is fed events and samples and nothing else: it imports no Qt, holds no reference to a
+- [x] The ledger is fed events and samples and nothing else: it imports no Qt, holds no reference to a
   graph, and replaying a dump's events and samples into a fresh one gives the same buckets and walks as
   the live one held.
   Check: a ledger test records a two-walk run to a dump with a ledger attached, replays the file into a
   second ledger, and compares them.
-- [ ] Wall time is kept in buckets of one fixed width over a bounded history: per bucket, each node's
+- [x] Wall time is kept in buckets of one fixed width over a bounded history: per bucket, each node's
   exclusive time, the rows each lane finished, the time between rows that no probe covers, each store's
   bytes held against its limit, the recomputations and seeks, and the worst lateness sampled. A span
   longer than a bucket is spread over the buckets it covers.
   Check: a ledger test feeds a hand-built span of three buckets' length and reads a third of it in each;
   and feeds more buckets than the history and reads the bound.
-- [ ] Each walk is one record: its lane, range, start and end, the plan it ran under, and per node what
+- [x] Each walk is one record: its lane, range, start and end, the plan it ran under, and per node what
   ran, by kind and by demand, with the time and bytes; a restart closes one record and opens the next, and
   the runs between a restart and its first row are the new walk's.
   Check: a ledger test walks, changes a param, walks again, and reads two records whose second holds
   only the changed node's runs and all of them.
-- [ ] A walk's record says how cold it was: per node, the rows that ran, the rows a store held and the
+- [x] A walk's record says how cold it was: per node, the rows that ran, the rows a store held and the
   rows a served file answered, so a rate is never read without what it was a rate of.
   Check: a ledger test walks a window cold, walks it again, then walks one overlapping it by half, and
   reads all ran, all held, and half of each.
@@ -179,11 +185,15 @@ attached.
   against that store, in the walk and the bucket it happened in.
   Check: a ledger test walks a window twice over a memo that holds half of it and reads the second walk's
   recomputations as the rows the first discarded, and none on a memo that holds it.
-- [ ] A walk's record keeps each node's cost in order along the range, coarsely, so a cost that grows
+  Not ticked, 2026-11-12: the assertion is met and `tests/test_ledger.py` reads it, but the check's count
+  is not what an LRU gives. A memo holding half a window discards, as the second walk fills it, the half
+  the first walk left held, before the walk reaches them; the second walk recomputes every row, twice
+  what the first discarded. The test asserts that. Which the check should read is Kendrick's.
+- [x] A walk's record keeps each node's cost in order along the range, coarsely, so a cost that grows
   with the rows is told from one that is flat.
   Check: a ledger test steps a tool whose cost doubles over the range and reads a last part several times
   the first, and a flat tool's parts equal within noise.
-- [ ] What a reader on another thread is handed is a copy it may hold while the stream continues, and
+- [x] What a reader on another thread is handed is a copy it may hold while the stream continues, and
   taking it costs the emitting thread no wait longer than a bucket's bookkeeping.
   Check: a ledger test feeds from one thread while another takes views in a loop, with no error and the
   final view equal to a view taken after the feeder stopped.

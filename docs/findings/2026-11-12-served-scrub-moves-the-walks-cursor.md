@@ -24,3 +24,25 @@ the purb bake was not driven.
 
 Nothing in the spec's healthy walks covers it: the simulation's scrub during a walk is on a live document,
 where the scrub has its own cursor and the walk reads no seek.
+
+## The bug, for picking up after v5-monitor
+
+Open; nothing on v5-monitor fixes it, the branch leaving the player as it is. Kendrick's reading of
+2026-11-12 is that the fix is clear.
+
+What is wrong: `_Scrub.turn` in `sieve_player/worker.py` reads inside `g.decoder.scrub()` alone. The shown
+and the overlaid node may each sit at or behind a served frame node, whose rows come from the reader
+`Graph._reader` opens, a `writers` clip reader holding its own `Decoder` as `.decoder`. That decoder has the
+same two cursors and its `scrub()` is never entered.
+
+What would fix it: the scrub's reads run on the scrub cursor of every decoder they can reach, the plate's
+and each served clip reader's, so the walk's cursor on each stays where the walk left it. Whether that is
+`_Scrub.turn` entering each held reader's `scrub()`, or the graph offering one context that does, is the
+fix's to choose; a reader opened by the scrub itself, at its first read, must be covered too. A served series
+node's reader holds no decoder and needs nothing.
+
+What shows it fixed: the experiment beside this finding reads no seek on the bake node in the scrubbed walk,
+and the catalogue nothing; as a test, the scrubbed walk of `tests/test_reading_back.py`'s served graph, or of
+the simulations' with its bake served, reading no `seek` event in the window's lane. The second capture a
+served reader then opens on its file is one more reader to close before a same-key rebake on Windows, which
+`Readers.release` already does by closing the reader whole.

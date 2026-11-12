@@ -175,7 +175,7 @@ class Canvas(QWidget):
 
     def can_display(self, node):
         """Whether the display flag is offered: a node with a frame to show. A series node's output
-        is a signal in the Trace and a selector's a path, so neither takes it; an unresolved node
+        is a line in the plot and a selector's a path, so neither takes it; an unresolved node
         does, its kind unknown until its tool is found."""
         return node.tool == VIDEO_TOOL or self.tools.get(node.tool) is None \
             or kind_of(self.doc, self.tools, node.id) == "frame"

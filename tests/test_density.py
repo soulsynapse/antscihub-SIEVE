@@ -51,34 +51,38 @@ def test_plot_crops_to_the_occupied_bins_and_paints():
     from PySide6.QtCore import Qt
     from PySide6.QtTest import QTest
 
-    from sieve_player.widgets import Density
+    from sieve_player.plot import Plot
 
     QApplication.instance() or QApplication([])
     counts = np.zeros((3, density.BINS), np.uint32)
     counts[:, 40] = 100
     counts[2, 120] = 5
-    w = Density()
+    w = Plot()
     w.resize(300, 200)
-    w.set_series(counts, 7)
+    w.set_window(7, 3, 30.0)
+    w.set_fields({"a": counts}, 7)
+    w.set_selection("a")
     w.set_playhead(8)
+    f = w.fields["a"]
+    assert (f.lo, f.hi) == (40 - f.MARGIN, 120 + f.MARGIN)        # cropped on arrival, before any paint
     assert not w.grab().isNull()
-    assert (w.lo, w.hi) == (40 - w.MARGIN, 120 + w.MARGIN)
     assert w._row(w._inner().left()) == 7
     # the handles start at the axis's ends and keep every shown bin; dragged in, they drop the bins outside
-    assert w._kept().all()
+    assert f.kept(w.levels("a")).all()
     got, let_go = [], []
-    w.levelDragged.connect(lambda i, v: got.append((i, v)))
-    w.levelReleased.connect(lambda i, v: let_go.append((i, v)))
-    w._drag_level(1, w._y(density.value_of(100)))
-    assert got and got[0][0] == 1 and abs(density.pos_of(got[0][1]) - 100) < 0.5
+    w.bandDragged.connect(lambda nid, lv: (got.append((nid, list(lv))), w.set_bands({nid: lv})))   # the window: writes it and hands it back
+    w.bandReleased.connect(lambda nid, lv: let_go.append((nid, list(lv))))
+    w._drag_level(1, w._y(density.value_of(100), "a"))
+    assert got == [("a", w.levels("a"))]                            # a proposal; the plot draws the band it was handed
+    assert abs(density.pos_of(w.levels("a")[1]) - 100) < 0.5
     w._mode = 1
     QTest.mouseRelease(w, Qt.LeftButton)
-    assert let_go == [got[-1]]                                      # released once, with the handle's final value
-    kept = w._kept()
-    assert kept[40 - w.lo] and not kept[120 - w.lo]
-    w._drag_level(0, w._y(density.value_of(110)))             # lo above hi: inside out
-    kept = w._kept()
-    assert kept[40 - w.lo] and kept[120 - w.lo] and not kept[105 - w.lo]
+    assert let_go == [("a", w.levels("a"))]
+    kept = f.kept(w.levels("a"))
+    assert kept[40 - f.lo] and not kept[120 - f.lo]
+    w._drag_level(0, w._y(density.value_of(110), "a"))        # lo above hi: inside out
+    kept = f.kept(w.levels("a"))
+    assert kept[40 - f.lo] and kept[120 - f.lo] and not kept[105 - f.lo]
     w._drag_level(1, w._inner().top() - 20)                   # above the field: infinity
-    assert w.levels[1] == float("inf") and w._y(float("inf")) == w._inner().top()
+    assert w.levels("a")[1] == float("inf") and w._y(float("inf"), "a") == w._inner().top()
     assert not w.grab().isNull()

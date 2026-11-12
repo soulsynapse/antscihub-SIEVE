@@ -73,7 +73,7 @@ Facts to weigh. `Document.pinned` is one node id or None, written only when set,
 window's `_show_pinned` hands the strip that node's signal, the clip walk's when there is one.
 Every series node's card carries a pin; no frame node's does.
 
-- [ ] The document holds the pinned nodes as an ordered list, any node with a plot, and writes
+- [x] The document holds the pinned nodes as an ordered list, any node with a plot, and writes
   none when it is empty; a format-2 file's one pinned id loads as a list of one; a removed node
   leaves the list.
   Check: a document test pins two nodes, reads them in order, removes one, round-trips, and
@@ -94,12 +94,17 @@ and hover; `Pane.sizeHint` is the shown card's height. A Trace is `ROW_H * rows`
 trace five rows and a density six. A Trace's field is inset by its handles' room so stacked
 traces share x, which the one plot no longer needs. Display's `minimumSize` is 160 by 120.
 
-- [ ] The left of the splitter is the frame over the plot, the plot the frame's width, the two
+- [x] The left of the splitter is the frame over the plot, the plot the frame's width, the two
   flush, and the plot's height fixed; the frame takes the rest. No card in the pane holds a plot
   or a pin, and the pane's height is its settings' alone.
   Check: an offscreen window test reads the plot's top equal to the frame's bottom, its width the
   frame's, and no Trace, Density or pin button among the pane's children.
-- [ ] The plot draws the selection when it has a result, as Trace or Density draws it today, and
+- [x] One outline encloses the frame and the plot as one object, the theme's hairline edge around
+  both, and the plot draws no edge of its own; the frame's area and the plot's field read as
+  one box. Added at Kendrick's word 2026-11-10 after the first build read as two.
+  Check: an offscreen window test reads the edge colour at the left column's outer corner rows
+  beside the frame and beside the plot, and none along the seam between them.
+- [x] The plot draws the selection when it has a result, as Trace or Density draws it today, and
   the pinned set with it; a selection without a plot, the video node or a blobs node, leaves the
   pinned set drawn and the plot otherwise empty but for the playhead and the ruler. The plot's x
   axis stays the window, filling in as the walk does.
@@ -118,13 +123,15 @@ Facts to weigh. A Trace press anywhere but a handle is the playhead, `pressed`, 
 the same and the two are wired alike. The Display draws the playhead nowhere; the time bubble,
 "439.20 s" in the mockup, is the strip's `_show_bubble`, a tooltip the strip owns.
 
-- [ ] The playhead is a white line down the plot at the row, topped by a filled circle centred on
+- [x] The playhead is a white line down the plot at the row, topped by a filled circle centred on
   the frame's bottom edge, half over the frame; a press on the circle or anywhere in the plot
   that is not a handle seeks, dragging follows, and play pauses while held, as a Trace does today.
   Check: a window test presses in the plot, reads the row sought and play paused, drags, reads the
   row follow, releases.
-- [ ] A ruler along the plot's top edge marks time in seconds at a spacing that keeps labels
-  apart, the window's start and end among them.
+- [x] Ticks inside the plot along its top edge mark time at a whole-second spacing that keeps
+  them apart, the window's start and end among them, with no numerals: the strip's bubble and
+  the transport's readout are where a time is read. Amended at Kendrick's word 2026-11-10 from a
+  numbered ruler above the field.
   Check: a plot test sets a window and reads tick rows within it, the first at its start.
 
 ## The selection owns the axis
@@ -141,14 +148,14 @@ washes the kept rows. A band moves through `levelDragged` and `levelReleased`, t
 `_banded` writing it to the node and emitting `paramsChanged`. A Density's two handles are a
 band of the plane's values and crop the picture as they move.
 
-- [ ] The selection is drawn as a Trace or Density draws today, teal, or green with a gate, with a y axis along the plot's left edge in
+- [x] The selection is drawn as a Trace or Density draws today, teal, or green with a gate, with a y axis along the plot's left edge in
   the selection's units, labelled at a few values, and a gutter so the curve does not overprint
   the labels. Its band is two lines across the plot with handles, drawn in `LEVEL` as today, and
   each band value is a label on the axis in `LEVEL` at the line's height; no readout sits on the
   line. The gate wash and the excluded darkening are the selection's.
   Check: a plot test sets a selection with a band and reads two axis labels at the band's
   values and none elsewhere on the line.
-- [ ] Dragging a handle changes the selection's band, saved to its node as today; while a handle
+- [x] Dragging a handle changes the selection's band, saved to its node as today; while a handle
   is held every other shown node fades to near nothing, and returns on release.
   Check: a plot test presses a handle and reads the pinned series' alpha below a threshold, moves
   it and reads the band in the document, releases and reads the alpha restored.
@@ -164,14 +171,14 @@ second envelope over the same rows, each scaled to its own maximum. A pinned nod
 the walk has not produced has nothing to draw, which `Pane.show_series` hides today; `KIND`
 "same" takes both plots.
 
-- [ ] Each pinned node other than the selection is drawn as a line in ink at one reduced alpha,
+- [x] Each pinned node other than the selection is drawn as a line in ink at one reduced alpha,
   the same for every pinned node, scaled to its own range over the full plot height, with no axis,
   no handles and no band lines, its band drawn as the darkening alone; a pinned node without a
   result is not drawn. A pinned node that is the selection is drawn once, as the selection.
   Check: a plot test pins two series of different ranges, reads each spanning the plot's
   height and drawn in the same colour, and selects one and reads it drawn once in the series
   colour.
-- [ ] At most one field is drawn, under every line, dimmed when it is not the selection; pinning
+- [x] At most one field is drawn, under every line, dimmed when it is not the selection; pinning
   a second field unpins the first. A field that is the selection is drawn as Density draws it,
   its handles the selection's.
   Check: a document test pins two frame nodes and reads the first gone from the pinned set; a
@@ -187,7 +194,7 @@ Facts to weigh. A Trace reports `hovered(row)` and draws another widget's cursor
 `set_hover`; the window's `_hover` sets one row on every trace and the strip, and a Density's
 readout is the value of the bin under the cursor.
 
-- [ ] A dotted line runs the plot's height at the cursor's row, and the strip draws the same row;
+- [x] A dotted line runs the plot's height at the cursor's row, and the strip draws the same row;
   where the line crosses each shown line a dot is drawn, with the node's name and the value at
   that row beside it in the monospace face, the selection's in the series colour and the rest in
   ink; two readouts that would overprint are pushed apart. The field's readout is the value of
@@ -206,7 +213,7 @@ Facts to weigh. The canvas's `selectionChanged` hands the pane the last id and n
 told; `GlyphButton("pin", ...)` is the pin today, checkable. The Tab menu is sized to its rows; the
 theme's `ROW_H` is every control's height.
 
-- [ ] A row along the plot's bottom edge, right-justified, holds one chip per shown node, the
+- [x] A row along the plot's bottom edge, right-justified, holds one chip per shown node, the
   selection first then the pinned in pin order, each the node's name with a pin glyph beside it;
   the selection's chip is in head white, the rest in ink. A click on a chip's name selects
   that node, as a click on the canvas does, and the canvas shows it selected. The pin glyph reads
@@ -226,11 +233,85 @@ Facts to weigh. The strip draws one series, `SERIES` or `GATE`, as its columns' 
 whole clip, the clip walk's when it has one, else the window's at its own rows; `_show_pinned` is
 where the window hands it over.
 
-- [ ] The strip draws every shown node, the selection as it draws its one series today and the
+- [x] The strip draws every shown node, the selection as it draws its one series today and the
   pinned in dimmed ink, each as its columns' envelope at its own range, with no axis; a field is
   not drawn in the strip.
   Check: a window test pins two series and reads two series handed to the strip with the
   selection marked; a timeline test draws two and reads each at its rows.
+
+## After the review: the plot's model is not its paint
+
+Assumes: The strip mirrors.
+
+Added 2026-11-11 from the architectural review of the first build, every box above ticked. The
+build is sound where it draws; three couplings it inherited from Trace and Density are more exposed
+with one plot than they were with one per card, and are fixed before the PR. A query the plot
+answers must not depend on whether it has painted since the data changed, the selection must have
+an owner above the widgets, and a theme value must live in the theme.
+
+Facts to weigh. `Field.lo` and `Field.hi` are set inside `Plot._paint_field` and read by `_y`,
+`_scale`, `axis_labels`, `_drag_level` and `Field.kept`, so before the first paint after
+`set_fields` a field selection's labels and handles are on the uncropped axis; test_density.py
+grabs the widget before reading them. The worker's `densityReady` is wired straight to
+`set_fields`, so a walk result landing while a handle is held replaces the Field objects. The
+window holds no selection of its own: `_show_pinned` reads `plot.shown()` and `plot.selection` to
+feed the strip, and `_select` writes the selection into the pane and the plot and nowhere else.
+`INK_ALPHA` and the other alphas a non-selected series is drawn at live in plot.py; timeline.py
+imports one from there, and `timeline` has no row in test_seams.py's `MAY_IMPORT`, so the edge is
+unguarded.
+
+- [x] A field's crop is a fact of its counts and the window, computed once per change of either
+  and read alike by painting and geometry: the axis labels and a handle's value for a field
+  selection are the same before a paint as after one, and fields handed to the plot while a handle
+  is held leave the handle where it is.
+  Check: a plot test reads `axis_labels()` and `_y` for a field selection before any grab and
+  after one and reads them equal; a test presses a handle, sets the fields again, and reads the
+  band unmoved.
+- [x] The shown set, the selection first then the pinned in pin order each once, is stated once in
+  document.py as a function of a selection and a pinned list; the window holds the selection and
+  feeds the strip from the document and that, reading nothing back from the plot; the plot's
+  `shown()` is the same function over its own copies.
+  Check: a document test reads the function over a selection in and out of the pinned list; a
+  window test selects a node and reads the window's selection and the strip's series as the
+  function says, with the plot's selection cleared.
+- [x] The alphas a non-selected series is drawn at are the theme's, beside its inks, imported from
+  there by the plot and the strip alike, and `timeline` has a row in the seams map naming `theme`
+  and nothing else.
+  Check: the seams test passes with the new row.
+
+## After the review: where things live
+
+Assumes: After the review: the plot's model is not its paint.
+
+The same review's lesser findings: each is a seam drawn in the wrong place rather than a wrong
+answer, and each can follow the PR if it does not fit before.
+
+Facts to weigh. `Stage` and `Head` are in window.py; `Head` reads `Plot.HEAD_R`, `head_x` and
+`headMoved`, and `Stage` imports theme alone. The chip row is `chips`, `_chip_hit`, `_paint_chips`
+and a cursor branch inside Plot, laid from the right edge leftwards with no elision, so a long id
+or several pinned nodes walk into the axis gutter. `_drag_level` mutates `Plot.bands` and emits;
+`_banded` writes the document and reruns the chain and never hands the plot the document's bands
+back, so through a drag the widget's list and the node's tuple are two copies kept equal by
+convention. `Document.pin` takes the tool catalogue to drop a prior frame node, and
+`Plot.field_shown` picks the first pinned node with a field: one rule, two enforcers, the first for
+the file and the second for the picture.
+
+- [x] `Stage` and `Head` live in plot.py beside the widget they are the frame and the circle of,
+  and window.py builds them; the plot's seams row is unchanged.
+  Check: the seams test passes with plot's row as it stands, and the outline and circle tests
+  above still pass.
+- [x] The chip row is a helper of its own, laid and hit-tested from a font, a width and the shown
+  names without a Plot; a chip's name is elided in the middle when the row would otherwise reach
+  the axis gutter, the pin glyphs never dropped.
+  Check: a plot test lays chips for names longer than the plot is wide and reads every rect right
+  of the gutter and every pin inside the widget.
+- [x] A handle drag proposes a band; the window writes it to the node and hands the plot the
+  document's bands back, so the plot never holds a band the document does not.
+  Check: a window test drags a handle and at each move reads the plot's levels equal to the node's
+  band, and after a release the same.
+- [x] `Document.pin`'s docstring says the one-field rule is the plot's and why the document
+  enforces it for the file; nothing moves.
+  Check: none; a reading.
 
 ## Non-goals
 

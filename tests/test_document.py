@@ -39,10 +39,46 @@ def test_holds_nodes_wires_flags_video():
     assert doc.wires == [D.Wire("video", "gray", D.INPUT)]
     assert doc.display == "gray" and doc.overlay == "gray" and doc.video == "clip.mp4"
     assert "pinned" not in doc.to_dict()
-    doc.pinned = "gray"
-    assert D.Document.from_dict(json.loads(json.dumps(doc.to_dict()))).pinned == "gray"
     doc.remove_node("gray")
-    assert doc.display is None and doc.overlay is None and doc.pinned is None
+    assert doc.display is None and doc.overlay is None
+
+
+def test_pinned_is_an_ordered_list_and_a_format_2_id_loads_as_one():
+    doc = two_nodes()
+    doc.add_node("count", (0.0, 240.0))
+    doc.pinned = ["count", "gray"]
+    assert D.Document.from_dict(json.loads(json.dumps(doc.to_dict()))).pinned == ["count", "gray"]
+    doc.remove_node("count")
+    assert doc.pinned == ["gray"]
+    doc.remove_node("gray")
+    assert doc.pinned == [] and "pinned" not in doc.to_dict()
+    old = {**two_nodes().to_dict(), "version": 2, "pinned": "gray"}
+    assert D.Document.from_dict(old).pinned == ["gray"]
+    assert D.Document.from_dict({**old, "version": 3, "pinned": ["gray", "gray"]}).pinned == ["gray"]
+    with pytest.raises(D.FormatError, match="ghost"):
+        D.Document.from_dict({**old, "version": 3, "pinned": ["ghost"]})
+
+
+def test_pinning_a_second_frame_node_unpins_the_first_and_a_series_rides_beside():
+    doc = two_nodes()
+    doc.add_node("threshold", (0.0, 240.0))
+    doc.connect("gray", "threshold")
+    doc.add_node("motion", (0.0, 360.0))
+    doc.connect("gray", "motion")
+    doc.pin("motion", TOOLS)
+    doc.pin("gray", TOOLS)
+    doc.pin("gray", TOOLS)
+    assert doc.pinned == ["motion", "gray"]
+    doc.pin("threshold", TOOLS)
+    assert doc.pinned == ["motion", "threshold"]
+    doc.unpin("motion")
+    assert doc.pinned == ["threshold"]
+
+
+def test_shown_is_the_selection_then_the_pinned_each_once():
+    assert D.shown("a", ["b", "c"]) == ["a", "b", "c"]
+    assert D.shown("b", ["b", "c"]) == ["b", "c"] and D.shown("c", ["b", "c"]) == ["c", "b"]
+    assert D.shown(None, ["b"]) == ["b"] and D.shown("a", []) == ["a"] and D.shown(None, []) == []
 
 
 def test_band_rides_with_its_node_and_is_absent_until_set():

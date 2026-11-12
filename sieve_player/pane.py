@@ -3,17 +3,16 @@
 The document is the store and a card a view over it, as a Houdini parameter pane is over its node:
 a tool's settings widget must take the stored values and its knobs are the node's whole param set,
 so one that cannot be told them is shown as a defect, never as its own defaults. The pane writes
-params, bands and the pin into the document and says what changed; it knows nothing of the
-runtime, and what it shows of a run, the density, the trace, the standing line, the window hands it.
+params into the document and says what changed; it knows nothing of the runtime, and what it
+shows of a run, the standing line, the window hands it. A node's plot is the window's, under the frame.
 """
 import os
 
 from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtWidgets import QComboBox, QFileDialog, QFrame, QPushButton, QScrollArea, QVBoxLayout, QWidget
 
-from .document import BAKED, LIVE, OPEN, VIDEO_OUTPUT, VIDEO_OUTPUTS, VIDEO_TOOL, is_selector, mode_of, paths, video_output
-from .theme import CONTROL_W, GAP, PAD, WIDE_W, Form, GlyphButton, Layer, readout
-from .widgets import Density, Trace
+from .document import BAKED, LIVE, VIDEO_OUTPUT, VIDEO_OUTPUTS, VIDEO_TOOL, is_selector, mode_of, paths, video_output
+from .theme import CONTROL_W, GAP, PAD, WIDE_W, Form, Layer, readout
 
 VIDEO_FILTER = "Video (*.mp4 *.MP4 *.avi *.mov *.mkv *.mts *.MTS);;All (*)"
 
@@ -139,7 +138,6 @@ class Pane(QWidget):
     Its size hint is the shown card's
     height, so a host that stacks it under the canvas gives it only the room its content needs."""
     paramsChanged = Signal(str)   # this node's params in the document changed here
-    pinChanged = Signal()         # the document's pinned flag moved here
     videoPicked = Signal(str)
     bakeAsked = Signal(str)       # the Bake button under this node
     bakeCancelled = Signal(str)
@@ -151,9 +149,6 @@ class Pane(QWidget):
         self.doc = None
         self.cards, self.widgets, self.notes = {}, {}, {}
         self.standings = {}   # tool node -> the line under its settings, see set_standing
-        self.densities = {}   # frame node -> its Density plot, hidden until the window hands it counts
-        self.traces = {}      # series node -> its Trace, hidden until the window hands it a result
-        self.pins = {}        # series node -> the pin in its card's corner
         self.bakes = {}       # node whose tool bakes -> its BakeBlock
         self.video = None
         self.current = None
@@ -197,9 +192,6 @@ class Pane(QWidget):
         self.widgets.pop(nid, None)
         self.notes.pop(nid, None)
         self.standings.pop(nid, None)
-        self.densities.pop(nid, None)
-        self.traces.pop(nid, None)
-        self.pins.pop(nid, None)
         self.bakes.pop(nid, None)
         if self.video is not None and self.video.parent() is card:
             self.video = None
@@ -243,30 +235,6 @@ class Pane(QWidget):
                 if is_selector(tool) or paths(tool):
                     self.notes[node.id] = readout()
                     card.add(self.notes[node.id])
-                kind = getattr(tool, "KIND", "frame")   # "same" takes both plots: the walk fills the one its wire's kind has
-                if is_selector(tool):
-                    pass
-                if kind in ("frame", "same"):
-                    plot = Density()
-                    if node.band is not None:
-                        plot.levels = [float(v) for v in node.band]
-                    plot.levelReleased.connect(lambda _i, _v, nid=node.id: self._banded(nid))   # the picture crops as it moves; the data when let go
-                    plot.hide()
-                    card.add(plot)
-                    self.densities[node.id] = plot
-                if kind in ("series", "same"):
-                    plot = Trace(rows=5, levels=2)
-                    plot.levels[:] = [float(v) for v in node.band] if node.band is not None else list(OPEN)
-                    plot.levelDragged.connect(lambda _i, _v, nid=node.id: self._banded(nid))    # the chain reruns on the stack already walked, cheap enough to follow the drag
-                    plot.levelReleased.connect(lambda _i, _v, nid=node.id: self._banded(nid))
-                    plot.hide()
-                    card.add(plot)
-                    self.traces[node.id] = plot
-                    pin = GlyphButton("pin", "pinned", "draw this signal on the timeline")
-                    pin.setChecked(self.doc.pinned == node.id)
-                    pin.clicked.connect(lambda on, nid=node.id: self._pin(nid, on))
-                    card.add_corner(pin)
-                    self.pins[node.id] = pin
             if w is not None and getattr(tool, "bake", None) is not None:
                 block = BakeBlock()
                 block.set_mode(mode_of(self.doc, self.tools, node.id), node.baked is not None)
@@ -278,19 +246,6 @@ class Pane(QWidget):
         card.hide()
         self._lay.insertWidget(self._lay.count() - 1, card)
         self.cards[node.id] = card
-
-    def _banded(self, nid):
-        """A density or trace handle moved: the band is the node's, saved and keyed like a param."""
-        plot = self.densities.get(nid) or self.traces[nid]
-        self.doc.node(nid).band = tuple(plot.levels)
-        self.paramsChanged.emit(nid)
-
-    def _pin(self, nid, on):
-        """A pin was clicked: the flag lands on `nid` or leaves it, and every pin shows where it is."""
-        self.doc.pinned = nid if on else None
-        for i, pin in self.pins.items():
-            pin.setChecked(i == self.doc.pinned)
-        self.pinChanged.emit()
 
     def _video_param(self, nid, name, value):
         """A video node knob moved: its param, saved and keyed like any node's."""
@@ -335,28 +290,6 @@ class Pane(QWidget):
     def widget(self, nid):
         return self.widgets.get(nid)
 
-    def show_density(self, counts, start):
-        """`counts` is {frame node: (rows, bins)} for every plane the walk computed: a node in it shows
-        them, and one not in it, whose output is a mask or a field or that the video does not reach,
-        shows no plot."""
-        for nid, plot in self.densities.items():
-            if nid in counts:
-                plot.set_series(counts[nid], start)
-                plot.show()
-            else:
-                plot.hide()
-
-    def show_series(self, results, start):
-        """`results` is {series node: result} for the chain the walk ran, each with "gate" (see
-        `graph.gated`): a node in it with a signal shows it, and any other series node shows no plot."""
-        for nid, plot in self.traces.items():
-            r = results.get(nid)
-            if isinstance(r, dict) and "signal" in r:
-                plot.set_series(r["signal"], start, r.get("gate"))
-                plot.show()
-            else:
-                plot.hide()
-
     def show_bake(self, nid, done, total):
         if nid in self.bakes:
             self.bakes[nid].set_progress(done, total)
@@ -369,10 +302,6 @@ class Pane(QWidget):
         """Every mode line follows the document, and the plan's `stale` nodes, after a sync."""
         for nid, block in self.bakes.items():
             block.set_mode(mode_of(self.doc, self.tools, nid), self.doc.node(nid).baked is not None, nid in stale)
-
-    def set_playhead(self, row):
-        for plot in (*self.densities.values(), *self.traces.values()):
-            plot.set_playhead(row)
 
     def note(self, nid, text):
         """The line under a selector's settings, what its rule matched, or under a tool with path

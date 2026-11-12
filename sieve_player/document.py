@@ -12,7 +12,7 @@ import os
 from dataclasses import dataclass, field
 from typing import NamedTuple
 
-VERSION = 2                 # 2: the video node's scale is a rescale node's; a 1 with one loads with that node inserted
+VERSION = 3                 # 3: pinned is a list in pin order; a 2's one id loads as a list of one. 2: the video node's scale is a rescale node's; a 1 with one loads with that node inserted
 VIDEO_TOOL = "video"        # the reserved tool name of the node the decoder is
 VIDEO_OUTPUT = "output"     # the video node's one param: what the decoder hands out, applied before its cache
 VIDEO_OUTPUTS = ("bgr", "gray", "luma")    # luma: the decoder's own plane, a gray left in the stream's range
@@ -115,7 +115,7 @@ class Document:
     wires: list = field(default_factory=list)
     display: str | None = None
     overlay: str | None = None                                      # heated over the displayed frame; None is off
-    pinned: str | None = None                                       # the series node the timeline draws; None is none
+    pinned: list = field(default_factory=list)                      # the nodes the plot and the strip draw beside the selection, in pin order
     video: str | None = None                                      # as written
     extra: dict = field(default_factory=dict, repr=False)
     path: str | None = field(default=None, compare=False)           # where it was loaded from or saved to
@@ -152,8 +152,21 @@ class Document:
             self.display = None
         if self.overlay == nid:
             self.overlay = None
-        if self.pinned == nid:
-            self.pinned = None
+        self.pinned = [p for p in self.pinned if p != nid]
+
+    def pin(self, nid, tools):
+        """Adds `nid` to the end of the pinned set, once; a frame node, by kind_of under `tools`,
+        replaces any frame node pinned before it. One field under the lines is the plot's rule, the
+        first shown with one; the document keeps it so the file never holds a pin that is never drawn
+        and the strip and the plot read one set."""
+        if nid in self.pinned:
+            return
+        if kind_of(self, tools, nid) == "frame":
+            self.pinned = [p for p in self.pinned if kind_of(self, tools, p) != "frame"]
+        self.pinned.append(nid)
+
+    def unpin(self, nid):
+        self.pinned = [p for p in self.pinned if p != nid]
 
     def connect(self, src, dst, input=INPUT):
         """Wires `src` into `dst`'s input, replacing whatever fed it."""
@@ -200,7 +213,7 @@ class Document:
             "video": self.video,
             "display": self.display,
             "overlay": self.overlay,
-            **({"pinned": self.pinned} if self.pinned is not None else {}),
+            **({"pinned": list(self.pinned)} if self.pinned else {}),
             "nodes": [{"id": n.id, "tool": n.tool, "params": n.params, "pos": list(n.pos),
                        **({"band": list(n.band)} if n.band is not None else {}),
                        **({"mode": n.mode} if n.mode is not None else {}),
@@ -216,7 +229,9 @@ class Document:
             raise FormatError(f"document is format version {v!r}; this module reads up to {VERSION}")
         top = {"version", "video", "display", "overlay", "pinned", "nodes", "wires"}
         node_keys = {"id", "tool", "params", "pos", "band", "mode", "baked"}
-        doc = cls(video=d.get("video"), display=d.get("display"), overlay=d.get("overlay"), pinned=d.get("pinned"),
+        pinned = d.get("pinned")
+        doc = cls(video=d.get("video"), display=d.get("display"), overlay=d.get("overlay"),
+                  pinned=[] if pinned is None else [str(pinned)] if isinstance(pinned, str) else [str(p) for p in pinned],
                   extra={k: v for k, v in d.items() if k not in top})
         for nd in d.get("nodes", []):
             if any(n.id == nd["id"] for n in doc.nodes):
@@ -232,6 +247,10 @@ class Document:
             if wd["from"] not in ids or wd["to"] not in ids:
                 raise FormatError(f"wire {wd['from']!r} -> {wd['to']!r} names a node the document lacks")
             doc.wires.append(Wire(wd["from"], wd["to"], wd.get("input", INPUT)))
+        for nid in doc.pinned:
+            if nid not in ids:
+                raise FormatError(f"pinned {nid!r} names a node the document lacks")
+        doc.pinned = list(dict.fromkeys(doc.pinned))
         doc._lift_scale()
         if known is not None:
             doc.resolve(known)
@@ -401,6 +420,13 @@ def produces(doc, tools, nid, _seen=()):
 
 
 LIVE, BAKED = "live", "baked"   # a node's two modes: serving the chain, or the bake it holds; whether the bake is stale is the plan's to say
+
+
+def shown(selection, pinned):
+    """The nodes the plot and the strip draw: `selection` first when there is one, then `pinned` in
+    its order, each once."""
+    out = [] if selection is None else [selection]
+    return out + [nid for nid in pinned if nid != selection]
 
 
 def served(node):

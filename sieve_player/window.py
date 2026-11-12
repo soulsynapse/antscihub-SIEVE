@@ -1,5 +1,5 @@
-"""The window: the header across the top, the frame left, the canvas over the parameter pane right,
-the transport across the bottom.
+"""The window: the header across the top, the frame over the plot left, the canvas over the
+parameter pane right, the transport across the bottom.
 
 The document is the one source of truth. The canvas and the pane read and write it and say what
 changed; the window carries the change to the runtime, built on every load of a video and
@@ -26,7 +26,7 @@ from .registry import CATEGORIES, Entry, category, description, signature
 from .theme import GAP, PAD, ROW_H, readout
 from .timeline import Timeline
 from .trace import Dump
-from .widgets import Trace
+from .plot import Plot, Stage
 from .worker import Worker
 
 DUMP_ENV = "SIEVE_DUMP"     # names the file every video opened in this process dumps its stream to
@@ -381,22 +381,28 @@ class PlayerWindow(QMainWindow):
         self._reload.setInterval(RELOAD_SETTLE_MS)
         self._reload.timeout.connect(self._pick_paths)
         self._driven = {}      # (node id, path input) -> (the keys its loader set, the selector's id)
-        self.traces = []
-        self._hooked = set()   # ids of traces already wired to the strip's cursor
         self._gone = {}        # node -> why its bake could not be read when the document opened, for the graph's notes
         self.store = store.current()   # where bakes land and are read from; Store… replaces it
 
         self.display = Display()
+        self.plot = Plot()
         self.canvas = Canvas(self.tools, broken, {n: (category(t), description(t), signature(t)) for n, t in self.tools.items()}, CATEGORIES)
         self.pane = Pane(self.tools)
         self.timeline = Timeline()
-        # an empty selection leaves the pane on its last node, so a click on empty canvas never blanks it
-        self.canvas.selectionChanged.connect(lambda ids: ids and self.pane.select(ids[-1]))
+        # an empty selection leaves the pane and the plot on their last node, so a click on empty canvas never blanks them
+        self.canvas.selectionChanged.connect(lambda ids: ids and self._select(ids[-1]))
         self.canvas.changed.connect(self.sync)
         self.canvas.flagged.connect(self.reflag)
         self.pane.paramsChanged.connect(self._params_changed)
-        self.pane.pinChanged.connect(self._show_pinned)
         self.pane.videoPicked.connect(self.load)
+        self.plot.pressed.connect(self._scrub_begin)
+        self.plot.dragged.connect(lambda r: self.seek(r, commit=False))
+        self.plot.released.connect(self._scrub_end)
+        self.plot.hovered.connect(self._hover)
+        self.plot.bandDragged.connect(self._band_dragged)
+        self.plot.bandReleased.connect(self._band_released)
+        self.plot.chipClicked.connect(lambda nid: self.canvas.select([nid]))
+        self.plot.pinToggled.connect(self._toggle_pin)
         self.pane.bakeAsked.connect(lambda nid: self.worker is not None
                                     and self.worker.bake(nid, os.path.basename(self.doc.path or "")))
         self.pane.bakeCancelled.connect(lambda nid: self.worker is not None and self.worker.cancel_bake())
@@ -406,6 +412,7 @@ class PlayerWindow(QMainWindow):
         self.display.back.connect(self._back)
         self._shown_before = []    # the display flag's past, most recent last, for a right click; the document's session
         self._shown_last = None
+        self.selection = None      # the node the canvas last selected, whose settings the pane shows and whose axis the plot draws
         self.header = Header()
         self.header.show_store(self.store)
         self.header.store.clicked.connect(self._choose_store)
@@ -416,9 +423,10 @@ class PlayerWindow(QMainWindow):
         right.lay.addWidget(self.canvas, 1)
         right.lay.addWidget(self.pane, 0)
         right.capped = self.pane
+        self.stage = Stage(self.display, self.plot)
         split = theme.Splitter(Qt.Horizontal)
         split.setHandleWidth(GAP)
-        split.addWidget(self.display)
+        split.addWidget(self.stage)
         split.addWidget(right)
         split.setStretchFactor(0, 1)
         split.setStretchFactor(1, 1)
@@ -478,7 +486,9 @@ class PlayerWindow(QMainWindow):
             doc.node(nid).mode = document.LIVE
         self.canvas.set_document(doc)
         self.pane.set_document(doc)
-        self._hook_traces()
+        self.selection = None
+        self.plot.set_selection(None)
+        self._show_plot()
         self._retitle()
         self._pick_video()
 
@@ -523,25 +533,48 @@ class PlayerWindow(QMainWindow):
             parts.append(os.path.basename(self.decoder.path))
         self.setWindowTitle(" — ".join(parts))
 
-    def _hook_traces(self):
-        """Every trace in the pane shares the strip's playhead and cursor; a new one is wired once."""
-        self.traces = self.pane.findChildren(Trace)
-        for tr in self.traces:
-            if id(tr) in self._hooked:
-                continue
-            self._hooked.add(id(tr))
-            tr.set_length(self.window_[1])
-            tr.pressed.connect(self._scrub_begin)
-            tr.dragged.connect(lambda r: self.seek(r, commit=False))
-            tr.released.connect(self._scrub_end)
-            tr.hovered.connect(self._hover)
+    def _select(self, nid):
+        self.selection = nid
+        self.pane.select(nid)
+        self.plot.set_selection(nid)
+        self._show_pinned()
+
+    def _show_plot(self):
+        """The plot and the strip follow the document's pinned set and bands."""
+        self.plot.set_pinned(self.doc.pinned)
+        self._show_bands()
+        self._show_pinned()
+
+    def _show_bands(self):
+        self.plot.set_bands({n.id: n.band for n in self.doc.nodes})
+
+    def _toggle_pin(self, nid):
+        if nid in self.doc.pinned:
+            self.doc.unpin(nid)
+        else:
+            self.doc.pin(nid, self.tools)
+        self._show_plot()
+
+    def _band_dragged(self, nid, levels):
+        """A handle on the plot proposes a band: it is the node's, written and handed back, and a
+        chain node's chain reruns on the stack already walked, cheap enough to follow the drag; a
+        frame node's walk restarts only once the handle is let go."""
+        self.doc.node(nid).band = tuple(levels)
+        self._show_bands()
+        if self.graph is not None and nid in self.graph.chain:
+            self._params_changed(nid)
+
+    def _band_released(self, nid, levels):
+        self.doc.node(nid).band = tuple(levels)
+        self._show_bands()
+        self._params_changed(nid)
 
     # -- the graph changed ------------------------------------------------
     def sync(self):
-        """The document's wiring, nodes or flag changed: the pane, the runtime, the canvas and the
-        frame follow, and the video, if a selector now picks a different file."""
+        """The document's wiring, nodes or flag changed: the pane, the plot, the runtime, the canvas
+        and the frame follow, and the video, if a selector now picks a different file."""
         self.pane.sync()
-        self._hook_traces()
+        self._show_plot()
         self._pick_video()
         self.display.drawers = [(n.id, self.tools[n.tool], n) for n in self.doc.nodes
                                 if n.tool in self.tools and hasattr(self.tools[n.tool], "draw")
@@ -876,7 +909,7 @@ class PlayerWindow(QMainWindow):
         ct = self.timeline.controls
         self.worker.rowReady.connect(self._row_ready)
         self.worker.seriesReady.connect(self._series_ready)
-        self.worker.densityReady.connect(self.pane.show_density)
+        self.worker.densityReady.connect(self.plot.set_fields)
         self.worker.walked.connect(ct.set_progress)
         self.worker.walked.connect(lambda _, n: self._set_length(n))   # the walk's own length: clamped, or closed early
         self.worker.failed.connect(self._failed)
@@ -922,8 +955,11 @@ class PlayerWindow(QMainWindow):
         self.header.set_walking(False)
         self.header.set_progress(0, 0)
         self.header.setEnabled(False)
-        self.timeline.strip.set_series(None, 0)
+        self.timeline.strip.set_series({})
         self.row, self.window_ = 0, (0, 0)
+        self.plot.set_window(0, 0)
+        self.plot.set_lines({}, 0)
+        self.plot.set_fields({}, 0)
         self.display.clear()
 
     # -- state (every entry is a no-op until something is loaded) --------
@@ -937,7 +973,7 @@ class PlayerWindow(QMainWindow):
         offset = self.row - self.window_[0] if playhead is None else int(playhead) - start
         offset = max(0, min(length - 1, offset))
         self.window_ = (start, length)
-        self._set_length(length)
+        self.plot.set_window(start, length, self.fps)
         self.timeline.strip.set_window(start, length)
         self.timeline.controls.set_window(start, length)
         self.worker.set_window(start, length)
@@ -963,7 +999,7 @@ class PlayerWindow(QMainWindow):
             w = self.pane.widget(nid)
             if w is not None and hasattr(w, "set_playhead"):
                 w.set_playhead(row)
-        self.pane.set_playhead(row)
+        self.plot.set_playhead(row)
         self._update_gate()
 
     def _scrub_begin(self, row):
@@ -1031,7 +1067,8 @@ class PlayerWindow(QMainWindow):
 
     def _series_ready(self, results, start, fps):
         self.results, self.result_start = results, start
-        self.pane.show_series(results, start)
+        self.plot.set_lines({nid: (r["signal"], r.get("gate")) for nid, r in results.items()
+                             if isinstance(r, dict) and "signal" in r}, start)
         self._restate()
         for nid, result in results.items():
             w = self.pane.widget(nid)
@@ -1081,27 +1118,25 @@ class PlayerWindow(QMainWindow):
         self.header.note.setText(why)
 
     def _show_pinned(self):
-        """The strip draws the pinned node's signal: the clip walk's when it has one, else the
-        window's, each at its own rows; nothing when no node is pinned or the pinned has no signal."""
-        nid = None if self.doc is None else self.doc.pinned
-        if nid in self.clip_results:
-            r, start = self.clip_results[nid], 0
-        else:
-            r, start = self.results.get(nid), self.result_start
-        if isinstance(r, dict) and "signal" in r:
-            self.timeline.strip.set_series(r["signal"], start, r.get("gate"))
-        else:
-            self.timeline.strip.set_series(None, 0)
+        """The strip draws every shown node that has a signal: the clip walk's when it has one, else
+        the window's, each at its own rows."""
+        series = {}
+        for nid in document.shown(self.selection, self.doc.pinned) if self.doc is not None else []:
+            if nid in self.clip_results:
+                r, start = self.clip_results[nid], 0
+            else:
+                r, start = self.results.get(nid), self.result_start
+            if isinstance(r, dict) and "signal" in r:
+                series[nid] = (r["signal"], start, r.get("gate"))
+        self.timeline.strip.set_series(series, self.selection)
 
     def _set_length(self, rows):
-        """Every trace's x axis is the window, so a walk fills in at its place instead of stretching."""
-        for tr in self.traces:
-            tr.set_length(rows)
+        """The plot's x axis is the window, so a walk fills in at its place instead of stretching."""
+        self.plot.set_window(self.window_[0], rows, self.fps)
 
     def _hover(self, row):
-        """One cursor for the strip and every trace; -1 clears it."""
-        for tr in self.traces:
-            tr.set_hover(row)
+        """One cursor for the strip and the plot; -1 clears it."""
+        self.plot.set_hover(row)
         self.timeline.strip.set_hover(row)
 
     def _update_gate(self):

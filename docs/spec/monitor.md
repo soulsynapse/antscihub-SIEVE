@@ -1,7 +1,7 @@
 # Monitor: the stream carries why, a ledger keeps it over time, a catalogue names what is wrong, and one window shows the three
 
 Written 2026-11-12 from the conversation that read `docs/findings/2026-11-12-served-bake-upstream-walk.md`,
-on v5-monitor, branched from v5 at cce7cb8e; no box is ticked. Read with that finding, which is the case
+on v5-monitor, branched from v5 at cce7cb8e. Read with that finding, which is the case
 this spec is argued from; with `sieve_player/graph.py`, whose `Event` and `Graph.probe` are the stream as it
 stands; with `sieve_player/worker.py`, whose ladder decides what each event served; with
 `sieve_player/trace.py`, the stream's file and the GUI thread's lateness sampler's reader; with
@@ -104,31 +104,31 @@ session may build on: the reader and the demand as fields, since every run and r
 `facts` field for what only a boundary carries, the plan on a sync and the counters on a progress. The
 existing `keys` and `length` stay as they are.
 
-- [ ] Every run, read and fold event names the demand it answered, at any depth: the walk, a fold and
+- [x] Every run, read and fold event names the demand it answered, at any depth: the walk, a fold and
   whose, the display, a bake. A computation a fold opened is told from one the walk opened even when the
   node and row are the same.
   Check: a graph test walks a row and folds a node off the walked path, and reads the walked node's run
   under the walk's demand and the off-path node's run, and the read it opened, under that fold's.
-- [ ] Every run and read a `Frames` read opened names the reading node, so the reads across one wire can
+- [x] Every run and read a `Frames` read opened names the reading node, so the reads across one wire can
   be counted.
   Check: the same test reads, for a node with two readers, a run naming the reader that reached it first.
-- [ ] A sync event carries the plan it began: for each node its kind, whether it is fed, static, served,
+- [x] A sync event carries the plan it began: for each node its kind, whether it is fed, static, served,
   stepped or run whole and by which node, and what each input reads; beside them the walked node, the
   shown and overlaid nodes and the pinned set.
   Check: a graph test serves a node, syncs, and reads from the event alone that the node is served and
   that the node upstream of it is fed and read by nothing the walk reaches.
-- [ ] Memo hits are counted per node and leave on the next progress event, with each store's bytes held,
+- [x] Memo hits are counted per node and leave on the next progress event, with each store's bytes held,
   limit, hits, misses and discards as that event found them; no event is emitted per hit.
   Check: a graph test walks twice, and reads zero hits for a node on the first walk's events and one a row
   on the second's, and the memo's held bytes on a progress event equal to `Memo.bytes` then.
-- [ ] The clip walk's rows are their own lane and it emits progress as the window does; no event of a
+- [x] The clip walk's rows are their own lane and it emits progress as the window does; no event of a
   clip row reads as the window's.
   Check: a worker test runs a window then a clip walk and partitions every event by lane, with each lane's
   progress rows counting from one to its range.
-- [ ] A served reader's cache reports what it discards into the stream under the served node's key.
+- [x] A served reader's cache reports what it discards into the stream under the served node's key.
   Check: a reading-back test reads a baked clip through a reader whose cache holds two rows and finds a
   discard event for the first.
-- [ ] The old monitor and `Stats` read the same figures off a window walk as before the lane and the
+- [x] The old monitor and `Stats` read the same figures off a window walk as before the lane and the
   clip's progress existed.
   Check: `tests/test_monitor.py` and the Stats tests pass unchanged but for the fields an `Event` built by
   hand must now carry.

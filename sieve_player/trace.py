@@ -96,7 +96,7 @@ class Dump:
                 # The writer's own cost as a span on its own thread, so a reader sees a node inflated or
                 # a GUI tick late while the writer held the GIL for what it is.
                 self._write(as_dict(Event("dump", None, None, "dump", n, (time.perf_counter() - t) * 1000, t,
-                                          "dump", (time.thread_time() - c) * 1000, None, None, None)))
+                                          "dump", (time.thread_time() - c) * 1000, None, None, None, None, None, None, None, None)))
             if stopped:
                 return
 

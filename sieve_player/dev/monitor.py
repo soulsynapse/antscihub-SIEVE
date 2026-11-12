@@ -60,7 +60,8 @@ class Monitor:
                     self._changed = tuple(n for n, k in ev.keys.items() if self._keys.get(n) != k)
                 self._keys = ev.keys
             elif ev.kind == "progress":
-                self._progress(ev)
+                if ev.lane != "clip":        # the walk scope is the window's
+                    self._progress(ev)
             elif ev.kind in COST_KINDS:
                 if ev.serves == "scrub":
                     self._scrub_ms += ev.ms

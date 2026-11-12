@@ -120,7 +120,12 @@ def test_baked_mode_decodes_no_video_row_and_runs_nothing_upstream(tmp_path, in_
     done, refused = baked(g)
     assert done and not refused, refused
     g.sync()
+    served = g.entry("bake")
+    g.readers.get(served.bake, 2 * H * W)       # a reader whose cache holds two rows
     _, events = walk(g, 0, N)
+    gone = [ev.row for ev in events if ev.kind == "uncache"]
+    assert gone[0] == 0 and {ev.key for ev in events if ev.kind == "uncache"} == {served.raw_key}     # its discards, under the served node's key
+    assert [ev for ev in events if ev.kind == "progress"][-1].facts["caches"][served.raw_key]["discards"] == len(gone)
     assert not [ev for ev in events if ev.node in ("video", "gray", "up") and ev.kind in ("run", "cache", "decode", "seek")]
     assert {ev.row for ev in events if ev.node == "bake" and ev.kind in ("cache", "decode", "seek")} == set(range(N))
     assert {ev.row for ev in events if ev.node == "threshold" and ev.kind == "run"} == set(range(N))

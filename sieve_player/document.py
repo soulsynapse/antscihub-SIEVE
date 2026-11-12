@@ -247,6 +247,10 @@ class Document:
             if wd["from"] not in ids or wd["to"] not in ids:
                 raise FormatError(f"wire {wd['from']!r} -> {wd['to']!r} names a node the document lacks")
             doc.wires.append(Wire(wd["from"], wd["to"], wd.get("input", INPUT)))
+        for nid in doc.pinned:
+            if nid not in ids:
+                raise FormatError(f"pinned {nid!r} names a node the document lacks")
+        doc.pinned = list(dict.fromkeys(doc.pinned))
         doc._lift_scale()
         if known is not None:
             doc.resolve(known)

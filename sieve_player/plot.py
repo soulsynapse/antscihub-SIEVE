@@ -135,8 +135,9 @@ class Plot(QWidget):
     A press on a handle drags it, proposing the band: bandDragged(node, levels) as it moves and
     bandReleased(node, levels) once when let go, neither moving the band drawn, which is what
     set_bands last handed over; any other press is the playhead, pressed, dragged and released in
-    rows, and a press on the playhead's circle is the playhead whatever handle lies under it. The circle is centred on the top edge, so only its lower half is drawn here; head_x()
-    and headMoved let a widget astride the edge draw the whole of it. The cursor's row is
+    rows, and a press on the playhead's circle is the playhead whatever handle lies under it. The
+    circle is centred on the top edge, so only its lower half is drawn here; head_x() and headMoved
+    let a widget astride the edge draw the whole of it. The cursor's row is
     hovered(row), -1 on leave, and set_hover(row) draws another widget's cursor here: a dotted
     line, and where it crosses each shown line a dot with the node's name and value beside it,
     readouts() saying where. The corner readout is the selection's value at the playhead while
@@ -155,7 +156,7 @@ class Plot(QWidget):
     chipClicked = Signal(str)
     pinToggled = Signal(str)
     headMoved = Signal()
-    ROWS = 7     # the plot's height in form rows, until the first build is looked at
+    ROWS = 7     # the plot's height in form rows
     GRAB = 4     # px either side of a handle's line that takes the drag
     STUB = 6     # px: a handle's line runs this far past the field's edge
     DOT = 3.2    # px: the radius of the dot it ends in

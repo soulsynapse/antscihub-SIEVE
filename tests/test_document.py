@@ -54,6 +54,9 @@ def test_pinned_is_an_ordered_list_and_a_format_2_id_loads_as_one():
     assert doc.pinned == [] and "pinned" not in doc.to_dict()
     old = {**two_nodes().to_dict(), "version": 2, "pinned": "gray"}
     assert D.Document.from_dict(old).pinned == ["gray"]
+    assert D.Document.from_dict({**old, "version": 3, "pinned": ["gray", "gray"]}).pinned == ["gray"]
+    with pytest.raises(D.FormatError, match="ghost"):
+        D.Document.from_dict({**old, "version": 3, "pinned": ["ghost"]})
 
 
 def test_pinning_a_second_frame_node_unpins_the_first_and_a_series_rides_beside():

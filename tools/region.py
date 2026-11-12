@@ -26,7 +26,7 @@ import sys
 import cv2
 import numpy as np
 
-from tools._draw import outline as draw_outline
+from tools._draw import contour as draw_contour
 from tools._table import moments, plane_dtype, with_column
 
 SIEVE_TOOL = True
@@ -174,7 +174,7 @@ def draw(painter, row, result, start, params):
         pen.setCosmetic(True)
         pen.setWidth(3 if chosen else 0)
         painter.setPen(pen)
-        draw_outline(painter, {"contour": contour_of(s)}, "contour")
+        draw_contour(painter, contour_of(s))
 
 
 def utility_command(video, file):

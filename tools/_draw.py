@@ -6,13 +6,20 @@ tool (tests/test_seams.py). Qt is imported inside the functions, so a tool's run
 TRAIL = 30          # rows of path drawn behind each record of a tracks table
 
 
-def outline(painter, b, kind):
-    """A record's box or contour in the painter's pen; the contour's points are pixel centres, +0.5."""
-    from PySide6.QtCore import QPointF, QRectF
+def contour(painter, points):
+    """An (N, 2) x, y outline in the painter's pen; the points are pixel centres, +0.5."""
+    from PySide6.QtCore import QPointF
     from PySide6.QtGui import QPolygonF
 
+    painter.drawPolygon(QPolygonF([QPointF(float(x) + 0.5, float(y) + 0.5) for x, y in points]))
+
+
+def outline(painter, b, kind):
+    """A record's box or contour in the painter's pen."""
+    from PySide6.QtCore import QRectF
+
     if kind == "contour" and "contour" in b.dtype.names and b["contour"] is not None:
-        painter.drawPolygon(QPolygonF([QPointF(float(x) + 0.5, float(y) + 0.5) for x, y in b["contour"]]))
+        contour(painter, b["contour"])
     else:
         painter.drawRect(QRectF(float(b["x"]), float(b["y"]), float(b["w"]), float(b["h"])))
 

@@ -84,10 +84,17 @@ def test_each_shape_is_a_filled_record_the_mask_paints_back_and_the_tools_read()
     assert filter_.keep(out, "area", "", str(nest["area"]))["name"].tolist() == ["nest"]
 
 
-def test_the_choice_narrows_to_one_record_a_missing_name_reads_as_every_shape_and_a_click_picks():
+def test_the_choice_narrows_to_one_record_a_missing_name_reads_as_every_shape_a_click_picks_and_each_shape_is_drawn_in_its_pen():
+    from PySide6.QtGui import QColor, QImage, QPainter
     from PySide6.QtWidgets import QApplication
 
     QApplication.instance() or QApplication([])
+    image = QImage(W, H, QImage.Format_RGB32)
+    image.fill(0)
+    painter = QPainter(image)
+    region.draw(painter, 0, None, 0, params("dish"))
+    painter.end()
+    assert image.pixelColor(25, 15) == QColor(80, 220, 120) and image.pixelColor(53, 20) == QColor(255, 200, 80)
     assert region.run(fed(frame()), 0, params("dish"))["name"].tolist() == ["dish"]
     assert region.run(fed(frame()), 0, params(""))["name"].tolist() == ["nest", "dish"]
     assert region.run(fed(frame()), 0, params("gone"))["name"].tolist() == ["nest", "dish"]

@@ -230,7 +230,9 @@ record is read calls `Graph.began` as the worker does. A walk's wall is not comp
 walk half held costs less a row than a cold one with nothing wrong, and a lane's wall holds the turns the
 ladder gave the other lanes; what two walks under one plan have in common is each node's cost a run. The
 sync's plan carries the pinned set and not the selection. A served reader has one cursor, where the plate's
-decoder keeps a second for the scrub.
+decoder keeps a second for the scrub, so a scrub of a served node during a walk makes the walk seek on it:
+`docs/findings/2026-11-12-served-scrub-moves-the-walks-cursor.md`, where the seeks class surfaced it. It is
+a fault of the player's and no false sighting; the healthy scrub below is on a live document.
 
 Fork: whether a density folded for a node nothing shows is the same problem when the walk reaches the
 node anyway. The class is built as work no watched node and no walked node asked for, with one threshold,

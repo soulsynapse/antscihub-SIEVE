@@ -114,10 +114,19 @@ class _Run:
         self.graph.sync()       # the plan, into the ledger
         self.worker = Worker(self.graph, every=EVERY, store=self.store)
         self.walked, self.series, self.baked = [], [], []
-        self.worker.walked.connect(lambda done, n: self.walked.append((done, n)))
-        self.worker.seriesReady.connect(lambda *a: self.series.append(a))
+        self.worker.walked.connect(self.slot("walked", lambda done, n: self.walked.append((done, n))))
+        self.worker.seriesReady.connect(self.slot("seriesReady", lambda *a: self.series.append(a)))
         self.worker.bakeDone.connect(lambda nid, b: self.baked.append(b))
         self.worker.bakeRefused.connect(lambda nid, why: self.baked.append(RuntimeError(why)))
+
+    def slot(self, name, fn):
+        """`fn` as the window connects a worker signal's slot: a "slot" span on the thread it lands in."""
+        graph = self.graph
+
+        def timed(*args):
+            with graph.turn("slot", name):
+                return fn(*args)
+        return timed
 
     def wait(self, done, what, timeout=60.0):
         t = time.perf_counter()
@@ -216,10 +225,10 @@ def seeks(folder):
 
 
 def slower(folder):
-    """Two halves of the clip under one plan, work three times as slow over the second."""
+    """Two halves of the clip under one plan, work five times as slow over the second."""
     with _Run(folder) as r:
         r.walk(0, ROWS // 2)
-        r.tools["work"].ms *= 3
+        r.tools["work"].ms *= 5
         r.walk(ROWS // 2, ROWS // 2)
         return r.seen()
 
@@ -230,6 +239,16 @@ def held(folder):
         r.walk(0, ROWS // 2)
         r.worker.walked.connect(lambda done, n: _spin(3 * MS), Qt.ConnectionType.DirectConnection)
         r.walk(ROWS // 2, ROWS // 2)
+        return r.seen()
+
+
+def slot(folder):
+    """A slot of the GUI thread's that spins at every row, holding the interpreter the worker then
+    waits for. The wait lands in whatever span the worker is in, the folds among them, so the frame
+    nodes are pinned and their folds, grown by it, are read."""
+    with _Run(folder, pinned=("gray", "work", "bake", "edge")) as r:
+        r.worker.walked.connect(r.slot("walked", lambda done, n: _spin(3 * MS)))
+        r.walk()
         return r.seen()
 
 
@@ -250,7 +269,7 @@ def _scrubbed(r):
 
 SIMULATIONS = {"unread": (unread, "unread"), "memo": (memo, "thrash"), "cache": (cache, "thrash"), "reader": (reader, "thrash"),
                "grows": (grows, "grows"), "seeks": (seeks, "seeks"), "slower": (slower, "slower"),
-               "held": (held, "slower")}     # name -> (it, the class it builds)
+               "held": (held, "slower"), "slot": (slot, "waits")}     # name -> (it, the class it builds)
 SERVED = {"unread", "reader", "bake"}      # the simulations that write a bake
 HEALTHY = {"walk": _healthy(_Run.walk), "rewalk": _healthy(_Run.walk, _Run.walk),
            "midclip": _healthy(lambda r: r.walk(ROWS // 4, ROWS // 2)), "scrub": _healthy(_scrubbed),

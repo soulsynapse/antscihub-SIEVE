@@ -116,7 +116,7 @@ def test_the_window_samples_how_late_its_timer_fired_while_a_dump_is_attached(tm
     app = QApplication.instance() or QApplication([])
     g = Graph(D.from_tools([gray, add]), Dec(), TOOLS)
     dump = Dump(g, tmp_path / "d.jsonl")
-    late = Lateness(dump, interval_ms=20)
+    late = Lateness(dump.sample, interval_ms=20)
     end = time.perf_counter() + 0.1
     while time.perf_counter() < end:
         app.processEvents()
@@ -129,3 +129,34 @@ def test_the_window_samples_how_late_its_timer_fired_while_a_dump_is_attached(tm
     _, _, samples = read_dump(dump.path)
     lates = [s["value"] for s in samples if s["sample"] == "late"]
     assert len(lates) > 3 and max(lates) >= 230 and min(lates) < 230
+
+
+def test_the_window_attaches_a_ledger_that_holds_the_gui_threads_slots_and_paints(tmp_path):
+    import threading
+
+    import numpy as np
+    from tests.test_plot import PlayerWindow, QApplication, clip, series, settle
+    from tools import gray as gray_tool
+    QApplication.instance() or QApplication([])
+    head = series("head", lambda v: np.arange(len(v), dtype=np.float64))
+    D.save(D.from_tools([gray_tool, head], clip(tmp_path / "v.avi")), tmp_path / "doc.json")
+    win = PlayerWindow(str(tmp_path / "doc.json"), "t", [gray_tool, head])
+    win.resize(900, 600)
+    win.show()
+    settle(win, "head")
+    events, ledger = [], win.graph.on_event
+    win.graph.on_event = lambda ev: (events.append(ev), ledger(ev))
+    win.worker.invalidate()                                     # the window walked again, every signal of a walk fired under the tap
+    win.results = {}
+    settle(win, "head")
+    win.plot.grab()
+    QApplication.processEvents()
+    turns = {(ev.kind, ev.node) for ev in events if ev.kind in ("slot", "paint")}
+    assert {("slot", "walked"), ("slot", "seriesReady"), ("slot", "densityReady"), ("paint", "plot")} <= turns
+    assert {ev.thread for ev in events if ev.kind in ("slot", "paint")} == {threading.main_thread().name}
+    assert threading.main_thread().name not in {ev.thread for ev in events if ev.kind in ("run", "decode", "progress")}
+    view = win.ledger.view()
+    assert {"slot walked", "slot seriesReady", "paint plot"} <= {name for b in view.buckets for name in b.turns}
+    assert view.walks[-1].lane == "window" and view.walks[-1].plan["walk"] == "gray"
+    win.close()
+    assert win.ledger is None

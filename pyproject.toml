@@ -21,3 +21,5 @@ test = ["pytest"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "-m 'not simulation'"
+markers = ["simulation: runs sieve_player/dev/simulations.py, whose faults are built of wall time; pytest -m simulation"]

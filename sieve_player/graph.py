@@ -206,10 +206,10 @@ class Event:
     """What the probe emits, one per run, read or boundary; see Graph.probe(). Every field is
     required, so a consumer building or reading one by position, or one missing a field, fails
     where it stands instead of misreading its neighbour."""
-    node: str | None    # the node that ran, or read; None on a boundary
+    node: str | None    # the node that ran, or read; None on a boundary; on a "slot" or "paint" what turn() was told, no node
     row: int | None
     key: str | None     # the node's raw key, what the memo holds under
-    kind: str           # "run" | "step" | "fold" | "error" | "cancel" | "cache" | "decode" | "seek" | "read" | "sync" | "evict" | "uncache" | "begin" | "progress" | "dump"
+    kind: str           # "run" | "step" | "fold" | "error" | "cancel" | "cache" | "decode" | "seek" | "read" | "sync" | "evict" | "uncache" | "begin" | "progress" | "dump" | "slot" | "paint"
     bytes: int          # the result's; what an eviction freed
     ms: float           # wall, exclusive of the runs this one opened
     t: float            # start, on the probe's clock (perf_counter); orders events across threads
@@ -573,6 +573,28 @@ class Graph:
                 stack[-1][1] += cpu
             self._emit(ev[0], nid, row, key, ev[1], (total - inner) * 1000, t, (cpu - inner_cpu) * 1000, reader=reader)
 
+    @contextmanager
+    def turn(self, kind, name):
+        """Times the body as a span of this thread's that no node ran and hands `on_event` one Event
+        of `kind` with `name` as its node, its ms exclusive of the turns opened inside it: the
+        window's are "slot", a worker signal's slot named by the signal, and "paint", named by the
+        part that painted. Emitted whether or not the body raises; nothing when `on_event` is unset."""
+        if self.on_event is None:
+            yield
+            return
+        stack = self._probing.__dict__.setdefault("stack", [])
+        stack.append([0.0, 0.0])
+        t, c = time.perf_counter(), time.thread_time()
+        try:
+            yield
+        finally:
+            total, cpu = time.perf_counter() - t, time.thread_time() - c
+            inner, inner_cpu = stack.pop()
+            if stack:
+                stack[-1][0] += total
+                stack[-1][1] += cpu
+            self._emit(kind, name, None, None, 0, (total - inner) * 1000, t, (cpu - inner_cpu) * 1000)
+
     def _compute(self, plan, nid, row, raw=False, reader=None):
         e = plan.get(nid)
         if e is None or e.kind in ("series", "selector") or not e.fed:
@@ -673,8 +695,8 @@ class Stats:
     def event(self, ev):
         if self._prev is not None:
             self._prev(ev)
-        if ev.kind in ("sync", "evict", "uncache", "begin", "error", "fold") or ev.kind == "progress" and ev.lane == "clip":
-            return                          # the means are the tool's; a fold is not. The rate is the window's
+        if ev.kind in ("sync", "evict", "uncache", "begin", "error", "fold", "slot", "paint") or ev.kind == "progress" and ev.lane == "clip":
+            return                          # the means are the tool's; a fold is not, nor a turn of the GUI thread's. The rate is the window's
         with self._lock:
             if ev.kind == "progress":
                 if self._walk and ev.row < self._walk[-1][1]:

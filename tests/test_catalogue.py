@@ -93,22 +93,25 @@ def test_a_changed_param_between_two_walks_is_compared_with_nothing():
     assert [p.subject for p in slower(View(0.25, 0, [], [first, second]))] == ["slow"]
 
 
+@pytest.mark.simulation
 @pytest.mark.parametrize("name", [pytest.param(n, marks=needs_ffmpeg) if n in SERVED else n for n in SIMULATIONS])
 def test_a_simulation_surfaces_its_class_alone(name, tmp_path):
     seen = run(name, tmp_path)
     assert {e.problem.kind for e in seen.log.ordered()} == {SIMULATIONS[name][1]}, [e.problem.line for e in seen.log.ordered()]
     subjects = {e.problem.subject for e in seen.log.ordered()}
     want = {"unread": {"gray", "work"}, "memo": {"memo"}, "cache": {"video"}, "reader": {"bake"}, "grows": {"pile"},
-            "seeks": {"video"}, "slower": {"work"}, "held": {"unprobed"}}[name]
+            "seeks": {"video"}, "slower": {"work"}, "held": {"unprobed"}, "slot": {"slot walked"}}[name]
     assert want <= subjects and (name == "unread" or want == subjects)
 
 
+@pytest.mark.simulation
 @pytest.mark.parametrize("name", [pytest.param(n, marks=needs_ffmpeg) if n in SERVED else n for n in HEALTHY])
 def test_a_healthy_walk_surfaces_nothing(name, tmp_path):
     seen = run(name, tmp_path)
     assert not seen.log.entries and seen.view.walks[-1].done == seen.view.walks[-1].length
 
 
+@pytest.mark.simulation
 @needs_ffmpeg
 def test_an_entrys_text_is_enough_to_begin_on_the_fault(tmp_path):
     seen = run("unread", tmp_path)

@@ -54,8 +54,14 @@ decision this spec does not make.
 ## How to read this
 
 Each `##` below is a deliverable: an `Assumes:` line naming what it builds on, a sentence of why, facts
-read off the tree, then done-when assertions, each a box with a `Check:` that is a test in `tests/` or a
-simulation's exit. A box is ticked by a session once its check passes in the tree; a session never unticks
+read off the tree, then done-when assertions, each a box with a `Check:`. Since 2026-11-12, on Kendrick's
+word, a check is by default a one-off: a script under `docs/findings/experiments/` or a simulation's
+exit, run when the box is built and again when the question comes up, its output recorded where the box
+says or in the commit that ticks it. It is a test in `tests/` only where what it holds is a seam or an
+invariant, something a later change elsewhere could break without anyone looking: that a dump replays
+to what the live ledger held, that a module imports no Qt, that a detector fires on its fault alone. A
+check written before that date as a test stands as it was ticked; an unticked one that names a test is
+read as naming the behaviour, and the session building it chooses the form by this rule. A box is ticked by a session once its check passes in the tree; a session never unticks
 or rewrites an assertion, and before building toward an unticked box checks whether the tree already meets
 it. Where a result is worth Kendrick's eye before the next deliverable leans on it, a `Worth a look:` line
 says what to look at; it is not a gate. Nothing here says how. Any deliverable whose `Assumes:` are all
@@ -251,7 +257,10 @@ stay in the saved history.
 
 Open: where simulations live and whether they are tests. Recommended, and what a session may build on:
 one module under `sieve_player/dev/`, each simulation runnable by name from the command line, and one test
-that runs them all.
+that runs them all. Since 2026-11-12, on Kendrick's word, the tests that run a simulation carry the
+`simulation` marker and are out of the default run, their faults being built of wall time: one failed
+once under a full suite with nothing wrong and not again alone. A check that names a simulation's test
+is run with `pytest -m simulation`.
 
 - [x] A problem is a value: its class, its subject, one line, its cost per row of the walk and as a share
   of it where it has one, the evidence the line was drawn from, and where in the code the class has come
@@ -322,9 +331,10 @@ message of efd1fe10 and `Dump`'s docstring say, so a consumer's cost is not its 
 fields to every event and a payload to every progress event once anything consumes the stream; the hits
 are counted and the payloads built only then.
 
-- [ ] The walk's rate is measured on Kendrick's footage with nothing attached, with the new facts
-  emitted to no consumer, with the ledger attached, and with the ledger and the window open at each of
-  its sizes, and stated as a finding beside the dump's figures.
+- [x] The walk's rate is measured on Kendrick's footage with nothing attached, with the new facts
+  emitted to no consumer, and with the ledger attached, and stated as a finding beside the dump's
+  figures. Split 2026-11-12 on Kendrick's word: the box also asked for the window open at each of its
+  sizes, which this deliverable does not assume, and that half is a box under The window.
   Check: an experiment under `docs/findings/experiments/` and its finding.
 
 Fork: whether the ledger is attached for the life of a video or of the window. Until the finding is in,
@@ -332,7 +342,10 @@ a session builds the window-lifetime attachment and nothing that forecloses the 
 finding: where the walk's rate with the ledger attached sits inside the run-to-run spread of the rate
 with nothing attached, the ledger is attached when a video opens and the window finds its history
 waiting; where it sits outside, the attachment stays the window's, and the cost is stated in the window
-itself beside the monitor's own band. On either side the figure on the player attaches nothing.
+itself beside the monitor's own band. On either side the figure on the player attaches nothing. Observed
+2026-11-12, in `docs/findings/2026-11-12-what-the-trace-costs.md`: inside, at every point of the spread,
+so the ledger is attached when a video opens. The finding says how little the criterion asked, the
+spread being many times the cost, and that a walk long enough to pass the memo's limit was not measured.
 
 ## The GUI thread's turn
 
@@ -347,7 +360,15 @@ of seconds. The worker's signals land on the GUI thread as queued slots: `rowRea
 `walked` and `clipWalked` per row, `seriesReady`, `densityReady` and `clipReady` per emit, each ending in
 a repaint of the frame, the plot or the strip. The old monitor's unprobed line names "the GUI's turn"
 among four things it cannot separate. The worker's own spans carry wall and CPU, and the two part for two
-reasons the stream does not tell apart: waiting for the GIL, and a decoder's threads working.
+reasons the stream does not tell apart: waiting for the GIL, and a decoder's threads working. Added
+2026-11-12 on building it: the pane has no paint of its own, its children being Qt's widgets painted
+with no Python run, so a span around its paint event would time an empty background and it has none;
+what its children cost the GUI thread is in the lateness and under no span. The monitor's paint is The
+window's box for the monitor's own work. A wait lands in whatever span the worker is in, a fold as
+readily as a tool, so a GUI thread holding the interpreter grows the folds' ms and with them the share
+the work-nothing-reads class is judged by: the slot simulation with nothing pinned surfaced that class
+on all four frame nodes beside its own, and pins them for it. The CPU clock's tick makes one span's wait
+noise, so the sums are kept signed and a detector reads a walk's.
 
 Fork: how fine the attribution is. It begins at one span per slot a worker signal lands in, named by the
 signal, and one per paint of each of the player's top-level parts, the frame, the plot, the strip, the
@@ -357,7 +378,7 @@ single span left over, the attribution stops there; where more is left uncovered
 holding the most is split one level finer, or the uncovered time is given its own span by what the loop
 was doing, and the observation is made again.
 
-- [ ] The GUI thread's time is in the stream as spans on its own thread, each naming what it was: the
+- [x] The GUI thread's time is in the stream as spans on its own thread, each naming what it was: the
   slot a worker signal landed in, or the part that painted; the lateness is sampled into the ledger
   whenever one is attached, with or without a dump.
   Check: a window test, offscreen, walks a window and reads a span for each signal that fired and a paint
@@ -365,13 +386,19 @@ was doing, and the observation is made again.
 - [ ] The ledger keeps the GUI thread's spans in the same buckets as the worker's and apart from them,
   and the time view draws them as their own stack on the shared axis.
   Check: a monitor test feeds both threads' spans and reads two stacks.
-- [ ] How long the worker's spans spent off their own CPU is summed per bucket and per walk, read
+- [x] How long the worker's spans spent off their own CPU is summed per bucket and per walk, read
   kinds apart from tool kinds, since a decode's wait is its own threads.
   Check: a ledger test feeds spans with wall above CPU and reads the sum, and reads none from decodes.
-- [ ] The worker waiting on a blocked GUI thread is a class in the catalogue: a walk in which the GUI
+- [x] The worker waiting on a blocked GUI thread is a class in the catalogue: a walk in which the GUI
   thread's spans and the worker's tool-kind waits coincide past a threshold, its subject the GUI span
   that took the most, its simulation a slot made slow on purpose.
   Check: the simulation's test, and the healthy simulation still surfacing nothing.
+- [x] The player attaches a ledger to each video's graph as it opens and drops it as the video closes,
+  read or not. Added 2026-11-12: the fork of What the trace costs was observed on that side and no box
+  held it, and the lateness of the first box has nowhere to go without one.
+  Check: the window test of the first box reads the walk and its plan off the window's ledger, and
+  none after the window closes. A lateness of the blocked GUI thread was read off it once, 2026-11-12,
+  in that test before the read was dropped from it for the quarter second it slept.
 
 Worth a look: the GUI stack on the purb document in the player against the offscreen figures of the
 finding of 2026-11-12; the gap between the two is what this deliverable is for, and whether it closes is
@@ -496,6 +523,10 @@ read arriving stays in the default list; one on which none was leaves the defaul
   look at its density reads as unwatched.
   Check: a monitor test selects a node whose fold the catalogue had surfaced, walks, and reads the entry
   cleared.
+- [ ] The walk's rate is measured on Kendrick's footage with the ledger attached and the window open at
+  each of its sizes, and stated in What the trace costs' finding beside the figures there. Split
+  2026-11-12 from that deliverable's box, which asked it before the window existed.
+  Check: that finding's experiment, extended to open the window, and a second half of the finding.
 
 Worth a look: the window full screen on the second monitor through a session on the purb document and one
 on the GoPro clip, bake live and served; and small beside the player.

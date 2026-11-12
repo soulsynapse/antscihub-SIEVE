@@ -20,7 +20,7 @@ def walk(g, rows):
 
 
 def event(kind, t, ms=0.0, node=None, row=None, **more):
-    return Event(**{f: None for f in FIELDS} | {"kind": kind, "t": t, "ms": ms, "node": node, "row": row, "bytes": 0,
+    return Event(**{f: None for f in FIELDS} | {"kind": kind, "t": t, "ms": ms, "cpu_ms": ms, "node": node, "row": row, "bytes": 0,
                                                 "thread": "w", "lane": "window"} | more)
 
 
@@ -92,6 +92,19 @@ def test_a_span_is_spread_over_its_buckets_and_a_cost_keeps_its_place_along_the_
     assert v.buckets[4].ms["w"] == {"outer": pytest.approx(80.0), "video": pytest.approx(20.0)}
     led.event(event("run", 100.0, 3100.0, "long"))             # thirteen buckets touched
     assert len(led.view().buckets) == 8 and led.view().first == 405 and len(v.buckets) == 5     # the bound; the view held is as it was
+
+    led = Ledger(width=0.25)                                    # the GUI thread's spans apart from the worker's, and what a span spent off its CPU
+    led.event(event("begin", 0.0, row=0, length=1))
+    led.event(event("run", 0.0, 400.0, "tool", cpu_ms=100.0))
+    led.event(event("decode", 0.4, 50.0, "video", cpu_ms=10.0))
+    led.event(event("slot", 0.05, 100.0, "walked", thread="gui", lane=None))
+    led.event(event("paint", 0.2, 100.0, "plot", thread="gui", lane=None))
+    led.event(event("progress", 0.45, row=1, length=1))
+    v = led.view()
+    assert [b.turns for b in v.buckets] == [{"slot walked": pytest.approx(100.0), "paint plot": pytest.approx(50.0)}, {"paint plot": pytest.approx(50.0)}]
+    assert [set(b.ms) for b in v.buckets] == [{"w"}, {"w"}] and set(v.walks[0].nodes) == {"tool", "video"}
+    assert [b.wait for b in v.buckets] == [pytest.approx(187.5), pytest.approx(112.5)] and v.buckets[1].read_wait == pytest.approx(40.0)
+    assert (v.walks[0].wait, v.walks[0].read_wait) == (300.0, 40.0)
 
     led = Ledger()
     led.event(event("begin", -2.0, row=5, length=9))            # a drag: begun and begun again with no row between

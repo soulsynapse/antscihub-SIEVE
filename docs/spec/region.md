@@ -55,7 +55,9 @@ has been so a right click walks back.
 ## How to read this
 
 Each `##` below is a deliverable: an `Assumes:` line naming what it builds on, a sentence of why,
-then done-when assertions, each a box with a `Check:` that is a test in `tests/`. A box is ticked
+then done-when assertions, each a box with a `Check:`,
+a test in `tests/` when the box was ticked and since 2026-11-12 a one-off unless it holds a seam or
+an invariant, by the Tests section of CLAUDE.md. A box is ticked
 by a session once its test passes in the tree; a session never unticks or rewrites an assertion,
 and before building toward an unticked box checks whether the tree already meets it. Where a
 result is worth Kendrick's eye before the next deliverable leans on it, a `Worth a look:` line says

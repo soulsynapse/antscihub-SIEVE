@@ -9,13 +9,14 @@ import threading
 from collections import deque
 from dataclasses import dataclass, field, fields, replace
 
-from .trace import SPANS, read_dump
+from .trace import SPANS, TURNS, read_dump
 
 PARTS = 8           # the pieces a walk's range is cut into for a node's cost along it
 BACKLOG = 4096      # events queued before the emitting thread folds them itself
 
 _RAN = {"run", "step", "fold", "decode", "seek"}
 _FILE = {"decode", "seek", "read"}      # what a served node's file answered, its reader's cache not holding the row
+_READS = _FILE | {"cache"}              # the kinds whose wall above CPU is a decoder's own threads at work and no wait
 
 
 @dataclass
@@ -29,11 +30,14 @@ class Bucket:
     recomputed: dict = field(default_factory=dict)  # store -> computations and decodes of what it had discarded
     seeks: dict = field(default_factory=dict)       # node -> seeks
     late: float = 0.0                               # the worst lateness sampled, ms
+    turns: dict = field(default_factory=dict)       # "slot walked", "paint plot" -> ms: the GUI thread's spans, apart from `ms`
+    wait: float = 0.0                               # the tool spans' wall less their CPU, ms; signed, see Walk.wait
+    read_wait: float = 0.0                          # the same of the read kinds
     shared: bool = field(default=False, compare=False, repr=False)
 
     def copy(self):
         return Bucket({t: dict(d) for t, d in self.ms.items()}, dict(self.rows), self.unprobed, dict(self.stores),
-                      dict(self.recomputed), dict(self.seeks), self.late)
+                      dict(self.recomputed), dict(self.seeks), self.late, dict(self.turns), self.wait, self.read_wait)
 
 
 _EMPTY = Bucket(shared=True)
@@ -75,6 +79,8 @@ class Walk:
     recomputed: dict = field(default_factory=dict)  # store -> count, as a bucket's
     recomputed_ms: dict = field(default_factory=dict)   # store -> what those took
     unprobed: float = 0.0                           # ms between its rows that no span covers, as the buckets'
+    wait: float = 0.0                               # its tool spans' wall less their CPU, ms; summed signed, one span's being a tick's noise either way
+    read_wait: float = 0.0                          # the same of its reads, where it is the decoder's threads
 
     def copy(self):
         return replace(self, nodes={n: v.copy() for n, v in self.nodes.items()}, recomputed=dict(self.recomputed),
@@ -163,6 +169,10 @@ class Ledger:
                 self._gone[(item.key, item.row)] = "memo" if item.kind == "evict" else item.key
                 if len(self._gone) > self._discards:
                     del self._gone[next(iter(self._gone))]
+            elif item.kind in TURNS:
+                name = f"{item.kind} {item.node}"
+                for bucket, share in self._over(item.t, item.t + item.ms / 1000):
+                    bucket.turns[name] = bucket.turns.get(name, 0.0) + item.ms * share
             elif item.kind in SPANS and item.kind != "dump":    # the dump's writer is in the file and never in the stream
                 self._span(item)
 
@@ -210,12 +220,16 @@ class Ledger:
         end = ev.t + ev.ms / 1000 + sum(b - a for a, b in inner)
         if ev.reader is not None:
             nest.append((ev.t, end))
-        at = ev.t
+        at, off, reads = ev.t, ev.ms - ev.cpu_ms, ev.kind in _READS
         for a, b in [*reversed(inner), (end, end)]:
             if a > at:
                 for bucket, share in self._over(at, a):
-                    ms = bucket.ms.setdefault(ev.thread, {})
-                    ms[ev.node] = ms.get(ev.node, 0.0) + (a - at) * 1000 * share
+                    ms, piece = bucket.ms.setdefault(ev.thread, {}), (a - at) * 1000 * share
+                    ms[ev.node] = ms.get(ev.node, 0.0) + piece
+                    if reads:
+                        bucket.read_wait += off * piece / ev.ms
+                    else:
+                        bucket.wait += off * piece / ev.ms
             at = max(at, b)
         self._spent[ev.thread] = self._spent.get(ev.thread, 0.0) + ev.ms
         lane = self._lanes.get(ev.lane)
@@ -233,6 +247,10 @@ class Ledger:
             walk.recomputed_ms[store] = walk.recomputed_ms.get(store, 0.0) + ev.ms
         if lane.synced and ev.kind != "cancel":     # a cancelled run was the old plan's
             walk.replanned = True
+        if reads:
+            walk.read_wait += off
+        else:
+            walk.wait += off
         node = walk.nodes.setdefault(ev.node, Node())
         run = node.runs.setdefault((ev.kind, ev.demand, ev.asked), [0, 0.0, 0])
         run[0] += 1

@@ -23,6 +23,8 @@ SOURCES = {
              "docs/findings/2026-11-08-bake-window-fit.md, its second half",
     "seeks": "decoder.Decoder.read, a row behind the cursor or past what it reads through; a tool reading far from its row",
     "slower": "no one place; the evidence names the nodes whose cost moved",
+    "waits": "window.PlayerWindow's slots and paints, Python on the GUI thread holding the interpreter a tool on the "
+             "worker's then waits for; the subject names the slot or the part",
 }
 
 
@@ -192,7 +194,36 @@ def slower(view):
     return out
 
 
-CLASSES = {"unread": unread, "thrash": thrash, "grows": grows, "seeks": seeks, "slower": slower}
+WAITS = 0.1         # the tools' waits that coincide with the GUI thread's spans, as a share of the walk's cost
+TICK = 16.0         # ms; the CPU clock's step on Windows, see Event.cpu_ms: a walk's wait under one is not a figure
+
+
+def waits(view):
+    """The worker waiting on the GUI thread: over the buckets a walk spans, what its tools spent
+    off their own CPU while the GUI thread was in a slot or a paint, the lesser of the two in each
+    bucket and no more than the walk's own wait, which is the steadier figure. A read's wait is the
+    decoder's threads and is not counted; a tool that sleeps coincides with nothing."""
+    out = []
+    for w in finished(view):
+        i0, i1 = (int(t // view.width) - view.first for t in (w.t0, w.t1))
+        both, by = 0.0, {}
+        for b in view.buckets[max(i0, 0):max(i1 + 1, 0)]:
+            if b.wait > 0 and b.turns:
+                both += min(b.wait, sum(b.turns.values()))
+                for name, ms in b.turns.items():
+                    by[name] = by.get(name, 0.0) + ms
+        both = min(both, w.wait)
+        if both < max(TICK, WAITS * cost(w)):
+            continue
+        top = sorted(by.items(), key=lambda x: -x[1])
+        out.append(_problem("waits", w, top[0][0], f"the walk's tools waited {both:.0f} ms off their CPU while the GUI thread "
+                            f"was in its own spans, {top[0][0]} the longest at {top[0][1]:.0f} ms", both,
+                            [*(f"{name}: {ms:.1f} ms" for name, ms in top),
+                             f"the walk's tools {w.wait:.1f} ms off their CPU, its reads {w.read_wait:.1f}"]))
+    return out
+
+
+CLASSES = {"unread": unread, "thrash": thrash, "grows": grows, "seeks": seeks, "slower": slower, "waits": waits}
 
 
 @dataclass

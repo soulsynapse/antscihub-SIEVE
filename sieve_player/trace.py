@@ -15,7 +15,7 @@ from dataclasses import fields
 
 from .graph import Event
 
-SPANS = ("run", "step", "fold", "error", "cache", "decode", "seek", "dump")    # the kinds with a duration; the rest are instants
+SPANS = ("run", "step", "fold", "error", "cancel", "cache", "decode", "seek", "read", "dump")    # the kinds with a duration; the rest are instants
 FIELDS = tuple(f.name for f in fields(Event))
 
 

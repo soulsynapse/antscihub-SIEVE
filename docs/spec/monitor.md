@@ -134,7 +134,8 @@ existing `keys` and `length` stay as they are.
   hand must now carry.
 
 Worth a look: what the probe costs with the new facts, by `bench.py`'s cold fill beside the figure it
-gives on v5; the dump finding of 2026-10-31 is where a later figure sits beside the earlier.
+gives on v5; `docs/findings/2026-11-12-probe-cost-with-the-stream-facts.md` holds the figures, and is where
+a later one sits beside them.
 
 ## The ledger
 
@@ -276,11 +277,13 @@ Assumes: The ledger.
 Whether the ledger runs from the moment a video opens or only under an open window is decided by what it
 costs the walk, and that is not known.
 
-Facts to weigh. With `on_event` unset the probe yields and returns, so an unwatched graph pays nothing
-today. `bench.py` times a cold fill bare and with a dump attached; the dump's first writer cost the walk
-through GIL handoffs rather than through its own work, the finding of 2026-10-31 and `Dump`'s docstring
-say, so a consumer's cost is not its CPU time. The new facts add work at every probe and a payload at
-every progress event whether or not anything consumes them.
+Facts to weigh. With `on_event` unset the probe yields and returns, and an unwatched graph pays the
+demand's context manager at each entry and nothing else. `bench.py` times a cold fill bare and with a dump
+attached, on one fill, which `docs/findings/2026-11-12-probe-cost-with-the-stream-facts.md` found too few
+to read; the dump's first writer cost the walk through GIL handoffs rather than through its own work, the
+message of efd1fe10 and `Dump`'s docstring say, so a consumer's cost is not its CPU time. The new facts add
+fields to every event and a payload to every progress event once anything consumes the stream; the hits
+are counted and the payloads built only then.
 
 - [ ] The walk's rate is measured on Kendrick's footage with nothing attached, with the new facts
   emitted to no consumer, with the ledger attached, and with the ledger and the window open at each of

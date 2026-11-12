@@ -447,6 +447,14 @@ def test_stats_counts_everything_over_a_short_walk(tmp_path):
     assert s["walk_rows_s"] > 0 and s["step_ms"] > 0 and s["seek_ms"] > 0 and s["decodes"] and s["seeks"]
     assert s["memo_mb"] > 0 and s["cache_mb"] > 0 and 0 < s["memo_hit"] < 1 and 0 < s["cache_hit"] < 1
     assert s["series_ms"] is None and s["evictions"] > 0    # no chain in this document
+    g.compute("add", 0)                       # neither store holds row 0 any longer
+    from sieve_player.ledger import Ledger
+    led = Ledger()
+    for ev in events:
+        led.event(ev)
+    again, seeks = ({k: sum(getattr(b, name).get(k, 0) for b in led.view().buckets) for k in ("memo", "video", g.key("video"))}
+                    for name in ("recomputed", "seeks"))
+    assert again["memo"] == 2 and again[g.key("video")] == 1 and seeks["video"] == sum(ev.kind == "seek" for ev in events)
     g.decoder.close()
 
 
@@ -489,6 +497,10 @@ def test_events_name_the_demand_and_the_reader_and_memo_hits_leave_on_progress()
     assert [(f["hits"], f["fold_hits"]) for f in first] == [({"gray": 1}, {})] * 3                      # same read gray, which add had run
     assert [(f["hits"], f["fold_hits"]) for f in second] == [({"add": 1, "same": 1}, {"side": 1})] * 3
     assert second[-1]["memo"]["hits"] == g.memo.hits and second[-1]["caches"][g.key("video")]["misses"] == 0   # the fake counts no read
+    g.compute("same", 0)
+    g.began(0, 3)                             # a hit before a walk begins is not the walk's
+    g.progress(1, 3)
+    assert events[-1].facts["hits"] == {}
 
 
 def test_a_sync_event_carries_the_plan_it_began():

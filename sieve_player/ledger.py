@@ -55,8 +55,10 @@ class Node:
 @dataclass
 class Walk:
     """One pass of a lane over its range, opened by a "begin" event and holding everything the lane
-    emitted until the next: the chain's run after the last row is this walk's. A stream that marks no
-    beginning opens one at a progress that goes back, with `start` unknown."""
+    emitted until the next: the chain's run after the last row is this walk's. One that finished no
+    row before the next began leaves no record, so a drag's restarts do not push the walks before
+    them out of the history. A stream that marks no beginning opens one at a progress that goes back,
+    with `start` unknown."""
     lane: str | None
     start: int | None       # the range's first row
     length: int
@@ -182,8 +184,12 @@ class Ledger:
 
     def _begin(self, ev, start):
         lane = self._lanes.setdefault(ev.lane, _Lane())
-        lane.walk = Walk(ev.lane, start, ev.length, self._plan, self._keys, ev.t, ev.t)
-        self._walks.append(lane.walk)
+        old, lane.walk = lane.walk, Walk(ev.lane, start, ev.length, self._plan, self._keys, ev.t, ev.t)
+        at = None if old is None or old.done else next((i for i, w in enumerate(self._walks) if w is old), None)
+        if at is None:
+            self._walks.append(lane.walk)
+        else:
+            self._walks[at] = lane.walk
         lane.kinds, lane.synced = {}, False
         lane.t, lane.at = ev.t, self._spent.get(ev.thread, 0.0)
         return lane

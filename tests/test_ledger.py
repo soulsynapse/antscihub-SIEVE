@@ -91,11 +91,14 @@ def test_a_span_is_spread_over_its_buckets_and_a_cost_keeps_its_place_along_the_
     assert len(led.view().buckets) == 8 and led.view().first == 405 and len(v.buckets) == 5     # the bound; the view held is as it was
 
     led = Ledger()
+    led.event(event("begin", -2.0, row=5, length=9))            # a drag: begun and begun again with no row between
+    led.event(event("run", -1.5, 1.0, "dropped", row=5))
     led.event(event("begin", 0.0, row=0, length=64))
     for r in range(64):
         led.event(event("step", r, 2.0 ** (r // 8), "grows", row=r))
         led.event(event("step", r + 0.5, 3.0, "flat", row=r))
         led.event(event("progress", r + 0.9, row=r + 1, length=64))
+    assert [w.start for w in led.view().walks] == [0]
     nodes = led.view().walks[0].nodes
     assert len(nodes["grows"].parts) == PARTS and nodes["grows"].parts[-1] == 128 * nodes["grows"].parts[0]
     assert set(nodes["flat"].parts) == {24.0} and nodes["flat"].ran == 64

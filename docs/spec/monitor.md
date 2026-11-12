@@ -138,6 +138,11 @@ existing `keys` and `length` stay as they are.
   the next walk's first row, and a progress event says how long a range is and not where it starts.
   Check: the worker test of the two lanes reads one begin for each range, and a ledger fed its events
   gives the window's last chain run to the window's record.
+- [x] A hit counted in a lane before its walk began is not reported on that walk's first row. Added
+  2026-11-12 on driving The ledger: the hits of a row a restart cancelled left on the new walk's first
+  progress, where a node the row never touched read as held.
+  Check: the graph test of the hits computes a held node, begins a walk, and reads no hit on its first
+  progress.
 
 Worth a look: what the probe costs with the new facts, by `bench.py`'s cold fill beside the figure it
 gives on v5; `docs/findings/2026-11-12-probe-cost-with-the-stream-facts.md` holds the figures, and is where
@@ -181,14 +186,13 @@ attached.
   rows a served file answered, so a rate is never read without what it was a rate of.
   Check: a ledger test walks a window cold, walks it again, then walks one overlapping it by half, and
   reads all ran, all held, and half of each.
-- [ ] A computation or decode of a key and row a store had discarded is counted as a recomputation
+- [x] A computation or decode of a key and row a store had discarded is counted as a recomputation
   against that store, in the walk and the bucket it happened in.
-  Check: a ledger test walks a window twice over a memo that holds half of it and reads the second walk's
-  recomputations as the rows the first discarded, and none on a memo that holds it.
-  Not ticked, 2026-11-12: the assertion is met and `tests/test_ledger.py` reads it, but the check's count
-  is not what an LRU gives. A memo holding half a window discards, as the second walk fills it, the half
-  the first walk left held, before the walk reaches them; the second walk recomputes every row, twice
-  what the first discarded. The test asserts that. Which the check should read is Kendrick's.
+  Check: a ledger test walks a window twice over a memo that holds half of it and reads the second walk
+  recomputing every row, the first walk's discards and its own, an LRU discarding the half the first
+  left held before the second reaches it, and none on a memo that holds it; the graph test over a real
+  decoder reads a decode of a row its cache had discarded against the cache, and the seeks. The check
+  was reworded 2026-11-12, on Kendrick's word, from one that expected only the first walk's discards.
 - [x] A walk's record keeps each node's cost in order along the range, coarsely, so a cost that grows
   with the rows is told from one that is flat.
   Check: a ledger test steps a tool whose cost doubles over the range and reads a last part several times
@@ -197,6 +201,11 @@ attached.
   taking it costs the emitting thread no wait longer than a bucket's bookkeeping.
   Check: a ledger test feeds from one thread while another takes views in a loop, with no error and the
   final view equal to a view taken after the feeder stopped.
+- [x] A walk that finished no row before the next began leaves no record. Added 2026-11-12: the ladder
+  begins the window walk at every change, so a drag opened a record a sync and pushed every walk
+  before it out of the bounded history, the one a detector would compare the next walk with included.
+  Reasoned from the ladder, not watched in the player.
+  Check: a ledger test begins twice with no row between and reads one record, the second's.
 
 ## The catalogue and its simulations
 
@@ -214,7 +223,10 @@ among them: since static is inherited in the plan, the fault is a tool that shou
 not, which the stream cannot tell from a tool whose output differs by row without comparing outputs.
 `time.thread_time` ticks at the scheduler quantum on Windows, so a wait is a sum over many events or it is
 nothing. The finding's own table shows a decode's wall well above the worker's CPU for a reason that is no
-fault, the decoder's own threads.
+fault, the decoder's own threads. A walk driven by hand, as `bench.py` and the experiments under
+`docs/findings/experiments/` drive theirs, emits progress and no begin; the ledger then opens a record at
+the first progress, without the runs before it and without the range's first row, so a script whose
+record is read calls `Graph.began` as the worker does.
 
 Fork: whether a density folded for a node nothing shows is the same problem when the walk reaches the
 node anyway. The class is built as work no watched node and no walked node asked for, with one threshold,
@@ -389,7 +401,13 @@ a painted widget sized for a snapshot; none has a time axis. `monitor_views.py` 
 this window keeps: hue is the product type's, the canvas's connector hue, never a node's, and unprobed is
 the neutral gray; the plot's spec decided the same for series on 2026-11-10 and names its fallback. A
 window opened from Dev is kept on the main window and outlives the menu action. The player's selection is
-`Player.selection` and the pinned set is the document's; the two together are what is watched.
+`Player.selection` and the pinned set is the document's; the two together are what is watched. A ledger
+attached after the graph's last sync has seen no plan, and its walks carry none until the document next
+changes; `Graph.sync()` on an unchanged document emits the plan again and moves nothing, the decoder's
+`output` setter returning on an unchanged value and the memo and the readers keeping the same keys. The
+dump's writer times itself into the file and passes nothing to `on_event`, so its span is not in the
+stream, and the ledger passes over that kind so that a dump replays to what the live ledger held; the
+ledger holds no graph to emit through.
 
 The figure at the top is the player's, the measured rate of the lane now walking, by The figure on the
 player. The cold projection is a different number, and the finding has the two at twice one another on
@@ -397,6 +415,13 @@ one walk; it is not drawn here until The old monitor goes has rebuilt it on the 
 
 The old monitor goes, Kendrick's word of 2026-11-12. Until the last deliverable it stays reachable under
 its own Dev entry, since the window is not yet there to replace it.
+
+Open: how a consumer's own cost enters the stream, which the monitor's-own-work box below needs and the
+dump does not yet do. Recommended, and what a session may build on: the dump passes its span on down the
+chain, `Stats` passing over the kind, and the ledger stops passing over it; whoever attaches the ledger
+times its bookkeeping and the window its painting and detecting, and emits each as a span on the graph it
+attached to, the ledger staying without one; and a span of the monitor's own is never itself timed, so
+the monitor's band does not hold the cost of drawing the monitor's band.
 
 Fork: which tracks earn their place. The tracks begin as the first box lists them. Observed by watching
 each simulation shown, under the last-but-one box, and in Kendrick's use: a track on which some class was
@@ -446,6 +471,10 @@ read arriving stays in the default list; one on which none was leaves the defaul
 - [ ] The window watches whatever graph the player holds, through a video closing and another opening,
   and with no video says so.
   Check: a monitor test swaps the player's graph and reads the new walk's rows.
+- [ ] A ledger attached to a graph already planned holds that plan from its first walk on. Added
+  2026-11-12 on driving The ledger.
+  Check: a monitor test opens the window on a synced graph, walks, and reads the plan on the walk's
+  record.
 
 Worth a look: the window full screen on the second monitor through a session on the purb document and one
 on the GoPro clip, bake live and served; and small beside the player.

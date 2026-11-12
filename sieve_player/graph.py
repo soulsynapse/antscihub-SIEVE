@@ -511,7 +511,9 @@ class Graph:
     def began(self, start, length):
         """A walk of this thread's lane began, over `length` rows from `start`: a "begin" event with
         the range's first row as its row. Whoever drives the walk says so as it starts or starts over,
-        so a reader tells the walk's first row from what the walk before ran after its last."""
+        so a reader tells the walk's first row from what the walk before ran after its last. The
+        lane's hits not yet reported were the walk before's and are dropped."""
+        self._hits.pop(getattr(self._probing, "lane", None), None)
         self._emit("begin", None, start, None, 0, length=length)
 
     def _hit(self, nid, fold):

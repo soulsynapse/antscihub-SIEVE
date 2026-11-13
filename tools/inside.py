@@ -1,7 +1,7 @@
 """Frame tool: which region each record of a table lies in, written onto the record; blobs in, a
 second blobs table on `regions`, the first table out with the regions' columns added.
 
-A record is in the region whose filled contour, or box by `outline`, holds its centroid, the
+A record is in the region whose runs or filled contour, or box by `outline`, holds its centroid, the
 regions placed in the first table's coordinates when the planes differ; in several it is in the
 smallest by area, where attach joins the other way and takes the largest mark. The regions' `name`,
 when they carry one, and the `columns` named, comma separated, land as `prefix`_name, with

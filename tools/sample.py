@@ -1,8 +1,8 @@
 """Frame tool: a statistic of a plane inside each record, as a column; blobs in, a gray or mask
 plane on `plane`, blobs out with `column` added.
 
-`method` is mean, max or count (nonzero pixels), read within the record's filled contour, not its
-box. A plane of another shape than the table's is read in the plane's coordinates, the record
+`method` is mean, max or count (nonzero pixels), read within the record's runs or filled contour, not
+its box. A plane of another shape than the table's is read in the plane's coordinates, the record
 scaled by the ratio of the shapes, so count is in the plane's pixels. A record whose footprint is
 empty reads NaN, or 0 for count. The table must carry a plane and must not already have `column`.
 """

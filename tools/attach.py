@@ -1,7 +1,7 @@
 """Frame tool: the records of a second table written onto the records of the first they sit on;
 blobs in, a second blobs table on `marks`, the first table out with the second's columns added.
 
-A mark attaches to the record of the first table whose filled contour, or box by `outline`, holds
+A mark attaches to the record of the first table whose runs or filled contour, or box by `outline`, holds
 its centroid, placed in the first table's coordinates when the planes differ. Its `cx`, `cy` and
 `area` and the `columns` named, comma separated, land as `prefix`_name, cx and cy in the first
 table's coordinates, area in the mark's own pixels, with `prefix`_n the marks on the record; a

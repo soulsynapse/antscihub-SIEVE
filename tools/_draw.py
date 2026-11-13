@@ -15,10 +15,15 @@ def contour(painter, points):
 
 
 def outline(painter, b, kind):
-    """A record's box or contour in the painter's pen."""
+    """A record's box, contour or the boundaries of its runs in the painter's pen."""
     from PySide6.QtCore import QRectF
 
-    if kind == "contour" and "contour" in b.dtype.names and b["contour"] is not None:
+    if kind == "contour" and "runs" in b.dtype.names and b["runs"] is not None:
+        from tools._table import outlines
+
+        for points in outlines(b):
+            contour(painter, points)
+    elif kind == "contour" and "contour" in b.dtype.names and b["contour"] is not None:
         contour(painter, b["contour"])
     else:
         painter.drawRect(QRectF(float(b["x"]), float(b["y"]), float(b["w"]), float(b["h"])))

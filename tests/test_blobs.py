@@ -1,9 +1,10 @@
 """blobs: the nonzero regions of a mask or gray plane as a table, with area bounds, moments, the diff
 input's intensity columns, and splitting; the display falls back to what it read."""
+import cv2
 import numpy as np
 
 from sieve_player.window import imageable
-from tools import blobs
+from tools import _table, blobs, blobs_to_mask, runs
 
 m = np.zeros((10, 12), np.uint8)
 m[1:4, 1:5] = 255                                          # 12 px
@@ -40,6 +41,24 @@ def test_regions_as_records_with_area_bounds_from_mask_or_gray():
     speck = blobs.run(fed(ring), 0, {**blobs.DEFAULTS, "min_area": 1, "max_area": 10})[0]
     assert speck["area"] == 1 and speck["contour"].tolist() == [[4, 4]]
     assert not imageable(out) and imageable(m) and imageable(np.zeros((4, 4, 3), np.uint8))
+
+
+def test_runs_keeps_blobs_records_and_each_region_as_its_own_pixels():
+    rng = np.random.default_rng(0)
+    for shape in ((40, 60), (1, 9), (7, 1)):
+        mask = cv2.dilate((rng.random(shape) < 0.08).astype(np.uint8), np.ones((3, 3), np.uint8))
+        diff = rng.integers(1, 200, shape).astype(np.uint8)
+        params = {"min_area": 3, "max_area": 60, "core_threshold": 100, "split": True}
+        a, b = blobs.run(fed(mask, diff), 0, params), runs.run(fed(mask, diff), 0, params)
+        assert len(a) == len(b) and b.dtype.names[-1] == "runs" and _table.plane(b) == shape
+        a, b = np.sort(a, order=("y", "x", "area")), np.sort(b, order=("y", "x", "area"))
+        for k in a.dtype.names[:-1]:
+            assert np.allclose(a[k], b[k], atol=1e-3, equal_nan=True), k
+    ring = np.zeros((9, 9), np.uint8)
+    ring[1:8, 1:8], ring[3:6, 3:6] = 255, 0
+    one = runs.run(fed(ring), 0, {**runs.DEFAULTS, "min_area": 1})
+    assert np.array_equal(blobs_to_mask.mask(one, "contour"), ring) and len(_table.outlines(one[0])) == 2
+    assert len(runs.run(fed(np.zeros((4, 4), np.uint8)), 0, runs.DEFAULTS)) == 0
 
 
 def test_a_long_region_reads_its_angle_and_the_diff_input_its_core():

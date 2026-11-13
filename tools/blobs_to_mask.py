@@ -1,8 +1,8 @@
 """Frame tool: a table's records painted into a mask the shape of the plane they were found in;
 blobs in, mask out.
 
-`outline` paints each record's contour filled or its box; a record with no contour gets its box
-either way, as draw shows it. No records is an empty mask. A table with no plane on it raises.
+`outline` paints each record's runs or filled contour, or its box; a record with neither gets its
+box either way, as draw shows it. No records is an empty mask. A table with no plane on it raises.
 """
 import numpy as np
 

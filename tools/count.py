@@ -7,7 +7,7 @@ and the signal is their lengths. The band on the trace is the player's, as reduc
 """
 import numpy as np
 
-from tools._table import is_tables
+from tools._table import is_table
 
 SIEVE_TOOL = True
 NAME, KIND, EXPECTS, PRODUCES = "count", "series", ("blobs", "tracks"), "signal"
@@ -20,11 +20,15 @@ def fold(frame):
 
 
 def run(series, params):
-    data = series.data
-    if is_tables(data):
-        return {"signal": np.array([len(t) for t in data], np.float32)}
-    data = np.asarray(data, np.float64).reshape(len(data), -1)
-    return {"signal": data[:, 0].astype(np.float32)}
+    out = np.zeros(len(series.data), np.float32)
+    for r, row in enumerate(series.data):
+        out[r] = step(None, row, r, params)[1]["signal"]
+    return {"signal": out}
+
+
+def step(state, row, i, params):
+    """No state: a row's signal is its table's length or its fold's one number."""
+    return None, {"signal": np.float32(len(row) if is_table(row) else np.asarray(row, np.float64).reshape(-1)[0])}
 
 
 def settings(parent=None):

@@ -1,8 +1,9 @@
-"""reduce: each method over a row's pixels, one float per row, from the four numbers the fold keeps; no gate of its own."""
+"""reduce: each method over a row's pixels, one float per row, from the four numbers the fold keeps, stepped as run whole; no gate of its own."""
 import numpy as np
 import pytest
 
 from sieve_player.graph import Series
+from tests.stepping import hold
 from tools import reduce
 
 
@@ -14,7 +15,7 @@ def test_each_method_over_the_rows_pixels():
     s = Series(folded, "k", 0, 30.0)
     expect = {"mean": [0.0, 50.0], "sum": [0.0, 800.0], "max": [0.0, 200.0], "count": [0.0, 4.0], "fraction": [0.0, 0.25]}
     for m, want in expect.items():
-        out = reduce.run(s, {"method": m})
+        out = hold(reduce, folded, {"method": m})
         assert out["signal"].dtype == np.float32 and out["signal"].tolist() == want and "gate" not in out, m
     with pytest.raises(ValueError):
         reduce.run(s, {"method": "median"})

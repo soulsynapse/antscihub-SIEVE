@@ -1,4 +1,7 @@
-"""Experiment behind the second half of docs/findings/2026-11-08-bake-window-fit.md: the crossings
+"""Left as 6530136d added it, over the tree its finding names, 2712d0d3, and run from there: the monitor
+it imports, sieve_player/dev/monitor.py, is gone from the tree since docs/spec/monitor.md.
+
+Experiment behind the second half of docs/findings/2026-11-08-bake-window-fit.md: the crossings
 window once the chain's prefix steps, read off the monitor.
 
     .venv\\Scripts\\python -X utf8 docs\\findings\\experiments\\2026-11-08-stepped-chain.py [document] [rows]

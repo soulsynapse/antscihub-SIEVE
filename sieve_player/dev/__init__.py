@@ -23,8 +23,8 @@ def show(window: QMainWindow, key: str) -> None:
             from .reference.icons import Icons
             w = Icons(window)
         elif key == "monitor":
-            from .monitor import MonitorWindow
-            w = MonitorWindow(window)
+            from .timeview import Window
+            w = Window(window)
         opened[key] = w
     w.show()
     w.raise_()

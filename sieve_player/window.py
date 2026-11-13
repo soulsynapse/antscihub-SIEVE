@@ -22,6 +22,7 @@ from .canvas import Canvas
 from .decoder import Decoder
 from .graph import Graph
 from .ledger import Ledger
+from .machine import Watch
 from .pace import Pace, clock
 from .pane import Pane
 from .registry import CATEGORIES, Entry, category, description, signature
@@ -299,26 +300,28 @@ class PaceControl(QAbstractButton):
     cut by what they were: those a store held dim, those that ran bright, those that read a bake
     hatched, in that order and not at the rows' places, the figure holding counts. The time is under
     the glyph of what it is, the clip at this rate, the clip walk's rest or what it took, and a dash
-    where the figure gives none. The tooltip is the figure's words. Its width never follows its text."""
+    where the figure gives none. The tooltip is the figure's words, then `hint`, what a press does;
+    without one it does not show as pressable. Its width never follows its text."""
     BAR_W, BAR_H, EDGE = 140, 8, 6
     LANES = {"window": "brackets-contain", "clip": "movie"}
     TIMES = {"takes": "clock", "left": "hourglass", "took": "circle-check"}
     HELD = 105      # a held row's gray, between the bar's ground and a row that ran
 
-    def __init__(self, parent=None):
+    def __init__(self, hint="", parent=None):
         super().__init__(parent)
-        self.figure = None
+        self.figure, self.hint = None, hint
         self.setFont(theme.mono_font())
         fm = QFontMetrics(self.font())
         self._rate_w, self._time_w = fm.horizontalAdvance("00.0×"), fm.horizontalAdvance("0:00:00")
         self.setFixedSize(3 * self.EDGE + 2 * theme.GLYPH + self._rate_w + self.BAR_W + 2 * GAP + 4 + self._time_w, ROW_H)
-        self.setAttribute(Qt.WA_Hover, True)
-        self.setCursor(Qt.PointingHandCursor)
+        self.setAttribute(Qt.WA_Hover, bool(hint))
+        if hint:
+            self.setCursor(Qt.PointingHandCursor)
 
     def set_figure(self, figure):
         """`figure`, a pace.Figure, or None for no walk to show."""
         self.figure = figure
-        self.setToolTip("" if figure is None else figure.words() + "\nclick for the monitor")
+        self.setToolTip("" if figure is None else figure.words() + ("\n" + self.hint if self.hint else ""))
         self.update()
 
     def paintEvent(self, event):
@@ -329,7 +332,7 @@ class PaceControl(QAbstractButton):
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing, True)
         base = theme.layer(theme.depth_of(self) + 1)
-        if self.underMouse() and self.isEnabled():
+        if self.hint and self.underMouse() and self.isEnabled():
             p.setPen(QPen(theme.qgray(base + theme.LINE_LIFT).lighter(theme.HOVER_EDGE), 1))
             p.setBrush(theme.qgray(base + theme.HOVER_LIFT))
             p.drawRoundedRect(QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5), theme.RADIUS, theme.RADIUS)
@@ -387,7 +390,7 @@ class Header(QWidget):
         self.store.setFixedSize(80, ROW_H)
         self.note = readout(mono=True, wrap=False)
         self.note.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        self.figure = PaceControl()
+        self.figure = PaceControl("click for the monitor")
         self.walk = QPushButton("Walk clip")
         self.walk.setFixedSize(80, ROW_H)
         lay.addWidget(self.store)
@@ -448,7 +451,7 @@ class PlayerWindow(QMainWindow):
             modules = catalogue(source)[0]
         self.doc = None
         self.decoder = self.graph = self.worker = None
-        self.ledger = self.lateness = None        # the open video's stream kept over time, and the GUI thread's sampler into it
+        self.ledger = self.lateness = self.machine = None     # the open video's stream kept over time, and the GUI thread's and the machine's samplers into it
         self.pace = None                          # the open video's walks as the header's figure reads them
         self.dump = None                          # the stream's file, while DUMP_ENV names one
         self.fps, self.count = 30.0, 0
@@ -623,6 +626,8 @@ class PlayerWindow(QMainWindow):
 
     def _select(self, nid):
         self.selection = nid
+        if self.graph is not None:
+            self.graph.watch(nid)
         self.pane.select(nid)
         self.plot.set_selection(nid)
         self._show_pinned()
@@ -990,11 +995,13 @@ class PlayerWindow(QMainWindow):
               f"{decoder.count} rows claimed, luma plane {'read' if decoder.luma else 'converted'}; "
               f"memo {self.graph.memo.limit >> 30} GB, cache {decoder.cache_limit >> 30} GB", file=sys.stderr)
         # Attached for the video's life, read or not: docs/findings/2026-11-12-what-the-trace-costs.md. The sync below is its first plan.
-        self.ledger = Ledger()
+        self.ledger = Ledger(timed=lambda graph=self.graph: graph.turn("monitor", "ledger"))
         self.graph.on_event = self.ledger.event
+        self.graph.watch(self.selection)
         if os.environ.get(DUMP_ENV):
             self.dump = Dump(self.graph, os.environ[DUMP_ENV])
         self.lateness = Lateness(self._sample, parent=self)
+        self.machine = Watch(self._sample)
         self.pace = Pace()
         self.worker = Worker(self.graph, store=self.store)
         self.fps, self.count = self.graph.fps, self.graph.count
@@ -1047,9 +1054,10 @@ class PlayerWindow(QMainWindow):
             self.toggle_play()
         self.worker.stop()
         self.lateness.stop()
+        self.machine.close()
         if self.dump is not None:
             self.dump.close()
-        self.dump = self.lateness = self.ledger = self.pace = None
+        self.dump = self.lateness = self.machine = self.ledger = self.pace = None
         self.header.figure.set_figure(None)
         self.graph.close()
         self.decoder.close()

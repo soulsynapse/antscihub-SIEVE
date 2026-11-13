@@ -7,7 +7,7 @@ name = "sieve-player"
 version = "0.1.0"
 description = "The shared PySide6 window SIEVE tools run inside"
 requires-python = ">=3.11"
-dependencies = ["PySide6", "opencv-python-headless", "numpy"]
+dependencies = ["PySide6", "opencv-python-headless", "numpy", "psutil"]
 
 [tool.setuptools]
 packages = ["sieve_player", "sieve_player.registry", "sieve_player.dev", "sieve_player.dev.reference"]

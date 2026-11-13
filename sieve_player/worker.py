@@ -154,7 +154,7 @@ class _Walk:
             self.refuse(f"the {self.name}'s stack reached {self.bytes / 2**30:.1f} GB at row {row}; the rows walked stand")
             return
         self.report()
-        g.progress(self.i, self.length)
+        g.progress(self.i, self.length, (self.bytes, STACK_BYTES))
         if self.i == self.length or self.i % self.every == 0:
             self.emit()
 
@@ -232,7 +232,7 @@ class _Walk:
         with its progress alone: the handlers that close on a tool's first raise must not raise on
         its second."""
         self.halt()
-        self.graph.progress(self.i, self.length)
+        self.graph.progress(self.i, self.length, (self.bytes, STACK_BYTES))
         try:
             self.emit()
         except Exception as exc:

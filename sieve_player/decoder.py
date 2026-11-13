@@ -189,6 +189,12 @@ class Decoder:
             f = self._cache.get(row)
             return f if f is None or self._fits(f) else None
 
+    def empty(self):
+        """Drops every cached frame and tells `on_evict` of none. Any thread."""
+        with self._cache_lock:
+            self._cache.clear()
+            self._cache_bytes = 0
+
     @property
     def cache_bytes(self):
         return self._cache_bytes

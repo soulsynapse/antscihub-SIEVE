@@ -118,6 +118,15 @@ class Memo:
             self.misses += 1
             return None
 
+    def empty(self):
+        """Drops every entry, pinned ones with the rest, and tells `on_evict` of none: what is
+        emptied on purpose was not discarded for room."""
+        with self._lock:
+            self._big.clear()
+            self._small.clear()
+            self._pinned.clear()
+            self.bytes = 0
+
     def unpin(self, keep):
         gone = []
         with self._lock:
@@ -206,10 +215,10 @@ class Event:
     """What the probe emits, one per run, read or boundary; see Graph.probe(). Every field is
     required, so a consumer building or reading one by position, or one missing a field, fails
     where it stands instead of misreading its neighbour."""
-    node: str | None    # the node that ran, or read; None on a boundary; on a "slot" or "paint" what turn() was told, no node
+    node: str | None    # the node that ran, or read; None on a boundary; on a "slot", "paint" or "monitor" what turn() was told, no node; on a "watch" the selection
     row: int | None
     key: str | None     # the node's raw key, what the memo holds under
-    kind: str           # "run" | "step" | "fold" | "error" | "cancel" | "cache" | "decode" | "seek" | "read" | "sync" | "evict" | "uncache" | "begin" | "progress" | "dump" | "slot" | "paint"
+    kind: str           # "run" | "step" | "fold" | "error" | "cancel" | "cache" | "decode" | "seek" | "read" | "sync" | "watch" | "evict" | "uncache" | "begin" | "progress" | "dump" | "monitor" | "slot" | "paint"
     bytes: int          # the result's; what an eviction freed
     ms: float           # wall, exclusive of the runs this one opened
     t: float            # start, on the probe's clock (perf_counter); orders events across threads
@@ -224,7 +233,8 @@ class Event:
     demand: str | None  # "walk" | "fold" | "display" | "bake": what asked at the top for everything under it; see Graph.demand()
     asked: str | None   # the node the demand named: the walked or chain node, the folded one, the shown or overlaid, a bake's input
     lane: str | None    # "window" | "clip" | "scrub" | "bake": the worker's range the row belonged to; None off the worker
-    facts: dict | None  # sync: the plan begun, see plan.facts(); progress: the lane's memo hits and the stores, see Graph.progress()
+    facts: dict | None  # sync: the plan begun and the selection, see plan.facts(); progress: the lane's memo hits and the stores, see Graph.progress()
+    shape: tuple | None # of what a span read or made: a decode's or a read's frame, a run's result, a fold's plane; None for what has none
 
 
 class Readers:
@@ -258,6 +268,11 @@ class Readers:
     def keep(self, keys):
         with self._lock:
             self._retired += [self._held.pop(k) for k in list(self._held) if k not in keys]
+
+    def decoders(self):
+        """The Decoder of each reader held that reads a clip. GUI-safe."""
+        with self._lock:
+            return [d for r in self._held.values() if (d := getattr(r, "decoder", None)) is not None]
 
     def reap(self):
         """Closes the retired readers; the worker's alone, between computations, since a close under a read in flight pulls the file from it."""
@@ -307,6 +322,7 @@ class Graph:
         self._plan = {}
         self._notes = {}                    # node -> (its key, what the run said): a tool raising, a chain node fed no signal
         self.shown = self.over = self.series = None
+        self.selected = None                # the node the player shows beside the pinned; see watch()
         self.chain, self.heads, self.unrun_series = [], [], []
         self.sync()
 
@@ -340,7 +356,24 @@ class Graph:
         self.memo.unpin({e.raw_key for e in p.entries.values() if e.static})
         if self.on_event is not None:       # a boundary in the stream: what runs next ran under a new plan, which it carries
             self._emit("sync", None, None, None, 0, keys={nid: e.key for nid, e in p.entries.items()},
-                       facts=facts(p, self.doc.pinned))
+                       facts=facts(p, self.doc.pinned, self.selected))
+
+    def empty(self):
+        """Empties the memo, the decoder's cache and every open reader's, so the next walk runs
+        every row; no discard is emitted for them, so the ledger takes none of it for a
+        recomputation. Any thread; a row in flight may land in a store after it."""
+        self.memo.empty()
+        self.decoder.empty()
+        for d in self.readers.decoders():
+            d.empty()
+
+    def watch(self, nid):
+        """`nid`, or None, is the node the player now shows beside the document's pinned: a "watch"
+        event naming it, and "selected" in every sync's facts from here on. Nothing is computed for
+        it; a reader of the stream takes a fold of it for work something shown asked for."""
+        if nid != self.selected:
+            self.selected = nid
+            self._emit("watch", nid, None, None, 0)
 
     def _reader(self, nid, e):
         """The reader on `nid`'s bake; a file that cannot be read is the node's to say, in its standing."""
@@ -474,7 +507,7 @@ class Graph:
         with self.demand(demand, nid):
             return self._compute(plan, nid, row, raw)
 
-    def _emit(self, kind, nid, row, key, nbytes, ms=0.0, t=None, cpu_ms=0.0, length=None, keys=None, reader=None, facts=None):
+    def _emit(self, kind, nid, row, key, nbytes, ms=0.0, t=None, cpu_ms=0.0, length=None, keys=None, reader=None, facts=None, shape=None):
         """One Event to `on_event`, stamped here with what every event carries: its start, the
         thread, and what the thread says it is serving, the demand open on it and its lane. The probe
         passes the times it measured; a boundary or an eviction has none and is stamped now."""
@@ -483,15 +516,16 @@ class Graph:
             demand, asked = getattr(p, "demand", (None, None))
             self.on_event(Event(nid, row, key, kind, nbytes, ms, time.perf_counter() if t is None else t,
                                 threading.current_thread().name, cpu_ms, getattr(p, "serves", None), length, keys,
-                                reader, demand, asked, getattr(p, "lane", None), facts))
+                                reader, demand, asked, getattr(p, "lane", None), facts, shape))
 
-    def progress(self, done, length):
+    def progress(self, done, length, stack=None):
         """The walk's progress, `done` rows of `length`, as an event; whoever drives the walk, the
         worker or bench.py, says so as each row lands, and a reader takes the rate from the stream.
         Its facts are what emits no event of its own: "hits" and "fold_hits", per node the results and
         the folds the memo held for this thread's lane since the lane's last progress, and "memo" and
         "caches", each store's bytes, limit, hits, misses and discards now, a cache under the key its
-        discards carry. A lane that reports no progress keeps its count."""
+        discards carry, and "stack", the bytes the lane's walk holds and their limit, when `stack` gives
+        the two. A lane that reports no progress keeps its count."""
         if self.on_event is None:
             return
         hits = self._hits.pop(getattr(self._probing, "lane", None), {})
@@ -503,6 +537,7 @@ class Graph:
             if e.bake is not None and (d := getattr(self.readers.held(e.bake.key), "decoder", None)) is not None:
                 caches[e.raw_key] = d
         self._emit("progress", None, done, None, 0, length=length, facts={
+            **({} if stack is None else {"stack": {"bytes": stack[0], "limit": stack[1]}}),
             "hits": {nid: h for nid, (h, _) in hits.items() if h}, "fold_hits": {nid: f for nid, (_, f) in hits.items() if f},
             "memo": {"bytes": m.bytes, "limit": m.limit, "hits": m.hits, "misses": m.misses, "discards": m.evictions},
             "caches": {k: {"bytes": d.cache_bytes, "limit": getattr(d, "cache_limit", None), "hits": d.cache_hits,
@@ -556,7 +591,7 @@ class Graph:
     def probe(self, nid, row, key, reader=None):
         """Times the run inside and hands `on_event` one Event, its ms wall time exclusive of the
         runs it opened in turn, so a cold row charges the decode to the video node and each tool its
-        own work, `reader` being the node whose read opened it. The body sets `kind` and `bytes` on the yielded
+        own work, `reader` being the node whose read opened it. The body sets `kind`, `bytes` and the shape on the yielded
         list, what only the call site knows: a tool's kind is "run", or "step" for one row of a
         series tool the walk steps, since a memo hit is not a run
         and emits nothing, counted instead into the next progress event; the video read's is "cache", "decode" or "seek", read off the decoder's
@@ -566,11 +601,11 @@ class Graph:
         and "uncache" with the bytes freed. The worker wraps a series tool's run in this; `_compute`
         wraps a frame tool's and the video node's read."""
         if self.on_event is None:
-            yield [None, 0]
+            yield [None, 0, None]
             return
         stack = self._probing.__dict__.setdefault("stack", [])
         stack.append([0.0, 0.0])             # wall and CPU the runs opened inside this one took
-        ev = ["run", 0]
+        ev = ["run", 0, None]
         t, c = time.perf_counter(), time.thread_time()
         try:
             yield ev
@@ -586,14 +621,15 @@ class Graph:
             if stack:
                 stack[-1][0] += total
                 stack[-1][1] += cpu
-            self._emit(ev[0], nid, row, key, ev[1], (total - inner) * 1000, t, (cpu - inner_cpu) * 1000, reader=reader)
+            self._emit(ev[0], nid, row, key, ev[1], (total - inner) * 1000, t, (cpu - inner_cpu) * 1000, reader=reader, shape=ev[2])
 
     @contextmanager
     def turn(self, kind, name):
         """Times the body as a span of this thread's that no node ran and hands `on_event` one Event
         of `kind` with `name` as its node, its ms exclusive of the turns opened inside it: the
         window's are "slot", a worker signal's slot named by the signal, and "paint", named by the
-        part that painted. Emitted whether or not the body raises; nothing when `on_event` is unset."""
+        part that painted; the monitor's poll and paint are a "slot" and a "paint" named "monitor",
+        and "monitor" is its ledger's bookkeeping on a thread that emits. Emitted whether or not the body raises; nothing when `on_event` is unset."""
         if self.on_event is None:
             yield
             return
@@ -620,7 +656,7 @@ class Graph:
                 decodes, seeks = d.decodes, d.seeks
                 v = d.read(row)
                 ev[0] = "seek" if d.seeks != seeks else "decode" if d.decodes != decodes else "cache"
-                ev[1] = v.nbytes
+                ev[1], ev[2] = v.nbytes, v.shape
             return v
         if e.bake is not None:
             r = self._reader(nid, e)
@@ -629,7 +665,7 @@ class Graph:
                 decodes, seeks = (d.decodes, d.seeks) if d else (0, 0)
                 v = r.read(row)
                 ev[0] = "read" if d is None else "seek" if d.seeks != seeks else "decode" if d.decodes != decodes else "cache"
-                ev[1] = nbytes(v)
+                ev[1], ev[2] = nbytes(v), getattr(v, "shape", None)
             return v if raw or e.band is None else banded(v, e.band)
         mk = (e.raw_key, None if e.static else row)
         v = self.memo.get(mk)
@@ -644,7 +680,7 @@ class Graph:
                         exc.sieve_node = nid
                         self.note(nid, f"raised at row {row}: {type(exc).__name__}: {exc}")
                     raise
-                ev[1] = Memo._size(v)
+                ev[1], ev[2] = Memo._size(v), getattr(v, "shape", None)
             self.memo.put(mk, v, owner=e.raw_key if e.static else None)
         elif self.on_event is not None:
             self._hit(nid, 0)
@@ -667,7 +703,7 @@ class Graph:
                     return None
                 with self.probe(nid, row, k[0]) as ev:
                     v = density.fold(plane)
-                    ev[0], ev[1] = "fold", v.nbytes
+                    ev[0], ev[1], ev[2] = "fold", v.nbytes, plane.shape
             self.memo.put(k, v, owner=e.raw_key if e.static else None)
         elif self.on_event is not None:
             self._hit(nid, 1)
@@ -710,7 +746,7 @@ class Stats:
     def event(self, ev):
         if self._prev is not None:
             self._prev(ev)
-        if ev.kind in ("sync", "evict", "uncache", "begin", "error", "fold", "slot", "paint") or ev.kind == "progress" and ev.lane == "clip":
+        if ev.kind in ("sync", "watch", "evict", "uncache", "begin", "error", "fold", "slot", "paint", "dump", "monitor") or ev.kind == "progress" and ev.lane == "clip":
             return                          # the means are the tool's; a fold is not, nor a turn of the GUI thread's. The rate is the window's
         with self._lock:
             if ev.kind == "progress":

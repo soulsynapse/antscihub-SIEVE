@@ -84,3 +84,59 @@ Kendrick's word. The ledger's cost a row there may differ from a window's.
 The window, which did not exist: its painting, at any size. `read` is its polling and detecting alone.
 
 Any document but purb-settings, and a bake served.
+
+## Second half: the window open, at each of its sizes
+
+2026-11-12, on v5-monitor over 5ceb287a with the window's deliverable uncommitted in the tree, by the same
+experiment, which now takes `window`, `full` and `small`: the monitor's window open on the walk's ledger,
+polled at 250 ms, at the size it opens at, full screen, and at its smallest, on the screen and not offscreen.
+The ledger there is attached as the player attaches it, its folding on the worker timed into the stream. Six
+consumers walked in turn, ten times round, in two processes. A third was stopped: the experiment opens a
+window a walk, and Kendrick, at the machine, asked what was opening. So the desktop was in use for both, and
+the player's state was not controlled as it was for the first half.
+
+Every walk, ms, in the order run; each column of a process is six walks run one after another.
+
+| consumer | process 1 | process 2 |
+|---|---|---|
+| bare | 894 1183 1142 989 984 1037 1037 1277 1076 1146 | 767 1162 775 915 873 965 762 814 766 815 |
+| ledger | 912 1271 1170 1112 1214 1235 1076 1021 1054 1293 | 775 1361 811 1132 754 1068 847 770 772 806 |
+| read | 1139 1105 935 1015 1072 1032 1215 1080 1350 1119 | 802 1142 1014 1167 776 904 832 811 778 793 |
+| window | 1222 1029 882 1205 1118 1023 1154 847 919 838 | 1143 1155 1103 839 942 830 829 1073 1302 1174 |
+| full | 1219 1060 866 1264 988 963 1064 1250 851 902 | 1158 1022 1332 1289 973 842 941 1200 1302 1101 |
+| small | 1324 1014 1159 1088 1283 1012 1104 1221 828 938 | 1047 1088 806 1008 993 970 816 1060 1122 1251 |
+
+| consumer | process | least | lower quartile | median | upper quartile | most |
+|---|---|---|---|---|---|---|
+| bare | 1 | 894 | 988 | 1056 | 1155 | 1277 |
+| ledger | 1 | 912 | 1046 | 1141 | 1244 | 1293 |
+| read | 1 | 935 | 1028 | 1092 | 1158 | 1350 |
+| window | 1 | 838 | 873 | 1026 | 1167 | 1222 |
+| full | 1 | 851 | 893 | 1024 | 1227 | 1264 |
+| small | 1 | 828 | 994 | 1096 | 1236 | 1324 |
+| bare | 2 | 762 | 767 | 814 | 928 | 1162 |
+| ledger | 2 | 754 | 772 | 808 | 1084 | 1361 |
+| read | 2 | 776 | 789 | 822 | 1046 | 1167 |
+| window | 2 | 829 | 837 | 1088 | 1160 | 1302 |
+| full | 2 | 842 | 965 | 1130 | 1292 | 1332 |
+| small | 2 | 806 | 932 | 1028 | 1096 | 1251 |
+
+The walks run from 7.4 to 13.3 times realtime, where the first half's ran 4.0 to 7.9 on the same document and
+rows; bare is among them, so it is the machine or the tree since 989dce68 and no consumer, and it was not
+taken apart.
+
+The two processes do not agree. In the second, where bare's fast walks sit within a few ms of one another,
+the window open is above bare at every point: its fastest walk by 44 to 80 ms, six to ten percent, and its
+median by 214 to 316 ms, a quarter to two fifths, with the window at the size it opens at slower than the
+bare walk of its own round in seven rounds of ten. In the first, where bare itself spreads from 894 to 1277,
+that window and the full screen one are below bare at the least, the lower quartile and the median, the
+smallest within 40 ms of it at each, and the window is slower than its round's bare walk in four of ten. The
+sizes do not order in either: full screen is the highest by the median in the second process and the lowest
+in the first.
+
+So the window's cost to the walk is not settled by this. The most that the second process shows is a
+quarter to two fifths at the median, which is far past the ledger's alone; the least that the first shows
+is nothing. What would settle it is the same in more processes on a desktop left alone, and with the window
+left open across the walks: a window opened a walk pays its first layout and paints inside that walk, which
+a window already open in the player does not, so these figures are an upper reading of the window as it is
+used.

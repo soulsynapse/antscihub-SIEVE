@@ -15,8 +15,9 @@ from dataclasses import fields
 
 from .graph import Event
 
-TURNS = ("slot", "paint")       # the spans Graph.turn emits, a thread's own time under no node
-SPANS = ("run", "step", "fold", "error", "cancel", "cache", "decode", "seek", "read", "dump", *TURNS)    # the kinds with a duration; the rest are instants
+TURNS = ("slot", "paint")       # the GUI thread's spans of Graph.turn, a thread's own time under no node
+OWN = ("dump", "monitor")       # a consumer's own work: the dump's writer, and the ledger's bookkeeping on a thread that emits
+SPANS = ("run", "step", "fold", "error", "cancel", "cache", "decode", "seek", "read", *OWN, *TURNS)    # the kinds with a duration; the rest are instants
 FIELDS = tuple(f.name for f in fields(Event))
 
 
@@ -55,7 +56,7 @@ def rss():
 
 class Dump:
     """Writes every event to `path`, and passes it on to whatever `on_event` was before, so Stats
-    keeps reading; `close()` restores the chain. The emitting thread only appends the event to a
+    keeps reading, its writer's own span with them; `close()` restores the chain. The emitting thread only appends the event to a
     list; a writer thread takes the list every `period` seconds, encodes each event, samples the
     resident set at each progress event, and writes through a buffered file. One handoff per batch
     rather than one per event is what keeps the writer from stealing the GIL at every emit. A crash
@@ -96,8 +97,11 @@ class Dump:
                         n += self._write(item)
                 # The writer's own cost as a span on its own thread, so a reader sees a node inflated or
                 # a GUI tick late while the writer held the GIL for what it is.
-                self._write(as_dict(Event("dump", None, None, "dump", n, (time.perf_counter() - t) * 1000, t,
-                                          "dump", (time.thread_time() - c) * 1000, None, None, None, None, None, None, None, None)))
+                own = Event("dump", None, None, "dump", n, (time.perf_counter() - t) * 1000, t,
+                            "dump", (time.thread_time() - c) * 1000, None, None, None, None, None, None, None, None, None)
+                self._write(as_dict(own))
+                if self._prev is not None:
+                    self._prev(own)
             if stopped:
                 return
 

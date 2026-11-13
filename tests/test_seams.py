@@ -24,6 +24,7 @@ MAY_IMPORT = {
     "trace": {"graph"},
     "ledger": {"trace"},                          # the span kinds and a dump's reader; no graph is held and no Qt reached
     "catalogue": {"ledger"},                      # a detector reads a view and nothing else
+    "machine": set(),                             # psutil and the system's counters; the player is not imported
     "pace": set(),                                # the worker's signals and a clock; the control and the monitor's header both read it
 }
 
@@ -45,6 +46,15 @@ def imports_of(name):
 def test_imports_run_one_way():
     for name, allowed in MAY_IMPORT.items():
         assert imports_of(name) <= allowed, f"{name} imports {imports_of(name) - allowed}"
+
+
+def test_one_accumulator_reads_the_stream_for_the_monitor():
+    """The ledger is the monitor's one reading of the stream: the monitor that kept its own is gone,
+    and nothing in the package or the tests brings it back by name."""
+    assert not (PKG / "dev" / "monitor.py").exists() and not (PKG / "dev" / "monitor_views.py").exists()
+    named = [str(p.relative_to(PKG.parent)) for p in [*PKG.rglob("*.py"), *Path(__file__).parent.glob("*.py")]
+             if p != Path(__file__) and re.search(r"dev\.monitor\b|from \.monitor\b|monitor_views|MonitorWindow", p.read_text(encoding="utf-8"))]
+    assert not named, named
 
 
 def test_canvas_and_pane_never_name_the_runtime():

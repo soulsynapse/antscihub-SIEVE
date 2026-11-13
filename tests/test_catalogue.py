@@ -6,10 +6,10 @@ import time
 import pytest
 
 from sieve_player import document as D
-from sieve_player.catalogue import CLASSES, SOURCES, Log, slower, text
+from sieve_player.catalogue import CLASSES, SOURCES, Entry, Log, cold, reach, slower, text, waits
 from sieve_player.dev.simulations import HEALTHY, SERVED, SIMULATIONS, run
 from sieve_player.graph import Graph
-from sieve_player.ledger import Ledger, Node, View, Walk
+from sieve_player.ledger import Bucket, Ledger, Node, View, Walk
 from tests.test_graph import TOOLS, Dec, gray, tool
 from tests.test_ledger import walk
 
@@ -41,6 +41,9 @@ def test_each_class_reads_off_a_view_built_by_hand():
     p = e.problem
     assert key == ("unread", "a") and (p.ms_row, p.share, p.walk, p.source) == (9 / 8, 9 / 17, ("window", 0.0), SOURCES["unread"])
     assert "a run" in p.line and len(p.evidence) == 2 and not found(rec(**FOLDED), pinned=["a"])
+    selected = rec(**FOLDED)
+    selected.selected = ["a"]
+    assert not found(selected)                                                                  # watched by the selection as by a pin
     assert not found(rec(a=FOLDED["a"], b={("run", "walk", "b"): [8, 80.0, 0]}))                # under the threshold
     thrashed = rec(keys={"video": "kv"}, b={("run", "walk", "b"): [8, 8.0, 0]})
     thrashed.recomputed, thrashed.recomputed_ms = {"memo": 8, "kv": 4, "other": 1}, {"memo": 4.0, "kv": 2.0, "other": 1.0}
@@ -59,6 +62,17 @@ def test_each_class_reads_off_a_view_built_by_hand():
     assert list(found(rec(keys={"b": "k"}, b=run_b(8.0)), late)) == [("slower", "unprobed")]
     assert not found(rec(keys={"b": "k"}, b=run_b(8.0)), rec(1.0, {"b": "k2"}, b=run_b(16.0)))  # another plan
     assert {kind for _, kind in SIMULATIONS.values()} == set(CLASSES) == set(SOURCES)
+    turned = rec(b={("run", "walk", "b"): [8, 100.0, 0]})
+    turned.wait = 80.0
+    waited = View(0.25, 0, [Bucket(wait=40.0, turns={"slot walked": 60.0, "paint plot": 5.0})] * 2, [turned])
+    said = {k: (e.problem.says, e.problem.target, e.problem.nodes) for views in (
+        [rec(**FOLDED)], [thrashed], [rec(**GROWN)], [rec(**SOUGHT)], [rec(keys={"b": "k"}, b=run_b(8.0)), late], waited)
+        for k, e in (found(*views) if isinstance(views, list) else {(p.kind, p.subject): Entry(p, p.t) for p in waits(views)}).items()}
+    assert {k[0] for k in said} == set(CLASSES) and all(says and target for says, target, _ in said.values())
+    assert said[("unread", "a")] == ("Computed on every row and read by nothing", "the fold of a", ("a",))
+    assert said[("thrash", "video")][1:] == ("the video cache's limit", ("video",)) and said[("thrash", "memo")][2] == ()
+    assert said[("waits", "slot walked")][1:] == ("the walked slot", ("slot walked",))
+    assert said[("slower", "unprobed")][1:] == ("the time between rows, in no node", ())
 
 
 def test_the_log_holds_one_entry_a_class_and_subject_counted_cleared_and_ordered():
@@ -91,6 +105,37 @@ def test_a_changed_param_between_two_walks_is_compared_with_nothing():
     assert not slower(led.view())
     second.keys = first.keys
     assert [p.subject for p in slower(View(0.25, 0, [], [first, second]))] == ["slow"]
+
+
+def test_the_cold_projection_sums_what_the_plan_reaches_by_the_walk_each_node_last_ran_in():
+    def node(*reads, **flags):
+        return {"kind": "frame", "fed": True, "static": False, "served": False, "steps": False, "whole_by": None,
+                "reads": dict(enumerate(reads))} | flags
+
+    def under(served=False, **walk):
+        nodes = {"a": node(), "b": node(*() if served else "a", served=served), "c": node("b", "s"), "s": node(static=True)}
+        w = rec(**walk)
+        w.plan = PLAN | {"nodes": nodes, "walk": "c"}
+        return w
+
+    def ran(ms, more=()):
+        return Node(runs={("run", "walk", "c"): [8, ms, 0]} | dict(more), ran=8)
+    first = under(t0=0.0, keys={"a": "ka", "b": "kb", "c": "kc"}, a=ran(8.0, {("seek", "walk", "c"): [1, 6.0, 0]}), b=ran(16.0),
+                  c=ran(8.0, {("fold", "fold", "c"): [8, 4.0, 0]}))
+    first.unprobed = 4.0
+    p = cold(View(0.25, 0, [], [first]))
+    assert {n: (c.ms_row, c.walk, c.stale) for n, c in p.nodes.items()} == {
+        "a": (1.0, ("window", 0.0), False), "b": (2.0, ("window", 0.0), False), "c": (1.0, ("window", 0.0), False), "s": (0.0, None, False)}
+    assert (p.unprobed, p.ms_row(), p.missing) == (0.5, 4.5, ())                 # the seek and the fold are no row's
+    second = under(t0=1.0, keys={"a": "ka", "b": "kb2", "c": "kc2"}, a=Node(held=8), b=ran(24.0), c=ran(8.0))
+    p = cold(View(0.25, 0, [], [first, second]))
+    assert {n: (c.ms_row, c.walk, c.stale) for n, c in p.nodes.items() if c.walk} == {
+        "a": (1.0, ("window", 0.0), False), "b": (3.0, ("window", 1.0), False), "c": (1.0, ("window", 1.0), False)}
+    served = under(served=True, t0=2.0, keys={"a": "ka", "b": "kb3", "c": "kc3"})
+    served.done = 0
+    p = cold(View(0.25, 0, [], [first, second, served]))
+    assert reach(served.plan) == {"b", "c", "s"} and "a" not in p.nodes         # nothing behind the served node
+    assert {n: (c.walk, c.stale) for n, c in p.nodes.items() if c.walk} == {"b": (("window", 1.0), True), "c": (("window", 1.0), True)}
 
 
 @pytest.mark.simulation

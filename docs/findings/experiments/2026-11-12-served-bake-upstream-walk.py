@@ -1,13 +1,14 @@
 """Experiment behind docs/findings/2026-11-12-served-bake-upstream-walk.md: video-tests/purb-settings.json over
-one window, its bake node live and then serving its file, read off the monitor and off the raw event stream.
+one window, its bake node live and then serving its file, read off the ledger and off the raw event stream.
 
     .venv\Scripts\python -X utf8 docs\findings\experiments\2026-11-12-served-bake-upstream-walk.py [rows] 2>NUL
 
-A fresh Graph, Decoder and Monitor per phase, twice over, so each walk is cold in every store; then one Graph
-and one Monitor across the switch, as a session that toggles the node has them. The bake is read from the
-current store and must be there already. Per phase: the monitor's summary and table, then the events summed
-per (node, kind), the wall they leave unprobed, and the plate decoder's and the served reader's counters; then
-the catalogue's log off a ledger attached to the same graph, the finding's second half.
+A fresh Graph, Decoder and Ledger per phase, twice over, so each walk is cold in every store; then one Graph
+and one Ledger across the switch, as a session that toggles the node has them. The bake is read from the
+current store and must be there already. Per phase: the cold projection and the walk's table, the ledger's by
+catalogue.cold and catalogue.rows, where the finding's figures were the old monitor's summary and table, gone
+since; then the events summed per (node, kind), the wall they leave unprobed, and the plate decoder's and the
+served reader's counters; then the catalogue's log, the finding's second half.
 """
 import os
 import sys
@@ -24,9 +25,8 @@ from PySide6.QtWidgets import QApplication  # noqa: E402
 from sieve_player import decoder as decmod  # noqa: E402
 from sieve_player import document as D  # noqa: E402
 from sieve_player import store  # noqa: E402
-from sieve_player.catalogue import Log, line  # noqa: E402
+from sieve_player.catalogue import Log, cold, line, rows  # noqa: E402
 from sieve_player.decoder import Decoder  # noqa: E402
-from sieve_player.dev.monitor import Monitor, summary, table  # noqa: E402
 from sieve_player.graph import Graph  # noqa: E402
 from sieve_player.ledger import Ledger  # noqa: E402
 from sieve_player.registry import discover  # noqa: E402
@@ -59,13 +59,19 @@ def walk(g, length):
     return s
 
 
-def report(label, g, mon, s, length):
-    mon, led = mon
-    snap = mon.snapshot()
+def report(label, g, led, s, length):
+    view = led.view()
     print(f"\n== {label}: {s:.2f} s wall for {length} rows, {s / length * 1000:.2f} ms/row, "
           f"{length / g.fps / s:.2f}x realtime measured")
-    print("\n".join("   " + ln for ln in summary(snap).splitlines()))
-    print("\n".join("   " + ln for ln in table(snap).splitlines()))
+    p, w = cold(view), view.walks[-1]
+    ms = p.ms_row(g.count)
+    print(f"   cold    whole clip in ~{g.count * ms / 1000:.0f} s, {1000 / ms / g.fps:.1f}x realtime, {ms:.2f} ms/row of which "
+          f"{p.unprobed:.2f} unprobed; no figure for {list(p.missing) or 'none'}")
+    print(f"   {'node':14} {'ms/row':>7} {'spans':>6}  {'kind':7} {'asked by':18} {'p50':>7} {'p99':>7}  cold ms/row")
+    for r in rows(w, view).values():
+        c = p.nodes.get(r.node)
+        print(f"   {r.node:14} {r.ms_row:>7.3f} {r.spans:>6}  {r.kind:7} {r.asked_by():18} {r.median or 0:>7.3f} {r.p99 or 0:>7.3f}  "
+              + ("not reached" if c is None else f"{c.ms_row:.3f}" + (", from before a change" if c.stale else "")))
     by = defaultdict(lambda: [0, 0.0, 0.0])
     for ev in EVENTS:
         if ev.kind in ("sync", "progress"):
@@ -90,7 +96,7 @@ def report(label, g, mon, s, length):
                   f"{rd.seeks} seeks, {rd.reads} reads, {rd.cache_hits} cached, step {rd.step_ms or 0:.3f} ms")
     print(f"   memo {g.memo.bytes >> 20} MB, {g.memo.hits} hits, {g.memo.misses} misses, {g.memo.evictions} evictions")
     log = Log()
-    log.read(led.view())
+    log.read(view)
     print(f"   the catalogue, pinned {g.doc.pinned}:")
     print("\n".join("      " + line(e) for e in log.ordered()) or "      nothing found")
 
@@ -103,7 +109,7 @@ def build(tools, st, mode):
     led = Ledger()
     g.on_event = lambda ev: (EVENTS.append(ev), led.event(ev))
     g.sync()        # the plan, into the ledger; EVENTS' sync is not summed
-    return g, dec, (Monitor(g), led)
+    return g, dec, led
 
 
 def main():

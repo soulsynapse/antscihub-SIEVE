@@ -7,13 +7,16 @@ of the stream named, every walk's time printed.
 Several consumers are walked in turn, walk by walk, in one process, so a slow spell of the machine's falls on
 all of them. `how` is bare, on_event unset; drop, a consumer that does nothing with an event; ledger, a Ledger
 no reader takes a view of, so the emitting thread folds; read, a Ledger whose view the GUI thread takes and
-the catalogue reads at POLL, a window's work less its painting; dump, a Dump. The walk is the Worker's, on its
-own thread with the GUI thread turning its loop, as the player has it.
+the catalogue reads at POLL, a window's work less its painting; dump, a Dump; window, full and small, the
+monitor's window open on the walk's ledger at the size it opens at, full screen and at its smallest, on the
+screen and not offscreen. The walk is the Worker's, on its own thread with the GUI thread turning its loop, as
+the player has it.
 """
 import os
 import sys
 import tempfile
 import time
+from types import SimpleNamespace
 
 os.environ.setdefault("OPENCV_LOG_LEVEL", "ERROR")
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
@@ -27,8 +30,10 @@ from sieve_player import document as D  # noqa: E402
 from sieve_player import store  # noqa: E402
 from sieve_player.catalogue import Log  # noqa: E402
 from sieve_player.decoder import Decoder  # noqa: E402
+from sieve_player.dev.timeview import SMALLEST, Window  # noqa: E402
 from sieve_player.graph import Graph  # noqa: E402
 from sieve_player.ledger import Ledger  # noqa: E402
+from sieve_player.pace import Pace  # noqa: E402
 from sieve_player.registry import discover  # noqa: E402
 from sieve_player.trace import Dump  # noqa: E402
 from sieve_player.worker import Worker  # noqa: E402
@@ -45,8 +50,16 @@ def walk(tools, st, how):
     doc.node("bake").mode = D.LIVE
     dec = Decoder(doc.video)
     g = Graph(doc, dec, tools, open_bake=lambda bk, c: st.open_bake(bk, c))
-    dump = timer = None
-    if how == "drop":
+    dump = timer = win = None
+    pace = Pace()
+    if how in ("window", "full", "small"):
+        led = Ledger(timed=lambda: g.turn("monitor", "ledger"))
+        g.on_event = led.event
+        win = Window(SimpleNamespace(graph=g, ledger=led, pace=pace, dump=None), period_ms=POLL)
+        if how == "small":
+            win.resize(*SMALLEST)
+        win.showFullScreen() if how == "full" else win.show()
+    elif how == "drop":
         g.on_event = lambda ev: None
     elif how in ("ledger", "read"):
         led = Ledger()
@@ -64,7 +77,7 @@ def walk(tools, st, how):
     n = min(ROWS, g.count)
     walked, series = [], []
     w = Worker(g)
-    w.walked.connect(lambda d, m: walked.append((d, m)))
+    w.walked.connect(lambda d, m, *was: (walked.append((d, m)), pace.row("window", d, m, *was)))
     w.seriesReady.connect(lambda r, s, fps: series.append(r))
     w.set_window(0, n)
     t = time.perf_counter()
@@ -78,6 +91,9 @@ def walk(tools, st, how):
     w.stop()
     if timer:
         timer.stop()
+    if win:
+        win.close()
+        win.deleteLater()
     if dump:
         dump.close()
         os.remove(dump.path)

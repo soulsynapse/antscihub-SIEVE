@@ -383,7 +383,7 @@ was doing, and the observation is made again.
   whenever one is attached, with or without a dump.
   Check: a window test, offscreen, walks a window and reads a span for each signal that fired and a paint
   span for the plot, on the GUI thread's name.
-- [ ] The ledger keeps the GUI thread's spans in the same buckets as the worker's and apart from them,
+- [x] The ledger keeps the GUI thread's spans in the same buckets as the worker's and apart from them,
   and the time view draws them as their own stack on the shared axis.
   Check: a monitor test feeds both threads' spans and reads two stacks.
 - [x] How long the worker's spans spent off their own CPU is summed per bucket and per walk, read
@@ -437,8 +437,9 @@ sentence, and shows no time for the clip.
   labels; and reads no clip time beside the second and third.
 - [x] Pressing it opens the monitor, the same window Dev opens.
   Check: the same test presses it and reads the window shown.
-- [ ] The figure is the one the monitor's header leads with, by one definition both read.
+- [x] The figure is the one the monitor's header leads with, by one definition both read.
   Check: a monitor test reads the two equal over a walk.
+  Ticked 2026-11-12 by `docs/findings/experiments/2026-11-12-the-monitor-on-the-player.py`, the two read off one `Pace`.
 - [x] A walk is cold while no row of it read a bake and a store held no more than a named share of
   them. Added 2026-11-12 on building it: the display's row is computed on the scrub's rung before the
   walk reaches it, so a window never walked read 49 rows ran and 1 held, paused and under playback
@@ -469,7 +470,25 @@ changes; `Graph.sync()` on an unchanged document emits the plan again and moves 
 `output` setter returning on an unchanged value and the memo and the readers keeping the same keys. The
 dump's writer times itself into the file and passes nothing to `on_event`, so its span is not in the
 stream, and the ledger passes over that kind so that a dump replays to what the live ledger held; the
-ledger holds no graph to emit through.
+ledger holds no graph to emit through. Added 2026-11-12 on building it, each of them how the tree now is and
+none a box. The Open below was built as recommended but for two things: the ledger is handed `timed`, a
+context its attacher makes, and folds inside it on a thread that emits, since timing its `event` from
+outside would time every append; and the window's poll and paint are a "slot" and a "paint" named
+"monitor", the GUI thread's as its others are, so the waits class reads them, the kind "monitor" being the
+ledger's folding alone. So the dump now passes its writer's span on and the ledger keeps it, where the
+sentences above say how it stood; and the catalogue's fact that a sync carries the pinned set and not the
+selection is likewise how it stood. The selection is a "watch" event and "selected" in a sync's facts, and a walk's
+record holds every node selected as it began and while it walked, a sync being a boundary a click must not
+be. The log is the window's, one a video, and is read at a poll, so a problem of a walk made with the
+window closed is first sighted, and its line printed, when the window next opens; its mark is at the
+walk's end all the same. Drawn out, the axis is the same reading at a wider bucket, the ledger's `coarsen`,
+and no statistic of the narrow ones. A simulation shown repeats its fault on a fresh graph under the one
+ledger, a rewalk being held. The log's rows order by cost beside the time view and by latest sighting under
+it, which is this session's reading of "the log's newest entries remain" and Kendrick's to overrule. The
+history's file goes to the system's temporary folder. On the experiment's own document, gray and a chain
+node on a clip of 64 by 48, the player's first walk surfaced the work-nothing-reads class on gray, nothing
+being selected or pinned and the fold a quarter of so small a walk, and once the waits class on the walked
+slot: sightings for the fork on healthy documents, on a document that is no one's.
 
 The figure at the top is the player's, the measured rate of the lane now walking, by The figure on the
 player. The cold projection is a different number, and the finding has the two at twice one another on
@@ -489,67 +508,275 @@ Fork: which tracks earn their place. The tracks begin as the first box lists the
 each simulation shown, under the last-but-one box, and in Kendrick's use: a track on which some class was
 read arriving stays in the default list; one on which none was leaves the default and stays addable.
 
-- [ ] The window's default is time across: where the worker's time went, stacked by node in walk order in
+- [x] The window's default is time across: where the worker's time went, stacked by node in walk order in
   each node's type hue with unprobed in gray and idle empty, scrolling with the wall clock; under it on
   the same axis the cost of a row, each store's bytes held against its limit with a mark at each
   recomputation, and the GUI thread's lateness; the GUI thread's own stack joins them with The GUI
   thread's turn.
   Check: a monitor test feeds a ledger a walk whose second half costs twice its first and reads, off the
   painted image, a taller stack in the later columns and the row cost's line higher there.
-- [ ] A node's band is told by pointing and by a name at the right edge where the band is tall enough to
+- [x] A node's band is told by pointing and by a name at the right edge where the band is tall enough to
   take one; no node has a colour of its own.
   Check: the same test hovers a column and reads the node and its figure in the tip.
-- [ ] The axis holds more than the window is wide: it can be drawn out to the ledger's whole history and
+  Ticked 2026-11-12 by `docs/findings/experiments/2026-11-12-the-window.py`.
+- [x] The axis holds more than the window is wide: it can be drawn out to the ledger's whole history and
   back in, and scrolled back along while the stream continues.
   Check: a monitor test feeds more history than the widget's width, draws out, and reads the first
   bucket's column.
-- [ ] The log is beside the time view, each entry its line, its cost, how long since it was first and
+  Ticked 2026-11-12 by `docs/findings/experiments/2026-11-12-the-window.py`.
+- [x] The log is beside the time view, each entry its line, its cost, how long since it was first and
   last seen, whether it still holds, and a button that puts the entry's text on the clipboard. A problem's
   first sighting is marked on the time axis at the moment it was seen.
   Check: a monitor test surfaces one problem, presses its button and reads the clipboard; and reads the
   mark's column.
-- [ ] A problem's first sighting is one line on stderr in the player's log form, and nothing is printed
+  Ticked 2026-11-12 by `docs/findings/experiments/2026-11-12-the-monitor-on-the-player.py`.
+- [x] A problem's first sighting is one line on stderr in the player's log form, and nothing is printed
   for a sighting after the first.
   Check: a monitor test surfaces a problem over three walks and reads one line.
-- [ ] The window goes full screen and back by a key and by a control, and holds together small: as it
+  Ticked 2026-11-12 by `docs/findings/experiments/2026-11-12-the-monitor-on-the-player.py`, over three rounds of a simulation shown.
+- [x] The window goes full screen and back by a key and by a control, and holds together small: as it
   narrows the log moves under the time view, and as it shortens the tracks leave in a stated order, the
   lateness first and the stack last, until the header, the stack and the log's newest entries remain.
   Check: a monitor test sizes the window to a full-screen size and to the stated smallest and reads which
   parts are visible at each.
-- [ ] The monitor's own work, its ledger's bookkeeping on the emitting thread and its painting and
+  Ticked 2026-11-12 by `docs/findings/experiments/2026-11-12-the-monitor-on-the-player.py` and, for the order the tracks leave in, `docs/findings/experiments/2026-11-12-the-window.py`.
+- [x] The monitor's own work, its ledger's bookkeeping on the emitting thread and its painting and
   detecting on the GUI thread, is in the stream as spans under its own name and is drawn as a band like
   any other, as the dump's writer already is.
   Check: a monitor test runs the window over a walk and reads the monitor's band nonzero in the image
   and its spans in the ledger.
-- [ ] A control writes the recent history to a file, the catalogue's hand-over for a slowdown with no
+  Ticked 2026-11-12 by `docs/findings/experiments/2026-11-12-the-window.py` for the bands and `docs/findings/experiments/2026-11-12-the-monitor-on-the-player.py` for the spans.
+- [x] A control writes the recent history to a file, the catalogue's hand-over for a slowdown with no
   entry, and puts the file's path on the clipboard.
   Check: a monitor test presses it and replays the file.
-- [ ] The parts are a list: a track or a panel is added by adding one to it, and the window lays out what
+  Ticked 2026-11-12 by `docs/findings/experiments/2026-11-12-the-monitor-on-the-player.py`.
+- [x] The parts are a list: a track or a panel is added by adding one to it, and the window lays out what
   the list holds.
   Check: a monitor test adds a track that paints one colour and reads it in the image.
-- [ ] A simulation run with its show flag opens this window on the simulation's graph and repeats the
+  Ticked 2026-11-12 by `docs/findings/experiments/2026-11-12-the-window.py` for a track on the view and `docs/findings/experiments/2026-11-12-the-monitor-on-the-player.py` for one added to the window.
+- [x] A simulation run with its show flag opens this window on the simulation's graph and repeats the
   fault, so each class can be watched arriving.
   Check: a monitor test starts a simulation shown, offscreen, and reads its class in the window's log.
-- [ ] The window watches whatever graph the player holds, through a video closing and another opening,
+  Ticked 2026-11-12 by `docs/findings/experiments/2026-11-12-the-monitor-on-the-player.py`.
+- [x] The window watches whatever graph the player holds, through a video closing and another opening,
   and with no video says so.
   Check: a monitor test swaps the player's graph and reads the new walk's rows.
-- [ ] A ledger attached to a graph already planned holds that plan from its first walk on. Added
+  Ticked 2026-11-12 by `docs/findings/experiments/2026-11-12-the-monitor-on-the-player.py`.
+- [x] A ledger attached to a graph already planned holds that plan from its first walk on. Added
   2026-11-12 on driving The ledger.
   Check: a monitor test opens the window on a synced graph, walks, and reads the plan on the walk's
   record.
-- [ ] The selection is in the stream beside the pinned set, so a fold of the selected node is work a
+  Ticked 2026-11-12 by `docs/findings/experiments/2026-11-12-the-monitor-on-the-player.py`: the tree met it once the player attached the ledger as a video opens, ahead of its first sync; no window attaches one.
+- [x] The selection is in the stream beside the pinned set, so a fold of the selected node is work a
   watched node asked for. Added 2026-11-12 on building The catalogue: the plan a sync carries holds the
   pinned set alone, and the work-nothing-reads class takes pinned for watched, so a node selected to
   look at its density reads as unwatched.
   Check: a monitor test selects a node whose fold the catalogue had surfaced, walks, and reads the entry
   cleared.
-- [ ] The walk's rate is measured on Kendrick's footage with the ledger attached and the window open at
+  Ticked 2026-11-12 by `docs/findings/experiments/2026-11-12-the-monitor-on-the-player.py`.
+- [x] The walk's rate is measured on Kendrick's footage with the ledger attached and the window open at
   each of its sizes, and stated in What the trace costs' finding beside the figures there. Split
   2026-11-12 from that deliverable's box, which asked it before the window existed.
   Check: that finding's experiment, extended to open the window, and a second half of the finding.
+  Ticked 2026-11-12: measured and stated, and not settled; the finding's second half says what would settle it.
 
 Worth a look: the window full screen on the second monitor through a session on the purb document and one
 on the GoPro clip, bake live and served; and small beside the player.
+
+## The window says what is wrong first
+
+Assumes: The window.
+
+The window as built draws the ledger and leaves the reading to whoever looks: five tracks of mostly gray
+and a log of the detectors' own lines. Kendrick's word of 2026-11-12 on seeing it was that it is ugly and
+not yet helpful, and on the mockup that followed, that it is going the right way: one strong way to tell
+the user and the actionable target, the rest as evidence, and no fact said twice.
+
+The mockup is https://claude.ai/artifact/59YT8VUi85Au5gJPvMphXe, private to Kendrick, three artboards: the
+window, what its copy puts on the clipboard, and the small size. It is a drawing and no contract; where
+it and a box below disagree the box holds. Its figures are invented but for the served-bake finding's ms a
+row and share and the trace-cost finding's spread of walk times.
+
+Facts to weigh. The boxes of The window stand ticked and are not rewritten by this; what changes is the
+look and what leads, and a check of theirs that reads a pixel or a part's place is rerun in the new form by
+the session that moves it. A problem's `line` is the detector's evidence sentence, written for a reader of
+the code. An event carries its result's bytes and neither its shape nor its dtype. The ledger keeps a
+node's ms as sums and keeps no distribution. `Event.cpu_ms` is the emitting thread's own clock, so
+OpenCV's pool threads and the decoder's are in no span and wall above CPU reads alike for a wait and for
+work on another thread. `trace.rss()` reads a struct that holds the process's page fault count and uses
+only the working set. Nothing samples the machine: its memory, its other processes, its disk or its GPU.
+Whether a decode or any tool runs on the GPU was not checked; the interface paints through Qt. Whether
+the slow half of the walks in `docs/findings/2026-11-12-what-the-trace-costs.md` falls where the machine is
+under pressure is a hypothesis the mockup draws as if it were found. Kendrick's report of 2026-11-12 is
+that a clip walk sometimes makes the whole machine chug, cause unknown. `catalogue.text` puts the whole
+document in the block. Scrolled back, the time view already holds where it was put while the ledger takes
+the stream. Added 2026-11-12 on building the boxes that need no new instrumentation, each of them how the
+tree now is and none a box. On Kendrick's word that the values will be drawn on the canvas too, every
+figure the window shows is a value in `catalogue.py`, keyed by node and reaching no Qt: `rows`, a node over
+a walk; `naming`, the problems that name a node; `needs`, a store's; `gui`, the GUI thread's; a problem's
+`says`, `target` and `nodes`. The window's parts paint them and make none. The log is still the window's,
+which an overlay on the canvas would need to be the player's; that is not decided here. The first Open was
+built on as recommended: the window's copy is `catalogue.report`, the history written beside it and named
+in it, and `catalogue.text` stands as the catalogue's box ticked it, the document inline, read now by its
+test and the command line alone; whether it goes is Kendrick's. The shares of problems are not summed, in
+the window or the report: a wait is inside the spans a recomputation is counted in, and three faults at
+once read 109% of a row between them. The pipeline's table is built with the columns the ledger already
+holds, ms a row, what asked and the rate were the node free, so that picking has rows to mark; its
+distribution and its ms per megapixel are the fifth box's. The interface thread has a panel beside the
+stores', which no box asks for and picking a wait needs. Paused is the axis held, one state: the pause
+control holds it at now, a drag back holds it where it is put, and either way the whole window draws
+what it drew until it is resumed or scrolled forward to now. Compact is one rule, narrower than 720 or
+shorter than 420: the problems lead at every size, so the log no longer moves under the time view, and
+the tracks but the stack leave together, where The window's box has them leave one at a time; between
+those sizes they still do. Every part's paint is a "paint" named "monitor", where only the time view's
+was. The window's first paint is now of five widgets and some 18 ms where the time view alone was 6, and
+on the simulations' walk of a fifth of a second that is past the waits class's threshold: a simulation
+shown surfaces waits on "paint monitor" beside its own class, three runs of three, and none with no
+window. A sighting for the fork on healthy documents, on a walk no one would wait for; a poll thereafter
+is 3 ms and repaints a part only where what it shows changed.
+
+The machine is sampled through psutil, Kendrick's word of 2026-11-12, as a declared dependency: it is in
+`.venv` and not yet in `pyproject.toml`. Facts for the boxes that sample, read 2026-11-12 and none built.
+psutil gives the machine's memory, its cores' times, its disks' bytes and the process's own of each; its
+calls here took under a quarter of a millisecond apiece. It gives no hard page faults for the machine on
+Windows, a process's count being every fault, soft with hard, and its swap counters reading zero there;
+and it gives nothing of the GPU. Both want a Windows performance counter beside it, or the box's figure
+said to be absent. `Event` is built by position in `trace.Dump` for the writer's own span and by
+`{f: None for f in FIELDS}` in the tests and experiments, so a field added for a shape breaks the first
+and not the second, and a dump written before it no longer reads. `ledger.sample` keeps "late" alone and
+drops every other name. A saved history is compared equal with the view it was written from, in
+`tests/test_ledger.py` and the monitor's experiment, so whatever a bucket or a node gains must come back
+from JSON as it went: no tuple, no key that is not a string, or `save` and `saved` carry it across as
+they do a node's runs. A walk's stack is `worker._Walk.bytes` against `STACK_BYTES` and is in no event;
+`Graph.progress` is called from `_Walk.turn` and `_Walk.close`. `tests/test_seams.py` lists what each
+module may import, and a module it does not list is not held to anything. For the fork on the GPU, the
+reading half: the decoder opens `cv2.VideoCapture` on the FFMPEG backend and sets no acceleration
+property, and no tool or player module names CUDA, a UMat or OpenCL; what the capture then reports of its
+own acceleration on the purb clip, and the sampling over a walk, were not done. The panels' lines are
+`(name, value, bar, note, past)` with one bar of one filled share, which the machine's SIEVE beside
+everything else does not fit as it stands.
+
+Added 2026-11-12 on building the boxes that sample, each of them how the tree now is and none a box. The
+shape is a field on `Event`, last, of what a span read or made: a decode's or a read's frame, a run's
+result, a fold's plane, which is the node's own output, and None on a chain node's step or run. A dump
+written before it no longer reads. The ledger keeps a node's spans by kind in bins of an eighth of a
+doubling, so a quantile is a bin's middle, within a twenty-fourth; the table's median and 99th percentile
+are of the kind most of the node's ms were under, and its ms per megapixel is that median over the pixels
+of the node's own plane for a read or a fold and of its inputs' for a run, an input the walk held being
+looked for in the walks before it under the same key. `sieve_player/machine.py` samples through psutil and,
+on Windows, the performance counters: `\Memory\Page Reads/sec` for the hard faults,
+`\PhysicalDisk(_Total)\% Idle Time` for how busy the disks are, `\GPU Engine(*)\Utilization Percentage`
+for the GPU by process. The faults are the machine's and count a mapped file's first read as a page
+file's, so they are a figure beside memory and no part of whether it is tight. A process's bytes read and
+written are every handle's and are capped at the disks'. The counters take 0.4 s to open and a sample a
+few ms, on a thread of its own, one a second; a bucket keeps the last sample in it. The player attaches
+the sampler as it attaches the ledger, and a simulation's run keeps one across its fresh graphs. A walk's
+stack is in its progress event and among the stores as "<lane> stack". Tight is a share of the whole in
+use, one named constant for the four in `catalogue.py`, and the box's memory limit set low was read as
+that constant set low. The walks set beside the one walked are its lane's, whole, of its length, under its
+plan and as cold, each node having run on as many rows, since a held walk is cheaper with nothing wrong;
+their figure is ms a row, a walk's wall being comparable with no other's. The cores are not split by
+thread, which the mockup draws. SIEVE's share of the machine is an amber, the mockup's, and everything else on it a gray, Kendrick's word
+of 2026-11-12, in the lane and the panel; the mockup has them the other way round. The default's other
+tracks, the GUI thread's stack, the row's cost and the stores', are classes still and added by `add`. A
+walk's segment is as wide as its wall, so one of a quarter second is a mark and has no room for its label.
+A poll of the window as it now is took a median of 3 ms and a paint under half of one, on the simulations'
+graph. The waits class on "paint monitor" was sighted in the one-off's first block in some runs and not
+others once the window's parts grew, and in 2 runs of 20 with the sampler against none of 20 without, the
+tools' wall less their CPU being a tick's noise on a walk of a quarter second either way; the one-off
+leaves the class out of its log and says so. A sighting for the fork on healthy documents. The check of
+the player's one-off that read the ledger's bookkeeping on the worker read none in about one run of six
+before any of this: the thread whose emit passes the backlog folds, and the GUI thread's slots are events
+too; it now sums every thread's. Neither fork below was observed: Kendrick was using SIEVE on the machine
+while this was built, and both want the purb document walked on a machine left alone. The GPU is sampled
+and drawn as a resource where the counters give it, which is the fork's second side taken unobserved in
+the drawing alone; on the simulations' graph offscreen SIEVE's share read nothing.
+
+Open: whether a copied report holds the document or the path of a history file that holds it. Recommended,
+and what a session may build on: the path, the history written as the copy is made, so a paste is some
+thirty lines; the cost is that a report carried to another machine wants the file sent with it.
+
+Open: what a problem with no cost in a row's own unit shows for its share, the machine's being one.
+Recommended: the ms a row its walks lost in time no span covers, as the slower class costs unprobed time.
+
+Fork: whether the slow walks are the machine's. Observed on the purb document once the machine is
+sampled, as a second half of the trace-cost finding: walks under one plan, each with the memory, the hard
+faults, the other processes' load and the disk over it. Where the slow ones fall under one of those and
+the fast ones do not, that resource under pressure is a class in the catalogue and the machine's panel
+says which; where they do not, the panel shows the spread and says the cause is not known, and no class
+is entered.
+
+Fork: whether the GPU is in the panel. Observed by reading what the decoder and the tools are built with
+and by sampling it over a walk: where SIEVE's share is nothing but painting, the GPU is one line that says
+so; where a decode or a tool runs on it, it is a resource beside the others. Observed 2026-11-12, in
+`docs/findings/2026-11-12-the-gpu-over-a-walk.md`: the walk's process read nothing on any engine over
+6000 rows of the purb document with every bake live, and the capture reports no acceleration, so it is one
+line, in the machine's panel and the report, with no bar, no row in the machine's lane and no part in what
+is tight; the line is read off the samples and says SIEVE's share where there is one. The player's painting
+was not sampled, the finding says why.
+
+- [x] The problems lead the window, costliest first, a line each: its share of a row, one plain sentence,
+  its target, its ms a row, its class and the walks it was seen in. Each has its own copy and one control
+  copies them all. The cleared problems and the classes that found nothing are one line under them.
+  Check: a one-off surfaces three problems at once and reads the three lines in order of cost.
+  Ticked 2026-11-12 by `docs/findings/experiments/2026-11-12-the-window-says-what-is-wrong.py`, four at once.
+- [x] Each class says itself in one sentence a user of the player reads without the code, and names a
+  target to act on: a node's fold, a store and what the window needs of it, a slot. The detector's line
+  stays, as evidence in the report.
+  Check: a catalogue test reads a sentence and a target off each class's hand-built view.
+- [x] Picking a problem is the one thing that changes the rest of the window: its nodes are marked in the
+  table and the stack, the panel it is about is outlined, and its first sighting is the flag on the axis.
+  Check: the same one-off picks each in turn and reads the marks.
+  Ticked 2026-11-12 by the same one-off, on the table as far as it is built.
+- [x] The pipeline is one table in walk order, a row a node: ms a row with a bar on one scale, the median
+  and the 99th percentile of its ms a run, its ms per megapixel of what it read, what asked for it, and
+  the rate the walk would reach were the node free.
+  Check: a one-off walks the simulations' graph and reads each column against the ledger.
+  Ticked 2026-11-12 by the same one-off.
+- [x] The ledger keeps each node's ms a run as a distribution over a walk, in bins and with no mean, and
+  the stream carries the shape of what a run read or made.
+  Check: a ledger test feeds runs of two known costs and reads the median and the 99th percentile; a
+  graph test reads the shape off a run's event.
+  Ticked 2026-11-12 by the same one-off, both read there and neither a test: 98 runs of 1 ms and 2 of 50
+  read 1.04 and 51.5.
+- [x] The time view's default is the worker's stack alone, each walk a labelled segment over it, with a
+  lane for the machine and one for the GUI thread's lateness under it; the other tracks stay addable.
+  Check: a one-off reads the default's parts and adds one.
+  Ticked 2026-11-12 by the same one-off.
+- [x] The machine is sampled into the ledger whenever one is attached: memory, cores, disk and, by its
+  fork, the GPU, each as SIEVE's and everything else's against the whole, and the hard page faults.
+  SIEVE's memory is said by what holds it: each store and a walk's stack.
+  Check: a ledger test feeds the samples and reads them in the buckets; a one-off reads the panel's
+  figures against the OS's own over a walk.
+  Not ticked 2026-11-12: built, and the same one-off reads a sample in its bucket and the panel's memory
+  and cores against psutil's; the GPU's fork is not observed.
+  Ticked 2026-11-12, later: the fork observed and its first side built, the same one-off rerun.
+- [x] The machine's panel says in one sentence which resource is tight, or that none is, and shows the
+  spread of the walks under the plan now walked.
+  Check: the one-off of the box above, under a memory limit set low and under none.
+  Ticked 2026-11-12 by the same one-off.
+- [x] A store's panel says what the window needs of it against what it holds, from the bytes a row the
+  walk has made, before the store discards anything.
+  Check: a one-off sets a window that does not fit and reads the figure before the first discard.
+  Ticked 2026-11-12 by the same one-off: the need read at each of the 24 rows before the memo's first
+  discard, and equal to what an unbounded memo held after the walk.
+- [x] The window pauses and resumes by a control: paused it draws what it drew, says how far behind now
+  it is, and the ledger goes on taking the stream; it is the same holding as the axis scrolled back.
+  Check: a one-off pauses, walks, reads the image unchanged and the ledger's walks grown, and resumes.
+  Ticked 2026-11-12 by the same one-off.
+- [x] A copy of several problems is one block: the problems numbered, each with its sentence, its
+  evidence, where the class has come from and its simulation; then once, shared, the walk and the one
+  before it, the plan's watched set, the table with the problems that name each node, the machine, the
+  GUI thread, the stores, the video and the decoder. A copy of one is the same block with one.
+  Check: a catalogue test takes the block for two problems and finds each part once.
+  Ticked 2026-11-12 by the same one-off, on a copy of three and of one.
+- [x] Small, the window is the rate, the costliest problem's sentence and target, how many more there
+  are, the copy of them all, and the stack.
+  Check: a one-off sizes it to the stated smallest and reads the parts.
+  Ticked 2026-11-12 by the same one-off.
+
+Worth a look: the window on the purb document served and live, beside the mockup; and whether the one
+sentence a class says is the one Kendrick would have said.
 
 ## The old monitor goes
 
@@ -559,11 +786,19 @@ Two accumulators over one stream are two answers to keep agreeing.
 
 Facts to weigh. `summary` and `table` are imported by every experiment under `docs/findings/experiments/`
 from 2026-11-08 on, each pinned in its finding to the commit it ran at. `tests/test_monitor.py` asserts the
-old snapshot's arithmetic.
+old snapshot's arithmetic. Added 2026-11-12 on building it, each of them how the tree now is and none a
+box. A chain node runs in every walk, held or not, so its figure is always the newest walk's. A served
+node's rows are counted with those it ran. A walk's unprobed is taken from the newest walk a figure is
+from. Emptying the stores emits no discard, so the cold walk after it is no recomputation to the ledger
+and surfaces no thrash. What went with the old monitor and has no successor: what a change at a node
+costs over the window, its table's last column. Its stores in windows are `catalogue.needs`.
 
 Fork: what becomes of an experiment that imports it. An experiment a box of this spec reruns, the
 finding of 2026-11-12's, reads the ledger's table from then on; one no box reruns is left as the script
-of the commit its finding names, and says so in its docstring's first line.
+of the commit its finding names, and says so in its docstring's first line. Taken 2026-11-12: the
+served-bake experiment prints `catalogue.cold` and `catalogue.rows` where it printed the old summary and
+table; the three before it, of 2026-11-08 and 2026-11-09, say in their first line the commit that added
+each, the scripts not being in the commits their findings name but in the one after.
 
 Kendrick's reading of 2026-11-12 is that a jump of the window to rows nothing holds is a cold walk taken
 for free, and the best sample of how the clip will go. Four things stand between a cold window and the
@@ -578,28 +813,42 @@ out, beside a clip walk's measured time. Where the projections agree with the cl
 another inside the walks' own spread, the projection is one figure from the latest cold window; where
 they agree with the clip walk only together, it is stated as the range the cold windows so far span, with
 how many there were; where a whole-run node's growth is what separates them, the projection carries that
-node's cost by its growth and not by its mean.
+node's cost by its growth and not by its mean. Observed 2026-11-12, in
+`docs/findings/2026-11-12-a-cold-window-and-the-clip.md`, on a machine in use: a whole-run node's growth
+is what separates them, `size` costing a hundredth in a window of what it cost over the clip, so
+`catalogue.cold` gives a Projection whose `ms_row(rows)` carries such a node by its growth. Carried so the
+windows still span a factor of two, which the finding does not take apart.
 
 Fork: whether the cold projection is worth keeping at all. Observed once it sums only what the plan
 reaches: where it agrees with the measured rate of a cold walk on the simulations and on the purb
 document, it is drawn beside the measured rate and a disagreement past a threshold is a class in the
 catalogue; where it does not agree on a healthy walk, it is not drawn, and the finding says by how much
-it missed.
+it missed. Not taken 2026-11-12: the same finding has it agree on the simulations and miss on purb by a
+half and more, and purb's clip walk was no healthy one, the catalogue reading it as `grows size`. `size`
+steps since, on Kendrick's word, and the observation wants making again on a machine left alone. Until
+then the projection is a reading in `catalogue.py` that an experiment prints and the window does not draw.
 
-- [ ] The per-node table, a walk's shares and the cold projection, is a reading of the ledger, and the
+- [x] The per-node table, a walk's shares and the cold projection, is a reading of the ledger, and the
   cold projection sums only the nodes the plan reaches.
   Check: a test switches a node to served after a live walk and reads a projection without the nodes
   behind it.
-- [ ] Each node's cold cost is taken from the rows of it that ran, in whichever walk they ran, and the
+  Ticked 2026-11-12: `catalogue.cold` over `catalogue.reach`, by a view built by hand in
+  `tests/test_catalogue.py`, the reach of a plan being a seam with `plan.facts`, and on the simulations'
+  graph by `docs/findings/experiments/2026-11-12-the-old-monitor-goes.py`.
+- [x] Each node's cold cost is taken from the rows of it that ran, in whichever walk they ran, and the
   projection says which walk each node's figure is from; a node whose figure is from before the last
   change upstream of it is marked so.
   Check: a test walks cold, changes a param mid-chain, walks again, and reads the changed node's and its
   readers' figures from the second walk and the rest from the first, unmarked.
-- [ ] A control empties the memo, the decoder's cache and every reader's and walks the window again, for
+  Ticked 2026-11-12 by the same test and one-off.
+- [x] A control empties the memo, the decoder's cache and every reader's and walks the window again, for
   a cold figure on demand; it says before it does that what is held will be recomputed.
   Check: a monitor test presses it and reads a walk whose every row ran.
-- [ ] `Monitor`, `MonitorWindow` and `monitor_views.py` are gone and nothing imports them.
+  Ticked 2026-11-12 by the same one-off: the window's Cold walk, whose first press says what the memo
+  and the caches hold and whose second, inside a few seconds, empties them and walks.
+- [x] `Monitor`, `MonitorWindow` and `monitor_views.py` are gone and nothing imports them.
   Check: the seams test.
+  Ticked 2026-11-12: nothing in the package or the tests; the three experiments the fork leaves do.
 
 ## Non-goals
 

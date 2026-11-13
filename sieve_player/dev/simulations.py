@@ -2,8 +2,9 @@ r"""The simulations: each builds one fault on purpose with the player's own Grap
 and a store it writes under the folder it is handed, and returns what the catalogue's log then holds.
 The graph is one, video, gray, work, bake, edge, then mean and pile as the chain; a fault is one
 departure from HEALTHY's ways of walking it. Those that serve a bake need ffmpeg, as a bake does.
+With --show the monitor is opened on the first one named and its fault repeated until it is closed.
 
-    .venv\Scripts\python -m sieve_player.dev.simulations [name]
+    .venv\Scripts\python -m sieve_player.dev.simulations [name] [--show]
 """
 import os
 import sys
@@ -24,8 +25,11 @@ from ..catalogue import Log, line
 from ..decoder import Decoder
 from ..graph import Graph
 from ..ledger import Ledger
-from ..store import Store, commit
+from ..machine import Watch
+from ..pace import Pace
+from ..store import Store
 from ..worker import Worker
+from .timeview import Window, context
 
 ROWS, H, W = 64, 48, 64
 EVERY = 4           # the chain's cadence, so a node run whole runs in every part of the range
@@ -39,14 +43,6 @@ def _spin(ms):
     end = time.perf_counter() + ms / 1000
     while time.perf_counter() < end:
         pass
-
-
-def context(graph, dump=None):
-    """What an entry's text takes beside the view, read off `graph`; `dump` is the path of the
-    dump being written, when one is."""
-    d = graph.decoder
-    return {"document": graph.doc.to_dict(), "video": d.path, "memo_limit": graph.memo.limit, "commit": commit(), "dump": dump,
-            "decoder": {k: getattr(d, k, None) for k in ("width", "height", "fps", "count", "output", "cache_limit")}}
 
 
 def _clip(path):
@@ -90,7 +86,8 @@ def _tools():
 
 
 class _Run:
-    """One simulation's graph, worker, ledger and log under `folder`, closed on leaving."""
+    """One simulation's graph, worker, ledger and log under `folder`, closed on leaving. `limits` are
+    the stores', `memo_bytes` and `cache_bytes`, and `sample`, the seconds between the machine's samples."""
 
     def __init__(self, folder, served=False, pinned=(), **limits):
         QApplication.instance() or QApplication([])
@@ -98,23 +95,25 @@ class _Run:
         self.path = _clip(os.path.join(folder, "clip.avi"))
         self.doc = D.from_tools(list(self.tools.values()), self.path)
         self.doc.pinned = list(pinned)
-        self.limits, self.worker, self.graph = limits, None, None
-        self._open(Ledger())
+        self.limits, self.worker, self.graph, self.dump = limits, None, None, None
+        self._open(Ledger(timed=lambda: self.graph.turn("monitor", "ledger")))
+        self.machine = Watch(lambda *sample: self.ledger.sample(*sample), limits.get("sample", 1.0))     # one for the run: its counters take 0.4 s to open
         if served:      # baked on one graph and served on a fresh one, so no store holds what is upstream of it
             D.land(self.doc.node("bake"), self.bake())
-            self.close()
-            self._open(Ledger())
+            self._shut()
+            self._open(Ledger(timed=lambda: self.graph.turn("monitor", "ledger")))
 
     def _open(self, ledger):
         cache = self.limits.get("cache_bytes")
         self.graph = Graph(self.doc, Decoder(self.path, **({} if cache is None else {"cache_bytes": cache})), self.tools,
                            open_bake=self.store.open_bake, **{k: v for k, v in self.limits.items() if k == "memo_bytes"})
-        self.ledger, self.log = ledger, Log()
+        self.ledger, self.log, self.pace = ledger, Log(), Pace()
         self.graph.on_event = ledger.event
         self.graph.sync()       # the plan, into the ledger
         self.worker = Worker(self.graph, every=EVERY, store=self.store)
         self.walked, self.series, self.baked = [], [], []
-        self.worker.walked.connect(self.slot("walked", lambda done, n, *was: self.walked.append((done, n))))
+        self.worker.walked.connect(self.slot("walked", lambda done, n, *was: (self.walked.append((done, n)),
+                                                                             self.pace.row("window", done, n, *was))))
         self.worker.seriesReady.connect(self.slot("seriesReady", lambda *a: self.series.append(a)))
         self.worker.bakeDone.connect(lambda nid, b: self.baked.append(b))
         self.worker.bakeRefused.connect(lambda nid, why: self.baked.append(RuntimeError(why)))
@@ -163,11 +162,20 @@ class _Run:
         self.log.read(view)
         return Seen(self.log, view, context(self.graph))
 
-    def close(self):
+    def fresh(self):
+        """A new graph, decoder and worker under the ledger it has, so the next walk is cold in one history."""
+        self._shut()
+        self._open(self.ledger)
+
+    def _shut(self):
         if self.worker.isRunning():
             self.worker.stop()
         self.graph.close()
         self.graph.decoder.close()
+
+    def close(self):
+        self.machine.close()
+        self._shut()
 
     def __enter__(self):
         return self
@@ -176,88 +184,87 @@ class _Run:
         self.close()
 
 
-def unread(folder):
+def _fault(**run):
+    """Marks a simulation, a function of a _Run, with what its _Run is made with."""
+    def mark(fault):
+        fault.run = run
+        return fault
+    return mark
+
+
+@_fault(served=True)
+def unread(r):
     """A bake served on a fresh graph: the window walk folds gray and work, which nothing reads."""
-    with _Run(folder, served=True) as r:
-        r.walk()
-        return r.seen()
+    r.walk()
 
 
-def memo(folder):
+@_fault(memo_bytes=ROWS * ROW * 2)
+def memo(r):
     """A memo that holds under half the window, walked twice."""
-    with _Run(folder, memo_bytes=ROWS * ROW * 2) as r:
-        r.walk()
-        r.walk()
-        return r.seen()
+    r.walk()
+    r.walk()
 
 
-def cache(folder):
+@_fault(cache_bytes=8 * ROW * 3)
+def cache(r):
     """A plate cache that holds eight rows, and a change at gray, which decodes the window again."""
-    with _Run(folder, cache_bytes=8 * ROW * 3) as r:
-        r.walk()
-        r.walk(ask=r.change("gray", k=1))
-        return r.seen()
+    r.walk()
+    r.walk(ask=r.change("gray", k=1))
 
 
-def reader(folder):
+@_fault(served=True, pinned=("gray", "work"), cache_bytes=8 * ROW * 3)
+def reader(r):
     """A served reader's cache that holds eight rows, and a change under it; what is upstream is
     pinned, so its folds are read."""
-    with _Run(folder, served=True, pinned=("gray", "work"), cache_bytes=8 * ROW * 3) as r:
-        r.walk()
-        r.walk(ask=r.change("edge", k=1))
-        return r.seen()
+    r.walk()
+    r.walk(ask=r.change("edge", k=1))
 
 
-def grows(folder):
+@_fault()
+def grows(r):
     """pile, which does not step, costing by the rows it is run over."""
-    with _Run(folder) as r:
-        r.tools["pile"].ms = 0.1
-        r.walk()
-        return r.seen()
+    r.tools["pile"].ms = 0.1
+    r.walk()
 
 
-def seeks(folder):
+@_fault()
+def seeks(r):
     """work reading the row half a clip away beside its own."""
-    with _Run(folder) as r:
-        r.tools["work"].far = ROWS // 2
-        r.walk()
-        return r.seen()
+    r.tools["work"].far = ROWS // 2
+    r.walk()
 
 
-def slower(folder):
+@_fault()
+def slower(r):
     """Two halves of the clip under one plan, work five times as slow over the second."""
-    with _Run(folder) as r:
-        r.walk(0, ROWS // 2)
-        r.tools["work"].ms *= 5
-        r.walk(ROWS // 2, ROWS // 2)
-        return r.seen()
+    r.tools["work"].ms = MS
+    r.walk(0, ROWS // 2)
+    r.tools["work"].ms = 5 * MS
+    r.walk(ROWS // 2, ROWS // 2)
 
 
-def held(folder):
+@_fault()
+def held(r):
     """Two halves of the clip under one plan, the worker held between rows over the second, in no span."""
-    with _Run(folder) as r:
-        r.walk(0, ROWS // 2)
-        r.worker.walked.connect(lambda done, n: _spin(3 * MS), Qt.ConnectionType.DirectConnection)
-        r.walk(ROWS // 2, ROWS // 2)
-        return r.seen()
+    r.walk(0, ROWS // 2)
+    r.worker.walked.connect(lambda done, n: _spin(3 * MS), Qt.ConnectionType.DirectConnection)
+    r.walk(ROWS // 2, ROWS // 2)
 
 
-def slot(folder):
+@_fault(pinned=("gray", "work", "bake", "edge"))
+def slot(r):
     """A slot of the GUI thread's that spins at every row, holding the interpreter the worker then
     waits for. The wait lands in whatever span the worker is in, the folds among them, so the frame
     nodes are pinned and their folds, grown by it, are read."""
-    with _Run(folder, pinned=("gray", "work", "bake", "edge")) as r:
-        r.worker.walked.connect(r.slot("walked", lambda done, n, *was: _spin(3 * MS)))
-        r.walk()
-        return r.seen()
+    r.worker.walked.connect(r.slot("walked", lambda done, n, *was: _spin(3 * MS)))
+    r.walk()
 
 
 def _healthy(*steps):
-    def run(folder):
-        with _Run(folder) as r:
-            for step in steps:
-                step(r)
-            return r.seen()
+    @_fault()
+    def run(r):
+        for step in steps:
+            step(r)
     return run
 
 
@@ -276,19 +283,42 @@ HEALTHY = {"walk": _healthy(_Run.walk), "rewalk": _healthy(_Run.walk, _Run.walk)
            "bake": _healthy(_Run.walk, _Run.bake)}      # each a way of walking the graph that is no fault
 
 
+def _named(name):
+    return SIMULATIONS[name][0] if name in SIMULATIONS else HEALTHY[name]
+
+
 def run(name, folder=None):
     """What simulation `name`, a key of SIMULATIONS or HEALTHY, leaves the log holding: a Seen. It
     writes under `folder`, a temporary one when none is given."""
-    sim = SIMULATIONS[name][0] if name in SIMULATIONS else HEALTHY[name]
-    if folder is not None:
-        return sim(str(folder))
-    with tempfile.TemporaryDirectory() as tmp:
-        return sim(tmp)
+    with tempfile.TemporaryDirectory() as tmp, _Run(str(folder or tmp), **_named(name).run) as r:
+        _named(name)(r)
+        return r.seen()
+
+
+def show(name, rounds=None, folder=None):
+    """Opens the monitor on simulation `name`'s run and repeats its fault, each time after the first
+    on a fresh graph under the one ledger, `rounds` times or until the window is closed; returns the
+    window, closed, holding what its last poll read."""
+    with tempfile.TemporaryDirectory() as tmp, _Run(str(folder or tmp), **_named(name).run) as r:
+        win, n = Window(r), 0
+        win.show()
+        while win.isVisible() and (rounds is None or n < rounds):
+            if n:
+                r.fresh()
+            _named(name)(r)
+            n += 1
+        win.refresh()
+        win.close()
+        return win
 
 
 if __name__ == "__main__":
     wrong = 0
-    asked = [n for a in sys.argv[1:] for n in ([s for s, (_, kind) in SIMULATIONS.items() if kind == a] or [a])]    # a class names its simulations
+    asked = [n for a in sys.argv[1:] if a != "--show" for n in ([s for s, (_, kind) in SIMULATIONS.items() if kind == a] or [a])]    # a class names its simulations
+    if "--show" in sys.argv:
+        QApplication.instance() or QApplication([])
+        show((asked or ["walk"])[0])
+        sys.exit(0)
     for name in asked or [*SIMULATIONS, *HEALTHY]:
         seen = run(name)
         found, want = {e.problem.kind for e in seen.log.ordered()}, {SIMULATIONS[name][1]} if name in SIMULATIONS else set()

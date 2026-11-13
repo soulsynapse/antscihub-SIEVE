@@ -145,11 +145,11 @@ the kinds of `stats.MEANS`; what it averaged before it averages now, a "cancel" 
 `worker.py`, `window.py` and `dev/timeview.py` pass a string to `probe`'s list or to `turn`, which no
 check here reads.
 
-- [ ] Every kind is a named value in the stream's module, with what it is: a span of a node's, a span of
+- [x] Every kind is a named value in the stream's module, with what it is: a span of a node's, a span of
   a thread's, a reader's own, or an instant. The sets a reader keeps are drawn from those.
   Check: a seam test finds no kind as a string literal in `trace.py`, `ledger.py` or `catalogue.py`
   outside a set built from the module's. It is `test_a_reader_spells_no_kind`.
-- [ ] A kind no reader has classified fails a test and is averaged into nothing: `Stats` takes a kind by
+- [x] A kind no reader has classified fails a test and is averaged into nothing: `Stats` takes a kind by
   membership, as the ledger does.
   Check: a test feeds `Stats` an event of a kind made up for it and reads no node's mean moved; a seam
   test reads every kind of the module in each reader's sets or in a stated set of those it passes over.
@@ -172,11 +172,11 @@ whole, and its entry in `MAY_IMPORT` is `pace` and `theme`. With it gone from `w
 `tests.test_catalogue` loads no `sieve_player.window`. `window` and the modules under `dev` still have
 no entry in `MAY_IMPORT`; the test below reads `dev` for the one import and holds nothing else of them.
 
-- [ ] No module under `sieve_player/dev` imports `window`, and the control the player's header and the
+- [x] No module under `sieve_player/dev` imports `window`, and the control the player's header and the
   monitor's both draw is in a module each may import.
   Check: `test_seams` reads the imports of every file under `dev`. It is
   `test_nothing_under_dev_imports_the_window`.
-- [ ] The control draws as it did.
+- [x] The control draws as it did.
   Check: `docs/findings/experiments/2026-11-12-the-figure-on-the-player.py` exits as it did.
 
 ## The ledger's records have names
@@ -207,14 +207,14 @@ of a run, and `saved` raises ValueError on a record whose fields are not the led
 anything is built of it, so an error from the building is no refusal. The one-off counts a loop over the
 runs once, so its count of lines at a7ceace5 is under the fact's above.
 
-- [ ] What a node ran under, and what that came to, are each a value with named fields, and nothing
+- [x] What a node ran under, and what that came to, are each a value with named fields, and nothing
   outside `ledger.py` reads either by position.
   Check: a one-off greps `catalogue.py` for an index into a run; the catalogue's tests stand. It is
   `docs/findings/experiments/2026-11-12-the-ledgers-records-have-names.py`, over every module under
   `sieve_player`.
-- [ ] A walk's identity is one value, made in one place.
+- [x] A walk's identity is one value, made in one place.
   Check: the same one-off, for `(w.lane, w.t0)` built outside `ledger.py`.
-- [ ] A view saved and read back is equal to itself.
+- [x] A view saved and read back is equal to itself.
   Check: the test of `save` and `saved` in `tests/test_ledger.py` stands.
 
 ## A span's place in time is the emitter's to say
@@ -370,7 +370,7 @@ experiments imported `line` from the catalogue, `2026-11-12-served-scrub-moves-t
 repointed by its one line, as settled under The stream has a module of its own; the three places
 monitor.md named `catalogue.text` or `catalogue.report` name `report.text` and `report.report`.
 
-- [ ] The module the detectors are in renders no report.
+- [x] The module the detectors are in renders no report.
   Check: `MAY_IMPORT` has the rendering's module importing the catalogue and not the reverse.
 
 ## Not here

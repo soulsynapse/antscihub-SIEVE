@@ -114,7 +114,7 @@ class _Run:
         self.graph.sync()       # the plan, into the ledger
         self.worker = Worker(self.graph, every=EVERY, store=self.store)
         self.walked, self.series, self.baked = [], [], []
-        self.worker.walked.connect(self.slot("walked", lambda done, n: self.walked.append((done, n))))
+        self.worker.walked.connect(self.slot("walked", lambda done, n, *was: self.walked.append((done, n))))
         self.worker.seriesReady.connect(self.slot("seriesReady", lambda *a: self.series.append(a)))
         self.worker.bakeDone.connect(lambda nid, b: self.baked.append(b))
         self.worker.bakeRefused.connect(lambda nid, why: self.baked.append(RuntimeError(why)))
@@ -247,7 +247,7 @@ def slot(folder):
     waits for. The wait lands in whatever span the worker is in, the folds among them, so the frame
     nodes are pinned and their folds, grown by it, are read."""
     with _Run(folder, pinned=("gray", "work", "bake", "edge")) as r:
-        r.worker.walked.connect(r.slot("walked", lambda done, n: _spin(3 * MS)))
+        r.worker.walked.connect(r.slot("walked", lambda done, n, *was: _spin(3 * MS)))
         r.walk()
         return r.seen()
 

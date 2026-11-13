@@ -414,22 +414,42 @@ will take, and the player is told both already.
 Facts to weigh. The worker's `walked` and `clipWalked` signals reach the window per row with rows done and
 rows in the range; a rate is two of them and a clock, with no consumer on the probe. `Header` is the
 player's top bar and holds the walk's state. The old monitor's multiple is the cold projection, a
-different number.
+different number. Added 2026-11-12 on building it: a walk's beginning has no signal, so a lane's count
+at or below its last is what opens a walk and the walk's first row is not in its rate; the clock is
+the GUI thread's, so the rate holds the turns the ladder gave other work and how late the slot ran.
+The memo's counters are every thread's and count a held row as one hit where a row that ran is a miss
+a node, so they give no share of rows read from the GUI thread: the worker takes `Graph.tally` either
+side of the walked row, and the two signals carry, of the rows done, those that ran and those that
+read a bake. The video node and a served node go round the memo, so the tally holds the decoders'
+reads their caches did not answer beside the memo's misses. A `peek` that misses from the GUI thread
+between the two is counted with the row. A walk that read a bake is not cold by the second box's
+sentence, and shows no time for the clip.
 
-- [ ] The player shows, on one control, the measured rate of the lane now walking as a multiple of
+- [x] The player shows, on one control, the measured rate of the lane now walking as a multiple of
   realtime and the clip's length beside the time it takes or has left at that rate; idle, the last walk's.
   It reads the worker's own signals and attaches nothing to the probe.
   Check: a window test walks a window offscreen with `on_event` unset throughout and reads the control's
   text against the rows and the clock.
-- [ ] Beside the rate the control says what the walk was: cold, held in part and by how much, or served
+- [x] Beside the rate the control says what the walk was: cold, held in part and by how much, or served
   from a bake, read off the counters the memo, the decoder and a served reader already keep, across the
   walk. A rate from a walk that was not cold is not shown as the clip's time.
   Check: the same test walks a window cold, again, and one overlapping it by half, and reads the three
   labels; and reads no clip time beside the second and third.
-- [ ] Pressing it opens the monitor, the same window Dev opens.
+- [x] Pressing it opens the monitor, the same window Dev opens.
   Check: the same test presses it and reads the window shown.
 - [ ] The figure is the one the monitor's header leads with, by one definition both read.
   Check: a monitor test reads the two equal over a walk.
+- [x] A walk is cold while no row of it read a bake and a store held no more than a named share of
+  them. Added 2026-11-12 on building it: the display's row is computed on the scrub's rung before the
+  walk reaches it, so a window never walked read 49 rows ran and 1 held, paused and under playback
+  alike, and a cold that asked every row to have run showed a time for the clip on no walk.
+  Check: `docs/findings/experiments/2026-11-12-the-figure-on-the-player.py`, whose first and fourth
+  walks give a time for the clip and whose second and third, held whole and by half, give none.
+- [x] The control is drawn and not written, Kendrick's word of 2026-11-12: the lane's glyph, the
+  rate, one bar whose width is the range and whose filled part is the rows done, cut by what they
+  were, and a time under the glyph of what it is; the words and the counts are its tooltip, which is
+  the text the first box's check reads. The header's count of the clip walk's rows is the bar's.
+  Check: the same experiment, handed a folder, grabs the header at each walk.
 
 ## The window
 

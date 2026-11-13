@@ -13,15 +13,16 @@ import traceback
 
 import cv2
 import numpy as np
-from PySide6.QtCore import QFileSystemWatcher, QRectF, Qt, QTimer, Signal
-from PySide6.QtGui import QFontMetrics, QImage, QKeySequence, QPainter, QPen, QPixmap, QShortcut
-from PySide6.QtWidgets import QFileDialog, QHBoxLayout, QMainWindow, QPushButton, QSizePolicy, QVBoxLayout, QWidget
+from PySide6.QtCore import QFileSystemWatcher, QPointF, QRectF, Qt, QTimer, Signal
+from PySide6.QtGui import QBrush, QFontMetrics, QImage, QKeySequence, QPainter, QPen, QPixmap, QShortcut
+from PySide6.QtWidgets import QAbstractButton, QFileDialog, QHBoxLayout, QMainWindow, QPushButton, QSizePolicy, QVBoxLayout, QWidget
 
 from . import dev, document, store, theme
 from .canvas import Canvas
 from .decoder import Decoder
 from .graph import Graph
 from .ledger import Ledger
+from .pace import Pace, clock
 from .pane import Pane
 from .registry import CATEGORIES, Entry, category, description, signature
 from .theme import GAP, PAD, ROW_H, readout
@@ -292,9 +293,89 @@ def catalogue(items):
     return modules, {t.NAME: t for t in modules}, broken
 
 
+class PaceControl(QAbstractButton):
+    """A pace.Figure as one control, drawn and not written: the lane's glyph, the rate as a multiple
+    of realtime, a bar and a time. The bar's width is the range and its filled part the rows done,
+    cut by what they were: those a store held dim, those that ran bright, those that read a bake
+    hatched, in that order and not at the rows' places, the figure holding counts. The time is under
+    the glyph of what it is, the clip at this rate, the clip walk's rest or what it took, and a dash
+    where the figure gives none. The tooltip is the figure's words. Its width never follows its text."""
+    BAR_W, BAR_H, EDGE = 140, 8, 6
+    LANES = {"window": "brackets-contain", "clip": "movie"}
+    TIMES = {"takes": "clock", "left": "hourglass", "took": "circle-check"}
+    HELD = 105      # a held row's gray, between the bar's ground and a row that ran
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.figure = None
+        self.setFont(theme.mono_font())
+        fm = QFontMetrics(self.font())
+        self._rate_w, self._time_w = fm.horizontalAdvance("00.0×"), fm.horizontalAdvance("0:00:00")
+        self.setFixedSize(3 * self.EDGE + 2 * theme.GLYPH + self._rate_w + self.BAR_W + 2 * GAP + 4 + self._time_w, ROW_H)
+        self.setAttribute(Qt.WA_Hover, True)
+        self.setCursor(Qt.PointingHandCursor)
+
+    def set_figure(self, figure):
+        """`figure`, a pace.Figure, or None for no walk to show."""
+        self.figure = figure
+        self.setToolTip("" if figure is None else figure.words() + "\nclick for the monitor")
+        self.update()
+
+    def paintEvent(self, event):
+        del event
+        f = self.figure
+        if f is None:
+            return
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing, True)
+        base = theme.layer(theme.depth_of(self) + 1)
+        if self.underMouse() and self.isEnabled():
+            p.setPen(QPen(theme.qgray(base + theme.LINE_LIFT).lighter(theme.HOVER_EDGE), 1))
+            p.setBrush(theme.qgray(base + theme.HOVER_LIFT))
+            p.drawRoundedRect(QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5), theme.RADIUS, theme.RADIUS)
+        ratio, h, top = self.devicePixelRatioF(), self.height(), (self.height() - theme.GLYPH) / 2
+        dim = theme.INK_2 - 50
+        x = self.EDGE
+        p.drawPixmap(QPointF(x, top), theme.glyph(self.LANES[f.lane], theme.INK_2, theme.GLYPH, ratio))
+        x += theme.GLYPH + self.EDGE
+        p.setFont(self.font())
+        p.setPen(theme.qgray(theme.INK if f.multiple is not None else dim))
+        rate = "–" if f.multiple is None else f"{f.multiple:.1f}×" if f.multiple < 100 else f"{f.multiple:.0f}×"
+        p.drawText(QRectF(x, 0, self._rate_w, h), Qt.AlignRight | Qt.AlignVCenter, rate)
+        x += self._rate_w + GAP
+        bar = QRectF(x, (h - self.BAR_H) / 2, self.BAR_W, self.BAR_H)
+        p.setRenderHint(QPainter.Antialiasing, False)
+        p.fillRect(bar, theme.qgray(theme.GROUND - theme.STEP))
+        at = bar.left()
+        for rows, brush in ((f.held, theme.qgray(self.HELD)), (f.ran, theme.qgray(theme.INK)), (f.served, None)):
+            w = self.BAR_W * rows / f.total if f.total else 0
+            if brush is None:
+                p.fillRect(QRectF(at, bar.top(), w, self.BAR_H), theme.qgray(self.HELD - 45))
+                brush = QBrush(theme.qgray(theme.INK), Qt.BDiagPattern)
+            p.fillRect(QRectF(at, bar.top(), w, self.BAR_H), brush)
+            at += w
+        p.setPen(QPen(theme.qgray(base + theme.LINE_LIFT), 1))
+        p.setBrush(Qt.NoBrush)
+        p.drawRect(bar.adjusted(0, 0, -1, -1))
+        p.setRenderHint(QPainter.Antialiasing, True)
+        x += self.BAR_W + GAP
+        name = self.TIMES.get(f.what, "clock" if f.lane == "window" else "hourglass")
+        p.drawPixmap(QPointF(x, top), theme.glyph(name, theme.INK_2 if f.what else dim, theme.GLYPH, ratio))
+        x += theme.GLYPH + 4
+        p.setPen(theme.qgray(theme.INK if f.what else dim))
+        p.drawText(QRectF(x, 0, self._time_w, h), Qt.AlignLeft | Qt.AlignVCenter, clock(f.seconds) if f.what else "–")
+        p.end()
+
+    def event(self, e):
+        if e.type() in (e.Type.HoverEnter, e.Type.HoverLeave):
+            self.update()
+        return super().event(e)
+
+
 class Header(QWidget):
     """The row across the top: the store's folder, what it holds and what the disk has free with the
-    button that changes it, at the left; the clip walk's progress and its button, at the right."""
+    button that changes it, at the left; the walk's figure, what the clip walk has to say and its
+    button, at the right."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -306,13 +387,14 @@ class Header(QWidget):
         self.store.setFixedSize(80, ROW_H)
         self.note = readout(mono=True, wrap=False)
         self.note.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        self.note.setMinimumWidth(QFontMetrics(self.note.font()).horizontalAdvance("clip 000000/000000"))   # so a digit more never shifts it
+        self.figure = PaceControl()
         self.walk = QPushButton("Walk clip")
         self.walk.setFixedSize(80, ROW_H)
         lay.addWidget(self.store)
         lay.addWidget(self.store_note)
         lay.addStretch(1)
         lay.addWidget(self.note)
+        lay.addWidget(self.figure)
         lay.addWidget(self.walk)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
@@ -329,8 +411,8 @@ class Header(QWidget):
     def set_walking(self, on):
         self.walk.setText("Stop walk" if on else "Walk clip")
 
-    def set_progress(self, done, total):
-        self.note.setText(f"clip {done}/{total}" if done < total else "")
+    def clear_note(self):
+        self.note.setText("")
 
 
 class Column(QWidget):
@@ -367,6 +449,7 @@ class PlayerWindow(QMainWindow):
         self.doc = None
         self.decoder = self.graph = self.worker = None
         self.ledger = self.lateness = None        # the open video's stream kept over time, and the GUI thread's sampler into it
+        self.pace = None                          # the open video's walks as the header's figure reads them
         self.dump = None                          # the stream's file, while DUMP_ENV names one
         self.fps, self.count = 30.0, 0
         self.row, self.playing, self.window_ = 0, False, (0, 0)
@@ -421,6 +504,7 @@ class PlayerWindow(QMainWindow):
         self.header.show_store(self.store)
         self.header.store.clicked.connect(self._choose_store)
         self.header.walk.clicked.connect(self._toggle_clip)
+        self.header.figure.clicked.connect(lambda: dev.show(self, "monitor"))
         self.header.setEnabled(False)
 
         right = Column()
@@ -742,7 +826,7 @@ class PlayerWindow(QMainWindow):
         self.worker.invalidate()
         self._clip_asked = False
         self.header.set_walking(False)
-        self.header.set_progress(0, 0)
+        self.header.clear_note()
         self.clip_results = {}
         self._show_pinned()
 
@@ -911,12 +995,14 @@ class PlayerWindow(QMainWindow):
         if os.environ.get(DUMP_ENV):
             self.dump = Dump(self.graph, os.environ[DUMP_ENV])
         self.lateness = Lateness(self._sample, parent=self)
+        self.pace = Pace()
         self.worker = Worker(self.graph, store=self.store)
         self.fps, self.count = self.graph.fps, self.graph.count
         ct = self.timeline.controls
         for signal, slot in (("rowReady", self._row_ready), ("seriesReady", self._series_ready),
-                             ("densityReady", self.plot.set_fields), ("walked", ct.set_progress),
-                             ("walked", lambda _, n: self._set_length(n)),   # the walk's own length: clamped, or closed early
+                             ("densityReady", self.plot.set_fields), ("walked", lambda done, n, *was: ct.set_progress(done, n)),
+                             ("walked", lambda _, n, *was: self._set_length(n)),   # the walk's own length: clamped, or closed early
+                             ("walked", lambda *row: self._paced("window", *row)),
                              ("failed", self._failed), ("clipWalked", self._clip_walked), ("clipReady", self._clip_ready),
                              ("clipRefused", self._clip_refused), ("baked", self.pane.show_bake), ("bakeDone", self._baked),
                              ("bakeRefused", self._bake_refused), ("walkRefused", ct.progress.setText),
@@ -963,13 +1049,14 @@ class PlayerWindow(QMainWindow):
         self.lateness.stop()
         if self.dump is not None:
             self.dump.close()
-        self.dump = self.lateness = self.ledger = None
+        self.dump = self.lateness = self.ledger = self.pace = None
+        self.header.figure.set_figure(None)
         self.graph.close()
         self.decoder.close()
         self.decoder = self.graph = self.worker = None
         self.results, self.clip_results, self._clip_asked = {}, {}, False
         self.header.set_walking(False)
-        self.header.set_progress(0, 0)
+        self.header.clear_note()
         self.header.setEnabled(False)
         self.timeline.strip.set_series({})
         self.row, self.window_ = 0, (0, 0)
@@ -1100,16 +1187,21 @@ class PlayerWindow(QMainWindow):
         if self._clip_asked:
             self.worker.stop_clip()
             self._clip_asked = False
-            self.header.set_progress(0, 0)
+            self.header.clear_note()
         else:
             self.worker.walk_clip()
             self._clip_asked = True
             self.header.note.setText("clip: after the window")
         self.header.set_walking(self._clip_asked)
 
-    def _clip_walked(self, done, total):
+    def _paced(self, lane, done, total, ran, served):
+        self.pace.row(lane, done, total, ran, served)
+        self.header.figure.set_figure(self.pace.figure(self.fps, self.count))
+
+    def _clip_walked(self, done, total, ran, served):
+        self._paced("clip", done, total, ran, served)
         if self._clip_asked:
-            self.header.set_progress(done, total)
+            self.header.clear_note()
             if done >= total:
                 self._clip_asked = False
                 self.header.set_walking(False)

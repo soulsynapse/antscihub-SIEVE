@@ -516,6 +516,21 @@ class Graph:
         self._hits.pop(getattr(self._probing, "lane", None), None)
         self._emit("begin", None, start, None, 0, length=length)
 
+    def tally(self):
+        """What the stores have been asked for and did not hold, as two counts off the counters they
+        keep: the memo's misses with the plate decoder's reads its cache did not answer, and the same
+        reads of every served reader open now. Taken before and after a computation, either having
+        moved says which the computation was; a miss from another thread between the two is counted
+        with it, the counters being every thread's, and the second falls when a sync retires a reader."""
+        with self._lock:
+            plan = self._plan
+        d = self.decoder
+        served = 0
+        for e in plan.values():
+            if e.bake is not None and (r := getattr(self.readers.held(e.bake.key), "decoder", None)) is not None:
+                served += r.reads - r.cache_hits
+        return self.memo.misses + d.reads - d.cache_hits, served
+
     def _hit(self, nid, fold):
         self._hits.setdefault(getattr(self._probing, "lane", None), {}).setdefault(nid, [0, 0])[fold] += 1
 

@@ -88,7 +88,7 @@ class _Walk:
     graph: object
     name: str           # "window" or "clip": the lane its events are in
     every: int          # the cadence, in rows, at which the chain's result goes out
-    progress: object    # Signal(int, int): rows done, rows in the range
+    progress: object    # Signal(int, int, int, int): rows done, rows in the range, and of those done the rows that ran and that read a bake
     ready: object       # Signal(object, int, float): the chain's {node: result}, start, fps
     refused: object     # Signal(str): the range closed short, and why
     failed: object      # Signal(int, str): a tool raised at this row, on this node
@@ -99,6 +99,8 @@ class _Walk:
     start: int = 0
     length: int = 0
     i: int = 0
+    ran: int = 0        # of the rows done, those whose walked row a store did not hold: Graph.tally moved under it
+    served: int = 0     # and those that read a bake's file, whatever ran beside the read
     bytes: int = 0
     stack: object = None
     dens: dict = field(default_factory=dict)      # node -> (length, BINS) counts, for the planes the walk computes
@@ -115,14 +117,16 @@ class _Walk:
             self.graph.began(start, length)
 
     def drop(self):
-        self.i = self.bytes = 0
+        self.i = self.ran = self.served = self.bytes = 0
         self.stack, self.dens, self.folded, self.stepped = None, {}, {}, {}
 
     def turn(self):
         g = self.graph
         row = self.start + self.i
         headed = g.walk is None      # a served series node heads the chain: the rows are its file's, and nothing is walked for them
+        before = g.tally()
         out = None if headed else np.asarray(g.walk_row(row))
+        ran, served = (a != b for a, b in zip(before, g.tally()))
         planes = {nid: v for nid in g.frame_nodes() if (v := g.density(nid, row)) is not None} if self.densities is not None and not headed else {}
         stacked = bool(g.chain) and not headed      # without a chain nothing reads the stack, and the rows are not held
         if self.i and ((self.stack is not None) != stacked or (stacked and not _fits(self.stack, out))
@@ -144,10 +148,12 @@ class _Walk:
             self.dens[nid][self.i] = v
         self.step(self.i + 1)
         self.i += 1
+        self.served += headed or served
+        self.ran += ran and not served and not headed
         if self.bytes > STACK_BYTES:
             self.refuse(f"the {self.name}'s stack reached {self.bytes / 2**30:.1f} GB at row {row}; the rows walked stand")
             return
-        self.progress.emit(self.i, self.length)
+        self.report()
         g.progress(self.i, self.length)
         if self.i == self.length or self.i % self.every == 0:
             self.emit()
@@ -216,7 +222,10 @@ class _Walk:
     def halt(self):
         """Stopped: the rows it has stand, and the count says so."""
         self.length = self.i
-        self.progress.emit(self.i, self.length)
+        self.report()
+
+    def report(self):
+        self.progress.emit(self.i, self.length, self.ran, self.served)
 
     def close(self):
         """Returns the exception the chain raised over the rows held, if it did, the range closed
@@ -477,11 +486,11 @@ def run_chain(graph, stack, start, done, folds, stepped=None):
 
 class Worker(QThread):
     rowReady = Signal(int)                    # a requested row is computed and peekable
-    walked = Signal(int, int)                 # rows done, rows in window
+    walked = Signal(int, int, int, int)       # rows done, rows in window, and of those done the rows that ran and that read a bake; the rest a store held
     seriesReady = Signal(object, int, float)  # {node: result} for the series chain, each gated and keyed, start, fps
     densityReady = Signal(object, int)        # {node: (rows, BINS) counts} per plane the walk computes, start
     failed = Signal(int, str)                 # a tool raised at this row, on this node; a walk closes at the rows it has, as a refused one does, a display request is dropped
-    clipWalked = Signal(int, int)             # rows done, rows in the clip; done == total when the clip walk is not running
+    clipWalked = Signal(int, int, int, int)   # as walked, over the clip; done == total when the clip walk is not running
     clipReady = Signal(object, int, float)    # as seriesReady, over the clip walk's rows; {} when the walk was abandoned
     clipRefused = Signal(str)                 # the clip walk did not start, or stopped short of the clip, and why
     walkRefused = Signal(str)                 # the window walk closed short of the window, and why: its stack passed STACK_BYTES
@@ -660,7 +669,7 @@ class Worker(QThread):
                 clip.begin(0, count if on and fed else 0)
                 if not clip.length:
                     clip.ready.emit({}, 0, g.fps)
-                clip.progress.emit(clip.i, clip.length)
+                clip.report()
             return "walk", [(clip, begin)]
         if clip.i < clip.length:
             if self._clip_on and fed:

@@ -94,6 +94,7 @@ class _Walk:
     failed: object      # Signal(int, str): a tool raised at this row, on this node
     densities: object = None    # Signal(object, int) the window's plane densities go out on; None, and the walk folds none
     bake: object = None # the _Bake this range writes for, the clip's alone: told the result at the end and a refusal
+    ahead: bool = False # whether the plate's decoder reads ahead of this range on a thread of its own, from begin() to its last row or halt()
     asked: bool = False # set under the worker's lock by anything that restarts this range; the scheduler takes it
     ask: tuple = (0, 0) # (start, length) the range was asked over; the clip's is the clip
     start: int = 0
@@ -113,6 +114,8 @@ class _Walk:
         """Starts over `length` rows from `start`, dropping every row held, and tells the probe a walk began."""
         self.start, self.length = start, length
         self.drop()
+        if self.ahead:
+            self.graph.decoder.ahead(start, start + length)
         if length:
             self.graph.began(start, length)
 
@@ -157,6 +160,8 @@ class _Walk:
         g.progress(self.i, self.length, (self.bytes, STACK_BYTES))
         if self.i == self.length or self.i % self.every == 0:
             self.emit()
+        if self.ahead and self.i == self.length:
+            g.decoder.rest()
 
     def step(self, rows):
         """Brings every node the plan steps up to `rows` of the range; one whose raw key is not the
@@ -222,6 +227,8 @@ class _Walk:
     def halt(self):
         """Stopped: the rows it has stand, and the count says so."""
         self.length = self.i
+        if self.ahead:
+            self.graph.decoder.rest()
         self.report()
 
     def report(self):
@@ -514,7 +521,7 @@ class Worker(QThread):
         self._win = _Walk(graph, name="window", every=every, progress=self.walked, ready=self.seriesReady,
                           refused=self.walkRefused, failed=self.failed, densities=self.densityReady)
         self._clip = _Walk(graph, name="clip", every=every, progress=self.clipWalked, ready=self.clipReady,
-                           refused=self.clipRefused, failed=self.failed, bake=self._bake)
+                           refused=self.clipRefused, failed=self.failed, bake=self._bake, ahead=True)
 
     @property
     def store(self):

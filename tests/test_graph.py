@@ -33,6 +33,12 @@ class Dec:
 
     scrub = staticmethod(nullcontext)
 
+    def ahead(self, start, end):
+        pass
+
+    def rest(self):
+        pass
+
 
 def tool(name, expects="gray", produces="gray", fn=None, kind="frame"):
     t = Tool(NAME=name, KIND=kind, EXPECTS=expects, PRODUCES=produces, DEFAULTS={"k": 1}, runs=0)

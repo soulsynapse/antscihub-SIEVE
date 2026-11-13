@@ -339,6 +339,7 @@ def test_the_chip_row_is_legend_selector_and_pinned_set(tmp_path):
     win.show()
     settle(win, "head", "down")
     win.toggle_play()
+    row = win.row           # wherever the playhead had got to before the pause
     win.canvas.select(["head"])
     plot = win.plot
     chips = plot.chips()
@@ -350,7 +351,7 @@ def test_the_chip_row_is_legend_selector_and_pinned_set(tmp_path):
     mouse(plot, QEvent.MouseButtonPress, chips[1][1].center())           # down's name: the canvas selection moves
     mouse(plot, QEvent.MouseButtonRelease, chips[1][1].center())
     assert win.canvas.selected == ["down"] and plot.selection == "down" and [c[0] for c in plot.chips()] == ["down"]   # head, unpinned, is gone
-    assert win.row == 0                                                     # a chip press is not a seek
+    assert win.row == row                                                   # a chip press is not a seek
     win.canvas.select(["head"])
     chips = plot.chips()
     mouse(plot, QEvent.MouseButtonPress, chips[0][2].center())           # the selection's own pin: it will stay

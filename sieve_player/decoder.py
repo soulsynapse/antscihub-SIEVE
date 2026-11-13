@@ -3,7 +3,8 @@ which takes the display's jumps so they never land on the walk's. A sequential r
 in use; a short jump ahead reads through, since a seek decodes from the last keyframe anyway and
 costs what the decoder has measured it to cost here; anything else seeks. A seek lands one row
 short and reads through it, because the tools that difference frames ask for row - 1 right after
-row, and that second ask would otherwise be a second seek."""
+row, and that second ask would otherwise be a second seek. ahead() has a thread of the decoder's own
+step the walk's cursor into the cache in front of a walk's reads, until rest()."""
 import os
 import sys
 import threading
@@ -16,6 +17,8 @@ import cv2
 import numpy as np
 
 LOOKBEHIND = 1          # rows a seek lands short of its target and reads through
+AHEAD_ROWS = 64         # the most rows the reading thread keeps decoded past the last one read in step
+AHEAD_SWITCH_S = 0.0005 # the interpreter's switch interval while a thread reads ahead: at Python's 5 ms it waits on the tools between frames
 SEEK_GUESS = 12.0       # steps a seek is taken to cost until one has been measured here
 LUMA_FORMATS = {b"I420"}    # planar 8-bit 4:2:0: unconverted, cv2 hands out the luma plane as rows x cols
 QUIET = False   # play() sets it once C-level stderr goes nowhere; the plugin warns on every unconverted frame otherwise
@@ -107,6 +110,27 @@ class _Cursor:
         self.pos = 0
 
 
+class _Ahead:
+    """One run of the reading thread over rows [start, end): `front` is the last row read() was asked
+    in step, `next` the row the thread decodes next, never more than `lead` past `front`."""
+
+    def __init__(self, start, end, lead):
+        self.start, self.end, self.lead = start, end, lead
+        self.front = self.last = -2
+        self.next = start
+        self.stop = self.waiting = False
+        self.cv = threading.Condition()
+        self.thread = None
+
+    def saw(self, row):
+        if (row == self.last + 1 or row == self.front + 1) and self.start <= row < self.end:
+            self.front = row
+            if self.waiting:
+                with self.cv:
+                    self.cv.notify()
+        self.last = row
+
+
 class Decoder:
     """Opens an indexed container; a file that will not open, or whose container claims no rows (a
     raw stream, which cannot be seeked), raises IOError saying which."""
@@ -138,6 +162,11 @@ class Decoder:
         self.step_ms = self.seek_ms = None      # running means of what a step and a seek cost on this file
         self.on_evict = None                    # (row, bytes) for each frame the cache drops, after the lock
         self._inexact_said = False
+        self._ahead = None                      # the _Ahead running, if one is
+        self._fresh = set()                     # rows the reading thread decoded that no read() has taken yet
+        self._dropped = []                      # (row, bytes) the reading thread's puts evicted, told to on_evict by the next read()
+        self.ahead_decodes = self.ahead_seeks = 0   # the reading thread's, counted in `decodes` only as a read() takes each row
+        self._interval = None
 
     @contextmanager
     def scrub(self):
@@ -204,26 +233,100 @@ class Decoder:
         return self._cache_limit
 
     def read(self, row) -> np.ndarray:
+        """The frame at `row`. A row the reading thread decoded counts as a decode of this read, the
+        first to take it, and not as a cache hit, though the time was the other thread's."""
         self.reads += 1
+        a = self._ahead
+        if a is not None and self._use == "walk":
+            a.saw(row)
+        if self._dropped:
+            dropped, self._dropped = self._dropped, []
+            if self.on_evict is not None:
+                for r, n in dropped:
+                    self.on_evict(r, n)
         f = self.cached(row)
-        if f is not None:
+        held = f is not None
+        if not held:
+            f = self._fetch(row, self._use)
+        if row in self._fresh:
+            self._fresh.discard(row)
+            self.decodes += 1
+        elif held:
             self.cache_hits += 1
-            return f
+        return f
+
+    def _fetch(self, row, use, ahead=False):
         with self._cap_lock:
-            cur = self._cursors[self._use]
+            f = self.cached(row)    # the other thread may have decoded it while this one waited on the lock
+            if f is not None:
+                return f
+            cur = self._cursors[use]
             if cur is None:
-                cur = self._cursors[self._use] = _Cursor(self.path, self._luma_read())
+                cur = self._cursors[use] = _Cursor(self.path, self._luma_read())
             if cur.luma != self._luma_read():
                 cur.reopen(self._luma_read())   # here, under the lock a read holds, never from the setter
             if cur.pos is None or not 0 <= row - cur.pos <= self._read_through():
                 t = time.perf_counter()
                 self._seek(cur, max(0, row - LOOKBEHIND))
-                f = self._step(cur)
-                self.seeks += 1
-                self.seek_ms = self._mean(self.seek_ms, (time.perf_counter() - t) * 1000, self.seeks)
+                f = self._step(cur, ahead)
+                if ahead:
+                    self.ahead_seeks += 1
+                else:
+                    self.seeks += 1
+                self.seek_ms = self._mean(self.seek_ms, (time.perf_counter() - t) * 1000, self.seeks + self.ahead_seeks)
             while cur.pos <= row:
-                f = self._step(cur)
+                f = self._step(cur, ahead)
         return f
+
+    def ahead(self, start, end):
+        """Starts a thread decoding rows of [start, end) on the walk's cursor into the cache, up to
+        AHEAD_ROWS past the last row read() was asked in step and never so far that the cache drops a
+        row not yet read; it decodes nothing until two reads come in step. Replaces one already
+        running; a cache too small to hold three frames starts none. The interpreter's switch interval
+        is AHEAD_SWITCH_S until rest(). The thread that calls read()."""
+        self.rest()
+        frame = self.width * self.height * (3 if self._output == "bgr" else 1)
+        lead = min(AHEAD_ROWS, self._cache_limit // frame - 2)
+        if lead < 1 or end - start < 2:
+            return
+        a = self._ahead = _Ahead(start, end, lead)
+        self._interval = sys.getswitchinterval()
+        sys.setswitchinterval(AHEAD_SWITCH_S)
+        a.thread = threading.Thread(target=self._read_ahead, args=(a,), name="decode", daemon=True)
+        a.thread.start()
+
+    def rest(self):
+        """Stops the reading thread, if one runs, and puts the switch interval back. The thread that calls read()."""
+        a, self._ahead = self._ahead, None
+        if a is None:
+            return
+        with a.cv:
+            a.stop = True
+            a.cv.notify()
+        a.thread.join()
+        self._fresh.clear()
+        sys.setswitchinterval(self._interval)
+
+    def _read_ahead(self, a):
+        while True:
+            with a.cv:
+                while not a.stop:
+                    front = a.front
+                    if not front < a.next <= front + a.lead + 1:
+                        a.next = front + 1
+                    if front >= a.start and a.next <= min(front + a.lead, a.end - 1):
+                        break
+                    a.waiting = True
+                    a.cv.wait()
+                a.waiting = False
+                if a.stop:
+                    return
+            try:
+                if self.cached(a.next) is None:
+                    self._fetch(a.next, "walk", ahead=True)
+            except Exception:
+                return      # the read() that comes to this row meets the same and answers for it
+            a.next += 1
 
     def _seek(self, cur, target):
         """Puts the cursor at or before `target`, where the plugin reports it landed: a container that
@@ -251,10 +354,13 @@ class Decoder:
             return self.seek_ms / self.step_ms
         return SEEK_GUESS
 
-    def _step(self, cur):
+    def _step(self, cur, ahead=False):
         t = time.perf_counter()
         ok, f = cur.cap.read()
-        self.decodes += 1
+        if ahead:
+            self.ahead_decodes += 1
+        else:
+            self.decodes += 1
         if not ok:
             row, cur.pos = cur.pos, None
             if 0 <= row < self.count:
@@ -263,12 +369,12 @@ class Decoder:
                       f"at {cur.cap.get(cv2.CAP_PROP_POS_MSEC) / 1000:.3f} s; the count is now {row}", file=sys.stderr)
                 self.count = row
             raise EndOfStream(f"row {row} past end of {self.path}")
-        self.step_ms = self._mean(self.step_ms, (time.perf_counter() - t) * 1000, self.decodes)
+        self.step_ms = self._mean(self.step_ms, (time.perf_counter() - t) * 1000, self.decodes + self.ahead_decodes)
         if self._output != "bgr" and f.ndim == 3:
             f = cv2.cvtColor(f, cv2.COLOR_BGR2GRAY)
         elif self._output == "gray" and self.limited:
             f = cv2.LUT(f, _EXPAND)
-        self._put(cur.pos, f)
+        self._put(cur.pos, f, ahead)
         cur.pos += 1
         return f
 
@@ -276,7 +382,7 @@ class Decoder:
     def _mean(mean, x, n):
         return x if mean is None else mean + (x - mean) / min(n, 64)
 
-    def _put(self, row, bgr):
+    def _put(self, row, bgr, ahead=False):
         gone = []
         with self._cache_lock:
             if not self._fits(bgr):
@@ -285,17 +391,22 @@ class Decoder:
                 self._cache.move_to_end(row)
                 return
             self._cache[row] = bgr
+            if ahead:
+                self._fresh.add(row)     # under the lock cached() takes, so no read sees the frame without it
             self._cache_bytes += bgr.nbytes
             while self._cache_bytes > self._cache_limit and len(self._cache) > 1:
                 r, old = self._cache.popitem(last=False)
                 self._cache_bytes -= old.nbytes
                 gone.append((r, old.nbytes))
             self.evictions += len(gone)
-        if self.on_evict is not None:
+        if ahead:
+            self._dropped.extend(gone)
+        elif self.on_evict is not None:
             for r, n in gone:
                 self.on_evict(r, n)
 
     def close(self):
+        self.rest()
         for cur in self._cursors.values():
             if cur is not None:
                 cur.cap.release()

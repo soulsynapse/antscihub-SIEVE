@@ -181,7 +181,7 @@ class Store:
         why = self.absent(bake)
         if why:
             raise IOError(why)
-        return reader(self.place(bake.key, writer(bake.kind)[0]), bake.kind, cache_bytes)
+        return reader(self.place(bake.key, writer(bake.kind)[0]), bake.kind, cache_bytes, bake.shape)
 
     def write_sidecar(self, side):
         """Writes `side`, a Sidecar, beside its file, whole or not at all, with the commit and the

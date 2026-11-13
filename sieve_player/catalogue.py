@@ -24,6 +24,8 @@ SOURCES = {
     "slower": "no one place; the evidence names the nodes whose cost moved",
     "waits": "window.PlayerWindow's slots and paints, Python on the GUI thread holding the interpreter a tool on the "
              "worker's then waits for; the subject names the slot or the part",
+    "signals": "worker._Walk.report, a progress signal at every row, and the window's slots on it; "
+               "docs/findings/2026-11-13-a-signal-a-row.md",
 }
 
 
@@ -283,8 +285,39 @@ def waits(view, walks=None):
     return out
 
 
+SIGNALS = 0.04      # a slot's own spans as a share of the walk's cost, at which one run at most rows is a problem
+BRIEF = 1.0         # ms a call; a slot longer than this holds the interpreter and is waits' to find
+
+
+def signals(view, walks=None):
+    """A slot of the GUI thread's run at one row in two of a walk or oftener, brief each time: a
+    worker signal a row, which a walk of short rows pays for at each. The cost is the slot's own spans and so the
+    floor: the interpreter changing hands at every call lands in the tools' spans and has no figure
+    of its own. A walk whose walked node the stores held on more than half its rows is not judged, being over either way."""
+    out = []
+    for w in finished(view) if walks is None else walks:
+        walked = w.nodes.get((w.plan or {}).get("walk"))
+        if walked is None or 2 * (walked.ran + walked.served) < w.done:
+            continue
+        ms, calls = {}, {}
+        for b in span(view, w):
+            for name, n in b.calls.items():
+                if name.startswith(SLOT + " "):
+                    calls[name], ms[name] = calls.get(name, 0) + n, ms.get(name, 0.0) + b.turns.get(name, 0.0)
+        for name, n in calls.items():
+            if 2 * n < w.done or ms[name] > BRIEF * n or ms[name] < SIGNALS * cost(w):
+                continue
+            slot = name.split(" ", 1)[1]
+            out.append(_problem("signals", w, name, f"the {slot} slot ran {n} times over the walk's {w.done} rows, "
+                                f"{ms[name] / n * 1000:.0f} us each", ms[name],
+                                [f"{name}: {n} calls, {ms[name]:.1f} ms", f"the walk: {(w.t1 - w.t0) * 1000 / w.done:.3f} ms a row of wall"],
+                                "The interface is told of every row, and a row is short enough to feel it",
+                                f"how often {slot} is signalled", [name]))
+    return out
+
+
 # Each takes a view and the walks of it to judge, every finished one when none are given.
-CLASSES = {"unread": unread, "thrash": thrash, "grows": grows, "seeks": seeks, "slower": slower, "waits": waits}
+CLASSES = {"unread": unread, "thrash": thrash, "grows": grows, "seeks": seeks, "slower": slower, "waits": waits, "signals": signals}
 
 
 @dataclass

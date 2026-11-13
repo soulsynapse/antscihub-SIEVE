@@ -263,6 +263,15 @@ def slot(r):
     r.walk()
 
 
+@_fault(pinned=("gray", "work", "bake", "edge"))
+def signals(r):
+    """Rows a tenth as long, and a slot of the GUI thread's that does a little at every one. The
+    frame nodes are pinned, so the folds of so short a row are read."""
+    r.tools["work"].ms = r.tools["edge"].ms = MS / 10
+    r.worker.walked.connect(r.slot("walked", lambda done, n, *was: _spin(MS / 20)))
+    r.walk()
+
+
 def _healthy(*steps):
     @_fault()
     def run(r):
@@ -279,7 +288,7 @@ def _scrubbed(r):
 
 SIMULATIONS = {"unread": (unread, "unread"), "memo": (memo, "thrash"), "cache": (cache, "thrash"), "reader": (reader, "thrash"),
                "grows": (grows, "grows"), "seeks": (seeks, "seeks"), "slower": (slower, "slower"),
-               "held": (held, "slower"), "slot": (slot, "waits")}     # name -> (it, the class it builds)
+               "held": (held, "slower"), "slot": (slot, "waits"), "signals": (signals, "signals")}     # name -> (it, the class it builds)
 SERVED = {"unread", "reader", "bake"}      # the simulations that write a bake
 HEALTHY = {"walk": _healthy(_Run.walk), "rewalk": _healthy(_Run.walk, _Run.walk),
            "midclip": _healthy(lambda r: r.walk(ROWS // 4, ROWS // 2)), "scrub": _healthy(_scrubbed),

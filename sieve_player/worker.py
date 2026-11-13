@@ -95,6 +95,8 @@ class _Walk:
     densities: object = None    # Signal(object, int) the window's plane densities go out on; None, and the walk folds none
     bake: object = None # the _Bake this range writes for, the clip's alone: told the result at the end and a refusal
     asked: bool = False # set under the worker's lock by anything that restarts this range; the scheduler takes it
+    tell_every: float = 0.0     # s between a turn's tellings of the rows done, the range's end always told; 0 tells of each row
+    told: float = 0.0   # when a turn last told, on perf_counter
     ask: tuple = (0, 0) # (start, length) the range was asked over; the clip's is the clip
     start: int = 0
     length: int = 0
@@ -153,8 +155,10 @@ class _Walk:
         if self.bytes > STACK_BYTES:
             self.refuse(f"the {self.name}'s stack reached {self.bytes / 2**30:.1f} GB at row {row}; the rows walked stand")
             return
-        self.report()
-        g.progress(self.i, self.length, (self.bytes, STACK_BYTES))
+        if not self.tell_every or self.i == self.length or time.perf_counter() - self.told >= self.tell_every:
+            self.told = time.perf_counter() if self.tell_every else 0.0
+            self.report()
+            g.progress(self.i, self.length, (self.bytes, STACK_BYTES))
         if self.i == self.length or self.i % self.every == 0:
             self.emit()
 

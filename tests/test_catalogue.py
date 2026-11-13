@@ -6,7 +6,7 @@ import time
 import pytest
 
 from sieve_player import document as D
-from sieve_player.catalogue import CLASSES, SOURCES, Entry, Log, cold, reach, seeks, slower, waits
+from sieve_player.catalogue import CLASSES, SOURCES, Entry, Log, cold, reach, seeks, signals, slower, waits
 from sieve_player.dev.simulations import HEALTHY, SERVED, SIMULATIONS, run
 from sieve_player.graph import Graph
 from sieve_player.ledger import Bucket, Ledger, Node, Total, Under, View, Walk
@@ -70,13 +70,18 @@ def test_each_class_reads_off_a_view_built_by_hand():
     turned = rec(b={("run", "walk", "b"): [8, 100.0, 0]})
     turned.wait = 80.0
     waited = View(0.25, 0, [Bucket(wait=40.0, turns={"slot walked": 60.0, "paint plot": 5.0})] * 2, [turned])
+    told = rec(b=Node(runs=runs(run_b(8.0)), ran=8))
+    signalled = View(0.25, 0, [Bucket(turns={"slot clipWalked": 0.5, "slot seriesReady": 9.0}, calls={"slot clipWalked": 4, "slot seriesReady": 1})] * 2, [told])
+    assert not signals(View(0.25, 0, signalled.buckets, [rec(b=Node(runs=runs(run_b(8.0)), held=8))]))     # a walk the stores held
     said = {k: (e.problem.says, e.problem.target, e.problem.nodes) for views in (
-        [rec(**FOLDED)], [thrashed], [rec(**GROWN)], [rec(**SOUGHT)], [rec(keys={"b": "k"}, b=run_b(8.0)), late], waited)
-        for k, e in (found(*views) if isinstance(views, list) else {(p.kind, p.subject): Entry(p, p.t) for p in waits(views)}).items()}
+        [rec(**FOLDED)], [thrashed], [rec(**GROWN)], [rec(**SOUGHT)], [rec(keys={"b": "k"}, b=run_b(8.0)), late], waited, signalled)
+        for k, e in (found(*views) if isinstance(views, list) else
+                     {(p.kind, p.subject): Entry(p, p.t) for p in (*waits(views), *signals(views))}).items()}
     assert {k[0] for k in said} == set(CLASSES) and all(says and target for says, target, _ in said.values())
     assert said[("unread", "a")] == ("Computed on every row and read by nothing", "the fold of a", ("a",))
     assert said[("thrash", "video")][1:] == ("the video cache's limit", ("video",)) and said[("thrash", "memo")][2] == ()
     assert said[("waits", "slot walked")][1:] == ("the walked slot", ("slot walked",))
+    assert said[("signals", "slot clipWalked")][1:] == ("how often clipWalked is signalled", ("slot clipWalked",))
     assert said[("slower", "unprobed")][1:] == ("the time between rows, in no node", ())
 
 
@@ -151,7 +156,7 @@ def test_a_simulation_surfaces_its_class_alone(name, tmp_path):
     assert {e.problem.kind for e in seen.log.ordered()} == {SIMULATIONS[name][1]}, [e.problem.line for e in seen.log.ordered()]
     subjects = {e.problem.subject for e in seen.log.ordered()}
     want = {"unread": {"gray", "work"}, "memo": {"memo"}, "cache": {"video"}, "reader": {"bake"}, "grows": {"pile"},
-            "seeks": {"video"}, "slower": {"work"}, "held": {"unprobed"}, "slot": {"slot walked"}}[name]
+            "seeks": {"video"}, "slower": {"work"}, "held": {"unprobed"}, "slot": {"slot walked"}, "signals": {"slot walked"}}[name]
     assert want <= subjects and (name == "unread" or want == subjects)
 
 

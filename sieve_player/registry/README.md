@@ -8,7 +8,9 @@ supply it. No facet has a meaningful None (pass-through is `PRODUCES = "same"`).
 `FACETS` only if something in `sieve_player` outside this package reads it. A selector, a tool
 whose `PRODUCES` is `"path"` with no `EXPECTS`, says `select` instead of `run`, and `matches` if
 it can count what its rule covers. A tool with `PATHS` has a path input per key, which a selector
-feeds; the value is called with the picked file and answers the params to merge. A series tool
+feeds; the value is called with the picked file and answers the params to merge. A tool with
+`PARAMS` names inputs of its `INPUTS` whose wire carries params as well: the value is called with
+the params of the node wired in and answers the params to merge, again whenever those change. A series tool
 that steps says `step` beside `run`: handed the state it returned for the row before, None at the
 first, one folded row and its index, it returns the next state and that row's share of `run`'s
 result, so the shares accumulated over a series equal `run` over it; `run` stays mandatory and is

@@ -52,7 +52,7 @@ OURS = QColor(224, 192, 112)    # SIEVE's share of the machine: the mockup's amb
 ELSE = qgray(INK_2 - 40)        # everything on the machine that is not SIEVE
 PICKED, PICKED_EDGE = QColor(58, 42, 41), QColor(168, 72, 63)      # a picked problem's row, LEVEL toward the ground
 TINT = QColor(245, 168, 161)    # a problem's target and a figure past its limit, LEVEL toward the ink
-ABOUT = {"thrash": "stores", "waits": "gui"}        # a class -> the panel its problems are about; the rest are the table's
+ABOUT = {"thrash": "stores", "waits": "gui", "signals": "gui"}        # a class -> the panel its problems are about; the rest are the table's
 
 
 @lru_cache(maxsize=None)

@@ -179,16 +179,21 @@ def read_signal(path):
 
 class ClipReader:
     """A baked clip as a served frame node reads it: a Decoder on the file, handing out gray for
-    gray and mask kinds, which are written lossless as planes, and bgr for bgr. The decoder's
-    counters are the reader's, for the probe."""
+    gray and mask kinds, which are written lossless as planes, and bgr for bgr. `shape` is the
+    plane's as the bake saved it, and a row is handed out at it, without the pixel the writer padded
+    an odd side by; empty, a row is the file's. The decoder's counters are the reader's, for the probe."""
 
-    def __init__(self, path, kind, cache_bytes):
+    def __init__(self, path, kind, cache_bytes, shape=()):
         self.decoder = Decoder(path, cache_bytes=cache_bytes)
         self.decoder.output = "bgr" if kind == "bgr" else "gray"
         self.count, self.fps = self.decoder.count, self.decoder.fps
+        self.shape = tuple(shape)
 
     def read(self, row):
-        return self.decoder.read(row)
+        f = self.decoder.read(row)
+        if self.shape and f.shape[:2] != self.shape:
+            f = np.ascontiguousarray(f[:self.shape[0], :self.shape[1]])
+        return f
 
     def close(self):
         self.decoder.close()
@@ -198,7 +203,7 @@ class RowsReader:
     """A baked table file or signal, loaded whole: `data` is the object array of tables or the
     float32 signal, and read(row) one row of it."""
 
-    def __init__(self, path, kind, cache_bytes=0):
+    def __init__(self, path, kind, cache_bytes=0, shape=()):
         self.data = read_signal(path) if kind == "signal" else read_tables(path)
         self.count, self.fps = len(self.data), None
 
@@ -214,8 +219,8 @@ def is_series(kind):
     return WRITERS[kind][1] is not ClipWriter
 
 
-def reader(path, kind, cache_bytes=0):
-    return (RowsReader if is_series(kind) else ClipReader)(path, kind, cache_bytes)
+def reader(path, kind, cache_bytes=0, shape=()):
+    return (RowsReader if is_series(kind) else ClipReader)(path, kind, cache_bytes, shape)
 
 
 WRITERS = {"gray": (".mp4", ClipWriter), "bgr": (".mp4", ClipWriter), "mask": (".mp4", ClipWriter),

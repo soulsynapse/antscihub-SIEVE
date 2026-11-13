@@ -65,3 +65,17 @@ def test_a_region_over_max_area_is_split_at_a_higher_cut_or_dropped():
     assert len(blobs.run(fed(mask), 0, params)) == 0                         # no diff: nothing to cut at
     solid = np.full((10, 10), 60, np.uint8)
     assert len(blobs.run(fed(solid, solid), 0, params)) == 0                 # no cut splits it
+
+
+def test_detect_gives_blobs_records_flat_and_reads_a_dark_plate():
+    from tools import detect, track
+
+    moved = np.zeros((11, 15), np.uint8)
+    moved[1:, 3:] = m                                          # an odd corner on the box of every set pixel
+    for mask in (m, moved):
+        ours, theirs = detect.find(mask, 1), blobs.find(mask, 1)
+        assert ours.dtype == detect.DTYPE and not ours.dtype.hasobject and ours.dtype.metadata["plane"] == mask.shape
+        assert all(np.allclose(ours[k], theirs[k], atol=1e-4) for k in detect.DTYPE.names)
+        assert np.array_equal(detect.find(255 - mask, 1, dark=True), ours)
+    assert len(detect.find(m, 2, 10)) == 1 and len(detect.find(np.zeros((4, 4), np.uint8), 1)) == 0
+    assert len(track.link([detect.find(m, 2)] * 3, 20.0, 30, 1, 0.1)[0][2]) == 2      # a table with no contour links

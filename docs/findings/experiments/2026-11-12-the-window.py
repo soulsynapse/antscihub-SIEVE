@@ -19,7 +19,7 @@ from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from sieve_player import theme  # noqa: E402
 from sieve_player.dev.timeview import MINE, OTHER, SLOT, Late, RowCost, Stack, Stores, TimeView, Track, Turns  # noqa: E402
-from sieve_player.graph import Event  # noqa: E402
+from sieve_player.stream import Event  # noqa: E402
 from sieve_player.ledger import Ledger  # noqa: E402
 from sieve_player.theme import INK, INK_2, LEVEL, qgray  # noqa: E402
 from sieve_player.trace import FIELDS  # noqa: E402

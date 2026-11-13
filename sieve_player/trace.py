@@ -13,11 +13,8 @@ import threading
 import time
 from dataclasses import fields
 
-from .graph import Event
+from .stream import SPANS, Event
 
-TURNS = ("slot", "paint")       # the GUI thread's spans of Graph.turn, a thread's own time under no node
-OWN = ("dump", "monitor")       # a consumer's own work: the dump's writer, and the ledger's bookkeeping on a thread that emits
-SPANS = ("run", "step", "fold", "error", "cancel", "cache", "decode", "seek", "read", *OWN, *TURNS)    # the kinds with a duration; the rest are instants
 FIELDS = tuple(f.name for f in fields(Event))
 
 

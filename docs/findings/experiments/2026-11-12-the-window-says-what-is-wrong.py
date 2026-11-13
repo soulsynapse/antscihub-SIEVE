@@ -30,7 +30,7 @@ from sieve_player import catalogue, theme  # noqa: E402
 from sieve_player.catalogue import CLASSES, Log, alike, needs, size, store_name  # noqa: E402
 from sieve_player.dev.simulations import ROW, ROWS, H, W, _Run  # noqa: E402
 from sieve_player.dev.timeview import SMALLEST, GuiPanel, MachinePanel, Problems, Stack, StoresPanel, Table, Turns, Window  # noqa: E402
-from sieve_player.graph import Event  # noqa: E402
+from sieve_player.stream import Event  # noqa: E402
 from sieve_player.ledger import Ledger, quantile, saved  # noqa: E402
 from sieve_player.trace import FIELDS  # noqa: E402
 from sieve_player.theme import LEVEL  # noqa: E402

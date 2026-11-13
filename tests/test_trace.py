@@ -4,7 +4,9 @@ import time
 from collections import Counter
 
 from sieve_player import document as D
-from sieve_player.graph import Event, Graph, Stats
+from sieve_player.graph import Graph
+from sieve_player.stats import Stats
+from sieve_player.stream import Event
 from sieve_player.trace import FIELDS, Dump, read_dump, to_trace, totals
 from tests.test_graph import TOOLS, Dec, add, gray
 

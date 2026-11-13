@@ -11,7 +11,8 @@ from collections import deque
 from contextlib import nullcontext
 from dataclasses import dataclass, field, fields, replace
 
-from .trace import OWN, SPANS, TURNS, read_dump
+from .stream import OWN, SPANS, TURNS
+from .trace import read_dump
 
 PARTS = 8           # the pieces a walk's range is cut into for a node's cost along it
 BACKLOG = 4096      # events queued before the emitting thread folds them itself
@@ -122,7 +123,7 @@ class Ledger:
     `discards` how many discarded (key, row) are remembered for telling a recomputation. `event` and
     `sample` may be called from any thread and never wait; a sample other than "late" and "machine" is not kept.
     `timed()` gives the context an emitting thread folds inside, for whoever attached the ledger to
-    time its bookkeeping there, the ledger holding no graph to emit a span through."""
+    time its bookkeeping there, the ledger holding no Emitter to emit a span through."""
 
     def __init__(self, width=0.25, history=2400, walks=64, discards=1 << 17, timed=nullcontext):
         self.width, self.history, self._discards, self._timed = width, history, discards, timed

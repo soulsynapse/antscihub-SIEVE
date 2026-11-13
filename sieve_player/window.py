@@ -26,6 +26,7 @@ from .machine import Watch
 from .pace import Pace, clock
 from .pane import Pane
 from .registry import CATEGORIES, Entry, category, description, signature
+from .stream import Emitter
 from .theme import GAP, PAD, ROW_H, readout
 from .timeline import Timeline
 from .trace import Dump
@@ -450,7 +451,7 @@ class PlayerWindow(QMainWindow):
         if not from_file:
             modules = catalogue(source)[0]
         self.doc = None
-        self.decoder = self.graph = self.worker = None
+        self.decoder = self.graph = self.stream = self.worker = None
         self.ledger = self.lateness = self.machine = None     # the open video's stream kept over time, and the GUI thread's and the machine's samplers into it
         self.pace = None                          # the open video's walks as the header's figure reads them
         self.dump = None                          # the stream's file, while DUMP_ENV names one
@@ -626,8 +627,8 @@ class PlayerWindow(QMainWindow):
 
     def _select(self, nid):
         self.selection = nid
-        if self.graph is not None:
-            self.graph.watch(nid)
+        if self.stream is not None:
+            self.stream.watch(nid)
         self.pane.select(nid)
         self.plot.set_selection(nid)
         self._show_pinned()
@@ -985,7 +986,8 @@ class PlayerWindow(QMainWindow):
             return False
         self._unload()
         self.decoder = decoder
-        self.graph = Graph(self.doc, decoder, self.tools, open_bake=lambda bake, cache: self.store.open_bake(bake, cache),
+        self.stream = Emitter()
+        self.graph = Graph(self.doc, decoder, self.tools, open_bake=lambda bake, cache: self.store.open_bake(bake, cache), stream=self.stream,
                            **({"memo_bytes": m} if (m := _gb(MEMO_ENV)) else {}))
         for nid, why in self._gone.items():
             self.graph.note(nid, why)
@@ -995,9 +997,9 @@ class PlayerWindow(QMainWindow):
               f"{decoder.count} rows claimed, luma plane {'read' if decoder.luma else 'converted'}; "
               f"memo {self.graph.memo.limit >> 30} GB, cache {decoder.cache_limit >> 30} GB", file=sys.stderr)
         # Attached for the video's life, read or not: docs/findings/2026-11-12-what-the-trace-costs.md. The sync below is its first plan.
-        self.ledger = Ledger(timed=lambda graph=self.graph: graph.turn("monitor", "ledger"))
-        self.graph.on_event = self.ledger.event
-        self.graph.watch(self.selection)
+        self.ledger = Ledger(timed=lambda stream=self.stream: stream.turn("monitor", "ledger"))
+        self.stream.on_event = self.ledger.event
+        self.stream.watch(self.selection)
         if os.environ.get(DUMP_ENV):
             self.dump = Dump(self.graph, os.environ[DUMP_ENV])
         self.lateness = Lateness(self._sample, parent=self)
@@ -1039,11 +1041,11 @@ class PlayerWindow(QMainWindow):
 
     def _timed(self, kind, name, fn):
         """`fn` as a callable whose every call is a span of the GUI thread's in the stream of the
-        video then open, a "slot" or a "paint" under `name`; see Graph.turn."""
+        video then open, a "slot" or a "paint" under `name`; see stream.Emitter.turn."""
         def timed(*args):
-            if self.graph is None:
+            if self.stream is None:
                 return fn(*args)
-            with self.graph.turn(kind, name):
+            with self.stream.turn(kind, name):
                 return fn(*args)
         return timed
 
@@ -1061,7 +1063,7 @@ class PlayerWindow(QMainWindow):
         self.header.figure.set_figure(None)
         self.graph.close()
         self.decoder.close()
-        self.decoder = self.graph = self.worker = None
+        self.decoder = self.graph = self.stream = self.worker = None
         self.results, self.clip_results, self._clip_asked = {}, {}, False
         self.header.set_walking(False)
         self.header.clear_note()

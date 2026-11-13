@@ -10,7 +10,9 @@ import pytest
 
 from sieve_player import document as D
 from sieve_player.decoder import EndOfStream
-from sieve_player.graph import Event, Graph, Stats, gated, nbytes
+from sieve_player.graph import Graph, gated, nbytes
+from sieve_player.stats import Stats
+from sieve_player.stream import Event
 from sieve_player.plan import base_key, plan
 
 

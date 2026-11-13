@@ -53,7 +53,7 @@ def walk(tools, st, how):
     dump = timer = win = None
     pace = Pace()
     if how in ("window", "full", "small"):
-        led = Ledger(timed=lambda: g.turn("monitor", "ledger"))
+        led = Ledger(timed=lambda: g.stream.turn("monitor", "ledger"))
         g.on_event = led.event
         win = Window(SimpleNamespace(graph=g, ledger=led, pace=pace, dump=None), period_ms=POLL)
         if how == "small":

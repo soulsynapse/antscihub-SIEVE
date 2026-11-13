@@ -12,7 +12,8 @@ import tempfile
 import time
 
 from sieve_player import Decoder, document
-from sieve_player.graph import Graph, Stats
+from sieve_player.graph import Graph
+from sieve_player.stats import Stats
 from sieve_player.trace import Dump
 from tools import gray, motion, reduce, rescale, threshold
 

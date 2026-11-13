@@ -29,7 +29,7 @@ from ..ledger import coarsen, save
 from ..pace import clock as as_clock
 from ..store import commit
 from ..theme import GAP, GROUND, HEAD, INK, INK_2, LEVEL, LINE_LIFT, PAD, RADIUS, ROW_H, layer, qgray
-from ..trace import OWN
+from ..stream import OWN
 from ..window import PaceControl
 
 THREAD = "worker"               # the name graph.Readers.reap asserts of the worker's thread
@@ -954,7 +954,7 @@ class Window(QWidget):
             graph = self.source.graph
             if graph is None:
                 return fn(*args)
-            with graph.turn(kind, "monitor"):
+            with graph.stream.turn(kind, "monitor"):
                 return fn(*args)
         return timed
 

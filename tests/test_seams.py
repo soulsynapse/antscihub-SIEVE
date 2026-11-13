@@ -1,6 +1,8 @@
 """The seams: which modules under sieve_player may import which, and how much a module header may say."""
 import ast
 import re
+import subprocess
+import sys
 from pathlib import Path
 
 PKG = Path(__file__).resolve().parents[1] / "sieve_player"
@@ -10,7 +12,9 @@ HEADER_LINES = 10   # a module docstring states the module and its seams; past t
 MAY_IMPORT = {
     "document": set(),
     "plan": {"document"},
-    "graph": {"document", "density", "plan"},     # Graph.density folds planes; sync holds a plan
+    "stream": set(),                              # the Event, the kinds and the Emitter; a reader of a dump loads nothing else
+    "stats": set(),                               # a reader of the stream; the Graph it is made on is handed to it
+    "graph": {"document", "density", "plan", "stream"},     # Graph.density folds planes; sync holds a plan; it emits through an Emitter
     "canvas": {"document", "menu", "theme"},
     "menu": {"theme"},
     "pane": {"document", "theme", "widgets"},
@@ -21,8 +25,8 @@ MAY_IMPORT = {
     "writers": {"decoder"},                       # a baked clip reads back through the Decoder
     "store": {"document", "writers"},             # where files land knows what a Bake is and which kinds write; never the reverse
     "worker": {"decoder", "density", "document", "graph", "store"},
-    "trace": {"graph"},
-    "ledger": {"trace"},                          # the span kinds and a dump's reader; no graph is held and no Qt reached
+    "trace": {"stream"},
+    "ledger": {"stream", "trace"},                # the span kinds and a dump's reader; no graph is held and no Qt reached
     "catalogue": {"ledger"},                      # a detector reads a view and nothing else
     "machine": set(),                             # psutil and the system's counters; the player is not imported
     "pace": set(),                                # the worker's signals and a clock; the control and the monitor's header both read it
@@ -46,6 +50,21 @@ def imports_of(name):
 def test_imports_run_one_way():
     for name, allowed in MAY_IMPORT.items():
         assert imports_of(name) <= allowed, f"{name} imports {imports_of(name) - allowed}"
+
+
+def test_a_reader_of_the_stream_loads_no_graph():
+    """A dump replays, and a view is judged, in an interpreter that has loaded no graph, plan or document."""
+    code = ("import sys, sieve_player.ledger, sieve_player.catalogue; "
+            "print(sorted(m for m in sys.modules if m in {'sieve_player.' + n for n in ('graph', 'plan', 'document')}))")
+    out = subprocess.run([sys.executable, "-c", code], cwd=PKG.parent, capture_output=True, text=True)
+    assert out.returncode == 0 and out.stdout.strip() == "[]", out.stdout + out.stderr
+
+
+def test_the_graph_names_no_span_no_node_ran_and_nothing_of_the_selection():
+    """A thread's turn, a reader's own work and the player's selection are said by whoever holds the
+    Emitter, never through the compute core."""
+    named = re.findall(r"(slot|paint|monitor|selected)", (PKG / "graph.py").read_text(encoding="utf-8"))
+    assert not named, named
 
 
 def test_one_accumulator_reads_the_stream_for_the_monitor():

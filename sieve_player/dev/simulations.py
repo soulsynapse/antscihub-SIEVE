@@ -28,6 +28,7 @@ from ..ledger import Ledger
 from ..machine import Watch
 from ..pace import Pace
 from ..store import Store
+from ..stream import Emitter
 from ..worker import Worker
 from .timeview import Window, context
 
@@ -86,7 +87,7 @@ def _tools():
 
 
 class _Run:
-    """One simulation's graph, worker, ledger and log under `folder`, closed on leaving. `limits` are
+    """One simulation's graph, its stream, worker, ledger and log under `folder`, closed on leaving. `limits` are
     the stores', `memo_bytes` and `cache_bytes`, and `sample`, the seconds between the machine's samples."""
 
     def __init__(self, folder, served=False, pinned=(), **limits):
@@ -96,19 +97,20 @@ class _Run:
         self.doc = D.from_tools(list(self.tools.values()), self.path)
         self.doc.pinned = list(pinned)
         self.limits, self.worker, self.graph, self.dump = limits, None, None, None
-        self._open(Ledger(timed=lambda: self.graph.turn("monitor", "ledger")))
+        self._open(Ledger(timed=lambda: self.stream.turn("monitor", "ledger")))
         self.machine = Watch(lambda *sample: self.ledger.sample(*sample), limits.get("sample", 1.0))     # one for the run: its counters take 0.4 s to open
         if served:      # baked on one graph and served on a fresh one, so no store holds what is upstream of it
             D.land(self.doc.node("bake"), self.bake())
             self._shut()
-            self._open(Ledger(timed=lambda: self.graph.turn("monitor", "ledger")))
+            self._open(Ledger(timed=lambda: self.stream.turn("monitor", "ledger")))
 
     def _open(self, ledger):
         cache = self.limits.get("cache_bytes")
+        self.stream = Emitter()
         self.graph = Graph(self.doc, Decoder(self.path, **({} if cache is None else {"cache_bytes": cache})), self.tools,
-                           open_bake=self.store.open_bake, **{k: v for k, v in self.limits.items() if k == "memo_bytes"})
+                           open_bake=self.store.open_bake, stream=self.stream, **{k: v for k, v in self.limits.items() if k == "memo_bytes"})
         self.ledger, self.log, self.pace = ledger, Log(), Pace()
-        self.graph.on_event = ledger.event
+        self.stream.on_event = ledger.event
         self.graph.sync()       # the plan, into the ledger
         self.worker = Worker(self.graph, every=EVERY, store=self.store)
         self.walked, self.series, self.baked = [], [], []
@@ -120,10 +122,10 @@ class _Run:
 
     def slot(self, name, fn):
         """`fn` as the window connects a worker signal's slot: a "slot" span on the thread it lands in."""
-        graph = self.graph
+        stream = self.stream
 
         def timed(*args):
-            with graph.turn("slot", name):
+            with stream.turn("slot", name):
                 return fn(*args)
         return timed
 

@@ -203,7 +203,7 @@ with tempfile.TemporaryDirectory() as tmp, _Run(tmp, served=True) as r:
     log.read(r.ledger.view())
     before = {k: e.holds for k, e in log.entries.items()}
     r.fresh()
-    r.graph.watch("gray")
+    r.stream.watch("gray")
     r.walk()
     log.read(r.ledger.view())
     print("unread before gray is selected:", before, "and after a cold walk with it selected:", {k: (e.holds, e.count) for k, e in log.entries.items()})

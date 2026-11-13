@@ -5,8 +5,9 @@ import threading
 import pytest
 
 from sieve_player import document as D
-from sieve_player.graph import Event, Graph
+from sieve_player.graph import Graph
 from sieve_player.ledger import PARTS, Ledger, replay, save, saved
+from sieve_player.stream import Event
 from sieve_player.trace import FIELDS, Dump
 from tests.test_graph import TOOLS, Dec, add, gray
 

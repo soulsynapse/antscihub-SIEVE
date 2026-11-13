@@ -2,7 +2,7 @@
 
 Written 2026-11-12 from the conversation that read `docs/findings/2026-11-12-served-bake-upstream-walk.md`,
 on v5-monitor, branched from v5 at cce7cb8e. Read with that finding, which is the case
-this spec is argued from; with `sieve_player/graph.py`, whose `Event` and `Graph.probe` are the stream as it
+this spec is argued from; with `sieve_player/stream.py`, whose `Event` and `Emitter.probe` are the stream as it
 stands; with `sieve_player/worker.py`, whose ladder decides what each event served; with
 `sieve_player/trace.py`, the stream's file and the GUI thread's lateness sampler's reader; with
 `sieve_player/dev/monitor.py` and `monitor_views.py`, the monitor this one succeeds; and with

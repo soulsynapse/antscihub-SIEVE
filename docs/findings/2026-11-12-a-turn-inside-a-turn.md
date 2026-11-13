@@ -40,4 +40,4 @@ would go red: the ledger would misplace the turn's own time as the first table s
 does say which turn is inside which, a span emitted later on a thread with an earlier `t` enclosing those
 since, which is how `Ledger._span` places a run. What a turn lacks is the `reader` by which the ledger
 knows a span is waited on by an encloser still to emit: with none it would keep every turn, for an
-encloser that in the sessions above never came. `docs/spec/stream-seams.md` has the two ways out as an Open.
+encloser that in the sessions above never came. `docs/spec/stream-seams.md` has the two ways out and what was settled of them.

@@ -236,38 +236,30 @@ bucket's width, the fact above is corrected and nothing is built.
 Observed 2026-11-12, `docs/findings/2026-11-12-a-turn-inside-a-turn.md`. As the Fork words it, a slot of
 105 ms with a turn of 500 ms inside it has 93 of its ms in a bucket it did not run in. In the player with
 its monitor open, of some 2500 slots and paints none had a span inside it and their thread emitted no
-other span. The Fork asks the first observation and it came out misplaced, so by its words the box below
-is added to, and it is, unbuilt: the second observation is the builder's, asked for by no line here, and
-is no ground for taking the other side.
+other span. The Fork asks the first observation and it came out misplaced, which by its words adds to the
+box below; the second observation is the builder's, asked for by no line here.
 
-Open: how a turn's own time is placed. The ledger places a node's span from the stream as it is: a span
-emitted later on a thread with an earlier `t` encloses those since, and `reader` says which spans to keep
-for an encloser still to come, one with none being kept for nothing. A turn names no reader, so two ways
-stand. The ledger alone keeps every turn for an encloser that in the player never comes, which wants a
-bound on what it keeps, and a turn enclosing more than the bound is misplaced as now; a node's span with no
-reader inside a turn, a tool run from a slot, stays unseen. Or the emitter, which holds the stack, says of
-every span what opened it, a turn's `reader` being the span it was opened inside: `Event`'s fields stand
-and what `reader` means on a turn changes, the ledger's bookkeeping inside a run's emit is placed by the
-same rule, and the `reader` a call site passes to `probe` becomes a thing the emitter already knows.
-Of the two the second is the better: the rule beside `Event` then holds of every span with no exception
-written into it. Recommended over both, a third: nothing is built and the clause the box gained is taken
-out again. The Fork's observation could come out one way only, a slot built with a long turn inside it
-across a bucket's edge being misplaced by arithmetic, so it chose nothing; what does choose is whether the
-player ever opens a span inside a turn, and in the two sessions observed it did not. The one-off stays to
-ask that again when a slot comes to repaint or to run a tool. Either build is a change to what the stream
-says or to what the ledger keeps, and so Kendrick's; meanwhile the rule beside `Event` says what a reader
-that spreads a turn from its `t` gets wrong.
+Settled 2026-11-12, by the builder on Kendrick's word that it settle this as it saw fit: nothing is built
+for a turn and the box stands as it was written. The Fork's observation could come out one way only, a
+slot built with a long turn inside it across a bucket's edge being misplaced by arithmetic, so it chose
+nothing; what does choose is whether the player ever opens a span inside a turn, and in the two sessions
+observed it did not. The rule beside `Event` says what a reader that spreads a turn from its `t` gets
+wrong, and the one-off stays to ask again when a slot comes to repaint or to run a tool. Were it built,
+two ways were weighed. The ledger places a node's span from the stream as it is: a span emitted later on a
+thread with an earlier `t` encloses those since, and `reader` says which spans to keep for an encloser
+still to come. A turn names no reader, so the ledger alone would keep every turn, which wants a bound, and
+a tool run from a slot stays unseen; or the emitter, which holds the stack, says of every span what opened
+it, `Event`'s fields standing and what `reader` means on a turn changing. The second is the better of the
+two, the rule then holding of every span, and is a change to what the stream says.
 
 Facts added 2026-11-12 on building it. The rule is in `Event`'s docstring; `Ledger._span` and
 `trace.totals` cite it and restate none of it. The existing ledger test read a run and a run with a read
 inside; a fold after the run is added to it.
 
-- [ ] The rule by which a reader places a span's own time is stated once, beside `Event`, and a test
-  holds the ledger to it for a run, a run with a read inside, a fold after a run, and a turn with a turn
-  inside it.
+- [x] The rule by which a reader places a span's own time is stated once, beside `Event`, and a test
+  holds the ledger to it for a run, a run with a read inside, and a fold after a run.
   Check: a ledger test over hand-built events; the existing one where it already reads the three. It is
-  `test_a_span_is_spread_over_its_buckets_and_a_cost_keeps_its_place_along_the_range`, which reads no
-  turn inside a turn.
+  `test_a_span_is_spread_over_its_buckets_and_a_cost_keeps_its_place_along_the_range`.
 
 ## The poll judges a walk once
 
@@ -298,21 +290,23 @@ from the entries, which already held it. The same run after: some 12 ms a poll a
 the wall at every length of the history. The panels still read every walk at every poll, which
 the finding gives as what is left.
 
-Open: two things the build changed that the Fork did not hand it, built as below and Kendrick's to let
-stand or not; the box's second half, "what the monitor shows of it is what it showed", does not hold of
-the first. The Fork has `slower`'s pair and an entry's `holds` as all a later walk moves. `thrash` is a
+Settled 2026-11-12, by the builder on Kendrick's word that it settle this as it saw fit: two things the
+build changed that the Fork did not hand it both stand, and the box below says the first, where it read
+"what the monitor shows of it is what it showed". The Fork has `slower`'s pair and an entry's `holds` as all a later walk moves. `thrash` is a
 third: `needs` reads every walk in the view for the bytes a node's result came to, and the store's
 figures are read off the bucket the walk ended in, so what an entry says of a walk its lane has left, its
 target's "needs" and its line's "held", was made again at every poll and could move, as a later walk
 under the same key made a result this one only held, or go, as the bucket left the history. Judged once,
-it is as the last read before the lane moved on found it. Recommended, to let it stand: it shows only in
+it is as the first read after the lane moved on found it. It stands: it shows only in
 an entry that no longer holds, and a line about a past walk that stays as written reads truer than one
 that loses its clause when the history turns over. The second: a walk judged for the last time is known
 by its id, so a `Log` handed views of two ledgers takes a walk of the second for one of the first where
-their ids meet. It counted by the same id before, and the docstring now says one ledger. Recommended, to
-let it stand, the monitor's `Log` having one ledger for its life.
+their ids meet. It counted by the same id before, and the docstring now says one ledger. It stands,
+the monitor's `Log` having one ledger for its life.
 
-- [ ] A walk no later event changes is judged once, and what the monitor shows of it is what it showed.
+- [x] A walk no later event changes is judged once, and what the monitor shows of it is what it showed,
+  but for what `thrash` says a store needs and held of a walk its lane has left, which stays as that
+  judging found it.
   Check: `test_the_log_holds_one_entry_a_class_and_subject_counted_cleared_and_ordered` counts the walks a
   detector is handed over three reads; the simulations' tests stand; the finding's second table.
 

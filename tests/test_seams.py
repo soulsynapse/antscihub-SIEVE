@@ -28,6 +28,7 @@ MAY_IMPORT = {
     "writers": {"decoder"},                       # a baked clip reads back through the Decoder
     "store": {"document", "writers"},             # where files land knows what a Bake is and which kinds write; never the reverse
     "worker": {"decoder", "density", "document", "graph", "store"},
+    "bare": {"decoder", "document", "graph", "registry", "store", "worker"},      # the clip walk's own process: no window, no stream's reader
     "trace": {"stream"},
     "ledger": {"stream", "trace"},                # the span kinds and a dump's reader; no graph is held and no Qt reached
     "catalogue": {"ledger", "stream"},            # a detector reads a view, by the stream's names for a kind, and nothing else

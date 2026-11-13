@@ -6,24 +6,27 @@ changed; the window carries the change to the runtime, built on every load of a 
 re-synced on every change, and carries the runtime's results and standings back to the widgets.
 The display reads the memo and never waits on the decoder. It opens on whatever the document names, or empty, and never prompts.
 """
+import json
 import os
+import pickle
 import sys
+import tempfile
 import time
 import traceback
 
 import cv2
 import numpy as np
-from PySide6.QtCore import QFileSystemWatcher, QRectF, Qt, QTimer, Signal
+from PySide6.QtCore import QFileSystemWatcher, QProcess, QProcessEnvironment, QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import QImage, QKeySequence, QPainter, QPen, QPixmap, QShortcut
-from PySide6.QtWidgets import QFileDialog, QHBoxLayout, QMainWindow, QPushButton, QSizePolicy, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QFileDialog, QHBoxLayout, QMainWindow, QProgressBar, QPushButton, QSizePolicy, QVBoxLayout, QWidget
 
-from . import dev, document, store, theme
+from . import bare, dev, document, store, theme
 from .canvas import Canvas
 from .decoder import Decoder
 from .graph import Graph
 from .ledger import Ledger
 from .machine import Watch
-from .pace import Pace
+from .pace import Pace, clock
 from .pacecontrol import PaceControl
 from .pane import Pane
 from .registry import CATEGORIES, Entry, category, description, signature
@@ -298,8 +301,8 @@ def catalogue(items):
 
 class Header(QWidget):
     """The row across the top: the store's folder, what it holds and what the disk has free with the
-    button that changes it, at the left; the walk's figure, what the clip walk has to say and its
-    button, at the right."""
+    button that changes it, at the left; what the clip walk has to say, a bare walk's bar, the walk's
+    figure, the button that walks the clip bare (bare.py) and the clip walk's, at the right."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -314,11 +317,21 @@ class Header(QWidget):
         self.figure = PaceControl("click for the monitor")
         self.walk = QPushButton("Walk clip")
         self.walk.setFixedSize(80, ROW_H)
+        self.bare = QPushButton("Walk bare")
+        self.bare.setFixedSize(80, ROW_H)
+        self.bare.setToolTip("Walks the clip in a process of its own: a bar, its rate and when it ends, "
+                             "the series nodes' results at its end, and nothing in the monitor")
+        self.bar = QProgressBar()
+        self.bar.setFixedSize(160, ROW_H)
+        self.bar.setTextVisible(False)
+        self.bar.hide()
         lay.addWidget(self.store)
         lay.addWidget(self.store_note)
         lay.addStretch(1)
         lay.addWidget(self.note)
+        lay.addWidget(self.bar)
         lay.addWidget(self.figure)
+        lay.addWidget(self.bare)
         lay.addWidget(self.walk)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
@@ -377,6 +390,7 @@ class PlayerWindow(QMainWindow):
         self.dump = None                          # the stream's file, while DUMP_ENV names one
         self.fps, self.count = 30.0, 0
         self.row, self.playing, self.window_ = 0, False, (0, 0)
+        self._bare = None          # the QProcess of a bare walk under way
         self._resume = False  # playback to restore when a playhead drag ends
         self.results, self.result_start = {}, 0   # node id -> the series chain's results, and the row they start at
         self.clip_results = {}                    # the same over the clip walk's rows, from row 0; {} when there are none
@@ -428,6 +442,7 @@ class PlayerWindow(QMainWindow):
         self.header.show_store(self.store)
         self.header.store.clicked.connect(self._choose_store)
         self.header.walk.clicked.connect(self._toggle_clip)
+        self.header.bare.clicked.connect(self._toggle_bare)
         self.header.figure.clicked.connect(lambda: dev.show(self, "monitor"))
         self.header.setEnabled(False)
 
@@ -1011,6 +1026,7 @@ class PlayerWindow(QMainWindow):
             return
         if self.playing:
             self.toggle_play()
+        self._end_bare()
         self.worker.stop()
         self.lateness.stop()
         self.machine.close()
@@ -1160,6 +1176,74 @@ class PlayerWindow(QMainWindow):
             self._clip_asked = True
             self.header.note.setText("clip: after the window")
         self.header.set_walking(self._clip_asked)
+
+    # -- the bare walk: the clip in a process of its own, bare.py ---------
+    def _toggle_bare(self):
+        if self._bare is not None:
+            self._end_bare("bare: stopped")
+        elif self.worker is not None:
+            self._start_bare()
+
+    def _start_bare(self):
+        folder = tempfile.mkdtemp(prefix="sieve-bare-")
+        job = bare.job(self.doc, self.decoder.path, self.tools, self.store.folder, os.path.join(folder, "results.pkl"))
+        with open(os.path.join(folder, "job.json"), "w", encoding="utf-8") as f:
+            json.dump(job, f)
+        p = QProcess(self)
+        env = QProcessEnvironment.systemEnvironment()
+        env.insert("PYTHONPATH", os.pathsep.join(filter(None, [os.path.dirname(os.path.dirname(os.path.abspath(__file__))), env.value("PYTHONPATH")])))
+        p.setProcessEnvironment(env)
+        p.readyReadStandardOutput.connect(self._bare_said)
+        p.finished.connect(lambda code, _: self._bare is p and self._end_bare(f"bare: its process ended with {code} and no results"))
+        self._bare, self._bare_doc, self._bare_t = p, job["document"], time.perf_counter()
+        self.header.bar.setRange(0, 0)
+        self.header.bar.show()
+        self.header.note.setText("bare: starting")
+        self.header.bare.setText("Stop bare")
+        p.start(sys.executable, ["-X", "utf8", "-m", "sieve_player.bare", os.path.join(folder, "job.json")])
+
+    def _bare_said(self):
+        p = self._bare
+        while p is not None and self._bare is p and p.canReadLine():
+            try:
+                said = json.loads(bytes(p.readLine()).decode("utf-8"))
+            except ValueError:
+                continue
+            if "done" in said:
+                done, total, rate = said["done"], said["total"], said["rate"]
+                self.header.bar.setRange(0, total)
+                self.header.bar.setValue(done)
+                left = f", {clock((total - done) / rate)} left" if rate else ""
+                self.header.note.setText(f"bare: {done} of {total} rows, {rate:.0f} a second{left}")
+                self._bare_rate = rate
+            elif "results" in said:
+                took = time.perf_counter() - self._bare_t
+                if self.doc.to_dict() != self._bare_doc:
+                    self._end_bare("bare: the document changed under the walk, and its results were dropped")
+                    return
+                with open(said["results"], "rb") as f:
+                    results, start, fps = pickle.load(f)
+                self._end_bare(f"bare: the clip in {clock(took)}, {getattr(self, '_bare_rate', 0.0):.0f} rows a second"
+                               + (f"; {', '.join(results)} read back" if results else ""))
+                if results:
+                    self._clip_ready(results, start, fps)
+            elif "refused" in said:
+                self._end_bare(f"bare: {said['refused']}")
+            elif "failed" in said:
+                row, nid, text = said["failed"]
+                self._end_bare(f"bare: {nid or 'a tool'} raised at row {row}: {text}")
+
+    def _end_bare(self, note=""):
+        p, self._bare = self._bare, None
+        if p is None:
+            return
+        if p.state() != QProcess.NotRunning:
+            p.kill()
+            p.waitForFinished(2000)
+        p.deleteLater()
+        self.header.bar.hide()
+        self.header.note.setText(note)
+        self.header.bare.setText("Walk bare")
 
     def _paced(self, lane, done, total, ran, served):
         self.pace.row(lane, done, total, ran, served)

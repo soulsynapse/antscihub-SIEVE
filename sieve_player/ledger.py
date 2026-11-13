@@ -41,11 +41,12 @@ class Bucket:
     wait: float = 0.0                               # the tool spans' wall less their CPU, ms; signed, see Walk.wait
     read_wait: float = 0.0                          # the same of the read kinds
     machine: dict = field(default_factory=dict)     # the last "machine" sample in it, as machine.Machine.read gives one; {} with none
+    calls: dict = field(default_factory=dict)       # a key of `turns` -> the spans of it that began in the bucket
     shared: bool = field(default=False, compare=False, repr=False)
 
     def copy(self):
         return Bucket({t: dict(d) for t, d in self.ms.items()}, dict(self.rows), self.unprobed, dict(self.stores),
-                      dict(self.recomputed), dict(self.seeks), self.late, dict(self.turns), self.wait, self.read_wait, self.machine)
+                      dict(self.recomputed), dict(self.seeks), self.late, dict(self.turns), self.wait, self.read_wait, self.machine, dict(self.calls))
 
 
 _EMPTY = Bucket(shared=True)
@@ -220,8 +221,10 @@ class Ledger:
                     del self._gone[next(iter(self._gone))]
             elif item.kind in TURNS:
                 name = f"{item.kind} {item.node}"
-                for bucket, share in self._over(item.t, item.t + item.ms / 1000):
+                for i, (bucket, share) in enumerate(self._over(item.t, item.t + item.ms / 1000)):
                     bucket.turns[name] = bucket.turns.get(name, 0.0) + item.ms * share
+                    if not i:
+                        bucket.calls[name] = bucket.calls.get(name, 0) + 1
             elif item.kind in OWN:      # in the buckets under its thread and accounted for there, and in no walk
                 name = item.kind if item.node in (None, item.kind) else f"{item.kind} {item.node}"
                 for bucket, share in self._over(item.t, item.t + item.ms / 1000):
@@ -376,7 +379,7 @@ def coarsen(view, k):
             ms = m.ms.setdefault(thread, {})
             for n, v in d.items():
                 ms[n] = ms.get(n, 0.0) + v
-        for name in ("rows", "recomputed", "seeks", "turns"):
+        for name in ("rows", "recomputed", "seeks", "turns", "calls"):
             d = getattr(m, name)
             for key, v in getattr(b, name).items():
                 d[key] = d.get(key, 0) + v

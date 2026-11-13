@@ -11,6 +11,7 @@ be NaN or absent where its producer did not make it. `contour` is an object colu
 so the table is never a flat array.
 """
 import math
+from functools import lru_cache
 
 import cv2
 import numpy as np
@@ -23,9 +24,14 @@ TRACKS_DTYPE = np.dtype(DTYPE.descr + [("id", np.int32)])      # a tracks table 
 OUTLINES = ("box", "contour")
 
 
+@lru_cache(maxsize=64)      # a tool asks at every row, and building a dtype of this many fields costs more than a threshold
+def _plane_dtype(height, width, dtype):
+    return np.dtype(dtype.descr, metadata={"plane": (height, width)})
+
+
 def plane_dtype(shape, dtype=DTYPE):
     """`dtype` with the plane's (height, width) on it."""
-    return np.dtype(dtype.descr, metadata={"plane": (int(shape[0]), int(shape[1]))})
+    return _plane_dtype(int(shape[0]), int(shape[1]), dtype)
 
 
 def plane(table):

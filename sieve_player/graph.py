@@ -125,8 +125,9 @@ class Memo:
             for ok, n in gone:
                 self.on_evict(ok, n)
 
-    def put(self, k, v, owner=None):
-        """`v` under `k`, pinned to `owner` when one is given; a key already held is left as it is."""
+    def put(self, k, v, owner=None, size=None):
+        """`v` under `k`, pinned to `owner` when one is given; a key already held is left as it is.
+        `size` is `nbytes(v)` when the caller has already counted it."""
         gone = []
         with self._lock:
             if k in self._big or k in self._small or k in self._pinned:
@@ -137,7 +138,7 @@ class Memo:
                 self._big[k] = v
             else:
                 self._small[k] = v
-            self.bytes += self._size(v)
+            self.bytes += self._size(v) if size is None else size
             while self.bytes > self.limit:
                 src = self._big or self._small
                 if not src:
@@ -563,8 +564,9 @@ class Graph:
                         exc.sieve_node = nid
                         self.note(nid, f"raised at row {row}: {type(exc).__name__}: {exc}")
                     raise
-                ev[1], ev[2] = Memo._size(v), getattr(v, "shape", None)
-            self.memo.put(mk, v, owner=e.raw_key if e.static else None)
+                size = ev[1] = Memo._size(v)
+                ev[2] = getattr(v, "shape", None)
+            self.memo.put(mk, v, owner=e.raw_key if e.static else None, size=size)
         elif self.stream.on_event is not None:
             self._hit(nid, 0)
         return v if raw or e.band is None else banded(v, e.band)

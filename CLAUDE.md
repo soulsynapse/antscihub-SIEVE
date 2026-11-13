@@ -29,6 +29,13 @@
   check already ticked as a test stands.
 - Tests built of wall time carry the `simulation` marker and stay out of the default run;
   `pyproject.toml` holds the marker.
+- A test asserts only what holds whichever thread runs first and however slow the machine is. A
+  count or a position that a second thread or a timer can move is fixed by taking that thread out:
+  the worker's turns are taken on the test's thread, a clock is handed in, a value a timer may have
+  moved is read before the act and compared after. Waiting on another thread for an end state that
+  must come is allowed; asserting what it passed through on the way is not.
+- A test that fails some runs is a defect in the test or a race in the code, and is settled as one
+  or the other: never rerun until green, never widened by a row, never measured for how often.
 
 ## Running
 - Run Python and pytest through `.venv/Scripts/python.exe`; the anaconda `python` on PATH has no PySide6.

@@ -317,6 +317,12 @@ def paths(tool):
     return dict(getattr(tool, "PATHS", None) or {})
 
 
+def wired_params(tool):
+    """A tool's inputs that also carry params, as PARAMS declares them: name to the function that
+    turns the params of the node wired in into params of this one; empty if none."""
+    return dict(getattr(tool, "PARAMS", None) or {})
+
+
 def static(tool):
     """Whether the tool's output is the same at every row, as STATIC declares: the runtime then
     computes it once per key and holds it once, and the monitor counts its run per change, not per row."""

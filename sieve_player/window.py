@@ -389,7 +389,7 @@ class PlayerWindow(QMainWindow):
         self._reload.setSingleShot(True)
         self._reload.setInterval(RELOAD_SETTLE_MS)
         self._reload.timeout.connect(self._pick_paths)
-        self._driven = {}      # (node id, path input) -> (the keys its loader set, the selector's id)
+        self._driven = {}      # (node id, path or PARAMS input) -> (the keys set through it, the id of the node wired in)
         self._gone = {}        # node -> why its bake could not be read when the document opened, for the graph's notes
         self.store = store.current()   # where bakes land and are read from; Store… replaces it
 
@@ -736,6 +736,7 @@ class PlayerWindow(QMainWindow):
         if document.is_selector(self.tools.get(self.doc.node(nid).tool)):
             self._pick_video()
             return
+        self._drive(nid)
         if self.graph is None:
             return
         self.graph.sync()
@@ -764,6 +765,7 @@ class PlayerWindow(QMainWindow):
         if self.doc is None:
             return False
         self._pick_paths()
+        self._drive()
         sel = self.doc.selector()
         path, why = document.pick_video(self.doc, self.tools)
         vid = self.doc.video_node()
@@ -841,6 +843,41 @@ class PlayerWindow(QMainWindow):
             self.pane.note(n.id, "; ".join(errors or notes))
         self.canvas.update()
         self._watch_taken(asked)
+
+    def _drive(self, src=None):
+        """Every input a tool names in PARAMS: the params of the node wired into it go through the
+        tool's function into the node's own, as a file's do through a path input, the node `src`
+        feeds alone when one is given. A function that raises is said on the node."""
+        for n in self.doc.nodes:
+            takers = document.wired_params(self.tools.get(n.tool))
+            if not takers:
+                continue
+            w = self.pane.widget(n.id)
+            for name, take in takers.items():
+                wire = self.doc.source(n.id, name)
+                if wire is None:
+                    self._driven.pop((n.id, name), None)
+                    continue
+                if src is not None and wire.src != src:
+                    continue
+                try:
+                    params = dict(take(dict(self.doc.node(wire.src).params)))
+                except Exception as e:  # the function is a tool's; its failure is a report, not a crash
+                    self.canvas.errors[n.id] = f"{name}: {type(e).__name__}: {e}"
+                    continue
+                if self.canvas.errors.get(n.id, "").startswith(f"{name}: "):
+                    del self.canvas.errors[n.id]
+                self._driven[(n.id, name)] = (tuple(params), wire.src)
+                if all(k in n.params and n.params[k] == v for k, v in params.items()):
+                    continue
+                n.params = {**n.params, **params}
+                if w is not None:
+                    w.set_params(n.params)       # moves the knobs; each move is a change the pane reports
+                else:
+                    self._params_changed(n.id)
+            if w is not None and hasattr(w, "set_driven"):
+                held = [(keys, by) for (nid, _), (keys, by) in self._driven.items() if nid == n.id]
+                w.set_driven({k for keys, _ in held for k in keys}, held[0][1] if held else None)
 
     def _watch_taken(self, asked):
         """Watch every file a loader last read or was asked for and no other, and the folder of one

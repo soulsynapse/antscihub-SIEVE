@@ -608,7 +608,7 @@ only the working set. Nothing samples the machine: its memory, its other process
 Whether a decode or any tool runs on the GPU was not checked; the interface paints through Qt. Whether
 the slow half of the walks in `docs/findings/2026-11-12-what-the-trace-costs.md` falls where the machine is
 under pressure is a hypothesis the mockup draws as if it were found. Kendrick's report of 2026-11-12 is
-that a clip walk sometimes makes the whole machine chug, cause unknown. `catalogue.text` puts the whole
+that a clip walk sometimes makes the whole machine chug, cause unknown. `report.text` puts the whole
 document in the block. Scrolled back, the time view already holds where it was put while the ledger takes
 the stream. Added 2026-11-12 on building the boxes that need no new instrumentation, each of them how the
 tree now is and none a box. On Kendrick's word that the values will be drawn on the canvas too, every
@@ -616,8 +616,8 @@ figure the window shows is a value in `catalogue.py`, keyed by node and reaching
 a walk; `naming`, the problems that name a node; `needs`, a store's; `gui`, the GUI thread's; a problem's
 `says`, `target` and `nodes`. The window's parts paint them and make none. The log is still the window's,
 which an overlay on the canvas would need to be the player's; that is not decided here. The first Open was
-built on as recommended: the window's copy is `catalogue.report`, the history written beside it and named
-in it, and `catalogue.text` stands as the catalogue's box ticked it, the document inline, read now by its
+built on as recommended: the window's copy is `report.report`, the history written beside it and named
+in it, and `report.text` stands as the catalogue's box ticked it, the document inline, read now by its
 test and the command line alone; whether it goes is Kendrick's. The shares of problems are not summed, in
 the window or the report: a wait is inside the spans a recomputation is counted in, and three faults at
 once read 109% of a row between them. The pipeline's table is built with the columns the ledger already

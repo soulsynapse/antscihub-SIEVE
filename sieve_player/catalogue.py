@@ -1,20 +1,17 @@
 r"""The catalogue: the detectors, each a function from a ledger's view to the problems it shows, and the
 log, one entry per class and subject. A problem's cost is ms a row of the walk it was found in, so
 problems rank against each other and against the walk. A class is entered with a simulation of its
-name in dev/simulations.py, which proves it fires alone. No graph is held and no Qt reached; an
-entry's text takes what the stream does not carry, the document and the decoder's facts, as a dict.
+name in dev/simulations.py, which proves it fires alone. No graph is held and no Qt reached, and
+nothing here is rendered to text: that is report.py's.
 What a reader shows of a walk is a value here, `rows`, `naming`, `needs`, `gui`, `machine`, `tight`,
 `alike`, so the monitor and whatever else draws a node read one figure.
-
-    .venv\Scripts\python -m sieve_player.catalogue dump.jsonl
 """
-import json
-import sys
 from dataclasses import dataclass
 
-from .ledger import View, quantile, replay
+from .ledger import View, WalkId, quantile
+from .stream import CACHE, DECODE, FOLD, PAINT, READ, RUN, SEEK, SLOT, STEP
 
-COSTS = ("run", "step", "fold", "decode", "seek", "read")      # the kinds a walk is compared with the last by
+COSTS = (RUN, STEP, FOLD, DECODE, SEEK, READ)      # the kinds a walk is compared with the last by
 
 SOURCES = {
     "unread": "worker._Walk.turn folds Graph.frame_nodes(), every fed frame node, whatever the plot shows; "
@@ -39,7 +36,7 @@ class Problem:
     share: float | None     # of what the walk's nodes cost
     evidence: tuple         # the lines the figures were drawn from
     source: str             # where in the code the class has come from before
-    walk: tuple             # (lane, t0) of the walk it was found in
+    walk: WalkId            # the walk it was found in
     t: float                # that walk's last progress, on the probe's clock
     says: str = ""          # the class in one sentence, for a user of the player and not a reader of the code
     target: str = ""        # what to act on: a node's fold, a store and what the walk needs of it, a slot
@@ -48,7 +45,7 @@ class Problem:
 
 def cost(walk):
     """The ms the walk's nodes took, every span of every kind."""
-    return sum(r[1] for n in walk.nodes.values() for r in n.runs.values())
+    return sum(r.ms for n in walk.nodes.values() for r in n.runs.values())
 
 
 def size(b):
@@ -68,7 +65,7 @@ def span(view, walk):
     return view.buckets[max(i0, 0):max(i1 + 1, 0)]
 
 
-_HELD_AS = {"run": "result", "fold": "fold", "cache": "row", "decode": "row", "seek": "row"}
+_HELD_AS = {RUN: "result", FOLD: "plane", CACHE: "row", DECODE: "row", SEEK: "row"}
 
 
 def needs(view, walk):
@@ -83,10 +80,10 @@ def needs(view, walk):
             if (w.keys or {}).get(nid) != key or nid not in w.nodes:
                 continue
             made = {}
-            for (kind, _, _), (n, _, b) in w.nodes[nid].runs.items():
-                if kind in _HELD_AS:
-                    m = made.setdefault(_HELD_AS[kind], [0, 0])
-                    m[0], m[1] = m[0] + n, m[1] + b
+            for u, r in w.nodes[nid].runs.items():
+                if u.kind in _HELD_AS:
+                    m = made.setdefault(_HELD_AS[u.kind], [0, 0])
+                    m[0], m[1] = m[0] + r.count, m[1] + r.bytes
             mean.update({what: b / n for what, (n, b) in made.items() if n and b})
         rows = 1 if (nodes.get(nid) or {}).get("static") else walk.length
         for what, b in mean.items():
@@ -105,24 +102,24 @@ def finished(view):
 def _problem(kind, walk, subject, line, ms, evidence, says, target, nodes=()):
     total = cost(walk)
     return Problem(kind, subject, line, ms / walk.done, ms / total if total else None, tuple(evidence), SOURCES[kind],
-                   (walk.lane, walk.t0), walk.t1, says, target, tuple(dict.fromkeys(nodes)))
+                   walk.id, walk.t1, says, target, tuple(dict.fromkeys(nodes)))
 
 
 UNREAD = 0.25       # the share of a walk's cost under folds no watched node asked for, at which each is a problem
 
 
-def unread(view):
+def unread(view, walks=None):
     """Work no watched node and no walked node asked for: everything under a density's fold of a
     node neither pinned nor selected while the walk ran, the runs and decodes the fold opened with it."""
     out = []
-    for w in finished(view):
+    for w in finished(view) if walks is None else walks:
         if w.plan is None or w.replanned:
             continue
         watched, by = {*w.plan["pinned"], *w.selected}, {}
         for nid, node in w.nodes.items():
-            for (kind, demand, asked), (n, ms, _) in node.runs.items():
-                if demand == "fold" and asked not in watched:
-                    by.setdefault(asked, []).append((ms, n, nid, kind))
+            for u, r in node.runs.items():
+                if u.demand == "fold" and u.asked not in watched:
+                    by.setdefault(u.asked, []).append((r.ms, r.count, nid, u.kind))
         if sum(r[0] for rs in by.values() for r in rs) < UNREAD * cost(w) or not cost(w):
             continue
         for asked, rs in by.items():
@@ -137,11 +134,11 @@ def unread(view):
 THRASH = 0.25       # recomputations a row of the walk at which a store is a problem
 
 
-def thrash(view):
+def thrash(view, walks=None):
     """A store computing or decoding again what it had discarded: the memo, or a decoder's cache,
     the plate's under the video node and a served reader's under the served one."""
     out = []
-    for w in finished(view):
+    for w in finished(view) if walks is None else walks:
         at = int(w.t1 // view.width) - view.first
         stores = view.buckets[at].stores if 0 <= at < len(view.buckets) else {}
         need = needs(view, w)
@@ -166,12 +163,12 @@ GROWS = 3.0         # a node's ms a run over the last quarter of the range again
 GROWS_SHARE = 0.1   # and the share of the walk's cost the growth is, below which it is not a problem
 
 
-def grows(view):
+def grows(view, walks=None):
     """A node whose cost a run grows along the range, a chain node run whole over the rows so far
     being the known case; read off the parts of the range its spans fell in, so rows a store held
     are not taken for cheap ones."""
     out = []
-    for w in finished(view):
+    for w in finished(view) if walks is None else walks:
         total = cost(w)
         for nid, node in w.nodes.items():
             per = [ms / n for ms, n in zip(node.parts, node.counts) if n]
@@ -194,12 +191,12 @@ def grows(view):
 SEEKS = 1           # the seeks a walk may make on one node: the one a walk beginning mid-clip opens with
 
 
-def seeks(view):
+def seeks(view, walks=None):
     """The walk's cursor seeking, on the plate's decoder or a served reader's."""
     out = []
-    for w in finished(view):
+    for w in finished(view) if walks is None else walks:
         for nid, node in w.nodes.items():
-            rs = [(demand, asked, n, ms) for (kind, demand, asked), (n, ms, _) in node.runs.items() if kind == "seek"]
+            rs = [(u.demand, u.asked, r.count, r.ms) for u, r in node.runs.items() if u.kind == SEEK]
             n = sum(r[2] for r in rs)
             if n > SEEKS:
                 out.append(_problem("seeks", w, nid, f"the walk's cursor on {nid} sought {n} times over {w.done} rows",
@@ -215,19 +212,19 @@ SLOWER = 1.5        # what the nodes of a walk cost, against the same runs at th
 def _per(walk):
     out = {}
     for nid, node in walk.nodes.items():
-        for (kind, _, _), (n, ms, _) in node.runs.items():
-            if kind in COSTS and n:
-                r = out.setdefault((nid, kind), [0, 0.0])
-                r[0] += n
-                r[1] += ms
+        for u, r in node.runs.items():
+            if u.kind in COSTS and r.count:
+                at = out.setdefault((nid, u.kind), [0, 0.0])
+                at[0] += r.count
+                at[1] += r.ms
     return out
 
 
-def slower(view):
+def slower(view, walks=None):
     """A walk that costs more than the lane's last walk, both whole, of one length and under one
     plan, whatever the cause: each node's ms a run in what ran in both, so a walk colder than the
     last is not a slower one, and the ms a row no span covers, under the subject "unprobed"."""
-    out, before, judged = [], {}, {id(w) for w in finished(view)}
+    out, before, judged = [], {}, {id(w) for w in (finished(view) if walks is None else walks)}
     for w in view.walks:
         prev, before[w.lane] = before.get(w.lane), w
         if (id(w) not in judged or prev is None or w.keys is None or prev.keys != w.keys or w.replanned or prev.replanned
@@ -260,13 +257,13 @@ WAITS = 0.1         # the tools' waits that coincide with the GUI thread's spans
 TICK = 16.0         # ms; the CPU clock's step on Windows, see Event.cpu_ms: a walk's wait under one is not a figure
 
 
-def waits(view):
+def waits(view, walks=None):
     """The worker waiting on the GUI thread: over the buckets a walk spans, what its tools spent
     off their own CPU while the GUI thread was in a slot or a paint, the lesser of the two in each
     bucket and no more than the walk's own wait, which is the steadier figure. A read's wait is the
     decoder's threads and is not counted; a tool that sleeps coincides with nothing."""
     out = []
-    for w in finished(view):
+    for w in finished(view) if walks is None else walks:
         both, by = 0.0, {}
         for b in span(view, w):
             if b.wait > 0 and b.turns:
@@ -286,6 +283,7 @@ def waits(view):
     return out
 
 
+# Each takes a view and the walks of it to judge, every finished one when none are given.
 CLASSES = {"unread": unread, "thrash": thrash, "grows": grows, "seeks": seeks, "slower": slower, "waits": waits}
 
 
@@ -298,21 +296,24 @@ class Entry:
 
 
 class Log:
-    """The problems the catalogue has surfaced, one Entry per class and subject. `read(view)` runs
-    every detector and may be called on any view any number of times: a walk counts once toward an
-    entry however often it is read."""
+    """The problems the catalogue has surfaced, one Entry per class and subject. `read(view)` may
+    be called on any view of one ledger any number of times: a walk counts once toward an entry
+    however often it is read, and one its lane has begun another after, which no later event
+    changes, is judged in the first read that finds it so and never again."""
 
     def __init__(self, classes=None):
         self.classes = CLASSES if classes is None else classes
         self.entries = {}       # (class, subject) -> Entry
-        self._seen = {}         # a walk's (lane, t0) -> the entries it has counted toward
+        self._seen = {}         # a walk's id -> the entries it has counted toward
+        self._settled = set()   # the ids of the walks judged for the last time
 
     def read(self, view):
         """Takes what `view` shows into the entries and returns those it made, the first sightings."""
-        made = []
-        latest = {w.lane: (w.lane, w.t0) for w in finished(view)}
+        made, done, last = [], finished(view), {w.lane: w for w in view.walks}
+        latest = {w.lane: w.id for w in done}
+        judge = [w for w in done if w.id not in self._settled]
         for detect in self.classes.values():
-            for p in detect(view):
+            for p in detect(view, judge):
                 key = (p.kind, p.subject)
                 e = self.entries.get(key)
                 if e is None:
@@ -322,12 +323,13 @@ class Log:
                 if key not in seen:
                     seen.add(key)
                     e.count += 1
-                if p.walk[1] >= e.problem.walk[1]:
+                if p.walk.t0 >= e.problem.walk.t0:
                     e.problem = p
         for e in self.entries.values():
-            lane = e.problem.walk[0]
-            e.holds = latest.get(lane, e.problem.walk) == e.problem.walk
-        self._seen = {wid: s for wid, s in self._seen.items() if wid in {(w.lane, w.t0) for w in view.walks}}
+            e.holds = latest.get(e.problem.walk.lane, e.problem.walk) == e.problem.walk
+        held = {w.id for w in view.walks}
+        self._seen = {wid: s for wid, s in self._seen.items() if wid in held}
+        self._settled = (self._settled | {w.id for w in judge if w is not last[w.lane]}) & held
         return made
 
     def ordered(self):
@@ -373,16 +375,17 @@ def rows(walk, view=None):
     for nid, node in walk.nodes.items():
         if not node.runs or not walk.done:
             continue
-        ms, n = sum(r[1] for r in node.runs.values()), sum(r[0] for r in node.runs.values())
-        kind, demand, asked = max(node.runs, key=lambda k: node.runs[k][1])
+        ms, n = sum(r.ms for r in node.runs.values()), sum(r.count for r in node.runs.values())
+        most = max(node.runs, key=lambda u: node.runs[u].ms)
+        kind = most.kind
         bins = node.bins.get(kind) or []
         median, px = quantile(bins, 0.5), None
-        if kind == "run":
+        if kind == RUN:
             read = [_pixels(view, walk, src) for src in (plan.get(nid) or {}).get("reads", {}).values() if src]
             px = sum(read) if read and None not in read else None
-        elif kind in ("decode", "seek", "cache", "read", "fold"):
+        elif kind in (DECODE, SEEK, CACHE, READ, FOLD):
             px = _pixels(view, walk, nid)
-        out[nid] = Row(nid, ms / walk.done, n, kind, demand, asked, total / (total - ms) if total > ms else None,
+        out[nid] = Row(nid, ms / walk.done, n, kind, most.demand, most.asked, total / (total - ms) if total > ms else None,
                        median, quantile(bins, 0.99), median / (px / 1e6) if median is not None and px else None)
     return out
 
@@ -399,7 +402,7 @@ def reach(plan):
     return seen
 
 
-_COLD = ("run", "step", "decode", "read", "cache")     # what a row pays a node; a seek is a walk's opening and a fold the window's
+_COLD = (RUN, STEP, DECODE, READ, CACHE)     # what a row pays a node; a seek is a walk's opening and a fold the window's
 
 
 @dataclass(frozen=True)
@@ -407,7 +410,7 @@ class Cold:
     """What a row nothing holds pays one node, from the latest walk in which the node ran."""
     node: str
     ms_row: float           # its ms under the walk's own demand over the rows it ran or read its file on; 0 for a static node, which runs once
-    walk: tuple | None      # (lane, t0) of the walk the figure is from; None for a static node
+    walk: WalkId | None     # the walk the figure is from; None for a static node
     stale: bool             # that walk ran it under another key: the figure is from before a change at or upstream of it
     grows: tuple | None     # (ms an emit at no rows, ms an emit a row, rows an emit) for a chain node run whole, fitted along that walk's range
 
@@ -447,8 +450,8 @@ def cold(view):
         found = None
         for w in reversed(view.walks):
             node = w.nodes.get(nid)
-            ms = sum(r[1] for (kind, demand, _), r in node.runs.items() if demand == "walk" and kind in _COLD) if node else 0.0
-            n = sum(r[0] for (kind, demand, _), r in node.runs.items() if demand == "walk" and kind in _COLD) if node else 0
+            ms = sum(r.ms for u, r in node.runs.items() if u.demand == "walk" and u.kind in _COLD) if node else 0.0
+            n = sum(r.count for u, r in node.runs.items() if u.demand == "walk" and u.kind in _COLD) if node else 0
             if not n:
                 continue
             same = (w.keys or {}).get(nid) == (w0.keys or {}).get(nid)
@@ -462,7 +465,7 @@ def cold(view):
         w, node, ms, n, stale = found
         whole = plan[nid]["kind"] == "series" and not plan[nid]["steps"]
         rows = w.done if whole else node.ran + node.served
-        nodes[nid] = Cold(nid, ms / max(rows, 1), (w.lane, w.t0), stale, _growth(w, node) if whole else None)
+        nodes[nid] = Cold(nid, ms / max(rows, 1), w.id, stale, _growth(w, node) if whole else None)
         if newest is None or w.t0 > newest.t0:
             newest = w
     return Projection(nodes, newest.unprobed / max(newest.done, 1) if newest else 0.0, tuple(missing))
@@ -498,7 +501,7 @@ def gui(view, walk):
         for name, ms in b.turns.items():
             by[name] = by.get(name, 0.0) + ms
     wall, out = len(bs) * view.width * 1000, []
-    for what, mine in (("slot", False), ("paint", False), ("monitor", True)):
+    for what, mine in ((SLOT, False), (PAINT, False), ("monitor", True)):
         rs = {n: ms for n, ms in by.items() if n.endswith(" monitor") == mine and (mine or n.startswith(what))}
         out.append((what, sum(rs.values()) / wall if wall else 0.0, max(rs, key=rs.get).split(" ", 1)[1] if rs else None))
     return max((b.late for b in bs), default=0.0), out
@@ -577,125 +580,3 @@ def alike(view, walk):
     return [(cost(w) + w.unprobed) / w.done for w in view.walks
             if w.lane == walk.lane and w.keys == walk.keys and w.length == walk.length and w.done >= w.length
             and not w.replanned and ran(w) == ran(walk)]
-
-
-def report(entries, view, context=None):
-    """One block for `entries`, in the order given: the problems numbered, each with its sentence
-    and target, its evidence, where the class has come from and its simulation; then once, of the
-    first entry's walk, the walk and the one before it in its lane, the plan's watched set, the
-    table with the numbers of the problems naming each node, the machine, the GUI thread, the
-    stores, the video and the decoder, and the history's file. `context` is as `text` takes it, with
-    "history", the path of a saved history holding the document, "when", the wall time as written,
-    and "now", the probe's clock; a part with nothing to say reads "-"."""
-    c, named = context or {}, {}
-    out = [f"SIEVE monitor report · {c.get('when', '-')} · commit {c.get('commit') or '-'}",
-           f"{len(entries)} problem{'s' * (len(entries) != 1)}, costliest first; their shares may count the same ms twice"]
-    for i, e in enumerate(entries, 1):
-        p = e.problem
-        since = "" if c.get("now") is None else f" · first seen {c['now'] - e.first:.0f} s before this"
-        out += ["", f"{i}  {p.kind} · {p.subject} · {p.ms_row:.2f} ms a row" + ("" if p.share is None else f" · {p.share:.0%}")
-                + f" · {e.count} walk{'s' * (e.count != 1)}{since}{'' if e.holds else ' · cleared'}",
-                f"   {p.says}: {p.target}", f"   {p.line}", *("   " + x for x in p.evidence),
-                f"   from  {p.source}", f"   repro python -m sieve_player.dev.simulations {p.kind}"]
-        for n in p.nodes:
-            named.setdefault(n, []).append(str(i))
-
-    def said(w):
-        return (f"{w.lane} · rows {w.start}..{(w.start or 0) + w.length - 1} · {w.done} done · "
-                f"{(cost(w) + w.unprobed) / max(w.done, 1):.2f} ms a row" + (" · under more than one plan" if w.replanned else ""))
-    at = next((i for i, w in enumerate(view.walks) if entries and (w.lane, w.t0) == entries[0].problem.walk), len(view.walks) - 1)
-    out.append("")
-    if at < 0:
-        out.append("WALK     no longer in the history")
-    else:
-        w = view.walks[at]
-        prev = next((x for x in reversed(view.walks[:at]) if x.lane == w.lane), None)
-        plan = w.plan or {}
-        out += ["WALK     " + said(w),
-                "BEFORE   " + ("-" if prev is None else said(prev) + (" · the same plan" if prev.keys == w.keys else " · another plan")),
-                "PLAN     " + ("-" if not plan else f"walks {plan.get('walk')} · chain {', '.join(plan.get('chain') or []) or 'none'} · "
-                               f"shown {plan.get('shown')} · pinned {', '.join(plan.get('pinned') or []) or 'none'} · "
-                               f"selected {', '.join(w.selected) or 'none'}"),
-                "", f"ROW      {'node':<16}{'ms/row':>7}{'spans':>7}  {'kind':<7}{'asked by':<20}{'p50':>7}{'p99':>7}{'ms/MP':>7}  in"]
-
-        def ms(x):
-            return f"{'-' if x is None else format(x, '.2f'):>7}"
-        for r in rows(w, view).values():
-            out.append(f"         {r.node:<16}{r.ms_row:>7.2f}{r.spans:>7}  {r.kind:<7}{r.asked_by():<20}{ms(r.median)}{ms(r.p99)}{ms(r.per_mp)}"
-                       f"  {','.join(named.get(r.node, []))}".rstrip())
-        res, like = machine(view, w), alike(view, w)
-        late, turns = gui(view, w)
-        stores, need = next((b.stores for b in reversed(span(view, w)) if b.stores), {}), needs(view, w)
-        out += [f"         {'unprobed':<16}{w.unprobed / max(w.done, 1):>7.2f}", "",
-                "MACHINE  " + "\n         ".join([tight(res), *(f"{r.name} {r.value} · {r.note}" for r in res),
-                                                 *([f"{len(like)} walks under this plan and as cold, {min(like):.2f} to {max(like):.2f} ms a row"]
-                                                   if len(like) > 1 else [])]),
-                f"GUI      worst {late:.0f} ms late · " + " · ".join(("the monitor" if what == "monitor" else f"{what}s") + f" {share:.1%}"
-                                                                   + (f", {top} the longest" if top and what != "monitor" else "")
-                                                                   for what, share, top in turns),
-                "STORES   " + ("\n         ".join(
-                    f"{store_name(s, view)} {size(held)} of {size(limit or 0)} · {w.recomputed.get(s, 0)} run again"
-                    + (f" · the {w.lane or 'walk'} needs {size(need[s])}" if s in need else "") for s, (held, limit) in stores.items()) or "-")]
-    d = c.get("decoder")
-    out += [f"VIDEO    {c.get('video', '-')} · " + ("-" if not d else ", ".join(f"{k} {v}" for k, v in d.items())) + f" · memo limit {c.get('memo_limit', '-')}",
-            f"HISTORY  {c.get('history') or '-'}"]
-    return "\n".join(out)
-
-
-def line(entry):
-    p = entry.problem
-    share = "" if p.share is None else f" {p.share:.0%}"
-    return (f"{p.kind:<7} {p.subject:<14} {p.ms_row:7.2f} ms/row{share:>5}  x{entry.count}"
-            f"{'' if entry.holds else '  cleared'}  {p.line}")
-
-
-def text(entry, view, context=None):
-    """One block sufficient to begin on the entry's fault without the session it was seen in, each
-    part under its label, the document last and whole after its label's line. `context` is what
-    no view holds: "document", the document as saved, "video", "decoder", "memo_limit", "commit",
-    "dump"; a part it lacks reads "-"."""
-    p, c = entry.problem, context or {}
-    w = next((w for w in view.walks if (w.lane, w.t0) == p.walk), None)
-    out = [f"class      {p.kind}", f"subject    {p.subject}", f"line       {p.line}",
-           f"cost       {p.ms_row:.3f} ms a row" + ("" if p.share is None else f", {p.share:.0%} of what the walk's nodes cost")
-           + f"; seen in {entry.count} walk{'s' * (entry.count != 1)}, {'still holds' if entry.holds else "not in the lane's last walk"}",
-           "evidence", *("  " + e for e in p.evidence)]
-    if w is None:
-        out.append("walk       no longer in the history")
-    else:
-        out.append(f"walk       {w.lane}, rows {w.start}..{(w.start or 0) + w.length - 1}, {w.done} of {w.length} done in "
-                   f"{w.t1 - w.t0:.2f} s, {cost(w):.0f} ms in its nodes" + (", under more than one plan" if w.replanned else ""))
-        out.append(f"  {'node':<14}{'ran':>6}{'held':>6}{'served':>7}  {'kind':<7}{'demand':<8}{'asked':<14}{'n':>6}{'ms':>9}{'ms/row':>8}")
-        for nid, node in w.nodes.items():
-            head = f"  {nid:<14}{node.ran:>6}{node.held:>6}{node.served:>7}  "
-            for (kind, demand, asked), (n, ms, _) in node.runs.items() or {("-", "-", "-"): (0, 0.0, 0)}.items():
-                out.append(f"{head}{kind:<7}{str(demand):<8}{str(asked):<14}{n:>6}{ms:>9.1f}{ms / w.done:>8.3f}")
-                head = " " * len(head)
-        nodes = (w.plan or {}).get("nodes") or {}
-        out.append("plan       " + ("-" if not nodes else f"walk {w.plan['walk']}, chain {w.plan['chain']}, shown {w.plan['shown']}, "
-                                    f"overlaid {w.plan['over']}, pinned {w.plan['pinned']}, selected {w.selected}"))
-        if p.subject in nodes:
-            readers = [n for n, f in nodes.items() if p.subject in f["reads"].values()]
-            for nid in dict.fromkeys([p.subject, *(s for s in nodes[p.subject]["reads"].values() if s), *readers]):
-                f = nodes[nid]
-                flags = [f["kind"], "fed" if f["fed"] else "unfed", *(k for k in ("static", "served", "steps") if f[k]),
-                         *([f"whole by {f['whole_by']}"] if f["whole_by"] else [])]
-                out.append(f"  {nid}: {', '.join(flags)}; reads {', '.join(str(s) for s in f['reads'].values())}; "
-                           f"read by {', '.join(n for n, x in nodes.items() if nid in x['reads'].values()) or 'nothing'}")
-        names = {k: n for n, k in (w.keys or {}).items()}
-        stores = next((b.stores for b in reversed(view.buckets) if b.stores), {})
-        out.append("stores     " + (", ".join(f"{'memo' if s == 'memo' else names.get(s, s) + ' cache'} {b / 2**20:.1f} of "
-                                              f"{(limit or 0) / 2**20:.1f} MB" for s, (b, limit) in stores.items()) or "-"))
-    d = c.get("decoder")
-    out += [f"video      {c.get('video', '-')}",
-            "decoder    " + ("-" if not d else ", ".join(f"{k} {v}" for k, v in d.items())) + f"; memo limit {c.get('memo_limit', '-')}",
-            f"commit     {c.get('commit') or '-'}", f"dump       {c.get('dump') or '-'}",
-            f"simulation python -m sieve_player.dev.simulations {p.kind}", f"source     {p.source}",
-            "document", json.dumps(c.get("document"), indent=2, ensure_ascii=False)]
-    return "\n".join(out)
-
-
-if __name__ == "__main__":
-    log = Log()
-    log.read(replay(sys.argv[1]).view())
-    print("\n".join(line(e) for e in log.ordered()) or "nothing found")

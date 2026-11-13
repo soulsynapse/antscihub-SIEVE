@@ -26,7 +26,7 @@ def event(kind, t, ms=0.0, node=None, row=None, **more):
 
 
 def runs(node, kind="run"):
-    return sum(r[0] for (k, _, _), r in node.runs.items() if k == kind)
+    return sum(r.count for u, r in node.runs.items() if u.kind == kind)
 
 
 def test_a_dump_replays_into_the_ledger_the_live_one_was(tmp_path):
@@ -88,11 +88,13 @@ def test_a_span_is_spread_over_its_buckets_and_a_cost_keeps_its_place_along_the_
     led.event(event("run", 1.0, 750.0, "slow"))
     led.event(event("decode", 2.05, 20.0, "video", reader="outer"))
     led.event(event("run", 2.0, 80.0, "outer"))                # 100 ms in all, the decode inside it from 50 to 70
+    led.event(event("fold", 2.2, 100.0, "outer"))              # after the run and inside nothing: its own from where it began
     v = led.view()
     assert [b.ms.get("w", {}).get("slow") for b in v.buckets[:4]] == [pytest.approx(250.0)] * 3 + [None] and v.first == 4
-    assert v.buckets[4].ms["w"] == {"outer": pytest.approx(80.0), "video": pytest.approx(20.0)}
+    assert v.buckets[4].ms["w"] == {"outer": pytest.approx(80.0 + 50.0), "video": pytest.approx(20.0)}
+    assert v.buckets[5].ms["w"] == {"outer": pytest.approx(50.0)}
     led.event(event("run", 100.0, 3100.0, "long"))             # thirteen buckets touched
-    assert len(led.view().buckets) == 8 and led.view().first == 405 and len(v.buckets) == 5     # the bound; the view held is as it was
+    assert len(led.view().buckets) == 8 and led.view().first == 405 and len(v.buckets) == 6     # the bound; the view held is as it was
 
     led = Ledger(width=0.25)                                    # the GUI thread's spans apart from the worker's, and what a span spent off its CPU
     led.event(event("begin", 0.0, row=0, length=1))

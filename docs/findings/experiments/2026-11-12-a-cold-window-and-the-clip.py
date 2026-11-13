@@ -25,7 +25,8 @@ from PySide6.QtWidgets import QApplication  # noqa: E402
 from sieve_player import decoder as decmod  # noqa: E402
 from sieve_player import document as D  # noqa: E402
 from sieve_player import store  # noqa: E402
-from sieve_player.catalogue import Log, cold, cost, line, reach  # noqa: E402
+from sieve_player.catalogue import Log, cold, cost, reach  # noqa: E402
+from sieve_player.report import line  # noqa: E402
 from sieve_player.decoder import Decoder  # noqa: E402
 from sieve_player.dev import simulations  # noqa: E402
 from sieve_player.graph import Graph  # noqa: E402

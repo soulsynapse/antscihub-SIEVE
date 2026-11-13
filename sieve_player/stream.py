@@ -8,20 +8,36 @@ import time
 from contextlib import contextmanager
 from dataclasses import dataclass
 
-TURNS = ("slot", "paint")       # the GUI thread's spans of Emitter.turn, a thread's own time under no node
-OWN = ("dump", "monitor")       # a consumer's own work: the dump's writer, and the ledger's bookkeeping on a thread that emits
-SPANS = ("run", "step", "fold", "error", "cancel", "cache", "decode", "seek", "read", *OWN, *TURNS)    # the kinds with a duration; the rest are instants
+RUN, STEP, FOLD, ERROR, CANCEL = "run", "step", "fold", "error", "cancel"
+CACHE, DECODE, SEEK, READ = "cache", "decode", "seek", "read"
+SLOT, PAINT = "slot", "paint"
+DUMP, MONITOR = "dump", "monitor"
+SYNC, WATCH, EVICT, UNCACHE, BEGIN, PROGRESS = "sync", "watch", "evict", "uncache", "begin", "progress"
+
+NODES = (RUN, STEP, FOLD, ERROR, CANCEL, CACHE, DECODE, SEEK, READ)     # a node's spans of Emitter.probe: a tool's run and the video's or a served file's read
+TURNS = (SLOT, PAINT)           # the GUI thread's spans of Emitter.turn, a thread's own time under no node
+OWN = (DUMP, MONITOR)           # a reader's own work: the dump's writer, and the ledger's bookkeeping on a thread that emits
+INSTANTS = (SYNC, WATCH, EVICT, UNCACHE, BEGIN, PROGRESS)               # no duration: a boundary, a discard, a walk's beginning, its rows done
+SPANS = (*NODES, *OWN, *TURNS)  # the kinds with a duration
+KINDS = (*SPANS, *INSTANTS)     # every value of Event.kind; a reader takes one by membership in a set drawn from these
 
 
 @dataclass(frozen=True, slots=True)
 class Event:
     """What the probe emits, one per run, read or boundary; see Emitter.probe(). Every field is
     required, so a consumer building or reading one by position, or one missing a field, fails
-    where it stands instead of misreading its neighbour."""
+    where it stands instead of misreading its neighbour.
+
+    A reader places a span's own time by what holds of every emit: `t` is the span's start and `ms`
+    excludes the spans opened inside it; on one thread a span is emitted after those it opened; and
+    a node's span that another's read opened names that node as its `reader`, one with none being
+    inside no node's span. So a span's own time runs from `t` for `ms` in all, broken by each span
+    inside it. A turn names no reader: spread from its `t`, one with a span inside it is misplaced
+    by that span's length."""
     node: str | None    # the node that ran, or read; None on a boundary; on a "slot", "paint" or "monitor" what turn() was told, no node; on a "watch" the selection
     row: int | None
     key: str | None     # the node's raw key, what the memo holds under
-    kind: str           # "run" | "step" | "fold" | "error" | "cancel" | "cache" | "decode" | "seek" | "read" | "sync" | "watch" | "evict" | "uncache" | "begin" | "progress" | "dump" | "monitor" | "slot" | "paint"
+    kind: str           # one of KINDS
     bytes: int          # the result's; what an eviction freed
     ms: float           # wall, exclusive of the runs this one opened
     t: float            # start, on the probe's clock (perf_counter); orders events across threads
@@ -69,7 +85,7 @@ class Emitter:
     def sync(self, keys, facts):
         """A "sync" event, a boundary with no node, row or time: what runs next ran under a new plan,
         whose `keys` and `facts` it carries, with "selected", the watched node, among the facts."""
-        self.emit("sync", None, None, None, 0, keys=keys, facts={**facts, "selected": self.watched})
+        self.emit(SYNC, None, None, None, 0, keys=keys, facts={**facts, "selected": self.watched})
 
     def watch(self, nid):
         """`nid`, or None, is the node the player now shows beside the document's pinned: a "watch"
@@ -77,7 +93,7 @@ class Emitter:
         it; a reader of the stream takes a fold of it for work something shown asked for."""
         if nid != self.watched:
             self.watched = nid
-            self.emit("watch", nid, None, None, 0)
+            self.emit(WATCH, nid, None, None, 0)
 
     def serving(self, what, lane=None):
         """What the events this thread emits from here on served, "scrub", "walk" or "bake", and the
@@ -115,13 +131,13 @@ class Emitter:
             return
         stack = self._thread.__dict__.setdefault("stack", [])
         stack.append([0.0, 0.0])             # wall and CPU the runs opened inside this one took
-        ev = ["run", 0, None]
+        ev = [RUN, 0, None]
         t, c = time.perf_counter(), time.thread_time()
         try:
             yield ev
         except BaseException as exc:
             # cancelled: the graph moved on under the run, not the tool's fault; else the body raised, a tool failed or the read ran off the stream's end
-            ev[0] = "cancel" if isinstance(exc, cancel) else "error"
+            ev[0] = CANCEL if isinstance(exc, cancel) else ERROR
             raise
         finally:
             total, cpu = time.perf_counter() - t, time.thread_time() - c

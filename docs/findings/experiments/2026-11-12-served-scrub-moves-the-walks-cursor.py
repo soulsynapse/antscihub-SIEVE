@@ -12,7 +12,7 @@ import tempfile
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..")))
 
-from sieve_player.catalogue import line  # noqa: E402
+from sieve_player.report import line  # noqa: E402
 from sieve_player.dev import simulations as S  # noqa: E402
 
 for scrub in (False, True):

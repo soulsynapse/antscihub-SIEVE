@@ -373,7 +373,8 @@ def test_an_event_is_read_by_name_and_refused_short():
     with pytest.raises(AttributeError):
         stats.event(tuple(full.values()))                           # a tuple is not an event; nothing is read by position
     stats.event(Event(**full))
-    assert stats.snapshot()["nodes"]["add"]["n"] == 1
+    stats.event(Event(**full | {"kind": "no kind of the stream's", "ms": 9.0}))
+    assert stats.snapshot()["nodes"]["add"] == {"last": 1.0, "mean": 1.0, "n": 1}     # a kind Stats does not know moves no mean
 
 
 def test_events_carry_start_thread_and_cpu_so_a_reader_sees_overlap_and_waiting():
@@ -619,7 +620,7 @@ def test_the_window_and_the_clip_are_one_walk_over_two_ranges():
     for ev in events:
         led.event(ev)
     window, clip = led.view().walks       # head's run after a range's last row is that range's, by the begin between them
-    assert [sum(r[0] for r in walk.nodes["head"].runs.values()) for walk in (window, clip)] == [2, 4]
+    assert [sum(r.count for r in walk.nodes["head"].runs.values()) for walk in (window, clip)] == [2, 4]
 
 
 def test_a_tool_raising_indexerror_fails_the_walk_and_only_the_stream_end_closes_it():

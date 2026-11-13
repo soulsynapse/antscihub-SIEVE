@@ -21,12 +21,13 @@ from PySide6.QtWidgets import QApplication
 from tools import bake
 
 from .. import document as D
-from ..catalogue import Log, line
+from ..catalogue import Log
 from ..decoder import Decoder
 from ..graph import Graph
 from ..ledger import Ledger
 from ..machine import Watch
 from ..pace import Pace
+from ..report import line
 from ..store import Store
 from ..stream import Emitter
 from ..worker import Worker

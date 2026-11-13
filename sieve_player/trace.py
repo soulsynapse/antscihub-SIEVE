@@ -13,7 +13,7 @@ import threading
 import time
 from dataclasses import fields
 
-from .stream import SPANS, Event
+from .stream import DUMP, PROGRESS, SPANS, Event
 
 FIELDS = tuple(f.name for f in fields(Event))
 
@@ -71,7 +71,7 @@ class Dump:
                      "width": getattr(d, "width", None), "height": getattr(d, "height", None),
                      "memo_bytes": graph.memo.limit, "cache_bytes": getattr(d, "cache_limit", None),
                      "fields": list(FIELDS)})
-        self._writer = threading.Thread(target=self._drain, args=(period,), name="dump", daemon=True)
+        self._writer = threading.Thread(target=self._drain, args=(period,), name=DUMP, daemon=True)
         self._prev = graph.on_event
         graph.on_event = self.event
         self._writer.start()
@@ -88,14 +88,14 @@ class Dump:
                 for item in batch:
                     if isinstance(item, Event):
                         n += self._write(as_dict(item))
-                        if item.kind == "progress":
+                        if item.kind == PROGRESS:
                             n += self._write({"sample": "rss", "value": rss(), "t": item.t})
                     else:
                         n += self._write(item)
                 # The writer's own cost as a span on its own thread, so a reader sees a node inflated or
                 # a GUI tick late while the writer held the GIL for what it is.
-                own = Event("dump", None, None, "dump", n, (time.perf_counter() - t) * 1000, t,
-                            "dump", (time.thread_time() - c) * 1000, None, None, None, None, None, None, None, None, None)
+                own = Event(DUMP, None, None, DUMP, n, (time.perf_counter() - t) * 1000, t,
+                            DUMP, (time.thread_time() - c) * 1000, None, None, None, None, None, None, None, None, None)
                 self._write(as_dict(own))
                 if self._prev is not None:
                     self._prev(own)
@@ -143,9 +143,9 @@ def read_dump(path):
 
 
 def totals(events):
-    """Each span event's total ms, exclusive plus the runs it opened: {id(event): ms}. On one thread
-    the probe emits a run after the runs inside it, so the pending events that started after this one
-    did are its children, and nothing else is."""
+    """Each span event's total ms, exclusive plus the runs it opened: {id(event): ms}. By the rule
+    beside stream.Event, the pending events of a thread that started after this one did are its
+    children, and nothing else is."""
     out, pending = {}, {}
     for ev in events:
         if ev.kind not in SPANS:

@@ -10,8 +10,9 @@ import threading
 from collections import deque
 from contextlib import nullcontext
 from dataclasses import dataclass, field, fields, replace
+from typing import NamedTuple
 
-from .stream import OWN, SPANS, TURNS
+from .stream import BEGIN, CACHE, CANCEL, DECODE, EVICT, FOLD, NODES, OWN, PROGRESS, READ, RUN, SEEK, STEP, SYNC, TURNS, UNCACHE, WATCH
 from .trace import read_dump
 
 PARTS = 8           # the pieces a walk's range is cut into for a node's cost along it
@@ -20,9 +21,9 @@ FINEST = 2.0 ** -10 # ms; the bottom of a distribution's first bin
 OCTAVE = 8          # bins to a doubling of ms
 BINS = 26 * OCTAVE  # up to 2 ** 16 ms; a span past either end is counted in the bin at it
 
-_RAN = {"run", "step", "fold", "decode", "seek"}
-_FILE = {"decode", "seek", "read"}      # what a served node's file answered, its reader's cache not holding the row
-_READS = _FILE | {"cache"}              # the kinds whose wall above CPU is a decoder's own threads at work and no wait
+_RAN = {RUN, STEP, FOLD, DECODE, SEEK}
+_FILE = {DECODE, SEEK, READ}            # what a served node's file answered, its reader's cache not holding the row
+_READS = _FILE | {CACHE}                # the kinds whose wall above CPU is a decoder's own threads at work and no wait
 
 
 @dataclass
@@ -50,11 +51,34 @@ class Bucket:
 _EMPTY = Bucket(shared=True)
 
 
+class Under(NamedTuple):
+    """What a node's spans ran under: their kind and the demand they answered."""
+    kind: str
+    demand: str | None
+    asked: str | None       # the node the demand named
+
+
+class Total(NamedTuple):
+    """What a node's spans under one Under came to."""
+    count: int
+    ms: float
+    bytes: int
+
+
+class WalkId(NamedTuple):
+    """Which walk a record is: a lane begins one at a time. Made by Walk.id alone."""
+    lane: str | None
+    t0: float
+
+
+_NONE = Total(0, 0.0, 0)
+
+
 @dataclass
 class Node:
     """One node over one walk. A row counts once, by the most that happened to the node on it: it
     ran, else its served file answered, else a store held it."""
-    runs: dict = field(default_factory=dict)        # (kind, demand, the node the demand named) -> [count, ms, bytes]
+    runs: dict = field(default_factory=dict)        # Under -> Total
     ran: int = 0
     held: int = 0
     served: int = 0
@@ -64,7 +88,7 @@ class Node:
     shape: list | None = None                       # of its output, as the last span that carried one had it
 
     def copy(self):
-        return Node({k: list(v) for k, v in self.runs.items()}, self.ran, self.held, self.served, list(self.parts),
+        return Node(dict(self.runs), self.ran, self.held, self.served, list(self.parts),
                     list(self.counts), {k: list(v) for k, v in self.bins.items()}, self.shape)
 
 
@@ -91,6 +115,10 @@ class Walk:
     wait: float = 0.0                               # its tool spans' wall less their CPU, ms; summed signed, one span's being a tick's noise either way
     read_wait: float = 0.0                          # the same of its reads, where it is the decoder's threads
     selected: list = field(default_factory=list)    # the nodes the player had selected as it began and while it walked
+
+    @property
+    def id(self):
+        return WalkId(self.lane, self.t0)
 
     def copy(self):
         return replace(self, nodes={n: v.copy() for n, v in self.nodes.items()}, recomputed=dict(self.recomputed),
@@ -173,21 +201,21 @@ class Ledger:
                         b.late = max(b.late, value)
                     else:
                         b.machine = value
-            elif item.kind == "progress":
+            elif item.kind == PROGRESS:
                 self._progress(item)
-            elif item.kind == "begin":
+            elif item.kind == BEGIN:
                 self._begin(item, item.row)
-            elif item.kind == "sync":
+            elif item.kind == SYNC:
                 self._plan, self._keys, self._selected = item.facts, item.keys, (item.facts or {}).get("selected")
                 for lane in self._lanes.values():
                     lane.synced = True
-            elif item.kind == "watch":
+            elif item.kind == WATCH:
                 self._selected = item.node
                 for w in (lane.walk for lane in self._lanes.values()):
                     if w is not None and w.done < w.length and item.node is not None and item.node not in w.selected:
                         w.selected.append(item.node)
-            elif item.kind in ("evict", "uncache"):
-                self._gone[(item.key, item.row)] = "memo" if item.kind == "evict" else item.key
+            elif item.kind in (EVICT, UNCACHE):
+                self._gone[(item.key, item.row)] = "memo" if item.kind == EVICT else item.key
                 if len(self._gone) > self._discards:
                     del self._gone[next(iter(self._gone))]
             elif item.kind in TURNS:
@@ -200,7 +228,7 @@ class Ledger:
                     ms = bucket.ms.setdefault(item.thread, {})
                     ms[name] = ms.get(name, 0.0) + item.ms * share
                 self._spent[item.thread] = self._spent.get(item.thread, 0.0) + item.ms
-            elif item.kind in SPANS:
+            elif item.kind in NODES:
                 self._span(item)
 
     def _bucket(self, i):
@@ -239,8 +267,7 @@ class Ledger:
         return lane
 
     def _span(self, ev):
-        # On one thread a run emits after the runs it opened, each of which names its reader; a span
-        # with none is opened by nothing, so the nest holds only what a run still to emit will take.
+        # By the rule beside stream.Event, the nest holds only what a run still to emit will take.
         nest = self._nest.setdefault(ev.thread, [])
         inner = []
         while nest and nest[-1][0] >= ev.t:
@@ -263,27 +290,26 @@ class Ledger:
         lane = self._lanes.get(ev.lane)
         walk = None if lane is None else lane.walk
         store = self._gone.pop((ev.key, ev.row), None) if ev.kind in _RAN else None
-        if (store is not None or ev.kind == "seek") and (b := self._bucket(int(ev.t // self.width))) is not None:
+        if (store is not None or ev.kind == SEEK) and (b := self._bucket(int(ev.t // self.width))) is not None:
             if store is not None:
                 b.recomputed[store] = b.recomputed.get(store, 0) + 1
-            if ev.kind == "seek":
+            if ev.kind == SEEK:
                 b.seeks[ev.node] = b.seeks.get(ev.node, 0) + 1
         if walk is None:
             return
         if store is not None:
             walk.recomputed[store] = walk.recomputed.get(store, 0) + 1
             walk.recomputed_ms[store] = walk.recomputed_ms.get(store, 0.0) + ev.ms
-        if lane.synced and ev.kind != "cancel":     # a cancelled run was the old plan's
+        if lane.synced and ev.kind != CANCEL:     # a cancelled run was the old plan's
             walk.replanned = True
         if reads:
             walk.read_wait += off
         else:
             walk.wait += off
         node = walk.nodes.setdefault(ev.node, Node())
-        run = node.runs.setdefault((ev.kind, ev.demand, ev.asked), [0, 0.0, 0])
-        run[0] += 1
-        run[1] += ev.ms
-        run[2] += ev.bytes
+        under = Under(ev.kind, ev.demand, ev.asked)
+        was = node.runs.get(under, _NONE)
+        node.runs[under] = Total(was.count + 1, was.ms + ev.ms, was.bytes + ev.bytes)
         part = min(PARTS - 1, walk.done * PARTS // max(walk.length, 1))
         node.parts[part] += ev.ms
         node.counts[part] += 1
@@ -324,11 +350,11 @@ class Ledger:
             hit = facts.get("hits", {}).keys() | facts.get("fold_hits", {}).keys()
             for nid in lane.kinds.keys() | hit:
                 kinds, node = lane.kinds.get(nid, ()), walk.nodes.setdefault(nid, Node())
-                if "read" in kinds or nid in served and _FILE & set(kinds):
+                if READ in kinds or nid in served and _FILE & set(kinds):
                     node.served += 1
                 elif _RAN & set(kinds):
                     node.ran += 1
-                elif "cache" in kinds or nid in hit:
+                elif CACHE in kinds or nid in hit:
                     node.held += 1
         lane.kinds = {}
 
@@ -390,23 +416,36 @@ def save(view, path, **more):
         return {f.name: getattr(x, f.name) for f in fields(x) if f.name != "shared"} | also
     out = {"width": view.width, "first": view.first, "more": more,
            "buckets": [plain(b, {"rows": list(b.rows.items())}) for b in view.buckets],     # a lane may be None, which is no JSON key
-           "walks": [plain(w, {"nodes": {n: plain(x, {"runs": [[*k, *v] for k, v in x.runs.items()]})
+           "walks": [plain(w, {"nodes": {n: plain(x, {"runs": [u._asdict() | r._asdict() for u, r in x.runs.items()]})
                                          for n, x in w.nodes.items()}}) for w in view.walks]}
     with open(path, "w", encoding="utf-8") as f:
         json.dump(out, f)
 
 
+def _record(d, names, path):
+    """`d` when it is a record as `save` writes one, a dict of exactly `names`; else ValueError."""
+    if not isinstance(d, dict) or set(d) != set(names):
+        raise ValueError(f"{path} is a history of another shape than this ledger reads: "
+                         f"{sorted(d) if isinstance(d, dict) else type(d).__name__} where {sorted(names)} is written")
+    return d
+
+
 def saved(path):
     """(a Ledger holding the buckets and walks `save` wrote to `path`, every walk closed, and the
-    `more` written beside them)."""
+    `more` written beside them). A history is of the session that wrote it: one holding a record
+    whose fields are not this ledger's raises ValueError."""
     with open(path, encoding="utf-8") as f:
-        d = json.load(f)
+        d = _record(json.load(f), ("width", "first", "more", "buckets", "walks"), path)
+    of = {cls: [f.name for f in fields(cls) if f.name != "shared"] for cls in (Bucket, Walk, Node)}
     ledger = Ledger(width=d["width"], history=max(len(d["buckets"]), 1), walks=max(len(d["walks"]), 1))
     for i, b in enumerate(d["buckets"], d["first"]):
-        ledger._buckets[i] = Bucket(**b | {"rows": {lane: n for lane, n in b["rows"]},
-                                           "stores": {k: tuple(v) for k, v in b["stores"].items()}})
+        ledger._buckets[i] = Bucket(**_record(b, of[Bucket], path) | {"rows": {lane: n for lane, n in b["rows"]},
+                                                                      "stores": {k: tuple(v) for k, v in b["stores"].items()}})
         ledger._newest = i
     for w in d["walks"]:
-        nodes = {n: Node(**x | {"runs": {tuple(r[:3]): r[3:] for r in x["runs"]}}) for n, x in w["nodes"].items()}
+        nodes = {}
+        for n, x in _record(w, of[Walk], path)["nodes"].items():
+            runs = [_record(r, Under._fields + Total._fields, path) for r in _record(x, of[Node], path)["runs"]]
+            nodes[n] = Node(**x | {"runs": {Under(*(r[f] for f in Under._fields)): Total(*(r[f] for f in Total._fields)) for r in runs}})
         ledger._walks.append(Walk(**w | {"nodes": nodes}))
     return ledger, d["more"]

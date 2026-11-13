@@ -23,14 +23,15 @@ from PySide6.QtWidgets import QApplication, QHBoxLayout, QPushButton, QSizePolic
 
 from .. import theme
 from ..canvas import type_color
-from ..catalogue import Log, alike, cost, gui, machine, needs, report, rows, size, store_name, tight
+from ..catalogue import Log, alike, cost, gui, machine, needs, rows, size, store_name, tight
 from ..document import produces
 from ..ledger import coarsen, save
 from ..pace import clock as as_clock
+from ..pacecontrol import PaceControl
+from ..report import report
 from ..store import commit
 from ..theme import GAP, GROUND, HEAD, INK, INK_2, LEVEL, LINE_LIFT, PAD, RADIUS, ROW_H, layer, qgray
 from ..stream import OWN
-from ..window import PaceControl
 
 THREAD = "worker"               # the name graph.Readers.reap asserts of the worker's thread
 OTHER = qgray(INK_2 - 30)       # unprobed, never a type's hue

@@ -6,10 +6,11 @@ import time
 import pytest
 
 from sieve_player import document as D
-from sieve_player.catalogue import CLASSES, SOURCES, Entry, Log, cold, reach, slower, text, waits
+from sieve_player.catalogue import CLASSES, SOURCES, Entry, Log, cold, reach, seeks, slower, waits
 from sieve_player.dev.simulations import HEALTHY, SERVED, SIMULATIONS, run
 from sieve_player.graph import Graph
-from sieve_player.ledger import Bucket, Ledger, Node, View, Walk
+from sieve_player.ledger import Bucket, Ledger, Node, Total, Under, View, Walk
+from sieve_player.report import text
 from tests.test_graph import TOOLS, Dec, gray, tool
 from tests.test_ledger import walk
 
@@ -17,9 +18,13 @@ PLAN = {"nodes": {}, "chain": [], "walk": "b", "shown": "b", "over": None, "pinn
 needs_ffmpeg = pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="a bake's clip writer runs ffmpeg from PATH")
 
 
+def runs(by):
+    return {Under(*u): Total(*r) for u, r in by.items()}
+
+
 def rec(t0=0.0, keys=None, **nodes):
     """A finished window walk of eight rows whose nodes are `nodes`, each a Node or its runs."""
-    nodes = {n: v if isinstance(v, Node) else Node(runs=v) for n, v in nodes.items()}
+    nodes = {n: v if isinstance(v, Node) else Node(runs=runs(v)) for n, v in nodes.items()}
     return Walk("window", 0, 8, PLAN, keys, t0, t0 + 0.5, done=8, nodes=nodes)
 
 
@@ -33,7 +38,7 @@ def found(*walks, pinned=()):
 
 FOLDED = {"a": {("run", "fold", "a"): [8, 8.0, 0], ("fold", "fold", "a"): [8, 1.0, 0]}, "b": {("run", "walk", "b"): [8, 8.0, 0]}}
 SOUGHT = {"video": {("seek", "walk", "b"): [3, 6.0, 0], ("decode", "walk", "b"): [5, 5.0, 0]}}
-GROWN = {"c": Node(runs={("run", "walk", "c"): [8, 20.0, 0]}, parts=[1.0] * 4 + [4.0] * 4, counts=[1] * 8)}
+GROWN = {"c": Node(runs=runs({("run", "walk", "c"): [8, 20.0, 0]}), parts=[1.0] * 4 + [4.0] * 4, counts=[1] * 8)}
 
 
 def test_each_class_reads_off_a_view_built_by_hand():
@@ -76,14 +81,15 @@ def test_each_class_reads_off_a_view_built_by_hand():
 
 
 def test_the_log_holds_one_entry_a_class_and_subject_counted_cleared_and_ordered():
-    walks = [rec(float(i), **SOUGHT) for i in range(10)]
-    log = Log()
+    walks, judged = [rec(float(i), **SOUGHT) for i in range(10)], []
+    log = Log({"seeks": lambda view, walks: (judged.append(len(walks)), seeks(view, walks))[1]})
     for _ in range(2):      # a view read again counts no walk twice
         made = log.read(View(0.25, 0, [], walks))
     (e,) = log.ordered()
     assert (e.count, e.holds, e.first, made) == (10, True, 0.5, [])
     log.read(View(0.25, 0, [], walks + [rec(10.0, video={("decode", "walk", "b"): [8, 8.0, 0]})]))
     assert log.ordered() == [e] and (e.count, e.holds, e.problem.walk) == (10, False, ("window", 9.0))
+    assert judged == [10, 1, 2]     # a walk its lane has begun another after is judged once more and then kept
     five = rec(keys={"video": "kv"}, a={("run", "fold", "a"): [8, 20.0, 0]}, **SOUGHT, **GROWN)
     five.recomputed, five.recomputed_ms = {"memo": 8, "kv": 4}, {"memo": 4.0, "kv": 2.0}
     assert list(found(five)) == [("unread", "a"), ("grows", "c"), ("seeks", "video"), ("thrash", "memo"), ("thrash", "video")]     # by cost
@@ -101,7 +107,7 @@ def test_a_changed_param_between_two_walks_is_compared_with_nothing():
     g.sync()
     walk(g, range(6))
     first, second = led.view().walks
-    assert second.nodes["slow"].runs[("run", "walk", "slow")][1] > 3 * first.nodes["slow"].runs[("run", "walk", "slow")][1]
+    assert second.nodes["slow"].runs[("run", "walk", "slow")].ms > 3 * first.nodes["slow"].runs[("run", "walk", "slow")].ms
     assert not slower(led.view())
     second.keys = first.keys
     assert [p.subject for p in slower(View(0.25, 0, [], [first, second]))] == ["slow"]
@@ -119,7 +125,7 @@ def test_the_cold_projection_sums_what_the_plan_reaches_by_the_walk_each_node_la
         return w
 
     def ran(ms, more=()):
-        return Node(runs={("run", "walk", "c"): [8, ms, 0]} | dict(more), ran=8)
+        return Node(runs=runs({("run", "walk", "c"): [8, ms, 0]} | dict(more)), ran=8)
     first = under(t0=0.0, keys={"a": "ka", "b": "kb", "c": "kc"}, a=ran(8.0, {("seek", "walk", "c"): [1, 6.0, 0]}), b=ran(16.0),
                   c=ran(8.0, {("fold", "fold", "c"): [8, 4.0, 0]}))
     first.unprobed = 4.0

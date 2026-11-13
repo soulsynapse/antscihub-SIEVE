@@ -1,11 +1,14 @@
 """Stats: a reader of the stream that keeps each node's last and mean ms and the walk's rate, for
-bench.py. It imports nothing of sieve_player; the Graph it is made on is held for `snapshot()`'s
-counters and for its `on_event`.
+bench.py. It imports the stream's kinds and nothing else of sieve_player; the Graph it is made on
+is held for `snapshot()`'s counters and for its `on_event`.
 """
 import threading
 from collections import deque
 
+from .stream import CACHE, CANCEL, DECODE, PROGRESS, READ, RUN, SEEK, STEP
+
 WINDOW = 64     # rows a running mean spans; the decoder's step and seek means keep their own literal, see Decoder._mean
+MEANS = (RUN, STEP, CANCEL, CACHE, DECODE, SEEK, READ)      # the kinds a node's mean is of
 
 
 def _mean(mean, x, n):
@@ -18,7 +21,7 @@ def _rate(hits, misses):
 
 class Stats:
     """The probe's first consumer. Per node, the last figure and a running mean over the window the
-    decoder's means use, blind to key, kind and bytes; beside them the chain nodes' last figures
+    decoder's means use, over the kinds of MEANS alike and blind to key and bytes; beside them the chain nodes' last figures
     summed, a whole run's or one step's,
     the walk's rate in rows per second, read off the progress events, and the decoder's and memo's
     own counters. Making one installs it as the graph's `on_event`, passing each event on to whatever
@@ -37,17 +40,17 @@ class Stats:
     def event(self, ev):
         if self._prev is not None:
             self._prev(ev)
-        if ev.kind in ("sync", "watch", "evict", "uncache", "begin", "error", "fold", "slot", "paint", "dump", "monitor") or ev.kind == "progress" and ev.lane == "clip":
-            return                          # the means are the tool's; a fold is not, nor a turn of the GUI thread's. The rate is the window's
-        with self._lock:
-            if ev.kind == "progress":
-                if self._walk and ev.row < self._walk[-1][1]:
-                    self._walk.clear()      # a new walk; the rate is this one's
-                self._walk.append((ev.t, ev.row))
-                return
-            e = self._nodes.setdefault(ev.node, [0.0, None, 0])
-            e[2] += 1
-            e[0], e[1] = ev.ms, _mean(e[1], ev.ms, e[2])
+        if ev.kind == PROGRESS:
+            if ev.lane != "clip":           # the rate is the window's
+                with self._lock:
+                    if self._walk and ev.row < self._walk[-1][1]:
+                        self._walk.clear()  # a new walk; the rate is this one's
+                    self._walk.append((ev.t, ev.row))
+        elif ev.kind in MEANS:
+            with self._lock:
+                e = self._nodes.setdefault(ev.node, [0.0, None, 0])
+                e[2] += 1
+                e[0], e[1] = ev.ms, _mean(e[1], ev.ms, e[2])
 
     def snapshot(self):
         g, d, m = self.graph, self.graph.decoder, self.graph.memo

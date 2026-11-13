@@ -1,9 +1,12 @@
 """The seams: which modules under sieve_player may import which, and how much a module header may say."""
 import ast
+import importlib
 import re
 import subprocess
 import sys
 from pathlib import Path
+
+from sieve_player import stream
 
 PKG = Path(__file__).resolve().parents[1] / "sieve_player"
 TOOLS = PKG.parent / "tools"
@@ -13,7 +16,7 @@ MAY_IMPORT = {
     "document": set(),
     "plan": {"document"},
     "stream": set(),                              # the Event, the kinds and the Emitter; a reader of a dump loads nothing else
-    "stats": set(),                               # a reader of the stream; the Graph it is made on is handed to it
+    "stats": {"stream"},                          # a reader of the stream; the Graph it is made on is handed to it
     "graph": {"document", "density", "plan", "stream"},     # Graph.density folds planes; sync holds a plan; it emits through an Emitter
     "canvas": {"document", "menu", "theme"},
     "menu": {"theme"},
@@ -27,9 +30,11 @@ MAY_IMPORT = {
     "worker": {"decoder", "density", "document", "graph", "store"},
     "trace": {"stream"},
     "ledger": {"stream", "trace"},                # the span kinds and a dump's reader; no graph is held and no Qt reached
-    "catalogue": {"ledger"},                      # a detector reads a view and nothing else
+    "catalogue": {"ledger", "stream"},            # a detector reads a view, by the stream's names for a kind, and nothing else
+    "report": {"catalogue", "ledger"},            # the catalogue's findings as text; the catalogue renders none and never imports it
     "machine": set(),                             # psutil and the system's counters; the player is not imported
     "pace": set(),                                # the worker's signals and a clock; the control and the monitor's header both read it
+    "pacecontrol": {"pace", "theme"},             # the control the player's header and the monitor's both draw; it is neither's
 }
 
 
@@ -52,6 +57,24 @@ def test_imports_run_one_way():
         assert imports_of(name) <= allowed, f"{name} imports {imports_of(name) - allowed}"
 
 
+def test_nothing_under_dev_imports_the_window():
+    """The window opens what is under dev and never the reverse, so a dev module loads without the
+    player and what both draw is in a module of neither."""
+    bad = []
+    for path in (PKG / "dev").rglob("*.py"):
+        package = ["sieve_player", *path.relative_to(PKG).parts[:-1]]
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if isinstance(node, ast.ImportFrom):
+                base = package[:len(package) - node.level + 1] if node.level else []
+                names = [[*base, *(node.module or "").split("."), a.name] for a in node.names]
+            elif isinstance(node, ast.Import):
+                names = [a.name.split(".") for a in node.names]
+            else:
+                continue
+            bad += [str(path.relative_to(PKG)) for n in names if [p for p in n if p][:2] == ["sieve_player", "window"]]
+    assert not bad, bad
+
+
 def test_a_reader_of_the_stream_loads_no_graph():
     """A dump replays, and a view is judged, in an interpreter that has loaded no graph, plan or document."""
     code = ("import sys, sieve_player.ledger, sieve_player.catalogue; "
@@ -67,13 +90,51 @@ def test_the_graph_names_no_span_no_node_ran_and_nothing_of_the_selection():
     assert not named, named
 
 
-def test_one_accumulator_reads_the_stream_for_the_monitor():
-    """The ledger is the monitor's one reading of the stream: the monitor that kept its own is gone,
-    and nothing in the package or the tests brings it back by name."""
-    assert not (PKG / "dev" / "monitor.py").exists() and not (PKG / "dev" / "monitor_views.py").exists()
-    named = [str(p.relative_to(PKG.parent)) for p in [*PKG.rglob("*.py"), *Path(__file__).parent.glob("*.py")]
-             if p != Path(__file__) and re.search(r"dev\.monitor\b|from \.monitor\b|monitor_views|MonitorWindow", p.read_text(encoding="utf-8"))]
-    assert not named, named
+NOT_A_KIND = {      # the words that spell a kind and are another thing's name where a reader writes them
+    "catalogue": {"fold", "monitor"},           # a demand; the name the monitor's own slots and paints carry
+    "report": {"monitor", "dump"},              # that name again; a dump's path among what a text is handed
+}
+
+
+def test_a_reader_spells_no_kind():
+    """A kind is said once, in stream.py: what reads the stream or a ledger's view names a kind by
+    the module's value. A string that spells one is another thing's name, of NOT_A_KIND, and is
+    never what a kind is compared with."""
+    def spelled(node):
+        return {n.value for n in ast.walk(node) if isinstance(n, ast.Constant) and isinstance(n.value, str) and n.value in stream.KINDS}
+
+    for name in ("trace", "ledger", "catalogue", "report"):
+        tree = ast.parse((PKG / f"{name}.py").read_text(encoding="utf-8"))
+        assert spelled(tree) <= NOT_A_KIND.get(name, set()), (name, spelled(tree))
+        beside = [ast.unparse(c) for c in ast.walk(tree) if isinstance(c, ast.Compare) and spelled(c)
+                  and any(ast.unparse(o).split(".")[-1] == "kind" for o in (c.left, *c.comparators))]
+        assert not beside, (name, beside)
+
+
+TAKES = {"ledger": "_fold", "stats": "event"}       # where each reader of the stream takes an event by its kind
+PASSED_OVER = {     # the kinds a reader takes as nothing, by decision; one added to stream.py is taken or is written here
+    "ledger": set(),
+    # the means are the tool's: a fold is not, nor a turn of the GUI thread's; an error is passed over as it was before
+    "stats": {stream.SYNC, stream.WATCH, stream.EVICT, stream.UNCACHE, stream.BEGIN, stream.ERROR, stream.FOLD,
+              *stream.TURNS, *stream.OWN},
+}
+
+
+def test_a_reader_classifies_every_kind():
+    """Where a reader takes an event by its kind, the kinds it compares that with, alone or by a set
+    they are in, and the kinds PASSED_OVER says it leaves are every kind once: one added to
+    stream.py that a reader neither takes nor is said to pass over is red here, and is taken as
+    nothing meanwhile."""
+    for name, where in TAKES.items():
+        module = importlib.import_module(f"sieve_player.{name}")
+        tree = ast.parse((PKG / f"{name}.py").read_text(encoding="utf-8"))
+        taken = set()
+        for c in ast.walk(next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == where)):
+            if isinstance(c, ast.Compare) and ast.unparse(c.left).endswith(".kind"):
+                for value in (getattr(module, n.id) for o in c.comparators for n in ast.walk(o) if isinstance(n, ast.Name)):
+                    taken |= {value} if isinstance(value, str) else set(value)
+        assert not taken & PASSED_OVER[name], (name, taken & PASSED_OVER[name])
+        assert taken | PASSED_OVER[name] == set(stream.KINDS), (name, set(stream.KINDS) ^ (taken | PASSED_OVER[name]))
 
 
 def test_canvas_and_pane_never_name_the_runtime():

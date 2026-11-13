@@ -140,3 +140,31 @@ is nothing. What would settle it is the same in more processes on a desktop left
 left open across the walks: a window opened a walk pays its first layout and paints inside that walk, which
 a window already open in the player does not, so these figures are an upper reading of the window as it is
 used.
+
+## The fold of a span, with a run's total and what it ran under each a named tuple
+
+2026-11-12, on v5-monitor over c0ec2e20 with the working tree of `docs/spec/stream-seams.md`'s deliverables,
+by `docs/findings/experiments/2026-11-12-a-total-a-span.py`. The ledger of the tree keys a node's runs by an
+`Under` and holds a `Total` for each, both tuples with named fields, so the fold of a span makes one of each
+where c0ec2e20's made a plain tuple and wrote three numbers into a list. The halves above time a walk, whose
+spread is some thousand times this; here the same hand-built events, a walk of 20000 rows each a decode,
+three runs and a progress, are folded by each ledger in one `view()`, c0ec2e20's modules read out of git,
+the two in turn fifteen times a process, in three processes.
+
+ns a span folded:
+
+| process | ledger | least | lower quartile | median | upper quartile | most |
+|---|---|---|---|---|---|---|
+| 1 | c0ec2e20 | 4420 | 4443 | 4492 | 4555 | 5298 |
+| 1 | the tree | 4808 | 4836 | 4884 | 4946 | 5296 |
+| 2 | c0ec2e20 | 4272 | 4322 | 4368 | 4438 | 4569 |
+| 2 | the tree | 4783 | 4798 | 4835 | 4902 | 4968 |
+| 3 | c0ec2e20 | 4260 | 4289 | 4361 | 4479 | 5057 |
+| 3 | the tree | 4688 | 4715 | 4781 | 4973 | 6168 |
+
+The tree's fold of a span is 0.39 to 0.47 microseconds above c0ec2e20's by the median, about a tenth of the
+fold, and its fastest is above c0ec2e20's upper quartile in every process. A fifth of the events folded were
+progresses and are in the figure of both. Which of the two tuples the difference is of was not taken apart,
+and the rest of `_span` differs only in naming a kind by `stream.py`'s value where c0ec2e20 wrote the string. Against the first half's reading, the ledger at 20 to
+50 ms of a walk, a tenth of the fold is two to five ms of a walk if folding were all of that, which the first
+half says it is not: most of it is building the events.

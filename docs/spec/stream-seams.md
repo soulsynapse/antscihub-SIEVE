@@ -126,14 +126,34 @@ Settled 2026-11-12, Kendrick's word, whether `test_one_accumulator_reads_the_str
 monitor's file and class names, which is a thing pinned for having been removed, and `Stats` is a second
 accumulator it does not see. It goes, the box below holding what it was for.
 
+Facts added 2026-11-12 on building it. What a kind is, is the tuple of `stream.py` it sits in: `NODES`,
+`TURNS`, `OWN` or `INSTANTS`, with `SPANS` the first three and `KINDS` all four. `catalogue.py` names a
+kind by the module's value, so its entry in `MAY_IMPORT` holds `stream` beside `ledger`, and `stats`'
+holds `stream`: two seams wider than they were, each by the module that imports nothing. Three words
+spell a kind and are another thing's name in a reader: "fold" a demand, "monitor" the name the monitor's
+own turns carry, and "dump" a key of what a text is handed. `test_seams.NOT_A_KIND` names them by file,
+uncounted, and the test holds beside it that no string spelling a kind is what a `kind` is compared with;
+a kind held under a name that is not `kind` and compared with one of the three words is what that leaves
+unseen. A demand's values are a comment on `Event.demand` as the kinds were on `Event.kind`, which is
+reported here and not built. The readers the second box's seam test reads are `ledger` and `stats`: the
+dump writes every kind and classifies none, and `trace.totals` takes `SPANS`. The test reads the kinds
+each compares an event's `kind` with where it takes one, `Ledger._fold` and `Stats.event`, and the set
+it passes over is the test's own, `test_seams.PASSED_OVER`, beside `MAY_IMPORT`: no reader holds a set
+that nothing of it reads. The ledger takes a node's span by `NODES` and passes over none. `Stats` takes
+the kinds of `stats.MEANS`; what it averaged before it averages now, a "cancel" among them and an
+"error" not, which is reported here and not changed. The emitting side still spells a kind where it says one: `graph.py`,
+`worker.py`, `window.py` and `dev/timeview.py` pass a string to `probe`'s list or to `turn`, which no
+check here reads.
+
 - [ ] Every kind is a named value in the stream's module, with what it is: a span of a node's, a span of
   a thread's, a reader's own, or an instant. The sets a reader keeps are drawn from those.
   Check: a seam test finds no kind as a string literal in `trace.py`, `ledger.py` or `catalogue.py`
-  outside a set built from the module's.
+  outside a set built from the module's. It is `test_a_reader_spells_no_kind`.
 - [ ] A kind no reader has classified fails a test and is averaged into nothing: `Stats` takes a kind by
   membership, as the ledger does.
   Check: a test feeds `Stats` an event of a kind made up for it and reads no node's mean moved; a seam
   test reads every kind of the module in each reader's sets or in a stated set of those it passes over.
+  They are `test_an_event_is_read_by_name_and_refused_short` and `test_a_reader_classifies_every_kind`.
 
 ## Dev imports no window
 
@@ -147,9 +167,15 @@ modules under `dev` have no entry in `MAY_IMPORT`. `dev/simulations.py` imports 
 reaches no Qt, load `window.py` and everything it imports. `dev/__init__.py` says of itself that what is
 under it is no part of using SIEVE.
 
+Facts added 2026-11-12 on building it. The control is in `sieve_player/pacecontrol.py`, its class moved
+whole, and its entry in `MAY_IMPORT` is `pace` and `theme`. With it gone from `window.py`, importing
+`tests.test_catalogue` loads no `sieve_player.window`. `window` and the modules under `dev` still have
+no entry in `MAY_IMPORT`; the test below reads `dev` for the one import and holds nothing else of them.
+
 - [ ] No module under `sieve_player/dev` imports `window`, and the control the player's header and the
   monitor's both draw is in a module each may import.
-  Check: `test_seams` reads the imports of every file under `dev`.
+  Check: `test_seams` reads the imports of every file under `dev`. It is
+  `test_nothing_under_dev_imports_the_window`.
 - [ ] The control draws as it did.
   Check: `docs/findings/experiments/2026-11-12-the-figure-on-the-player.py` exits as it did.
 
@@ -167,9 +193,25 @@ written to the temporary folder and named in a copied report.
 Settled 2026-11-12, Kendrick's word, whether a history saved before this reads after it: no; `saved` refuses one of
 another shape and says so, a history being of the session that wrote it.
 
+Facts added 2026-11-12 on building it. The three values are `ledger.Under`, kind, demand and asked;
+`ledger.Total`, count, ms and bytes; and `ledger.WalkId`, lane and t0, made by `Walk.id` alone. The
+names are the builder's and Kendrick's to change. Each is a tuple with named fields, so a `Total` is
+not written in place: the ledger puts a new one at each span, and makes an `Under` to find it. What
+that costs the fold of a span is measured against c0ec2e20 in
+`docs/findings/2026-11-12-what-the-trace-costs.md`, its last part. A position still reads what it read,
+which is why the tests that key a run by a plain tuple stand unedited and why the dated experiments
+that index a run, `2026-11-12-a-cold-window-and-the-clip.py` and
+`2026-11-12-the-window-says-what-is-wrong.py` among them, run as written: the first box holds of
+`sieve_player` and of `tests`, and of those experiments it does not. A saved history names each field
+of a run, and `saved` raises ValueError on a record whose fields are not the ledger's, read before
+anything is built of it, so an error from the building is no refusal. The one-off counts a loop over the
+runs once, so its count of lines at a7ceace5 is under the fact's above.
+
 - [ ] What a node ran under, and what that came to, are each a value with named fields, and nothing
   outside `ledger.py` reads either by position.
-  Check: a one-off greps `catalogue.py` for an index into a run; the catalogue's tests stand.
+  Check: a one-off greps `catalogue.py` for an index into a run; the catalogue's tests stand. It is
+  `docs/findings/experiments/2026-11-12-the-ledgers-records-have-names.py`, over every module under
+  `sieve_player`.
 - [ ] A walk's identity is one value, made in one place.
   Check: the same one-off, for `(w.lane, w.t0)` built outside `ledger.py`.
 - [ ] A view saved and read back is equal to itself.
@@ -191,9 +233,41 @@ Fork: whether a turn inside a turn is misplaced by enough to read. Observed by a
 ms land in buckets it did not run in, the box below is added to; where they do not, by more than a
 bucket's width, the fact above is corrected and nothing is built.
 
+Observed 2026-11-12, `docs/findings/2026-11-12-a-turn-inside-a-turn.md`. As the Fork words it, a slot of
+105 ms with a turn of 500 ms inside it has 93 of its ms in a bucket it did not run in. In the player with
+its monitor open, of some 2500 slots and paints none had a span inside it and their thread emitted no
+other span. The Fork asks the first observation and it came out misplaced, so by its words the box below
+is added to, and it is, unbuilt: the second observation is the builder's, asked for by no line here, and
+is no ground for taking the other side.
+
+Open: how a turn's own time is placed. The ledger places a node's span from the stream as it is: a span
+emitted later on a thread with an earlier `t` encloses those since, and `reader` says which spans to keep
+for an encloser still to come, one with none being kept for nothing. A turn names no reader, so two ways
+stand. The ledger alone keeps every turn for an encloser that in the player never comes, which wants a
+bound on what it keeps, and a turn enclosing more than the bound is misplaced as now; a node's span with no
+reader inside a turn, a tool run from a slot, stays unseen. Or the emitter, which holds the stack, says of
+every span what opened it, a turn's `reader` being the span it was opened inside: `Event`'s fields stand
+and what `reader` means on a turn changes, the ledger's bookkeeping inside a run's emit is placed by the
+same rule, and the `reader` a call site passes to `probe` becomes a thing the emitter already knows.
+Of the two the second is the better: the rule beside `Event` then holds of every span with no exception
+written into it. Recommended over both, a third: nothing is built and the clause the box gained is taken
+out again. The Fork's observation could come out one way only, a slot built with a long turn inside it
+across a bucket's edge being misplaced by arithmetic, so it chose nothing; what does choose is whether the
+player ever opens a span inside a turn, and in the two sessions observed it did not. The one-off stays to
+ask that again when a slot comes to repaint or to run a tool. Either build is a change to what the stream
+says or to what the ledger keeps, and so Kendrick's; meanwhile the rule beside `Event` says what a reader
+that spreads a turn from its `t` gets wrong.
+
+Facts added 2026-11-12 on building it. The rule is in `Event`'s docstring; `Ledger._span` and
+`trace.totals` cite it and restate none of it. The existing ledger test read a run and a run with a read
+inside; a fold after the run is added to it.
+
 - [ ] The rule by which a reader places a span's own time is stated once, beside `Event`, and a test
-  holds the ledger to it for a run, a run with a read inside, and a fold after a run.
-  Check: a ledger test over hand-built events; the existing one where it already reads the three.
+  holds the ledger to it for a run, a run with a read inside, a fold after a run, and a turn with a turn
+  inside it.
+  Check: a ledger test over hand-built events; the existing one where it already reads the three. It is
+  `test_a_span_is_spread_over_its_buckets_and_a_cost_keeps_its_place_along_the_range`, which reads no
+  turn inside a turn.
 
 ## The poll judges a walk once
 
@@ -211,6 +285,36 @@ document after sixty-four walks, the monitor shown: the "slot monitor" share of 
 Where it is under the share at which `waits` would name it, nothing is built and the figure is recorded
 in a finding; where it is over, a walk that can no longer change is judged once and what was found of it
 kept, `slower`'s pair and an entry's `holds` being the only things a later walk moves.
+
+Observed 2026-11-12, `docs/findings/2026-11-12-what-the-poll-costs.md`, offscreen: with sixty-four walks
+held a poll took some 48 ms and the polls a fifth of the wall, over the share at which `waits` names a
+span, and the log named "slot monitor". The Fork is taken to its second side and built.
+
+Facts added 2026-11-12 on building it. `Log.read` hands each detector the finished walks not yet judged
+for the last time, and a walk that is no longer its lane's last is judged in the first read that finds
+it so and never again; a detector takes the walks to judge beside the view and judges every finished one
+when given none, so one called with a view alone reads as it did. Nothing found of a walk is kept apart
+from the entries, which already held it. The same run after: some 12 ms a poll and under a twentieth of
+the wall at every length of the history. The panels still read every walk at every poll, which
+the finding gives as what is left.
+
+Open: two things the build changed that the Fork did not hand it, built as below and Kendrick's to let
+stand or not; the box's second half, "what the monitor shows of it is what it showed", does not hold of
+the first. The Fork has `slower`'s pair and an entry's `holds` as all a later walk moves. `thrash` is a
+third: `needs` reads every walk in the view for the bytes a node's result came to, and the store's
+figures are read off the bucket the walk ended in, so what an entry says of a walk its lane has left, its
+target's "needs" and its line's "held", was made again at every poll and could move, as a later walk
+under the same key made a result this one only held, or go, as the bucket left the history. Judged once,
+it is as the last read before the lane moved on found it. Recommended, to let it stand: it shows only in
+an entry that no longer holds, and a line about a past walk that stays as written reads truer than one
+that loses its clause when the history turns over. The second: a walk judged for the last time is known
+by its id, so a `Log` handed views of two ledgers takes a walk of the second for one of the first where
+their ids meet. It counted by the same id before, and the docstring now says one ledger. Recommended, to
+let it stand, the monitor's `Log` having one ledger for its life.
+
+- [ ] A walk no later event changes is judged once, and what the monitor shows of it is what it showed.
+  Check: `test_the_log_holds_one_entry_a_class_and_subject_counted_cleared_and_ordered` counts the walks a
+  detector is handed over three reads; the simulations' tests stand; the finding's second table.
 
 ## One reading of a walk's start and of what its rows were
 
@@ -230,8 +334,19 @@ live, with scrubs during the walk: ran, held and served by the control beside th
 node, per walk. Where they agree on every walk, both stand and the finding says so; where they differ, the
 Open below is Kendrick's to settle with the difference in front of him.
 
+Observed 2026-11-12, `docs/findings/2026-11-12-two-counts-of-a-walks-rows.md`, offscreen, twenty-nine
+walks. The two agree on the twenty-two that read no bake and that no scrub reached into. They differ on
+the six served walks, where the control counts a row served when a bake's file was read anywhere under it
+and the ledger counts the walked node, which ran, the bake's node being the one served; and on the one
+walk a scrub ran a row of first, where the walk found the row held and then folded it, and `ledger._RAN`
+takes a node's fold for the node running. Neither is a miscount. Where a walk begins was not observed.
+
 Open: whether the control reads the ledger. Not recommended either way before the fork: the ledger's count
 is exact and is a reader's, taken at a poll; the worker's is the control's own and arrives with the row.
+After it, the builder's reading and not a settling: the two count different things, a row and a node, so
+the control reading the ledger's walked node would draw a served walk as one that ran; and whether a row
+on which only a node's fold ran is that node's `ran` is a second question the observation raised, one of
+a figure the monitor shows.
 
 ## The catalogue's parts
 
@@ -246,6 +361,14 @@ header says the values are there "so the monitor and whatever else draws a node 
 
 Settled 2026-11-12, Kendrick's word, where the text renderings live: a module beside the catalogue that imports it, so how
 a report reads changes in a file no threshold is in; the values stay, being the one figure.
+
+Facts added 2026-11-12 on building it. `report`, `text` and `line` are in `sieve_player/report.py`,
+moved whole, with the command line that prints an entry a line: it is `python -m sieve_player.report`,
+and the catalogue has none. The module's name is the builder's and Kendrick's to change. Three
+experiments imported `line` from the catalogue, `2026-11-12-served-scrub-moves-the-walks-cursor.py`,
+`2026-11-12-served-bake-upstream-walk.py` and `2026-11-12-a-cold-window-and-the-clip.py`, and each is
+repointed by its one line, as settled under The stream has a module of its own; the three places
+monitor.md named `catalogue.text` or `catalogue.report` name `report.text` and `report.report`.
 
 - [ ] The module the detectors are in renders no report.
   Check: `MAY_IMPORT` has the rendering's module importing the catalogue and not the reverse.

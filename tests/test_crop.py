@@ -63,7 +63,7 @@ def clip(path, n=6, h=48, w=64):
     wr = cv2.VideoWriter(str(path), cv2.VideoWriter_fourcc(*"MJPG"), 30, (w, h))
     for r in range(n):
         f = np.full((h, w, 3), 30, np.uint8)
-        f[10:30, 20:50] = 220                                  # a bright plate the threshold finds
+        f[10:31, 20:51] = 220                                  # a bright plate the threshold finds, odd on both sides
         wr.write(f)
     wr.release()
     return str(path)
@@ -92,7 +92,7 @@ def test_a_displayed_crop_shows_the_cut_at_its_shape_and_the_plan_lists_it(tmp_p
     while win.display._pix is None and time.perf_counter() - t < 10:
         QApplication.processEvents()
         time.sleep(0.005)
-    assert (win.display._pix.height(), win.display._pix.width()) == (20, 30) and win.count == 6
+    assert (win.display._pix.height(), win.display._pix.width()) == (21, 31) and win.count == 6
     e = plan(win.doc, {t.NAME: t for t in tools}, base_key(win.doc.video_path(), "bgr")).entries["crop"]
     assert e.kind == "frame" and e.standing == "" and win.graph.standing("crop") == ""
     win.close()
@@ -119,8 +119,8 @@ def test_a_bake_after_a_crop_writes_and_serves_the_cut(tmp_path, in_store):
     w.stop()
     g.halt = False
     assert done and not refused, refused
-    assert store.Store(str(in_store)).sidecar(done[0][1]).shape == [20, 30] and doc.node("bake").baked.shape == (20, 30)
+    assert store.Store(str(in_store)).sidecar(done[0][1]).shape == [21, 31] and doc.node("bake").baked.shape == (21, 31)
     g.sync()
-    assert g.compute("bake", 2).shape == (20, 30)
+    assert g.compute("bake", 2).shape == (21, 31)       # the writer pads an odd side; the served row is the cut's
     g.close()
     g.decoder.close()

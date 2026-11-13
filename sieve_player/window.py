@@ -14,15 +14,20 @@ import traceback
 import cv2
 import numpy as np
 from PySide6.QtCore import QFileSystemWatcher, QRectF, Qt, QTimer, Signal
-from PySide6.QtGui import QFontMetrics, QImage, QKeySequence, QPainter, QPen, QPixmap, QShortcut
+from PySide6.QtGui import QImage, QKeySequence, QPainter, QPen, QPixmap, QShortcut
 from PySide6.QtWidgets import QFileDialog, QHBoxLayout, QMainWindow, QPushButton, QSizePolicy, QVBoxLayout, QWidget
 
 from . import dev, document, store, theme
 from .canvas import Canvas
 from .decoder import Decoder
 from .graph import Graph
+from .ledger import Ledger
+from .machine import Watch
+from .pace import Pace
+from .pacecontrol import PaceControl
 from .pane import Pane
 from .registry import CATEGORIES, Entry, category, description, signature
+from .stream import Emitter
 from .theme import GAP, PAD, ROW_H, readout
 from .timeline import Timeline
 from .trace import Dump
@@ -42,14 +47,14 @@ def _gb(env):
 
 
 class Lateness(QTimer):
-    """Samples how late the GUI thread's timer fires into a dump, while one is attached: a tick that
-    lands long after it was due says the main thread was blocked that long, by what the dump's other
-    lines may show. It lives here and not in the probe since the probe carries what its site knows
-    and measures nothing; the dump holds the measurements. It draws nothing."""
+    """Samples how late the GUI thread's timer fires, to `sample(name, value, t)`: a tick that lands
+    long after it was due says the main thread was blocked that long, by what the stream's "slot"
+    and "paint" spans may show. It lives here and not in the probe since the probe carries what its
+    site knows and measures nothing. It draws nothing."""
 
-    def __init__(self, dump, interval_ms=100, parent=None):
+    def __init__(self, sample, interval_ms=100, parent=None):
         super().__init__(parent)
-        self.dump, self._due = dump, None
+        self.sample, self._due = sample, None
         self.setTimerType(Qt.PreciseTimer)
         self.timeout.connect(self._fired)
         self.start(interval_ms)
@@ -57,7 +62,7 @@ class Lateness(QTimer):
     def _fired(self):
         now = time.perf_counter()
         if self._due is not None:
-            self.dump.sample("late", max(0.0, (now - self._due) * 1000), now)
+            self.sample("late", max(0.0, (now - self._due) * 1000), now)
         self._due = now + self.interval() / 1000
 
 DOCUMENT_FILTER = "SIEVE document (*.json);;All (*)"
@@ -293,7 +298,8 @@ def catalogue(items):
 
 class Header(QWidget):
     """The row across the top: the store's folder, what it holds and what the disk has free with the
-    button that changes it, at the left; the clip walk's progress and its button, at the right."""
+    button that changes it, at the left; the walk's figure, what the clip walk has to say and its
+    button, at the right."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -305,13 +311,14 @@ class Header(QWidget):
         self.store.setFixedSize(80, ROW_H)
         self.note = readout(mono=True, wrap=False)
         self.note.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        self.note.setMinimumWidth(QFontMetrics(self.note.font()).horizontalAdvance("clip 000000/000000"))   # so a digit more never shifts it
+        self.figure = PaceControl("click for the monitor")
         self.walk = QPushButton("Walk clip")
         self.walk.setFixedSize(80, ROW_H)
         lay.addWidget(self.store)
         lay.addWidget(self.store_note)
         lay.addStretch(1)
         lay.addWidget(self.note)
+        lay.addWidget(self.figure)
         lay.addWidget(self.walk)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
@@ -328,8 +335,8 @@ class Header(QWidget):
     def set_walking(self, on):
         self.walk.setText("Stop walk" if on else "Walk clip")
 
-    def set_progress(self, done, total):
-        self.note.setText(f"clip {done}/{total}" if done < total else "")
+    def clear_note(self):
+        self.note.setText("")
 
 
 class Column(QWidget):
@@ -364,8 +371,10 @@ class PlayerWindow(QMainWindow):
         if not from_file:
             modules = catalogue(source)[0]
         self.doc = None
-        self.decoder = self.graph = self.worker = None
-        self.dump = self.lateness = None          # the stream's file and the GUI-thread sampler, while DUMP_ENV names a file
+        self.decoder = self.graph = self.stream = self.worker = None
+        self.ledger = self.lateness = self.machine = None     # the open video's stream kept over time, and the GUI thread's and the machine's samplers into it
+        self.pace = None                          # the open video's walks as the header's figure reads them
+        self.dump = None                          # the stream's file, while DUMP_ENV names one
         self.fps, self.count = 30.0, 0
         self.row, self.playing, self.window_ = 0, False, (0, 0)
         self._resume = False  # playback to restore when a playhead drag ends
@@ -389,6 +398,8 @@ class PlayerWindow(QMainWindow):
         self.canvas = Canvas(self.tools, broken, {n: (category(t), description(t), signature(t)) for n, t in self.tools.items()}, CATEGORIES)
         self.pane = Pane(self.tools)
         self.timeline = Timeline()
+        for part, w in (("frame", self.display), ("plot", self.plot), ("strip", self.timeline.strip), ("canvas", self.canvas)):
+            w.paintEvent = self._timed("paint", part, w.paintEvent)
         # an empty selection leaves the pane and the plot on their last node, so a click on empty canvas never blanks them
         self.canvas.selectionChanged.connect(lambda ids: ids and self._select(ids[-1]))
         self.canvas.changed.connect(self.sync)
@@ -417,6 +428,7 @@ class PlayerWindow(QMainWindow):
         self.header.show_store(self.store)
         self.header.store.clicked.connect(self._choose_store)
         self.header.walk.clicked.connect(self._toggle_clip)
+        self.header.figure.clicked.connect(lambda: dev.show(self, "monitor"))
         self.header.setEnabled(False)
 
         right = Column()
@@ -535,6 +547,8 @@ class PlayerWindow(QMainWindow):
 
     def _select(self, nid):
         self.selection = nid
+        if self.stream is not None:
+            self.stream.watch(nid)
         self.pane.select(nid)
         self.plot.set_selection(nid)
         self._show_pinned()
@@ -738,7 +752,7 @@ class PlayerWindow(QMainWindow):
         self.worker.invalidate()
         self._clip_asked = False
         self.header.set_walking(False)
-        self.header.set_progress(0, 0)
+        self.header.clear_note()
         self.clip_results = {}
         self._show_pinned()
 
@@ -892,7 +906,8 @@ class PlayerWindow(QMainWindow):
             return False
         self._unload()
         self.decoder = decoder
-        self.graph = Graph(self.doc, decoder, self.tools, open_bake=lambda bake, cache: self.store.open_bake(bake, cache),
+        self.stream = Emitter()
+        self.graph = Graph(self.doc, decoder, self.tools, open_bake=lambda bake, cache: self.store.open_bake(bake, cache), stream=self.stream,
                            **({"memo_bytes": m} if (m := _gb(MEMO_ENV)) else {}))
         for nid, why in self._gone.items():
             self.graph.note(nid, why)
@@ -901,26 +916,27 @@ class PlayerWindow(QMainWindow):
         print(f"SIEVE {time.strftime('%H:%M:%S')}: opened {path}: {decoder.width}x{decoder.height} at {decoder.fps:.3f} fps, "
               f"{decoder.count} rows claimed, luma plane {'read' if decoder.luma else 'converted'}; "
               f"memo {self.graph.memo.limit >> 30} GB, cache {decoder.cache_limit >> 30} GB", file=sys.stderr)
+        # Attached for the video's life, read or not: docs/findings/2026-11-12-what-the-trace-costs.md. The sync below is its first plan.
+        self.ledger = Ledger(timed=lambda stream=self.stream: stream.turn("monitor", "ledger"))
+        self.stream.on_event = self.ledger.event
+        self.stream.watch(self.selection)
         if os.environ.get(DUMP_ENV):
             self.dump = Dump(self.graph, os.environ[DUMP_ENV])
-            self.lateness = Lateness(self.dump, parent=self)
+        self.lateness = Lateness(self._sample, parent=self)
+        self.machine = Watch(self._sample)
+        self.pace = Pace()
         self.worker = Worker(self.graph, store=self.store)
         self.fps, self.count = self.graph.fps, self.graph.count
         ct = self.timeline.controls
-        self.worker.rowReady.connect(self._row_ready)
-        self.worker.seriesReady.connect(self._series_ready)
-        self.worker.densityReady.connect(self.plot.set_fields)
-        self.worker.walked.connect(ct.set_progress)
-        self.worker.walked.connect(lambda _, n: self._set_length(n))   # the walk's own length: clamped, or closed early
-        self.worker.failed.connect(self._failed)
-        self.worker.clipWalked.connect(self._clip_walked)
-        self.worker.clipReady.connect(self._clip_ready)
-        self.worker.clipRefused.connect(self._clip_refused)
-        self.worker.baked.connect(self.pane.show_bake)
-        self.worker.bakeDone.connect(self._baked)
-        self.worker.bakeRefused.connect(self._bake_refused)
-        self.worker.walkRefused.connect(ct.progress.setText)
-        self.worker.shortened.connect(self._shortened)
+        for signal, slot in (("rowReady", self._row_ready), ("seriesReady", self._series_ready),
+                             ("densityReady", self.plot.set_fields), ("walked", lambda done, n, *was: ct.set_progress(done, n)),
+                             ("walked", lambda _, n, *was: self._set_length(n)),   # the walk's own length: clamped, or closed early
+                             ("walked", lambda *row: self._paced("window", *row)),
+                             ("failed", self._failed), ("clipWalked", self._clip_walked), ("clipReady", self._clip_ready),
+                             ("clipRefused", self._clip_refused), ("baked", self.pane.show_bake), ("bakeDone", self._baked),
+                             ("bakeRefused", self._bake_refused), ("walkRefused", ct.progress.setText),
+                             ("shortened", self._shortened)):
+            getattr(self.worker, signal).connect(self._timed("slot", signal, slot))
         self.worker.finished.connect(lambda w=self.worker: self._worker_ended(w))
         self.header.setEnabled(True)
         self.timeline.strip.set_count(self.count, self.fps)
@@ -938,22 +954,39 @@ class PlayerWindow(QMainWindow):
         self._retitle()
         return True
 
+    def _sample(self, name, value, t):
+        self.ledger.sample(name, value, t)
+        if self.dump is not None:
+            self.dump.sample(name, value, t)
+
+    def _timed(self, kind, name, fn):
+        """`fn` as a callable whose every call is a span of the GUI thread's in the stream of the
+        video then open, a "slot" or a "paint" under `name`; see stream.Emitter.turn."""
+        def timed(*args):
+            if self.stream is None:
+                return fn(*args)
+            with self.stream.turn(kind, name):
+                return fn(*args)
+        return timed
+
     def _unload(self):
         if self.worker is None:
             return
         if self.playing:
             self.toggle_play()
         self.worker.stop()
+        self.lateness.stop()
+        self.machine.close()
         if self.dump is not None:
-            self.lateness.stop()
             self.dump.close()
-            self.dump = self.lateness = None
+        self.dump = self.lateness = self.machine = self.ledger = self.pace = None
+        self.header.figure.set_figure(None)
         self.graph.close()
         self.decoder.close()
-        self.decoder = self.graph = self.worker = None
+        self.decoder = self.graph = self.stream = self.worker = None
         self.results, self.clip_results, self._clip_asked = {}, {}, False
         self.header.set_walking(False)
-        self.header.set_progress(0, 0)
+        self.header.clear_note()
         self.header.setEnabled(False)
         self.timeline.strip.set_series({})
         self.row, self.window_ = 0, (0, 0)
@@ -1084,16 +1117,21 @@ class PlayerWindow(QMainWindow):
         if self._clip_asked:
             self.worker.stop_clip()
             self._clip_asked = False
-            self.header.set_progress(0, 0)
+            self.header.clear_note()
         else:
             self.worker.walk_clip()
             self._clip_asked = True
             self.header.note.setText("clip: after the window")
         self.header.set_walking(self._clip_asked)
 
-    def _clip_walked(self, done, total):
+    def _paced(self, lane, done, total, ran, served):
+        self.pace.row(lane, done, total, ran, served)
+        self.header.figure.set_figure(self.pace.figure(self.fps, self.count))
+
+    def _clip_walked(self, done, total, ran, served):
+        self._paced("clip", done, total, ran, served)
         if self._clip_asked:
-            self.header.set_progress(done, total)
+            self.header.clear_note()
             if done >= total:
                 self._clip_asked = False
                 self.header.set_walking(False)

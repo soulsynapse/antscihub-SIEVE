@@ -31,6 +31,11 @@ def run(series, params):
     return {"signal": np.array([spacing(t, m, r) for t in series.data], np.float32)}
 
 
+def step(state, row, i, params):
+    """No state: a row's signal is its own table's."""
+    return None, {"signal": np.float32(spacing(row, params["method"], float(params["r"])))}
+
+
 def settings(parent=None):
     from sieve_player import ParamWidget  # only the GUI needs the player
 

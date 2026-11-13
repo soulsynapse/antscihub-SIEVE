@@ -15,18 +15,20 @@ DEFAULTS = {"field": "area", "method": "mean"}
 
 
 def run(series, params):
+    out = np.zeros(len(series.data), np.float32)
+    for r, t in enumerate(series.data):
+        out[r] = step(None, t, r, params)[1]["signal"]
+    return {"signal": out}
+
+
+def step(state, row, i, params):
+    """No state: a row's signal is its own table's."""
     field, m = params["field"], params["method"]
     if m not in METHODS:
         raise ValueError(f"size: no method {m!r}; one of {METHODS}")
-    reduce = getattr(np, m)
-    rows = series.data
-    out = np.zeros(len(rows), np.float32)
-    for r, t in enumerate(rows):
-        if field not in t.dtype.names or t.dtype[field] == object:
-            raise ValueError(f"size: no numeric field {field!r}; one of {tuple(n for n in t.dtype.names if t.dtype[n] != object)}")
-        if len(t):
-            out[r] = reduce(np.asarray(t[field], np.float64))
-    return {"signal": out}
+    if field not in row.dtype.names or row.dtype[field] == object:
+        raise ValueError(f"size: no numeric field {field!r}; one of {tuple(n for n in row.dtype.names if row.dtype[n] != object)}")
+    return None, {"signal": np.float32(getattr(np, m)(np.asarray(row[field], np.float64)) if len(row) else 0.0)}
 
 
 def settings(parent=None):

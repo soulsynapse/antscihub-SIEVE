@@ -1,4 +1,7 @@
-"""Experiment behind docs/findings/2026-11-09-crop-cold-walk.md: the crossings window with the blobs
+"""Left as 4203efbc added it, over the tree its finding names, 50d07ce7, and run from there: the monitor
+it imports, sieve_player/dev/monitor.py, is gone from the tree since docs/spec/monitor.md.
+
+Experiment behind docs/findings/2026-11-09-crop-cold-walk.md: the crossings window with the blobs
 chain after a crop to a drawn region, against the same window uncropped, read off the monitor.
 
     .venv\\Scripts\\python -X utf8 docs\\findings\\experiments\\2026-11-09-crop-cold-walk.py [shape|none] [geometry] [document] [rows]

@@ -7,27 +7,14 @@ are read from the document's nodes; the runtime holds none of its own. A node is
 when nothing reaches it: no wire, an unresolved tool, or a wire whose types do not fit.
 """
 import threading
-import time
-from collections import OrderedDict, deque
-from contextlib import contextmanager
-from dataclasses import dataclass
+from collections import OrderedDict
 
 import numpy as np
 
 from . import density
 from .document import INPUT, video_output
-from .plan import _key, base_key, plan, shared_fold, walked
-
-WINDOW = 64     # rows a running mean spans; the decoder's step and seek means keep their own literal, see Decoder._mean
-
-
-def _mean(mean, x, n):
-    return x if mean is None else mean + (x - mean) / min(n, WINDOW)
-
-
-def _rate(hits, misses):
-    return hits / (hits + misses) if hits + misses else None
-
+from .plan import _key, base_key, facts, plan, shared_fold, walked
+from .stream import Emitter
 
 def inband(v, band):
     """Where `v` lies between the band's lo and hi; outside them once lo is above hi, the band
@@ -118,6 +105,15 @@ class Memo:
             self.misses += 1
             return None
 
+    def empty(self):
+        """Drops every entry, pinned ones with the rest, and tells `on_evict` of none: what is
+        emptied on purpose was not discarded for room."""
+        with self._lock:
+            self._big.clear()
+            self._small.clear()
+            self._pinned.clear()
+            self.bytes = 0
+
     def unpin(self, keep):
         gone = []
         with self._lock:
@@ -185,7 +181,7 @@ class Frames:
         if g.halt or now is None or now.raw_key != self._raw_key:
             raise Cancelled(f"{self._nid} at row {row}: the graph moved on")
         try:
-            return g._compute(self._plan, self._sources[input], row)
+            return g._compute(self._plan, self._sources[input], row, reader=self._nid)
         except Exception as exc:
             if not hasattr(exc, "sieve_node"):
                 exc.sieve_node = self._sources[input]     # a read that fails is the read node's, never the reader's
@@ -199,27 +195,6 @@ class Series:
 
     def __init__(self, data, key, start, fps):
         self.data, self.key, self.start, self.fps = data, key, start, fps
-
-
-@dataclass(frozen=True, slots=True)
-class Event:
-    """What the probe emits, one per run, read or boundary; see Graph.probe(). Every field is
-    required, so a consumer building or reading one by position, or one missing a field, fails
-    where it stands instead of misreading its neighbour."""
-    node: str | None    # the node that ran, or read; None on a boundary
-    row: int | None
-    key: str | None     # the node's raw key, what the memo holds under
-    kind: str           # "run" | "step" | "fold" | "error" | "cancel" | "cache" | "decode" | "seek" | "read" | "sync" | "evict" | "uncache" | "progress" | "dump"
-    bytes: int          # the result's; what an eviction freed
-    ms: float           # wall, exclusive of the runs this one opened
-    t: float            # start, on the probe's clock (perf_counter); orders events across threads
-    thread: str         # the emitting thread's name
-    cpu_ms: float       # the thread's CPU time over the same span, exclusive likewise; wall far above it is a wait. On
-                        # Windows thread_time ticks at the scheduler quantum (~16 ms), so one event's is 0 or a tick and
-                        # only a sum over many events is a figure
-    serves: str | None  # "scrub" | "walk" | "bake": what the worker was doing; None off the worker (bench, tests)
-    length: int | None  # progress only: rows in the window, `row` being the rows done
-    keys: dict | None   # sync only: every node's key under the new plan, band included; diff two to see what a drag changed
 
 
 class Readers:
@@ -254,6 +229,11 @@ class Readers:
         with self._lock:
             self._retired += [self._held.pop(k) for k in list(self._held) if k not in keys]
 
+    def decoders(self):
+        """The Decoder of each reader held that reads a clip. GUI-safe."""
+        with self._lock:
+            return [d for r in self._held.values() if (d := getattr(r, "decoder", None)) is not None]
+
     def reap(self):
         """Closes the retired readers; the worker's alone, between computations, since a close under a read in flight pulls the file from it."""
         assert threading.current_thread().name == "worker", "Readers.reap off the worker thread"
@@ -277,10 +257,11 @@ class Readers:
 
 
 class Graph:
-    def __init__(self, doc, decoder, tools, memo_bytes=4 << 30, open_bake=None):
+    def __init__(self, doc, decoder, tools, memo_bytes=4 << 30, open_bake=None, stream=None):
         """`open_bake(bake, cache_bytes)` opens a served node's file as a reader, or raises IOError;
         without it a served node's read raises. Whether the file is there is asked where the document
-        opens, Store.missing, not here."""
+        opens, Store.missing, not here. `stream` is the Emitter it emits through, one of its own when
+        none is handed."""
         self.doc, self.decoder = doc, decoder
         self.tools = tools if hasattr(tools, "get") else {t.NAME: t for t in tools}
         self.readers = Readers(open_bake)
@@ -290,14 +271,14 @@ class Graph:
         self.stale = set()                  # served nodes whose live key is not the one they were baked under; the plan's verdict, shown and never saved
         self.memo = Memo(memo_bytes)
         self._lock = threading.Lock()
-        self.on_event = None                # the probe's one consumer; see probe() for the event
         self.halt = False                   # set by whoever is stopping the worker: every Frames read from then on raises Cancelled
-        self._probing = threading.local()   # the runs open on this thread, so a run's time excludes its reads
+        self.stream = stream or Emitter()
         self._base = None                   # the video node's key: the file and what the decoder hands out; set at sync()
-        # The two stores report what they discard into the same stream: the memo's entry by its key and
-        # row, the decoder cache's frame by its row under the video's key.
-        self.memo.on_evict = lambda k, n: self._emit("evict", None, k[1], k[0], n)
-        decoder.on_evict = lambda row, n: self._emit("uncache", None, row, self._base, n)
+        self._hits = {}                     # lane -> {node: [results the memo held, folds it held]} since that lane's last progress
+        # The stores report what they discard into the same stream: the memo's entry by its key and row,
+        # the decoder cache's frame by its row under the video's key, a served reader's under the served node's.
+        self.memo.on_evict = lambda k, n: self.stream.emit("evict", None, k[1], k[0], n)
+        decoder.on_evict = lambda row, n: self.stream.emit("uncache", None, row, self._base, n)
         self._plan = {}
         self._notes = {}                    # node -> (its key, what the run said): a tool raising, a chain node fed no signal
         self.shown = self.over = self.series = None
@@ -332,17 +313,31 @@ class Graph:
             self.series = p.chain[0] if p.chain else None
             self.heads, self.chain, self.unrun_series = p.heads, p.chain, p.unrun
         self.memo.unpin({e.raw_key for e in p.entries.values() if e.static})
-        # A boundary in the stream: what runs next ran under a new plan, whose keys it carries.
-        self._emit("sync", None, None, None, 0, keys={nid: e.key for nid, e in p.entries.items()})
+        if self.stream.on_event is not None:    # a boundary in the stream: what runs next ran under a new plan, which it carries
+            self.stream.sync({nid: e.key for nid, e in p.entries.items()}, facts(p, self.doc.pinned))
+
+    def empty(self):
+        """Empties the memo, the decoder's cache and every open reader's, so the next walk runs
+        every row; no discard is emitted for them, so the ledger takes none of it for a
+        recomputation. Any thread; a row in flight may land in a store after it."""
+        self.memo.empty()
+        self.decoder.empty()
+        for d in self.readers.decoders():
+            d.empty()
 
     def _reader(self, nid, e):
         """The reader on `nid`'s bake; a file that cannot be read is the node's to say, in its standing."""
         try:
-            return self.readers.get(e.bake, self.decoder.cache_limit)
+            r = self.readers.get(e.bake, self.decoder.cache_limit)
         except OSError as exc:
             exc.sieve_node = nid
             self.note(nid, str(exc))
             raise
+        d = getattr(r, "decoder", None)
+        if d is not None and d.on_evict is None:
+            key = e.raw_key
+            d.on_evict = lambda row, n: self.stream.emit("uncache", None, row, key, n)
+        return r
 
     def baked_series(self, nid):
         """A served series node's whole file: its tables one a row, or its float32 signal. Worker threads only."""
@@ -403,7 +398,8 @@ class Graph:
         frame. Worker threads only."""
         with self._lock:
             plan, nid, fold = self._plan, self._walk(), self._fold()
-        out = self._compute(plan, nid, row)
+        with self.demand("walk", nid):
+            out = self._compute(plan, nid, row)
         return out if fold is None or out is None else fold(out)
 
     def frame_nodes(self):
@@ -450,94 +446,114 @@ class Graph:
             e = self._plan.get(nid)
         return e is not None and e.fed
 
-    def compute(self, nid, row, raw=False):
+    def compute(self, nid, row, raw=False, demand="display"):
         """Output of `nid` at `row`, memoized; None for a node nothing reaches. Worker threads only.
         The whole recursion runs in the plan current at the call, so what lands in the memo under a
         key was computed from the graph that key describes. `raw` is the plane before the node's band,
-        what its density counts, so the axis holds while a handle moves."""
+        what its density counts, so the axis holds while a handle moves. `demand` is what the caller
+        answers, the display unless it says "bake"."""
         with self._lock:
             plan = self._plan
-        return self._compute(plan, nid, row, raw)
+        with self.demand(demand, nid):
+            return self._compute(plan, nid, row, raw)
 
-    def _emit(self, kind, nid, row, key, nbytes, ms=0.0, t=None, cpu_ms=0.0, length=None, keys=None):
-        """One Event to `on_event`, stamped here with what every event carries: its start, the
-        thread. The probe passes the times it measured; a boundary or an eviction has none and is
-        stamped now."""
-        if self.on_event is not None:
-            self.on_event(Event(nid, row, key, kind, nbytes, ms, time.perf_counter() if t is None else t,
-                                threading.current_thread().name, cpu_ms, getattr(self._probing, "serves", None), length, keys))
-
-    def progress(self, done, length):
+    def progress(self, done, length, stack=None):
         """The walk's progress, `done` rows of `length`, as an event; whoever drives the walk, the
-        worker or bench.py, says so as each row lands, and a reader takes the rate from the stream."""
-        self._emit("progress", None, done, None, 0, length=length)
-
-    def serving(self, what):
-        """What the events this thread emits from here on served, "scrub", "walk" or "bake"; the worker says
-        at the top of each loop, since only it knows, and nothing else sets it."""
-        self._probing.serves = what
-
-    @contextmanager
-    def probe(self, nid, row, key):
-        """Times the run inside and hands `on_event` one Event, its ms wall time exclusive of the
-        runs it opened in turn, so a cold row charges the decode to the video node and each tool its
-        own work. The body sets `kind` and `bytes` on the yielded
-        list, what only the call site knows: a tool's kind is "run", or "step" for one row of a
-        series tool the walk steps, since a memo hit is not a run
-        and emits nothing; the video read's is "cache", "decode" or "seek", read off the decoder's
-        counters; a body that raises emits "error", or "cancel" for Cancelled, with the time it took and
-        no bytes, so a reader tells a failed run from one that returned. Nothing when `on_event` is unset. `sync()` emits a "sync" event into the same
-        stream, a boundary with no node, row or time, and the memo and decoder cache emit "evict"
-        and "uncache" with the bytes freed. The worker wraps a series tool's run in this; `_compute`
-        wraps a frame tool's and the video node's read."""
-        if self.on_event is None:
-            yield [None, 0]
+        worker or bench.py, says so as each row lands, and a reader takes the rate from the stream.
+        Its facts are what emits no event of its own: "hits" and "fold_hits", per node the results and
+        the folds the memo held for this thread's lane since the lane's last progress, and "memo" and
+        "caches", each store's bytes, limit, hits, misses and discards now, a cache under the key its
+        discards carry, and "stack", the bytes the lane's walk holds and their limit, when `stack` gives
+        the two. A lane that reports no progress keeps its count."""
+        if self.stream.on_event is None:
             return
-        stack = self._probing.__dict__.setdefault("stack", [])
-        stack.append([0.0, 0.0])             # wall and CPU the runs opened inside this one took
-        ev = ["run", 0]
-        t, c = time.perf_counter(), time.thread_time()
-        try:
-            yield ev
-        except Cancelled:
-            ev[0] = "cancel"                 # the graph moved on under the run; not the tool's fault
-            raise
-        except BaseException:
-            ev[0] = "error"                  # the body raised: a tool failed, or the read ran off the stream's end
-            raise
-        finally:
-            total, cpu = time.perf_counter() - t, time.thread_time() - c
-            inner, inner_cpu = stack.pop()
-            if stack:
-                stack[-1][0] += total
-                stack[-1][1] += cpu
-            self._emit(ev[0], nid, row, key, ev[1], (total - inner) * 1000, t, (cpu - inner_cpu) * 1000)
+        hits = self._hits.pop(self.stream.lane, {})
+        with self._lock:
+            plan = self._plan
+        m = self.memo
+        caches = {self._base: self.decoder}
+        for e in plan.values():
+            if e.bake is not None and (d := getattr(self.readers.held(e.bake.key), "decoder", None)) is not None:
+                caches[e.raw_key] = d
+        self.stream.emit("progress", None, done, None, 0, length=length, facts={
+            **({} if stack is None else {"stack": {"bytes": stack[0], "limit": stack[1]}}),
+            "hits": {nid: h for nid, (h, _) in hits.items() if h}, "fold_hits": {nid: f for nid, (_, f) in hits.items() if f},
+            "memo": {"bytes": m.bytes, "limit": m.limit, "hits": m.hits, "misses": m.misses, "discards": m.evictions},
+            "caches": {k: {"bytes": d.cache_bytes, "limit": getattr(d, "cache_limit", None), "hits": d.cache_hits,
+                           "misses": d.reads - d.cache_hits, "discards": getattr(d, "evictions", 0)} for k, d in caches.items()}})
 
-    def _compute(self, plan, nid, row, raw=False):
+    def began(self, start, length):
+        """A walk of this thread's lane began, over `length` rows from `start`: a "begin" event with
+        the range's first row as its row. Whoever drives the walk says so as it starts or starts over,
+        so a reader tells the walk's first row from what the walk before ran after its last. The
+        lane's hits not yet reported were the walk before's and are dropped."""
+        self._hits.pop(self.stream.lane, None)
+        self.stream.emit("begin", None, start, None, 0, length=length)
+
+    def tally(self):
+        """What the stores have been asked for and did not hold, as two counts off the counters they
+        keep: the memo's misses with the plate decoder's reads its cache did not answer, and the same
+        reads of every served reader open now. Taken before and after a computation, either having
+        moved says which the computation was; a miss from another thread between the two is counted
+        with it, the counters being every thread's, and the second falls when a sync retires a reader."""
+        with self._lock:
+            plan = self._plan
+        d = self.decoder
+        served = 0
+        for e in plan.values():
+            if e.bake is not None and (r := getattr(self.readers.held(e.bake.key), "decoder", None)) is not None:
+                served += r.reads - r.cache_hits
+        return self.memo.misses + d.reads - d.cache_hits, served
+
+    def _hit(self, nid, fold):
+        self._hits.setdefault(self.stream.lane, {}).setdefault(nid, [0, 0])[fold] += 1
+
+    @property
+    def on_event(self):
+        """The stream's one consumer, the Emitter's; set here or there, it is one."""
+        return self.stream.on_event
+
+    @on_event.setter
+    def on_event(self, consumer):
+        self.stream.on_event = consumer
+
+    def serving(self, what, lane=None):
+        """Emitter.serving, said of this graph's stream by the worker."""
+        self.stream.serving(what, lane)
+
+    def demand(self, what, nid):
+        """Emitter.demand on this graph's stream."""
+        return self.stream.demand(what, nid)
+
+    def probe(self, nid, row, key, reader=None):
+        """Emitter.probe on this graph's stream, a body raising Cancelled being its "cancel"."""
+        return self.stream.probe(nid, row, key, reader, cancel=Cancelled)
+
+    def _compute(self, plan, nid, row, raw=False, reader=None):
         e = plan.get(nid)
         if e is None or e.kind in ("series", "selector") or not e.fed:
             return None
         if e.kind == "video":
             d = self.decoder
-            with self.probe(nid, row, e.raw_key) as ev:
+            with self.probe(nid, row, e.raw_key, reader) as ev:
                 decodes, seeks = d.decodes, d.seeks
                 v = d.read(row)
                 ev[0] = "seek" if d.seeks != seeks else "decode" if d.decodes != decodes else "cache"
-                ev[1] = v.nbytes
+                ev[1], ev[2] = v.nbytes, v.shape
             return v
         if e.bake is not None:
             r = self._reader(nid, e)
             d = getattr(r, "decoder", None)
-            with self.probe(nid, row, e.raw_key) as ev:
+            with self.probe(nid, row, e.raw_key, reader) as ev:
                 decodes, seeks = (d.decodes, d.seeks) if d else (0, 0)
                 v = r.read(row)
                 ev[0] = "read" if d is None else "seek" if d.seeks != seeks else "decode" if d.decodes != decodes else "cache"
-                ev[1] = nbytes(v)
+                ev[1], ev[2] = nbytes(v), getattr(v, "shape", None)
             return v if raw or e.band is None else banded(v, e.band)
         mk = (e.raw_key, None if e.static else row)
         v = self.memo.get(mk)
         if v is None:
-            with self.probe(nid, row, e.raw_key) as ev:
+            with self.probe(nid, row, e.raw_key, reader) as ev:
                 try:
                     v = e.tool.run(Frames(self, plan, nid, e.srcs, e.src_key, e.types), row, e.params)
                 except Cancelled:
@@ -547,8 +563,10 @@ class Graph:
                         exc.sieve_node = nid
                         self.note(nid, f"raised at row {row}: {type(exc).__name__}: {exc}")
                     raise
-                ev[1] = Memo._size(v)
+                ev[1], ev[2] = Memo._size(v), getattr(v, "shape", None)
             self.memo.put(mk, v, owner=e.raw_key if e.static else None)
+        elif self.stream.on_event is not None:
+            self._hit(nid, 0)
         return v if raw or e.band is None else banded(v, e.band)
 
     def density(self, nid, row):
@@ -562,13 +580,16 @@ class Graph:
         k = (_key(e.raw_key, "fold"), None if e.static else row)
         v = self.memo.get(k)
         if v is None:
-            plane = self._compute(plan, nid, row, raw=True)
-            if not density.is_plane(plane):
-                return None
-            with self.probe(nid, row, k[0]) as ev:
-                v = density.fold(plane)
-                ev[0], ev[1] = "fold", v.nbytes
+            with self.demand("fold", nid):
+                plane = self._compute(plan, nid, row, raw=True)
+                if not density.is_plane(plane):
+                    return None
+                with self.probe(nid, row, k[0]) as ev:
+                    v = density.fold(plane)
+                    ev[0], ev[1], ev[2] = "fold", v.nbytes, plane.shape
             self.memo.put(k, v, owner=e.raw_key if e.static else None)
+        elif self.stream.on_event is not None:
+            self._hit(nid, 1)
         return v
 
     def peek(self, row, nid=None):
@@ -587,53 +608,3 @@ class Graph:
         return v if v is None or e.band is None else banded(v, e.band)
 
 
-class Stats:
-    """The probe's first consumer. Per node, the last figure and a running mean over the window the
-    decoder's means use, blind to key, kind and bytes; beside them the chain nodes' last figures
-    summed, a whole run's or one step's,
-    the walk's rate in rows per second, read off the progress events, and the decoder's and memo's
-    own counters. Making one installs it as the graph's `on_event`, passing each event on to whatever
-    was there before, so consumers chain in any order; `event` is its one entry point. `snapshot()`
-    is one plain dict, the only thing a reader gets: the window and bench.py read the same and
-    neither reaches into the runtime."""
-
-    def __init__(self, graph):
-        self.graph = graph
-        self._lock = threading.Lock()
-        self._nodes = {}                    # nid -> [last ms, mean ms, runs]
-        self._walk = deque(maxlen=WINDOW)   # (time, rows done) as the walk reports them
-        self._prev = graph.on_event
-        graph.on_event = self.event
-
-    def event(self, ev):
-        if self._prev is not None:
-            self._prev(ev)
-        if ev.kind in ("sync", "evict", "uncache", "error", "fold"):
-            return                          # the means are the tool's; a fold is not
-        with self._lock:
-            if ev.kind == "progress":
-                if self._walk and ev.row < self._walk[-1][1]:
-                    self._walk.clear()      # a new walk; the rate is this one's
-                self._walk.append((ev.t, ev.row))
-                return
-            e = self._nodes.setdefault(ev.node, [0.0, None, 0])
-            e[2] += 1
-            e[0], e[1] = ev.ms, _mean(e[1], ev.ms, e[2])
-
-    def snapshot(self):
-        g, d, m = self.graph, self.graph.decoder, self.graph.memo
-        with self._lock:
-            nodes = {nid: {"last": last, "mean": mean, "n": n} for nid, (last, mean, n) in self._nodes.items()}
-            rate = None
-            if len(self._walk) > 1 and self._walk[-1][0] > self._walk[0][0]:
-                (t0, r0), (t1, r1) = self._walk[0], self._walk[-1]
-                rate = (r1 - r0) / (t1 - t0)
-        chain = [nid for nid in g.chain if nid in nodes]
-        return {
-            "nodes": nodes,
-            "series_ms": sum(nodes[nid]["last"] for nid in chain) if chain else None,
-            "walk_rows_s": rate, "fps": g.fps,
-            "step_ms": d.step_ms, "seek_ms": d.seek_ms, "decodes": d.decodes, "seeks": d.seeks,
-            "memo_mb": m.bytes / 2**20, "memo_hit": _rate(m.hits, m.misses), "evictions": m.evictions,
-            "cache_mb": d.cache_bytes / 2**20, "cache_hit": _rate(d.cache_hits, d.reads - d.cache_hits),
-        }

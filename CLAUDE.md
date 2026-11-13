@@ -20,6 +20,16 @@
 - Moving or refactoring code keeps its comments unless the change makes one
   obsolete.
 
+## Tests
+- `tests/` holds seams and invariants: what a later change elsewhere could break without anyone
+  looking. A feature is not pinned to a test for having been built.
+- That a behaviour was seen working once is shown by a one-off script under
+  `docs/findings/experiments/` or a simulation's exit, not by a new test.
+- A spec's `Check:` is a one-off by the same rule and a test only for a seam or an invariant; a
+  check already ticked as a test stands.
+- Tests built of wall time carry the `simulation` marker and stay out of the default run;
+  `pyproject.toml` holds the marker.
+
 ## Running
 - Run Python and pytest through `.venv/Scripts/python.exe`; the anaconda `python` on PATH has no PySide6.
 - Files are LF. A script that rewrites one must open it with `newline="\n"` (or write bytes); Python's

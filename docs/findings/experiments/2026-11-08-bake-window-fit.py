@@ -1,4 +1,7 @@
-"""Experiment behind docs/findings/2026-11-08-bake-window-fit.md: the window on the crossings clip with
+"""Left as a9d6989b added it, over the tree its finding names, 5b96276e, and run from there: the monitor
+it imports, sieve_player/dev/monitor.py, is gone from the tree since docs/spec/monitor.md.
+
+Experiment behind docs/findings/2026-11-08-bake-window-fit.md: the window on the crossings clip with
 rescale live, then baked, read off the monitor.
 
     .venv\\Scripts\\python -X utf8 docs\\findings\\experiments\\2026-11-08-bake-window-fit.py [document] [cache GB] [memo GB] [rows]

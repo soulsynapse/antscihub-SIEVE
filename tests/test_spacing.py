@@ -1,8 +1,8 @@
-"""spacing: nearest-other distance per row by mean, median or min, or pairs within r; under two blobs reads 0."""
+"""spacing: nearest-other distance per row by mean, median or min, or pairs within r, stepped as run whole; under two blobs reads 0."""
 import numpy as np
 import pytest
 
-from sieve_player.graph import Series
+from tests.stepping import hold
 from tools import blobs, spacing
 
 
@@ -16,7 +16,7 @@ ROWS = [table([(0, 0), (3, 4), (3, 0), (100, 100)]), table([(0, 0)]), table([])]
 
 
 def test_each_method_and_the_rows_under_two():
-    s = lambda m, r=0.0: spacing.run(Series(ROWS, "k", 0, 30.0), {"method": m, "r": r})["signal"].tolist()
+    s = lambda m, r=0.0: hold(spacing, ROWS, {"method": m, "r": r})["signal"].tolist()
     assert s("min") == [3.0, 0.0, 0.0] and s("median") == [3.5, 0.0, 0.0]
     assert s("mean") == pytest.approx([(3 + 4 + 3 + np.hypot(97, 96)) / 4, 0.0, 0.0])
     assert s("pairs", 5.0) == [3.0, 0.0, 0.0] and s("pairs", 4.5) == [2.0, 0.0, 0.0] and s("pairs", 200) == [6.0, 0.0, 0.0]

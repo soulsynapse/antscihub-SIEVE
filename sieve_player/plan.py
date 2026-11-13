@@ -73,6 +73,18 @@ def shared_fold(entries, heads):
     return next(iter(folds.values())) if len(folds) == 1 else None
 
 
+def facts(p, pinned):
+    """The Plan `p` as a sync event carries it, in plain values a dump can write: per node its kind,
+    whether it is fed, static and served, whether the walk steps it and the chain node that made a
+    stepping tool run whole, and the node each input reads; beside them the chain in run order, the
+    walked, shown and overlaid nodes, and `pinned`, the document's. The player's selection is the
+    stream's to add, see stream.Emitter.sync()."""
+    return {"nodes": {nid: {"kind": e.kind, "fed": e.fed, "static": e.static, "served": e.bake is not None,
+                            "steps": e.steps, "whole_by": e.whole_by, "reads": dict(e.srcs)} for nid, e in p.entries.items()},
+            "chain": list(p.chain), "walk": walked(p.entries, p.chain, p.shown), "shown": p.shown, "over": p.over,
+            "pinned": list(pinned)}
+
+
 def plan(doc, tools, base):
     """The plan for `doc` under `tools`, name to module, with `base` the video node's key. A raw
     key names what a tool computes from, so the memo holds under it; the key adds the band, which

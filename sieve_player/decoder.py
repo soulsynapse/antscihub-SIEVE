@@ -134,6 +134,7 @@ class Decoder:
         self._cap_lock = threading.Lock()       # the captures and the cursor in use
         self.decodes = self.seeks = 0
         self.reads = self.cache_hits = 0        # read() calls, and those the cache answered
+        self.evictions = 0                      # frames the cache dropped for room
         self.step_ms = self.seek_ms = None      # running means of what a step and a seek cost on this file
         self.on_evict = None                    # (row, bytes) for each frame the cache drops, after the lock
         self._inexact_said = False
@@ -187,6 +188,12 @@ class Decoder:
         with self._cache_lock:
             f = self._cache.get(row)
             return f if f is None or self._fits(f) else None
+
+    def empty(self):
+        """Drops every cached frame and tells `on_evict` of none. Any thread."""
+        with self._cache_lock:
+            self._cache.clear()
+            self._cache_bytes = 0
 
     @property
     def cache_bytes(self):
@@ -283,6 +290,7 @@ class Decoder:
                 r, old = self._cache.popitem(last=False)
                 self._cache_bytes -= old.nbytes
                 gone.append((r, old.nbytes))
+            self.evictions += len(gone)
         if self.on_evict is not None:
             for r, n in gone:
                 self.on_evict(r, n)

@@ -10,7 +10,9 @@ import pytest
 
 from sieve_player import document as D
 from sieve_player.decoder import EndOfStream
-from sieve_player.graph import Event, Graph, Stats, gated, nbytes
+from sieve_player.graph import Graph, gated, nbytes
+from sieve_player.stats import Stats
+from sieve_player.stream import Event
 from sieve_player.plan import base_key, plan
 
 
@@ -371,7 +373,8 @@ def test_an_event_is_read_by_name_and_refused_short():
     with pytest.raises(AttributeError):
         stats.event(tuple(full.values()))                           # a tuple is not an event; nothing is read by position
     stats.event(Event(**full))
-    assert stats.snapshot()["nodes"]["add"]["n"] == 1
+    stats.event(Event(**full | {"kind": "no kind of the stream's", "ms": 9.0}))
+    assert stats.snapshot()["nodes"]["add"] == {"last": 1.0, "mean": 1.0, "n": 1}     # a kind Stats does not know moves no mean
 
 
 def test_events_carry_start_thread_and_cpu_so_a_reader_sees_overlap_and_waiting():
@@ -447,6 +450,14 @@ def test_stats_counts_everything_over_a_short_walk(tmp_path):
     assert s["walk_rows_s"] > 0 and s["step_ms"] > 0 and s["seek_ms"] > 0 and s["decodes"] and s["seeks"]
     assert s["memo_mb"] > 0 and s["cache_mb"] > 0 and 0 < s["memo_hit"] < 1 and 0 < s["cache_hit"] < 1
     assert s["series_ms"] is None and s["evictions"] > 0    # no chain in this document
+    g.compute("add", 0)                       # neither store holds row 0 any longer
+    from sieve_player.ledger import Ledger
+    led = Ledger()
+    for ev in events:
+        led.event(ev)
+    again, seeks = ({k: sum(getattr(b, name).get(k, 0) for b in led.view().buckets) for k in ("memo", "video", g.key("video"))}
+                    for name in ("recomputed", "seeks"))
+    assert again["memo"] == 2 and again[g.key("video")] == 1 and seeks["video"] == sum(ev.kind == "seek" for ev in events)
     g.decoder.close()
 
 
@@ -462,6 +473,60 @@ def test_a_density_is_folded_once_under_the_node_and_memoized_beside_its_plane()
     seen.clear()
     assert (g.density("gray", 3) == counts).all() and seen == []           # held: no run, no fold
     assert g.density("video", 3) is None and g.density("nowhere", 3) is None and seen == []
+
+
+def test_events_name_the_demand_and_the_reader_and_memo_hits_leave_on_progress():
+    """video -> gray -> {add, same}, add walked, and side reading the video off the walked path."""
+    side = tool("side", "bgr", "gray", lambda f, p: f[..., 1])
+    doc = fan_out()
+    doc.add_node("side", (0, 400))
+    doc.connect("video", "side")
+    g = Graph(doc, Dec(), {**TOOLS, "side": side})
+    events = []
+    g.on_event = events.append
+    for _ in range(2):
+        for r in range(3):
+            g.walk_row(r)
+            g.compute("same", r)
+            g.density("side", r)
+            g.progress(r + 1, 3)
+            assert events[-1].facts["memo"]["bytes"] == g.memo.bytes
+    said = {(ev.node, ev.kind, ev.reader): (ev.demand, ev.asked) for ev in events if ev.row == 0 and ev.node}
+    assert said == {("add", "run", None): ("walk", "add"), ("gray", "run", "add"): ("walk", "add"),     # gray names the reader that reached it first
+                    ("video", "decode", "gray"): ("walk", "add"), ("same", "run", None): ("display", "same"),
+                    ("side", "run", None): ("fold", "side"), ("video", "decode", "side"): ("fold", "side"),
+                    ("side", "fold", None): ("fold", "side")}
+    first, second = ([ev.facts for ev in events if ev.kind == "progress"][i:i + 3] for i in (0, 3))
+    assert [(f["hits"], f["fold_hits"]) for f in first] == [({"gray": 1}, {})] * 3                      # same read gray, which add had run
+    assert [(f["hits"], f["fold_hits"]) for f in second] == [({"add": 1, "same": 1}, {"side": 1})] * 3
+    assert second[-1]["memo"]["hits"] == g.memo.hits and second[-1]["caches"][g.key("video")]["misses"] == 0   # the fake counts no read
+    g.compute("same", 0)
+    g.began(0, 3)                             # a hit before a walk begins is not the walk's
+    g.progress(1, 3)
+    assert events[-1].facts["hits"] == {}
+
+
+def test_a_sync_event_carries_the_plan_it_began():
+    from sieve_player.store import Sidecar
+    doc = fan_out()
+    D.land(doc.node("add"), Sidecar("k", "gray", "doc", "add", [0, 9], 1, 30.0, 30.0, [4, 6], "lossless").bake(10))
+    doc.pin("same", TOOLS)
+    g = Graph(doc, Dec(), TOOLS)
+    events = []
+    g.on_event = events.append
+    g.sync()
+    f = events[-1].facts
+    reach, todo = set(), [f["walk"]]
+    while todo:
+        n = todo.pop()
+        if n is not None and n not in reach:
+            reach.add(n)
+            todo += f["nodes"][n]["reads"].values()
+    assert f["nodes"]["add"]["served"] and f["nodes"]["gray"]["fed"] and not f["nodes"]["gray"]["served"]
+    assert reach == {"add"} and f["nodes"]["same"]["reads"] == {"in": "gray"}        # gray is fed, and nothing the walk reaches reads it
+    assert (f["walk"], f["shown"], f["over"], f["pinned"], f["chain"]) == ("add", "add", None, ["same"], [])
+    assert f["nodes"]["video"] == {"kind": "video", "fed": True, "static": False, "served": False, "steps": False,
+                                   "whole_by": None, "reads": {"in": None}}
 
 
 def test_the_clip_walk_runs_behind_the_window_and_a_frame_change_drops_it():
@@ -516,7 +581,8 @@ def test_the_clip_walk_runs_behind_the_window_and_a_frame_change_drops_it():
 def test_the_window_and_the_clip_are_one_walk_over_two_ranges():
     """Under the probe the clip walk runs each node as the window walk does: a frame node once per
     row the memo does not hold, the chain at each cadence row and at the range's end; the densities
-    are the window's alone."""
+    are the window's alone, each range's events and progress are in its own lane, and each range's
+    beginning is an event."""
     from PySide6.QtWidgets import QApplication
     from sieve_player.worker import Worker
     QApplication.instance() or QApplication([])
@@ -543,7 +609,18 @@ def test_the_window_and_the_clip_are_one_walk_over_two_ranges():
     assert [r for n, r in runs if n == "gray"] == list(range(10))              # the window's six, then the clip's four the memo lacks
     assert [r for n, r in runs if n == "head"] == [2, 5, 2, 5, 8, 9]
     assert [ev.row for ev in events if ev.kind == "fold"] == list(range(6))
-    assert [(ev.row, ev.length) for ev in events if ev.kind == "progress"] == [(i, 6) for i in range(1, 7)]
+    assert {ev.lane for ev in events} == {"window", "clip"}                    # each range's rows are its own lane
+    for lane, n in (("window", 6), ("clip", 10)):
+        assert [(ev.row, ev.length) for ev in events if ev.kind == "progress" and ev.lane == lane] == [(i, n) for i in range(1, n + 1)]
+    assert {ev.lane for ev in events if ev.kind == "fold" or ev.node == "gray" and ev.row < 6} == {"window"}
+    assert {ev.lane for ev in events if ev.node == "gray" and ev.row >= 6} == {"clip"}
+    assert [(ev.lane, ev.row, ev.length) for ev in events if ev.kind == "begin"] == [("window", 0, 6), ("clip", 0, 10)]
+    from sieve_player.ledger import Ledger
+    led = Ledger()
+    for ev in events:
+        led.event(ev)
+    window, clip = led.view().walks       # head's run after a range's last row is that range's, by the begin between them
+    assert [sum(r.count for r in walk.nodes["head"].runs.values()) for walk in (window, clip)] == [2, 4]
 
 
 def test_a_tool_raising_indexerror_fails_the_walk_and_only_the_stream_end_closes_it():

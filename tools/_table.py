@@ -33,10 +33,15 @@ def plane(table):
     return (table.dtype.metadata or {}).get("plane")
 
 
+def is_table(row):
+    """Whether a series' row is a table; False for a signal's value or a folded row."""
+    return getattr(row, "dtype", None) is not None and row.dtype.names is not None
+
+
 def is_tables(data):
     """Whether a series' rows are tables, read off the first; False for an empty series or a signal.
     A Series carries no type, so a tool over both reads the shape."""
-    return len(data) > 0 and getattr(data[0], "dtype", None) is not None and data[0].dtype.names is not None
+    return len(data) > 0 and is_table(data[0])
 
 
 def with_column(table, name, values):

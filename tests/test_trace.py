@@ -4,8 +4,10 @@ import time
 from collections import Counter
 
 from sieve_player import document as D
-from sieve_player.graph import Graph, Stats
-from sieve_player.trace import Dump, read_dump, to_trace, totals
+from sieve_player.graph import Graph
+from sieve_player.stats import Stats
+from sieve_player.stream import Event
+from sieve_player.trace import FIELDS, Dump, read_dump, to_trace, totals
 from tests.test_graph import TOOLS, Dec, add, gray
 
 
@@ -74,6 +76,8 @@ def test_the_trace_has_a_timestamp_duration_and_thread_on_every_event(tmp_path):
     first = {ev.node: ev for ev in events if ev.row == 0 and ev.kind in ("run", "decode")}
     assert total[id(first["add"])] >= first["add"].ms + total[id(first["gray"])]           # a run's total holds its reads
     assert total[id(first["video"])] == first["video"].ms                                 # a read opens nothing
+    read, cancelled = (Event(**{f: None for f in FIELDS} | {"kind": k, "ms": 1.0, "t": t, "thread": "w"}) for k, t in (("read", 1.0), ("cancel", 0.0)))
+    assert totals([read, cancelled])[id(cancelled)] == 2.0                                # a bake's row read and a cancelled run are spans too
 
 
 def test_two_threads_and_either_install_order_write_one_whole_dump(tmp_path):
@@ -114,7 +118,7 @@ def test_the_window_samples_how_late_its_timer_fired_while_a_dump_is_attached(tm
     app = QApplication.instance() or QApplication([])
     g = Graph(D.from_tools([gray, add]), Dec(), TOOLS)
     dump = Dump(g, tmp_path / "d.jsonl")
-    late = Lateness(dump, interval_ms=20)
+    late = Lateness(dump.sample, interval_ms=20)
     end = time.perf_counter() + 0.1
     while time.perf_counter() < end:
         app.processEvents()
@@ -127,3 +131,34 @@ def test_the_window_samples_how_late_its_timer_fired_while_a_dump_is_attached(tm
     _, _, samples = read_dump(dump.path)
     lates = [s["value"] for s in samples if s["sample"] == "late"]
     assert len(lates) > 3 and max(lates) >= 230 and min(lates) < 230
+
+
+def test_the_window_attaches_a_ledger_that_holds_the_gui_threads_slots_and_paints(tmp_path):
+    import threading
+
+    import numpy as np
+    from tests.test_plot import PlayerWindow, QApplication, clip, series, settle
+    from tools import gray as gray_tool
+    QApplication.instance() or QApplication([])
+    head = series("head", lambda v: np.arange(len(v), dtype=np.float64))
+    D.save(D.from_tools([gray_tool, head], clip(tmp_path / "v.avi")), tmp_path / "doc.json")
+    win = PlayerWindow(str(tmp_path / "doc.json"), "t", [gray_tool, head])
+    win.resize(900, 600)
+    win.show()
+    settle(win, "head")
+    events, ledger = [], win.graph.on_event
+    win.graph.on_event = lambda ev: (events.append(ev), ledger(ev))
+    win.worker.invalidate()                                     # the window walked again, every signal of a walk fired under the tap
+    win.results = {}
+    settle(win, "head")
+    win.plot.grab()
+    QApplication.processEvents()
+    turns = {(ev.kind, ev.node) for ev in events if ev.kind in ("slot", "paint")}
+    assert {("slot", "walked"), ("slot", "seriesReady"), ("slot", "densityReady"), ("paint", "plot")} <= turns
+    assert {ev.thread for ev in events if ev.kind in ("slot", "paint")} == {threading.main_thread().name}
+    assert threading.main_thread().name not in {ev.thread for ev in events if ev.kind in ("run", "decode", "progress")}
+    view = win.ledger.view()
+    assert {"slot walked", "slot seriesReady", "paint plot"} <= {name for b in view.buckets for name in b.turns}
+    assert view.walks[-1].lane == "window" and view.walks[-1].plan["walk"] == "gray"
+    win.close()
+    assert win.ledger is None

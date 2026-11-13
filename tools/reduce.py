@@ -22,10 +22,9 @@ def fold(frame):
     return np.array([f.sum(dtype=np.float64), f.max(), np.count_nonzero(f), f.size], np.float64)
 
 
-def run(series, params):
-    d = np.asarray(series.data, np.float64).reshape(len(series.data), 4)
-    total, top, count, n = d.T
-    m = params["method"]
+def reduced(folded, m):
+    """The method `m` over rows folded to (T, 4), float64."""
+    total, top, count, n = folded.T
     if m == "mean":
         s = total / np.maximum(n, 1)
     elif m == "sum":
@@ -38,7 +37,17 @@ def run(series, params):
         s = count / np.maximum(n, 1)
     else:
         raise ValueError(f"reduce: no method {m!r}; one of {METHODS}")
-    return {"signal": np.asarray(s, np.float32)}
+    return s
+
+
+def run(series, params):
+    d = np.asarray(series.data, np.float64).reshape(len(series.data), 4)
+    return {"signal": np.asarray(reduced(d, params["method"]), np.float32)}
+
+
+def step(state, row, i, params):
+    """No state: a row's signal is its own fold's."""
+    return None, {"signal": np.float32(reduced(np.asarray(row, np.float64).reshape(1, 4), params["method"])[0])}
 
 
 def settings(parent=None):

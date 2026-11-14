@@ -12,7 +12,7 @@ from sieve_player import document as D
 from sieve_player.decoder import EndOfStream
 from sieve_player.graph import Graph, gated, nbytes
 from sieve_player.stats import Stats
-from sieve_player.stream import Event
+from sieve_player.stream import NODE_FACTS, PLAN_FACTS, Event
 from sieve_player.plan import base_key, plan
 
 
@@ -527,6 +527,7 @@ def test_a_sync_event_carries_the_plan_it_began():
     assert (f["walk"], f["shown"], f["over"], f["pinned"], f["chain"]) == ("add", "add", None, ["same"], [])
     assert f["nodes"]["video"] == {"kind": "video", "fed": True, "static": False, "served": False, "steps": False,
                                    "whole_by": None, "reads": {"in": None}}
+    assert set(f) == set(PLAN_FACTS) and all(set(n) == set(NODE_FACTS) for n in f["nodes"].values())    # what the ledger takes a sync by
 
 
 def test_the_clip_walk_runs_behind_the_window_and_a_frame_change_drops_it():

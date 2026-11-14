@@ -57,6 +57,10 @@ def test_a_dump_replays_into_the_ledger_the_live_one_was(tmp_path):
     save(seen, tmp_path / "history.json", document=doc.to_dict())      # the hand-over for a slowdown of no class: history, plans, document
     back, more = saved(tmp_path / "history.json")
     assert back.view() == seen and D.Document.from_dict(more["document"]).node("add").params["k"] == 2
+    short = Ledger()
+    short.event(event("sync", 0.0, facts={k: v for k, v in first.plan.items() if k != "pinned"}))
+    with pytest.raises(ValueError, match="a sync's facts.*pinned"):      # a fact gone from a sync fails where the ledger takes it, not where one is read
+        short.view()
 
 
 def test_a_walk_says_how_cold_it_was_and_what_a_store_made_it_compute_again():
@@ -99,10 +103,11 @@ def test_a_span_is_spread_over_its_buckets_and_a_cost_keeps_its_place_along_the_
     led.event(event("decode", 2.05, 20.0, "video", reader="outer"))
     led.event(event("run", 2.0, 80.0, "outer"))                # 100 ms in all, the decode inside it from 50 to 70
     led.event(event("fold", 2.2, 100.0, "outer"))              # after the run and inside nothing: its own from where it began
+    led.event(event("monitor", 2.3, 10.0, "outer"))            # a reader's own work is no node's, whatever it is named
     v = led.view()
     assert [b.ms.get("w", {}).get("slow") for b in v.buckets[:4]] == [pytest.approx(250.0)] * 3 + [None] and v.first == 4
     assert v.buckets[4].ms["w"] == {"outer": pytest.approx(80.0 + 50.0), "video": pytest.approx(20.0)}
-    assert v.buckets[5].ms["w"] == {"outer": pytest.approx(50.0)}
+    assert v.buckets[5].ms["w"] == {"outer": pytest.approx(50.0)} and v.buckets[5].own == {"w": {"monitor outer": pytest.approx(10.0)}}
     led.event(event("run", 100.0, 3100.0, "long"))             # thirteen buckets touched
     assert len(led.view().buckets) == 8 and led.view().first == 405 and len(v.buckets) == 6     # the bound; the view held is as it was
 

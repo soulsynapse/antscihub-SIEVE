@@ -21,6 +21,9 @@ INSTANTS = (SYNC, WATCH, EVICT, UNCACHE, BEGIN, PROGRESS)               # no dur
 SPANS = (*NODES, *OWN, *TURNS)  # the kinds with a duration
 KINDS = (*SPANS, *INSTANTS)     # every value of Event.kind; a reader takes one by membership in a set drawn from these
 
+PLAN_FACTS = ("nodes", "chain", "walk", "shown", "over", "pinned", "selected")      # a sync's facts: plan.facts() and, by Emitter.sync, the selection
+NODE_FACTS = ("kind", "fed", "static", "served", "steps", "whole_by", "reads")      # each node's under its "nodes"
+
 
 @dataclass(frozen=True, slots=True)
 class Event:

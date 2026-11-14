@@ -189,8 +189,8 @@ class Bands(Track):
 
 class Stack(Bands):
     """Where the worker's time went: each node's exclusive ms from the bottom in walk order, what
-    `nodes` does not hold after them, the monitor's own among it, then unprobed; what is left empty
-    the worker spent idle."""
+    `nodes` does not hold after them, a reader's own work on the thread, then unprobed; what is
+    left empty the worker spent idle."""
     name = "worker"
     stretch = 4
     HEAD = 16           # px over the columns for the walks, each a segment from its beginning to its last row
@@ -233,7 +233,8 @@ class Stack(Bands):
     def parts(self, b, nodes):
         ms = b.ms.get(THREAD, {})
         return [*((n, ms[n], c) for n, c in nodes.items() if n in ms),
-                *((n, v, MINE if n.split()[0] in stream.OWN else type_color(None)) for n, v in ms.items() if n not in nodes),
+                *((n, v, type_color(None)) for n, v in ms.items() if n not in nodes),
+                *((n, v, MINE) for n, v in b.own.get(THREAD, {}).items()),
                 ("unprobed", b.unprobed, OTHER)]
 
 
@@ -245,8 +246,8 @@ class Turns(Bands):
     stretch = 2
 
     def parts(self, b, nodes):
-        parts = [(f"{n} on {t}", v, MINE if n.split()[0] in stream.OWN else nodes.get(n, type_color(None)))
-                 for t, ms in b.ms.items() if t != THREAD for n, v in ms.items()]
+        parts = [(f"{n} on {t}", v, colour or nodes.get(n, type_color(None)))
+                 for by, colour in ((b.ms, None), (b.own, MINE)) for t, ms in by.items() if t != THREAD for n, v in ms.items()]
         return parts + [(name, v, MINE if name.endswith(f" {MONITOR}") else SLOT if name.startswith(stream.SLOT) else PAINT)
                         for name, v in sorted(b.turns.items())]
 

@@ -13,7 +13,7 @@ from sieve_player.graph import Graph
 from sieve_player.ledger import Bucket, Ledger, Node, Total, Under, View, Walk
 from sieve_player.report import report, text
 from tests.test_graph import TOOLS, Dec, gray, tool
-from tests.test_ledger import walk
+from tests.test_ledger import event, walk
 
 PLAN = {"nodes": {}, "chain": [], "walk": "b", "shown": "b", "over": None, "pinned": []}
 needs_ffmpeg = pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="a bake's clip writer runs ffmpeg from PATH")
@@ -100,7 +100,7 @@ def test_each_class_reads_off_a_view_built_by_hand():
 
 def test_the_log_holds_one_entry_a_class_and_subject_counted_cleared_and_ordered():
     walks, judged = [rec(float(i), **SOUGHT) for i in range(10)], []
-    log = Log({"seeks": lambda view, walks: (judged.append(len(walks)), seeks(view, walks))[1]})
+    log = Log({"seeks": lambda view, walks, baselines: (judged.append(len(walks)), seeks(view, walks))[1]})
     for _ in range(2):      # a view read again counts no walk twice
         made = log.read(View(0.25, 0, [], walks))
     (e,) = log.ordered()
@@ -136,6 +136,32 @@ def test_the_log_holds_one_entry_a_class_and_subject_counted_cleared_and_ordered
     five = rec(keys={"video": "kv"}, a={("run", "fold", "a"): [8, 20.0, 0]}, **SOUGHT, **GROWN)
     five.recomputed, five.recomputed_ms = {"memo": 8, "kv": 4}, {"memo": 4.0, "kv": 2.0}
     assert list(found(five)) == [("unread", "a"), ("grows", "c"), ("seeks", "video"), ("thrash", "memo"), ("thrash", "video")]     # by cost
+
+
+@pytest.mark.parametrize("kept", [2, 3])
+def test_the_log_reads_the_same_however_few_walks_the_ledger_keeps(kept):
+    """One stream into a ledger that keeps every walk and one that keeps `kept`, each read by its
+    own Log after every event: the entries are equal throughout."""
+    def told(walks):
+        t = 0.0
+        for lane, key, ms in walks:
+            yield event("sync", t, keys={"b": key}, facts=PLAN | {"selected": None})
+            yield event("begin", t, row=0, length=8, lane=lane)
+            for r in range(8):
+                yield event("run", t, ms, "b", r, key=key, demand="walk", asked="b", lane=lane)
+                t += ms / 1000
+                yield event("progress", t, row=r + 1, length=8, lane=lane, facts={})
+            t += 1.0
+
+    walks = [("window", "k", 1.0), ("window", "k", 4.0), ("clip", "k", 1.0), ("window", "k", 4.0), ("clip", "k", 4.0),
+             ("clip", "k", 1.0), ("window", "k2", 4.0), ("clip", "k", 4.0), ("window", "k2", 1.0), ("window", "k", 4.0)]
+    (all_, some), (whole, short) = (Ledger(), Ledger(walks=kept)), (Log(), Log())
+    for i, ev in enumerate(told(walks)):
+        for led, log in ((all_, whole), (some, short)):
+            led.event(ev)
+            log.read(led.view())
+        assert whole.entries == short.entries, (i, ev.kind, ev.lane, ev.row)
+    assert {k: (e.count, e.holds) for k, e in whole.entries.items()} == {("slower", "b"): (4, True)}     # both lanes' slow walks, and the clip's last still slow
 
 
 def test_a_changed_param_between_two_walks_is_compared_with_nothing():

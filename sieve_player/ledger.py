@@ -16,7 +16,8 @@ from contextlib import nullcontext
 from dataclasses import dataclass, field, fields, replace
 from typing import NamedTuple
 
-from .stream import BEGIN, CACHE, CANCEL, DECODE, EVICT, FOLD, NODES, OWN, PROGRESS, READ, RUN, SEEK, STEP, SYNC, TURNS, UNCACHE, WATCH
+from .stream import (BEGIN, CACHE, CANCEL, DECODE, EVICT, FOLD, NODE_FACTS, NODES, OWN, PLAN_FACTS, PROGRESS, READ, RUN, SEEK, STEP, SYNC, TURNS,
+                     UNCACHE, WATCH)
 from .trace import read_dump
 
 PARTS = 8           # the pieces a walk's range is cut into for a node's cost along it
@@ -34,7 +35,7 @@ _READS = _FILE | {CACHE}                # the kinds whose wall above CPU is a de
 class Bucket:
     """One slice of wall time. A view's buckets are the ledger's own until it next writes one, which
     it copies first, so a reader holds them and never writes them."""
-    ms: dict = field(default_factory=dict)          # thread -> {node: ms}, exclusive of the runs a run opened; a consumer's own under "dump" or "monitor"
+    ms: dict = field(default_factory=dict)          # thread -> {node: ms}, exclusive of the runs a run opened
     rows: dict = field(default_factory=dict)        # lane -> rows finished
     unprobed: float = 0.0                           # ms between a lane's rows that no span covers
     stores: dict = field(default_factory=dict)      # "memo", a cache's key or "<lane> stack" -> (bytes held, limit) at the bucket's last progress
@@ -46,11 +47,13 @@ class Bucket:
     read_wait: float = 0.0                          # the same of the read kinds
     machine: dict = field(default_factory=dict)     # the last "machine" sample in it, as machine.Machine.read gives one; {} with none
     calls: dict = field(default_factory=dict)       # a key of `turns` -> the spans of it that began in the bucket
+    own: dict = field(default_factory=dict)         # thread -> {name: ms}: a reader's own work there, the dump's writer and the ledger's bookkeeping, apart from `ms`
     shared: bool = field(default=False, compare=False, repr=False)
 
     def copy(self):
         return Bucket({t: dict(d) for t, d in self.ms.items()}, dict(self.rows), self.unprobed, dict(self.stores),
-                      dict(self.recomputed), dict(self.seeks), self.late, dict(self.turns), self.wait, self.read_wait, self.machine, dict(self.calls))
+                      dict(self.recomputed), dict(self.seeks), self.late, dict(self.turns), self.wait, self.read_wait, self.machine, dict(self.calls),
+                      {t: dict(d) for t, d in self.own.items()})
 
 
 _EMPTY = Bucket(shared=True)
@@ -217,7 +220,8 @@ class Ledger:
             elif item.kind == BEGIN:
                 self._begin(item, item.row)
             elif item.kind == SYNC:
-                self._plan, self._keys, self._selected = item.facts, item.keys, (item.facts or {}).get("selected")
+                self._plan, self._keys = _plan(item.facts, "a sync's facts"), item.keys
+                self._selected = (item.facts or {}).get("selected")
                 for lane in self._lanes.values():
                     lane.synced = True
             elif item.kind == WATCH:
@@ -238,7 +242,7 @@ class Ledger:
             elif item.kind in OWN:      # in the buckets under its thread and accounted for there, and in no walk
                 name = item.kind if item.node in (None, item.kind) else f"{item.kind} {item.node}"
                 for bucket, share in self._over(item.t, item.t + item.ms / 1000):
-                    ms = bucket.ms.setdefault(item.thread, {})
+                    ms = bucket.own.setdefault(item.thread, {})
                     ms[name] = ms.get(name, 0.0) + item.ms * share
                 self._spent[item.thread] = self._spent.get(item.thread, 0.0) + item.ms
             elif item.kind in NODES:
@@ -405,10 +409,11 @@ def coarsen(view, k):
         if b is _EMPTY:
             continue
         m = out[-1]
-        for thread, d in b.ms.items():
-            ms = m.ms.setdefault(thread, {})
-            for n, v in d.items():
-                ms[n] = ms.get(n, 0.0) + v
+        for name in ("ms", "own"):
+            for thread, d in getattr(b, name).items():
+                ms = getattr(m, name).setdefault(thread, {})
+                for n, v in d.items():
+                    ms[n] = ms.get(n, 0.0) + v
         for name in ("rows", "recomputed", "seeks", "turns", "calls"):
             d = getattr(m, name)
             for key, v in getattr(b, name).items():
@@ -455,12 +460,22 @@ def save(view, path, **more):
         json.dump(out, f)
 
 
-def _record(d, names, path):
-    """`d` when it is a record as `save` writes one, a dict of exactly `names`; else ValueError."""
+def _record(d, names, where):
+    """`d` when it is a dict of exactly `names`, as `save` writes a record and the stream a sync's
+    facts; else ValueError naming `where` it was read."""
     if not isinstance(d, dict) or set(d) != set(names):
-        raise ValueError(f"{path} is a history of another shape than this ledger reads: "
+        raise ValueError(f"{where} is of another shape than this ledger reads: "
                          f"{sorted(d) if isinstance(d, dict) else type(d).__name__} where {sorted(names)} is written")
     return d
+
+
+def _plan(facts, where):
+    """`facts` when it is None or a sync's as stream.PLAN_FACTS and NODE_FACTS name them, so what
+    reads a walk's plan reads a field that is there; else ValueError naming `where`."""
+    if facts is not None:
+        for node in _record(facts, PLAN_FACTS, where)["nodes"].values():
+            _record(node, NODE_FACTS, where)
+    return facts
 
 
 def saved(path):
@@ -480,5 +495,5 @@ def saved(path):
         for n, x in _record(w, of[Walk], path)["nodes"].items():
             runs = [_record(r, Under._fields + Total._fields, path) for r in _record(x, of[Node], path)["runs"]]
             nodes[n] = Node(**x | {"runs": {Under(*(r[f] for f in Under._fields)): Total(*(r[f] for f in Total._fields)) for r in runs}})
-        ledger._walks.append(Walk(**w | {"nodes": nodes}))
+        ledger._walks.append(Walk(**w | {"nodes": nodes, "plan": _plan(w["plan"], path)}))
     return ledger, d["more"]

@@ -11,6 +11,7 @@ import os
 import pickle
 import sys
 import tempfile
+import threading
 import time
 import traceback
 
@@ -20,10 +21,10 @@ from PySide6.QtCore import QFileSystemWatcher, QProcess, QProcessEnvironment, QR
 from PySide6.QtGui import QImage, QKeySequence, QPainter, QPen, QPixmap, QShortcut
 from PySide6.QtWidgets import QFileDialog, QHBoxLayout, QMainWindow, QProgressBar, QPushButton, QSizePolicy, QVBoxLayout, QWidget
 
-from . import bare, dev, document, store, theme
+from . import bare, dev, document, held, store, theme
 from .canvas import Canvas
 from .decoder import Decoder
-from .graph import Graph
+from .graph import Graph, nbytes
 from .ledger import Ledger
 from .machine import Watch
 from .pace import Pace, clock
@@ -37,7 +38,9 @@ from .trace import Dump
 from .plot import Plot, Stage
 from .worker import Worker
 
-DUMP_ENV = "SIEVE_DUMP"     # names the file every video opened in this process dumps its stream to
+HOLD_MS = 2000              # how long the held runs rest, nothing new held, before they are written beside the document
+HELD_BYTES = 512 << 20      # what the held runs may take together, as graph.nbytes counts them, before the oldest go
+DUMP_ENV = "SIEVE_DUMP"    # names the file every video opened in this process dumps its stream to
 MEMO_ENV, CACHE_ENV = "SIEVE_MEMO_GB", "SIEVE_CACHE_GB"   # the memo's and the decoder cache's limits; unset, each class's default
 
 
@@ -69,6 +72,14 @@ class Lateness(QTimer):
         self._due = now + self.interval() / 1000
 
 DOCUMENT_FILTER = "SIEVE document (*.json);;All (*)"
+
+
+def _save_held(file, runs):
+    """held.File.write on the writer's thread, where a failure can only be said on stderr."""
+    try:
+        file.write(runs)
+    except Exception as e:
+        print(f"SIEVE {time.strftime('%H:%M:%S')}: could not write {file.path}: {type(e).__name__}: {e}", file=sys.stderr)
 
 
 def _same(a, b):
@@ -395,6 +406,15 @@ class PlayerWindow(QMainWindow):
         self.results, self.result_start = {}, 0   # node id -> the series chain's results, and the row they start at
         self.clip_results = {}                    # the same over the clip walk's rows, from row 0; {} when there are none
         self._clip_asked = False                  # a clip walk was asked for and has not finished or been stopped
+        self.runs = held.Runs(HELD_BYTES, nbytes) # the held runs, the file's and this session's walks'
+        self._spared = False                      # the window's results are a held run's, and the worker runs no chain over it
+        self._clip_ended = False                  # the clip walk told of its last row and its results have not yet come
+        self._given = False                       # the window walk was given held results for some of the chain and steps the rest
+        self._unwritten = False                   # a run was held since the file was written
+        self._file = None                         # the held.File the runs were read from or last written to; the writer's thread's while that lives
+        self._writer = None                       # the thread writing the held file, or the last that did
+        self._stamp = None                        # what the open video's held file is good under, see held.stamp
+        self._tools_digest = held.tools_print(self.tools)   # taken beside the import: a file edited after it is not the code that runs
         self._taken = {}      # (node id, path input) -> (the file last handed to its loader, its mtime)
         self._watch = QFileSystemWatcher(self)
         self._watch.fileChanged.connect(self._path_changed)
@@ -492,6 +512,10 @@ class PlayerWindow(QMainWindow):
         self.timer = QTimer(self)
         self.timer.setTimerType(Qt.PreciseTimer)
         self.timer.timeout.connect(self._tick)
+        self._hold = QTimer(self)                 # running while a run held since the last write waits for a quiet moment
+        self._hold.setSingleShot(True)
+        self._hold.setInterval(HOLD_MS)
+        self._hold.timeout.connect(lambda: self._write_held())
         self.timeline.setEnabled(False)
         ct.progress.setText("no video")
         if from_file:
@@ -535,11 +559,14 @@ class PlayerWindow(QMainWindow):
         path = path or self.doc.path
         if not path:
             return self._save_as()
+        was = self.doc.path
         try:
             document.save(self.doc, path)
         except OSError as e:
             self.timeline.controls.progress.setText(f"could not save {os.path.basename(str(path))}: {e}")
             return False
+        self._unwritten |= was != self.doc.path
+        self._write_held(wait=True)
         self._retitle()
         return True
 
@@ -567,6 +594,7 @@ class PlayerWindow(QMainWindow):
         self.pane.select(nid)
         self.plot.set_selection(nid)
         self._show_pinned()
+        self._show_size()
 
     def _show_plot(self):
         """The plot and the strip follow the document's pinned set and bands."""
@@ -757,7 +785,10 @@ class PlayerWindow(QMainWindow):
         self.graph.sync()
         self._restate()
         if nid in self.graph.chain:
+            if self._spared or self._given or self.runs.over(*self.window_, self._chain()) is not None:
+                self._ask_window()      # what was held is no longer the chain's, or a run now is: the walk begins again with what is held now
             self.worker.rerun_series()
+            self._show_held()
         else:
             self._invalidate()
             self.goto(self.row, commit=True)
@@ -766,6 +797,7 @@ class PlayerWindow(QMainWindow):
         """The frame tools changed: the walk restarts, and the clip walk's rows are of a graph that is
         gone, so they are dropped here and now rather than when the worker gets to it."""
         self.worker.invalidate()
+        self._ask_window()
         self._clip_asked = False
         self.header.set_walking(False)
         self.header.clear_note()
@@ -980,7 +1012,7 @@ class PlayerWindow(QMainWindow):
         self.worker = Worker(self.graph, store=self.store)
         self.fps, self.count = self.graph.fps, self.graph.count
         ct = self.timeline.controls
-        for signal, slot in (("rowReady", self._row_ready), ("seriesReady", self._series_ready),
+        for signal, slot in (("rowReady", self._row_ready), ("seriesReady", self._window_ready),
                              ("densityReady", self.plot.set_fields), ("walked", lambda done, n, *was: ct.set_progress(done, n)),
                              ("walked", lambda _, n, *was: self._set_length(n)),   # the walk's own length: clamped, or closed early
                              ("walked", lambda *row: self._paced("window", *row)),
@@ -997,6 +1029,9 @@ class PlayerWindow(QMainWindow):
         self.timeline.setEnabled(True)
         self.worker.start()
         self.sync()
+        self._stamp = held.stamp(path, self._tools_digest)
+        self._file = held.File(held.path_for(self.doc.path), self._stamp) if self.doc.path else None
+        self.runs.take(self._file.load() if self._file is not None else [])
         self.set_window(0, min(self.count, round(10 * self.fps)))
         self.goto(0, commit=True)
         self.toggle_play()  # _unload left it paused
@@ -1027,6 +1062,10 @@ class PlayerWindow(QMainWindow):
         if self.playing:
             self.toggle_play()
         self._end_bare()
+        self._write_held(wait=True)
+        self.runs.take([])
+        self._unwritten, self._file = False, None
+        self._spared = self._given = False
         self.worker.stop()
         self.lateness.stop()
         self.machine.close()
@@ -1042,6 +1081,7 @@ class PlayerWindow(QMainWindow):
         self.header.clear_note()
         self.header.setEnabled(False)
         self.timeline.strip.set_series({})
+        self.timeline.strip.set_held([])
         self.row, self.window_ = 0, (0, 0)
         self.plot.set_window(0, 0)
         self.plot.set_lines({}, 0)
@@ -1062,7 +1102,7 @@ class PlayerWindow(QMainWindow):
         self.plot.set_window(start, length, self.fps)
         self.timeline.strip.set_window(start, length)
         self.timeline.controls.set_window(start, length)
-        self.worker.set_window(start, length)
+        self._ask_window()
         if self.row != start + offset:
             self.goto(start + offset, commit=True)
 
@@ -1151,6 +1191,58 @@ class PlayerWindow(QMainWindow):
         if row == self.row and self.graph is not None:
             self._show(row)
 
+    def _ask_window(self):
+        """Asks the worker for the window: spared the chain where a held run covers it, whose rows
+        are then the window's results at once; else given what a run holds of the chain's stepped
+        nodes, so only the rest is stepped. The window's frames are walked either way."""
+        s, n = self.window_
+        chain = self._chain()
+        got = self.runs.over(s, n, chain)
+        part = {} if got is not None else self.runs.part(s, n, chain)
+        self._spared, self._given = got is not None, bool(part)
+        self.worker.set_window(s, n, self._spared, self._as_given(part))
+        if got is not None:
+            self._series_ready(got, s, self.fps)
+        self._show_held()
+
+    def _as_given(self, part):
+        """`part`, node to held result, as the worker takes it: node to (raw key, the result's fields
+        as the tool made them, without what the player put beside them)."""
+        return {nid: (self.graph.entry(nid).raw_key, {f: v for f, v in r.items() if f not in ("gate", "key", "plate")})
+                for nid, r in part.items()}
+
+    def _show_held(self):
+        """What is held, or the chain's keys, changed: the strip's bar is over the runs held under
+        the keys the chain now has, and the worker is given what they have of the clip."""
+        chain = self._chain()
+        self.timeline.strip.set_held(self.runs.spans(chain))
+        if self.worker is not None:
+            self.worker.give_clip(self.count, self._as_given(self.runs.part(0, self.count, chain)))
+        self._show_pinned()
+
+    def _chain(self):
+        """The series chain as held.Runs is told it; one of no nodes with no video open."""
+        g = self.graph
+        entries = {} if g is None else {nid: e for nid in g.chain if (e := g.entry(nid)) is not None}
+        return held.Chain({nid: e.key for nid, e in entries.items()}, frozenset(nid for nid, e in entries.items() if e.steps),
+                          None if g is None else g.plate)
+
+    def _key(self, nid):
+        """The key `nid` now has; None for a node the plan does not have."""
+        e = self.graph.entry(nid)
+        return None if e is None else e.key
+
+    def _window_ready(self, results, start, fps):
+        """The window walk's results, held as a run once they reach the window's last row; one that
+        arrives while a held run is shown is of a walk since left. A walk given held rows is not
+        held: its run would hold those rows a second time, and the window is stepped from them
+        again for the rest when it returns."""
+        if self._spared:
+            return
+        self._series_ready(results, start, fps)
+        if start == self.window_[0] and not self._given:
+            self._hold_run(start, self.window_[1], results)
+
     def _series_ready(self, results, start, fps):
         self.results, self.result_start = results, start
         self.plot.set_lines({nid: (r["signal"], r.get("gate")) for nid, r in results.items()
@@ -1162,6 +1254,7 @@ class PlayerWindow(QMainWindow):
                 w.show_result(result, start, fps)
         self._update_gate()
         self._show_pinned()
+        self._show_size()
 
     # -- the clip walk ---------------------------------------------------
     def _toggle_clip(self):
@@ -1251,6 +1344,7 @@ class PlayerWindow(QMainWindow):
 
     def _clip_walked(self, done, total, ran, served):
         self._paced("clip", done, total, ran, served)
+        self._clip_ended = done >= total > 0        # the results that follow are a walk's own, held at once
         if self._clip_asked:
             self.header.clear_note()
             if done >= total:
@@ -1259,7 +1353,67 @@ class PlayerWindow(QMainWindow):
 
     def _clip_ready(self, results, start, fps):
         self.clip_results = results
+        if self._whole() and self._clip_ended:
+            self._clip_ended = False
+            self._hold_run(0, self.count, self._whole())
+        elif self._whole():
+            self._hold.start()      # a rerun of the chain over a walk long ended: held once the knob is at rest
         self._show_pinned()
+
+    def _whole(self):
+        """The clip walk's results that reach the clip's last row."""
+        return {nid: r for nid, r in self.clip_results.items()
+                if isinstance(r, dict) and "signal" in r and len(r["signal"]) == self.count}
+
+    def _write_held(self, wait=False):
+        """A whole clip walk's results are held as a run, and the runs held since the file was
+        written go beside the document when it has been saved, on a thread of their own, which
+        pickles only the runs the file has not had; `wait` returns once the file has landed."""
+        if self.graph is None:
+            return
+        self._hold_run(0, self.count, self._whole())
+        self._hold.stop()
+        path = held.path_for(self.doc.path)
+        busy = self._writer is not None and self._writer.is_alive()
+        if busy and wait:
+            self._writer.join()
+        elif busy and self._unwritten:
+            return self._hold.start()       # one file, one writer: this one's turn comes when that one lands
+        if path and self._unwritten:
+            self._unwritten = False
+            if self._file is None or self._file.path != path:
+                self._file = held.File(path, self._stamp)       # the document saved under another name: nothing there is known to be this one's
+            self._writer = threading.Thread(target=_save_held, args=(self._file, list(self.runs)), name="held")
+            self._writer.start()
+            if wait:
+                self._writer.join()
+
+    def _hold_run(self, start, rows, results):
+        """Holds `results` as a run where held.Runs.hold does, and one held is written once
+        nothing more has been for HOLD_MS."""
+        if self.runs.hold(start, rows, results, self._chain()):
+            self._unwritten = True
+            self._hold.start()
+            self._show_held()
+
+    def _clip_result(self, nid):
+        """The clip's result for `nid`: the clip walk's, or the held run's from row 0 that reaches
+        further under the key the node now has; None with neither."""
+        r = self.clip_results.get(nid)
+        if self.graph is None:
+            return r
+        key, plate = self._key(nid), self.graph.plate
+        if not held.good(r, key, plate):
+            r = None        # of a key the node has left, where the walk it came from had no rows to run the chain over again
+        best = self.runs.from_first_row(nid, key, plate)
+        return r if best is None or (isinstance(r, dict) and "signal" in r and len(r["signal"]) >= best[1]) else best[2][nid]
+
+    def _show_size(self):
+        """The selected node's card says about what its result over the clip would add to the held
+        file, from the window's rows."""
+        if self.selection is not None:
+            per = held.per_row(self.results.get(self.selection))
+            self.pane.set_size(self.selection, f"about {store.fmt_bytes(per * self.count)} held over the clip" if per else "")
 
     def _baked(self, nid, bake):
         """Recorded here, on the GUI thread, since the document is the GUI's and the worker's alone to read."""
@@ -1277,17 +1431,20 @@ class PlayerWindow(QMainWindow):
         self.header.note.setText(why)
 
     def _show_pinned(self):
-        """The strip draws every shown node that has a signal: the clip walk's when it has one, else
-        the window's, each at its own rows."""
-        series = {}
+        """The strip draws every shown node that has a signal: the clip's when there is one, walked or
+        held, else the window's, and with it the node's signal over the rows of every other run held
+        under the key it now has that nothing drawn before it is over, the run that began earliest
+        first as held.Runs.over serves, so no row is drawn twice."""
+        series, more = {}, {}
         for nid in document.shown(self.selection, self.doc.pinned) if self.doc is not None else []:
-            if nid in self.clip_results:
-                r, start = self.clip_results[nid], 0
+            if (r := self._clip_result(nid)) is not None:
+                start = 0
             else:
                 r, start = self.results.get(nid), self.result_start
             if isinstance(r, dict) and "signal" in r:
                 series[nid] = (r["signal"], start, r.get("gate"))
-        self.timeline.strip.set_series(series, self.selection)
+                more[nid] = self.runs.beside(nid, self._key(nid), self.graph.plate, start, len(r["signal"]))
+        self.timeline.strip.set_series(series, self.selection, more)
 
     def _set_length(self, rows):
         """The plot's x axis is the window, so a walk fills in at its place instead of stretching."""

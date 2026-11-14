@@ -154,8 +154,9 @@ class Memo:
 
 class Cancelled(Exception):
     """A run read a frame after the graph had moved on under it, or while the worker was stopping:
-    what it was computing is for a plan that is gone, so the read raises instead of serving it. The
-    worker drops the row; a tool that catches Exception around a read should let this one through."""
+    what it was computing is for a plan that is gone, so the read raises instead of serving it. A
+    walk raises it too, of a result it was given that the plan has left. The worker drops the row;
+    a tool that catches Exception around a read should let this one through."""
 
 
 class Frames:

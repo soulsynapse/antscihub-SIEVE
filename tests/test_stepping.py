@@ -2,8 +2,9 @@
 tests/stepping.py's oracle passes a tool whose step agrees with its run and names the row where a
 peeking one diverges, the plan says of each chain node whether the walk steps it or runs it whole
 and which node ended the prefix, and the walk steps the prefix once a row, a served head's rows
-included, runs the suffix per emit, restarts a changed node from the window's first row, and
-emits at one cadence over both ranges."""
+included, runs the suffix per emit, restarts a changed node from the window's first row,
+emits at one cadence over both ranges, and given a stepped head's result stacks no row for it
+and walks the range again once the plan has left that result."""
 import os
 import time
 from dataclasses import fields
@@ -234,6 +235,49 @@ def test_a_served_series_heads_rows_step_the_chain_under_it_one_at_a_time(in_sto
     assert equal(got[-1], run_chain(w.graph, None, 0, 10, {}))
     w.stop()
     g.close()
+
+
+def test_a_walk_given_a_stepped_heads_result_stacks_nothing_and_walks_again_when_the_plan_leaves_it(monkeypatch):
+    """The turns are taken here, on the test's thread, so the plan can be moved inside one."""
+    from PySide6.QtWidgets import QApplication
+    from sieve_player.graph import Cancelled
+    from sieve_player.worker import Worker
+    from tests.test_graph import Dec, TOOLS as FRAME, gray as fgray
+    QApplication.instance() or QApplication([])
+    table = frame_tool("table", "gray", "blobs", blobs_at)
+    tools = {**FRAME, "table": table, "track": track, "kinematics": kinematics, "tracks-filter": tracks_filter}
+    doc = D.from_tools([fgray, table, track, kinematics, tracks_filter])
+    g = Graph(doc, Dec(), tools)
+    got = []
+    w = Worker(g, every=3)
+    w.seriesReady.connect(lambda r, s, fps: got.append(r))
+    win = w._win
+
+    def walk(given):
+        win.given = dict(given)
+        win.begin(0, 7)
+        while win.i < win.length:
+            win.turn()
+        return got[-1]
+    whole = walk({})
+    given = {"track": (g.entry("track").raw_key, {f: v for f, v in whole["track"].items() if f not in ("gate", "key", "plate")})}
+    assert equal(walk(given), whole) and win.stack is None
+    win.given = dict(given)
+    win.begin(0, 7)
+    win.turn()
+    tally = g.tally
+
+    def moved():
+        monkeypatch.setattr(g, "tally", tally)
+        doc.node("track").params["max_step"] = 9.0
+        g.sync()
+        return tally()
+    monkeypatch.setattr(g, "tally", moved)      # between the turn's look at what it was given and its step
+    with pytest.raises(Cancelled):
+        win.turn()
+    while win.i < win.length:
+        win.turn()
+    assert win.given == {} and equal(got[-1], run_chain(g, win.stack, 0, 7, {}))
 
 
 def test_the_cadence_is_one_setting_read_over_both_ranges_and_the_throttle_is_gone():

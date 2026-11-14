@@ -149,18 +149,18 @@ class _Lane:
 
 
 class Ledger:
-    """`width` is a bucket's seconds, `history` the buckets kept, `walks` the records kept, and
-    `discards` how many discarded (key, row) are remembered for telling a recomputation. `event` and
+    """`width` is a bucket's seconds, `history` the buckets kept, `walks` the records kept, a
+    lane's walk under way never dropped for another's, and `discards` how many discarded (key, row) are remembered for telling a recomputation. `event` and
     `sample` may be called from any thread and never wait; a sample other than "late" and "machine" is not kept.
     `timed()` gives the context a thread that queues folds inside, for whoever attached the ledger to
     time its bookkeeping there, the ledger holding no Emitter to emit a span through."""
 
     def __init__(self, width=0.25, history=2400, walks=64, discards=1 << 17, timed=nullcontext):
-        self.width, self.history, self._discards, self._timed = width, history, discards, timed
+        self.width, self.history, self._discards, self._timed, self._kept = width, history, discards, timed, walks
         self._q = deque()
         self._lock = threading.Lock()   # held to fold and to take a view; an emitter that finds it taken leaves the folding
         self._buckets, self._newest = {}, None
-        self._walks = deque(maxlen=walks)
+        self._walks = deque()
         self._lanes = {}
         self._plan = self._keys = self._selected = None
         self._nest = {}                 # thread -> [(start, end)] of the spans whose opening run has not emitted yet
@@ -268,6 +268,13 @@ class Ledger:
         if at is not None:
             del self._walks[at]
         self._walks.append(lane.walk)
+        if len(self._walks) > self._kept:
+            walking = {id(x.walk) for x in self._lanes.values()}
+            for i, w in enumerate(self._walks):
+                if id(w) not in walking:
+                    del self._walks[i]
+                    break
+        self._bucket(int(ev.t // self.width))   # so a walk in a view began before the view's first bucket only when the history has dropped its beginning
         lane.kinds, lane.synced = {}, False
         lane.t, lane.at = ev.t, self._spent.get(ev.thread, 0.0)
         return lane

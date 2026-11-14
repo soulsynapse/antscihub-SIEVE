@@ -106,6 +106,13 @@ def test_the_log_holds_one_entry_a_class_and_subject_counted_cleared_and_ordered
     log.read(View(0.25, 0, [], walks + [again, clip, quiet, short, rec(16.0, **SOUGHT)]))
     log.read(View(0.25, 0, [], [clip, quiet]))
     assert (e.count, e.holds) == (13, True)      # its walk gone from the history, no walk has shown it gone
+    turned = rec(20.0, b={("run", "walk", "b"): [8, 100.0, 0]})
+    turned.wait, turned.replanned = 80.0, True
+    log = Log()
+    log.read(View(0.25, 80, [Bucket(wait=40.0, turns={"slot walked": 60.0})] * 2, [rec(19.0, **FOLDED), turned]))
+    log.read(View(0.25, 90, [], [turned]))      # its buckets gone from the history, and replanned
+    assert all(e.holds for e in log.ordered()) and set(log.entries) == {("waits", "slot walked"), ("unread", "a")}     # a walk a class cannot judge shows nothing gone
+    assert "waits" in log.checked and "slower" not in log.checked
     five = rec(keys={"video": "kv"}, a={("run", "fold", "a"): [8, 20.0, 0]}, **SOUGHT, **GROWN)
     five.recomputed, five.recomputed_ms = {"memo": 8, "kv": 4}, {"memo": 4.0, "kv": 2.0}
     assert list(found(five)) == [("unread", "a"), ("grows", "c"), ("seeks", "video"), ("thrash", "memo"), ("thrash", "video")]     # by cost
@@ -149,7 +156,8 @@ def test_the_cold_projection_sums_what_the_plan_reaches_by_the_walk_each_node_la
     assert {n: (c.ms_row, c.walk, c.stale) for n, c in p.nodes.items()} == {
         "a": (1.0, ("window", 0.0), False), "b": (2.0, ("window", 0.0), False), "c": (1.0, ("window", 0.0), False), "s": (0.0, None, False)}
     assert (p.unprobed, p.ms_row(), p.missing) == (0.5, 4.5, ())                 # the seek and the fold are no row's
-    second = under(t0=1.0, keys={"a": "ka", "b": "kb2", "c": "kc2"}, a=Node(held=8), b=ran(24.0), c=ran(8.0))
+    second = under(t0=1.0, keys={"a": "ka", "b": "kb2", "c": "kc2"}, a=Node(runs=runs({("cache", "walk", "c"): [8, 2.0, 0]}), held=8),
+                   b=ran(24.0), c=ran(8.0))     # a row a cache held is no walk the node ran in
     p = cold(View(0.25, 0, [], [first, second]))
     assert {n: (c.ms_row, c.walk, c.stale) for n, c in p.nodes.items() if c.walk} == {
         "a": (1.0, ("window", 0.0), False), "b": (3.0, ("window", 1.0), False), "c": (1.0, ("window", 1.0), False)}

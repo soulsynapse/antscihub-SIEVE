@@ -639,7 +639,7 @@ class Problems(QWidget):
         entries = window.log.ordered()
         holds, cleared = [e for e in entries if e.holds], [e for e in entries if not e.holds]
         judged = window.view is not None and bool(finished(window.view))
-        quiet = [k for k in window.log.classes if judged and not any(e.problem.kind == k for e in entries)]
+        quiet = [k for k in window.log.classes if k in window.log.checked and not any(e.problem.kind == k for e in entries)]
         drawn = self.lines.written, self.lines.picked
         self.lines.entries, self.lines.picked = holds, window.picked
         self.lines.written = [(e.problem.share, self.lines.said(e)) for e in holds]

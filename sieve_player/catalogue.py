@@ -135,6 +135,48 @@ def finished(view):
     return [w for w in view.walks if w.done >= PARTS and (w is not last[w.lane] or w.done >= w.length)]
 
 
+def _before(view, walk):
+    """The walk `walk`'s lane walked before it in `view`, or None."""
+    prev = None
+    for w in view.walks:
+        if w.id == walk.id:
+            return prev
+        if w.lane == walk.lane:
+            prev = w
+    return None
+
+
+def _began_in(view, walk):
+    return int(walk.t0 // view.width) >= view.first
+
+
+def _under_one_plan(view, walk):
+    return walk.plan is not None and not walk.replanned
+
+
+def _comparable(view, walk):
+    prev = _before(view, walk)
+    if prev is None or walk.keys is None or walk.replanned or prev.replanned:
+        return False
+    return (prev.keys, prev.length) != (walk.keys, walk.length) or walk.done >= walk.length and prev.done >= prev.length
+
+
+def _signalled(view, walk):
+    walked = walk.nodes.get((walk.plan or {}).get("walk"))
+    return walked is not None and 2 * (walked.ran + walked.served) >= walk.done and _began_in(view, walk)
+
+
+# A class -> whether it can say anything of a finished walk; a class not here can of every one.
+JUDGES = {"unread": _under_one_plan, "slower": _comparable, "waits": _began_in, "signals": _signalled}
+
+
+def judged(kind, view, walks=None):
+    """The walks class `kind` can judge, of `walks` or of every finished walk of `view`. One it
+    cannot is no evidence either way: it shows no problem of the class and shows none gone."""
+    can = JUDGES.get(kind)
+    return [w for w in (finished(view) if walks is None else walks) if can is None or can(view, w)]
+
+
 def _problem(kind, walk, subject, line, ms, evidence, says, target, nodes=()):
     total = cost(walk)
     return Problem(kind, subject, line, ms / walk.done, ms / total if total else None, tuple(evidence), SOURCES[kind],
@@ -148,9 +190,7 @@ def unread(view, walks=None):
     """Work no watched node and no walked node asked for: everything under a density's fold of a
     node neither pinned nor selected while the walk ran, the runs and decodes the fold opened with it."""
     out = []
-    for w in finished(view) if walks is None else walks:
-        if w.plan is None or w.replanned:
-            continue
+    for w in judged("unread", view, walks):
         watched, by = {*w.plan["pinned"], *w.selected}, {}
         for nid, node in w.nodes.items():
             for u, r in node.runs.items():
@@ -261,11 +301,10 @@ def slower(view, walks=None):
     """A walk that costs more than the lane's last walk, both whole, of one length and under one
     plan, whatever the cause: each node's ms a run in what ran in both, so a walk colder than the
     last is not a slower one, and the ms a row no span covers, under the subject "unprobed"."""
-    out, before, judged = [], {}, {id(w) for w in (finished(view) if walks is None else walks)}
-    for w in view.walks:
-        prev, before[w.lane] = before.get(w.lane), w
-        if (id(w) not in judged or prev is None or w.keys is None or prev.keys != w.keys or w.replanned or prev.replanned
-                or prev.length != w.length or w.done < w.length or prev.done < prev.length):
+    out = []
+    for w in judged("slower", view, walks):
+        prev = _before(view, w)
+        if (prev.keys, prev.length) != (w.keys, w.length):      # another plan or range: there is nothing it is slower than
             continue
         was, now, moved = _per(prev), _per(w), []
         for key in was.keys() & now.keys():
@@ -298,9 +337,10 @@ def waits(view, walks=None):
     """The worker waiting on the GUI thread: over the buckets a walk spans, what its tools spent
     off their own CPU while the GUI thread was in a slot or a paint, the lesser of the two in each
     bucket and no more than the walk's own wait, which is the steadier figure. A read's wait is the
-    decoder's threads and is not counted; a tool that sleeps coincides with nothing."""
+    decoder's threads and is not counted; a tool that sleeps coincides with nothing. A walk whose
+    beginning the view's buckets no longer reach is not judged."""
     out = []
-    for w in finished(view) if walks is None else walks:
+    for w in judged("waits", view, walks):
         both, by = 0.0, {}
         for b in span(view, w):
             if b.wait > 0 and b.turns:
@@ -328,12 +368,10 @@ def signals(view, walks=None):
     """A slot of the GUI thread's run at one row in two of a walk or oftener, brief each time: a
     worker signal a row, which a walk of short rows pays for at each. The cost is the slot's own spans and so the
     floor: the interpreter changing hands at every call lands in the tools' spans and has no figure
-    of its own. A walk whose walked node the stores held on more than half its rows is not judged, being over either way."""
+    of its own. A walk whose walked node the stores held on more than half its rows is not judged, being over either way,
+    nor one whose beginning the view's buckets no longer reach."""
     out = []
-    for w in finished(view) if walks is None else walks:
-        walked = w.nodes.get((w.plan or {}).get("walk"))
-        if walked is None or 2 * (walked.ran + walked.served) < w.done:
-            continue
+    for w in judged("signals", view, walks):
         ms, calls = {}, {}
         for b in span(view, w):
             for name, n in b.calls.items():
@@ -351,7 +389,7 @@ def signals(view, walks=None):
     return out
 
 
-# Each takes a view and the walks of it to judge, every finished one when none are given.
+# Each takes a view and the walks of it to judge, every finished one when none are given, and judges those `judged` gives of them.
 CLASSES = {"unread": unread, "thrash": thrash, "grows": grows, "seeks": seeks, "slower": slower, "waits": waits, "signals": signals}
 
 
@@ -360,32 +398,38 @@ class Entry:
     problem: Problem        # its latest sighting, of those that hold while any does
     first: float            # the first sighting's t
     count: int = 0          # the walks it was seen in
-    holds: bool = True      # whether the last finished walk of any lane shows it
+    holds: bool = True      # whether, in any lane, the last walk its class could judge shows it
 
 
 class Log:
     """The problems the catalogue has surfaced, one Entry per class and subject. `read(view)` may
     be called on any view of one ledger any number of times: a walk counts once toward an entry
     however often it is read, and one its lane has begun another after, which no later event
-    changes, is judged in the first read that finds it so and never again."""
+    changes, is judged in the first read that finds it so and never again. An entry holds until a
+    walk its class can judge, by `judged`, shows it gone."""
 
     def __init__(self, classes=None):
         self.classes = CLASSES if classes is None else classes
         self.entries = {}       # (class, subject) -> Entry
+        self.checked = set()    # the classes that have judged a walk
         self._seen = {}         # a walk's id -> the entries it has counted toward
         self._settled = set()   # the ids of the walks judged for the last time
-        self._shows = {}        # a walk's id -> {(class, subject): Problem} as it was last judged
-        self._latest = {}       # lane -> the id of the last walk of it judged, kept when the history no longer holds the walk
+        self._shows = {}        # (class, a walk's id) -> {(class, subject): Problem} as the class last judged it
+        self._latest = {}       # (lane, class) -> the id of the lane's last walk the class judged, kept when the history no longer holds the walk
 
     def read(self, view):
         """Takes what `view` shows into the entries and returns those it made, the first sightings."""
-        made, done, last = [], finished(view), {w.lane: w for w in view.walks}
-        latest = self._latest = self._latest | {w.lane: w.id for w in done}
-        judge = [w for w in done if w.id not in self._settled]
-        for w in judge:
-            self._shows[w.id] = {}
-        for detect in self.classes.values():
-            for p in detect(view, judge):
+        made, last = [], {w.lane: w for w in view.walks}
+        judge = [w for w in finished(view) if w.id not in self._settled]
+        for kind, detect in self.classes.items():
+            can = judged(kind, view, judge)
+            for w in can:
+                self.checked.add(kind)
+                self._shows[kind, w.id] = {}
+                was = self._latest.get((w.lane, kind))
+                if was is None or w.t0 >= was.t0:
+                    self._latest[w.lane, kind] = w.id
+            for p in detect(view, can):
                 key = (p.kind, p.subject)
                 e = self.entries.get(key)
                 if e is None:
@@ -395,24 +439,25 @@ class Log:
                 if key not in seen:
                     seen.add(key)
                     e.count += 1
-                self._shows.setdefault(p.walk, {})[key] = p
+                self._shows.setdefault((kind, p.walk), {})[key] = p
                 if p.walk.t0 >= e.problem.walk.t0:
                     e.problem = p
+        latest = {(kind, wid) for (_, kind), wid in self._latest.items()}
         for key, e in self.entries.items():
-            shown = [self._shows[wid][key] for wid in latest.values() if key in self._shows.get(wid, ())]
+            shown = [self._shows[at][key] for at in latest if key in self._shows.get(at, ())]
             e.holds = bool(shown)
             if shown:
                 e.problem = max(shown, key=lambda p: p.walk.t0)
         held = {w.id for w in view.walks}
         self._seen = {wid: s for wid, s in self._seen.items() if wid in held}
-        self._shows = {wid: s for wid, s in self._shows.items() if wid in held or wid in latest.values()}
+        self._shows = {at: s for at, s in self._shows.items() if at[1] in held or at in latest}
         self._settled = (self._settled | {w.id for w in judge if w is not last[w.lane]}) & held
         return made
 
     def copy(self):
         """A Log of the entries as they now stand, a reader's to hold while this one reads on."""
         out = Log(self.classes)
-        out.entries = {key: replace(e) for key, e in self.entries.items()}
+        out.entries, out.checked = {key: replace(e) for key, e in self.entries.items()}, set(self.checked)
         return out
 
     def ordered(self):
@@ -489,7 +534,7 @@ def reach(plan):
     return seen
 
 
-_COLD = (RUN, STEP, DECODE, READ, CACHE)     # what a row pays a node; a seek is a walk's opening and a fold the window's
+_COLD = (RUN, STEP, DECODE, READ)     # what a row nothing holds pays a node; a seek is a walk's opening, a fold the window's and a cache's row one a store held
 
 
 @dataclass(frozen=True)

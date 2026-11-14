@@ -131,6 +131,12 @@ def test_a_span_is_spread_over_its_buckets_and_a_cost_keeps_its_place_along_the_
         led.event(event("begin", float(t), row=0, length=4, lane=lane))
     assert [w.t0 for w in led.view().walks] == [1.0, 2.0]       # oldest first across lanes: a walk begun again takes no earlier walk's place
 
+    led = Ledger(walks=2)
+    for t, lane in enumerate(("clip", "window", "window", "window")):
+        led.event(event("begin", float(t), row=0, length=9, lane=lane))
+        led.event(event("progress", t + 0.5, row=1, length=9, lane=lane))
+    assert [(w.lane, w.t0) for w in led.view().walks] == [("clip", 0.0), ("window", 3.0)]      # a walk under way is not dropped for another lane's
+
 
 def test_a_view_is_the_readers_to_hold_while_another_thread_feeds():
     events = [event("begin", 0.0, row=0, length=4000)]

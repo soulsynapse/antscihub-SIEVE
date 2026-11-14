@@ -1,6 +1,6 @@
 """A document's held series: the runs its walks made, in one file beside the document, and what the
-file is good under beside its keys. A run is (start, rows, {node: result}, bytes), a walk's results
-over `rows` rows from `start` and what they hold. The file is the stamp and then a record a run, and
+file is good under beside its keys. A run is a Run, (start, rows, {node: result}, bytes), a walk's
+results over `rows` rows from `start` and what they hold. The file is the stamp and then a record a run, and
 File pickles a run once however often it writes. Runs is the runs held and which of them a range is
 served from, told the chain as a Chain. Imports nothing of sieve_player; the window says when a run
 is held and written, and what the chain now is."""
@@ -38,6 +38,23 @@ def stamp(video, tools_digest):
     `tools_digest`, taken when the tools were loaded."""
     st = os.stat(video)
     return (VERSION, st.st_size, st.st_mtime_ns, tools_digest)
+
+
+class Run(NamedTuple):
+    """A walk's results over `rows` rows from `start`, node to result, and the bytes they hold.
+    Equal to itself alone: its results are arrays, whose equality is not a truth value."""
+    start: int
+    rows: int
+    results: dict
+    size: int
+
+    def __eq__(self, other):
+        return self is other
+
+    def __ne__(self, other):
+        return self is not other
+
+    __hash__ = object.__hash__
 
 
 _FLAT = "held:flat"
@@ -100,7 +117,7 @@ class File:
                 self._had, self._end = had, f.tell()
                 while True:
                     start, rows, results, size = pickle.load(f)
-                    run = (start, rows, {nid: {k: _rows(v) for k, v in r.items()} for nid, r in results.items()}, size)
+                    run = Run(start, rows, {nid: {k: _rows(v) for k, v in r.items()} for nid, r in results.items()}, size)
                     had.append((run, self._end, f.tell() - self._end))
                     self._end = f.tell()
         except Exception:       # the file's end, or a truncated or foreign pickle, which raises whatever its bytes spell
@@ -175,7 +192,7 @@ class Runs:
         self.all = list(runs)
 
     def _earliest(self):
-        return sorted(self.all, key=lambda run: (run[0], -run[1]))
+        return sorted(self.all, key=lambda run: (run.start, -run.rows))
 
     @staticmethod
     def _serves(results, chain):
@@ -192,17 +209,17 @@ class Runs:
         keys = {nid: results[nid].get("key") for nid in nodes}.items()
 
         def keys_of(run):
-            return {nid: r.get("key") for nid, r in run[2].items()}.items()
-        if any(run[0] <= start and start + rows <= run[0] + run[1] and keys <= keys_of(run) for run in self.all):
+            return {nid: r.get("key") for nid, r in run.results.items()}.items()
+        if any(run.start <= start and start + rows <= run.start + run.rows and keys <= keys_of(run) for run in self.all):
             return False
         self.all = [run for run in self.all
-                    if not (start <= run[0] and run[0] + run[1] <= start + rows and keys_of(run) <= keys)]
+                    if not (start <= run.start and run.start + run.rows <= start + rows and keys_of(run) <= keys)]
         kept = {nid: results[nid] for nid in nodes}
-        self.all.append((start, rows, kept, sum(self.size_of(v) for r in kept.values() for v in r.values())))
-        while len(self.all) > 1 and sum(run[3] for run in self.all) > self.limit:
-            longest = max(self.all, key=lambda run: run[1])
+        self.all.append(Run(start, rows, kept, sum(self.size_of(v) for r in kept.values() for v in r.values())))
+        while len(self.all) > 1 and sum(run.size for run in self.all) > self.limit:
+            longest = max(self.all, key=lambda run: run.rows)
             spare = [run for run in self.all if run is not longest]
-            left = [run for run in spare if not self._serves(run[2], chain)]
+            left = [run for run in spare if not self._serves(run.results, chain)]
             self.all.remove((left or spare)[0])
         return True
 
@@ -241,7 +258,7 @@ class Runs:
     def from_first_row(self, nid, key, plate):
         """The run from row 0 that reaches furthest with `nid`'s result under `key` in `plate`;
         None with none."""
-        return max((run for run in self.all if run[0] == 0 and good(run[2].get(nid), key, plate)), key=lambda run: run[1], default=None)
+        return max((run for run in self.all if run.start == 0 and good(run.results.get(nid), key, plate)), key=lambda run: run.rows, default=None)
 
     def beside(self, nid, key, plate, start, rows):
         """`nid`'s signal under `key` in `plate` over the rows the runs have outside the `rows`

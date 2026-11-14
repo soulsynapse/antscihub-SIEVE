@@ -76,3 +76,7 @@ def test_a_range_is_served_from_the_run_that_covers_it_under_the_chains_keys_and
     assert hold(50, 4, moved) and [run[0] for run in runs] == [0, 30, 50]       # 40's keys are left; 0's are too, and it is the longest
     assert runs.from_first_row("a", "ka", None)[:2] == (0, 20) and runs.from_first_row("b", "kb2", None) is None
     assert [(at, signal.tolist()) for signal, at, _ in runs.beside("b", "kb2", None, 31, 2)] == [(30, [30.0]), (33, [33.0]), (50, [50.0, 51.0, 52.0, 53.0])]
+    twice = held.Runs(18, lambda v: 1)
+    again = lambda start, chain: twice.hold(start, 4, of(start, 4, chain), chain)
+    assert again(10, now) and again(10, moved) and again(30, now) and again(50, now)    # two runs over the same rows: one goes as itself, its arrays never compared
+    assert [(run.start, run.results["b"]["key"]) for run in twice] == [(10, "kb"), (30, "kb"), (50, "kb")]

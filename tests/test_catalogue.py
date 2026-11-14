@@ -10,7 +10,7 @@ from sieve_player.catalogue import CLASSES, SOURCES, Entry, Log, cold, reach, se
 from sieve_player.dev.simulations import HEALTHY, SERVED, SIMULATIONS, run
 from sieve_player.graph import Graph
 from sieve_player.ledger import Bucket, Ledger, Node, Total, Under, View, Walk
-from sieve_player.report import text
+from sieve_player.report import report, text
 from tests.test_graph import TOOLS, Dec, gray, tool
 from tests.test_ledger import walk
 
@@ -106,6 +106,7 @@ def test_the_log_holds_one_entry_a_class_and_subject_counted_cleared_and_ordered
     log.read(View(0.25, 0, [], walks + [again, clip, quiet, short, rec(16.0, **SOUGHT)]))
     log.read(View(0.25, 0, [], [clip, quiet]))
     assert (e.count, e.holds) == (13, True)      # its walk gone from the history, no walk has shown it gone
+    assert "WALK     no longer in the history" in report([e], View(0.25, 0, [], [clip, quiet]))      # and no other walk is shown as its
     turned = rec(20.0, b={("run", "walk", "b"): [8, 100.0, 0]})
     turned.wait, turned.replanned = 80.0, True
     log = Log()

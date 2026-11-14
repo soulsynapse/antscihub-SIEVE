@@ -12,12 +12,13 @@ from sieve_player.trace import FIELDS, Dump
 from tests.test_graph import TOOLS, Dec, add, gray
 
 
-def walk(g, rows):
+def walk(g, rows, every=1):
     g.serving("walk", "window")
     g.began(rows[0], len(rows))
     for i, r in enumerate(rows):
         g.walk_row(r)
-        g.progress(i + 1, len(rows))
+        if (i + 1) % every == 0 or i + 1 == len(rows):
+            g.progress(i + 1, len(rows))
 
 
 def event(kind, t, ms=0.0, node=None, row=None, **more):
@@ -59,17 +60,18 @@ def test_a_dump_replays_into_the_ledger_the_live_one_was(tmp_path):
 
 
 def test_a_walk_says_how_cold_it_was_and_what_a_store_made_it_compute_again():
-    g = Graph(D.from_tools([gray, add]), Dec(), TOOLS)
-    led = Ledger()
-    g.on_event = led.event
-    g.sync()
-    walk(g, range(6))
-    walk(g, range(6))
-    walk(g, range(3, 9))
-    cold, held, half = ({n: (v.ran, v.held, v.served) for n, v in w.nodes.items()} for w in led.view().walks)
-    assert cold == {"add": (6, 0, 0), "gray": (6, 0, 0), "video": (6, 0, 0)}
-    assert held == {"add": (0, 6, 0)} and half == {"add": (3, 3, 0), "gray": (3, 0, 0), "video": (3, 0, 0)}
-    assert not any(w.recomputed for w in led.view().walks)
+    for every in (1, 4):        # a row counts once however many rows a progress tells of
+        g = Graph(D.from_tools([gray, add]), Dec(), TOOLS)
+        led = Ledger()
+        g.on_event = led.event
+        g.sync()
+        walk(g, range(6), every)
+        walk(g, range(6), every)
+        walk(g, range(3, 9), every)
+        cold, held, half = ({n: (v.ran, v.held, v.served) for n, v in w.nodes.items()} for w in led.view().walks)
+        assert cold == {"add": (6, 0, 0), "gray": (6, 0, 0), "video": (6, 0, 0)}
+        assert held == {"add": (0, 6, 0)} and half == {"add": (3, 3, 0), "gray": (3, 0, 0), "video": (3, 0, 0)}
+        assert not any(w.recomputed for w in led.view().walks)
 
     g = Graph(D.from_tools([gray, add]), Dec(), TOOLS, memo_bytes=3 * 48)      # a row is gray's plane and add's, 24 bytes each
     led = Ledger()

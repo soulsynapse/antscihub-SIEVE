@@ -78,8 +78,9 @@ _NONE = Total(0, 0.0, 0)
 
 @dataclass
 class Node:
-    """One node over one walk. A row counts once, by the most that happened to the node on it: it
-    ran, else its served file answered, else a store held it."""
+    """One node over one walk. A row counts once, by the most that happened to the node on it: its
+    served file answered, else it ran, else a store held it. A progress of several rows gives each
+    as many of them as it has spans or hits since the last, in that order, and no more than the rows."""
     runs: dict = field(default_factory=dict)        # Under -> Total
     ran: int = 0
     held: int = 0
@@ -142,7 +143,7 @@ class View:
 class _Lane:
     def __init__(self):
         self.walk = None
-        self.kinds = {}         # node -> the kinds it emitted since the lane's last progress
+        self.kinds = {}         # node -> {kind: its spans} since the lane's last progress
         self.t = None           # the lane's last progress or begin
         self.at = 0.0           # its thread's ms accounted for then
         self.synced = False     # a sync landed since the walk began
@@ -333,7 +334,8 @@ class Ledger:
         bins[min(BINS - 1, max(0, int(math.log2(ev.ms / FINEST) * OCTAVE))) if ev.ms > 0 else 0] += 1
         if ev.shape is not None:
             node.shape = list(ev.shape)
-        lane.kinds.setdefault(ev.node, set()).add(ev.kind)
+        kinds = lane.kinds.setdefault(ev.node, {})
+        kinds[ev.kind] = kinds.get(ev.kind, 0) + 1
 
     def _progress(self, ev):
         lane = self._lanes.get(ev.lane)
@@ -361,15 +363,17 @@ class Ledger:
                     b.stores[store] = (s["bytes"], s["limit"])
         if rows:
             served = {n for n, f in ((walk.plan or {}).get("nodes") or {}).items() if f["served"]}
-            hit = facts.get("hits", {}).keys() | facts.get("fold_hits", {}).keys()
-            for nid in lane.kinds.keys() | hit:
-                kinds, node = lane.kinds.get(nid, ()), walk.nodes.setdefault(nid, Node())
-                if READ in kinds or nid in served and _FILE & set(kinds):
-                    node.served += 1
-                elif _RAN & set(kinds):
-                    node.ran += 1
-                elif CACHE in kinds or nid in hit:
-                    node.held += 1
+            hits, folds = facts.get("hits", {}), facts.get("fold_hits", {})
+            for nid in lane.kinds.keys() | hits.keys() | folds.keys():
+                kinds, node = lane.kinds.get(nid, {}), walk.nodes.setdefault(nid, Node())
+                file = _FILE if nid in served else {READ}
+                left = rows
+                for name, n in (("served", sum(n for k, n in kinds.items() if k in file)),
+                                ("ran", sum(n for k, n in kinds.items() if k in _RAN and k not in file)),
+                                ("held", kinds.get(CACHE, 0) + hits.get(nid, 0) + folds.get(nid, 0))):
+                    n = min(n, left)
+                    setattr(node, name, getattr(node, name) + n)
+                    left -= n
         lane.kinds = {}
 
 

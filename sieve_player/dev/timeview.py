@@ -35,7 +35,7 @@ from ..store import commit
 from ..theme import GAP, GROUND, HEAD, INK, INK_2, LEVEL, LINE_LIFT, PAD, RADIUS, ROW_H, layer, qgray
 
 THREAD = "worker"               # the name graph.Readers.reap asserts of the worker's thread
-MONITOR = "monitor"             # the name its turns go under in the stream, which catalogue.gui tells the monitor's own by
+MONITOR = stream.MONITOR        # the name its turns go under in the stream, which catalogue.gui tells the monitor's own by
 OTHER = qgray(INK_2 - 30)       # unprobed, never a type's hue
 SLOT, PAINT = qgray(INK), qgray(INK_2)      # the GUI thread's spans by kind, having no type
 MINE = qgray(INK_2 - 60)        # a consumer's own work, the monitor's and the dump's, on whichever thread
@@ -859,7 +859,7 @@ class GuiPanel(Panel):
             return []
         late, turns = gui(window.view, window.walk)
         return [Line("worst", f"{late:.0f} ms late"),
-                *(Line("this monitor" if what == "monitor" else f"{what}s" + (f", {top} the longest" if top else ""), f"{share:.1%}")
+                *(Line("this monitor" if what == MONITOR else f"{what}s" + (f", {top} the longest" if top else ""), f"{share:.1%}")
                   for what, share, top in turns)]
 
 

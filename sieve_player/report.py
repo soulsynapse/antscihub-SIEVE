@@ -36,7 +36,7 @@ def report(entries, view, context=None):
     def said(w):
         return (f"{w.lane} · rows {w.start}..{(w.start or 0) + w.length - 1} · {w.done} done · "
                 f"{(cost(w) + w.unprobed) / max(w.done, 1):.2f} ms a row" + (" · under more than one plan" if w.replanned else ""))
-    at = next((i for i, w in enumerate(view.walks) if entries and w.id == entries[0].problem.walk), len(view.walks) - 1)
+    at = next((i for i, w in enumerate(view.walks) if w.id == entries[0].problem.walk), -1) if entries else len(view.walks) - 1
     out.append("")
     if at < 0:
         out.append("WALK     no longer in the history")

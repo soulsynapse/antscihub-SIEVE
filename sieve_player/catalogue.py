@@ -9,7 +9,7 @@ What a reader shows of a walk is a value here, `rows`, `naming`, `needs`, `gui`,
 from dataclasses import dataclass, replace
 
 from .ledger import PARTS, View, WalkId, quantile
-from .stream import CACHE, DECODE, FOLD, PAINT, READ, RUN, SEEK, SLOT, STEP
+from .stream import CACHE, DECODE, FOLD, MONITOR, PAINT, READ, RUN, SEEK, SLOT, STEP
 
 COSTS = (RUN, STEP, FOLD, DECODE, SEEK, READ)      # the kinds a walk is compared with the last by
 
@@ -214,7 +214,7 @@ def thrash(view, walks=None):
     """A store computing or decoding again what it had discarded: the memo, or a decoder's cache,
     the plate's under the video node and a served reader's under the served one."""
     out = []
-    for w in finished(view) if walks is None else walks:
+    for w in judged("thrash", view, walks):
         at = int(w.t1 // view.width) - view.first
         stores = view.buckets[at].stores if 0 <= at < len(view.buckets) else {}
         need = None
@@ -245,7 +245,7 @@ def grows(view, walks=None):
     being the known case; read off the parts of the range its spans fell in, so rows a store held
     are not taken for cheap ones."""
     out = []
-    for w in finished(view) if walks is None else walks:
+    for w in judged("grows", view, walks):
         total = cost(w)
         for nid, node in w.nodes.items():
             per = [ms / n for ms, n in zip(node.parts, node.counts) if n]
@@ -271,7 +271,7 @@ SEEKS = 1           # the seeks a walk may make on one node: the one a walk begi
 def seeks(view, walks=None):
     """The walk's cursor seeking, on the plate's decoder or a served reader's."""
     out = []
-    for w in finished(view) if walks is None else walks:
+    for w in judged("seeks", view, walks):
         for nid, node in w.nodes.items():
             rs = [(u.demand, u.asked, r.count, r.ms) for u, r in node.runs.items() if u.kind == SEEK]
             n = sum(r[2] for r in rs)
@@ -458,6 +458,8 @@ class Log:
         """A Log of the entries as they now stand, a reader's to hold while this one reads on."""
         out = Log(self.classes)
         out.entries, out.checked = {key: replace(e) for key, e in self.entries.items()}, set(self.checked)
+        out._seen, out._settled = {wid: set(s) for wid, s in self._seen.items()}, set(self._settled)
+        out._shows, out._latest = {at: dict(s) for at, s in self._shows.items()}, dict(self._latest)
         return out
 
     def ordered(self):
@@ -633,8 +635,8 @@ def gui(view, walk):
         for name, ms in b.turns.items():
             by[name] = by.get(name, 0.0) + ms
     wall, out = len(bs) * view.width * 1000, []
-    for what, mine in ((SLOT, False), (PAINT, False), ("monitor", True)):
-        rs = {n: ms for n, ms in by.items() if n.endswith(" monitor") == mine and (mine or n.startswith(what))}
+    for what, mine in ((SLOT, False), (PAINT, False), (MONITOR, True)):
+        rs = {n: ms for n, ms in by.items() if n.endswith(f" {MONITOR}") == mine and (mine or n.startswith(what))}
         out.append((what, sum(rs.values()) / wall if wall else 0.0, max(rs, key=rs.get).split(" ", 1)[1] if rs else None))
     return max((b.late for b in bs), default=0.0), out
 

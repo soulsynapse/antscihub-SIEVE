@@ -8,7 +8,7 @@ stream does not carry, the document and the decoder's facts, a text takes as a d
 import json
 import sys
 
-from .catalogue import Log, alike, cost, gui, machine, needs, rows, size, store_name, stores_at, tight
+from .catalogue import NODE, Log, alike, cost, gui, machine, needs, rows, size, store_name, stores_at, tight
 from .ledger import Total, Under, replay
 
 
@@ -107,7 +107,7 @@ def text(entry, view, context=None):
         nodes = (w.plan or {}).get("nodes") or {}
         out.append("plan       " + ("-" if not nodes else f"walk {w.plan['walk']}, chain {w.plan['chain']}, shown {w.plan['shown']}, "
                                     f"overlaid {w.plan['over']}, pinned {w.plan['pinned']}, selected {w.selected}"))
-        if p.subject in nodes:
+        if p.subject_is == NODE and p.subject in nodes:
             readers = [n for n, f in nodes.items() if p.subject in f["reads"].values()]
             for nid in dict.fromkeys([p.subject, *(s for s in nodes[p.subject]["reads"].values() if s), *readers]):
                 f = nodes[nid]

@@ -134,10 +134,11 @@ class Track:
     may write in the gutter left of it and the margin right; `view` is a ledger's View at the axis's
     width and `nodes` is {node: colour} in walk order. `tip` is what the view's bucket `at` shows `up`
     of the track's height from its bottom, in words, or "". The view names the track at the gutter's top.
-    `marked` is the names the picked problem is about, which a track that draws them marks."""
+    `marked` is the nodes the picked problem names and `marked_turns` the GUI thread's spans it
+    names, which a track that draws either marks."""
     name = ""
     stretch = 1         # its share of the height the tracks divide
-    marked = frozenset()
+    marked = marked_turns = frozenset()
 
     def paint(self, p, rect, axis, view, nodes):
         raise NotImplementedError
@@ -158,7 +159,7 @@ class Track:
 
 class Bands(Track):
     """A stack of named bands, a column's full height the bucket's own wall time. `parts(b, nodes)`
-    is [(name, ms, colour)] from the bottom. A band is told by pointing, and by its name in the
+    is [(name, ms, colour, whether the picked problem names it)] from the bottom. A band is told by pointing, and by its name in the
     margin beside the axis's newest whole column where it is tall enough there to take one; a
     marked band is hatched."""
 
@@ -168,10 +169,10 @@ class Bands(Track):
     def paint(self, p, rect, axis, view, nodes):
         full, fm = axis.seconds * 1000, p.fontMetrics()
         for i, b in columns(view, axis):
-            stack(p, rect, axis.x(i), axis.px, [(v, c, name in self.marked) for name, v, c in self.parts(b, nodes)], full)
+            stack(p, rect, axis.x(i), axis.px, [(v, c, hit) for _, v, c, hit in self.parts(b, nodes)], full)
         at, y = axis.whole - view.first, rect.bottom()
         p.setPen(qgray(INK_2))
-        for name, v, _ in self.parts(view.buckets[at], nodes) if 0 <= at < len(view.buckets) else ():
+        for name, v, *_ in self.parts(view.buckets[at], nodes) if 0 <= at < len(view.buckets) else ():
             h = rect.height() * v / full
             if h >= fm.height():
                 p.drawText(QPointF(axis.right + 4, y - h / 2 + fm.ascent() / 2 - 1),
@@ -180,7 +181,7 @@ class Bands(Track):
 
     def tip(self, at, up, axis, view, nodes):
         full, top = axis.seconds * 1000, 0.0
-        for name, v, _ in self.parts(view.buckets[at], nodes):
+        for name, v, *_ in self.parts(view.buckets[at], nodes):
             top += v / full
             if v > 0 and up < top:
                 return f"{name}  {v:.1f} ms, {v / full:.0%} of the bucket"
@@ -232,10 +233,10 @@ class Stack(Bands):
 
     def parts(self, b, nodes):
         ms = b.ms.get(THREAD, {})
-        return [*((n, ms[n], c) for n, c in nodes.items() if n in ms),
-                *((n, v, type_color(None)) for n, v in ms.items() if n not in nodes),
-                *((n, v, MINE) for n, v in b.own.get(THREAD, {}).items()),
-                ("unprobed", b.unprobed, OTHER)]
+        return [*((n, ms[n], c, n in self.marked) for n, c in nodes.items() if n in ms),
+                *((n, v, type_color(None), n in self.marked) for n, v in ms.items() if n not in nodes),
+                *((n, v, MINE, False) for n, v in b.own.get(THREAD, {}).items()),
+                ("unprobed", b.unprobed, OTHER, False)]
 
 
 class Turns(Bands):
@@ -246,9 +247,9 @@ class Turns(Bands):
     stretch = 2
 
     def parts(self, b, nodes):
-        parts = [(f"{n} on {t}", v, colour or nodes.get(n, type_color(None)))
+        parts = [(f"{n} on {t}", v, colour or nodes.get(n, type_color(None)), False)
                  for by, colour in ((b.ms, None), (b.own, MINE)) for t, ms in by.items() if t != THREAD for n, v in ms.items()]
-        return parts + [(name, v, MINE if name.endswith(f" {MONITOR}") else SLOT if name.startswith(stream.SLOT) else PAINT)
+        return parts + [(name, v, MINE if name.endswith(f" {MONITOR}") else SLOT if name.startswith(stream.SLOT) else PAINT, name in self.marked_turns)
                         for name, v in sorted(b.turns.items())]
 
 
@@ -527,7 +528,7 @@ class TimeView(QWidget):
 
 
 def _key(entry):
-    return entry.problem.kind, entry.problem.subject
+    return entry.problem.key
 
 
 class _Lines(QWidget):
@@ -677,13 +678,12 @@ class Table(QWidget):
 
     def __init__(self):
         super().__init__()
-        self.lines, self.marked, self._colours, self._ms = [], frozenset(), {}, {}
+        self.lines, self._bars = [], []     # a line's (ms a row, colour, whether the picked problem names its node), the unprobed's never
         self.setFont(theme.mono_font())
 
     def refresh(self, window):
-        drawn = self.lines, self.marked, self._colours
-        w, self.marked, self._colours = window.walk, window.marked, window.nodes
-        self.lines, self._ms = [], {}
+        drawn, w = (self.lines, self._bars), window.walk
+        self.lines, self._bars = [], []
         if w is not None:
             by = rows(w, window.view)
             for nid in [*(n for n in window.nodes if n in by), *(n for n in by if n not in window.nodes)]:
@@ -691,12 +691,12 @@ class Table(QWidget):
                 self.lines.append((nid, f"{r.ms_row:.2f}", "-" if r.median is None else f"{r.median:.2f} – {r.p99:.2f}",
                                    "-" if r.per_mp is None else f"{r.per_mp:.2f}", r.asked_by(),
                                    "-" if (free := r.rate_if_free(window.rate)) is None else f"{free:.1f}×"))
-                self._ms[nid] = r.ms_row
+                self._bars.append((r.ms_row, window.nodes.get(nid, OTHER), nid in window.marked))
             if w.done:
-                self._ms["unprobed"] = unprobed_row_ms(w)
-                self.lines.append(("unprobed", f"{self._ms['unprobed']:.2f}", "", "", "", ""))
+                self._bars.append((unprobed_row_ms(w), OTHER, False))
+                self.lines.append(("unprobed", f"{self._bars[-1][0]:.2f}", "", "", "", ""))
         self.setFixedHeight((len(self.lines) + 1) * self.LINE + 2 * PAD)
-        if drawn != (self.lines, self.marked, self._colours):
+        if drawn != (self.lines, self._bars):
             self.update()
 
     @painted
@@ -705,7 +705,7 @@ class Table(QWidget):
         p.setPen(Qt.PenStyle.NoPen)
         p.setBrush(qgray(layer(2)))
         p.drawRoundedRect(QRectF(self.rect()), RADIUS, RADIUS)
-        fm, top = p.fontMetrics(), max(self._ms.values(), default=0.0)
+        fm, top = p.fontMetrics(), max((ms for ms, _, _ in self._bars), default=0.0)
         asked = self.ASKED if self.width() >= 700 else 0
         spread, mp = (self.SPREAD + GAP, self.MP + GAP) if self.width() >= 480 else (0, 0)
         bar = self.width() - 2 * PAD - self.NAME - self.MS - spread - mp - asked - self.FREE - 3 * GAP
@@ -714,10 +714,9 @@ class Table(QWidget):
         p.setPen(qgray(INK_2))
         for x, said in zip(cols, ("node", "ms a row", "median – p99" if spread else "", "ms/MP" if mp else "", "asked by" if asked else "", "if free")):
             p.drawText(QPointF(x, PAD + fm.ascent()), said)
-        for i, (nid, ms, run, per, by, free) in enumerate(self.lines, 1):
+        for i, ((nid, ms, run, per, by, free), (cost, colour, hit)) in enumerate(zip(self.lines, self._bars), 1):
             y = PAD + i * self.LINE
-            base, hit = y + (self.LINE + fm.ascent()) / 2 - 2, nid in self.marked
-            colour = self._colours.get(nid, OTHER)
+            base = y + (self.LINE + fm.ascent()) / 2 - 2
             p.fillRect(QRectF(cols[0], y + self.LINE / 2 - 4, 8, 8), colour)
             p.setPen(qgray(INK))
             p.drawText(QPointF(cols[0] + 14, base), fm.elidedText(nid, Qt.TextElideMode.ElideRight, self.NAME - 18))
@@ -725,7 +724,7 @@ class Table(QWidget):
             at = QRectF(cols[1] + self.MS + GAP, y + self.LINE / 2 - 5, max(bar, 0), 10)
             p.fillRect(at, qgray(GROUND))
             if top:
-                p.fillRect(QRectF(at.left(), at.top(), at.width() * self._ms[nid] / top, at.height()), hatch(colour.rgb()) if hit else colour)
+                p.fillRect(QRectF(at.left(), at.top(), at.width() * cost / top, at.height()), hatch(colour.rgb()) if hit else colour)
             p.setPen(qgray(INK_2))
             if spread:
                 p.drawText(QPointF(cols[2], base), run)
@@ -918,9 +917,9 @@ class Window(QWidget):
 
     What a part reads is the last poll's: `view`, `now`, `log`, the catalogue's over the open
     video, `walk`, the walk that progressed last, `rate`, its multiple of realtime, `nodes`,
-    {node: colour} in walk order, `picked`, the (class, subject) of the entry the window is about,
-    the one `pick` named while it holds and else the costliest that does, and `marked`, the names
-    that entry's problem is about. A first sighting is a line on stderr.
+    {node: colour} in walk order, `picked`, the `Problem.key` of the entry the window is about,
+    the one `pick` named while it holds and else the costliest that does, and `marked` and
+    `marked_turns`, the nodes and the GUI thread's spans that entry's problem names. A first sighting is a line on stderr.
 
     Paused, by `toggle_pause` or the axis scrolled back, which is one holding, it draws what it
     drew, `log` being the entries as they stood, and says how far behind now that is in the status,
@@ -943,6 +942,7 @@ class Window(QWidget):
         self.view, self.now, self._ledger = None, clock(), None
         self.log = self._log = Log()        # what the parts read, and the one that reads the ledger: one Log but while paused
         self.walk, self.rate, self.nodes, self.picked, self.marked, self._pick = None, None, {}, None, frozenset(), None
+        self.marked_turns = frozenset()
         self.parts, self.compact, self._armed = [], False, None
         self._judged, self._said, self._until = None, "", -math.inf     # (the view the log read last, its now); the status's word and when it lapses
         self.setMinimumSize(*SMALLEST)
@@ -1074,10 +1074,10 @@ class Window(QWidget):
         holds = [_key(e) for e in self.log.ordered() if e.holds] if entries else []
         self.picked = self._pick if self._pick in holds else holds[0] if holds else None
         e = entries.get(self.picked)
-        self.marked = frozenset(e.problem.nodes) if e else frozenset()
+        self.marked, self.marked_turns = (frozenset(e.problem.nodes), frozenset(e.problem.turns)) if e else (frozenset(), frozenset())
         for part in self.parts:
             if isinstance(part, Track):
-                part.marked = self.marked
+                part.marked, part.marked_turns = self.marked, self.marked_turns
             else:
                 part.refresh(self)
         if self.view is not None:
@@ -1086,7 +1086,7 @@ class Window(QWidget):
 
     @slotted
     def pick(self, key):
-        """Makes the log's entry under `key`, its (class, subject), the one the window is about."""
+        """Makes the log's entry under `key`, its problem's, the one the window is about."""
         self._pick = key
         self._show()
 
@@ -1113,7 +1113,7 @@ class Window(QWidget):
 
     @slotted
     def copy(self, keys=None):
-        """Puts on the clipboard one report of the entries under `keys`, each a (class, subject), or
+        """Puts on the clipboard one report of the entries under `keys`, each a `Problem.key`, or
         of every entry that holds, as the log read them last, and returns it; None with none. The
         history is written as `save_history` writes it and the report names the file, which holds
         the document; where the file cannot be written nothing is copied and None returned."""

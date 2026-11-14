@@ -135,11 +135,11 @@ class Document:
 
     def add_node(self, tool, pos=(0.0, 0.0), params=None, id=None):
         """A new node; its id is `id` or the tool name, suffixed if taken, and as a file's is a
-        name without spaces: ValueError for one that is not."""
+        string and not empty: ValueError for one that is not."""
         ids = {n.id for n in self.nodes}
         nid = id or tool
-        if not isinstance(nid, str) or nid.split() != [nid]:
-            raise ValueError(f"node id {nid!r} is not a name without spaces")
+        if not isinstance(nid, str) or not nid:
+            raise ValueError(f"node id {nid!r} is not a string or is empty")
         k = 2
         while nid in ids:
             nid, k = f"{tool}_{k}", k + 1
@@ -237,8 +237,8 @@ class Document:
                   pinned=[] if pinned is None else [str(pinned)] if isinstance(pinned, str) else [str(p) for p in pinned],
                   extra={k: v for k, v in d.items() if k not in top})
         for nd in d.get("nodes", []):
-            if not isinstance(nd["id"], str) or nd["id"].split() != [nd["id"]]:
-                raise FormatError(f"node id {nd['id']!r} is not a name without spaces")
+            if not isinstance(nd["id"], str) or not nd["id"]:
+                raise FormatError(f"node id {nd['id']!r} is not a string or is empty")
             if any(n.id == nd["id"] for n in doc.nodes):
                 raise FormatError(f"node id {nd['id']!r} appears twice")
             doc.nodes.append(Node(nd["id"], nd["tool"], dict(nd.get("params", {})),

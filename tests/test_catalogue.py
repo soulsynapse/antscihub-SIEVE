@@ -7,7 +7,7 @@ from dataclasses import replace
 import pytest
 
 from sieve_player import document as D
-from sieve_player.catalogue import CLASSES, SOURCES, Entry, Log, cold, reach, seeks, signals, slower, stores_at, unread, waits
+from sieve_player.catalogue import CLASSES, SOURCES, Entry, Log, cold, reach, seeks, signals, slower, stores_at, thrash, unread, waits
 from sieve_player.dev.simulations import HEALTHY, SERVED, SIMULATIONS, run
 from sieve_player.graph import Graph
 from sieve_player.ledger import Bucket, Ledger, Node, Total, Under, View, Walk
@@ -99,8 +99,13 @@ def test_each_class_reads_off_a_view_built_by_hand():
     assert {k[0] for k in said} == set(CLASSES) and all(says and target for says, target, _ in said.values())
     assert said[("unread", "a")] == ("Computed on every row and read by nothing", "the fold of a", ("a",))
     assert said[("thrash", "video")][1:] == ("the video cache's limit", ("video",)) and said[("thrash", "memo")][2] == ()
-    assert said[("waits", "slot walked")][1:] == ("the walked slot", ("slot walked",))
-    assert said[("signals", "slot clipWalked")][1:] == ("how often clipWalked is signalled", ("slot clipWalked",))
+    assert said[("waits", "slot walked")][1:] == ("the walked slot", ()) and waits(waited)[0].turns == ("slot walked",)
+    assert said[("signals", "slot clipWalked")][1:] == ("how often clipWalked is signalled", ()) and signals(signalled)[0].turns == ("slot clipWalked",)
+    named = rec(keys={"memo": "km"}, b={("run", "walk", "b"): [8, 8.0, 0]})     # a node whose id is a reader's own name is still a node
+    named.recomputed, named.recomputed_ms = {"memo": 8, "km": 8}, {"memo": 4.0, "km": 4.0}
+    assert {p.key for p in thrash(View(0.25, 0, [], [named]))} == {("thrash", "store", "memo"), ("thrash", "node", "memo")}
+    (p,) = slower(View(0.25, 0, [], [rec(keys={"b": "k"}, unprobed=run_b(8.0)), rec(1.0, {"b": "k"}, unprobed=run_b(16.0))]))
+    assert (p.key, p.target, p.nodes) == (("slower", "node", "unprobed"), "unprobed", ("unprobed",))
     assert said[("slower", "unprobed")][1:] == ("the time between rows, in no node", ())
 
 
@@ -131,13 +136,13 @@ def test_the_log_holds_one_entry_a_class_and_subject_counted_cleared_and_ordered
     log = Log()
     log.read(View(0.25, 80, [Bucket(wait=40.0, turns={"slot walked": 60.0})] * 2, [rec(19.0, **FOLDED), turned]))
     log.read(View(0.25, 90, [], [turned]))      # its buckets gone from the history, and replanned
-    assert all(e.holds for e in log.ordered()) and set(log.entries) == {("waits", "slot walked"), ("unread", "a")}     # a walk a class cannot judge shows nothing gone
+    assert all(e.holds for e in log.ordered()) and set(log.entries) == {("waits", "turn", "slot walked"), ("unread", "node", "a")}     # a walk a class cannot judge shows nothing gone
     assert "waits" in log.checked and "slower" not in log.checked
     fast, *slow = (rec(30.0 + i, {"b": "k"}, b={("run", "walk", "b"): [8, ms, 0]}) for i, ms in enumerate((8.0, 16.0, 16.0, 16.0)))
     log = Log()
     log.read(View(0.25, 0, [], [fast, *slow[:2]]))
     log.read(View(0.25, 0, [], slow))
-    e = log.entries[("slower", "b")]
+    e = log.entries[("slower", "node", "b")]
     assert (e.count, e.holds, e.problem.walk) == (3, True, ("window", 33.0))     # the walk it is slower than gone from the history, it is slower still
     five = rec(keys={"video": "kv"}, a={("run", "fold", "a"): [8, 20.0, 0]}, **SOUGHT, **GROWN)
     five.recomputed, five.recomputed_ms = {"memo": 8, "kv": 4}, {"memo": 4.0, "kv": 2.0}
@@ -167,7 +172,7 @@ def test_the_log_reads_the_same_however_few_walks_the_ledger_keeps(kept):
             led.event(ev)
             log.read(led.view())
         assert whole.entries == short.entries, (i, ev.kind, ev.lane, ev.row)
-    assert {k: (e.count, e.holds) for k, e in whole.entries.items()} == {("slower", "b"): (4, True)}     # both lanes' slow walks, and the clip's last still slow
+    assert {k: (e.count, e.holds) for k, e in whole.entries.items()} == {("slower", "node", "b"): (4, True)}     # both lanes' slow walks, and the clip's last still slow
 
 
 def test_a_changed_param_between_two_walks_is_compared_with_nothing():
@@ -243,7 +248,7 @@ def test_a_healthy_walk_surfaces_nothing(name, tmp_path):
 @needs_ffmpeg
 def test_an_entrys_text_is_enough_to_begin_on_the_fault(tmp_path):
     seen = run("unread", tmp_path)
-    entry = seen.log.entries[("unread", "work")]
+    entry = seen.log.entries[("unread", "node", "work")]
     t = text(entry, seen.view, seen.context)
     labels = [ln.split()[0] for ln in t.splitlines() if ln and not ln.startswith((" ", "{", "}"))]
     assert labels == ["class", "subject", "line", "cost", "evidence", "walk", "plan", "stores", "video", "decoder", "commit",

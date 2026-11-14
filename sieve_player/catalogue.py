@@ -31,10 +31,14 @@ SOURCES = {
 }
 
 
+NODE, STORE, TURN, BETWEEN = "node", "store", "turn", "between"     # what a problem's subject is: a node's id is no store's name and no turn's
+
+
 @dataclass(frozen=True)
 class Problem:
     kind: str               # the class, a key of CLASSES
     subject: str            # the node it is about, a cache being its node's; "memo" for the memo
+    subject_is: str         # NODE; STORE for the memo; TURN for a span of the GUI thread's; BETWEEN for the time between rows
     line: str
     ms_row: float           # what it cost a row of the walk
     share: float | None     # of what the walk's nodes cost
@@ -44,7 +48,14 @@ class Problem:
     t: float                # that walk's last progress, on the probe's clock
     says: str = ""          # the class in one sentence, for a user of the player and not a reader of the code
     target: str = ""        # what to act on: a node's fold, a store and what the walk needs of it, a slot
-    nodes: tuple = ()       # the nodes it names, and for a wait the GUI thread's span
+    nodes: tuple = ()       # the nodes it names
+    turns: tuple = ()       # the GUI thread's spans it names, as a bucket's `turns` keys them
+
+    @property
+    def key(self):
+        """What a Log holds one Entry of: the class and the subject as the kind of thing it is, so
+        a node whose id is a store's name or a turn's is another subject."""
+        return self.kind, self.subject_is, self.subject
 
 
 def cost(walk):
@@ -287,10 +298,10 @@ def judged(kind, view, walks=None, baselines=None):
     return [w for w in (finished(view) if walks is None else walks) if can is None or can(view, w, baselines)]
 
 
-def _problem(kind, walk, subject, line, ms, evidence, says, target, nodes=()):
+def _problem(kind, walk, subject, line, ms, evidence, says, target, nodes=(), subject_is=NODE, turns=()):
     total = cost(walk)
-    return Problem(kind, subject, line, ms / walk.done, ms / total if total else None, tuple(evidence), SOURCES[kind],
-                   walk.id, walk.t1, says, target, tuple(dict.fromkeys(nodes)))
+    return Problem(kind, subject, subject_is, line, ms / walk.done, ms / total if total else None, tuple(evidence), SOURCES[kind],
+                   walk.id, walk.t1, says, target, tuple(dict.fromkeys(nodes)), tuple(dict.fromkeys(turns)))
 
 
 UNREAD = 0.25       # the share of a walk's cost under folds no watched node asked for, at which each is a problem
@@ -350,7 +361,8 @@ def thrash(view, walks=None, baselines=None):
                                 [f"{n} recomputations, {w.recomputed_ms.get(store, 0.0):.1f} ms", f"store {store}"],
                                 f"The {name} is {'recomputing' if store == 'memo' else 'decoding again'} what it threw out",
                                 f"the {w.lane or 'walk'} needs {size(need[store])}, the {name} holds {size(stores[store][1])}"
-                                if fits else f"the {name}'s limit", () if store == "memo" else [node]))
+                                if fits else f"the {name}'s limit", () if store == "memo" else [node],
+                                STORE if store == "memo" else NODE))
     return out
 
 
@@ -415,13 +427,14 @@ def slower(view, walks=None, baselines=None):
         expected, actual, moved = against
         moved.sort(reverse=True)
         _, a, b, _, nid, kind = moved[0]
+        between = (nid, kind) == _UNPROBED
         out.append(_problem("slower", w, nid, f"a row costs {actual / w.done:.2f} ms in what ran before under this plan against "
                             f"{expected / w.done:.2f} at what each cost in the lane's last walk that ran it and was not itself slower; {nid} went from {a:.2f} to "
                             f"{b:.2f} ms a {kind}", actual - expected,
                             [f"{n} {k}: {x:.3f} to {y:.3f} ms, {d:+.1f} ms over the walk" for d, x, y, _, n, k in moved],
                             "Slower than it was under the same settings",
-                            "the time between rows, in no node" if nid == "unprobed" else nid,
-                            [n for d, _, _, _, n, _ in moved if d > 0 and n != "unprobed"]))
+                            "the time between rows, in no node" if between else nid,
+                            [n for d, _, _, _, n, k in moved if d > 0 and (n, k) != _UNPROBED], BETWEEN if between else NODE))
     return out
 
 
@@ -452,7 +465,7 @@ def waits(view, walks=None, baselines=None):
                             [*(f"{name}: {ms:.1f} ms" for name, ms in top),
                              f"the walk's tools {w.wait:.1f} ms off their CPU, its reads {w.read_wait:.1f}"],
                             "The walk waits while the interface thread is busy",
-                            "the " + " ".join(reversed(top[0][0].split(" ", 1))), [top[0][0]]))
+                            "the " + " ".join(reversed(top[0][0].split(" ", 1))), subject_is=TURN, turns=[top[0][0]]))
     return out
 
 
@@ -481,7 +494,7 @@ def signals(view, walks=None, baselines=None):
                          f"{ms[name] / n * 1000:.0f} us each", ms[name],
                          [f"{name}: {n} calls, {ms[name]:.1f} ms", f"the walk: {(w.t1 - w.t0) * 1000 / w.done:.3f} ms a row of wall"],
                          "The interface is told of every row, and a row is short enough to feel it",
-                         f"how often {slot} is signalled", [name])
+                         f"how often {slot} is signalled", subject_is=TURN, turns=[name])
             out.append(replace(p, share=None))
     return out
 
@@ -499,7 +512,7 @@ class Entry:
 
 
 class Log:
-    """The problems the catalogue has surfaced, one Entry per class and subject. `read(view)` may
+    """The problems the catalogue has surfaced, one Entry per class and subject, by `Problem.key`. `read(view)` may
     be called on any view of one ledger any number of times: a walk counts once toward an entry
     however often it is read, and one its lane has begun another after, which no later event
     changes, is judged in the first read that finds it so and never again. An entry holds while
@@ -509,11 +522,11 @@ class Log:
 
     def __init__(self, classes=None):
         self.classes = CLASSES if classes is None else classes
-        self.entries = {}       # (class, subject) -> Entry
+        self.entries = {}       # a Problem's key -> Entry
         self.checked = set()    # the classes that have judged a walk
         self._seen = {}         # a walk's id -> the entries it has counted toward
         self._settled = set()   # the ids of the walks judged for the last time
-        self._shows = {}        # (class, a walk's id) -> {(class, subject): Problem} as the class last judged it
+        self._shows = {}        # (class, a walk's id) -> {a Problem's key: Problem} as the class last judged it
         self._latest = {}       # (lane, class) -> the id of the lane's last walk the class judged, kept when the history no longer holds the walk
         self._baselines = {}    # lane -> _Baseline through the last of the lane's walks read that it had begun another after
         self._last = {}         # lane -> its last walk as last read, for the baseline should the history drop it as the lane begins another
@@ -531,7 +544,7 @@ class Log:
                 if was is None or w.t0 >= was.t0:
                     self._latest[w.lane, kind] = w.id
             for p in detect(view, can, self._baselines):
-                key = (p.kind, p.subject)
+                key = p.key
                 e = self.entries.get(key)
                 if e is None:
                     e = self.entries[key] = Entry(p, p.t)

@@ -23,7 +23,8 @@ from PySide6.QtWidgets import QApplication, QHBoxLayout, QPushButton, QSizePolic
 
 from .. import theme
 from ..canvas import type_color
-from ..catalogue import Log, alike, cost, gui, machine, needs, rows, size, store_name, tight
+from ..catalogue import (Log, alike, bucket_row_ms, gui, machine, needs, realtime_multiple, resource_shares, rows, size,
+                         store_name, tight, unprobed_row_ms, walk_row_ms)
 from ..document import produces
 from ..ledger import coarsen, save
 from ..pace import clock as as_clock
@@ -48,6 +49,7 @@ NARROW, SHORT = 720, 420        # px; a window narrower or shorter than these is
 SMALLEST = (488, 260)           # the least the window is sized to: the figure and the copy across, the costliest problem and the stack down
 SIDE = 300                      # px; the side panels' column
 ARMED = 6.0                     # s; how long a first press of the cold walk's control waits for the second
+SAID = 6.0                      # s; how long the status says what was just done before what stands returns
 OURS = QColor(224, 192, 112)    # SIEVE's share of the machine: the mockup's amber
 ELSE = qgray(INK_2 - 40)        # everything on the machine that is not SIEVE
 PICKED, PICKED_EDGE = QColor(58, 42, 41), QColor(168, 72, 63)      # a picked problem's row, LEVEL toward the ground
@@ -63,6 +65,18 @@ def hatch(rgb):
         for y in range(6):
             img.setPixelColor(x, y, QColor(rgb) if (x + y) % 6 < 3 else qgray(GROUND))
     return QBrush(QPixmap.fromImage(img))
+
+
+def painted(paint):
+    """A widget's `paint` as a "paint" named "monitor" in the stream of the video its window's
+    `source` holds; bare under a window with no source or no video."""
+    def paintEvent(self, e):
+        graph = getattr(getattr(QWidget.window(self), "source", None), "graph", None)     # _Lines holds a `window` of its own
+        if graph is None:
+            return paint(self, e)
+        with graph.stream.turn("paint", "monitor"):
+            return paint(self, e)
+    return paintEvent
 
 
 @dataclass(frozen=True)
@@ -180,7 +194,7 @@ class Stack(Bands):
     def label(w):
         """A walk as its segment says it."""
         rows = "" if w.start is None else f" · rows {w.start}..{w.start + w.length - 1}"
-        return f"{w.lane or 'walk'}{rows} · {(cost(w) + w.unprobed) / w.done:.2f} ms a row"
+        return f"{w.lane or 'walk'}{rows} · {walk_row_ms(w):.2f} ms a row"
 
     def segments(self, axis, view):
         """[(x0, x1, walk)] for the walks of `view` with a row done that are on `axis`."""
@@ -232,14 +246,8 @@ class RowCost(Track):
     is the most on the axis, written in the gutter."""
     name = "row"
 
-    @staticmethod
-    def cost(b):
-        """(ms a row, the rows), or None for a bucket that finished none."""
-        n = sum(b.rows.values())
-        return (sum(b.ms.get(THREAD, {}).values()) / n, n) if n else None
-
     def paint(self, p, rect, axis, view, nodes):
-        cols = [(i, c[0]) for i, b in columns(view, axis) if (c := self.cost(b))]
+        cols = [(i, c[0]) for i, b in columns(view, axis) if (c := bucket_row_ms(b, THREAD))]
         top = max((v for _, v in cols), default=0.0)
         if not top:
             return
@@ -248,7 +256,7 @@ class RowCost(Track):
             p.fillRect(QRectF(axis.x(i), rect.bottom() - 2 - (rect.height() - 2) * v / top, axis.px, 2), qgray(INK))
 
     def tip(self, b, up, axis, view, nodes):
-        c = self.cost(b)
+        c = bucket_row_ms(b, THREAD)
         return f"{c[0]:.2f} ms a row over {c[1]} rows" if c else ""
 
 
@@ -310,14 +318,9 @@ class Load(Track):
 
     @staticmethod
     def shares(m, name):
-        """(SIEVE's share of the whole, everything else's) of resource `name` in sample `m`, or None unread."""
+        """`catalogue.resource_shares` of resource `name` in sample `m`, or None unread."""
         v = m.get(name)
-        if not v:
-            return None
-        if name == "disk":
-            part = v[0] / (v[0] + v[1]) if v[0] + v[1] else 0.0
-            return (v[2] or 0.0) * part, (v[2] or 0.0) * (1 - part)
-        return v[0] / v[2], v[1] / v[2]
+        return resource_shares(name, v) if v else None
 
     def paint(self, p, rect, axis, view, nodes):
         cols, last = [], {}
@@ -444,6 +447,7 @@ class TimeView(QWidget):
                     lines.insert(0, said)
         return f"{as_clock(max(0.0, self.now - (i + 1) * axis.seconds))} ago\n" + "\n".join(lines) if lines else ""
 
+    @painted
     def paintEvent(self, _):
         p = QPainter(self)
         axis, fm = self.axis(), p.fontMetrics()
@@ -520,6 +524,7 @@ class _Lines(QWidget):
     def copy_rect(self, i):
         return QRectF(self.width() - self.COPY, i * self.H + 2, self.COPY, self.H - 6)
 
+    @painted
     def paintEvent(self, _):
         p = QPainter(self)
         ui, mono = theme.ui_font(), theme.mono_font()
@@ -655,15 +660,16 @@ class Table(QWidget):
                 r = by[nid]
                 self.lines.append((nid, f"{r.ms_row:.2f}", "-" if r.median is None else f"{r.median:.2f} – {r.p99:.2f}",
                                    "-" if r.per_mp is None else f"{r.per_mp:.2f}", r.asked_by(),
-                                   "-" if r.free is None or window.rate is None else f"{window.rate * r.free:.1f}×"))
+                                   "-" if (free := r.rate_if_free(window.rate)) is None else f"{free:.1f}×"))
                 self._ms[nid] = r.ms_row
             if w.done:
-                self.lines.append(("unprobed", f"{w.unprobed / w.done:.2f}", "", "", "", ""))
-                self._ms["unprobed"] = w.unprobed / w.done
+                self._ms["unprobed"] = unprobed_row_ms(w)
+                self.lines.append(("unprobed", f"{self._ms['unprobed']:.2f}", "", "", "", ""))
         self.setFixedHeight((len(self.lines) + 1) * self.LINE + 2 * PAD)
         if drawn != (self.lines, self.marked, self._colours):
             self.update()
 
+    @painted
     def paintEvent(self, _):
         p = QPainter(self)
         p.setPen(Qt.PenStyle.NoPen)
@@ -741,6 +747,7 @@ class Panel(QWidget):
     def _height(self, ln):
         return self.fontMetrics().lineSpacing() * (1 + (len(self._wrapped(ln[3])) if ln[3] else 0)) + (12 if ln[2] else 0) + 4
 
+    @painted
     def paintEvent(self, _):
         p = QPainter(self)
         p.setPen(PICKED_EDGE if self.outlined else Qt.PenStyle.NoPen)
@@ -864,10 +871,11 @@ class Window(QWidget):
     polled every `period_ms` while shown, `clock` being the probe's. What a part reads is the last
     poll's: `view`, `now`, `log`, the catalogue's over the open video, `walk`, the walk that
     progressed last, `rate`, its multiple of realtime, `nodes`, {node: colour} in walk order,
-    `picked`, the (class, subject) of the entry the window is about, the costliest that holds until
-    `pick` names one, and `marked`, the names that entry's problem is about. A first sighting is a
-    line on stderr. Paused, by `toggle_pause` or the axis scrolled back, which is one holding, it
-    draws what it drew and says how far behind now that is, the ledger taking the stream. `source`
+    `picked`, the (class, subject) of the entry the window is about, the one `pick` named while it
+    holds and else the costliest that does, and `marked`, the names that entry's problem is about.
+    A first sighting is a line on stderr. Paused, by `toggle_pause` or the axis scrolled back, which
+    is one holding, it draws what it drew and says how far behind now that is, the ledger taking the
+    stream and the log reading it. What was just done is said in the status for SAID seconds. `source`
     may hold `worker`, which `walk_cold` has walk the window again over emptied stores. Narrower
     than NARROW or shorter than SHORT it is compact: the figure, the costliest problem's sentence
     and target, how many more there are, the copy of them all and the time view. Its poll and its
@@ -883,6 +891,7 @@ class Window(QWidget):
         self.view, self.now, self.log, self._ledger = None, clock(), Log(), None
         self.walk, self.rate, self.nodes, self.picked, self.marked, self._pick = None, None, {}, None, frozenset(), None
         self.parts, self.compact, self._armed = [], False, None
+        self._judged, self._said, self._until = None, "", -math.inf     # (the view the log read last, its now); the status's word and when it lapses
         self.setMinimumSize(*SMALLEST)
         self.resize(1200, 780)
         lay = QVBoxLayout(self)
@@ -915,7 +924,6 @@ class Window(QWidget):
         self.left = QVBoxLayout()
         self.left.setSpacing(GAP)
         self.time = TimeView([])
-        self.time.paintEvent = self._timed("paint", self.time.paintEvent)
         self.left.addWidget(self.time, 1)
         self.sidebar = QWidget()
         self.sidebar.setFixedWidth(SIDE)
@@ -938,9 +946,6 @@ class Window(QWidget):
             self.time.tracks.append(part)
             self.time.update()
             return
-        for w in (part, *part.findChildren(QWidget)):
-            if any("paintEvent" in vars(c) for c in type(w).__mro__ if c.__module__.startswith("sieve_player")):
-                w.paintEvent = self._timed("paint", w.paintEvent)
         place = getattr(part, "place", "side")
         if place == "lead":
             self.lead.addWidget(part)
@@ -950,59 +955,62 @@ class Window(QWidget):
             self.side.insertWidget(self.side.count() - 1, part)
         self._fit()
 
-    def _timed(self, kind, fn):
-        def timed(*args):
-            graph = self.source.graph
-            if graph is None:
-                return fn(*args)
-            with graph.stream.turn(kind, "monitor"):
-                return fn(*args)
-        return timed
-
     def refresh(self):
         graph, ledger = self.source.graph, self.source.ledger
         if ledger is not self._ledger:
-            self._ledger, self.log, self.view, self._pick = ledger, Log(), None, None
+            self._ledger, self.log, self.view, self._judged, self._pick = ledger, Log(), None, None, None
             self.time.release()
         if graph is None or ledger is None:
-            self.status.setText("no video")
             self.figure.set_figure(None)
             self.walk = self.rate = None
             self.time.set_view(None, {}, self.clock())
             self._show()
-        elif self.time.held is None:
-            self._timed("slot", self._read)(graph, ledger)
-        held = self.time.held is not None
-        self.pause.setText("Resume" if held else "Pause")
+        else:
+            with graph.stream.turn("slot", "monitor"):
+                self._judge(ledger)
+                if self.time.held is None:
+                    self._read(graph)
         if self._armed is not None and self.clock() - self._armed > ARMED:
             self._armed = None
-            self.status.setText("")
+        self.pause.setText("Resume" if self.time.held is not None else "Pause")
         self.cold.setText("Cold walk" if self._armed is None else "Walk it")
-        if held and self._armed is None:
-            self.status.setText(f"paused · showing {as_clock(self.clock() - self.time.held)} ago · still recording")
-        elif self.status.text().startswith("paused"):
-            self.status.setText("")
+        self.status.setText(self._status())
 
-    def _read(self, graph, ledger):
-        if self.status.text() == "no video":
-            self.status.setText("")
-        self.view, self.now, self.nodes = ledger.view(), self.clock(), colours(graph)
-        for e in self.log.read(self.view):
+    def _status(self):
+        """The status line: no video, else what was said inside its time, else that the window is paused."""
+        if self.source.graph is None or self.source.ledger is None:
+            return "no video"
+        if self.clock() < self._until:
+            return self._said
+        if self.time.held is not None:
+            return f"paused · showing {as_clock(self.clock() - self.time.held)} ago · still recording"
+        return ""
+
+    def _say(self, text, seconds=SAID):
+        self._said, self._until = text, self.clock() + seconds
+        self.status.setText(self._status())
+
+    def _judge(self, ledger):
+        """Takes the ledger's view now into the log, paused or not, a first sighting a line on stderr."""
+        self._judged = ledger.view(), self.clock()
+        for e in self.log.read(self._judged[0]):
             print(f"SIEVE {time.strftime('%H:%M:%S')}: monitor: {e.problem.kind} {e.problem.subject}: {e.problem.line}", file=sys.stderr)
+
+    def _read(self, graph):
+        (self.view, self.now), self.nodes = self._judged, colours(graph)
         pace = self.source.pace
         figure = None if pace is None else pace.figure(graph.fps, graph.count)
         self.figure.set_figure(figure)
         self.walk = w = max((w for w in self.view.walks if w.done), key=lambda w: w.t1, default=None)
-        spent = 0.0 if w is None else cost(w) + w.unprobed
         self.rate = (None if w is None else figure.multiple if figure is not None and figure.lane == w.lane and figure.multiple
-                     else w.done / (spent / 1000) / graph.fps if spent else None)
+                     else realtime_multiple(w, graph.fps))
         self._show()
 
     def _show(self):
         """Hands the parts what the last poll read, about the entry now picked."""
         entries = {} if self.view is None else self.log.entries
-        holds = [e for e in self.log.ordered() if e.holds] if entries else []
-        self.picked = self._pick if self._pick in entries else _key(holds[0]) if holds else None
+        holds = [_key(e) for e in self.log.ordered() if e.holds] if entries else []
+        self.picked = self._pick if self._pick in holds else holds[0] if holds else None
         e = entries.get(self.picked)
         self.marked = frozenset(e.problem.nodes) if e else frozenset()
         for part in self.parts:
@@ -1031,7 +1039,7 @@ class Window(QWidget):
 
     def _write(self, folder=None):
         path = os.path.join(folder or tempfile.gettempdir(), f"sieve-history-{time.strftime('%Y%m%d-%H%M%S')}.json")
-        save(self.view, path, **self.context())
+        save(self._judged[0], path, **self.context())
         return path
 
     def copy(self, keys=None):
@@ -1039,22 +1047,23 @@ class Window(QWidget):
         subject), or of every entry that holds, and returns it; None with none. The history is
         written as `save_history` writes it and the report names the file, which holds the document."""
         entries = [e for e in self.log.ordered() if (e.holds if keys is None else _key(e) in keys)]
-        if not entries or self.view is None:
+        if not entries or self._judged is None:
             return None
-        said = report(entries, self.view, self.context() | {"history": self._write(), "now": self.now,
-                                                            "when": time.strftime("%Y-%m-%d %H:%M:%S")})
+        view, now = self._judged
+        said = report(entries, view, self.context() | {"history": self._write(), "now": now,
+                                                       "when": time.strftime("%Y-%m-%d %H:%M:%S")})
         QApplication.clipboard().setText(said)
         return said
 
     def save_history(self, folder=None):
-        """Writes the last poll's view with the document and the rest of `context` to a file under
-        `folder`, the system's temporary one when not given, puts its path on the clipboard and
-        returns it; None with no video."""
-        if self.view is None:
+        """Writes the view the log read last, which while paused is later than the one drawn, with
+        the document and the rest of `context` to a file under `folder`, the system's temporary one
+        when not given, puts its path on the clipboard and returns it; None with no video."""
+        if self._judged is None:
             return None
         path = self._write(folder)
         QApplication.clipboard().setText(path)
-        self.status.setText(f"history written to {path}, and the path to the clipboard")
+        self._say(f"history written to {path}, and the path to the clipboard")
         return path
 
     def walk_cold(self):
@@ -1067,14 +1076,14 @@ class Window(QWidget):
         if self._armed is None or self.clock() - self._armed > ARMED:
             held = graph.decoder.cache_bytes + sum(d.cache_bytes for d in graph.readers.decoders())
             self._armed = self.clock()
-            self.status.setText(f"a cold walk computes again what is held, {size(graph.memo.bytes)} in the memo and "
-                                f"{size(held)} in the caches · press again to walk")
+            self._say(f"a cold walk computes again what is held, {size(graph.memo.bytes)} in the memo and "
+                      f"{size(held)} in the caches · press again to walk", ARMED)
             self.cold.setText("Walk it")
             return False
         self._armed = None
         graph.empty()
         worker.invalidate()
-        self.status.setText("walking the window cold")
+        self._say("walking the window cold")
         self.cold.setText("Cold walk")
         return True
 

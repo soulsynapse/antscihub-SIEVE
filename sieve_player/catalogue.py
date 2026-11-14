@@ -50,6 +50,39 @@ def cost(walk):
     return sum(r.ms for n in walk.nodes.values() for r in n.runs.values())
 
 
+def walk_row_ms(walk):
+    """What a row of `walk` cost, its nodes' ms and its unprobed over the rows done, of which it has one."""
+    return (cost(walk) + walk.unprobed) / walk.done
+
+
+def unprobed_row_ms(walk):
+    """The part of `walk_row_ms` no node ran."""
+    return walk.unprobed / walk.done
+
+
+def realtime_multiple(walk, fps):
+    """The rows `walk` did in a second of what they cost, over a clip's `fps`; None for a walk that cost nothing."""
+    ms = walk_row_ms(walk)
+    return 1000 / ms / fps if ms else None
+
+
+def bucket_row_ms(bucket, thread):
+    """(`thread`'s ms in nodes over the rows the lanes finished in `bucket`, those rows), or None when it finished none."""
+    n = sum(bucket.rows.values())
+    return (sum(bucket.ms.get(thread, {}).values()) / n, n) if n else None
+
+
+def resource_shares(name, sample):
+    """(SIEVE's share of the whole, everything else's) of memory, cores or disk in one machine
+    `sample` of it; the disk's whole is how busy it was, split by the bytes each moved."""
+    if name == "disk":
+        ours, others, busy = sample
+        part = ours / (ours + others) if ours + others else 0.0
+        return (busy or 0.0) * part, (busy or 0.0) * (1 - part)
+    ours, others, whole = sample
+    return ours / whole, others / whole
+
+
 def size(b):
     """Bytes as they are written, in GB from one up and in MB under it."""
     return f"{b / 2**30:.1f} GB" if b >= 2**30 else f"{b / 2**20:.1f} MB"
@@ -387,6 +420,10 @@ class Row:
     def asked_by(self):
         return {"walk": "the walk", "fold": f"fold of {self.asked}", "display": "the display", "bake": "a bake"}.get(self.demand, "-")
 
+    def rate_if_free(self, rate):
+        """The walk's multiple of realtime were the node free, `rate` being its multiple now; None when either is not known."""
+        return None if self.free is None or rate is None else rate * self.free
+
 
 def _pixels(view, walk, nid):
     """The pixels of `nid`'s output, by `walk` or else the latest walk of `view` before it that saw
@@ -572,17 +609,16 @@ def machine(view, walk):
         stores = next((b.stores for b in reversed(view.buckets[:at]) if b.stores), {})
         held = [f"{store_name(s, view)} {size(n)}" for s, (n, _) in sorted(stores.items(), key=lambda x: -x[1][0]) if n]
         faults = max((b.machine["faults"] for b in seen if b.machine.get("faults") is not None), default=None)
-        out.append(Resource("memory", ours / whole, others / whole, f"{size(ours + others)} of {size(whole)}",
+        out.append(Resource("memory", *resource_shares("memory", m), f"{size(ours + others)} of {size(whole)}",
                             f"SIEVE {size(ours)}" + (": " + ", ".join(held) if held else "")
                             + ("" if faults is None else f" · {faults:.0f} hard faults a second"), (ours + others) / whole >= MEMORY))
     if (m := most("cores", lambda m: m[0] + m[1])) is not None:
         ours, others, whole = m
-        out.append(Resource("cores", ours / whole, others / whole, f"{ours + others:.1f} of {whole}", f"SIEVE {ours:.1f}",
+        out.append(Resource("cores", *resource_shares("cores", m), f"{ours + others:.1f} of {whole}", f"SIEVE {ours:.1f}",
                             (ours + others) / whole >= CORES))
     if (m := most("disk", lambda m: (m[2] or 0.0, m[0] + m[1]))) is not None:
         ours, others, busy = m
-        part = ours / (ours + others) if ours + others else 0.0
-        out.append(Resource("disk", (busy or 0.0) * part, (busy or 0.0) * (1 - part),
+        out.append(Resource("disk", *resource_shares("disk", m),
                             f"{size(ours + others)}/s" + ("" if busy is None else f" · busy {busy:.0%}"),
                             f"SIEVE {size(ours)}/s" + (" · how busy the disks were was not read" if busy is None else ""),
                             (busy or 0.0) >= DISK))
@@ -610,6 +646,6 @@ def alike(view, walk):
     `walk`'s own among them when it is whole. Oldest first."""
     def ran(w):
         return {n: x.ran for n, x in w.nodes.items() if x.ran}
-    return [(cost(w) + w.unprobed) / w.done for w in view.walks
+    return [walk_row_ms(w) for w in view.walks
             if w.lane == walk.lane and w.keys == walk.keys and w.length == walk.length and w.done >= w.length
             and not w.replanned and ran(w) == ran(walk)]

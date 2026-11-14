@@ -1,8 +1,9 @@
 """The ledger: the probe's stream kept over time, with no opinion of it. Wall time is cut into buckets
 of one width over a bounded history, and each walk of a lane is one record. It is fed events and
 samples and nothing else, holding no graph and importing no Qt, so a dump replays into one. `event`
-only queues; the bookkeeping is done by whoever takes a `view()`, or by the emitting thread once the
-queue is long and no reader is at it, so an emit never waits on a reader.
+and `sample` only queue; the bookkeeping is done by whoever takes a `view()`, or by the thread that
+queues once the queue is long and no reader is at it, so an emit never waits on a reader and the
+queue is bounded with no reader at all.
 """
 import json
 import math
@@ -16,7 +17,7 @@ from .stream import BEGIN, CACHE, CANCEL, DECODE, EVICT, FOLD, NODES, OWN, PROGR
 from .trace import read_dump
 
 PARTS = 8           # the pieces a walk's range is cut into for a node's cost along it
-BACKLOG = 4096      # events queued before the emitting thread folds them itself
+BACKLOG = 4096      # events and samples queued before the thread that queues the next folds them itself
 FINEST = 2.0 ** -10 # ms; the bottom of a distribution's first bin
 OCTAVE = 8          # bins to a doubling of ms
 BINS = 26 * OCTAVE  # up to 2 ** 16 ms; a span past either end is counted in the bin at it
@@ -151,7 +152,7 @@ class Ledger:
     """`width` is a bucket's seconds, `history` the buckets kept, `walks` the records kept, and
     `discards` how many discarded (key, row) are remembered for telling a recomputation. `event` and
     `sample` may be called from any thread and never wait; a sample other than "late" and "machine" is not kept.
-    `timed()` gives the context an emitting thread folds inside, for whoever attached the ledger to
+    `timed()` gives the context a thread that queues folds inside, for whoever attached the ledger to
     time its bookkeeping there, the ledger holding no Emitter to emit a span through."""
 
     def __init__(self, width=0.25, history=2400, walks=64, discards=1 << 17, timed=nullcontext):
@@ -167,16 +168,19 @@ class Ledger:
         self._gone = {}                 # (key, row) a store discarded -> the store
 
     def event(self, ev):
-        self._q.append(ev)
+        self._queue(ev)
+
+    def sample(self, name, value, t):
+        self._queue((name, value, t))
+
+    def _queue(self, item):
+        self._q.append(item)
         if len(self._q) > BACKLOG and self._lock.acquire(blocking=False):
             try:
                 with self._timed():
                     self._fold()
             finally:
                 self._lock.release()
-
-    def sample(self, name, value, t):
-        self._q.append((name, value, t))
 
     def view(self):
         with self._lock:

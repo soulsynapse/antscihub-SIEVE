@@ -6,7 +6,7 @@ import pytest
 
 from sieve_player import document as D
 from sieve_player.graph import Graph
-from sieve_player.ledger import PARTS, Ledger, replay, save, saved
+from sieve_player.ledger import BACKLOG, PARTS, Ledger, replay, save, saved
 from sieve_player.stream import Event
 from sieve_player.trace import FIELDS, Dump
 from tests.test_graph import TOOLS, Dec, add, gray
@@ -140,3 +140,11 @@ def test_a_view_is_the_readers_to_hold_while_another_thread_feeds():
     for ev in events:
         alone.event(ev)
     assert led.view() == alone.view() and early == kept and led.view().walks[0].done == 4000
+
+
+def test_the_queue_is_bounded_with_no_reader_whether_events_or_samples_feed_it():
+    for feed in (lambda led, i: led.sample("late", 1.0, i * 0.1), lambda led, i: led.event(event("slot", i * 0.1, 1.0, "walked"))):
+        led = Ledger()
+        for i in range(3 * BACKLOG):
+            feed(led, i)
+            assert len(led._q) <= BACKLOG + 1

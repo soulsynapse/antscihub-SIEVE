@@ -6,7 +6,7 @@ nothing here is rendered to text: that is report.py's.
 What a reader shows of a walk is a value here, `rows`, `naming`, `needs`, `gui`, `machine`, `tight`,
 `alike`, so the monitor and whatever else draws a node read one figure.
 """
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from .ledger import View, WalkId, quantile
 from .stream import CACHE, DECODE, FOLD, PAINT, READ, RUN, SEEK, SLOT, STEP
@@ -176,10 +176,11 @@ def thrash(view, walks=None):
     for w in finished(view) if walks is None else walks:
         at = int(w.t1 // view.width) - view.first
         stores = view.buckets[at].stores if 0 <= at < len(view.buckets) else {}
-        need = needs(view, w)
+        need = None
         for store, n in w.recomputed.items():
             if n < THRASH * w.done:
                 continue
+            need = needs(view, w) if need is None else need
             node = next((nid for nid, k in (w.keys or {}).items() if k == store), store)
             held = f"; it held {stores[store][0] / 2**20:.1f} of {(stores[store][1] or 0) / 2**20:.1f} MB at the walk's end" if store in stores else ""
             line = (f"the memo ran again {n} results it had discarded" if store == "memo" else
@@ -397,6 +398,12 @@ class Log:
         self._seen = {wid: s for wid, s in self._seen.items() if wid in held}
         self._settled = (self._settled | {w.id for w in judge if w is not last[w.lane]}) & held
         return made
+
+    def copy(self):
+        """A Log of the entries as they now stand, a reader's to hold while this one reads on."""
+        out = Log(self.classes)
+        out.entries = {key: replace(e) for key, e in self.entries.items()}
+        return out
 
     def ordered(self):
         """The entries, the costliest first."""
@@ -646,6 +653,7 @@ def alike(view, walk):
     `walk`'s own among them when it is whole. Oldest first."""
     def ran(w):
         return {n: x.ran for n, x in w.nodes.items() if x.ran}
+    mine = ran(walk)
     return [walk_row_ms(w) for w in view.walks
             if w.lane == walk.lane and w.keys == walk.keys and w.length == walk.length and w.done >= w.length
-            and not w.replanned and ran(w) == ran(walk)]
+            and not w.replanned and ran(w) == mine]

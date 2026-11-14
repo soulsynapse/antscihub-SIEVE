@@ -15,13 +15,13 @@ import sys
 import tempfile
 import time
 from dataclasses import dataclass
-from functools import lru_cache
+from functools import lru_cache, wraps
 
 from PySide6.QtCore import QPointF, QRectF, Qt, QTimer
-from PySide6.QtGui import QBrush, QColor, QImage, QKeySequence, QPainter, QPixmap, QShortcut
+from PySide6.QtGui import QBrush, QColor, QFontMetrics, QImage, QKeySequence, QPainter, QPixmap, QShortcut
 from PySide6.QtWidgets import QApplication, QHBoxLayout, QPushButton, QSizePolicy, QToolTip, QVBoxLayout, QWidget
 
-from .. import theme
+from .. import stream, theme
 from ..canvas import type_color
 from ..catalogue import (Log, alike, bucket_row_ms, gui, machine, needs, realtime_multiple, resource_shares, rows, size,
                          store_name, tight, unprobed_row_ms, walk_row_ms)
@@ -32,9 +32,9 @@ from ..pacecontrol import PaceControl
 from ..report import report
 from ..store import commit
 from ..theme import GAP, GROUND, HEAD, INK, INK_2, LEVEL, LINE_LIFT, PAD, RADIUS, ROW_H, layer, qgray
-from ..stream import OWN
 
 THREAD = "worker"               # the name graph.Readers.reap asserts of the worker's thread
+MONITOR = "monitor"             # the name its turns go under in the stream, which catalogue.gui tells the monitor's own by
 OTHER = qgray(INK_2 - 30)       # unprobed, never a type's hue
 SLOT, PAINT = qgray(INK), qgray(INK_2)      # the GUI thread's spans by kind, having no type
 MINE = qgray(INK_2 - 60)        # a consumer's own work, the monitor's and the dump's, on whichever thread
@@ -67,16 +67,22 @@ def hatch(rgb):
     return QBrush(QPixmap.fromImage(img))
 
 
-def painted(paint):
-    """A widget's `paint` as a "paint" named "monitor" in the stream of the video its window's
-    `source` holds; bare under a window with no source or no video."""
-    def paintEvent(self, e):
-        graph = getattr(getattr(QWidget.window(self), "source", None), "graph", None)     # _Lines holds a `window` of its own
-        if graph is None:
-            return paint(self, e)
-        with graph.stream.turn("paint", "monitor"):
-            return paint(self, e)
-    return paintEvent
+def turned(kind):
+    """A decorator of a widget's method: each call is a turn of `kind` named MONITOR in the stream of
+    the video its window's `source` holds; bare under a window with no source or no video."""
+    def wrap(method):
+        @wraps(method)
+        def turn(self, *args, **kwargs):
+            graph = getattr(getattr(self.window(), "source", None), "graph", None)
+            if graph is None:
+                return method(self, *args, **kwargs)
+            with graph.stream.turn(kind, MONITOR):
+                return method(self, *args, **kwargs)
+        return turn
+    return wrap
+
+
+painted, slotted = turned(stream.PAINT), turned(stream.SLOT)
 
 
 @dataclass(frozen=True)
@@ -124,8 +130,8 @@ def stack(p, rect, x, px, parts, full):
 class Track:
     """One reading of the buckets. `paint` draws into `rect`, a column per bucket of `axis`, and
     may write in the gutter left of it and the margin right; `view` is a ledger's View at the axis's
-    width and `nodes` is {node: colour} in walk order. `tip` is what bucket `b` shows `up` of the
-    track's height from its bottom, in words, or "". The view names the track at the gutter's top.
+    width and `nodes` is {node: colour} in walk order. `tip` is what the view's bucket `at` shows `up`
+    of the track's height from its bottom, in words, or "". The view names the track at the gutter's top.
     `marked` is the names the picked problem is about, which a track that draws them marks."""
     name = ""
     stretch = 1         # its share of the height the tracks divide
@@ -134,7 +140,7 @@ class Track:
     def paint(self, p, rect, axis, view, nodes):
         raise NotImplementedError
 
-    def tip(self, b, up, axis, view, nodes):
+    def tip(self, at, up, axis, view, nodes):
         return ""
 
     def body(self, rect):
@@ -170,9 +176,9 @@ class Bands(Track):
                            fm.elidedText(name, Qt.TextElideMode.ElideRight, TimeView.MARGIN - 4))
             y -= h
 
-    def tip(self, b, up, axis, view, nodes):
+    def tip(self, at, up, axis, view, nodes):
         full, top = axis.seconds * 1000, 0.0
-        for name, v, _ in self.parts(b, nodes):
+        for name, v, _ in self.parts(view.buckets[at], nodes):
             top += v / full
             if v > 0 and up < top:
                 return f"{name}  {v:.1f} ms, {v / full:.0%} of the bucket"
@@ -216,13 +222,16 @@ class Stack(Bands):
                 p.setPen(qgray(INK))
                 p.drawText(QPointF(x0 + 4, rect.top() + fm.ascent()), fm.elidedText(self.label(w), Qt.TextElideMode.ElideRight, int(x1 - x0 - 8)))
 
-    def tip(self, b, up, axis, view, nodes):
-        return "" if up > 1 else super().tip(b, up, axis, view, nodes)
+    def tip(self, at, up, axis, view, nodes):
+        if up <= 1:
+            return super().tip(at, up, axis, view, nodes)
+        t = (view.first + at) * view.width
+        return next((self.label(w) for w in reversed(view.walks) if w.done and w.t0 < t + view.width and w.t1 >= t), "")
 
     def parts(self, b, nodes):
         ms = b.ms.get(THREAD, {})
         return [*((n, ms[n], c) for n, c in nodes.items() if n in ms),
-                *((n, v, MINE if n.split()[0] in OWN else type_color(None)) for n, v in ms.items() if n not in nodes),
+                *((n, v, MINE if n.split()[0] in stream.OWN else type_color(None)) for n, v in ms.items() if n not in nodes),
                 ("unprobed", b.unprobed, OTHER)]
 
 
@@ -234,9 +243,9 @@ class Turns(Bands):
     stretch = 2
 
     def parts(self, b, nodes):
-        parts = [(f"{n} on {t}", v, MINE if n.split()[0] in OWN else nodes.get(n, type_color(None)))
+        parts = [(f"{n} on {t}", v, MINE if n.split()[0] in stream.OWN else nodes.get(n, type_color(None)))
                  for t, ms in b.ms.items() if t != THREAD for n, v in ms.items()]
-        return parts + [(name, v, MINE if name.endswith(" monitor") else SLOT if name.startswith("slot") else PAINT)
+        return parts + [(name, v, MINE if name.endswith(f" {MONITOR}") else SLOT if name.startswith(stream.SLOT) else PAINT)
                         for name, v in sorted(b.turns.items())]
 
 
@@ -255,8 +264,8 @@ class RowCost(Track):
         for i, v in cols:
             p.fillRect(QRectF(axis.x(i), rect.bottom() - 2 - (rect.height() - 2) * v / top, axis.px, 2), qgray(INK))
 
-    def tip(self, b, up, axis, view, nodes):
-        c = bucket_row_ms(b, THREAD)
+    def tip(self, at, up, axis, view, nodes):
+        c = bucket_row_ms(view.buckets[at], THREAD)
         return f"{c[0]:.2f} ms a row over {c[1]} rows" if c else ""
 
 
@@ -286,8 +295,9 @@ class Stores(Track):
                 if b.recomputed.get(store):
                     p.fillRect(QRectF(axis.x(i), top, axis.px, MARK), LEVEL)
 
-    def tip(self, b, up, axis, view, nodes):
-        return "; ".join([*(f"{store_name(s, view)} {held / 2**20:.1f} of {(limit or 0) / 2**20:.1f} MB" for s, (held, limit) in b.stores.items()),
+    def tip(self, at, up, axis, view, nodes):
+        b = view.buckets[at]
+        return "; ".join([*(f"{store_name(s, view)} {size(held)} of {size(limit or 0)}" for s, (held, limit) in b.stores.items()),
                           *(f"{store_name(s, view)} computed again {n}" for s, n in b.recomputed.items())])
 
 
@@ -304,8 +314,9 @@ class Late(Track):
             h = rect.height() * v / top
             p.fillRect(QRectF(axis.x(i), rect.bottom() - h, axis.px, h), qgray(INK_2))
 
-    def tip(self, b, up, axis, view, nodes):
-        return f"the GUI thread's timer {b.late:.0f} ms late" if b.late else ""
+    def tip(self, at, up, axis, view, nodes):
+        late = view.buckets[at].late
+        return f"the GUI thread's timer {late:.0f} ms late" if late else ""
 
 
 class Load(Track):
@@ -322,9 +333,18 @@ class Load(Track):
         v = m.get(name)
         return resource_shares(name, v) if v else None
 
+    @staticmethod
+    def sample(view, at):
+        """The last machine sample up to bucket `at` of `view`, {} with none."""
+        for i in range(min(at, len(view.buckets) - 1), -1, -1):
+            if view.buckets[i].machine:
+                return view.buckets[i].machine
+        return {}
+
     def paint(self, p, rect, axis, view, nodes):
-        cols, last = [], {}
-        for i in axis.visible():
+        shown = axis.visible()
+        cols, last = [], self.sample(view, shown[0] - view.first - 1) if len(shown) else {}
+        for i in shown:
             at = i - view.first
             last = (view.buckets[at].machine if 0 <= at < len(view.buckets) else {}) or last
             cols.append((i, last))
@@ -343,9 +363,10 @@ class Load(Track):
                     p.fillRect(QRectF(axis.x(i), top + h - 1 - ours, axis.px, ours), OURS)
                     p.fillRect(QRectF(axis.x(i), top + h - 1 - ours - others, axis.px, others), ELSE)
 
-    def tip(self, b, up, axis, view, nodes):
-        said = [f"{n} {s[0] + s[1]:.0%} in use, SIEVE {s[0]:.0%}" for n in self.ROWS if (s := self.shares(b.machine, n)) is not None]
-        faults = b.machine.get("faults")
+    def tip(self, at, up, axis, view, nodes):
+        m = self.sample(view, at)
+        said = [f"{n} {s[0] + s[1]:.0%} in use, SIEVE {s[0]:.0%}" for n in self.ROWS if (s := self.shares(m, n)) is not None]
+        faults = m.get("faults")
         return "; ".join(said + ([] if faults is None else [f"{faults:.0f} hard faults a second"]))
 
 
@@ -356,15 +377,16 @@ class TimeView(QWidget):
     holds a bucket a column until it is drawn out, by the wheel or `draw`, to as many a column as
     put the view's whole history on it. `held` is the time at its right edge while that is not now:
     dragged or `scroll`ed back, or put by `hold`, it stays where it was put while the stream
-    continues, until it is scrolled forward to now, double clicked or `release`d. What is under the
-    pointer is its tooltip."""
+    continues, until it is scrolled forward to now, double clicked or `release`d. `behind` is how
+    long ago the view handed over was read, its holder's to set, which the ruler and a tooltip count
+    in what they say is before now. What is under the pointer is its tooltip."""
     PX, GUTTER, MARGIN, RULER = 3, 96, 96, 18
 
     def __init__(self, tracks, parent=None):
         super().__init__(parent)
         self.tracks = tracks
         self.view = self.shown = None       # the View handed over, and it at the width drawn
-        self.nodes, self.now, self.marks = {}, 0.0, ()
+        self.nodes, self.now, self.marks, self.behind = {}, 0.0, (), 0.0
         self.k, self.held = 1, None         # buckets a column
         self._drag, self.alone = None, False
         self.setMinimumSize(self.GUTTER + self.MARGIN + 120, self.RULER + LEAST * 4)
@@ -442,10 +464,10 @@ class TimeView(QWidget):
         at, lines = i - self.shown.first, [said for t, said in self.marks if int(t // axis.seconds) == i]
         for track, rect in self.rects():
             if rect.top() <= y < rect.bottom() and 0 <= at < len(self.shown.buckets):
-                said = track.tip(self.shown.buckets[at], (rect.bottom() - y) / track.body(rect).height(), axis, self.shown, self.nodes)
+                said = track.tip(at, (rect.bottom() - y) / track.body(rect).height(), axis, self.shown, self.nodes)
                 if said:
                     lines.insert(0, said)
-        return f"{as_clock(max(0.0, self.now - (i + 1) * axis.seconds))} ago\n" + "\n".join(lines) if lines else ""
+        return f"{as_clock(max(0.0, self.behind + self.now - (i + 1) * axis.seconds))} ago\n" + "\n".join(lines) if lines else ""
 
     @painted
     def paintEvent(self, _):
@@ -460,7 +482,7 @@ class TimeView(QWidget):
                 p.setClipRect(QRectF(0, rect.top(), self.width(), rect.height()))
                 track.paint(p, rect, axis, self.shown, self.nodes)
                 p.restore()
-        top, lag = self.height() - self.RULER, self.now - (self.now if self.held is None else self.held)
+        top, lag = self.height() - self.RULER, self.behind + self.now - (self.now if self.held is None else self.held)
         for t, said in self.marks:
             if (i := int(t // axis.seconds)) in axis.visible():
                 x, w = axis.x(i), fm.horizontalAdvance(said) + 10
@@ -507,12 +529,12 @@ def _key(entry):
 
 class _Lines(QWidget):
     """The problems' rows, painted: `entries` a row each, the one under `picked` lit. A press on a
-    row's copy copies it and anywhere else on the row picks it, through `window`."""
+    row's copy copies it and anywhere else on the row picks it, through the monitor's window it is in."""
     H, BAR, SHARE, MS, SEEN, COPY = ROW_H + 6, 60, 36, 104, 150, 52
 
     def __init__(self):
         super().__init__()
-        self.entries, self.picked, self.window = [], None, None
+        self.entries, self.picked = [], None
         self.setCursor(Qt.CursorShape.PointingHandCursor)
 
     def said(self, e):
@@ -571,12 +593,12 @@ class _Lines(QWidget):
 
     def mousePressEvent(self, e):
         i = int(e.position().y() // self.H)
-        if e.button() != Qt.MouseButton.LeftButton or not 0 <= i < len(self.entries) or self.window is None:
+        if e.button() != Qt.MouseButton.LeftButton or not 0 <= i < len(self.entries):
             return
         if self.copy_rect(i).contains(e.position()):
-            self.window.copy([_key(self.entries[i])])
+            self.window().copy([_key(self.entries[i])])
         else:
-            self.window.pick(_key(self.entries[i]))
+            self.window().pick(_key(self.entries[i]))
 
 
 class Problems(QWidget):
@@ -608,14 +630,14 @@ class Problems(QWidget):
         lay.addLayout(head)
         lay.addWidget(self.lines)
         lay.addWidget(self.foot)
-        self.all.clicked.connect(lambda: self.lines.window is not None and self.lines.window.copy())
+        self.all.clicked.connect(lambda: self.window().copy())
 
     def refresh(self, window):
         entries = window.log.ordered()
         holds, cleared = [e for e in entries if e.holds], [e for e in entries if not e.holds]
         quiet = [k for k in window.log.classes if not any(e.problem.kind == k for e in entries)]
         drawn = [self.lines.said(e) for e in self.lines.entries], self.lines.picked
-        self.lines.entries, self.lines.picked, self.lines.window = holds, window.picked, window
+        self.lines.entries, self.lines.picked = holds, window.picked
         self.lines.setFixedHeight(len(holds) * _Lines.H)
         self.lines.setVisible(bool(holds) and not self.compact)
         if drawn != ([self.lines.said(e) for e in holds], window.picked):
@@ -730,14 +752,22 @@ class Panel(QWidget):
         self.lines = [] if window.view is None else self.read(window)
         entry = window.log.entries.get(window.picked)
         self.outlined = entry is not None and ABOUT.get(entry.problem.kind) == self.about
-        self.setFixedHeight(2 * PAD + ROW_H + (ROW_H if self.says else 0) + sum(self._height(ln) for ln in self.lines))
         if drawn != (self.lines, self.outlined, self.says):
+            self._fit()
             self.update()
 
-    def _wrapped(self, note):
-        """`note` as the lines the panel's width takes, broken at its spaces."""
-        fm, w, out = self.fontMetrics(), self.width() - 2 * PAD, []
-        for word in note.split(" "):
+    def _fit(self):
+        said = self._wrapped(self.says, QFontMetrics(theme.ui_font())) if self.says else []
+        self.setFixedHeight(2 * PAD + ROW_H + ROW_H * len(said) + sum(self._height(ln) for ln in self.lines))
+
+    def resizeEvent(self, e):
+        self._fit()     # the lines wrap by the width
+        super().resizeEvent(e)
+
+    def _wrapped(self, text, fm=None):
+        """`text` as the lines the panel's width takes in the font of `fm`, the panel's own when not given, broken at its spaces."""
+        fm, w, out = fm or self.fontMetrics(), self.width() - 2 * PAD, []
+        for word in text.split(" "):
             if out and fm.horizontalAdvance(f"{out[-1]} {word}") <= w:
                 out[-1] += " " + word
             else:
@@ -758,9 +788,9 @@ class Panel(QWidget):
         p.setPen(qgray(HEAD - 15))
         p.drawText(QPointF(PAD, PAD + p.fontMetrics().ascent()), self.title)
         y = PAD + ROW_H
-        if self.says:
-            p.setPen(TINT if any(ln[4] for ln in self.lines) else qgray(INK))
-            p.drawText(QPointF(PAD, y + p.fontMetrics().ascent()), p.fontMetrics().elidedText(self.says, Qt.TextElideMode.ElideRight, w))
+        p.setPen(TINT if any(ln[4] for ln in self.lines) else qgray(INK))
+        for said in self._wrapped(self.says, p.fontMetrics()) if self.says else ():
+            p.drawText(QPointF(PAD, y + p.fontMetrics().ascent()), said)
             y += ROW_H
         p.setFont(self.font())
         for name, value, bar, note, over in self.lines:
@@ -874,12 +904,14 @@ class Window(QWidget):
     `picked`, the (class, subject) of the entry the window is about, the one `pick` named while it
     holds and else the costliest that does, and `marked`, the names that entry's problem is about.
     A first sighting is a line on stderr. Paused, by `toggle_pause` or the axis scrolled back, which
-    is one holding, it draws what it drew and says how far behind now that is, the ledger taking the
-    stream and the log reading it. What was just done is said in the status for SAID seconds. `source`
-    may hold `worker`, which `walk_cold` has walk the window again over emptied stores. Narrower
-    than NARROW or shorter than SHORT it is compact: the figure, the costliest problem's sentence
-    and target, how many more there are, the copy of them all and the time view. Its poll and its
-    paint are in the stream as a "slot" and a "paint" named "monitor"."""
+    is one holding, it draws what it drew, `log` being the entries as they stood, and says how far
+    behind now that is in the status, the ruler and a tooltip, the ledger taking the stream and the
+    log reading it for stderr, a copy and a history. What was just done is said in the status for
+    SAID seconds. `source` may hold `worker`, which `walk_cold` has walk the window again over
+    emptied stores. Narrower than NARROW or shorter than SHORT it is compact: the figure, the
+    costliest problem's sentence and target, how many more there are, the copy of them all and the
+    time view. Its poll, what a press in it does and its paints are in the stream, each a "slot" or
+    a "paint" named "monitor"."""
 
     def __init__(self, source, period_ms=250, clock=time.perf_counter, parts=None):
         super().__init__(source if isinstance(source, QWidget) else None, Qt.WindowType.Window)
@@ -888,7 +920,8 @@ class Window(QWidget):
         self.setStyleSheet(theme.sheet() + f"#monitor {{ background: {theme.gray(theme.GROUND)}; }}")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.source, self.clock = source, clock
-        self.view, self.now, self.log, self._ledger = None, clock(), Log(), None
+        self.view, self.now, self._ledger = None, clock(), None
+        self.log = self._log = Log()        # what the parts read, and the one that reads the ledger: one Log but while paused
         self.walk, self.rate, self.nodes, self.picked, self.marked, self._pick = None, None, {}, None, frozenset(), None
         self.parts, self.compact, self._armed = [], False, None
         self._judged, self._said, self._until = None, "", -math.inf     # (the view the log read last, its now); the status's word and when it lapses
@@ -958,7 +991,8 @@ class Window(QWidget):
     def refresh(self):
         graph, ledger = self.source.graph, self.source.ledger
         if ledger is not self._ledger:
-            self._ledger, self.log, self.view, self._judged, self._pick = ledger, Log(), None, None, None
+            self._ledger, self.view, self._judged, self._pick, self._armed = ledger, None, None, None, None
+            self.log = self._log = Log()
             self.time.release()
         if graph is None or ledger is None:
             self.figure.set_figure(None)
@@ -966,10 +1000,18 @@ class Window(QWidget):
             self.time.set_view(None, {}, self.clock())
             self._show()
         else:
-            with graph.stream.turn("slot", "monitor"):
+            with graph.stream.turn(stream.SLOT, MONITOR):
+                if self.time.held is None:
+                    self.log = self._log
+                elif self.log is self._log:
+                    self.log = self._log.copy()
                 self._judge(ledger)
                 if self.time.held is None:
                     self._read(graph)
+        behind = 0.0 if self.time.held is None else self.clock() - self.now
+        if behind != self.time.behind:
+            self.time.behind = behind
+            self.time.update()
         if self._armed is not None and self.clock() - self._armed > ARMED:
             self._armed = None
         self.pause.setText("Resume" if self.time.held is not None else "Pause")
@@ -993,7 +1035,7 @@ class Window(QWidget):
     def _judge(self, ledger):
         """Takes the ledger's view now into the log, paused or not, a first sighting a line on stderr."""
         self._judged = ledger.view(), self.clock()
-        for e in self.log.read(self._judged[0]):
+        for e in self._log.read(self._judged[0]):
             print(f"SIEVE {time.strftime('%H:%M:%S')}: monitor: {e.problem.kind} {e.problem.subject}: {e.problem.line}", file=sys.stderr)
 
     def _read(self, graph):
@@ -1022,11 +1064,13 @@ class Window(QWidget):
             self.time.set_view(self.view, self.nodes, self.now,
                                [(e.first, f"first seen: {e.problem.kind} {e.problem.subject}")] if e else [])
 
+    @slotted
     def pick(self, key):
         """Makes the log's entry under `key`, its (class, subject), the one the window is about."""
         self._pick = key
         self._show()
 
+    @slotted
     def toggle_pause(self):
         if self.time.held is None:
             self.time.hold()
@@ -1042,30 +1086,35 @@ class Window(QWidget):
         save(self._judged[0], path, **self.context())
         return path
 
+    @slotted
     def copy(self, keys=None):
-        """Puts on the clipboard one report of the log's entries under `keys`, each a (class,
-        subject), or of every entry that holds, and returns it; None with none. The history is
-        written as `save_history` writes it and the report names the file, which holds the document."""
-        entries = [e for e in self.log.ordered() if (e.holds if keys is None else _key(e) in keys)]
-        if not entries or self._judged is None:
+        """Puts on the clipboard one report of the entries under `keys`, each a (class, subject), or
+        of every entry that holds, as the log read them last, and returns it; None with none. The
+        history is written as `save_history` writes it and the report names the file, which holds
+        the document."""
+        entries = [e for e in self._log.ordered() if (e.holds if keys is None else _key(e) in keys)]
+        if not entries or self._judged is None or self.source.graph is None:
             return None
         view, now = self._judged
-        said = report(entries, view, self.context() | {"history": self._write(), "now": now,
-                                                       "when": time.strftime("%Y-%m-%d %H:%M:%S")})
+        path = self._write()
+        said = report(entries, view, self.context() | {"history": path, "now": now, "when": time.strftime("%Y-%m-%d %H:%M:%S")})
         QApplication.clipboard().setText(said)
+        self._say(f"{len(entries)} problem{'s' * (len(entries) != 1)} copied, the history written to {path}")
         return said
 
+    @slotted
     def save_history(self, folder=None):
         """Writes the view the log read last, which while paused is later than the one drawn, with
         the document and the rest of `context` to a file under `folder`, the system's temporary one
         when not given, puts its path on the clipboard and returns it; None with no video."""
-        if self._judged is None:
+        if self._judged is None or self.source.graph is None:
             return None
         path = self._write(folder)
         QApplication.clipboard().setText(path)
         self._say(f"history written to {path}, and the path to the clipboard")
         return path
 
+    @slotted
     def walk_cold(self):
         """A first call says what the stores hold and that it will be computed again; a second
         inside ARMED seconds empties them and has the worker walk the window again, every row run.

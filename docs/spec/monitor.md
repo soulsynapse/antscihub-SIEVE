@@ -943,6 +943,97 @@ span has no cost and leads the list, and one with rows is costed over them.
 
 Open: the classes' names. The words above are descriptions and name nothing; the names are Kendrick's.
 
+## A walk is judged while it is under way
+
+Assumes: The catalogue says what no finished walk shows.
+
+Added 2026-11-14 from the conversation that followed that section's review, on v5-cleaning-up-monitor,
+and this branch's to build. A clip walk is the walk that matters most and the one that ends last, or
+not at all: every class but two waits for a walk's last row, so a fault that keeps a walk from ending
+is said by nothing, and a call that never returns reads as a player at rest. The rule the boxes are
+held to is that what is kept between reads is a cache of the stream: it makes an answer sooner and
+never another answer.
+
+Facts to weigh. `catalogue.finished` gives a lane's last walk to a class of `CLASSES` only once it has
+done its range, so a walk under way is judged by none of them; a class of `SPANS` judges each bucket
+once `catalogue.AHEAD` buckets after it are settled, with a walk over it or none. A bucket already
+holds what four classes read: the recomputations by store, the seeks by node, the GUI thread's turns
+and their calls, the tools' wait, and the rows each lane finished; the walk gives those classes the
+buckets to read and the rows to cost by. `Bucket.ms` is a thread's ms by node, with no demand and no
+count of spans: `unread` reads the demand, and a node's ms a row read off buckets takes a row a store
+held for a cheap one, which `grows` reads the walk's parts to avoid. `slower` is of a whole walk
+against its lane's baseline. A span is an event emitted as it ends, so a call that has not returned
+has emitted nothing and the buckets over it hold no ms; `late` fires on it only where the GUI thread
+is held too. The worker's ladder serves the window's walk before the clip's and a bake beside them,
+so a lane with a walk open finishes no row while another's turn is taken, with nothing wrong. A
+row may itself be long with nothing wrong: a reader's opening, a static node's one run, a chain node
+run whole. The `Log` keeps `_seen`, `_settled`, `_shows`, `_latest`, `_baselines`, `_last` and
+`_spanned` beside its entries, each what a later view no longer holds;
+`tests/test_catalogue.py`'s two-ledger test holds the entries equal however few walks are kept and
+whether the log reads after every event or once. A problem of a class of `CLASSES` carries the walk
+it was found in and one of `SPANS` carries none, and an entry's key is the class, what the subject
+is, and the subject. A bucket of another shape is another history: `ledger.saved` refuses a file
+written before a field was added, as it has twice on this branch. Detection runs at the window's
+poll, on the GUI thread; what it costs run anywhere else is not measured.
+
+- [ ] A lane with a walk open and short of its range that finishes no row for longer than a named
+  time, while no other lane's turn is taken and nothing begins it again, is a problem whose subject is
+  the lane, whether or not the GUI thread is late. A lane waiting behind the window's walk or a bake
+  is none.
+  Check: a simulation of a tool that does not return surfaces the class alone, read while the call is
+  still out; every healthy run surfaces nothing, a clip walk waiting behind a window's among them.
+- [ ] What each thread is in, and since when, is in what the ledger holds before the span ends, so the
+  problem above names the node, and a lateness under a call still out names it as one under a call
+  that ended does.
+  Check: the same simulation reads the node off the entry before the call returns; an experiment
+  under `docs/findings/experiments/` gives the walk's rate with and without it, beside the figures of
+  `docs/findings/2026-11-12-probe-cost-with-the-stream-facts.md`.
+- [ ] A store recomputing what it discarded, the walk's cursor seeking, the worker waiting on the GUI
+  thread and a slot run at every row are each found in a walk that has not done its range, from the
+  buckets settled so far, at the thresholds they are found by at its end.
+  Check: each one's simulation over a range long enough to read the log before the walk's last row,
+  the class there alone; the healthy runs surface nothing.
+- [ ] A problem found in a walk under way and found again as that walk ends is one entry, counted once
+  for the walk.
+  Check: a catalogue test feeds one such walk's stream and reads one entry counting one, before its
+  last row and after.
+- [ ] Work no watched node and no walked node asked for is found in a walk under way.
+  Check: the `unread` simulation over a long range, read before the walk's last row.
+- [ ] A node whose cost a run grows along the range is found in a walk under way, and a walk whose
+  first rows a store held and whose later rows ran is not taken for one.
+  Check: the `grows` simulation over a long range, read before the walk's last row; a catalogue test
+  of a walk half held then cold reads nothing.
+- [ ] The log's entries are the same however few walks and however few buckets the ledger keeps, and
+  whether it reads after every event or once at the end, with every class above among its classes.
+  Check: `tests/test_catalogue.py`'s two-ledger test, the history's length a third thing it varies;
+  an invariant, so a test.
+
+Fork: whether saying what a thread is in costs the walk. Observed in the second box's experiment:
+where the walk's rate with it sits inside the run-to-run spread of the rate without, it is built as
+the box says; where it sits outside, the first box stands with the lane as its whole subject and the
+second waits.
+
+Fork: what the log still keeps once the classes above read buckets. Observed by reading `Log`'s
+fields against what each class reads: a field no class reads is gone; what remains is written here,
+with the class that reads it.
+
+Fork: where detection runs. Observed by an experiment that judges on a thread of its own, in the
+stream's order, against the walk's rate judged at the poll: where the rate sits inside the spread,
+that the window reads a result and judges nothing is a deliverable for a later spec; where it sits
+outside, detection stays at the poll. Nothing on this branch is built on either side.
+
+Open: the time past which a lane that finishes no row is a problem. It is longer than any row that is
+long with nothing wrong, and no finding says how long that is on Kendrick's footage. A session
+builds on a named constant set past the longest such row the simulations and the purb document show,
+and records the sighting beside it.
+
+Open: how an entry found under way and one found at a walk's end are known for one. Recommended, and
+what a session may build on: the entry's key as it stands, the class, what the subject is and the
+subject, the walk counted once by its id whichever way it was found.
+
+Open: the classes' names, for the lane that finishes no row as for `late` and `restarts`. The words
+above are descriptions and name nothing; the names are Kendrick's.
+
 ## Non-goals
 
 The fault itself. Whether the window walk folds a density for a node behind a served bake, or for any node

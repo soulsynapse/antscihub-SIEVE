@@ -200,28 +200,31 @@ class Runs:
 
     def hold(self, start, rows, results, chain):
         """Holds `results` as a run over `rows` rows from `start` when every chain node has `rows`
-        rows in it, unless a run held covers its rows with every node it has under the same key;
-        whether it was held. A run it so covers goes, and while the runs together pass the limit
-        the oldest that is not the longest goes, one of keys the chain has left before any other."""
+        rows in it, unless a run held covers its rows with every node it has under the same key
+        and plate; whether the runs held changed. A run it so covers goes, and while the runs
+        together pass the limit the oldest goes that is not the longest the chain is served by,
+        one of keys the chain has left before any other."""
         nodes = list(chain.keys)
         if not nodes or not all(isinstance(r := results.get(nid), dict) and "signal" in r and len(r["signal"]) == rows for nid in nodes):
             return False
-        keys = {nid: results[nid].get("key") for nid in nodes}.items()
 
-        def keys_of(run):
-            return {nid: r.get("key") for nid, r in run.results.items()}.items()
-        if any(run.start <= start and start + rows <= run.start + run.rows and keys <= keys_of(run) for run in self.all):
-            return False
-        self.all = [run for run in self.all
-                    if not (start <= run.start and run.start + run.rows <= start + rows and keys_of(run) <= keys)]
+        def under(results):
+            return {nid: (r.get("key"), r.get("plate")) for nid, r in results.items()}.items()
         kept = {nid: results[nid] for nid in nodes}
+        keys = under(kept)
+        if any(run.start <= start and start + rows <= run.start + run.rows and keys <= under(run.results) for run in self.all):
+            return False
+        was = self.all
+        self.all = [run for run in self.all
+                    if not (start <= run.start and run.start + run.rows <= start + rows and under(run.results) <= keys)]
         self.all.append(Run(start, rows, kept, sum(self.size_of(v) for r in kept.values() for v in r.values())))
         while len(self.all) > 1 and sum(run.size for run in self.all) > self.limit:
-            longest = max(self.all, key=lambda run: run.rows)
+            serving = [run for run in self.all if self._serves(run.results, chain)]
+            longest = max(serving or self.all, key=lambda run: run.rows)
             spare = [run for run in self.all if run is not longest]
-            left = [run for run in spare if not self._serves(run.results, chain)]
+            left = [run for run in spare if run not in serving]
             self.all.remove((left or spare)[0])
-        return True
+        return self.all != was
 
     def over(self, s, n, chain):
         """The chain's results over `n` rows from `s`, cut from the run that began earliest and

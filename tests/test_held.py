@@ -73,10 +73,16 @@ def test_a_range_is_served_from_the_run_that_covers_it_under_the_chains_keys_and
     part = runs.part(12, 3, moved)
     assert list(part) == ["a"] and part["a"]["signal"].tolist() == [12.0, 13.0, 14.0]       # b is not stepped, nor under its key
     assert hold(30, 4, moved) and hold(40, 4, now) and len(runs) == 3
-    assert hold(50, 4, moved) and [run[0] for run in runs] == [0, 30, 50]       # 40's keys are left; 0's are too, and it is the longest
     assert runs.from_first_row("a", "ka", None)[:2] == (0, 20) and runs.from_first_row("b", "kb2", None) is None
+    assert hold(50, 4, moved) and [run[0] for run in runs] == [30, 40, 50]      # 0's keys are left: the longest kept is one the chain is served by
     assert [(at, signal.tolist()) for signal, at, _ in runs.beside("b", "kb2", None, 31, 2)] == [(30, [30.0]), (33, [33.0]), (50, [50.0, 51.0, 52.0, 53.0])]
     twice = held.Runs(18, lambda v: 1)
     again = lambda start, chain: twice.hold(start, 4, of(start, 4, chain), chain)
     assert again(10, now) and again(10, moved) and again(30, now) and again(50, now)    # two runs over the same rows: one goes as itself, its arrays never compared
     assert [(run.start, run.results["b"]["key"]) for run in twice] == [(10, "kb"), (30, "kb"), (50, "kb")]
+    full = held.Runs(6, lambda v: 1)        # room for one run
+    assert full.hold(0, 4, of(0, 4, now), now) and full.hold(0, 4, of(0, 4, moved), moved)     # as long as the run of keys left, which goes
+    assert not full.hold(0, 4, of(0, 4, now), moved) and [run.results["b"]["key"] for run in full] == ["kb2"]      # let go at once: nothing held changed
+    plated = held.Chain(moved.keys, moved.steps, "plate")
+    assert full.hold(0, 4, {nid: {**r, "plate": "plate"} for nid, r in of(0, 4, moved).items()}, plated)       # the same keys in another plate are not covered
+    assert full.over(0, 4, plated) is not None and full.over(0, 4, moved) is None

@@ -91,7 +91,7 @@ def text(entry, view, context=None):
     w = next((w for w in view.walks if w.id == p.walk), None)
     out = [f"class      {p.kind}", f"subject    {p.subject}", f"line       {p.line}",
            f"cost       {p.ms_row:.3f} ms a row" + ("" if p.share is None else f", {p.share:.0%} of what the walk's nodes cost")
-           + f"; seen in {entry.count} walk{'s' * (entry.count != 1)}, {'still holds' if entry.holds else "not in the lane's last walk"}",
+           + f"; seen in {entry.count} walk{'s' * (entry.count != 1)}, {'still holds' if entry.holds else "in no lane's last walk"}",
            "evidence", *("  " + e for e in p.evidence)]
     if w is None:
         out.append("walk       no longer in the history")

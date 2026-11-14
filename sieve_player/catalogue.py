@@ -356,10 +356,10 @@ CLASSES = {"unread": unread, "thrash": thrash, "grows": grows, "seeks": seeks, "
 
 @dataclass
 class Entry:
-    problem: Problem        # its latest sighting
+    problem: Problem        # its latest sighting, of those that hold while any does
     first: float            # the first sighting's t
     count: int = 0          # the walks it was seen in
-    holds: bool = True      # whether its lane's last finished walk shows it
+    holds: bool = True      # whether the last finished walk of any lane shows it
 
 
 class Log:
@@ -373,12 +373,15 @@ class Log:
         self.entries = {}       # (class, subject) -> Entry
         self._seen = {}         # a walk's id -> the entries it has counted toward
         self._settled = set()   # the ids of the walks judged for the last time
+        self._shows = {}        # a walk's id -> {(class, subject): Problem} as it was last judged
 
     def read(self, view):
         """Takes what `view` shows into the entries and returns those it made, the first sightings."""
         made, done, last = [], finished(view), {w.lane: w for w in view.walks}
         latest = {w.lane: w.id for w in done}
         judge = [w for w in done if w.id not in self._settled]
+        for w in judge:
+            self._shows[w.id] = {}
         for detect in self.classes.values():
             for p in detect(view, judge):
                 key = (p.kind, p.subject)
@@ -390,12 +393,17 @@ class Log:
                 if key not in seen:
                     seen.add(key)
                     e.count += 1
+                self._shows.setdefault(p.walk, {})[key] = p
                 if p.walk.t0 >= e.problem.walk.t0:
                     e.problem = p
-        for e in self.entries.values():
-            e.holds = latest.get(e.problem.walk.lane, e.problem.walk) == e.problem.walk
+        for key, e in self.entries.items():
+            shown = [self._shows[wid][key] for wid in latest.values() if key in self._shows.get(wid, ())]
+            e.holds = bool(shown)
+            if shown:
+                e.problem = max(shown, key=lambda p: p.walk.t0)
         held = {w.id for w in view.walks}
         self._seen = {wid: s for wid, s in self._seen.items() if wid in held}
+        self._shows = {wid: s for wid, s in self._shows.items() if wid in held}
         self._settled = (self._settled | {w.id for w in judge if w is not last[w.lane]}) & held
         return made
 

@@ -95,6 +95,10 @@ def test_the_log_holds_one_entry_a_class_and_subject_counted_cleared_and_ordered
     log.read(View(0.25, 0, [], walks + [rec(10.0, video={("decode", "walk", "b"): [8, 8.0, 0]})]))
     assert log.ordered() == [e] and (e.count, e.holds, e.problem.walk) == (10, False, ("window", 9.0))
     assert judged == [10, 1, 2]     # a walk its lane has begun another after is judged once more and then kept
+    again, clip, quiet = rec(11.0, **SOUGHT), rec(12.0, **SOUGHT), rec(13.0, video={("decode", "walk", "b"): [8, 8.0, 0]})
+    clip.lane = quiet.lane = "clip"
+    log.read(View(0.25, 0, [], walks + [again, clip, quiet]))
+    assert (e.count, e.holds, e.problem.walk) == (12, True, ("window", 11.0))     # cleared in one lane, it holds by another's last walk
     five = rec(keys={"video": "kv"}, a={("run", "fold", "a"): [8, 20.0, 0]}, **SOUGHT, **GROWN)
     five.recomputed, five.recomputed_ms = {"memo": 8, "kv": 4}, {"memo": 4.0, "kv": 2.0}
     assert list(found(five)) == [("unread", "a"), ("grows", "c"), ("seeks", "video"), ("thrash", "memo"), ("thrash", "video")]     # by cost

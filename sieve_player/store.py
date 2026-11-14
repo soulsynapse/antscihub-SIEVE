@@ -10,6 +10,7 @@ import subprocess
 import tempfile
 import time
 from dataclasses import asdict, dataclass, fields, replace
+from functools import lru_cache
 
 from .document import Bake, served
 from .writers import PART, WRITERS, is_series, reader
@@ -210,8 +211,9 @@ class Store:
             return None
 
 
+@lru_cache(maxsize=1)
 def commit():
-    """The repository commit this code runs under, or "" when it is not a checkout or git is not there."""
+    """The repository commit this code runs under, read once, or "" when it is not a checkout or git is not there."""
     try:
         out = subprocess.run(["git", "rev-parse", "HEAD"], cwd=os.path.dirname(os.path.abspath(__file__)),
                              capture_output=True, text=True, timeout=5)

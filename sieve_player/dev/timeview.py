@@ -24,8 +24,8 @@ from PySide6.QtWidgets import QApplication, QHBoxLayout, QPushButton, QSizePolic
 
 from .. import stream, theme
 from ..canvas import type_color
-from ..catalogue import (Log, alike, bucket_row_ms, gui, machine, needs, realtime_multiple, resource_shares, rows, size,
-                         store_name, tight, unprobed_row_ms, walk_row_ms)
+from ..catalogue import (Log, alike, bucket_row_ms, finished, gui, machine, needs, realtime_multiple, resource_shares, rows,
+                         size, store_name, tight, unprobed_row_ms, walk_row_ms)
 from ..document import produces
 from ..ledger import coarsen, save
 from ..pace import clock as as_clock
@@ -438,7 +438,7 @@ class TimeView(QWidget):
     def axis(self):
         seconds = (self.view.width if self.view is not None else 1.0) * self.k
         end = int((self.now if self.held is None else self.held) // seconds)
-        return Axis(seconds, end, self.PX, self.GUTTER, self.width() - self.MARGIN, end - (self.held is None))
+        return Axis(seconds, end, self.PX, self.GUTTER, self.width() - self.MARGIN, min(end, int(self.now // seconds) - 1))
 
     def rects(self):
         """[(track, the QRectF it paints into)] for the tracks the height takes, the height above the
@@ -638,7 +638,8 @@ class Problems(QWidget):
     def refresh(self, window):
         entries = window.log.ordered()
         holds, cleared = [e for e in entries if e.holds], [e for e in entries if not e.holds]
-        quiet = [k for k in window.log.classes if not any(e.problem.kind == k for e in entries)]
+        judged = window.view is not None and bool(finished(window.view))
+        quiet = [k for k in window.log.classes if judged and not any(e.problem.kind == k for e in entries)]
         drawn = self.lines.written, self.lines.picked
         self.lines.entries, self.lines.picked = holds, window.picked
         self.lines.written = [(e.problem.share, self.lines.said(e)) for e in holds]
@@ -650,7 +651,7 @@ class Problems(QWidget):
         self.all.setEnabled(bool(holds))
         self.head.setWordWrap(self.compact)     # the sentence, the target and how many more are all read, on as many lines as they take
         if not holds:
-            self.head.setText("no video" if window.view is None else "nothing found")
+            self.head.setText("no video" if window.view is None else "nothing found" if judged else "no walk finished yet")
         elif self.compact:
             p = holds[0].problem
             self.head.setText(f"{p.says} · {p.target}" + (f" · and {len(holds) - 1} more" if len(holds) > 1 else ""))
@@ -660,7 +661,7 @@ class Problems(QWidget):
         self.foot.setText(" · ".join(
             [*(["cleared: " + "; ".join(f"{e.problem.kind} {e.problem.subject}, {as_clock(window.now - e.problem.t)} ago" for e in cleared[:CLEARED])
                 + (f"; and {len(cleared) - CLEARED} earlier" if len(cleared) > CLEARED else "")]
-               if cleared else []), *(["checked and quiet: " + ", ".join(quiet)] if quiet and window.view is not None else [])]))
+               if cleared else []), *(["checked and quiet: " + ", ".join(quiet)] if quiet else [])]))
         self.foot.setVisible(bool(self.foot.text()) and not self.compact)
 
 
@@ -1099,11 +1100,11 @@ class Window(QWidget):
     def context(self):
         return context(self.source.graph, getattr(getattr(self.source, "dump", None), "path", None))
 
-    def _write(self, folder=None):
-        """The path the history was written to, or None where it could not be, the status saying why."""
+    def _write(self, context, folder=None):
+        """The path the history was written to with `context` beside it, or None where it could not be, the status saying why."""
         path = os.path.join(folder or tempfile.gettempdir(), f"sieve-history-{time.strftime('%Y%m%d-%H%M%S')}.json")
         try:
-            save(self._judged[0], path, **self.context())
+            save(self._judged[0], path, **context)
         except OSError as exc:
             self._say(f"the history was not written: {exc}")
             return None
@@ -1119,10 +1120,11 @@ class Window(QWidget):
         if not entries or self._judged is None or self.source.graph is None:
             return None
         view, now = self._judged
-        path = self._write()
+        context = self.context()
+        path = self._write(context)
         if path is None:
             return None
-        said = report(entries, view, self.context() | {"history": path, "now": now, "when": time.strftime("%Y-%m-%d %H:%M:%S")})
+        said = report(entries, view, context | {"history": path, "now": now, "when": time.strftime("%Y-%m-%d %H:%M:%S")})
         QApplication.clipboard().setText(said)
         self._say(f"{len(entries)} problem{'s' * (len(entries) != 1)} copied, the history written to {path}")
         return said
@@ -1135,7 +1137,7 @@ class Window(QWidget):
         the file cannot be written."""
         if self._judged is None or self.source.graph is None:
             return None
-        path = self._write(folder)
+        path = self._write(self.context(), folder)
         if path is None:
             return None
         QApplication.clipboard().setText(path)

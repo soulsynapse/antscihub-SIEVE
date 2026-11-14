@@ -28,7 +28,7 @@ MAY_IMPORT = {
     "held": set(),                                # a pickle and a stamp; the window writes and reads it
     "writers": {"decoder"},                       # a baked clip reads back through the Decoder
     "store": {"document", "writers"},             # where files land knows what a Bake is and which kinds write; never the reverse
-    "worker": {"decoder", "density", "document", "graph", "store"},
+    "worker": {"decoder", "density", "document", "graph", "store", "stream"},     # of the stream, the words a begin says what began it by
     "bare": {"decoder", "document", "graph", "registry", "store", "worker"},      # the clip walk's own process: no window, no stream's reader
     "trace": {"stream"},
     "ledger": {"stream", "trace"},                # the span kinds and a dump's reader; no graph is held and no Qt reached

@@ -21,6 +21,11 @@ INSTANTS = (SYNC, WATCH, EVICT, UNCACHE, BEGIN, PROGRESS)               # no dur
 SPANS = (*NODES, *OWN, *TURNS)  # the kinds with a duration
 KINDS = (*SPANS, *INSTANTS)     # every value of Event.kind; a reader takes one by membership in a set drawn from these
 
+HAND, EDIT, ASKED, GIVEN, SHAPE = "hand", "edit", "asked", "given", "shape"
+BEGUN_BY = (HAND, EDIT, ASKED, GIVEN, SHAPE)    # a begin's "by": the user's hand on the range or the walk, an edit of the document, an ask that says
+                                                # neither, and the walk's own, what it was given gone stale or the nodes or the shape changed under it
+THE_USERS = (HAND, EDIT)                        # of BEGUN_BY, the beginnings the user made
+
 PLAN_FACTS = ("nodes", "chain", "walk", "shown", "over", "pinned", "selected")      # a sync's facts: plan.facts() and, by Emitter.sync, the selection
 NODE_FACTS = ("kind", "fed", "static", "served", "steps", "whole_by", "reads")      # each node's under its "nodes"
 
@@ -55,7 +60,7 @@ class Event:
     demand: str | None  # "walk" | "fold" | "display" | "bake": what asked at the top for everything under it; see Emitter.demand()
     asked: str | None   # the node the demand named: the walked or chain node, the folded one, the shown or overlaid, a bake's input
     lane: str | None    # "window" | "clip" | "scrub" | "bake": the worker's range the row belonged to; None off the worker
-    facts: dict | None  # sync: the plan begun and the selection, see plan.facts() and Emitter.sync(); progress: the lane's memo hits and the stores, see Graph.progress()
+    facts: dict | None  # sync: the plan begun and the selection, see plan.facts() and Emitter.sync(); progress: the lane's memo hits and the stores, see Graph.progress(); begin: "by", what began the walk, see Graph.began()
     shape: tuple | None # of what a span read or made: a decode's or a read's frame, a run's result, a fold's plane; None for what has none
 
 

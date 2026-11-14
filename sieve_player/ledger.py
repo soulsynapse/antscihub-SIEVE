@@ -24,6 +24,7 @@ PARTS = 8           # the pieces a walk's range is cut into for a node's cost al
 BACKLOG = 4096      # events and samples queued before the thread that queues the next folds them itself
 FINEST = 2.0 ** -10 # ms; the bottom of a distribution's first bin
 OCTAVE = 8          # bins to a doubling of ms
+LONG = 50.0         # ms; a tool's span this long or longer is kept as its bucket's longest of its node
 BINS = 26 * OCTAVE  # up to 2 ** 16 ms; a span past either end is counted in the bin at it
 
 _RAN = {RUN, STEP, FOLD, DECODE, SEEK}
@@ -48,12 +49,15 @@ class Bucket:
     machine: dict = field(default_factory=dict)     # the last "machine" sample in it, as machine.Machine.read gives one; {} with none
     calls: dict = field(default_factory=dict)       # a key of `turns` -> the spans of it that began in the bucket
     own: dict = field(default_factory=dict)         # thread -> {name: ms}: a reader's own work there, the dump's writer and the ledger's bookkeeping, apart from `ms`
+    begins: dict = field(default_factory=dict)      # lane -> {what began a walk of it, one of stream.BEGUN_BY: the walks so begun in the bucket}; a begin that says none is not in it
+    longest: dict = field(default_factory=dict)     # node -> [ms, CPU ms] of its longest span of LONG ms or more that ended in the bucket, of the kinds that are no read
     shared: bool = field(default=False, compare=False, repr=False)
 
     def copy(self):
         return Bucket({t: dict(d) for t, d in self.ms.items()}, dict(self.rows), self.unprobed, dict(self.stores),
                       dict(self.recomputed), dict(self.seeks), self.late, dict(self.turns), self.wait, self.read_wait, self.machine, dict(self.calls),
-                      {t: dict(d) for t, d in self.own.items()})
+                      {t: dict(d) for t, d in self.own.items()}, {lane: dict(d) for lane, d in self.begins.items()},
+                      {n: list(v) for n, v in self.longest.items()})
 
 
 _EMPTY = Bucket(shared=True)
@@ -219,6 +223,10 @@ class Ledger:
                 self._progress(item)
             elif item.kind == BEGIN:
                 self._begin(item, item.row)
+                by = (item.facts or {}).get("by")
+                if by is not None and (b := self._bucket(int(item.t // self.width))) is not None:
+                    began = b.begins.setdefault(item.lane, {})
+                    began[by] = began.get(by, 0) + 1
             elif item.kind == SYNC:
                 self._plan, self._keys = _plan(item.facts, "a sync's facts"), item.keys
                 self._selected = (item.facts or {}).get("selected")
@@ -310,6 +318,8 @@ class Ledger:
                         bucket.wait += off * piece / ev.ms
             at = max(at, b)
         self._spent[ev.thread] = self._spent.get(ev.thread, 0.0) + ev.ms
+        if ev.ms >= LONG and not reads and (b := self._bucket(int(end // self.width))) is not None and ev.ms > b.longest.get(ev.node, (0.0,))[0]:
+            b.longest[ev.node] = [ev.ms, ev.cpu_ms]
         lane = self._lanes.get(ev.lane)
         walk = None if lane is None else lane.walk
         store = self._gone.pop((ev.key, ev.row), None) if ev.kind in _RAN else None
@@ -398,7 +408,7 @@ def stores_after(held, told):
 
 def coarsen(view, k):
     """`view` with its buckets merged `k` at a time on the probe's clock, each the reading a bucket
-    `k` widths wide would have held: what is summed summed, the lateness the worst, the stores by
+    `k` widths wide would have held: what is summed summed, the lateness the worst and a node's longest span the longest, the stores by
     `stores_after` and the machine as the last bucket that had one found it. The walks are the view's own."""
     if k <= 1:
         return view
@@ -409,17 +419,20 @@ def coarsen(view, k):
         if b is _EMPTY:
             continue
         m = out[-1]
-        for name in ("ms", "own"):
+        for name in ("ms", "own", "begins"):
             for thread, d in getattr(b, name).items():
                 ms = getattr(m, name).setdefault(thread, {})
                 for n, v in d.items():
-                    ms[n] = ms.get(n, 0.0) + v
+                    ms[n] = ms.get(n, 0) + v
         for name in ("rows", "recomputed", "seeks", "turns", "calls"):
             d = getattr(m, name)
             for key, v in getattr(b, name).items():
                 d[key] = d.get(key, 0) + v
         m.stores = stores_after(m.stores, b.stores)
         m.machine = b.machine or m.machine
+        for n, v in b.longest.items():
+            if v[0] > m.longest.get(n, (0.0,))[0]:
+                m.longest[n] = list(v)
         m.unprobed, m.wait, m.read_wait, m.late = m.unprobed + b.unprobed, m.wait + b.wait, m.read_wait + b.read_wait, max(m.late, b.late)
     return View(view.width * k, first, out, view.walks)
 
@@ -453,7 +466,7 @@ def save(view, path, **more):
     def plain(x, also):
         return {f.name: getattr(x, f.name) for f in fields(x) if f.name != "shared"} | also
     out = {"width": view.width, "first": view.first, "more": more,
-           "buckets": [plain(b, {"rows": list(b.rows.items())}) for b in view.buckets],     # a lane may be None, which is no JSON key
+           "buckets": [plain(b, {"rows": list(b.rows.items()), "begins": list(b.begins.items())}) for b in view.buckets],   # a lane may be None, which is no JSON key
            "walks": [plain(w, {"nodes": {n: plain(x, {"runs": [u._asdict() | r._asdict() for u, r in x.runs.items()]})
                                          for n, x in w.nodes.items()}}) for w in view.walks]}
     with open(path, "w", encoding="utf-8") as f:
@@ -487,7 +500,7 @@ def saved(path):
     of = {cls: [f.name for f in fields(cls) if f.name != "shared"] for cls in (Bucket, Walk, Node)}
     ledger = Ledger(width=d["width"], history=max(len(d["buckets"]), 1), walks=max(len(d["walks"]), 1))
     for i, b in enumerate(d["buckets"], d["first"]):
-        ledger._buckets[i] = Bucket(**_record(b, of[Bucket], path) | {"rows": {lane: n for lane, n in b["rows"]},
+        ledger._buckets[i] = Bucket(**_record(b, of[Bucket], path) | {"rows": {lane: n for lane, n in b["rows"]}, "begins": {lane: by for lane, by in b["begins"]},
                                                                       "stores": {k: tuple(v) for k, v in b["stores"].items()}})
         ledger._newest = i
     for w in d["walks"]:

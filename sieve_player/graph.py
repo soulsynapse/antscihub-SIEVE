@@ -484,13 +484,14 @@ class Graph:
             "caches": {k: {"bytes": d.cache_bytes, "limit": getattr(d, "cache_limit", None), "hits": d.cache_hits,
                            "misses": d.reads - d.cache_hits, "discards": getattr(d, "evictions", 0)} for k, d in caches.items()}})
 
-    def began(self, start, length):
+    def began(self, start, length, by=None):
         """A walk of this thread's lane began, over `length` rows from `start`: a "begin" event with
-        the range's first row as its row. Whoever drives the walk says so as it starts or starts over,
+        the range's first row as its row and, where `by`, one of stream.BEGUN_BY, says what began
+        it, that as its facts' "by". Whoever drives the walk says so as it starts or starts over,
         so a reader tells the walk's first row from what the walk before ran after its last. The
         lane's hits not yet reported were the walk before's and are dropped."""
         self._hits.pop(self.stream.lane, None)
-        self.stream.emit("begin", None, start, None, 0, length=length)
+        self.stream.emit("begin", None, start, None, 0, length=length, facts=None if by is None else {"by": by})
 
     def tally(self):
         """What the stores have been asked for and did not hold, as two counts off the counters they

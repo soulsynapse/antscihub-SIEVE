@@ -7,7 +7,8 @@ from dataclasses import replace
 import pytest
 
 from sieve_player import document as D
-from sieve_player.catalogue import CLASSES, SOURCES, Entry, Log, cold, reach, seeks, signals, slower, stores_at, thrash, unread, waits
+from sieve_player.catalogue import (CLASSES, SOURCES, SPANS, Entry, Log, cold, reach, seeks, signals, slower, stores_at, thrash,
+                                    unread, waits)
 from sieve_player.dev.simulations import HEALTHY, SERVED, SIMULATIONS, run
 from sieve_player.graph import Graph
 from sieve_player.ledger import Bucket, Ledger, Node, Total, Under, View, Walk
@@ -84,7 +85,18 @@ def test_each_class_reads_off_a_view_built_by_hand():
     assert not found(cold[0], rec(1.0, {"b": "k"}, b=Node(held=8)), cold[1])                    # nor is one all held a baseline of the time between a cold walk's rows
     told = View(0.25, 0, [Bucket(stores={"memo": (1, 9), "gone": (5, 9), "window stack": (2, 9)}), Bucket(stores={"memo": (3, 9), "clip stack": (4, 9)})], [])
     assert stores_at(told) == {"memo": (3, 9), "window stack": (2, 9), "clip stack": (4, 9)} and "clip stack" not in stores_at(told, 0.1)
-    assert {kind for _, kind in SIMULATIONS.values()} == set(CLASSES) == set(SOURCES)
+    assert {kind for _, kind in SIMULATIONS.values()} == {*CLASSES, *SPANS} == set(SOURCES)
+    quiet = [Bucket(), Bucket()]
+    felt = View(0.25, 0, [Bucket(), Bucket(late=300.0, turns={"slot walked": 200.0}, rows={"window": 4}), *quiet,
+                          Bucket(late=300.0, longest={"b": [250.0, 240.0]}), *quiet, Bucket(late=300.0, longest={"b": [250.0, 10.0]}),
+                          Bucket(late=99.0), Bucket(late=500.0)], [])     # under a turn, under one call on its own CPU, under one that waited; unfelt; unsettled
+    assert [(p.key, p.ms_row, p.t) for p in SPANS["late"](felt)] == [(("late", "turn", "slot walked"), 75.0, 0.25), (("late", "node", "b"), None, 1.0),
+                                                            (("late", "unrecorded", "nothing recorded"), None, 1.75)]
+    begun = [Bucket(begins={"window": {"asked": 2, "hand": 9}}, rows={"window": 8}), Bucket(begins={"window": {"given": 1}}, rows={"window": 4}),
+             Bucket(begins={"window": {"hand": 5, "edit": 5}}), Bucket()]
+    (p,) = SPANS["restarts"](View(0.25, 0, begun, []))       # two by no hand are under it, the third is it, and a hand's and an edit's are none however many
+    assert (p.key, p.t, p.walk) == (("restarts", "lane", "window"), 0.25, None) and "3 times" in p.line and "went stale" in p.target
+    assert not SPANS["restarts"](View(0.25, 0, [begun[0], replace(begun[1], rows={"window": 24}), *begun[2:]], []))      # rows enough finished a beginning
     turned = rec(b={("run", "walk", "b"): [8, 100.0, 0]})
     turned.wait = 80.0
     waited = View(0.25, 0, [Bucket(wait=40.0, turns={"slot walked": 60.0, "paint plot": 5.0})] * 2, [turned])
@@ -152,11 +164,16 @@ def test_the_log_holds_one_entry_a_class_and_subject_counted_cleared_and_ordered
 @pytest.mark.parametrize("kept", [2, 3])
 def test_the_log_reads_the_same_however_few_walks_the_ledger_keeps(kept):
     """One stream into a ledger that keeps every walk and one that keeps `kept`, each read by its
-    own Log after every event: the entries are equal throughout."""
+    own Log after every event: the entries are equal throughout, those of the classes that judge
+    no walk among them."""
     def told(walks):
         t = 0.0
-        for lane, key, ms in walks:
+        for i, (lane, key, ms) in enumerate(walks):
             yield event("sync", t, keys={"b": key}, facts=PLAN | {"selected": None})
+            for _ in range(3 * (i == 1)):
+                yield event("begin", t, row=0, length=8, lane=lane, facts={"by": "asked"})
+            if i == 2:
+                yield "late", 300.0, t
             yield event("begin", t, row=0, length=8, lane=lane)
             for r in range(8):
                 yield event("run", t, ms, "b", r, key=key, demand="walk", asked="b", lane=lane)
@@ -169,10 +186,12 @@ def test_the_log_reads_the_same_however_few_walks_the_ledger_keeps(kept):
     (all_, some), (whole, short) = (Ledger(), Ledger(walks=kept)), (Log(), Log())
     for i, ev in enumerate(told(walks)):
         for led, log in ((all_, whole), (some, short)):
-            led.event(ev)
+            led.sample(*ev) if isinstance(ev, tuple) else led.event(ev)
             log.read(led.view())
-        assert whole.entries == short.entries, (i, ev.kind, ev.lane, ev.row)
-    assert {k: (e.count, e.holds) for k, e in whole.entries.items()} == {("slower", "node", "b"): (4, True)}     # both lanes' slow walks, and the clip's last still slow
+        assert whole.entries == short.entries, (i, ev)
+    assert {k: (e.count, e.holds) for k, e in whole.entries.items()} == {
+        ("slower", "node", "b"): (4, True),     # both lanes' slow walks, and the clip's last still slow
+        ("restarts", "lane", "window"): (1, False), ("late", "unrecorded", "nothing recorded"): (1, False)}
 
 
 def test_a_changed_param_between_two_walks_is_compared_with_nothing():
@@ -233,7 +252,8 @@ def test_a_simulation_surfaces_its_class_alone(name, tmp_path):
     assert {e.problem.kind for e in seen.log.ordered()} == {SIMULATIONS[name][1]}, [e.problem.line for e in seen.log.ordered()]
     subjects = {e.problem.subject for e in seen.log.ordered()}
     want = {"unread": {"gray", "work"}, "memo": {"memo"}, "cache": {"video"}, "reader": {"bake"}, "grows": {"pile"},
-            "seeks": {"video"}, "slower": {"work"}, "held": {"unprobed"}, "slot": {"slot walked"}, "signals": {"slot walked"}}[name]
+            "seeks": {"video"}, "slower": {"work"}, "held": {"unprobed"}, "slot": {"slot walked"}, "signals": {"slot walked"},
+            "frozen": {"slot walked"}, "holds": {"work"}, "unspanned": {"nothing recorded"}, "again": {"window"}}[name]
     assert want <= subjects and (name == "unread" or want == subjects)
 
 
@@ -242,6 +262,7 @@ def test_a_simulation_surfaces_its_class_alone(name, tmp_path):
 def test_a_healthy_walk_surfaces_nothing(name, tmp_path):
     seen = run(name, tmp_path)
     assert not seen.log.entries and seen.view.walks[-1].done == seen.view.walks[-1].length
+    assert {"late", "restarts"} <= seen.log.checked
 
 
 @pytest.mark.simulation

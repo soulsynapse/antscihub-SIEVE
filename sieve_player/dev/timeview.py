@@ -24,13 +24,13 @@ from PySide6.QtWidgets import QApplication, QHBoxLayout, QPushButton, QSizePolic
 
 from .. import stream, theme
 from ..canvas import type_color
-from ..catalogue import (Log, alike, bucket_row_ms, finished, gui, machine, needs, realtime_multiple, resource_shares, rows,
+from ..catalogue import (Log, alike, asked_of, bucket_row_ms, finished, gui, machine, realtime_multiple, resource_shares, rows,
                          size, store_name, stores_at, tight, unprobed_row_ms, walk_row_ms)
 from ..document import produces
 from ..ledger import coarsen, save
 from ..pace import clock as as_clock
 from ..pacecontrol import PaceControl
-from ..report import report
+from ..report import cost_said, report
 from ..store import commit
 from ..theme import GAP, GROUND, HEAD, INK, INK_2, LEVEL, LINE_LIFT, PAD, RADIUS, ROW_H, layer, qgray
 
@@ -56,7 +56,7 @@ OURS = QColor(224, 192, 112)    # SIEVE's share of the machine: the mockup's amb
 ELSE = qgray(INK_2 - 40)        # everything on the machine that is not SIEVE
 PICKED, PICKED_EDGE = QColor(58, 42, 41), QColor(168, 72, 63)      # a picked problem's row, LEVEL toward the ground
 TINT = QColor(245, 168, 161)    # a problem's target and a figure past its limit, LEVEL toward the ink
-ABOUT = {"thrash": "stores", "waits": "gui", "signals": "gui"}        # a class -> the panel its problems are about; the rest are the table's
+ABOUT = {"thrash": "stores", "waits": "gui", "signals": "gui", "late": "gui"}        # a class -> the panel its problems are about; the rest are the table's
 
 
 @lru_cache(maxsize=None)
@@ -546,8 +546,7 @@ class _Lines(QWidget):
     def said(self, e):
         """An entry's row as it is written, cell by cell."""
         p = e.problem
-        return ("-" if p.share is None else f"{p.share:.0%}", p.says, p.target, f"{p.ms_row:.2f} ms a row",
-                f"{p.kind} · {e.count} walk{'s' * (e.count != 1)}")
+        return "-" if p.share is None else f"{p.share:.0%}", p.says, p.target, cost_said(p), f"{p.kind} · {e.seen()}"
 
     def copy_rect(self, i):
         return QRectF(self.width() - self.COPY, i * self.H + 2, self.COPY, self.H - 6)
@@ -641,7 +640,7 @@ class Problems(QWidget):
         entries = window.log.ordered()
         holds, cleared = [e for e in entries if e.holds], [e for e in entries if not e.holds]
         judged = window.view is not None and bool(finished(window.view))
-        quiet = [k for k in window.log.classes if k in window.log.checked and not any(e.problem.kind == k for e in entries)]
+        quiet = [k for k in (*window.log.classes, *window.log.spans) if k in window.log.checked and not any(e.problem.kind == k for e in entries)]
         drawn = self.lines.written, self.lines.picked
         self.lines.entries, self.lines.picked = holds, window.picked
         self.lines.written = [(e.problem.share, self.lines.said(e)) for e in holds]
@@ -828,24 +827,24 @@ class Panel(QWidget):
 
 
 class StoresPanel(Panel):
-    """Each store as the window lane's last walk found it: what it holds of its limit and what it
-    ran again, over what the window needs of it by `catalogue.needs`, which stands before the
-    store discards anything; a store the window does not fit has its bar drawn to the need, hatched
-    past the limit."""
+    """Each store: what it holds of its limit and what the window lane's last walk ran again of
+    it, over what the range of each lane's last walk needs of it by `catalogue.asked_of`, which
+    stands before the store discards anything; a store a range does not fit has its bar drawn to
+    the most needed of it, hatched past the limit."""
     title, about = "Stores", "stores"
 
     def read(self, window):
         view = window.view
         w = next((w for w in reversed(view.walks) if w.lane == "window"), window.walk)
         stores = stores_at(view)
-        need = {} if w is None else needs(view, w)
+        asked = asked_of(view)
         out = []
         for s, (held, limit) in sorted(stores.items(), key=lambda x: (x[0] != "memo", store_name(x[0], view))):
-            again, n = 0 if w is None else w.recomputed.get(s, 0), need.get(s)
-            over = bool(limit and n and n > limit)
-            full = max(n or 0, limit or 0) or 1
+            again, need = 0 if w is None else w.recomputed.get(s, 0), asked.get(s, [])
+            over = any(n.over for n in need)
+            full = max([n.bytes for n in need] + [limit or 0]) or 1
             out.append(Line(store_name(s, view), f"{size(held)} of {size(limit or 0)} · {again or 'none'} again",
-                            [(0, held / full, "ink"), *([(limit / full, 1, "hatch")] if over else [])], f"this window needs {size(n)}" if n else "", over))
+                            [(0, held / full, "ink"), *([(limit / full, 1, "hatch")] if over else [])], "; ".join(n.says for n in need), over))
         return out
 
 

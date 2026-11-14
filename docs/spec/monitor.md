@@ -887,32 +887,47 @@ order is by it. A class is entered with a simulation and a source, and `tests/te
 the three sets equal; its two-ledger test holds the log's entries the same however few walks are kept.
 Where the tree has `Problem.subject_is`, a subject that is a lane is one more value of it.
 
-- [ ] The GUI thread running later than a user feels is a problem, with a walk or without one; the
+- [x] The GUI thread running later than a user feels is a problem, with a walk or without one; the
   lateness a heavy walk ordinarily leaves is under it and is none. Its subject is what the buckets hold
   over the late span: the turn that covers it; else the worker's node that ran over it with no wait,
   holding the interpreter; else that nothing recorded covers it, which is said as such.
   Check: a simulation of each of the three surfaces the class alone, and every healthy run surfaces
   nothing.
-- [ ] A lane that begins again and again with few rows finished, by no hand of the user's, is a problem
+  Ticked 2026-11-14 by the simulations `frozen`, `holds` and `unspanned` and the healthy ones, under
+  `pytest -m simulation`. The class is `late`, the name this session's; what is felt is
+  `catalogue.LATE`, set by no measurement on Kendrick's footage; the fork on what a late GUI thread is
+  most often under was not observed, and all three subjects are built.
+- [x] A lane that begins again and again with few rows finished, by no hand of the user's, is a problem
   whose subject is the lane: how often it began against the rows it finished, and what began it again.
   A range begun again by a drag, by the playhead or by an edit is the user's and is none, however often.
   Check: a simulation of a walk the player itself restarts every few rows surfaces the class alone; a
   drag and a playback through a pipeline slower than the clip surface nothing.
-- [ ] The stores panel says, of the last walk of every lane and from its first rows, what its range
+  Ticked 2026-11-14 by the simulation `again` and the healthy `drag`, and for the playback by
+  `docs/findings/experiments/2026-11-14-the-catalogue-says-what-no-finished-walk-shows.py`,
+  which reads no restart of it and prints what else the log held: `seeks` on the video at two seeks
+  in one run of three, a playhead ahead of the walk leaving rows the walk then skips. The class is
+  `restarts`, the name this session's.
+- [x] The stores panel says, of the last walk of every lane and from its first rows, what its range
   needs of each store against the limit, and where the need is past the limit that the next walk of the
   range computes it again. It is a line of the panel's and no problem: no entry, no row among the
   problems, nothing on stderr.
   Check: a one-off script walks the clip once past the cache's limit and reads the panel's line before
   the walk's last row and the log empty after it.
-- [ ] The log's entries are the same however few walks the ledger keeps and however often it is read,
+  Ticked 2026-11-14 by `docs/findings/experiments/2026-11-14-the-catalogue-says-what-no-finished-walk-shows.py`,
+  the memo the store, read at 16 of 64 rows, and a second walk of the clip then computing it again.
+- [x] The log's entries are the same however few walks the ledger keeps and however often it is read,
   with the two classes above among its classes.
   Check: `tests/test_catalogue.py`'s two-ledger test, the classes among those it reads; an invariant, so
   a test.
+  Ticked 2026-11-14 by that test, an entry of each class among those it holds equal.
 
 Fork: whether the stream says what began a walk again. Observed by reading `stream.py` and the
 worker's begins, and written in the check's output: where it does, or a begin can be made to carry it
 without the graph naming the user, the second box is built; where it cannot, the box waits and nothing
-is built that fires on a drag.
+is built that fires on a drag. Observed 2026-11-14: it did not, a begin carrying its range and no more;
+it now carries what began it as its facts' "by", one of `stream.BEGUN_BY`, a word the graph passes on
+and does not read, the caller of `Worker.set_window` saying where a hand or an edit did and a caller
+that says nothing being neither.
 
 Fork: what a late GUI thread is most often under. Observed on a dump of a session Kendrick felt slow,
 replayed by `python -m sieve_player.report`, and written as a finding: where a turn covers most of the
@@ -922,7 +937,9 @@ Kendrick's use and waits for him.
 
 Open: how a problem with no walk ranks among those costed in ms a row. Recommended: it leads the list
 unranked while no walk ran over its span, and ranks by the ms a row of the walk it overlapped where one
-did. A session builds on this only once Kendrick has edited the line.
+did. A session builds on this only once Kendrick has edited the line. Built on 2026-11-14 all the
+same, on Kendrick's word that the unticked boxes be built: a problem with no row finished over its
+span has no cost and leads the list, and one with rows is costed over them.
 
 Open: the classes' names. The words above are descriptions and name nothing; the names are Kendrick's.
 

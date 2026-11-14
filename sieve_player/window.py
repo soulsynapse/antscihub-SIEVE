@@ -31,7 +31,7 @@ from .pace import Pace, clock
 from .pacecontrol import PaceControl
 from .pane import Pane
 from .registry import CATEGORIES, Entry, category, description, signature
-from .stream import Emitter
+from .stream import ASKED, EDIT, HAND, Emitter
 from .theme import GAP, PAD, ROW_H, readout
 from .timeline import Timeline
 from .trace import Dump
@@ -503,12 +503,12 @@ class PlayerWindow(QMainWindow):
         st.pressed.connect(self._scrub_begin)
         st.dragged.connect(lambda r: self.seek(r, commit=False))
         st.released.connect(self._scrub_end)
-        st.windowChanged.connect(self.set_window)
-        st.windowPlaced.connect(lambda s, n: self.set_window(s, n, playhead=s))
+        st.windowChanged.connect(lambda s, n: self.set_window(s, n, by=HAND))
+        st.windowPlaced.connect(lambda s, n: self.set_window(s, n, playhead=s, by=HAND))
         st.hovered.connect(self._hover)
         ct.playToggled.connect(self.toggle_play)
         ct.step.connect(lambda d: self.seek(self.row + d, commit=True))
-        ct.windowEdited.connect(lambda s, n: self.set_window(round(s * self.fps), round(n * self.fps)))
+        ct.windowEdited.connect(lambda s, n: self.set_window(round(s * self.fps), round(n * self.fps), by=HAND))
         QShortcut(QKeySequence(Qt.Key_Space), self, self.toggle_play)
         QShortcut(QKeySequence(Qt.Key_Left), self, lambda: self.seek(self.row - 1, commit=True))
         QShortcut(QKeySequence(Qt.Key_Right), self, lambda: self.seek(self.row + 1, commit=True))
@@ -709,7 +709,7 @@ class PlayerWindow(QMainWindow):
         self.pane.set_source(self.decoder.path, self.fps)
         if self.playing:
             self.timer.start(max(1, int(round(1000 / self.fps))))
-        self.set_window(across(s), max(1, round(n * old.increment / new.increment)), playhead=row)
+        self.set_window(across(s), max(1, round(n * old.increment / new.increment)), playhead=row, by=EDIT)
         return True
 
     def _toggle_mode(self, nid):
@@ -790,7 +790,7 @@ class PlayerWindow(QMainWindow):
         self._restate()
         if nid in self.graph.chain:
             if self._spared or self._given or self.runs.over(*self.window_, self._chain()) is not None:
-                self._ask_window()      # what was held is no longer the chain's, or a run now is: the walk begins again with what is held now
+                self._ask_window(EDIT)  # what was held is no longer the chain's, or a run now is: the walk begins again with what is held now
             self.worker.rerun_series()
             self._show_held()
         else:
@@ -801,7 +801,7 @@ class PlayerWindow(QMainWindow):
         """The frame tools changed: the walk restarts, and the clip walk's rows are of a graph that is
         gone, so they are dropped here and now rather than when the worker gets to it."""
         self.worker.invalidate()
-        self._ask_window()
+        self._ask_window(EDIT)
         self._clip_asked = False
         self.header.set_walking(False)
         self.header.clear_note()
@@ -1036,7 +1036,7 @@ class PlayerWindow(QMainWindow):
         self._stamp = held.stamp(path, self._tools_digest)
         self._file = held.File(held.path_for(self.doc.path), self._stamp) if self.doc.path else None
         self.runs.take(self._file.load() if self._file is not None else [])
-        self.set_window(0, min(self.count, round(10 * self.fps)))
+        self.set_window(0, min(self.count, round(10 * self.fps)), by=HAND)
         self.goto(0, commit=True)
         self.toggle_play()  # _unload left it paused
         if self.pane.video is not None:
@@ -1094,9 +1094,10 @@ class PlayerWindow(QMainWindow):
         self.display.clear()
 
     # -- state (every entry is a no-op until something is loaded) --------
-    def set_window(self, start, length, playhead=None):
+    def set_window(self, start, length, playhead=None, by=ASKED):
         """Move or resize the window. The playhead keeps its offset from the start, clamped inside,
-        unless `playhead` names the row to show instead."""
+        unless `playhead` names the row to show instead. `by` is what the walk's begin says began
+        it, as Worker.set_window takes it: a caller that says nothing is no hand and no edit."""
         if self.graph is None:
             return
         start = max(0, min(self.count - 1, int(start)))
@@ -1107,7 +1108,7 @@ class PlayerWindow(QMainWindow):
         self.plot.set_window(start, length, self.fps)
         self.timeline.strip.set_window(start, length)
         self.timeline.controls.set_window(start, length)
-        self._ask_window()
+        self._ask_window(by)
         if self.row != start + offset:
             self.goto(start + offset, commit=True)
 
@@ -1196,16 +1197,17 @@ class PlayerWindow(QMainWindow):
         if row == self.row and self.graph is not None:
             self._show(row)
 
-    def _ask_window(self):
+    def _ask_window(self, by=ASKED):
         """Asks the worker for the window: spared the chain where a held run covers it, whose rows
         are then the window's results at once; else given what a run holds of the chain's stepped
-        nodes, so only the rest is stepped. The window's frames are walked either way."""
+        nodes, so only the rest is stepped. The window's frames are walked either way. `by` as
+        set_window's."""
         s, n = self.window_
         chain = self._chain()
         got = self.runs.over(s, n, chain)
         part = {} if got is not None else self.runs.part(s, n, chain)
         self._spared, self._given = got is not None, bool(part)
-        self.worker.set_window(s, n, self._spared, self._as_given(part))
+        self.worker.set_window(s, n, self._spared, self._as_given(part), by)
         if got is not None:
             self._series_ready(got, s, self.fps)
         self._show_held()
@@ -1270,7 +1272,7 @@ class PlayerWindow(QMainWindow):
             self._clip_asked = False
             self.header.clear_note()
         else:
-            self.worker.walk_clip()
+            self.worker.walk_clip(HAND)
             self._clip_asked = True
             self.header.note.setText("clip: after the window")
         self.header.set_walking(self._clip_asked)

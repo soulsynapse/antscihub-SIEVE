@@ -15,7 +15,7 @@ from types import SimpleNamespace as Tool
 
 import cv2
 import numpy as np
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import QApplication
 
 from tools import bake
@@ -29,7 +29,7 @@ from ..machine import Watch
 from ..pace import Pace
 from ..report import line
 from ..store import Store
-from ..stream import Emitter
+from ..stream import HAND, Emitter
 from ..worker import Worker
 from .timeview import Window, context
 
@@ -39,12 +39,36 @@ MS = 1.0            # what work and edge each spin a row, well over the clip's d
 ROW = H * W
 
 Seen = namedtuple("Seen", "log view context")
+HOLD = 0.4          # s the GUI thread is kept from its loop in the simulations of its lateness, well past catalogue.LATE
 
 
 def _spin(ms):
     end = time.perf_counter() + ms / 1000
     while time.perf_counter() < end:
         pass
+
+
+def _hold(seconds):
+    """Holds the interpreter for about `seconds` in one call no other thread's turn breaks into."""
+    t = time.perf_counter()
+    sum(range(1_000_000))
+    sum(range(int(1_000_000 * seconds / (time.perf_counter() - t))))
+
+
+def _late(sample, interval_ms=50):
+    """A timer of the GUI thread's sampling how late it fires, as window.Lateness does, which
+    nothing under dev may import."""
+    timer, due = QTimer(), []
+    timer.setTimerType(Qt.TimerType.PreciseTimer)
+
+    def fired():
+        now = time.perf_counter()
+        if due:
+            sample("late", max(0.0, (now - due.pop()) * 1000), now)
+        due.append(now + interval_ms / 1000)
+    timer.timeout.connect(fired)
+    timer.start(interval_ms)
+    return timer
 
 
 def _clip(path):
@@ -60,13 +84,15 @@ def _clip(path):
 def _tools():
     """The graph's tools, made anew so a fault set on one is no other simulation's."""
     def frame(name, expects, fn):
-        t = Tool(NAME=name, KIND="frame", EXPECTS=expects, PRODUCES="gray", DEFAULTS={"k": 0}, ms=0.0, far=0)
+        t = Tool(NAME=name, KIND="frame", EXPECTS=expects, PRODUCES="gray", DEFAULTS={"k": 0}, ms=0.0, far=0, hold=0.0)
 
         def run(frames, row, params):
             f = frames(row)
             if t.far:
                 frames((row + t.far) % frames.count)
             _spin(t.ms)
+            if t.hold and row == ROWS // 2:
+                _hold(t.hold)
             return fn(f, params)
         t.run = run
         return t
@@ -120,6 +146,7 @@ class _Run:
         self.worker.seriesReady.connect(self.slot("seriesReady", lambda *a: self.series.append(a)))
         self.worker.bakeDone.connect(lambda nid, b: self.baked.append(b))
         self.worker.bakeRefused.connect(lambda nid, why: self.baked.append(RuntimeError(why)))
+        self.lateness = _late(ledger.sample)    # one a graph: what opening the next keeps the GUI thread for is no lateness of a walk's
 
     def slot(self, name, fn):
         """`fn` as the window connects a worker signal's slot: a "slot" span on the thread it lands in."""
@@ -142,7 +169,7 @@ class _Run:
         """Walks the window, by `ask` when the walk is another's to start, and waits for its chain."""
         self.walked.clear()
         self.series.clear()
-        (ask or (lambda: self.worker.set_window(start, length)))()
+        (ask or (lambda: self.worker.set_window(start, length, by=HAND)))()
         if not self.worker.isRunning():
             self.worker.start()
         self.wait(lambda: self.walked and self.walked[-1] == (length, length) and self.series, "the walk")
@@ -160,6 +187,11 @@ class _Run:
             raise self.baked[0]
         return self.baked[0]
 
+    def settle(self):
+        """Waits until the buckets written so far are settled, a later one begun, so a class that judges buckets has judged them."""
+        now = int(time.perf_counter() // self.ledger.width)
+        self.wait(lambda: (v := self.ledger.view()).first + len(v.buckets) > now + 3, "the next buckets")
+
     def seen(self):
         view = self.ledger.view()
         self.log.read(view)
@@ -171,6 +203,7 @@ class _Run:
         self._open(self.ledger)
 
     def _shut(self):
+        self.lateness.stop()
         if self.worker.isRunning():
             self.worker.stop()
         self.graph.close()
@@ -272,6 +305,52 @@ def signals(r):
     r.walk()
 
 
+@_fault()
+def frozen(r):
+    """A slot of the GUI thread's that sleeps, the walk done: the GUI thread late under a turn, and no tool waiting beside it."""
+    r.walk()
+    r.settle()
+    r.slot("walked", time.sleep)(HOLD)
+    r.settle()
+
+
+@_fault()
+def holds(r):
+    """work holding the interpreter through one call on one row: the GUI thread late under no turn of its own."""
+    r.tools["work"].hold = HOLD
+    r.walk()
+    r.settle()
+
+
+@_fault()
+def unspanned(r):
+    """The GUI thread kept from its loop under no span, and no walk at all."""
+    r.settle()
+    time.sleep(HOLD)
+    r.settle()
+
+
+def _again(r, by, times=40, every=4):
+    """Asks for the window again at every `every` rows, `times` times, as `by`, then lets it walk.
+    The ask is made on the worker's thread as the row lands, a queued one finding the walk rows on."""
+    left = [times]
+
+    def ask(done, n, *was):
+        if left[0] and done == every:
+            left[0] -= 1
+            r.worker.set_window(0, ROWS, by=by)
+    hook = r.worker.walked.connect(ask, Qt.ConnectionType.DirectConnection)
+    r.walk()
+    r.worker.walked.disconnect(hook)
+    r.settle()
+
+
+@_fault()
+def again(r):
+    """The window asked for again every few rows by no hand and no edit, forty times over."""
+    _again(r, "asked")
+
+
 def _healthy(*steps):
     @_fault()
     def run(r):
@@ -288,11 +367,13 @@ def _scrubbed(r):
 
 SIMULATIONS = {"unread": (unread, "unread"), "memo": (memo, "thrash"), "cache": (cache, "thrash"), "reader": (reader, "thrash"),
                "grows": (grows, "grows"), "seeks": (seeks, "seeks"), "slower": (slower, "slower"),
-               "held": (held, "slower"), "slot": (slot, "waits"), "signals": (signals, "signals")}     # name -> (it, the class it builds)
+               "held": (held, "slower"), "slot": (slot, "waits"), "signals": (signals, "signals"),
+               "frozen": (frozen, "late"), "holds": (holds, "late"), "unspanned": (unspanned, "late"),
+               "again": (again, "restarts")}     # name -> (it, the class it builds)
 SERVED = {"unread", "reader", "bake"}      # the simulations that write a bake
 HEALTHY = {"walk": _healthy(_Run.walk), "rewalk": _healthy(_Run.walk, _Run.walk),
            "midclip": _healthy(lambda r: r.walk(ROWS // 4, ROWS // 2)), "scrub": _healthy(_scrubbed),
-           "bake": _healthy(_Run.walk, _Run.bake)}      # each a way of walking the graph that is no fault
+           "bake": _healthy(_Run.walk, _Run.bake), "drag": _healthy(lambda r: _again(r, HAND))}      # each a way of walking the graph that is no fault
 
 
 def _named(name):

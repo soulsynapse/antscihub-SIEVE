@@ -1012,7 +1012,7 @@ class PlayerWindow(QMainWindow):
         if os.environ.get(DUMP_ENV):
             self.dump = Dump(self.graph, os.environ[DUMP_ENV])
         self.lateness = Lateness(self._sample, parent=self)
-        self.machine = Watch(self._sample)
+        self.machine = Watch(self._sample, still_out=self.stream.still_out)
         self.pace = Pace()
         self.worker = Worker(self.graph, store=self.store)
         self.fps, self.count = self.graph.fps, self.graph.count

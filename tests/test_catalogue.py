@@ -67,6 +67,10 @@ def test_each_class_reads_off_a_view_built_by_hand():
     (key, e), = found(rec(**GROWN)).items()
     assert key == ("grows", "c") and e.problem.ms_row == 12 / 8 and e.problem.share == 12 / 20
     assert not found(rec(c=Node(runs=GROWN["c"].runs, parts=[0.0] * 4 + [5.0] * 4, counts=[0] * 4 + [1] * 4)))     # held, then run: flat
+    under_way = rec(c=Node(runs=GROWN["c"].runs, parts=[0.0] * 2 + [5.0] * 2 + [0.0] * 4, counts=[0] * 2 + [1] * 2 + [0] * 4))
+    under_way.length = 16
+    assert not found(under_way)                                                                 # nor short of its range, held then run over the half it has done
+    assert not found(replace(rec(**GROWN), unprobed=200.0))                                     # nor is a growth that is little of what the walk took, most of it between rows
     stepped_again = rec(**GROWN)
     stepped_again.replanned = True
     assert not found(stepped_again)                                                             # a plan changed under it is no growth
@@ -105,6 +109,7 @@ def test_each_class_reads_off_a_view_built_by_hand():
     turned = rec(b={("run", "walk", "b"): [8, 100.0, 0]})
     turned.wait = 80.0
     waited = View(0.25, 0, [Bucket(wait=40.0, turns={"slot walked": 60.0, "paint plot": 5.0})] * 2, [turned])
+    assert not seen(View(0.25, 0, [Bucket(wait=40.0, turns={"slot walked": 60.0}, calls={"slot walked": 100})] * 2, [turned]))     # a slot brief at each call is signals' and no wait
     told = rec(b=Node(runs=runs(run_b(8.0)), ran=8))
     signalled = View(0.25, 0, [Bucket(turns={"slot clipWalked": 0.5, "slot seriesReady": 9.0}, calls={"slot clipWalked": 4, "slot seriesReady": 1})] * 2, [told])
     assert not seen(View(0.25, 0, signalled.buckets, [rec(b=Node(runs=runs(run_b(8.0)), held=8))]))        # a walk the stores held
@@ -197,16 +202,30 @@ def test_the_log_is_a_fold_of_the_stream_whatever_the_ledger_keeps_and_whenever_
                 yield event("run", t, ms, "b", r, key=key, demand="walk", asked="b", lane=lane)
                 t += ms / 1000
                 yield event("progress", t, row=r + 1, length=8, lane=lane, facts={})
-            t += 1.0
-            yield "late", 0.0, t        # the GUI thread's loop turning: a bucket left unsettled for longer than the shortest history is dropped unjudged
+            t += 3.0        # the loop says nothing from the third walk's lateness until the clip begins, longer than the shortest history: only ledger.SETTLES_BY settles those buckets
         yield event("begin", t, row=0, length=8, lane="clip")
         yield event("begin", t + 0.5, row=0, length=8, lane="window")       # the clip waits behind it from here
         for r in range(8):
+            if r == 2:
+                yield "still_out", {"w": ["b", t, 0.0, 0.0]}, t             # what a sampler found the thread in as the long row began
             for _ in range(int(STALLS) + 2 if r == 2 else 3):               # a row every three seconds, and one that takes longer than a lane may
                 t += 1.0
                 yield "late", 0.0, t
             yield event("progress", t, row=r + 1, length=8, lane="window", facts={})
         yield event("progress", t + 0.5, row=8, length=8, lane="clip", facts={})
+        t += 1.0        # a row as long under a plan that runs c whole: no stall while c is out, nor between its end and the row's progress
+        whole = {"kind": "series", "fed": True, "static": False, "served": False, "steps": False, "whole_by": None, "reads": {}}
+        yield event("sync", t, keys={"b": "k3"}, facts=PLAN | {"selected": None, "nodes": {"c": whole}})
+        yield event("begin", t, row=0, length=2, lane="window")
+        yield event("progress", t, row=1, length=2, lane="window", facts={})
+        yield "still_out", {"w": ["c", t, 0.0, 0.0]}, t
+        for _ in range(int(STALLS) + 2):
+            t += 1.0
+            yield "late", 0.0, t
+        yield event("run", t - STALLS - 2, (STALLS + 2) * 1000, "c", lane="window")
+        yield event("run", t, 100.0, "b", 1, lane="window")
+        yield "late", 0.0, t + 0.5
+        yield event("progress", t + 0.6, row=2, length=2, lane="window", facts={})
 
     walks = [("window", "k", 1.0), ("window", "k", 4.0), ("clip", "k", 1.0), ("window", "k", 4.0), ("clip", "k", 4.0),
              ("clip", "k", 1.0), ("window", "k2", 4.0), ("clip", "k", 4.0), ("window", "k2", 1.0), ("window", "k", 4.0)]
@@ -225,6 +244,7 @@ def test_the_log_is_a_fold_of_the_stream_whatever_the_ledger_keeps_and_whenever_
         ("slower", "node", "b"): (4, True),     # both lanes' slow walks, and the clip's last still slow
         ("restarts", "lane", "window"): (1, False), ("late", "node", "x"): (1, False),
         ("stalls", "lane", "window"): (1, False)}   # the window's long row, and not the clip that waited behind every one
+    assert entries["stalls", "lane", "window"].problem.nodes == ("b",)      # named by what its thread was sampled in
 
 
 def test_a_bucket_under_a_span_still_out_is_not_judged():

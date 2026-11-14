@@ -33,6 +33,30 @@ if sys.platform == "win32":
     _pdh.PdhGetFormattedCounterValue.argtypes = [_H, wintypes.DWORD, ctypes.POINTER(wintypes.DWORD), ctypes.POINTER(_Value)]
     _pdh.PdhGetFormattedCounterArrayW.argtypes = [_H, wintypes.DWORD, ctypes.POINTER(wintypes.DWORD),
                                                   ctypes.POINTER(wintypes.DWORD), ctypes.c_void_p]
+    _k32 = ctypes.WinDLL("kernel32")       # own handle: argtypes set on the shared windll.kernel32 are process-global
+    _k32.OpenThread.restype = _H
+    _k32.OpenThread.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+    _k32.GetThreadTimes.argtypes = [_H] + [ctypes.POINTER(wintypes.FILETIME)] * 4
+    _k32.CloseHandle.argtypes = [_H]
+    _QUERY_LIMITED = 0x0800
+
+
+def thread_cpu(ident, native):
+    """The CPU seconds the thread of threading ident `ident` and native id `native` has used, as
+    time.thread_time() reads them on it, read from any thread; None where the system gives none
+    or the thread is gone."""
+    if sys.platform == "win32":
+        h = _k32.OpenThread(_QUERY_LIMITED, False, native)
+        if not h:
+            return None
+        made, left, kernel, user = (wintypes.FILETIME() for _ in range(4))
+        ok = _k32.GetThreadTimes(h, *(ctypes.byref(x) for x in (made, left, kernel, user)))
+        _k32.CloseHandle(h)
+        return sum((x.dwHighDateTime << 32 | x.dwLowDateTime) for x in (kernel, user)) / 1e7 if ok else None
+    try:
+        return time.clock_gettime(time.pthread_getcpuclockid(ident))
+    except (AttributeError, OSError):
+        return None
 
 
 class _Counters:
@@ -125,16 +149,20 @@ class Machine:
 
 class Watch(threading.Thread):
     """Samples the machine every `period` seconds on its own thread into `sink("machine", value,
-    t)`, t on the probe's clock, until `close()`."""
+    t)`, t on the probe's clock, until `close()`. `still_out`, when given, is a stream's
+    Emitter.still_out: what it says with `thread_cpu` goes into `sink("still_out", value, t)`
+    before each of those, this thread being one a call that does not return leaves running."""
 
-    def __init__(self, sink, period=1.0):
+    def __init__(self, sink, period=1.0, still_out=None):
         super().__init__(name="machine", daemon=True)
-        self._sink, self._period, self._stop_ = sink, period, threading.Event()
+        self._sink, self._period, self._still_out, self._stop_ = sink, period, still_out, threading.Event()
         self.start()
 
     def run(self):
         machine = Machine()
         while not self._stop_.wait(self._period):
+            if self._still_out is not None:
+                self._sink("still_out", self._still_out(thread_cpu), time.perf_counter())
             self._sink("machine", machine.read(), time.perf_counter())
         machine.close()
 

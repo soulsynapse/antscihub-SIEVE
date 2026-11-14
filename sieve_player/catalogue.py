@@ -267,7 +267,7 @@ class Sofar:
     """What a Log holds of a walk it has not judged for the last time: what the settled buckets
     the walk ran over have shown, and what its classes have found of it."""
     at: int | None = None                           # the first bucket not yet taken; None before any
-    both: float = 0.0                               # ms the tools' wait and the GUI thread's turns coincide, the lesser of the two bucket by bucket
+    both: float = 0.0                               # ms the tools' wait and the GUI thread's turns coincide, the lesser of the two bucket by bucket, a slot of BRIEF ms a call or under in a bucket being no turn of these
     by: dict = field(default_factory=dict)          # a turn -> its ms in the buckets they coincided in
     calls: dict = field(default_factory=dict)       # a slot -> its spans begun over the walk, and under `ms` what they took
     ms: dict = field(default_factory=dict)
@@ -280,9 +280,11 @@ class Sofar:
         lo = max(int(walk.t0 // view.width) if self.at is None else self.at, view.first)
         hi = min(end, int(walk.t1 // view.width), view.first + len(view.buckets) - 1)
         for b in view.buckets[lo - view.first:max(hi + 1 - view.first, 0)]:
-            if b.wait > 0 and b.turns:
-                self.both += min(b.wait, sum(b.turns.values()))
-                for name, ms in b.turns.items():
+            turns = {name: ms for name, ms in b.turns.items()       # a slot of BRIEF ms a call or under is `signals`' to find
+                     if not (name.startswith(SLOT + " ") and b.calls.get(name) and ms <= BRIEF * b.calls[name])}
+            if b.wait > 0 and turns:
+                self.both += min(b.wait, sum(turns.values()))
+                for name, ms in turns.items():
                     self.by[name] = self.by.get(name, 0.0) + ms
             for name, n in b.calls.items():
                 if name.startswith(SLOT + " "):
@@ -377,15 +379,17 @@ def thrash(view, w, sofar=None):
 
 GROWS = 3.0         # a node's ms a run over the last quarter of the range it has run in against the first
 GROWS_BEFORE = GROWS ** 0.5     # and over the quarter before the last, so one long call at the rows last walked is no growth
-GROWS_SHARE = 0.1   # and the share of the walk's cost the growth is, below which it is not a problem
+GROWS_SHARE = 0.1   # and the share of the walk's wall the growth is, its nodes' ms and its unprobed, below which it is not a problem
 
 
 def grows(view, w, sofar=None):
     """A node whose cost a run grows along the range, a chain node run whole over the rows so far
     being the known case; read off the parts of the range its spans fell in, so rows a store held
-    are not taken for cheap ones. A walk that went on after a sync is not judged: a node the new
+    are not taken for cheap ones. The growth is held against what the walk took, the time between
+    its rows with its nodes' ms, so a walk the stores held, whose nodes cost next to nothing, is
+    not one by how little that is. A walk that went on after a sync is not judged: a node the new
     plan steps again from the range's first row does it all where the walk then stood."""
-    out, total = [], cost(w)
+    out, total = [], cost(w) + w.unprobed
     for nid, node in w.nodes.items():
         per = [ms / n for ms, n in zip(node.parts, node.counts) if n]
         k = len(per) // 4
@@ -449,7 +453,9 @@ def waits(view, w, sofar):
     """The worker waiting on the GUI thread: over the settled buckets a walk has run over, what its
     tools spent off their own CPU while the GUI thread was in a slot or a paint, the lesser of the
     two in each bucket and no more than the walk's own wait, which is the steadier figure. A read's
-    wait is the decoder's threads and is not counted; a tool that sleeps coincides with nothing."""
+    wait is the decoder's threads and is not counted; a tool that sleeps coincides with nothing. A
+    slot whose calls in a bucket took BRIEF ms each or under is not among the spans: it is
+    `signals`' to find, so one slot is one class's by how long a call of it is."""
     both = min(sofar.both, w.wait)
     if not sofar.by or both < max(TICK, WAITS * cost(w)):
         return []
@@ -514,8 +520,8 @@ def late(view, first, last):
     """The GUI thread late past LATE, with a walk or without one, a problem for each bucket from
     `first` through `last` that sampled it so. Its subject is what the buckets hold over the
     lateness, no further back than BACK: the turn whose ms cover it; else the node one call of
-    which, begun before the bucket's end, ran as long on its own CPU, so holding the interpreter;
-    else that no span of the stream covers it. Its cost is the lateness over the rows the lanes
+    which, begun before the bucket's end, ran as long on its own CPU, so holding the interpreter,
+    whether it has ended or is in `View.still_out`; else that no span of the stream covers it. Its cost is the lateness over the rows the lanes
     finished across it."""
     out = []
     for i, b in _range(view, first, last):
@@ -532,16 +538,22 @@ def late(view, first, last):
             for nid, (ms, cpu, t) in x.longest.items():
                 if t < (i + 1) * view.width and cpu >= COVERS * ms and ms > calls.get(nid, 0.0):
                     calls[nid] = ms
+        out_yet = set()
+        for o in view.still_out.values():   # and one that has not ended, as it was last sampled
+            if o.cpu_ms is not None and o.since < (i + 1) * view.width and o.cpu_ms >= COVERS * o.ms and o.ms > calls.get(o.node, 0.0):
+                calls[o.node] = o.ms
+                out_yet.add(o.node)
         turn, call = max(turns.items(), key=lambda x: x[1], default=("", 0.0)), max(calls.items(), key=lambda x: x[1], default=("", 0.0))
         evidence = [f"late {b.late:.0f} ms", *(f"{name}: {ms:.1f} ms" for name, ms in sorted(turns.items(), key=lambda x: -x[1])),
-                    *(f"{nid}: one call of {ms:.0f} ms on its own CPU" for nid, ms in sorted(calls.items(), key=lambda x: -x[1]))]
+                    *(f"{nid}: one call of {ms:.0f} ms on its own CPU{', not yet returned' * (nid in out_yet)}"
+                      for nid, ms in sorted(calls.items(), key=lambda x: -x[1]))]
         says, rows = "The interface thread ran late enough to feel", sum(n for x in over for n in x.rows.values())
         if turn[1] >= COVERS * b.late:
             out.append(_spanned("late", view, i, turn[0], TURN, f"the GUI thread ran {b.late:.0f} ms late with {turn[0]} taking {turn[1]:.0f} ms over it",
                                 b.late, rows, evidence, says, "the " + " ".join(reversed(turn[0].split(" ", 1))), turns=[turn[0]]))
         elif call[1] >= COVERS * b.late:
-            out.append(_spanned("late", view, i, call[0], NODE, f"the GUI thread ran {b.late:.0f} ms late while one call of {call[0]} ran "
-                                f"{call[1]:.0f} ms on its own CPU, holding the interpreter", b.late, rows, evidence, says,
+            out.append(_spanned("late", view, i, call[0], NODE, f"the GUI thread ran {b.late:.0f} ms late while one call of {call[0]} "
+                                f"{'has run' if call[0] in out_yet else 'ran'} {call[1]:.0f} ms on its own CPU, holding the interpreter", b.late, rows, evidence, says,
                                 f"{call[0]}, one call of which holds the interpreter", nodes=[call[0]]))
         else:
             out.append(_spanned("late", view, i, "nothing recorded", UNRECORDED, f"the GUI thread ran {b.late:.0f} ms late and no span of the "
@@ -597,17 +609,28 @@ def stalls(view):
     """A lane being walked that has finished no row for STALLS seconds or longer, by
     `View.no_row_since` against `View.now`: a problem for each, its subject the lane, found in the
     lane's walk and with no cost, no row having finished over it. It reads no bucket, so it is
-    found with the call that holds the lane still out."""
+    found with the call that holds the lane still out, and names the node of that call where
+    `View.still_out` has the lane's thread in one. A lane whose thread is in a series node its
+    plan runs whole is held to no time, such a run costing by the rows it is over, and what such
+    runs have taken since the lane's last row is no part of the time."""
     out = []
     for lane, since in view.no_row_since.items():
-        w, still = next(w for w in reversed(view.walks) if w.lane == lane), view.now - since
-        if still < STALLS:
+        w = next(w for w in reversed(view.walks) if w.lane == lane)
+        nodes = (w.plan or {}).get("nodes") or {}
+
+        def whole(nid):
+            return nid in nodes and nodes[nid]["kind"] == "series" and not nodes[nid]["steps"]
+        o = view.still_out.get(view.walked_by.get(lane))
+        still = view.now - since - sum(s for nid, s in view.since_row.get(lane, {}).items() if whole(nid))
+        if still < STALLS or o and whole(o.node):
             continue
         at = "its first row" if w.start is None and not w.done else f"row {(w.start or 0) + w.done}"
+        inside = f"one call of {o.node} not returned for {view.now - o.since:.0f} s" if o else ""
         out.append(Problem("stalls", str(lane), LANE, f"the {lane} walk has finished no row for {still:.0f} s, {w.done} of its {w.length} done, "
-                           "with its thread awake and no other lane's turn taken", None, None,
-                           (f"{w.done} of {w.length} rows done", f"no row finished and no other lane's turn taken for {still:.1f} s"),
-                           SOURCES["stalls"], w.id, since, "The walk has stopped finishing rows", f"what the {lane} walk is in at {at}"))
+                           f"with its thread awake and no other lane's turn taken{', ' + inside if o else ''}", None, None,
+                           (f"{w.done} of {w.length} rows done", f"no row finished and no other lane's turn taken for {still:.1f} s", *([inside] if o else [])),
+                           SOURCES["stalls"], w.id, since, "The walk has stopped finishing rows",
+                           f"{o.node}, one call of which has not returned, at {at}" if o else f"what the {lane} walk is in at {at}", (o.node,) if o else ()))
     return out
 
 

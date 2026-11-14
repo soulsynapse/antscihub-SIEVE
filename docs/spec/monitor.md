@@ -1045,6 +1045,23 @@ span that a progress ends is not. The time is 5 s by
 longest stretch of the purb document's lanes at 76 ms and says what it did not walk, a chain node
 run whole the first of them.
 
+Added 2026-11-14 on building the second box, each of them how the tree now is and none a box. What
+a thread is in is sampled and not emitted: once a second, by the machine's sampler, so a call
+shorter than that may never be said, and the classes that read it read calls of `catalogue.STALLS`
+and `ledger.SETTLES_BY` seconds. A view's `still_out` is the last sample's, a thread's dropped as
+the stream says its span or one around it ended, or that it is between spans. Its CPU is the
+thread's own, read from the sampler's thread, so `late` holds a call still out to the share of its
+ms it holds one that ended to; a call that held the interpreter and then waits has little CPU for
+its length by the time its bucket settles, and reads as nothing recorded. A bucket under a call
+still out settles only at `SETTLES_BY`, so its `late` entry is made that long after. Whether a
+span still out is a read is not known until it ends, so a decode is not left out as one that
+ended is. `ledger.replay` folds the samples after the events and so holds the last of them alone.
+Two sightings for the fork on healthy documents, on the simulations' graph: `slower` on pile
+between two held clip walks, "0.01 to 0.01 ms a run", a ratio of two costs near nothing; and
+`grows` not ruled out of `wholelong`'s one failed run before the cause above was read. Kendrick's
+word of the same day is that this spec's reading of the log is dated and the log is largely not
+needed; nothing here is built on it further, and what it would take to go is not a box.
+
 Built next, on the session's reading of 2026-11-14 and Kendrick's to overrule: the lane that
 finishes no row, then the three boxes under way, whose classes are built and whose checks are not,
 then the second box, which the third turned out not to need and which decides only whether a
@@ -1062,11 +1079,16 @@ problem names its node.
   refused. `_Walk.halt` tells the probe as it tells the window, and a begin of no rows closes the
   range it was short of. A range the stream ended under closes by the same call and is read by no
   test: the raising test's walk past the stream's end is begun over before it is waited for.
-- [ ] What each thread is in, and since when, is in what the ledger holds before the span ends, so a
+- [x] What each thread is in, and since when, is in what the ledger holds before the span ends, so a
   lateness under a call still out names it as one under a call that ended does.
   Check: the simulation of a tool that does not return reads the node off a lateness's entry before
   the call returns; an experiment under `docs/findings/experiments/` gives the walk's rate with and
   without it, beside the figures of `docs/findings/2026-11-12-probe-cost-with-the-stream-facts.md`.
+  Ticked 2026-11-14, later, by the simulation `unreturned`, which reads `late` on work with the call
+  out, and by `docs/findings/2026-11-14-what-saying-what-a-thread-is-in-costs.md`. `stuck` is not
+  that simulation: its call waits and holds nothing, so the GUI thread is not late under it; it
+  now names work in its `stalls`. No event is added: the sampler reads the spans the probe keeps
+  open, `Emitter.still_out`, into a "still_out" sample a second, and a view carries the last.
 - [x] A bucket is judged once no span that began in or before it is still out on a thread whose ms
   it holds, and not before, so what a class reads of a bucket is what every later reader finds
   there. Added 2026-11-14.
@@ -1127,7 +1149,7 @@ problem names its node.
   it and reads the window's entry and none of the clip's, equal in the four ledgers. The class is
   `stalls`, the name this session's; the time is `catalogue.STALLS`. What a thread is in is not yet
   said, the second box's, so no problem names a node.
-- [ ] A bucket the history drops is one already judged, or every ledger judges it alike. Added
+- [x] A bucket the history drops is one already judged, or every ledger judges it alike. Added
   2026-11-14 on building the box above: the two-ledger test, its stream lengthened past the
   shortest history with one lateness sampled early and none after, read `late` in the long
   histories and not in the short, the bucket having been held unsettled behind the last lateness
@@ -1145,7 +1167,14 @@ problem names its node.
   without that call's ms, and `stalls` reads none. Nothing of it is built.
   Check: the two-ledger test, a bucket left unsettled for longer than the shortest history among
   its buckets; an invariant, so a test.
-- [ ] A row long with nothing wrong is no stall. Added 2026-11-14 on the box before the last, by
+  Ticked 2026-11-14, later, by that test: no lateness is sampled from its third walk's to the
+  clip's beginning, a stretch longer than the shortest history, and with no age the short
+  histories read no `late`. The age is `ledger.SETTLES_BY`, the name and the value this
+  session's. A bucket is settled as the newest moves that far past it and before the history
+  drops any, so a stream silent for longer than a history drops none unjudged; and a history is
+  no shorter than `Log.back` gives with the age beside it, where it was `back` alone and a bucket
+  judged behind the newest lacked that much of what `late` reads behind it.
+- [x] A row long with nothing wrong is no stall. Added 2026-11-14 on the box before the last, by
   reading and by no run: a chain node run whole costs by the rows it is run over, so on a long
   clip one emit short of the range's end may itself pass `catalogue.STALLS`; and a clip walk given
   every stepped node is begun at its last row and runs what runs whole in one turn, `worker._turn`,
@@ -1156,23 +1185,65 @@ problem names its node.
   does is recorded beside the constant's finding.
   Check: a simulation of `pile` run whole for longer than the time, short of its range's end and
   as a clip walk given its stepped nodes, surfaces nothing.
-- [ ] A store recomputing what it discarded, the walk's cursor seeking, the worker waiting on the GUI
+  Ticked 2026-11-14, later, by the healthy simulations `wholelong` and `givenlong`, and by
+  `tests/test_catalogue.py`'s two-ledger test, which tells a row as long under a plan that runs a
+  node whole and reads no second stall. A lane whose thread is sampled in a series node its plan
+  runs whole is held to no time, and what such runs took since the lane's last row is no part of
+  the time, `View.since_row`: without the second, `wholelong` failed in one run of twelve, what it
+  found not kept; by reading, a clock told between pile's return and its row's progress finds
+  the thread in no node and the row as long as before, and the test fails with the second out. The sentence above on a clip walk given its stepped nodes
+  is not how the tree is: the run comes after the range's last progress, the walk is then at its
+  range and no subject of the class, and `givenlong` was silent before any of this. With no
+  sampler attached nothing is said and the class fires on such a row.
+- [x] A store recomputing what it discarded, the walk's cursor seeking, the worker waiting on the GUI
   thread and a slot run at every row are each found in a walk that has not done its range, from the
   buckets settled so far, at the thresholds they are found by at its end.
   Check: each one's simulation over a range long enough to read the log before the walk's last row,
   the class there alone; the healthy runs surface nothing.
-- [ ] Work no watched node and no walked node asked for is found in a walk under way.
+  Not ticked 2026-11-14: the simulations take `--long`, a clip of `simulations.LONG` rows, and each
+  of `memo`, `cache`, `reader`, `seeks`, `slot` and `signals` is first found with its walk short of
+  its range, by `docs/findings/2026-11-14-the-simulations-over-a-long-range.md`; an entry's first
+  sighting is its walk's last progress as it was judged, so the log is read after the walk and
+  the command's exit holds the sighting to lie inside it. The check fails twice, each the box
+  after the next two: `signals` is not alone in every run, and the healthy `rewalk` surfaces
+  `grows`.
+  Ticked 2026-11-14, later, with those two boxes built: each of the six alone and found under
+  way, and the eight healthy runs silent, by the same command and the finding's last section.
+- [x] Work no watched node and no walked node asked for is found in a walk under way.
   Check: the `unread` simulation over a long range, read before the walk's last row.
-- [ ] A node whose cost a run grows along the range is found in a walk under way, and a walk whose
+  Ticked 2026-11-14 by `python -m sieve_player.dev.simulations unread --long`, in the same finding.
+- [x] A node whose cost a run grows along the range is found in a walk under way, and a walk whose
   first rows a store held and whose later rows ran is not taken for one.
   Check: the `grows` simulation over a long range, read before the walk's last row; a catalogue test
   of a walk half held then cold reads nothing.
+  Ticked 2026-11-14 by `python -m sieve_player.dev.simulations grows --long`, in the same finding,
+  and by `tests/test_catalogue.py`'s hand-built walk, whole and short of its range.
+- [x] A slot run at every row is one entry. Added 2026-11-14 on the check of the box before the
+  last two: over a long range the `signals` simulation surfaces `waits` on its slot beside its own
+  class in some runs, at a share that sits on `catalogue.WAITS`, where over 64 rows the wait is
+  under `TICK` and unread. `signals` leaves a slot longer than `BRIEF` a call to `waits`; nothing
+  leaves a brief one to `signals`.
+  Check: the `signals` simulation with `--long`, its class alone, in every run of enough to say so.
+  Ticked 2026-11-14, on Kendrick's word to fix it: ten runs of ten, in the finding. `waits` reads
+  no slot whose calls in a bucket took `BRIEF` ms each or under; a paint is read whatever its
+  length, `signals` reading none. `tests/test_catalogue.py`'s hand-built views hold it.
+- [x] A walk the stores held is not taken for growth by how little it cost. Added 2026-11-14 the
+  same way: the healthy `rewalk` over a long range surfaces `grows` on pile in every run, under
+  way and at the walk's end alike, pile's conversion of the rows so far being most of what the
+  nodes of a held walk cost and a few hundredths of its wall. `GROWS_SHARE` is of what the walk's
+  nodes cost.
+  Check: every healthy simulation with `--long` surfaces nothing.
+  Ticked 2026-11-14, on Kendrick's word to fix it: the eight, `rewalk` four times, in the
+  finding. `GROWS_SHARE` is of the walk's nodes' ms with its unprobed, and the same hand-built
+  views hold it. A problem's share as the log shows it is of the nodes' cost still.
 
 Fork: whether saying what a thread is in costs the walk. Observed in the second box's experiment:
 where the walk's rate with it sits inside the run-to-run spread of the rate without, it is built as
 the box says; where it sits outside, the lane that finishes no row stands with the lane as its whole
 subject and the second box waits. The third box holds on either side, by what a progress, a begin
-and a lateness already say of their threads.
+and a lateness already say of their threads. Observed 2026-11-14, in
+`docs/findings/2026-11-14-what-saying-what-a-thread-is-in-costs.md`: inside, so it is built as the
+box says. The finding says how little that asked, Kendrick using the machine as it ran.
 
 Fork: what the log still keeps once the classes above read buckets. Observed by reading `Log`'s
 fields against what each class reads: a field no class reads is gone; what remains is written here,
@@ -1209,6 +1280,18 @@ finished walk was judged from, and a ratio over eight rows is of a walk's openin
 reader's opening, each static node's one run. Recommended: a named constant of its own, set past
 what the purb document's first rows show on a healthy walk, the sighting recorded beside it; a
 session builds on `PARTS` until Kendrick has edited the line.
+
+Open: which class a brief slot's wait is. Recommended: `waits` reads no turn of `BRIEF` ms a call
+or under, the bound `signals` draws from its own side, so a slot is one class's by its length; the
+cost is that brief paints, which `signals` does not read, are then no class's. A session builds on
+this only once Kendrick has edited the line. Built 2026-11-14 on Kendrick's word, of slots alone, so
+a paint stays `waits`' at any length; a brief slot `signals` passes over is no class's.
+
+Open: what a growth's share is of. Recommended: of the walk's wall a row, its nodes' ms and its
+unprobed as `catalogue.walk_row_ms` sums them, so a node run whole is a problem where its growth is
+a tenth of what is waited for, in a held walk as in a cold one; a floor in ms a row would be a
+second constant set by nothing. A session builds on this only once Kendrick has edited the line.
+Built 2026-11-14 on Kendrick's word, as recommended.
 
 Open: what becomes of the one-offs that read a view into a `Log`. Recommended, as the fork of The
 old monitor goes took it: one a box of this section reruns is repointed at a view's `found`; one no

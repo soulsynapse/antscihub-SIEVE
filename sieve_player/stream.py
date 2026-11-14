@@ -75,6 +75,7 @@ class Emitter:
         self.on_event = None
         self.watched = None                 # the node the player shows beside the pinned; see watch()
         self._thread = threading.local()    # the spans open on this thread, so a span's time excludes those it opened; its demand, serves and lane
+        self._stacks = {}                   # a thread's name -> (its ident, its native id, the spans open on it), for still_out() on another thread
 
     @property
     def lane(self):
@@ -91,6 +92,31 @@ class Emitter:
             self.on_event(Event(nid, row, key, kind, nbytes, ms, time.perf_counter() if t is None else t,
                                 threading.current_thread().name, cpu_ms, getattr(p, "serves", None), length, keys,
                                 reader, demand, asked, getattr(p, "lane", None), facts, shape))
+
+    def _stack(self):
+        stack = self._thread.__dict__.get("stack")
+        if stack is None:
+            me = threading.current_thread()
+            stack = self._thread.stack = []
+            self._stacks[me.name] = me.ident, me.native_id, stack
+        return stack
+
+    def still_out(self, cpu=lambda ident, native: None):
+        """What each thread is in as this is called, from any thread: {a thread's name: [node, start,
+        ms, CPU ms]} of the innermost span of probe() it has not left, the ms and the CPU ms as an
+        Event's, exclusive of the spans that ended inside it, so far. `cpu(ident, native id)` gives
+        the CPU seconds of the thread of that threading ident and native id as time.thread_time()
+        reads them there, or None, and the CPU ms is then None. A thread in no such span is not in
+        it, and nothing is with `on_event` unset as the span was entered."""
+        out, now = {}, time.perf_counter()
+        for name, (ident, native, stack) in list(self._stacks.items()):
+            for inner, inner_cpu, *node in reversed(list(stack)):
+                if node:
+                    nid, t, c = node
+                    used = cpu(ident, native)
+                    out[name] = [nid, t, (now - t - inner) * 1000, None if used is None else (used - c - inner_cpu) * 1000]
+                    break
+        return out
 
     def sync(self, keys, facts):
         """A "sync" event, a boundary with no node, row or time: what runs next ran under a new plan,
@@ -147,10 +173,10 @@ class Emitter:
         if self.on_event is None:
             yield [None, 0, None]
             return
-        stack = self._thread.__dict__.setdefault("stack", [])
-        stack.append([0.0, 0.0])             # wall and CPU the runs opened inside this one took
+        stack = self._stack()
         ev = [RUN, 0, None]
         t, c = time.perf_counter(), time.thread_time()
+        stack.append([0.0, 0.0, nid, t, c])     # wall and CPU the runs opened inside this one took; what still_out() says of it
         try:
             yield ev
         except BaseException as exc:
@@ -159,7 +185,7 @@ class Emitter:
             raise
         finally:
             total, cpu = time.perf_counter() - t, time.thread_time() - c
-            inner, inner_cpu = stack.pop()
+            inner, inner_cpu = stack.pop()[:2]
             if stack:
                 stack[-1][0] += total
                 stack[-1][1] += cpu
@@ -175,7 +201,7 @@ class Emitter:
         if self.on_event is None:
             yield
             return
-        stack = self._thread.__dict__.setdefault("stack", [])
+        stack = self._stack()
         stack.append([0.0, 0.0])
         t, c = time.perf_counter(), time.thread_time()
         try:

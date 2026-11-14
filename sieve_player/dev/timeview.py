@@ -16,6 +16,7 @@ import tempfile
 import time
 from dataclasses import dataclass
 from functools import lru_cache, wraps
+from typing import NamedTuple
 
 from PySide6.QtCore import QPointF, QRectF, Qt, QTimer
 from PySide6.QtGui import QBrush, QColor, QFontMetrics, QImage, QKeySequence, QPainter, QPixmap, QShortcut
@@ -50,6 +51,7 @@ SMALLEST = (488, 260)           # the least the window is sized to: the figure a
 SIDE = 300                      # px; the side panels' column
 ARMED = 6.0                     # s; how long a first press of the cold walk's control waits for the second
 SAID = 6.0                      # s; how long the status says what was just done before what stands returns
+CLEARED = 3                     # the cleared entries the problems' foot names, the latest first, the rest counted
 OURS = QColor(224, 192, 112)    # SIEVE's share of the machine: the mockup's amber
 ELSE = qgray(INK_2 - 40)        # everything on the machine that is not SIEVE
 PICKED, PICKED_EDGE = QColor(58, 42, 41), QColor(168, 72, 63)      # a picked problem's row, LEVEL toward the ground
@@ -199,8 +201,8 @@ class Stack(Bands):
     @staticmethod
     def label(w):
         """A walk as its segment says it."""
-        rows = "" if w.start is None else f" · rows {w.start}..{w.start + w.length - 1}"
-        return f"{w.lane or 'walk'}{rows} · {walk_row_ms(w):.2f} ms a row"
+        over = "" if w.start is None else f" · rows {w.start}..{w.start + w.length - 1}"
+        return f"{w.lane or 'walk'}{over} · {walk_row_ms(w):.2f} ms a row"
 
     def segments(self, axis, view):
         """[(x0, x1, walk)] for the walks of `view` with a row done that are on `axis`."""
@@ -528,13 +530,15 @@ def _key(entry):
 
 
 class _Lines(QWidget):
-    """The problems' rows, painted: `entries` a row each, the one under `picked` lit. A press on a
-    row's copy copies it and anywhere else on the row picks it, through the monitor's window it is in."""
+    """The problems' rows, painted: `entries` a row each, the one under `picked` lit, drawn as
+    `written`, each entry's (share, `said`) when the rows were handed over, an entry being the log's
+    to change under them. A press on a row's copy copies it and anywhere else on the row picks it,
+    through the monitor's window it is in."""
     H, BAR, SHARE, MS, SEEN, COPY = ROW_H + 6, 60, 36, 104, 150, 52
 
     def __init__(self):
         super().__init__()
-        self.entries, self.picked = [], None
+        self.entries, self.written, self.picked = [], [], None
         self.setCursor(Qt.CursorShape.PointingHandCursor)
 
     def said(self, e):
@@ -550,8 +554,7 @@ class _Lines(QWidget):
     def paintEvent(self, _):
         p = QPainter(self)
         ui, mono = theme.ui_font(), theme.mono_font()
-        for i, e in enumerate(self.entries):
-            share, says, target, ms, seen = self.said(e)
+        for i, (e, (part, (share, says, target, ms, seen))) in enumerate(zip(self.entries, self.written)):
             row = QRectF(0, i * self.H, self.width() - self.COPY - GAP, self.H - 2)
             lit = _key(e) == self.picked
             p.setPen(PICKED_EDGE if lit else qgray(layer(2) + LINE_LIFT))
@@ -559,7 +562,7 @@ class _Lines(QWidget):
             p.drawRoundedRect(row.adjusted(0.5, 0.5, -0.5, -0.5), RADIUS, RADIUS)
             x, mid = PAD, row.center().y()
             p.fillRect(QRectF(x, mid - 4, self.BAR, 8), qgray(GROUND))
-            p.fillRect(QRectF(x, mid - 4, self.BAR * min(1.0, e.problem.share or 0.0), 8), LEVEL)
+            p.fillRect(QRectF(x, mid - 4, self.BAR * min(1.0, part or 0.0), 8), LEVEL)
             x += self.BAR + GAP
             p.setFont(mono)
             fm = p.fontMetrics()
@@ -604,8 +607,8 @@ class _Lines(QWidget):
 class Problems(QWidget):
     """What leads the monitor: the log's entries that hold, the costliest first, a row each, its
     share of a row, the class's sentence, its target, its ms a row, its class and the walks it was
-    seen in, with its own copy; `all` copies them all. Under them one line, the entries cleared and
-    the classes that found nothing. A press on a row picks it. While `compact` it is the costliest's
+    seen in, with its own copy; `all` copies them all. Under them one line, the entries cleared, the
+    latest CLEARED named and the rest counted, and the classes that found nothing. A press on a row picks it. While `compact` it is the costliest's
     sentence and target and how many more there are, beside the copy of them all. A part of the
     monitor's: `refresh(window)` reads the window's `log`, `picked` and `now`."""
     place = "lead"
@@ -636,11 +639,12 @@ class Problems(QWidget):
         entries = window.log.ordered()
         holds, cleared = [e for e in entries if e.holds], [e for e in entries if not e.holds]
         quiet = [k for k in window.log.classes if not any(e.problem.kind == k for e in entries)]
-        drawn = [self.lines.said(e) for e in self.lines.entries], self.lines.picked
+        drawn = self.lines.written, self.lines.picked
         self.lines.entries, self.lines.picked = holds, window.picked
+        self.lines.written = [(e.problem.share, self.lines.said(e)) for e in holds]
         self.lines.setFixedHeight(len(holds) * _Lines.H)
         self.lines.setVisible(bool(holds) and not self.compact)
-        if drawn != ([self.lines.said(e) for e in holds], window.picked):
+        if drawn != (self.lines.written, window.picked):
             self.lines.update()
         self.all.setText(f"Copy all {len(holds)}" if holds else "Copy all")
         self.all.setEnabled(bool(holds))
@@ -652,8 +656,10 @@ class Problems(QWidget):
             self.head.setText(f"{p.says} · {p.target}" + (f" · and {len(holds) - 1} more" if len(holds) > 1 else ""))
         else:
             self.head.setText(f"{len(holds)} problem{'s hold' if len(holds) != 1 else ' holds'} · costliest first · pick one to see it below")
+        cleared.sort(key=lambda e: -e.problem.t)
         self.foot.setText(" · ".join(
-            [*(["cleared: " + "; ".join(f"{e.problem.kind} {e.problem.subject}, {as_clock(window.now - e.problem.t)} ago" for e in cleared)]
+            [*(["cleared: " + "; ".join(f"{e.problem.kind} {e.problem.subject}, {as_clock(window.now - e.problem.t)} ago" for e in cleared[:CLEARED])
+                + (f"; and {len(cleared) - CLEARED} earlier" if len(cleared) > CLEARED else "")]
                if cleared else []), *(["checked and quiet: " + ", ".join(quiet)] if quiet and window.view is not None else [])]))
         self.foot.setVisible(bool(self.foot.text()) and not self.compact)
 
@@ -729,12 +735,20 @@ class Table(QWidget):
             p.drawText(QPointF(cols[5], base), free)
 
 
+class Line(NamedTuple):
+    """One line of a Panel: a bar is its pieces, each (where it begins and where it ends as shares
+    of the bar, and how it is filled, a key of Panel.FILLS, or "dot", a mark where it begins)."""
+    name: str
+    value: str
+    bar: list | None = None
+    note: str = ""          # written under it
+    over: bool = False      # whether it is past its limit
+
+
 class Panel(QWidget):
-    """A side panel: `title` over `says`, one sentence or "", over `lines`, each (a name, its
-    value, a bar or None, a note under it, whether it is past its limit), a bar being its pieces,
-    each (where it begins and where it ends as shares of the bar, and how it is filled, a key of
-    FILLS, or "dot", a mark where it begins); outlined while the picked problem is of a class in
-    `about`. A subclass's `read(window)` gives the lines and may set `says`."""
+    """A side panel: `title` over `says`, one sentence or "", over `lines`, each a Line; outlined
+    while the picked problem is of a class in `about`. A subclass's `read(window)` gives the lines
+    and may set `says`."""
     FILLS = {"ink": lambda: qgray(INK_2), "ours": lambda: OURS, "else": lambda: ELSE, "hatch": lambda: hatch(LEVEL.rgb()), "dot": lambda: qgray(INK)}
     place, title, about = "side", "", ""
 
@@ -775,7 +789,7 @@ class Panel(QWidget):
         return out
 
     def _height(self, ln):
-        return self.fontMetrics().lineSpacing() * (1 + (len(self._wrapped(ln[3])) if ln[3] else 0)) + (12 if ln[2] else 0) + 4
+        return self.fontMetrics().lineSpacing() * (1 + (len(self._wrapped(ln.note)) if ln.note else 0)) + (12 if ln.bar else 0) + 4
 
     @painted
     def paintEvent(self, _):
@@ -788,7 +802,7 @@ class Panel(QWidget):
         p.setPen(qgray(HEAD - 15))
         p.drawText(QPointF(PAD, PAD + p.fontMetrics().ascent()), self.title)
         y = PAD + ROW_H
-        p.setPen(TINT if any(ln[4] for ln in self.lines) else qgray(INK))
+        p.setPen(TINT if any(ln.over for ln in self.lines) else qgray(INK))
         for said in self._wrapped(self.says, p.fontMetrics()) if self.says else ():
             p.drawText(QPointF(PAD, y + p.fontMetrics().ascent()), said)
             y += ROW_H
@@ -829,8 +843,8 @@ class StoresPanel(Panel):
             again, n = 0 if w is None else w.recomputed.get(s, 0), need.get(s)
             over = bool(limit and n and n > limit)
             full = max(n or 0, limit or 0) or 1
-            out.append((store_name(s, view), f"{size(held)} of {size(limit or 0)} · {again or 'none'} again",
-                        [(0, held / full, "ink"), *([(limit / full, 1, "hatch")] if over else [])], f"this window needs {size(n)}" if n else "", over))
+            out.append(Line(store_name(s, view), f"{size(held)} of {size(limit or 0)} · {again or 'none'} again",
+                            [(0, held / full, "ink"), *([(limit / full, 1, "hatch")] if over else [])], f"this window needs {size(n)}" if n else "", over))
         return out
 
 
@@ -843,9 +857,9 @@ class GuiPanel(Panel):
         if window.walk is None:
             return []
         late, turns = gui(window.view, window.walk)
-        return [("worst", f"{late:.0f} ms late", None, "", False),
-                *((("this monitor" if what == "monitor" else f"{what}s" + (f", {top} the longest" if top else "")),
-                   f"{share:.1%}", None, "", False) for what, share, top in turns)]
+        return [Line("worst", f"{late:.0f} ms late"),
+                *(Line("this monitor" if what == "monitor" else f"{what}s" + (f", {top} the longest" if top else ""), f"{share:.1%}")
+                  for what, share, top in turns)]
 
 
 class MachinePanel(Panel):
@@ -860,12 +874,12 @@ class MachinePanel(Panel):
             return []
         res, like = machine(window.view, window.walk), alike(window.view, window.walk)
         self.says = tight(res)
-        out = [(r.name, r.value, None if r.ours is None else [(0, r.ours, "ours"), (r.ours, r.ours + r.others, "else")],
-                r.note, r.tight) for r in res]
+        out = [Line(r.name, r.value, None if r.ours is None else [(0, r.ours, "ours"), (r.ours, r.ours + r.others, "else")],
+                    r.note, r.tight) for r in res]
         if len(like) > 1:
             lo, hi = min(like), max(like)
-            out.append((f"{len(like)} walks alike", f"{lo:.2f} – {hi:.2f} ms a row", [((x - lo) / ((hi - lo) or 1), 0, "dot") for x in like],
-                        "under this plan and as cold", False))
+            out.append(Line(f"{len(like)} walks alike", f"{lo:.2f} – {hi:.2f} ms a row", [((x - lo) / ((hi - lo) or 1), 0, "dot") for x in like],
+                            "under this plan and as cold"))
         return out
 
 
@@ -874,10 +888,10 @@ def colours(graph):
     within a depth, and the chain after them in run order."""
     doc, depth = graph.doc, {}
 
-    def of(nid, stack=()):
+    def of(nid, above=()):
         if nid not in depth:
             w = doc.source(nid)
-            depth[nid] = 0 if w is None or w.src in stack else of(w.src, (*stack, nid)) + 1
+            depth[nid] = 0 if w is None or w.src in above else of(w.src, (*above, nid)) + 1
         return depth[nid]
     chain = list(graph.chain)
     ids = [n.id for n in doc.nodes if n.id not in chain]
@@ -898,20 +912,24 @@ class Window(QWidget):
     `dump`: the player's window or a simulation's run. `parts` is what the window shows, each a
     Track on the time view's axis or a panel, a widget with `refresh(window)` and a `place`, "lead"
     over everything, "left" over the time view or "side" beside it; `add` takes another. It is
-    polled every `period_ms` while shown, `clock` being the probe's. What a part reads is the last
-    poll's: `view`, `now`, `log`, the catalogue's over the open video, `walk`, the walk that
-    progressed last, `rate`, its multiple of realtime, `nodes`, {node: colour} in walk order,
-    `picked`, the (class, subject) of the entry the window is about, the one `pick` named while it
-    holds and else the costliest that does, and `marked`, the names that entry's problem is about.
-    A first sighting is a line on stderr. Paused, by `toggle_pause` or the axis scrolled back, which
-    is one holding, it draws what it drew, `log` being the entries as they stood, and says how far
-    behind now that is in the status, the ruler and a tooltip, the ledger taking the stream and the
-    log reading it for stderr, a copy and a history. What was just done is said in the status for
-    SAID seconds. `source` may hold `worker`, which `walk_cold` has walk the window again over
-    emptied stores. Narrower than NARROW or shorter than SHORT it is compact: the figure, the
-    costliest problem's sentence and target, how many more there are, the copy of them all and the
-    time view. Its poll, what a press in it does and its paints are in the stream, each a "slot" or
-    a "paint" named "monitor"."""
+    polled every `period_ms` while shown, `clock` being the probe's.
+
+    What a part reads is the last poll's: `view`, `now`, `log`, the catalogue's over the open
+    video, `walk`, the walk that progressed last, `rate`, its multiple of realtime, `nodes`,
+    {node: colour} in walk order, `picked`, the (class, subject) of the entry the window is about,
+    the one `pick` named while it holds and else the costliest that does, and `marked`, the names
+    that entry's problem is about. A first sighting is a line on stderr.
+
+    Paused, by `toggle_pause` or the axis scrolled back, which is one holding, it draws what it
+    drew, `log` being the entries as they stood, and says how far behind now that is in the status,
+    the ruler and a tooltip, the ledger taking the stream and the log reading it for stderr, a copy
+    and a history.
+
+    What was just done is said in the status for SAID seconds. `source` may hold `worker`, which
+    `walk_cold` has walk the window again over emptied stores. Narrower than NARROW or shorter than
+    SHORT it is compact: the figure, the costliest problem's sentence and target, how many more
+    there are, the copy of them all and the time view. Its poll, what a press in it does and its
+    paints are in the stream, each a "slot" or a "paint" named "monitor"."""
 
     def __init__(self, source, period_ms=250, clock=time.perf_counter, parts=None):
         super().__init__(source if isinstance(source, QWidget) else None, Qt.WindowType.Window)
@@ -1082,8 +1100,13 @@ class Window(QWidget):
         return context(self.source.graph, getattr(getattr(self.source, "dump", None), "path", None))
 
     def _write(self, folder=None):
+        """The path the history was written to, or None where it could not be, the status saying why."""
         path = os.path.join(folder or tempfile.gettempdir(), f"sieve-history-{time.strftime('%Y%m%d-%H%M%S')}.json")
-        save(self._judged[0], path, **self.context())
+        try:
+            save(self._judged[0], path, **self.context())
+        except OSError as exc:
+            self._say(f"the history was not written: {exc}")
+            return None
         return path
 
     @slotted
@@ -1091,12 +1114,14 @@ class Window(QWidget):
         """Puts on the clipboard one report of the entries under `keys`, each a (class, subject), or
         of every entry that holds, as the log read them last, and returns it; None with none. The
         history is written as `save_history` writes it and the report names the file, which holds
-        the document."""
+        the document; where the file cannot be written nothing is copied and None returned."""
         entries = [e for e in self._log.ordered() if (e.holds if keys is None else _key(e) in keys)]
         if not entries or self._judged is None or self.source.graph is None:
             return None
         view, now = self._judged
         path = self._write()
+        if path is None:
+            return None
         said = report(entries, view, self.context() | {"history": path, "now": now, "when": time.strftime("%Y-%m-%d %H:%M:%S")})
         QApplication.clipboard().setText(said)
         self._say(f"{len(entries)} problem{'s' * (len(entries) != 1)} copied, the history written to {path}")
@@ -1106,10 +1131,13 @@ class Window(QWidget):
     def save_history(self, folder=None):
         """Writes the view the log read last, which while paused is later than the one drawn, with
         the document and the rest of `context` to a file under `folder`, the system's temporary one
-        when not given, puts its path on the clipboard and returns it; None with no video."""
+        when not given, puts its path on the clipboard and returns it; None with no video or where
+        the file cannot be written."""
         if self._judged is None or self.source.graph is None:
             return None
         path = self._write(folder)
+        if path is None:
+            return None
         QApplication.clipboard().setText(path)
         self._say(f"history written to {path}, and the path to the clipboard")
         return path

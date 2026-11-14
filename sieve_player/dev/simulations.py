@@ -9,6 +9,7 @@ With --show the monitor is opened on the first one named and its fault repeated 
 import os
 import sys
 import tempfile
+import threading
 import time
 from collections import namedtuple
 from types import SimpleNamespace as Tool
@@ -21,7 +22,7 @@ from PySide6.QtWidgets import QApplication
 from tools import bake
 
 from .. import document as D
-from ..catalogue import Log
+from ..catalogue import STALLS, Log
 from ..decoder import Decoder
 from ..graph import Graph
 from ..ledger import Ledger
@@ -84,7 +85,7 @@ def _clip(path):
 def _tools():
     """The graph's tools, made anew so a fault set on one is no other simulation's."""
     def frame(name, expects, fn):
-        t = Tool(NAME=name, KIND="frame", EXPECTS=expects, PRODUCES="gray", DEFAULTS={"k": 0}, ms=0.0, far=0, hold=0.0)
+        t = Tool(NAME=name, KIND="frame", EXPECTS=expects, PRODUCES="gray", DEFAULTS={"k": 0}, ms=0.0, far=0, hold=0.0, block=None)
 
         def run(frames, row, params):
             f = frames(row)
@@ -93,6 +94,8 @@ def _tools():
             _spin(t.ms)
             if t.hold and row == ROWS // 2:
                 _hold(t.hold)
+            if t.block is not None and row == ROWS // 2:
+                t.block.wait()
             return fn(f, params)
         t.run = run
         return t
@@ -330,6 +333,21 @@ def unspanned(r):
     r.settle()
 
 
+@_fault()
+def stuck(r):
+    """work not returning from one call, the window walk half done: what the log holds while the call is still out."""
+    out = r.tools["work"].block = threading.Event()
+    try:
+        r.worker.set_window(0, ROWS, by=HAND)
+        r.worker.start()
+        r.wait(lambda: any(kind == "stalls" for kind, _, _ in r.ledger.view().found.entries), "the walk to be found finishing no row", STALLS + 10)
+        view = r.ledger.view()
+        return Seen(view.found, view, context(r.graph))
+    finally:
+        out.set()
+        r.wait(lambda: r.walked and r.walked[-1] == (ROWS, ROWS) and r.series, "the walk")
+
+
 def _again(r, by, times=40, every=4):
     """Asks for the window again at every `every` rows, `times` times, as `by`, then lets it walk.
     The ask is made on the worker's thread as the row lands, a queued one finding the walk rows on."""
@@ -365,15 +383,33 @@ def _scrubbed(r):
     r.worker.walked.disconnect(hook)
 
 
+def _clip_walk(r, at, then):
+    """Walks the window, then the clip, calling `then` once as the clip's row `at` is told, and waits for the clip walk to close."""
+    told = []
+    r.walk()
+    hook = r.worker.clipWalked.connect(lambda done, n, *was: (told.append((done, n)), done == at and then()))
+    r.worker.walk_clip(HAND)
+    r.wait(lambda: told and told[-1][0] == told[-1][1], "the clip walk")
+    r.worker.clipWalked.disconnect(hook)
+
+
+def _behind(r):
+    """The window asked for again with the clip walk under way, which waits behind it."""
+    r.walked.clear()
+    _clip_walk(r, 8, lambda: r.worker.set_window(ROWS // 4, ROWS // 2, by=HAND))
+    r.wait(lambda: r.walked and r.walked[-1] == (ROWS // 2, ROWS // 2), "the window walked again")
+
+
 SIMULATIONS = {"unread": (unread, "unread"), "memo": (memo, "thrash"), "cache": (cache, "thrash"), "reader": (reader, "thrash"),
                "grows": (grows, "grows"), "seeks": (seeks, "seeks"), "slower": (slower, "slower"),
                "held": (held, "slower"), "slot": (slot, "waits"), "signals": (signals, "signals"),
                "frozen": (frozen, "late"), "holds": (holds, "late"), "unspanned": (unspanned, "late"),
-               "again": (again, "restarts")}     # name -> (it, the class it builds)
+               "again": (again, "restarts"), "stuck": (stuck, "stalls")}     # name -> (it, the class it builds)
 SERVED = {"unread", "reader", "bake"}      # the simulations that write a bake
 HEALTHY = {"walk": _healthy(_Run.walk), "rewalk": _healthy(_Run.walk, _Run.walk),
            "midclip": _healthy(lambda r: r.walk(ROWS // 4, ROWS // 2)), "scrub": _healthy(_scrubbed),
-           "bake": _healthy(_Run.walk, _Run.bake), "drag": _healthy(lambda r: _again(r, HAND))}      # each a way of walking the graph that is no fault
+           "bake": _healthy(_Run.walk, _Run.bake), "drag": _healthy(lambda r: _again(r, HAND)),
+           "behind": _healthy(_behind), "stopped": _healthy(lambda r: _clip_walk(r, ROWS // 2, r.worker.stop_clip))}      # each a way of walking the graph that is no fault
 
 
 def _named(name):
@@ -381,11 +417,11 @@ def _named(name):
 
 
 def run(name, folder=None):
-    """What simulation `name`, a key of SIMULATIONS or HEALTHY, leaves the log holding: a Seen. It
-    writes under `folder`, a temporary one when none is given."""
+    """What simulation `name`, a key of SIMULATIONS or HEALTHY, leaves the log holding, or what it
+    read part way where it returns that: a Seen. It writes under `folder`, a temporary one when
+    none is given."""
     with tempfile.TemporaryDirectory() as tmp, _Run(str(folder or tmp), **_named(name).run) as r:
-        _named(name)(r)
-        return r.seen()
+        return _named(name)(r) or r.seen()
 
 
 def show(name, rounds=None, folder=None):

@@ -658,6 +658,7 @@ class Worker(QThread):
 
     def _serve(self):
         """The loop: waits until a rung is due, takes its turn, and reads the asks again."""
+        self.graph.stream.rest(False)       # a turn due as the thread starts is taken with no wait: the stream is told from the first that this thread says when it rests
         while True:
             with self._cv:
                 turn = None if self._stop else self._turn()

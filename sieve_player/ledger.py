@@ -146,13 +146,18 @@ class View:
     missing between the first and the last; `walks` is oldest first, the last of each lane perhaps
     still walking. `settled` is the index on the probe's clock of the last bucket no span still out
     can write, None before there is one, and `found` what the ledger's `watch` had made of the
-    stream by then, None with none."""
+    stream by then, None with none. `now` is the latest time anything in the stream was of, None
+    of a view no stream made, and `no_row_since` says of each lane being walked short of its range,
+    by a thread that says when it rests and is not at rest, since when it has finished no row with
+    no turn of another lane's taken: a lane waiting behind the one its thread is walking is not in it."""
     width: float
     first: int
     buckets: list
     walks: list
     settled: int | None = field(default=None, compare=False)
     found: object = field(default=None, compare=False)
+    now: float | None = field(default=None, compare=False)
+    no_row_since: dict = field(default_factory=dict, compare=False)
 
 
 class _Lane:
@@ -161,6 +166,7 @@ class _Lane:
         self.kinds = {}         # node -> {kind: the rows its spans were of} since the lane's last progress
         self.t = None           # the lane's last progress or begin
         self.at = 0.0           # its thread's ms accounted for then
+        self.thread = None      # the thread that said so
         self.synced = False     # a sync landed since the walk began
 
 
@@ -176,8 +182,9 @@ class Ledger:
     "begin" or the end of a span no other opened, and resting it holds nothing back; behind the
     last lateness sampled, which the GUI thread's loop gives between its turns; and AHEAD behind
     the newest for a thread that says neither. `watch`, when given, is told as the stream is folded
-    and in its order: `settled(view, i)` each time the last settled bucket moves on, to `i`, with a
-    view that is the ledger's own and not to be kept. It gives `back(width)`, the buckets behind
+    and in its order: `settled(view, i)` each time the last settled bucket moves on, to `i`, and
+    `clock(view)` each time the stream's latest time enters another bucket's width, settled or not,
+    each with a view that is the ledger's own and not to be kept. It gives `back(width)`, the buckets behind
     one it reads, which the history is never shorter than, `final(id)`, whether it is done with a
     walk, before which the walk is not dropped, and `copy()`, what a view carries as its `found`."""
 
@@ -185,6 +192,8 @@ class Ledger:
         self.width, self._discards, self._timed, self._kept, self._watch = width, discards, timed, walks, watch
         self.history = history if watch is None else max(history, watch.back(width))
         self._clear, self._resting, self._loop, self._settled = {}, set(), None, None   # thread -> when it last had no span out; those at rest; the last lateness's t
+        self._now, self._told = None, None      # the latest time anything folded was of, and the bucket's index `watch` was last told the clock at
+        self._last = {}                 # a thread that says when it rests -> {lane: when it last said anything in it}
         self._q = deque()
         self._lock = threading.Lock()   # held to fold and to take a view; an emitter that finds it taken leaves the folding
         self._buckets, self._newest = {}, None
@@ -230,14 +239,27 @@ class Ledger:
         walking = {id(lane.walk) for lane in self._lanes.values()}
         walks = [w.copy() if kept and id(w) in walking else w for w in self._walks]
         found = self._watch.copy() if kept and self._watch is not None else None
+        since = self._no_row_since()
         if self._newest is None:
-            return View(self.width, 0, [], walks, self._settled, found)
+            return View(self.width, 0, [], walks, self._settled, found, self._now, since)
         first = min(self._buckets)
         buckets = [self._buckets.get(i, _EMPTY) for i in range(first, self._newest + 1)]
         if kept:
             for b in buckets:
                 b.shared = True
-        return View(self.width, first, buckets, walks, self._settled, found)
+        return View(self.width, first, buckets, walks, self._settled, found, self._now, since)
+
+    def _no_row_since(self):
+        """View.no_row_since: of the lanes a thread has short of their ranges the one that last began
+        or finished a row is the one it is walking, the ladder giving a turn to no lane behind another."""
+        walking = {}
+        for name, lane in self._lanes.items():
+            w = lane.walk
+            if (w is not None and w.done < w.length and lane.t is not None and lane.thread in self._clear
+                    and lane.thread not in self._resting and lane.t >= walking.get(lane.thread, (lane.t,))[0]):
+                walking[lane.thread] = lane.t, name
+        return {name: max([t, *(at for other, at in self._last.get(thread, {}).items() if other != name)])
+                for thread, (t, name) in walking.items()}
 
     def _settle(self):
         """Moves the last settled bucket on to where the stream now puts it and tells `watch`."""
@@ -255,6 +277,7 @@ class Ledger:
         q = self._q
         while q:
             item = q.popleft()
+            at = item[2] if isinstance(item, tuple) else item.t + item.ms / 1000
             if isinstance(item, tuple):
                 name, value, t = item
                 if name in ("late", "machine") and (b := self._bucket(int(t // self.width))) is not None:
@@ -304,8 +327,15 @@ class Ledger:
                     ms[name] = ms.get(name, 0.0) + item.ms * share
                 self._spent[item.thread] = self._spent.get(item.thread, 0.0) + item.ms
             elif item.kind in NODES:
-                self._span(item)
+                at = self._span(item)
+            if not isinstance(item, tuple) and item.thread in self._clear:
+                last = self._last.setdefault(item.thread, {})
+                last[item.lane] = max(last.get(item.lane, at), at)
+            self._now = at if self._now is None else max(self._now, at)
             self._settle()
+            if self._watch is not None and (i := int(self._now // self.width)) != self._told:
+                self._told = i
+                self._watch.clock(self._view(False))
 
     def _bucket(self, i):
         """Bucket `i` to write into, or None for one older than the history."""
@@ -345,7 +375,7 @@ class Ledger:
                     break
         self._bucket(int(ev.t // self.width))   # so a walk in a view began before the view's first bucket only when the history has dropped its beginning
         lane.kinds, lane.synced = {}, False
-        lane.t, lane.at = ev.t, self._spent.get(ev.thread, 0.0)
+        lane.t, lane.at, lane.thread = ev.t, self._spent.get(ev.thread, 0.0), ev.thread
         return lane
 
     def _said(self, thread, t):
@@ -355,6 +385,7 @@ class Ledger:
             self._resting.discard(thread)
 
     def _span(self, ev):
+        """Keeps a node's span and returns when it ended."""
         # By the rule beside stream.Event, the nest holds only what a run still to emit will take.
         nest = self._nest.setdefault(ev.thread, [])
         inner = []
@@ -388,7 +419,7 @@ class Ledger:
             if ev.kind == SEEK:
                 b.seeks[ev.node] = b.seeks.get(ev.node, 0) + 1
         if walk is None:
-            return
+            return end
         if store is not None:
             walk.recomputed[store] = walk.recomputed.get(store, 0) + 1
             walk.recomputed_ms[store] = walk.recomputed_ms.get(store, 0.0) + ev.ms
@@ -415,6 +446,7 @@ class Ledger:
         if ev.shape is not None:
             node.shape = list(ev.shape)
         lane.kinds.setdefault(ev.node, {}).setdefault(ev.kind, set()).add(ev.row)
+        return end
 
     def _progress(self, ev):
         lane = self._lanes.get(ev.lane)
@@ -429,7 +461,7 @@ class Ledger:
                 bucket.unprobed += gap * share
             spent = self._spent[ev.thread] = spent + gap
             walk.unprobed += gap
-        lane.t, lane.at = ev.t, spent
+        lane.t, lane.at, lane.thread = ev.t, spent, ev.thread
         rows = ev.row - walk.done
         walk.done, walk.length, walk.t1 = ev.row, ev.length, ev.t
         walk.replanned = walk.replanned or lane.synced

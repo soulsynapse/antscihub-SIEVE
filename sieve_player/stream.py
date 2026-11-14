@@ -108,7 +108,7 @@ class Emitter:
     def rest(self, resting):
         """This thread has nothing to do from here, or with `resting` false has something again: a
         "rest" or a "wake". A thread that says either is one whose silence between the two is no
-        span still out, and whose silence after a wake may be; the worker says both, around its wait.
+        span still out, and whose silence after a wake may be; the worker says a wake as it starts and both around its wait.
         Neither serves anything nor is in a lane, whatever the thread did last."""
         self._thread.serves = self._thread.lane = None
         self.emit(REST if resting else WAKE, None, None, None, 0)

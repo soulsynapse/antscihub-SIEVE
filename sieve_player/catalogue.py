@@ -2,7 +2,7 @@ r"""The catalogue: the detectors, each a function from a ledger's view to the pr
 log, one entry per class and subject, which a ledger tells of each bucket as it settles. A class
 of CLASSES judges a walk and a problem of its is costed in ms a row of that walk, so problems rank
 against each other and against the walk; a class of SPANS judges the buckets, a walk over them or
-none. A class is entered with a simulation in dev/simulations.py, which proves it fires alone. No
+none; a class of CLOCK judges what a view says of now. A class is entered with a simulation in dev/simulations.py, which proves it fires alone. No
 graph is held and no Qt reached. A
 problem and a resource carry their own words; laying entries out as a report is report.py's.
 What a reader shows of a walk is a value here, `rows`, `naming`, `needs`, `asked_of`, `gui`, `machine`, `tight`,
@@ -35,11 +35,13 @@ SOURCES = {
             "holding the interpreter, or what the GUI thread does under no span; the subject says which",
     "restarts": "worker._Walk.turn, a range begun again where what it was given went stale or the nodes or the shape changed "
                 "under it, and Worker.set_window or walk_clip asked by no hand and no edit; the evidence says which",
+    "stalls": "no one place: a tool's call, a read or the worker's own code between two rows that does not return; "
+              "the stream says which lane and not yet what the thread is in",
 }
 
 
 NODE, STORE, TURN, BETWEEN = "node", "store", "turn", "between"     # what a problem's subject is: a node's id is no store's name and no turn's
-LANE, UNRECORDED = "lane", "unrecorded"                             # and of a class of SPANS, a lane or what no span of the stream covers
+LANE, UNRECORDED = "lane", "unrecorded"                             # and of a class of SPANS or CLOCK a lane, or of SPANS what no span of the stream covers
 
 
 @dataclass(frozen=True)
@@ -48,12 +50,12 @@ class Problem:
     subject: str            # the node it is about, a cache being its node's; "memo" for the memo
     subject_is: str         # NODE; STORE for the memo; TURN for a span of the GUI thread's; BETWEEN for the time between rows; LANE; UNRECORDED
     line: str
-    ms_row: float | None    # what it cost a row of the walk; of a class of SPANS a row finished over its span, None where none was
+    ms_row: float | None    # what it cost a row of the walk; of a class of SPANS a row finished over its span, None where none was; of CLOCK None
     share: float | None     # of what the walk's nodes cost
     evidence: tuple         # the lines the figures were drawn from
     source: str             # where in the code the class has come from before
     walk: WalkId | None     # the walk it was found in; None of a class of SPANS
-    t: float                # that walk's last progress, on the probe's clock; of a class of SPANS the start of the bucket it was found in
+    t: float                # that walk's last progress, on the probe's clock; of a class of SPANS the start of the bucket it was found in; of CLOCK since when it has been so
     says: str = ""          # the class in one sentence, for a user of the player and not a reader of the code
     target: str = ""        # what to act on: a node's fold, a store and what the walk needs of it, a slot
     nodes: tuple = ()       # the nodes it names
@@ -588,12 +590,37 @@ SPANS = {"late": late, "restarts": restarts}
 STILL = 5.0         # s to the last settled bucket's end inside which a problem of a class of SPANS, seen, still holds
 
 
+STALLS = 5.0        # s a lane being walked may finish no row; docs/findings/2026-11-14-how-long-a-lane-finishes-no-row-with-nothing-wrong.md has the longest seen with nothing wrong
+
+
+def stalls(view):
+    """A lane being walked that has finished no row for STALLS seconds or longer, by
+    `View.no_row_since` against `View.now`: a problem for each, its subject the lane, found in the
+    lane's walk and with no cost, no row having finished over it. It reads no bucket, so it is
+    found with the call that holds the lane still out."""
+    out = []
+    for lane, since in view.no_row_since.items():
+        w, still = next(w for w in reversed(view.walks) if w.lane == lane), view.now - since
+        if still < STALLS:
+            continue
+        at = "its first row" if w.start is None and not w.done else f"row {(w.start or 0) + w.done}"
+        out.append(Problem("stalls", str(lane), LANE, f"the {lane} walk has finished no row for {still:.0f} s, {w.done} of its {w.length} done, "
+                           "with its thread awake and no other lane's turn taken", None, None,
+                           (f"{w.done} of {w.length} rows done", f"no row finished and no other lane's turn taken for {still:.1f} s"),
+                           SOURCES["stalls"], w.id, since, "The walk has stopped finishing rows", f"what the {lane} walk is in at {at}"))
+    return out
+
+
+# Each takes a view and judges what it says of now: neither a walk's rows nor a settled bucket.
+CLOCK = {"stalls": stalls}
+
+
 @dataclass
 class Entry:
     problem: Problem        # its latest sighting
     first: float            # the first sighting's t
     count: int = 0          # the walks it was seen in; of a class of SPANS the buckets
-    holds: bool = True      # whether a walk still walking has shown it or, in any lane, the last walk its class could judge did; of a class of SPANS whether it was seen inside STILL
+    holds: bool = True      # whether a walk still walking has shown it or, in any lane, the last walk its class could judge did; of a class of SPANS whether it was seen inside STILL; of CLOCK whether it is found now
 
     def seen(self):
         """How often it was seen, as written."""
@@ -611,11 +638,16 @@ class Log:
     any of those is found, and stands; a walk counts once toward an entry. A class of WHOLE is
     judged at the last alone. An entry holds while a walk not yet judged for the last time has
     shown it, or the last walk of any lane that its class could judge did. A class of `spans`
-    judges each bucket once, as it settles; `classes` given, `spans` is none but those given."""
+    judges each bucket once, as it settles. A class of `clock` judges what the view says of now,
+    each time the ledger says the stream's clock has moved on, `clock`: its entry holds while it
+    is found and a walk counts once toward it. `classes` given, `spans` and `clock` are none but
+    those given."""
 
-    def __init__(self, classes=None, spans=None):
+    def __init__(self, classes=None, spans=None, clock=None):
         self.classes = CLASSES if classes is None else classes
         self.spans = (SPANS if classes is None else {}) if spans is None else spans
+        self.clocks = (CLOCK if classes is None else {}) if clock is None else clock
+        self._clocked = set()   # (a Problem's key, its walk) of each a class of `clocks` has found
         self.entries = {}       # a Problem's key -> Entry
         self.checked = set()    # the classes that have judged a walk or a bucket
         self._spanned = None    # the index of the first bucket no class of `spans` has judged
@@ -680,8 +712,25 @@ class Log:
             if key[0] in self.spans:
                 if n:
                     e.holds = (end + 1) * view.width - e.problem.t <= STILL
-            else:
+            elif key[0] not in self.clocks:
                 e.holds = key in shown
+
+    def clock(self, view):
+        """Takes into the entries what `view` says of now."""
+        for kind, detect in self.clocks.items():
+            self.checked.add(kind)
+            found = set()
+            for p in detect(view):
+                e = self._sight(p)
+                found.add(p.key)
+                if (p.key, p.walk) not in self._clocked:
+                    self._clocked.add((p.key, p.walk))
+                    e.count += 1
+            for key, e in self.entries.items():
+                if key[0] == kind:
+                    e.holds = key in found
+        held = {w.id for w in view.walks}
+        self._clocked = {x for x in self._clocked if x[1] in held}
 
     def _sight(self, p):
         """The entry of `p`, made if it is the first sighting, its problem `p` unless it has a later one."""
@@ -694,7 +743,7 @@ class Log:
 
     def copy(self):
         """A Log of the entries as they now stand, a reader's to hold while this one is told on; it is not one to tell."""
-        out = Log(self.classes, self.spans)
+        out = Log(self.classes, self.spans, self.clocks)
         out.entries, out.checked = {key: replace(e) for key, e in self.entries.items()}, set(self.checked)
         return out
 

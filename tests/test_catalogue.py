@@ -7,7 +7,7 @@ from dataclasses import replace
 import pytest
 
 from sieve_player import document as D
-from sieve_player.catalogue import CLASSES, SOURCES, SPANS, Log, cold, reach, stores_at, thrash, unread
+from sieve_player.catalogue import CLASSES, CLOCK, SOURCES, SPANS, STALLS, Log, cold, reach, stores_at, thrash, unread
 from sieve_player.dev.simulations import HEALTHY, SERVED, SIMULATIONS, run
 from sieve_player.graph import Graph
 from sieve_player.ledger import Bucket, Ledger, Node, Total, Under, View, Walk
@@ -89,7 +89,7 @@ def test_each_class_reads_off_a_view_built_by_hand():
     assert not found(cold[0], rec(1.0, {"b": "k"}, b=Node(held=8)), cold[1])                    # nor is one all held a baseline of the time between a cold walk's rows
     told = View(0.25, 0, [Bucket(stores={"memo": (1, 9), "gone": (5, 9), "window stack": (2, 9)}), Bucket(stores={"memo": (3, 9), "clip stack": (4, 9)})], [])
     assert stores_at(told) == {"memo": (3, 9), "window stack": (2, 9), "clip stack": (4, 9)} and "clip stack" not in stores_at(told, 0.1)
-    assert {kind for _, kind in SIMULATIONS.values()} == {*CLASSES, *SPANS} == set(SOURCES)
+    assert {kind for _, kind in SIMULATIONS.values()} == {*CLASSES, *SPANS, *CLOCK} == set(SOURCES)
     quiet = [Bucket(), Bucket()]
     felt = View(0.25, 0, [Bucket(), Bucket(late=300.0, turns={"slot walked": 200.0}, rows={"window": 4}), *quiet,
                           Bucket(late=300.0, longest={"b": [250.0, 240.0, 1.0]}), *quiet, Bucket(late=300.0, longest={"b": [250.0, 10.0, 1.75]}),
@@ -184,6 +184,7 @@ def test_the_log_is_a_fold_of_the_stream_whatever_the_ledger_keeps_and_whenever_
     the classes that judge no walk among them."""
     def told(walks):
         t = 0.0
+        yield event("wake", t, lane=None)
         for i, (lane, key, ms) in enumerate(walks):
             yield event("sync", t, keys={"b": key}, facts=PLAN | {"selected": None})
             for _ in range(3 * (i == 1)):
@@ -197,6 +198,15 @@ def test_the_log_is_a_fold_of_the_stream_whatever_the_ledger_keeps_and_whenever_
                 t += ms / 1000
                 yield event("progress", t, row=r + 1, length=8, lane=lane, facts={})
             t += 1.0
+            yield "late", 0.0, t        # the GUI thread's loop turning: a bucket left unsettled for longer than the shortest history is dropped unjudged
+        yield event("begin", t, row=0, length=8, lane="clip")
+        yield event("begin", t + 0.5, row=0, length=8, lane="window")       # the clip waits behind it from here
+        for r in range(8):
+            for _ in range(int(STALLS) + 2 if r == 2 else 3):               # a row every three seconds, and one that takes longer than a lane may
+                t += 1.0
+                yield "late", 0.0, t
+            yield event("progress", t, row=r + 1, length=8, lane="window", facts={})
+        yield event("progress", t + 0.5, row=8, length=8, lane="clip", facts={})
 
     walks = [("window", "k", 1.0), ("window", "k", 4.0), ("clip", "k", 1.0), ("window", "k", 4.0), ("clip", "k", 4.0),
              ("clip", "k", 1.0), ("window", "k2", 4.0), ("clip", "k", 4.0), ("window", "k2", 1.0), ("window", "k", 4.0)]
@@ -213,7 +223,8 @@ def test_the_log_is_a_fold_of_the_stream_whatever_the_ledger_keeps_and_whenever_
     assert all(e == entries for _, e in others) and first < others[-1][0]       # the shortest history had dropped its first buckets
     assert {k: (e.count, e.holds) for k, e in entries.items()} == {
         ("slower", "node", "b"): (4, True),     # both lanes' slow walks, and the clip's last still slow
-        ("restarts", "lane", "window"): (1, False), ("late", "node", "x"): (1, False)}
+        ("restarts", "lane", "window"): (1, False), ("late", "node", "x"): (1, False),
+        ("stalls", "lane", "window"): (1, False)}   # the window's long row, and not the clip that waited behind every one
 
 
 def test_a_bucket_under_a_span_still_out_is_not_judged():
@@ -299,7 +310,7 @@ def test_a_simulation_surfaces_its_class_alone(name, tmp_path):
     subjects = {e.problem.subject for e in seen.log.ordered()}
     want = {"unread": {"gray", "work"}, "memo": {"memo"}, "cache": {"video"}, "reader": {"bake"}, "grows": {"pile"},
             "seeks": {"video"}, "slower": {"work"}, "held": {"unprobed"}, "slot": {"slot walked"}, "signals": {"slot walked"},
-            "frozen": {"slot walked"}, "holds": {"work"}, "unspanned": {"nothing recorded"}, "again": {"window"}}[name]
+            "frozen": {"slot walked"}, "holds": {"work"}, "unspanned": {"nothing recorded"}, "again": {"window"}, "stuck": {"window"}}[name]
     assert want <= subjects and (name == "unread" or want == subjects)
 
 
@@ -308,7 +319,7 @@ def test_a_simulation_surfaces_its_class_alone(name, tmp_path):
 def test_a_healthy_walk_surfaces_nothing(name, tmp_path):
     seen = run(name, tmp_path)
     assert not seen.log.entries and seen.view.walks[-1].done == seen.view.walks[-1].length
-    assert {"late", "restarts"} <= seen.log.checked
+    assert {"late", "restarts", "stalls"} <= seen.log.checked
 
 
 @pytest.mark.simulation

@@ -7,7 +7,10 @@ queue is bounded with no reader at all.
 """
 import json
 import math
+import sys
 import threading
+import time
+import traceback
 from collections import deque
 from contextlib import nullcontext
 from dataclasses import dataclass, field, fields, replace
@@ -79,13 +82,13 @@ _NONE = Total(0, 0.0, 0)
 @dataclass
 class Node:
     """One node over one walk. A row counts once, by the most that happened to the node on it: its
-    served file answered, else it ran, else a store held it. A progress of several rows gives each
-    as many of them as it has spans or hits since the last, in that order, and no more than the rows."""
+    served file answered, else it ran, else a store held it. A progress of several rows counts the
+    rows its spans since the last were of, each once, then its hits, which name no row, over the rows left."""
     runs: dict = field(default_factory=dict)        # Under -> Total
     ran: int = 0
     held: int = 0
     served: int = 0
-    parts: list = field(default_factory=lambda: [0.0] * PARTS)     # ms in order along the range, of every span but a "cache": a row its reader's cache held is no cost of the node's there
+    parts: list = field(default_factory=lambda: [0.0] * PARTS)     # ms in order along the range, each span's where its own row is, of every span but a "cache": a row its reader's cache held is no cost of the node's there
     counts: list = field(default_factory=lambda: [0] * PARTS)      # the spans those ms were of
     bins: dict = field(default_factory=dict)        # kind -> the spans of it counted by their ms, BINS bins; see quantile()
     shape: list | None = None                       # of its output, as the last span that carried one had it
@@ -143,7 +146,7 @@ class View:
 class _Lane:
     def __init__(self):
         self.walk = None
-        self.kinds = {}         # node -> {kind: its spans} since the lane's last progress
+        self.kinds = {}         # node -> {kind: the rows its spans were of} since the lane's last progress
         self.t = None           # the lane's last progress or begin
         self.at = 0.0           # its thread's ms accounted for then
         self.synced = False     # a sync landed since the walk began
@@ -152,7 +155,7 @@ class _Lane:
 class Ledger:
     """`width` is a bucket's seconds, `history` the buckets kept, `walks` the records kept, a
     lane's walk under way never dropped for another's, and `discards` how many discarded (key, row) are remembered for telling a recomputation. `event` and
-    `sample` may be called from any thread and never wait; a sample other than "late" and "machine" is not kept.
+    `sample` may be called from any thread and never wait or raise, an event the bookkeeping fails on there being said on stderr and not kept, where `view()` raises; a sample other than "late" and "machine" is not kept.
     `timed()` gives the context a thread that queues folds inside, for whoever attached the ledger to
     time its bookkeeping there, the ledger holding no Emitter to emit a span through."""
 
@@ -180,6 +183,8 @@ class Ledger:
             try:
                 with self._timed():
                     self._fold()
+            except Exception:       # the emitter is a tool's run or a slot: the ledger's fault is not its failure
+                print(f"SIEVE {time.strftime('%H:%M:%S')}: ledger: an event was not kept\n{traceback.format_exc()}", file=sys.stderr)
             finally:
                 self._lock.release()
 
@@ -325,7 +330,9 @@ class Ledger:
         was = node.runs.get(under, _NONE)
         node.runs[under] = Total(was.count + 1, was.ms + ev.ms, was.bytes + ev.bytes)
         if ev.kind != CACHE:
-            part = min(PARTS - 1, walk.done * PARTS // max(walk.length, 1))
+            # by the span's row and not the rows told done, which stand still between two progresses
+            at = walk.done if walk.start is None or ev.row is None else ev.row - walk.start
+            part = min(PARTS - 1, max(0, at * PARTS // max(walk.length, 1)))
             node.parts[part] += ev.ms
             node.counts[part] += 1
         bins = node.bins.get(ev.kind)
@@ -334,8 +341,7 @@ class Ledger:
         bins[min(BINS - 1, max(0, int(math.log2(ev.ms / FINEST) * OCTAVE))) if ev.ms > 0 else 0] += 1
         if ev.shape is not None:
             node.shape = list(ev.shape)
-        kinds = lane.kinds.setdefault(ev.node, {})
-        kinds[ev.kind] = kinds.get(ev.kind, 0) + 1
+        lane.kinds.setdefault(ev.node, {}).setdefault(ev.kind, set()).add(ev.row)
 
     def _progress(self, ev):
         lane = self._lanes.get(ev.lane)
@@ -358,29 +364,38 @@ class Ledger:
         if b is not None:
             if rows:
                 b.rows[ev.lane] = b.rows.get(ev.lane, 0) + rows
-            for store, s in {"memo": facts.get("memo"), **facts.get("caches", {}), f"{ev.lane or 'walk'} stack": facts.get("stack")}.items():
-                if s is not None:
-                    b.stores[store] = (s["bytes"], s["limit"])
+            told = {"memo": facts.get("memo"), **facts.get("caches", {}), f"{ev.lane or 'walk'} stack": facts.get("stack")}
+            b.stores = stores_after(b.stores, {store: (s["bytes"], s["limit"]) for store, s in told.items() if s is not None})
         if rows:
             served = {n for n, f in ((walk.plan or {}).get("nodes") or {}).items() if f["served"]}
             hits, folds = facts.get("hits", {}), facts.get("fold_hits", {})
             for nid in lane.kinds.keys() | hits.keys() | folds.keys():
                 kinds, node = lane.kinds.get(nid, {}), walk.nodes.setdefault(nid, Node())
                 file = _FILE if nid in served else {READ}
+                answered = set().union(*(at for k, at in kinds.items() if k in file))
+                ran = set().union(*(at for k, at in kinds.items() if k in _RAN and k not in file)) - answered
                 left = rows
-                for name, n in (("served", sum(n for k, n in kinds.items() if k in file)),
-                                ("ran", sum(n for k, n in kinds.items() if k in _RAN and k not in file)),
-                                ("held", kinds.get(CACHE, 0) + hits.get(nid, 0) + folds.get(nid, 0))):
+                for name, n in (("served", len(answered)), ("ran", len(ran)),
+                                ("held", len(kinds.get(CACHE, set()) - answered - ran) + hits.get(nid, 0) + folds.get(nid, 0))):
                     n = min(n, left)
                     setattr(node, name, getattr(node, name) + n)
                     left -= n
         lane.kinds = {}
 
 
+def stores_after(held, told):
+    """`held`, a bucket's `stores`, with a later telling `told` over it. A telling of the memo or a
+    cache is of every one there then is, so one of `held` it leaves out is gone; a lane's stack is
+    told by that lane alone and stays until it is told again."""
+    if any(not s.endswith(" stack") for s in told):
+        held = {s: v for s, v in held.items() if s.endswith(" stack")}
+    return {**held, **told}
+
+
 def coarsen(view, k):
     """`view` with its buckets merged `k` at a time on the probe's clock, each the reading a bucket
-    `k` widths wide would have held: what is summed summed, the lateness the worst, a store and the
-    machine as the last bucket that had one found it. The walks are the view's own."""
+    `k` widths wide would have held: what is summed summed, the lateness the worst, the stores by
+    `stores_after` and the machine as the last bucket that had one found it. The walks are the view's own."""
     if k <= 1:
         return view
     first, out = view.first // k, []
@@ -398,7 +413,7 @@ def coarsen(view, k):
             d = getattr(m, name)
             for key, v in getattr(b, name).items():
                 d[key] = d.get(key, 0) + v
-        m.stores.update(b.stores)
+        m.stores = stores_after(m.stores, b.stores)
         m.machine = b.machine or m.machine
         m.unprobed, m.wait, m.read_wait, m.late = m.unprobed + b.unprobed, m.wait + b.wait, m.read_wait + b.read_wait, max(m.late, b.late)
     return View(view.width * k, first, out, view.walks)

@@ -2,11 +2,12 @@
 import json
 import shutil
 import time
+from dataclasses import replace
 
 import pytest
 
 from sieve_player import document as D
-from sieve_player.catalogue import CLASSES, SOURCES, Entry, Log, cold, reach, seeks, signals, slower, waits
+from sieve_player.catalogue import CLASSES, SOURCES, Entry, Log, cold, reach, seeks, signals, slower, stores_at, waits
 from sieve_player.dev.simulations import HEALTHY, SERVED, SIMULATIONS, run
 from sieve_player.graph import Graph
 from sieve_player.ledger import Bucket, Ledger, Node, Total, Under, View, Walk
@@ -56,6 +57,9 @@ def test_each_class_reads_off_a_view_built_by_hand():
     (key, e), = found(rec(**GROWN)).items()
     assert key == ("grows", "c") and e.problem.ms_row == 12 / 8 and e.problem.share == 12 / 20
     assert not found(rec(c=Node(runs=GROWN["c"].runs, parts=[0.0] * 4 + [5.0] * 4, counts=[0] * 4 + [1] * 4)))     # held, then run: flat
+    stepped_again = rec(**GROWN)
+    stepped_again.replanned = True
+    assert not found(stepped_again)                                                             # a plan changed under it is no growth
     (key, e), = found(rec(**SOUGHT)).items()
     assert key == ("seeks", "video") and e.problem.ms_row == 6 / 8
     assert not found(rec(video={("seek", "walk", "b"): [1, 6.0, 0]}))                           # the one a walk opens with
@@ -66,6 +70,15 @@ def test_each_class_reads_off_a_view_built_by_hand():
     late.unprobed = 16.0
     assert list(found(rec(keys={"b": "k"}, b=run_b(8.0)), late)) == [("slower", "unprobed")]
     assert not found(rec(keys={"b": "k"}, b=run_b(8.0)), rec(1.0, {"b": "k2"}, b=run_b(16.0)))  # another plan
+    stays = found(*(rec(float(i), {"b": "k"}, b=run_b(ms)) for i, ms in enumerate((8.0, 16.0, 16.0))))[("slower", "b")]
+    assert (stays.count, stays.holds, stays.problem.walk) == (2, True, ("window", 2.0))         # a slowdown that stays is still one
+    chain = {("run", "walk", "c"): [8, 8.0, 0]}
+    held = found(rec(keys={"b": "k"}, b=run_b(8.0), c=chain), rec(1.0, {"b": "k"}, c=chain), rec(2.0, {"b": "k"}, b=run_b(16.0), c=chain))
+    assert list(held) == [("slower", "b")] and held[("slower", "b")].problem.walk == ("window", 2.0)    # a walk b was held in is no baseline of b's
+    cold = [replace(rec(t, {"b": "k"}, b=Node(runs=runs(run_b(8.0)), ran=8)), unprobed=16.0) for t in (0.0, 2.0)]
+    assert not found(cold[0], rec(1.0, {"b": "k"}, b=Node(held=8)), cold[1])                    # nor is one all held a baseline of the time between a cold walk's rows
+    told = View(0.25, 0, [Bucket(stores={"memo": (1, 9), "gone": (5, 9), "window stack": (2, 9)}), Bucket(stores={"memo": (3, 9), "clip stack": (4, 9)})], [])
+    assert stores_at(told) == {"memo": (3, 9), "window stack": (2, 9), "clip stack": (4, 9)} and "clip stack" not in stores_at(told, 0.1)
     assert {kind for _, kind in SIMULATIONS.values()} == set(CLASSES) == set(SOURCES)
     turned = rec(b={("run", "walk", "b"): [8, 100.0, 0]})
     turned.wait = 80.0
@@ -114,6 +127,12 @@ def test_the_log_holds_one_entry_a_class_and_subject_counted_cleared_and_ordered
     log.read(View(0.25, 90, [], [turned]))      # its buckets gone from the history, and replanned
     assert all(e.holds for e in log.ordered()) and set(log.entries) == {("waits", "slot walked"), ("unread", "a")}     # a walk a class cannot judge shows nothing gone
     assert "waits" in log.checked and "slower" not in log.checked
+    fast, *slow = (rec(30.0 + i, {"b": "k"}, b={("run", "walk", "b"): [8, ms, 0]}) for i, ms in enumerate((8.0, 16.0, 16.0, 16.0)))
+    log = Log()
+    log.read(View(0.25, 0, [], [fast, *slow[:2]]))
+    log.read(View(0.25, 0, [], slow))
+    e = log.entries[("slower", "b")]
+    assert (e.count, e.holds, e.problem.walk) == (3, True, ("window", 33.0))     # the walk it is slower than gone from the history, it is slower still
     five = rec(keys={"video": "kv"}, a={("run", "fold", "a"): [8, 20.0, 0]}, **SOUGHT, **GROWN)
     five.recomputed, five.recomputed_ms = {"memo": 8, "kv": 4}, {"memo": 4.0, "kv": 2.0}
     assert list(found(five)) == [("unread", "a"), ("grows", "c"), ("seeks", "video"), ("thrash", "memo"), ("thrash", "video")]     # by cost
@@ -158,7 +177,8 @@ def test_the_cold_projection_sums_what_the_plan_reaches_by_the_walk_each_node_la
         "a": (1.0, ("window", 0.0), False), "b": (2.0, ("window", 0.0), False), "c": (1.0, ("window", 0.0), False), "s": (0.0, None, False)}
     assert (p.unprobed, p.ms_row(), p.missing) == (0.5, 4.5, ())                 # the seek and the fold are no row's
     second = under(t0=1.0, keys={"a": "ka", "b": "kb2", "c": "kc2"}, a=Node(runs=runs({("cache", "walk", "c"): [8, 2.0, 0]}), held=8),
-                   b=ran(24.0), c=ran(8.0))     # a row a cache held is no walk the node ran in
+                   b=Node(runs=runs({("run", "walk", "c"): [4, 12.0, 0], ("fold", "fold", "b"): [8, 1.0, 0]}), ran=8),
+                   c=ran(8.0))     # a row a cache held is no walk the node ran in, and a row only b's fold ran on is none b ran on
     p = cold(View(0.25, 0, [], [first, second]))
     assert {n: (c.ms_row, c.walk, c.stale) for n, c in p.nodes.items() if c.walk} == {
         "a": (1.0, ("window", 0.0), False), "b": (3.0, ("window", 1.0), False), "c": (1.0, ("window", 1.0), False)}

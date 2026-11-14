@@ -8,7 +8,7 @@ stream does not carry, the document and the decoder's facts, a text takes as a d
 import json
 import sys
 
-from .catalogue import Log, alike, cost, gui, machine, needs, rows, size, span, store_name, tight
+from .catalogue import Log, alike, cost, gui, machine, needs, rows, size, store_name, stores_at, tight
 from .ledger import Total, Under, replay
 
 
@@ -58,7 +58,7 @@ def report(entries, view, context=None):
                        f"  {','.join(named.get(r.node, []))}".rstrip())
         res, like = machine(view, w), alike(view, w)
         late, turns = gui(view, w)
-        stores, need = next((b.stores for b in reversed(span(view, w)) if b.stores), {}), needs(view, w)
+        stores, need = stores_at(view, w.t1), needs(view, w)
         out += [f"         {'unprobed':<16}{w.unprobed / max(w.done, 1):>7.2f}", "",
                 "MACHINE  " + "\n         ".join([tight(res), *(f"{r.name} {r.value} · {r.note}" for r in res),
                                                  *([f"{len(like)} walks under this plan and as cold, {min(like):.2f} to {max(like):.2f} ms a row"]
@@ -115,10 +115,8 @@ def text(entry, view, context=None):
                          *([f"whole by {f['whole_by']}"] if f["whole_by"] else [])]
                 out.append(f"  {nid}: {', '.join(flags)}; reads {', '.join(str(s) for s in f['reads'].values())}; "
                            f"read by {', '.join(n for n, x in nodes.items() if nid in x['reads'].values()) or 'nothing'}")
-        names = {k: n for n, k in (w.keys or {}).items()}
-        stores = next((b.stores for b in reversed(view.buckets) if b.stores), {})
-        out.append("stores     " + (", ".join(f"{'memo' if s == 'memo' else names.get(s, s) + ' cache'} {b / 2**20:.1f} of "
-                                              f"{(limit or 0) / 2**20:.1f} MB" for s, (b, limit) in stores.items()) or "-"))
+        out.append("stores     " + (", ".join(f"{store_name(s, view)} {b / 2**20:.1f} of {(limit or 0) / 2**20:.1f} MB"
+                                              for s, (b, limit) in stores_at(view, w.t1).items()) or "-"))
     d = c.get("decoder")
     out += [f"video      {c.get('video', '-')}",
             "decoder    " + ("-" if not d else ", ".join(f"{k} {v}" for k, v in d.items())) + f"; memo limit {c.get('memo_limit', '-')}",

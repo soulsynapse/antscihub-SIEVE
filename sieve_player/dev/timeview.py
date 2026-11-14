@@ -25,7 +25,7 @@ from PySide6.QtWidgets import QApplication, QHBoxLayout, QPushButton, QSizePolic
 from .. import stream, theme
 from ..canvas import type_color
 from ..catalogue import (Log, alike, bucket_row_ms, finished, gui, machine, needs, realtime_multiple, resource_shares, rows,
-                         size, store_name, tight, unprobed_row_ms, walk_row_ms)
+                         size, store_name, stores_at, tight, unprobed_row_ms, walk_row_ms)
 from ..document import produces
 from ..ledger import coarsen, save
 from ..pace import clock as as_clock
@@ -252,8 +252,8 @@ class Turns(Bands):
 
 
 class RowCost(Track):
-    """What a row cost: the worker's ms in nodes over the rows the lanes finished, a bucket at a
-    time, as the catalogue costs a walk; a bucket that finished none has no mark. The full height
+    """What a row cost: the worker's ms in nodes and the unprobed over the rows the lanes finished,
+    a bucket at a time, by `catalogue.bucket_row_ms`; a bucket that finished none has no mark. The full height
     is the most on the axis, written in the gutter."""
     name = "row"
 
@@ -837,7 +837,7 @@ class StoresPanel(Panel):
     def read(self, window):
         view = window.view
         w = next((w for w in reversed(view.walks) if w.lane == "window"), window.walk)
-        stores = next((b.stores for b in reversed(view.buckets) if b.stores), {})
+        stores = stores_at(view)
         need = {} if w is None else needs(view, w)
         out = []
         for s, (held, limit) in sorted(stores.items(), key=lambda x: (x[0] != "memo", store_name(x[0], view))):

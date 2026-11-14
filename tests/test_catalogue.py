@@ -7,7 +7,7 @@ from dataclasses import replace
 import pytest
 
 from sieve_player import document as D
-from sieve_player.catalogue import CLASSES, SOURCES, Entry, Log, cold, reach, seeks, signals, slower, stores_at, waits
+from sieve_player.catalogue import CLASSES, SOURCES, Entry, Log, cold, reach, seeks, signals, slower, stores_at, unread, waits
 from sieve_player.dev.simulations import HEALTHY, SERVED, SIMULATIONS, run
 from sieve_player.graph import Graph
 from sieve_player.ledger import Bucket, Ledger, Node, Total, Under, View, Walk
@@ -51,6 +51,11 @@ def test_each_class_reads_off_a_view_built_by_hand():
     selected.selected = ["a"]
     assert not found(selected)                                                                  # watched by the selection as by a pin
     assert not found(rec(a=FOLDED["a"], b={("run", "walk", "b"): [8, 80.0, 0]}))                # under the threshold
+    both = rec(v={("decode", "fold", "a"): [8, 4.0, 0]}, a=FOLDED["a"], t={("run", "fold", "t"): [8, 8.0, 0]})
+    both.plan = PLAN | {"nodes": {"v": {"reads": {}}, "a": {"reads": {"in": "v"}}, "t": {"reads": {"in": "a"}}}}
+    a, t = unread(View(0.25, 0, [], [both]))
+    assert [" t " in x for x in a.evidence] == [True, True, False]                             # the run and the decode t's fold would open, not a's own fold
+    assert "no plane" in t.line and "no plane" in t.target and "no plane" not in a.line        # t ran under its fold and folded nothing
     thrashed = rec(keys={"video": "kv"}, b={("run", "walk", "b"): [8, 8.0, 0]})
     thrashed.recomputed, thrashed.recomputed_ms = {"memo": 8, "kv": 4, "other": 1}, {"memo": 4.0, "kv": 2.0, "other": 1.0}
     assert {k: e.problem.ms_row for k, e in found(thrashed).items()} == {("thrash", "memo"): 0.5, ("thrash", "video"): 0.25}
@@ -86,6 +91,7 @@ def test_each_class_reads_off_a_view_built_by_hand():
     told = rec(b=Node(runs=runs(run_b(8.0)), ran=8))
     signalled = View(0.25, 0, [Bucket(turns={"slot clipWalked": 0.5, "slot seriesReady": 9.0}, calls={"slot clipWalked": 4, "slot seriesReady": 1})] * 2, [told])
     assert not signals(View(0.25, 0, signalled.buckets, [rec(b=Node(runs=runs(run_b(8.0)), held=8))]))     # a walk the stores held
+    assert [p.share for p in signals(signalled)] == [None]                                                 # the GUI thread's ms, none of the walk's nodes'
     said = {k: (e.problem.says, e.problem.target, e.problem.nodes) for views in (
         [rec(**FOLDED)], [thrashed], [rec(**GROWN)], [rec(**SOUGHT)], [rec(keys={"b": "k"}, b=run_b(8.0)), late], waited, signalled)
         for k, e in (found(*views) if isinstance(views, list) else

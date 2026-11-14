@@ -298,7 +298,10 @@ UNREAD = 0.25       # the share of a walk's cost under folds no watched node ask
 
 def unread(view, walks=None, baselines=None):
     """Work no watched node and no walked node asked for: everything under a density's fold of a
-    node neither pinned nor selected while the walk ran, the runs and decodes the fold opened with it."""
+    node neither pinned nor selected while the walk ran, the runs and decodes the fold opened with it.
+    A span is charged to the fold that opened it, the first to read its node in the document's
+    order, so the evidence names the other such folds that would open it were that one gone. A node
+    with no fold span under its own fold had no plane to fold, and its line and target say so."""
     out = []
     for w in judged("unread", view, walks, baselines):
         watched, by = {*w.plan["pinned"], *w.selected}, {}
@@ -308,12 +311,19 @@ def unread(view, walks=None, baselines=None):
                     by.setdefault(u.asked, []).append((r.ms, r.count, nid, u.kind))
         if sum(r[0] for rs in by.values() for r in rs) < UNREAD * cost(w) or not cost(w):
             continue
+        opens = {asked: _through(w.plan.get("nodes") or {}, [asked]) for asked in by}
         for asked, rs in by.items():
             rs.sort(reverse=True)
             what = ", ".join(f"{n} {nid} {kind}" for _, n, nid, kind in rs)
-            out.append(_problem("unread", w, asked, f"{asked}'s density is folded and it is neither pinned nor selected: {what}",
-                                sum(r[0] for r in rs), [f"{nid} {kind} x{n}: {ms:.1f} ms" for ms, n, nid, kind in rs],
-                                "Computed on every row and read by nothing", f"the fold of {asked}", [r[2] for r in rs]))
+            too = {(nid, kind): "" if kind == FOLD else ", ".join(a for a in by if a != asked and nid in opens[a]) for _, _, nid, kind in rs}
+            plane = any(kind == FOLD for *_, kind in rs)
+            out.append(_problem("unread", w, asked, (f"{asked}'s density is folded and it is neither pinned nor selected: {what}" if plane else
+                                                     f"{asked} is computed for a density and its output is no plane, so none is folded: {what}"),
+                                sum(r[0] for r in rs),
+                                [f"{nid} {kind} x{n}: {ms:.1f} ms" + (f"; a fold of {too[nid, kind]} opens it too" if too[nid, kind] else "")
+                                 for ms, n, nid, kind in rs],
+                                "Computed on every row and read by nothing",
+                                f"the fold of {asked}" if plane else f"{asked}, which has no plane to fold", [r[2] for r in rs]))
     return out
 
 
@@ -454,7 +464,7 @@ def signals(view, walks=None, baselines=None):
     """A slot of the GUI thread's run at one row in two of a walk or oftener, brief each time: a
     worker signal a row, which a walk of short rows pays for at each. The cost is the slot's own spans and so the
     floor: the interpreter changing hands at every call lands in the tools' spans and has no figure
-    of its own. A walk whose walked node the stores held on more than half its rows is not judged, being over either way,
+    of its own. Those spans are the GUI thread's and no part of what the walk's nodes cost, so the problem has no share. A walk whose walked node the stores held on more than half its rows is not judged, being over either way,
     nor one whose beginning the view's buckets no longer reach."""
     out = []
     for w in judged("signals", view, walks, baselines):
@@ -467,11 +477,12 @@ def signals(view, walks=None, baselines=None):
             if 2 * n < w.done or ms[name] > BRIEF * n or ms[name] < SIGNALS * cost(w):
                 continue
             slot = name.split(" ", 1)[1]
-            out.append(_problem("signals", w, name, f"the {slot} slot ran {n} times over the walk's {w.done} rows, "
-                                f"{ms[name] / n * 1000:.0f} us each", ms[name],
-                                [f"{name}: {n} calls, {ms[name]:.1f} ms", f"the walk: {(w.t1 - w.t0) * 1000 / w.done:.3f} ms a row of wall"],
-                                "The interface is told of every row, and a row is short enough to feel it",
-                                f"how often {slot} is signalled", [name]))
+            p = _problem("signals", w, name, f"the {slot} slot ran {n} times over the walk's {w.done} rows, "
+                         f"{ms[name] / n * 1000:.0f} us each", ms[name],
+                         [f"{name}: {n} calls, {ms[name]:.1f} ms", f"the walk: {(w.t1 - w.t0) * 1000 / w.done:.3f} ms a row of wall"],
+                         "The interface is told of every row, and a row is short enough to feel it",
+                         f"how often {slot} is signalled", [name])
+            out.append(replace(p, share=None))
     return out
 
 
@@ -624,7 +635,12 @@ def rows(walk, view=None):
 def reach(plan):
     """The nodes a walk under `plan`, a sync's facts, computes for a row when it folds no density:
     the walked node and what it reads, through to the video or a served node, and the chain."""
-    nodes, seen, todo = plan.get("nodes") or {}, set(), [plan.get("walk"), *(plan.get("chain") or ())]
+    return _through(plan.get("nodes") or {}, [plan.get("walk"), *(plan.get("chain") or ())])
+
+
+def _through(nodes, starts):
+    """`starts` and what they read, by `nodes`, a sync's facts of each node, through to the video or a served node."""
+    seen, todo = set(), list(starts)
     while todo:
         nid = todo.pop()
         if nid in nodes and nid not in seen:

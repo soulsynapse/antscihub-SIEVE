@@ -74,11 +74,14 @@ class Lateness(QTimer):
 DOCUMENT_FILTER = "SIEVE document (*.json);;All (*)"
 
 
-def _save_held(file, runs):
-    """held.File.write on the writer's thread, where a failure can only be said on stderr."""
+def _save_held(file, runs, failed):
+    """held.File.write on the writer's thread, where a failure can only be said on stderr;
+    `failed` is set when the file did not land."""
     try:
-        file.write(runs)
+        for start, rows, _, _ in file.write(runs):
+            print(f"SIEVE {time.strftime('%H:%M:%S')}: the run of {rows} rows from {start} does not pickle and is not in {file.path}", file=sys.stderr)
     except Exception as e:
+        failed.set()
         print(f"SIEVE {time.strftime('%H:%M:%S')}: could not write {file.path}: {type(e).__name__}: {e}", file=sys.stderr)
 
 
@@ -413,6 +416,7 @@ class PlayerWindow(QMainWindow):
         self._unwritten = False                   # a run was held since the file was written
         self._file = None                         # the held.File the runs were read from or last written to; the writer's thread's while that lives
         self._writer = None                       # the thread writing the held file, or the last that did
+        self._write_failed = threading.Event()    # the last writer's file did not land: the next write carries its runs
         self._stamp = None                        # what the open video's held file is good under, see held.stamp
         self._tools_digest = held.tools_print(self.tools)   # taken beside the import: a file edited after it is not the code that runs
         self._taken = {}      # (node id, path input) -> (the file last handed to its loader, its mtime)
@@ -1065,6 +1069,7 @@ class PlayerWindow(QMainWindow):
         self._write_held(wait=True)
         self.runs.take([])
         self._unwritten, self._file = False, None
+        self._write_failed.clear()
         self._spared = self._given = False
         self.worker.stop()
         self.lateness.stop()
@@ -1368,7 +1373,8 @@ class PlayerWindow(QMainWindow):
     def _write_held(self, wait=False):
         """A whole clip walk's results are held as a run, and the runs held since the file was
         written go beside the document when it has been saved, on a thread of their own, which
-        pickles only the runs the file has not had; `wait` returns once the file has landed."""
+        pickles only the runs the file has not had; `wait` returns once the file has landed. A
+        write that did not land is made again with the next, the one at the video's close included."""
         if self.graph is None:
             return
         self._hold_run(0, self.count, self._whole())
@@ -1379,11 +1385,14 @@ class PlayerWindow(QMainWindow):
             self._writer.join()
         elif busy and self._unwritten:
             return self._hold.start()       # one file, one writer: this one's turn comes when that one lands
+        if self._write_failed.is_set() and not self._writer.is_alive():
+            self._write_failed.clear()
+            self._unwritten = True
         if path and self._unwritten:
             self._unwritten = False
             if self._file is None or self._file.path != path:
                 self._file = held.File(path, self._stamp)       # the document saved under another name: nothing there is known to be this one's
-            self._writer = threading.Thread(target=_save_held, args=(self._file, list(self.runs)), name="held")
+            self._writer = threading.Thread(target=_save_held, args=(self._file, list(self.runs), self._write_failed), name="held")
             self._writer.start()
             if wait:
                 self._writer.join()
@@ -1406,7 +1415,7 @@ class PlayerWindow(QMainWindow):
         if not held.good(r, key, plate):
             r = None        # of a key the node has left, where the walk it came from had no rows to run the chain over again
         best = self.runs.from_first_row(nid, key, plate)
-        return r if best is None or (isinstance(r, dict) and "signal" in r and len(r["signal"]) >= best[1]) else best[2][nid]
+        return r if best is None or (isinstance(r, dict) and "signal" in r and len(r["signal"]) >= best.rows) else best.results[nid]
 
     def _show_size(self):
         """The selected node's card says about what its result over the clip would add to the held

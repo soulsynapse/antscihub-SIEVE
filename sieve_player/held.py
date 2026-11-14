@@ -14,6 +14,7 @@ import numpy as np
 EXT = ".series"
 VERSION = 4
 SAMPLE = 256    # the most rows per_row pickles
+COPY = 1 << 20  # the most bytes of a kept record in memory as the file is made again
 
 
 def path_for(document):
@@ -85,12 +86,19 @@ def _rows(v):
 
 
 def _dump(f, runs):
-    """A record for each of `runs` at `f`'s position; where each lies, (offset, length)."""
+    """A record for each of `runs` at `f`'s position; where each lies, (offset, length), a run
+    that does not pickle leaving no record and lying at length 0."""
     at = []
     for start, rows, results, size in runs:
         record = (start, rows, {nid: {k: _flat(v, rows) for k, v in r.items()} for nid, r in results.items()}, size)
         was = f.tell()
-        pickle.dump(record, f, protocol=pickle.HIGHEST_PROTOCOL)
+        try:
+            pickle.dump(record, f, protocol=pickle.HIGHEST_PROTOCOL)
+        except (OSError, MemoryError):      # the machine's refusal and not the value's: the run is tried again
+            raise
+        except Exception:       # a value pickle refuses, which raises whatever the value does
+            f.seek(was)
+            f.truncate()
         at.append((was, f.tell() - was))
     return at
 
@@ -126,8 +134,11 @@ class File:
     def write(self, runs):
         """Leaves `runs` at the path in their order, those the file has first: the new are added
         behind the file's when it has no other, and else the file is made again, whole or not at
-        all, the records of the runs kept copied as bytes. OSError when it cannot, the file then
-        taken as unknown and the next write made of every run."""
+        all, the records of the runs kept copied as bytes. Returns the runs that did not pickle:
+        each is left out of the file and counted as had, so it is tried once and costs the others
+        nothing. OSError when the file cannot be written and MemoryError when a run cannot be
+        pickled for want of room, the file then taken as unknown and the next write made of every
+        run."""
         had, self._had = self._had, None
         kept = [(run, at, n) for run, at, n in had or [] if any(run is r for r in runs)]
         new = [r for r in runs if all(r is not run for run, _, _ in kept)]
@@ -147,7 +158,10 @@ class File:
                             for _, was, n in kept:
                                 old.seek(was)
                                 kept_at.append((f.tell(), n))
-                                f.write(old.read(n))
+                                while n and (piece := old.read(min(n, COPY))):
+                                    n -= f.write(piece)
+                                if n:
+                                    raise OSError(f"{self.path} ends inside a record it had")
                     at = _dump(f, new)
                     end = f.tell()
                 os.replace(part, self.path)      # the old file is closed by here: an open reader refuses the replace on Windows
@@ -156,6 +170,7 @@ class File:
                     os.remove(part)
             kept = [(run, *where) for (run, _, _), where in zip(kept, kept_at)]
         self._had, self._end = kept + [(run, *where) for run, where in zip(new, at)], end
+        return [run for run, (_, n) in zip(new, at) if not n]
 
 
 class Chain(NamedTuple):
@@ -195,17 +210,26 @@ class Runs:
         return sorted(self.all, key=lambda run: (run.start, -run.rows))
 
     @staticmethod
+    def _has(results, chain):
+        """The chain's nodes whose result in `results` is good under the key and plate it now has:
+        what every reader here and the limit take a run to be worth."""
+        return [nid for nid, key in chain.keys.items() if good(results.get(nid), key, chain.plate)]
+
+    @staticmethod
     def _serves(results, chain):
-        return bool(chain.keys) and all(good(results.get(nid), key, chain.plate) for nid, key in chain.keys.items())
+        return bool(chain.keys) and len(Runs._has(results, chain)) == len(chain.keys)
 
     def hold(self, start, rows, results, chain):
         """Holds `results` as a run over `rows` rows from `start` when every chain node has `rows`
-        rows in it, unless a run held covers its rows with every node it has under the same key
-        and plate; whether the runs held changed. A run it so covers goes, and while the runs
-        together pass the limit the oldest goes that is not the longest the chain is served by,
-        one of keys the chain has left before any other."""
+        rows in it under a key, unless a run held covers its rows with every node it has under the
+        same key and plate; whether the runs held changed. A run it so covers goes, and while the
+        runs together pass the limit the oldest goes that is not the one the chain has most of, a
+        run it has nothing of before any other. What the chain has of a run is the run's rows for
+        each node of `_has`, the longer run of two it has as much of and the one held last of two as
+        long. The last run stays whatever it takes."""
         nodes = list(chain.keys)
-        if not nodes or not all(isinstance(r := results.get(nid), dict) and "signal" in r and len(r["signal"]) == rows for nid in nodes):
+        if not nodes or not all(isinstance(r := results.get(nid), dict) and "signal" in r and len(r["signal"]) == rows
+                                and r.get("key") is not None for nid in nodes):
             return False
 
         def under(results):
@@ -219,10 +243,10 @@ class Runs:
                     if not (start <= run.start and run.start + run.rows <= start + rows and under(run.results) <= keys)]
         self.all.append(Run(start, rows, kept, sum(self.size_of(v) for r in kept.values() for v in r.values())))
         while len(self.all) > 1 and sum(run.size for run in self.all) > self.limit:
-            serving = [run for run in self.all if self._serves(run.results, chain)]
-            longest = max(serving or self.all, key=lambda run: run.rows)
-            spare = [run for run in self.all if run is not longest]
-            left = [run for run in spare if run not in serving]
+            has = {run: len(self._has(run.results, chain)) * run.rows for run in self.all}
+            most = max(reversed(self.all), key=lambda run: (has[run], run.rows))
+            spare = [run for run in self.all if run is not most]
+            left = [run for run in spare if not has[run]]
             self.all.remove((left or spare)[0])
         return self.all != was
 
@@ -241,15 +265,15 @@ class Runs:
         best = {}
         for start, rows, results, _ in self._earliest():
             if start <= s and s + n <= start + rows:
-                has = {nid: rows_of(results[nid], rows, s - start, n) for nid, key in chain.keys.items()
-                       if nid in chain.steps and good(results.get(nid), key, chain.plate)}
+                has = {nid: rows_of(results[nid], rows, s - start, n) for nid in self._has(results, chain) if nid in chain.steps}
                 if len(has) > len(best):
                     best = has
         return best
 
     def spans(self, chain):
-        """The rows a range inside which `over` serves, as (start, rows) stretches in order, none
-        touching the next: the union of the runs under the keys the chain now has."""
+        """The rows held under the keys the chain now has, as (start, rows) stretches in order,
+        none touching the next: the union of those runs. `over` serves a range inside one run,
+        so one that lies in a stretch across two is not served."""
         spans = []      # says whether a row is served, never how many times
         for s, n in sorted((s, n) for s, n, results, _ in self.all if self._serves(results, chain)):
             if spans and s <= sum(spans[-1]):

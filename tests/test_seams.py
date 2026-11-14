@@ -25,6 +25,7 @@ MAY_IMPORT = {
     "plot": {"density", "document", "theme"},       # document.shown is the one statement of what is drawn
     "timeline": {"theme"},
     "decoder": set(),
+    "held": set(),                                # a pickle and a stamp; the window writes and reads it
     "writers": {"decoder"},                       # a baked clip reads back through the Decoder
     "store": {"document", "writers"},             # where files land knows what a Bake is and which kinds write; never the reverse
     "worker": {"decoder", "density", "document", "graph", "store"},

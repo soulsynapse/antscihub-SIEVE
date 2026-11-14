@@ -1,221 +1,96 @@
-# Held results: what a walk computed for a series node is kept, over the clip, across the window's moves and across sessions, and what is kept is shown
+# Held series: what a walk computed for the series chain is kept, written beside the document in a quiet moment, read back when it opens, and shown on the strip
 
-Written 2026-11-12 from the conversation that read `docs/findings/2026-11-12-what-a-walk-holds.md`, on
-v5-monitor and outside its scope; the branch this is built on is not yet cut. Read with that finding,
-which is the measurement this is argued from; with `sieve_player/worker.py`, whose `_Walk` holds a range's
-stack and stepped results and whose `STACK_BYTES` closes it; with `sieve_player/graph.py`, whose `nbytes`
-is the count and whose `gated` is what a result becomes on its way out; with `sieve_player/plan.py`, whose
-keys say what a result is a result of; with `sieve_player/window.py`, whose `results` and `clip_results`
-are the two things the player keeps of a walk; and with `docs/spec/bake.md`, the one way a result reaches
-a disk today.
-
-## Why
-
-A clip walk steps every node of the series chain over every row and holds the lot until it ends. On the
-purb document the finding has an hour of that at about the cap, nearly all of it two nodes' tables, and a
-signal at under a megabyte. Of what is held, two things are read: the pinned traces, and a series bake of
-the one node it sits on. The rest goes, and it goes easily. The window and the clip are two ranges that
-share nothing, so a window moved onto rows the clip walk already has is stepped again; a window moved ten
-rows drops its whole result, overlap included; a frame tool's change drops the clip's rows; and closing
-the video drops everything. A user moving the playhead about loses what a full walk would give back
-unchanged.
-
-Kendrick's word of 2026-11-12 is that this is the wrong default: a signal is free to hold for virtually
-any clip, so it is kept through basically anything, here and into the next session; a table is not free,
-so it is kept as far as the memory allows, released when it does not, and the user is shown which. The
-line every program of this kind draws is between a cache, automatic, in memory and let go without a word,
-and a bake, asked for, on disk and kept until freed: Blender's physics cache beside its Bake, Houdini's
-Cache SOP beside its File Cache, a node's cache flag beside Nuke's DiskCache. This is the cache. The store
-stays what `docs/spec/bake.md` made it, the place for what is large and asked for; what is small lives
-beside the document.
-
-What bounds it. A result is only reusable where it is the same result, and for half the series tools the
-value at a row depends on where the walk that made it began; that is the first deliverable's to say and
-the one place this could do harm quietly. And a thing kept is a thing that can be stale: a key that does
-not see what changed serves a wrong row with nothing red.
+Written 2026-11-13 on v5-held, over the longer spec of 2026-11-12 under this name, which git has at
+a7ceace5. Kendrick's word of the 13th narrowed it: the series chain's results are persisted, a window
+moved about among them, beside the document, and open between sessions; a result that what is upstream
+of it has made stale is not served, and nothing more is owed it; and the strip says where a jump costs
+nothing. Read with `sieve_player/held.py`, the file and what a run is; with `sieve_player/window.py`,
+whose `runs` are what is held and whose `_run_over` is what serves a window from them; with
+`sieve_player/worker.py`, whose `_Walk.spared` is a window walked with no chain run; and with
+`docs/findings/2026-11-12-what-a-walk-holds.md` for what a series result weighs.
 
 ## How to read this
 
-As `docs/spec/monitor.md`'s How to read this, whole: deliverables with `Assumes:`, facts read off the
-tree, boxes with a `Check:` that is a one-off unless it holds a seam or an invariant, `Open:` lines that
-are Kendrick's to settle, `Fork:` lines taken by observation and never unobserved, and nothing that says
-how.
+As `docs/spec/monitor.md`'s How to read this.
 
-Words. A result is *held* when it outlives the walk's turn that made it. A node's result is *free of its
-range* when its value at a row is the same whatever range was walked, and *bound to its range* otherwise.
-The *cap* is the bytes held results may take together. A table is *released* when its bytes are let go
-and the row is as one never walked.
+Words. A *run* is one walk's results for every chain node over the rows it walked, from its first row.
+A window is *served* when its results are cut from a run and the chain is not run over it.
 
-## Which results are the same result
+## A walk's results are held, and a window on held rows is served
 
 Assumes: nothing.
 
-Everything after this leans on serving a row from a result some other walk made, which is only sound
-where the two walks agree at that row.
+Facts to weigh. A window moved ten rows drops its whole result, and a clip walk's rows are read by the
+strip alone (the 2026-11-12 spec's Why). A result carries the key its node had as the chain ran
+(`worker.run_chain`); a key is the node's tool, its params, its band and the keys upstream, the video's
+path and the decoder's output at the root (`plan.key_of`, `plan.base_key`). A stepped node's value at a
+row can depend on the row its walk began at, `track`'s ids and its first rows among them
+(`docs/findings/2026-11-13-a-windows-tracks-against-the-clips.md`), so rows of two walks are not stitched.
+The window walk's rows also feed the display, the densities and the frame tools' draws.
 
-Facts to weigh, read 2026-11-12. A stepped node's state is None at its walk's first row. `track` numbers
-its ids from there and holds a track back until it has `min_rows`; `travel` and `transitions` read 0 at
-it; `kinematics` carries rows across a gap. So a window walk's tracks at a row and the clip walk's at the
-same row are two answers, and every node downstream of `track`, `count` over tracks among them, inherits
-that. `reduce` over a frame node, and `count`, `size` and `spacing` over blobs, have no state and read a
-row alone. `smooth`, `tracks-filter` and `resolve` have no `step` and are a property of the whole range
-they are run over, so theirs is the same result only over the same rows. A result carries its node's key
-and its start beside it and the key does not hold the range. A key is the node's tool, its params and the
-keys upstream (`plan.key_of`); it holds no band, and a node downstream is fed what the band upstream
-keeps (`graph.gated`, `fed_row`); what a band's change does to a stepped node below it was not read. The
-video's key is its path and the decoder's output (`plan.base_key`) and nothing of the file's bytes or
-date. The registry reports whether a tool offers `step` and nothing about its state.
+- [x] A window walk that reached the window's last row, and a clip walk that reached the clip's, are
+  each held as a run as they end, a run let go when another covers its rows with every node it has
+  under the same key, a window walk given held rows not held at all, since its run would hold them a
+  second time, and none let go for room until
+  the runs together pass one named bound of bytes (`window.HELD_BYTES`), the oldest then first.
+  Check: `docs/findings/experiments/2026-11-13-held-series.py`.
+- [x] A window that lies wholly inside one run whose every chain node has the key and row space it has
+  now is served from it, from the run that began earliest: the results are the window's at once and
+  no chain is run over it. Its frames are walked as any window's are, so a move or a drag of the
+  playhead inside it shows each row from the memo
+  (`docs/findings/2026-11-13-a-served-window-jumped-about.md`).
+  Check: the same one-off moves a window away and back and reads no step of the chain and the
+  window's frames in the memo, then selects a frame node and reads its field.
+- [x] A window inside a run that has some of the chain's stepped nodes under the keys they now have,
+  and not all, is walked with those given: the rest is stepped from them, a given node is not stepped
+  again, and where every head is given no row of the window is walked for the chain. So a node added
+  under one already held reads what is held. A clip walk is given what a run over the whole clip
+  holds in the same way, a series bake's too, and one given every stepped node and every head ends
+  in a turn.
+  Check: the same one-off adds a node under `track` in the second window, walks the clip for it, and
+  asks for the clip again.
+- [x] A run under a key the chain has left serves nothing, and serves again when the key returns.
+  Check: the same one-off turns a knob and turns it back.
 
-Open: what a row of a bound result is served from. Recommended, and what a session may build on: a bound
-result is held as the run its walk made, from that walk's first row, and is never stitched to another
-walk's; a row is served from the run that began earliest and reaches it, the clip walk's from row 0 where
-there is one, since the answer with more rows behind it is the one a bake would write. The cost is that
-the window's tracks change as the clip walk passes under it, ids among them.
+## The runs are beside the document
 
-Fork: how far a window walk's result is from the clip walk's at the same rows. Observed on the crossings
-clip and its document, `track` and what reads it, as a finding: the rows from the window's first at which
-the two differ, and by what. Where they agree past some few rows, the recommendation above stands and the
-finding says how many; where they differ throughout, a window's bound results are its own and only a run
-from the same first row serves it.
+Assumes: A walk's results are held.
 
-- [ ] Each series tool's result is said to be free of its range or bound to it, by something a session
-  reads and the registry reports, and a tool that says nothing is taken as bound.
-  Check: a registry test reads it off each series tool in `tools/`.
-- [ ] A tool said to be free is free: stepped from two different first rows it gives the same share at
-  the rows both reach.
-  Check: `tests/stepping.py` holds it, beside what it holds of `step` against `run`.
-- [ ] A held result is identified by everything it depends on: a band upstream that feeds it, and the
-  footage as it was, are in what it is held under or it is not served across their change.
-  Check: a one-off changes a band upstream and replaces the footage at its path, and reads no row served
-  from before either.
+Facts to weigh. A key sees neither the footage's bytes nor a tool's code. A document knows its path once
+saved, and one never saved has none.
 
-## The count is what is held
-
-Assumes: nothing.
-
-The cap is only a fact about memory if the count is.
-
-Facts to weigh, from the finding. `graph.nbytes` charges 64 for anything that is neither None nor an
-array, and a signal's share is a numpy scalar, so a walk is charged sixteen times what its signals hold.
-A table's contours are charged under every node whose rows carry them; whether `track`'s are the arrays
-`blobs` made, held once and charged twice, was not read. `STACK_BYTES` is a constant with no stated
-reason for its value, and the machine's memory is sampled by `sieve_player/machine.py`.
-
-Fork: whether a contour is held once under two nodes. Observed by identity over a walk's stack and
-`track`'s rows. Where it is, the count charges an array once however many rows carry it.
-
-Open: what the cap is. Recommended: a share of the machine's memory, one named constant, read as the walk
-begins; the cost is that a walk fits on one machine and not another under one document.
-
-- [ ] What a walk is charged for a signal is what the signal's array holds.
-  Check: a one-off walks a chain of signals and reads the walk's bytes against the arrays'.
-- [ ] The bytes charged over a clip walk of the purb document are within a stated margin of what the
-  process's memory grew by.
-  Check: a one-off, on a machine left alone, the figures in a finding beside the 2026-11-12 one.
-
-## A signal outlives its walk
-
-Assumes: Which results are the same result; The count is what is held.
-
-Facts to weigh. `_Walk.begin` drops every row held, and is what a moved window and a restarted clip both
-call. `Worker.invalidate` restarts both ranges on a frame tool's change and `window._invalidate` empties
-`clip_results`; the rows were under keys the plan no longer has, and nothing keeps a result under a key
-that might come back. `rerun_series` reruns the chain over what is held. A stopped clip walk's rows stand
-and its states are held with them, and asking for it again begins from row 0. The strip draws a shown
-node's signal from the clip's result where there is one, else the window's (`window._show_pinned`), and
-the plot draws the window's.
-
-- [ ] A signal free of its range is held by its key over the clip's rows, with which rows it has, and a
-  walk of either range that reaches a row held under the node's key steps nothing for it.
-  Check: a one-off walks the clip, moves the window onto it, and reads no step of that node in the
-  window's lane.
-- [ ] A moved window keeps what it has of the rows it still covers, for a free result, and for a bound
-  one by the first deliverable's Open.
-  Check: a one-off moves a window by a tenth of its length and reads steps for the new rows alone.
-- [ ] A signal held under a key the plan has left is kept while the cap allows and served when the key
-  returns, a knob turned and turned back costing nothing.
-  Check: a one-off changes a frame tool's knob and restores it, and reads the trace whole with no row
-  walked.
-- [ ] A clip walk stopped and asked for again goes on from the row it reached.
-  Check: a one-off stops one midway, asks again, and reads each row stepped once.
-- [ ] The trace, the strip and a tool's draw at the playhead read one held result for a node at a row,
-  whichever walk made it.
-  Check: a one-off reads the three at a row both ranges walked.
-
-## Tables are kept until the cap
-
-Assumes: A signal outlives its walk.
-
-Facts to weigh. A walk past `STACK_BYTES` is refused: it closes at the rows it has and a bake of it is
-abandoned (`_Walk.refuse`). A stepping tool needs its own state to go on and none of the rows behind it.
-A node run whole needs every row of its source at each emit; a series bake is written from the finished
-result all at once (`_Bake.from_clip`); a series node whose knob changes is stepped again from the rows
-held upstream; a tool's draw reads the row's table; and csv's Write reads the window's rows. Each of those
-is a reader of a table that a release takes away. The finding has what a node run whole costs over an
-hour at every emit against once at its end.
-
-Open: which tables are released first. Recommended: rows of the clip outside the window, farthest from it
-first, under keys the plan has left before any it has; the window's own rows last, and a window that
-alone passes the cap closes short as it does now.
-
-- [ ] Past the cap a walk goes on: tables are released, the signals and the stepping tools' states are
-  kept, and the walk reaches its last row.
-  Check: a one-off walks a clip under a cap set low and reads every row's signal and the tables released.
-- [ ] A released row asked for again, by a draw at the playhead, a window placed on it or a knob below
-  it, is walked again as a row never walked is, and nothing reads an absent table as an empty one.
-  Check: the same one-off draws at a released row and reads the row's own records.
-- [ ] A reader that needs every row, a node run whole, a series bake, csv's Write, says what it lacks
-  where rows are released, in the node's standing, and writes or shows no partial result as a whole one.
-  Check: the same one-off, with a node run whole on the chain and a series bake asked.
+- [x] The runs held are in one file beside a saved document, a record a run, each run in it whole or
+  not at all, written off the GUI thread once nothing new has been held for a moment and again as the
+  video closes; a document saved afterwards gets the file at the save. A run is pickled once: one
+  held since the file was written is added behind those it has, and when a run the file has is no
+  longer held the file is made again from the kept records' bytes (`held.File`). A row's table that is every row's dtype is in the file as one
+  table and the rows' lengths (`docs/findings/2026-11-13-what-the-held-file-costs.md`).
+  Check: the same one-off, which cuts the file short in its last record and reads the runs before it.
+- [x] Opening the document holds the file's runs: its first window is served where one covers it, and
+  the strip draws a clip run's signals with no clip walk asked.
+  Check: the same one-off, in a second window.
+- [x] A file made under other footage at the path or under other tool files, or one absent or
+  unreadable from its first bytes, is the same as none.
+  Check: `tests/test_held.py`.
 
 ## What is held is shown
 
-Assumes: Tables are kept until the cap.
+Assumes: A walk's results are held.
 
-Facts to weigh. A walk's progress carries its bytes and the cap to the stream (`Graph.progress`), the
-monitor lists a lane's stack among its stores, and the player shows neither. The strip's x axis is the
-clip and it draws the shown nodes' signals; it draws nothing of which rows are held. By
-`sieve-trace-no-derived-statistic`'s rule, Kendrick's and in no file here, a rendering neither hides a
-value nor adds one.
-
-- [ ] The strip shows, for the clip, which rows have a held result and which of those have their tables,
-  so a row that costs nothing to visit is told from one that will be walked.
-  Check: a one-off walks part of a clip under a low cap and reads the three states off the strip.
-- [ ] The player says what is held in bytes against the cap, by signals and by tables, and says when a
-  release has begun.
-  Check: the same one-off reads the figures against the walk's own.
-
-Worth a look: the strip on the purb document with the clip half walked and the window moved about.
-
-## A second session starts with what the last one held
-
-Assumes: A signal outlives its walk.
-
-Facts to weigh. A document is a json file and knows its path once saved (`document.save`); one never
-saved has none. A geometry file already sits beside the footage it describes. A store's bake is found
-through the `baked` record on a bake node and through nothing else, so a node that is no bake node is
-never served from a disk. A signal over an hour of the purb footage is under a megabyte and a table node
-some hundreds, by the finding.
-
-Open: when the file is written. Recommended: when the document is saved and when the video closes, once
-each and whole, so a walk writes nothing as it runs; the cost is that a crash loses what was held since.
-
-Open: how far tables go into it. Recommended: signals always; tables where the file stays under a stated
-size, the player saying which it left out; the cost of the tables is a file that is no longer small.
-
-- [ ] A saved document has one file beside it holding its held signals, each under what identifies it by
-  the first deliverable, with the rows it has; opening the document serves them with no row walked.
-  Check: a one-off walks, saves, opens the document in a fresh process and reads the trace and no step.
-- [ ] A held result in the file that the document's plan no longer identifies is not served, and the file
-  being absent, unreadable or of another document's is the same as there being none.
-  Check: the same one-off, with a knob changed in the json, the footage replaced, and the file truncated.
-- [ ] The file's size is stated where the player says what is held.
-  Check: the same one-off reads it against the file's.
+- [x] The strip draws a bar over the rows of every run that would serve a window now, so a stretch a
+  window can be placed in for nothing is told from one that will be walked.
+  Check: the same one-off reads the bar after two moves, after an open, and under a turned knob.
+- [x] The strip draws a shown node's signal over every run held under the key the node now has, the
+  selection's in its colour, a node's stretches on one scale, and no row twice: where runs lie over
+  one another the rows are drawn from the one that would serve them, and the bar is their union.
+  Check: the same one-off reads the stretches drawn after two moves.
+- [x] The card of a series node whose window has a result says about how many bytes that node's result
+  over the whole clip would add to the file, from the rows walked.
+  Check: the same one-off reads the line against a clip run's size.
 
 ## Not here
 
-Decided 2026-11-12 as outside this: a control that writes the cache to a bake, Blender's Current Cache to
-Bake, held off on Kendrick's word; whether bake is a tool, a node of the player's as the video node is, or
-a node at all, which he set aside for another time, this spec changing nothing of it and a bake on a
-signal wire having less to do once this is built; a node run whole running once at a walk's end instead
-of at every emit; and a table written to a disk as the walk makes it.
+A window that straddles two runs, or reaches a row past one, is walked whole: rows are not stitched, by
+the fact above, and no tool says whether its rows would stitch soundly. A served window is spared its chain and not its frames. The cap, a table's release and the count's fix,
+all of the 2026-11-12 spec, are dropped. The player's own code is not in what a file is good under, only
+the tools'. A frame node's card says nothing of a disk.

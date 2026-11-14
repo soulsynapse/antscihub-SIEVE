@@ -149,6 +149,7 @@ class Pane(QWidget):
         self.doc = None
         self.cards, self.widgets, self.notes = {}, {}, {}
         self.standings = {}   # tool node -> the line under its settings, see set_standing
+        self.sizes = {}       # tool node -> the line that says what its result would take on disk, see set_size
         self.bakes = {}       # node whose tool bakes -> its BakeBlock
         self.video = None
         self.current = None
@@ -192,6 +193,7 @@ class Pane(QWidget):
         self.widgets.pop(nid, None)
         self.notes.pop(nid, None)
         self.standings.pop(nid, None)
+        self.sizes.pop(nid, None)
         self.bakes.pop(nid, None)
         if self.video is not None and self.video.parent() is card:
             self.video = None
@@ -230,6 +232,9 @@ class Pane(QWidget):
                 self.standings[node.id] = readout()
                 self.standings[node.id].hide()
                 card.add(self.standings[node.id])
+                self.sizes[node.id] = readout()
+                self.sizes[node.id].hide()
+                card.add(self.sizes[node.id])
                 if hasattr(w, "set_source"):
                     w.set_source(self._src, self._fps)
                 if is_selector(tool) or paths(tool):
@@ -313,6 +318,14 @@ class Pane(QWidget):
         """The line under `nid`'s settings: why it does not run, or what its run said, from the
         runtime through the window; "" hides it."""
         lab = self.standings.get(nid)
+        if lab is not None:
+            lab.setText(text)
+            lab.setVisible(bool(text))
+
+    def set_size(self, nid, text):
+        """The line under `nid`'s settings that says what its result would take on disk, from the
+        window; "" hides it."""
+        lab = self.sizes.get(nid)
         if lab is not None:
             lab.setText(text)
             lab.setVisible(bool(text))

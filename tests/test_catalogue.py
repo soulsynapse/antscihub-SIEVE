@@ -7,8 +7,7 @@ from dataclasses import replace
 import pytest
 
 from sieve_player import document as D
-from sieve_player.catalogue import (CLASSES, SOURCES, SPANS, Entry, Log, cold, reach, seeks, signals, slower, stores_at, thrash,
-                                    unread, waits)
+from sieve_player.catalogue import CLASSES, SOURCES, SPANS, Log, cold, reach, stores_at, thrash, unread
 from sieve_player.dev.simulations import HEALTHY, SERVED, SIMULATIONS, run
 from sieve_player.graph import Graph
 from sieve_player.ledger import Bucket, Ledger, Node, Total, Under, View, Walk
@@ -30,12 +29,17 @@ def rec(t0=0.0, keys=None, **nodes):
     return Walk("window", 0, 8, PLAN, keys, t0, t0 + 0.5, done=8, nodes=nodes)
 
 
+def seen(view):
+    """What a Log told of the whole of `view`, as of a stream that has ended, holds: {(class, subject): Entry}, the costliest first."""
+    log = Log()
+    log.settled(view)
+    return {(e.problem.kind, e.problem.subject): e for e in log.ordered()}
+
+
 def found(*walks, pinned=()):
     for w in walks:
         w.plan = PLAN | {"pinned": list(pinned)}
-    log = Log()
-    log.read(View(0.25, 0, [], list(walks)))
-    return {(e.problem.kind, e.problem.subject): e for e in log.ordered()}
+    return seen(View(0.25, 0, [], list(walks)))
 
 
 FOLDED = {"a": {("run", "fold", "a"): [8, 8.0, 0], ("fold", "fold", "a"): [8, 1.0, 0]}, "b": {("run", "walk", "b"): [8, 8.0, 0]}}
@@ -54,7 +58,7 @@ def test_each_class_reads_off_a_view_built_by_hand():
     assert not found(rec(a=FOLDED["a"], b={("run", "walk", "b"): [8, 80.0, 0]}))                # under the threshold
     both = rec(v={("decode", "fold", "a"): [8, 4.0, 0]}, a=FOLDED["a"], t={("run", "fold", "t"): [8, 8.0, 0]})
     both.plan = PLAN | {"nodes": {"v": {"reads": {}}, "a": {"reads": {"in": "v"}}, "t": {"reads": {"in": "a"}}}}
-    a, t = unread(View(0.25, 0, [], [both]))
+    a, t = unread(View(0.25, 0, [], [both]), both)
     assert [" t " in x for x in a.evidence] == [True, True, False]                             # the run and the decode t's fold would open, not a's own fold
     assert "no plane" in t.line and "no plane" in t.target and "no plane" not in a.line        # t ran under its fold and folded nothing
     thrashed = rec(keys={"video": "kv"}, b={("run", "walk", "b"): [8, 8.0, 0]})
@@ -88,85 +92,96 @@ def test_each_class_reads_off_a_view_built_by_hand():
     assert {kind for _, kind in SIMULATIONS.values()} == {*CLASSES, *SPANS} == set(SOURCES)
     quiet = [Bucket(), Bucket()]
     felt = View(0.25, 0, [Bucket(), Bucket(late=300.0, turns={"slot walked": 200.0}, rows={"window": 4}), *quiet,
-                          Bucket(late=300.0, longest={"b": [250.0, 240.0]}), *quiet, Bucket(late=300.0, longest={"b": [250.0, 10.0]}),
-                          Bucket(late=99.0), Bucket(late=500.0), Bucket()], [])     # under a turn, under one call on its own CPU, under one that waited; unfelt; the bucket after it unsettled
-    assert [(p.key, p.ms_row, p.t) for p in SPANS["late"](felt)] == [(("late", "turn", "slot walked"), 75.0, 0.25), (("late", "node", "b"), None, 1.0),
+                          Bucket(late=300.0, longest={"b": [250.0, 240.0, 1.0]}), *quiet, Bucket(late=300.0, longest={"b": [250.0, 10.0, 1.75]}),
+                          Bucket(late=99.0), Bucket(late=500.0), Bucket()], [])     # under a turn, under one call on its own CPU, under one that waited; unfelt; the last two not judged
+    assert [(p.key, p.ms_row, p.t) for p in SPANS["late"](felt, 0, 8)] == [(("late", "turn", "slot walked"), 75.0, 0.25), (("late", "node", "b"), None, 1.0),
                                                             (("late", "unrecorded", "nothing recorded"), None, 1.75)]
     begun = [Bucket(begins={"window": {"asked": 2, "hand": 9}}, rows={"window": 8}), Bucket(begins={"window": {"given": 1}}, rows={"window": 4}),
              Bucket(begins={"window": {"hand": 5, "edit": 5}}), Bucket(), Bucket()]
-    (p,) = SPANS["restarts"](View(0.25, 0, begun, []))       # two by no hand are under it, the third is it, and a hand's and an edit's are none however many
+    (p,) = SPANS["restarts"](View(0.25, 0, begun, []), 0, 2)       # two by no hand are under it, the third is it, and a hand's and an edit's are none however many
     assert (p.key, p.t, p.walk) == (("restarts", "lane", "window"), 0.25, None) and "3 times in 0.50 s and finished" in p.line and "went stale" in p.target
-    assert all(q.says and q.target for q in (p, *SPANS["late"](felt)))
-    assert not SPANS["restarts"](View(0.25, 0, [begun[0], replace(begun[1], rows={"window": 24}), *begun[2:]], []))      # rows enough finished a beginning
+    assert all(q.says and q.target for q in (p, *SPANS["late"](felt, 0, 8)))
+    assert not SPANS["restarts"](View(0.25, 0, [begun[0], replace(begun[1], rows={"window": 24}), *begun[2:]], []), 0, 2)      # rows enough finished a beginning
     turned = rec(b={("run", "walk", "b"): [8, 100.0, 0]})
     turned.wait = 80.0
     waited = View(0.25, 0, [Bucket(wait=40.0, turns={"slot walked": 60.0, "paint plot": 5.0})] * 2, [turned])
     told = rec(b=Node(runs=runs(run_b(8.0)), ran=8))
     signalled = View(0.25, 0, [Bucket(turns={"slot clipWalked": 0.5, "slot seriesReady": 9.0}, calls={"slot clipWalked": 4, "slot seriesReady": 1})] * 2, [told])
-    assert not signals(View(0.25, 0, signalled.buckets, [rec(b=Node(runs=runs(run_b(8.0)), held=8))]))     # a walk the stores held
-    assert [p.share for p in signals(signalled)] == [None]                                                 # the GUI thread's ms, none of the walk's nodes'
+    assert not seen(View(0.25, 0, signalled.buckets, [rec(b=Node(runs=runs(run_b(8.0)), held=8))]))        # a walk the stores held
+    assert [e.problem.share for e in seen(signalled).values()] == [None]                                   # the GUI thread's ms, none of the walk's nodes'
     said = {k: (e.problem.says, e.problem.target, e.problem.nodes) for views in (
         [rec(**FOLDED)], [thrashed], [rec(**GROWN)], [rec(**SOUGHT)], [rec(keys={"b": "k"}, b=run_b(8.0)), late], waited, signalled)
-        for k, e in (found(*views) if isinstance(views, list) else
-                     {(p.kind, p.subject): Entry(p, p.t) for p in (*waits(views), *signals(views))}).items()}
+        for k, e in (found(*views) if isinstance(views, list) else seen(views)).items()}
     assert {k[0] for k in said} == set(CLASSES) and all(says and target for says, target, _ in said.values())
     assert said[("unread", "a")] == ("Computed on every row and read by nothing", "the fold of a", ("a",))
     assert said[("thrash", "video")][1:] == ("the video cache's limit", ("video",)) and said[("thrash", "memo")][2] == ()
-    assert said[("waits", "slot walked")][1:] == ("the walked slot", ()) and waits(waited)[0].turns == ("slot walked",)
-    assert said[("signals", "slot clipWalked")][1:] == ("how often clipWalked is signalled", ()) and signals(signalled)[0].turns == ("slot clipWalked",)
+    assert said[("waits", "slot walked")][1:] == ("the walked slot", ()) and seen(waited)[("waits", "slot walked")].problem.turns == ("slot walked",)
+    assert said[("signals", "slot clipWalked")][1:] == ("how often clipWalked is signalled", ()) and seen(signalled)[("signals", "slot clipWalked")].problem.turns == ("slot clipWalked",)
     named = rec(keys={"memo": "km"}, b={("run", "walk", "b"): [8, 8.0, 0]})     # a node whose id is a reader's own name is still a node
     named.recomputed, named.recomputed_ms = {"memo": 8, "km": 8}, {"memo": 4.0, "km": 4.0}
-    assert {p.key for p in thrash(View(0.25, 0, [], [named]))} == {("thrash", "store", "memo"), ("thrash", "node", "memo")}
-    (p,) = slower(View(0.25, 0, [], [rec(keys={"b": "k"}, unprobed=run_b(8.0)), rec(1.0, {"b": "k"}, unprobed=run_b(16.0))]))
+    assert {p.key for p in thrash(View(0.25, 0, [], [named]), named)} == {("thrash", "store", "memo"), ("thrash", "node", "memo")}
+    p = found(rec(keys={"b": "k"}, unprobed=run_b(8.0)), rec(1.0, {"b": "k"}, unprobed=run_b(16.0)))[("slower", "unprobed")].problem
     assert (p.key, p.target, p.nodes) == (("slower", "node", "unprobed"), "unprobed", ("unprobed",))
     assert said[("slower", "unprobed")][1:] == ("the time between rows, in no node", ())
 
 
 def test_the_log_holds_one_entry_a_class_and_subject_counted_cleared_and_ordered():
-    walks, judged = [rec(float(i), **SOUGHT) for i in range(10)], []
-    log = Log({"seeks": lambda view, walks, baselines: (judged.append(len(walks)), seeks(view, walks))[1]})
-    for _ in range(2):      # a view read again counts no walk twice
-        made = log.read(View(0.25, 0, [], walks))
+    quiet = {"video": {("decode", "walk", "b"): [8, 8.0, 0]}}
+    walks, log = [rec(float(i), **SOUGHT) for i in range(10)], Log()
+    for _ in range(2):      # told of the same walks again, it counts none twice
+        log.settled(View(0.25, 0, [], walks))
     (e,) = log.ordered()
-    assert (e.count, e.holds, e.first, made) == (10, True, 0.5, [])
-    log.read(View(0.25, 0, [], walks + [rec(10.0, video={("decode", "walk", "b"): [8, 8.0, 0]})]))
+    assert (e.count, e.holds, e.first) == (10, True, 0.5)
+    walks.append(rec(10.0, **quiet))
+    log.settled(View(0.25, 0, [], walks))
     assert log.ordered() == [e] and (e.count, e.holds, e.problem.walk) == (10, False, ("window", 9.0))
-    assert judged == [10, 1, 2]     # a walk its lane has begun another after is judged once more and then kept
-    again, clip, quiet = rec(11.0, **SOUGHT), rec(12.0, **SOUGHT), rec(13.0, video={("decode", "walk", "b"): [8, 8.0, 0]})
-    clip.lane = quiet.lane = "clip"
-    log.read(View(0.25, 0, [], walks + [again, clip, quiet]))
-    assert (e.count, e.holds, e.problem.walk) == (12, True, ("window", 11.0))     # cleared in one lane, it holds by another's last walk
+    again, clip, clean = rec(11.0, **SOUGHT), rec(12.0, **SOUGHT), rec(13.0, **quiet)
+    clip.lane = clean.lane = "clip"
+    walks += [again, clip, clean]
+    log.settled(View(0.25, 0, [], walks))
+    assert (e.count, e.holds, e.problem.walk) == (12, True, ("clip", 12.0))       # cleared in one lane, it holds by another's last walk
     short = rec(14.0, **SOUGHT)
     short.done = 2
-    log.read(View(0.25, 0, [], walks + [again, clip, quiet, short, rec(15.0, video={("decode", "walk", "b"): [8, 8.0, 0]})]))
+    walks += [short, rec(15.0, **quiet)]
+    log.settled(View(0.25, 0, [], walks))
     assert (e.count, e.holds) == (12, False)     # a walk of two rows is not judged
-    log.read(View(0.25, 0, [], walks + [again, clip, quiet, short, rec(16.0, **SOUGHT)]))
-    log.read(View(0.25, 0, [], [clip, quiet]))
+    walks.append(rec(16.0, **SOUGHT))
+    log.settled(View(0.25, 0, [], walks))
+    log.settled(View(0.25, 0, [], [clip, clean]))
     assert (e.count, e.holds) == (13, True)      # its walk gone from the history, no walk has shown it gone
-    assert "WALK     no longer in the history" in report([e], View(0.25, 0, [], [clip, quiet]))      # and no other walk is shown as its
-    turned = rec(20.0, b={("run", "walk", "b"): [8, 100.0, 0]})
-    turned.wait, turned.replanned = 80.0, True
-    log = Log()
-    log.read(View(0.25, 80, [Bucket(wait=40.0, turns={"slot walked": 60.0})] * 2, [rec(19.0, **FOLDED), turned]))
-    log.read(View(0.25, 90, [], [turned]))      # its buckets gone from the history, and replanned
-    assert all(e.holds for e in log.ordered()) and set(log.entries) == {("waits", "turn", "slot walked"), ("unread", "node", "a")}     # a walk a class cannot judge shows nothing gone
-    assert "waits" in log.checked and "slower" not in log.checked
-    fast, *slow = (rec(30.0 + i, {"b": "k"}, b={("run", "walk", "b"): [8, ms, 0]}) for i, ms in enumerate((8.0, 16.0, 16.0, 16.0)))
-    log = Log()
-    log.read(View(0.25, 0, [], [fast, *slow[:2]]))
-    log.read(View(0.25, 0, [], slow))
-    e = log.entries[("slower", "node", "b")]
-    assert (e.count, e.holds, e.problem.walk) == (3, True, ("window", 33.0))     # the walk it is slower than gone from the history, it is slower still
+    assert "WALK     no longer in the history" in report([e], View(0.25, 0, [], [clip, clean]))      # and no other walk is shown as its
+    def told():     # one walk of 32 rows, a tenth of a second each, the first four run again after the memo discarded them
+        yield event("begin", 0.0, row=0, length=32)
+        for r in range(32):
+            if r < 4:
+                yield event("evict", r / 10, row=r, key="k")
+            yield event("run", r / 10, 1.0, "b", r, key="k", demand="walk", asked="b")
+            yield event("progress", (r + 1) / 10, row=r + 1, length=32, facts={})
+
+    led, half = Ledger(watch=Log()), None
+    for ev in told():
+        led.event(ev)
+        if ev.kind == "progress" and ev.row == 16:
+            half = led.view()       # under way and short of its range: found of the rows it has
+    led.end()
+    ended, key = led.view(), ("thrash", "store", "memo")
+    assert [w.done for w in (*half.walks, *ended.walks)] == [16, 32] and list(half.found.entries) == list(ended.found.entries) == [key]
+    assert [(v.found.entries[key].count, v.found.entries[key].holds) for v in (half, ended)] == [(1, True), (1, True)]     # the rest ran clean: it stands, the walk counted once
+    whole = rec(21.0, {"b": "k"}, b={("run", "walk", "b"): [8, 16.0, 0]})
+    whole.length = 16
+    log, view = Log(), View(0.25, 0, [], [rec(19.0, {"b": "k"}, b={("run", "walk", "b"): [8, 8.0, 0]}), whole])
+    log.settled(view, 0)
+    assert not log.entries                       # slower is of a whole walk, and says nothing of one under way
     five = rec(keys={"video": "kv"}, a={("run", "fold", "a"): [8, 20.0, 0]}, **SOUGHT, **GROWN)
     five.recomputed, five.recomputed_ms = {"memo": 8, "kv": 4}, {"memo": 4.0, "kv": 2.0}
     assert list(found(five)) == [("unread", "a"), ("grows", "c"), ("seeks", "video"), ("thrash", "memo"), ("thrash", "video")]     # by cost
 
 
-@pytest.mark.parametrize("kept", [2, 3])
-def test_the_log_reads_the_same_however_few_walks_the_ledger_keeps(kept):
-    """One stream into a ledger that keeps every walk and one that keeps `kept`, each read by its
-    own Log after every event: the entries are equal throughout, those of the classes that judge
-    no walk among them, and equal at the end to those of a Log that reads the whole once."""
+@pytest.mark.parametrize("kept", [2, 64])
+def test_the_log_is_a_fold_of_the_stream_whatever_the_ledger_keeps_and_whenever_it_is_read(kept):
+    """One stream into four ledgers, of a long history and of the shortest, each read after every
+    event and not until the stream has ended, keeping `kept` walks: the entries are equal, those of
+    the classes that judge no walk among them."""
     def told(walks):
         t = 0.0
         for i, (lane, key, ms) in enumerate(walks):
@@ -175,8 +190,7 @@ def test_the_log_reads_the_same_however_few_walks_the_ledger_keeps(kept):
                 yield event("begin", t, row=0, length=8, lane=lane, facts={"by": "asked"})
             if i == 2:
                 yield "late", 300.0, t
-                yield "late", 0.0, t + 0.26
-                yield event("run", t - 0.2, 480.0, "x", thread="other", lane=None)      # told a bucket after the lateness it ran over
+                yield event("run", t - 0.2, 480.0, "x", thread="other", lane=None)      # told after the lateness it ran over
             yield event("begin", t, row=0, length=8, lane=lane)
             for r in range(8):
                 yield event("run", t, ms, "b", r, key=key, demand="walk", asked="b", lane=lane)
@@ -186,18 +200,44 @@ def test_the_log_reads_the_same_however_few_walks_the_ledger_keeps(kept):
 
     walks = [("window", "k", 1.0), ("window", "k", 4.0), ("clip", "k", 1.0), ("window", "k", 4.0), ("clip", "k", 4.0),
              ("clip", "k", 1.0), ("window", "k2", 4.0), ("clip", "k", 4.0), ("window", "k2", 1.0), ("window", "k", 4.0)]
-    (all_, some), (whole, short) = (Ledger(), Ledger(walks=kept)), (Log(), Log())
-    for i, ev in enumerate(told(walks)):
-        for led, log in ((all_, whole), (some, short)):
+    short = Log().back(0.25)
+    ledgers = {(history, often): Ledger(walks=kept, history=history, watch=Log()) for history in (2400, short) for often in (True, False)}
+    for ev in told(walks):
+        for (_, often), led in ledgers.items():
             led.sample(*ev) if isinstance(ev, tuple) else led.event(ev)
-            log.read(led.view())
-        assert whole.entries == short.entries, (i, ev)
-    once = Log()
-    once.read(all_.view())
-    assert once.entries == whole.entries
-    assert {k: (e.count, e.holds) for k, e in whole.entries.items()} == {
+            if often:
+                led.view()
+    for led in ledgers.values():
+        led.end()
+    (first, entries), *others = ((led.view().first, led.view().found.entries) for led in ledgers.values())
+    assert all(e == entries for _, e in others) and first < others[-1][0]       # the shortest history had dropped its first buckets
+    assert {k: (e.count, e.holds) for k, e in entries.items()} == {
         ("slower", "node", "b"): (4, True),     # both lanes' slow walks, and the clip's last still slow
         ("restarts", "lane", "window"): (1, False), ("late", "node", "x"): (1, False)}
+
+
+def test_a_bucket_under_a_span_still_out_is_not_judged():
+    """A thread that says when it rests is under a span, for all the stream says, from its wake
+    until it says otherwise: a lateness over that time is judged once the span is told, and then
+    as a ledger read only at the end judges it."""
+    def told():
+        yield event("wake", 0.0)
+        yield "late", 400.0, 1.0
+        for i in range(1, 9):
+            yield "late", 0.0, 1.0 + i / 4      # the GUI thread's loop turning on
+        yield None
+        yield event("run", 0.5, 2000.0, "x")    # two seconds on its own CPU, told as it ends
+        yield "late", 0.0, 3.25
+
+    often, once = Ledger(watch=Log()), Ledger(watch=Log())
+    for item in told():
+        if item is None:
+            assert not often.view().found.entries and often.view().settled is None
+            continue
+        for led in (often, once):
+            led.sample(*item) if isinstance(item, tuple) else led.event(item)
+        often.view()
+    assert list(often.view().found.entries) == [("late", "node", "x")] and once.view().found.entries == often.view().found.entries
 
 
 def test_a_changed_param_between_two_walks_is_compared_with_nothing():
@@ -213,9 +253,9 @@ def test_a_changed_param_between_two_walks_is_compared_with_nothing():
     walk(g, range(8))
     first, second = led.view().walks
     assert second.nodes["slow"].runs[("run", "walk", "slow")].ms > 3 * first.nodes["slow"].runs[("run", "walk", "slow")].ms
-    assert not slower(led.view())
+    assert not seen(led.view())
     second.keys = first.keys
-    assert [p.subject for p in slower(View(0.25, 0, [], [first, second]))] == ["slow"]
+    assert list(seen(View(0.25, 0, [], [first, second]))) == [("slower", "slow")]
 
 
 def test_the_cold_projection_sums_what_the_plan_reaches_by_the_walk_each_node_last_ran_in():

@@ -11,6 +11,7 @@ import pytest
 from sieve_player import document as D
 from sieve_player.decoder import EndOfStream
 from sieve_player.graph import Graph, gated, nbytes
+from sieve_player.ledger import Ledger
 from sieve_player.stats import Stats
 from sieve_player.stream import NODE_FACTS, PLAN_FACTS, Event
 from sieve_player.plan import base_key, plan
@@ -451,7 +452,6 @@ def test_stats_counts_everything_over_a_short_walk(tmp_path):
     assert s["memo_mb"] > 0 and s["cache_mb"] > 0 and 0 < s["memo_hit"] < 1 and 0 < s["cache_hit"] < 1
     assert s["series_ms"] is None and s["evictions"] > 0    # no chain in this document
     g.compute("add", 0)                       # neither store holds row 0 any longer
-    from sieve_player.ledger import Ledger
     led = Ledger()
     for ev in events:
         led.event(ev)
@@ -610,18 +610,41 @@ def test_the_window_and_the_clip_are_one_walk_over_two_ranges():
     assert [r for n, r in runs if n == "gray"] == list(range(10))              # the window's six, then the clip's four the memo lacks
     assert [r for n, r in runs if n == "head"] == [2, 5, 2, 5, 8, 9]
     assert [ev.row for ev in events if ev.kind == "fold"] == list(range(6))
-    assert {ev.lane for ev in events} == {"window", "clip"}                    # each range's rows are its own lane
+    assert {ev.lane for ev in events if ev.kind not in ("rest", "wake")} == {"window", "clip"}                    # each range's rows are its own lane
     for lane, n in (("window", 6), ("clip", 10)):
         assert [(ev.row, ev.length) for ev in events if ev.kind == "progress" and ev.lane == lane] == [(i, n) for i in range(1, n + 1)]
     assert {ev.lane for ev in events if ev.kind == "fold" or ev.node == "gray" and ev.row < 6} == {"window"}
     assert {ev.lane for ev in events if ev.node == "gray" and ev.row >= 6} == {"clip"}
     assert [(ev.lane, ev.row, ev.length) for ev in events if ev.kind == "begin"] == [("window", 0, 6), ("clip", 0, 10)]
-    from sieve_player.ledger import Ledger
     led = Ledger()
     for ev in events:
         led.event(ev)
     window, clip = led.view().walks       # head's run after a range's last row is that range's, by the begin between them
     assert [sum(r.count for r in walk.nodes["head"].runs.values()) for walk in (window, clip)] == [2, 4]
+
+    def turn(w):
+        with w._cv:
+            serves, steps = w._turn()
+        for job, act in steps:
+            g.serving(serves, job.name)
+            act()
+
+    w, led = Worker(g, every=3), Ledger()      # its turns taken here: a range closed short says so, and its record is closed
+    g.on_event = led.event
+    w.set_window(2, 6)
+    w.walk_clip()
+    for _ in range(1 + 6 + 1 + 3):
+        turn(w)
+    w.stop_clip()
+    turn(w)
+    w.set_window(4, 6)
+    turn(w)
+    turn(w)
+    doc.disconnect("gray")                     # the walked node no longer fed: no row is left to walk
+    g.sync()
+    w.invalidate()
+    turn(w)
+    assert [(x.lane, x.done, x.length) for x in led.view().walks] == [("window", 6, 6), ("clip", 3, 3), ("window", 1, 1)]
 
 
 def test_a_tool_raising_indexerror_fails_the_walk_and_only_the_stream_end_closes_it():
@@ -636,6 +659,8 @@ def test_a_tool_raising_indexerror_fails_the_walk_and_only_the_stream_end_closes
     always.run = lambda series, params: 1 / 0
     doc = D.from_tools([gray, bad])
     g = Graph(doc, Dec(), {**TOOLS, "bad": bad, "always": always})
+    led = Ledger()
+    g.on_event = led.event
     w = Worker(g)
     failed, walked = [], []
     w.failed.connect(lambda r, n: failed.append((r, n)))
@@ -683,6 +708,8 @@ def test_a_tool_raising_indexerror_fails_the_walk_and_only_the_stream_end_closes
         time.sleep(0.01)
     w.stop()
     assert rows == [1] and len(failed) == 3
+    walks = led.view().walks
+    assert [(x.done, x.length) for x in (walks[0], walks[-1])] == [(2, 2), (2, 2)]     # raised under, by a row or by its chain, a range's record is closed where it stood
 
 
 def test_a_clip_stack_of_tables_is_counted_through_its_object_columns():
@@ -701,6 +728,8 @@ def test_a_clip_stack_of_tables_is_counted_through_its_object_columns():
     head.run = lambda series, params: {"signal": np.array([len(r) for r in series.data], np.float32)}
     doc = D.from_tools([gray, table, head])
     g = Graph(doc, Dec(), {**TOOLS, "table": table, "head": head})
+    led = Ledger()
+    g.on_event = led.event
     w = W.Worker(g)
     W.STACK_BYTES = 10_000           # ten rows of row 0's 424 B pass the forecast; the contours grow 400 B a row
     refused, walked, clips = [], [], []
@@ -721,6 +750,8 @@ def test_a_clip_stack_of_tables_is_counted_through_its_object_columns():
         W.STACK_BYTES = 512 << 20
     assert refused and refused[0].startswith("the clip's stack reached") and walked[-1][0] == walked[-1][1] < 10
     assert len(clips[-1]["head"]["signal"]) == walked[-1][0]
+    clip = led.view().walks[-1]
+    assert (clip.lane, clip.done, clip.length) == ("clip", walked[-1][0], walked[-1][0])       # refused, its record is closed at the rows it had
 
 
 def test_a_shown_table_walks_without_a_series_node():

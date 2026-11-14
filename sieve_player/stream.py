@@ -13,11 +13,13 @@ CACHE, DECODE, SEEK, READ = "cache", "decode", "seek", "read"
 SLOT, PAINT = "slot", "paint"
 DUMP, MONITOR = "dump", "monitor"
 SYNC, WATCH, EVICT, UNCACHE, BEGIN, PROGRESS = "sync", "watch", "evict", "uncache", "begin", "progress"
+REST, WAKE = "rest", "wake"
 
 NODES = (RUN, STEP, FOLD, ERROR, CANCEL, CACHE, DECODE, SEEK, READ)     # a node's spans of Emitter.probe: a tool's run and the video's or a served file's read
 TURNS = (SLOT, PAINT)           # the GUI thread's spans of Emitter.turn, a thread's own time under no node
 OWN = (DUMP, MONITOR)           # a reader's own work: the dump's writer, and the ledger's bookkeeping on a thread that emits
-INSTANTS = (SYNC, WATCH, EVICT, UNCACHE, BEGIN, PROGRESS)               # no duration: a boundary, a discard, a walk's beginning, its rows done
+INSTANTS = (SYNC, WATCH, EVICT, UNCACHE, BEGIN, PROGRESS, REST, WAKE)   # no duration: a boundary, a discard, a walk's beginning, its rows done,
+                                                                        # and a thread with nothing to do and with something again
 SPANS = (*NODES, *OWN, *TURNS)  # the kinds with a duration
 KINDS = (*SPANS, *INSTANTS)     # every value of Event.kind; a reader takes one by membership in a set drawn from these
 
@@ -102,6 +104,14 @@ class Emitter:
         if nid != self.watched:
             self.watched = nid
             self.emit(WATCH, nid, None, None, 0)
+
+    def rest(self, resting):
+        """This thread has nothing to do from here, or with `resting` false has something again: a
+        "rest" or a "wake". A thread that says either is one whose silence between the two is no
+        span still out, and whose silence after a wake may be; the worker says both, around its wait.
+        Neither serves anything nor is in a lane, whatever the thread did last."""
+        self._thread.serves = self._thread.lane = None
+        self.emit(REST if resting else WAKE, None, None, None, 0)
 
     def serving(self, what, lane=None):
         """What the events this thread emits from here on served, "scrub", "walk" or "bake", and the

@@ -118,7 +118,7 @@ PASSED_OVER = {     # the kinds a reader takes as nothing, by decision; one adde
     "ledger": set(),
     # the means are the tool's: a fold is not, nor a turn of the GUI thread's; an error is passed over as it was before
     "stats": {stream.SYNC, stream.WATCH, stream.EVICT, stream.UNCACHE, stream.BEGIN, stream.ERROR, stream.FOLD,
-              *stream.TURNS, *stream.OWN},
+              *stream.TURNS, *stream.OWN, stream.REST, stream.WAKE},
 }
 
 

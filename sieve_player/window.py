@@ -23,6 +23,7 @@ from PySide6.QtWidgets import QFileDialog, QHBoxLayout, QMainWindow, QProgressBa
 
 from . import bare, dev, document, held, store, theme
 from .canvas import Canvas
+from .catalogue import Log
 from .decoder import Decoder
 from .graph import Graph, nbytes
 from .ledger import Ledger
@@ -1005,7 +1006,7 @@ class PlayerWindow(QMainWindow):
               f"{decoder.count} rows claimed, luma plane {'read' if decoder.luma else 'converted'}; "
               f"memo {self.graph.memo.limit >> 30} GB, cache {decoder.cache_limit >> 30} GB", file=sys.stderr)
         # Attached for the video's life, read or not: docs/findings/2026-11-12-what-the-trace-costs.md. The sync below is its first plan.
-        self.ledger = Ledger(timed=lambda stream=self.stream: stream.turn("monitor", "ledger"))
+        self.ledger = Ledger(timed=lambda stream=self.stream: stream.turn("monitor", "ledger"), watch=Log())
         self.stream.on_event = self.ledger.event
         self.stream.watch(self.selection)
         if os.environ.get(DUMP_ENV):

@@ -24,7 +24,7 @@ from PySide6.QtWidgets import QApplication, QHBoxLayout, QPushButton, QSizePolic
 
 from .. import stream, theme
 from ..canvas import type_color
-from ..catalogue import (Log, alike, asked_of, bucket_row_ms, finished, gui, machine, realtime_multiple, resource_shares, rows,
+from ..catalogue import (Log, alike, asked_of, bucket_row_ms, gui, machine, realtime_multiple, resource_shares, rows,
                          size, store_name, stores_at, tight, unprobed_row_ms, walk_row_ms)
 from ..document import produces
 from ..ledger import coarsen, save
@@ -639,7 +639,7 @@ class Problems(QWidget):
     def refresh(self, window):
         entries = window.log.ordered()
         holds, cleared = [e for e in entries if e.holds], [e for e in entries if not e.holds]
-        judged = window.view is not None and bool(finished(window.view))
+        judged = window.view is not None and bool(window.log.checked)
         quiet = [k for k in (*window.log.classes, *window.log.spans) if k in window.log.checked and not any(e.problem.kind == k for e in entries)]
         drawn = self.lines.written, self.lines.picked
         self.lines.entries, self.lines.picked = holds, window.picked
@@ -922,7 +922,7 @@ class Window(QWidget):
 
     Paused, by `toggle_pause` or the axis scrolled back, which is one holding, it draws what it
     drew, `log` being the entries as they stood, and says how far behind now that is in the status,
-    the ruler and a tooltip, the ledger taking the stream and the log reading it for stderr, a copy
+    the ruler and a tooltip, the ledger taking the stream and its log's first sightings said on stderr, a copy
     and a history.
 
     What was just done is said in the status for SAID seconds. `source` may hold `worker`, which
@@ -939,11 +939,12 @@ class Window(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.source, self.clock = source, clock
         self.view, self.now, self._ledger = None, clock(), None
-        self.log = self._log = Log()        # what the parts read, and the one that reads the ledger: one Log but while paused
+        self.log = self._log = Log()        # what the parts read, and the ledger's as last polled: one Log but while paused
+        self._known = set()                 # the keys of the entries whose first sighting was said
         self.walk, self.rate, self.nodes, self.picked, self.marked, self._pick = None, None, {}, None, frozenset(), None
         self.marked_turns = frozenset()
         self.parts, self.compact, self._armed = [], False, None
-        self._judged, self._said, self._until = None, "", -math.inf     # (the view the log read last, its now); the status's word and when it lapses
+        self._judged, self._said, self._until = None, "", -math.inf     # (the view last polled, its now); the status's word and when it lapses
         self.setMinimumSize(*SMALLEST)
         self.resize(1200, 780)
         lay = QVBoxLayout(self)
@@ -1011,7 +1012,7 @@ class Window(QWidget):
         graph, ledger = self.source.graph, self.source.ledger
         if ledger is not self._ledger:
             self._ledger, self.view, self._judged, self._pick, self._armed = ledger, None, None, None, None
-            self.log = self._log = Log()
+            self.log, self._log, self._known = Log(), Log(), set()
             self.time.release()
         if graph is None or ledger is None:
             self.figure.set_figure(None)
@@ -1020,12 +1021,9 @@ class Window(QWidget):
             self._show()
         else:
             with graph.stream.turn(stream.SLOT, MONITOR):
-                if self.time.held is None:
-                    self.log = self._log
-                elif self.log is self._log:
-                    self.log = self._log.copy()
                 self._judge(ledger)
                 if self.time.held is None:
+                    self.log = self._log
                     self._read(graph)
         behind = 0.0 if self.time.held is None else self.clock() - self.now
         if behind != self.time.behind:
@@ -1052,9 +1050,13 @@ class Window(QWidget):
         self.status.setText(self._status())
 
     def _judge(self, ledger):
-        """Takes the ledger's view now into the log, paused or not, a first sighting a line on stderr."""
+        """Takes the ledger's view now and the log it found, paused or not, a first sighting a line on stderr."""
         self._judged = ledger.view(), self.clock()
-        for e in self._log.read(self._judged[0]):
+        self._log = self._judged[0].found or Log()
+        for key, e in self._log.entries.items():
+            if key in self._known:
+                continue
+            self._known.add(key)
             print(f"SIEVE {time.strftime('%H:%M:%S')}: monitor: {e.problem.kind} {e.problem.subject}: {e.problem.line}", file=sys.stderr)
 
     def _read(self, graph):
@@ -1113,7 +1115,7 @@ class Window(QWidget):
     @slotted
     def copy(self, keys=None):
         """Puts on the clipboard one report of the entries under `keys`, each a `Problem.key`, or
-        of every entry that holds, as the log read them last, and returns it; None with none. The
+        of every entry that holds, as the ledger's log held them at the last poll, and returns it; None with none. The
         history is written as `save_history` writes it and the report names the file, which holds
         the document; where the file cannot be written nothing is copied and None returned."""
         entries = [e for e in self._log.ordered() if (e.holds if keys is None else _key(e) in keys)]
@@ -1131,7 +1133,7 @@ class Window(QWidget):
 
     @slotted
     def save_history(self, folder=None):
-        """Writes the view the log read last, which while paused is later than the one drawn, with
+        """Writes the view last polled, which while paused is later than the one drawn, with
         the document and the rest of `context` to a file under `folder`, the system's temporary one
         when not given, puts its path on the clipboard and returns it; None with no video or where
         the file cannot be written."""

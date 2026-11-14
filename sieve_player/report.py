@@ -141,6 +141,6 @@ def text(entry, view, context=None):
 
 
 if __name__ == "__main__":
-    log = Log()
-    log.read(replay(sys.argv[1]).view())
-    print("\n".join(line(e) for e in log.ordered()) or "nothing found")
+    ledger = replay(sys.argv[1], watch=Log())
+    ledger.end()
+    print("\n".join(line(e) for e in ledger.view().found.ordered()) or "nothing found")

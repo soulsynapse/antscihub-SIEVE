@@ -116,7 +116,10 @@ class _Walk:
     stepped: dict = field(default_factory=dict)   # node -> _Stepped
 
     def begin(self, start, length, by=ASKED):
-        """Starts over `length` rows from `start`, dropping every row held, and tells the probe a walk began and `by` what."""
+        """Starts over `length` rows from `start`, dropping every row held, and tells the probe a walk
+        began and `by` what, or with no row to walk that the range it was short of is closed."""
+        if self.i < self.length and not length:
+            self.graph.progress(self.i, self.i, (self.bytes, STACK_BYTES))
         self.start, self.length = start, length
         self.drop()
         if length:
@@ -249,9 +252,10 @@ class _Walk:
         return any((e := self.graph.entry(nid)) is None or not e.steps or e.raw_key != key for nid, (key, _) in self.given.items())
 
     def halt(self):
-        """Stopped: the rows it has stand, and the count says so."""
+        """Stopped: the rows it has stand, and the count says so, to the window and to the probe."""
         self.length = self.i
         self.report()
+        self.graph.progress(self.i, self.length, (self.bytes, STACK_BYTES))
 
     def report(self):
         self.progress.emit(self.i, self.length, self.ran, self.served)
@@ -261,7 +265,6 @@ class _Walk:
         with its progress alone: the handlers that close on a tool's first raise must not raise on
         its second."""
         self.halt()
-        self.graph.progress(self.i, self.length, (self.bytes, STACK_BYTES))
         try:
             self.emit()
         except Exception as exc:
@@ -657,11 +660,16 @@ class Worker(QThread):
         """The loop: waits until a rung is due, takes its turn, and reads the asks again."""
         while True:
             with self._cv:
-                while not self._stop and (turn := self._turn()) is None:
-                    self._cv.wait()
-                if self._stop:
-                    self._bake.abandon("the video was closed")
-                    return
+                turn = None if self._stop else self._turn()
+            if turn is None:
+                self.graph.stream.rest(True)        # outside the lock: a reader of the stream may fold on this thread
+                with self._cv:
+                    while not self._stop and (turn := self._turn()) is None:
+                        self._cv.wait()
+                    if self._stop:
+                        self._bake.abandon("the video was closed")
+                        return
+                self.graph.stream.rest(False)
             serves, steps = turn
             self.graph.readers.reap()
             job = None

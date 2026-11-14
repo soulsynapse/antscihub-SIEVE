@@ -124,19 +124,19 @@ class _Run:
         self.doc = D.from_tools(list(self.tools.values()), self.path)
         self.doc.pinned = list(pinned)
         self.limits, self.worker, self.graph, self.dump = limits, None, None, None
-        self._open(Ledger(timed=lambda: self.stream.turn("monitor", "ledger")))
+        self._open(Ledger(timed=lambda: self.stream.turn("monitor", "ledger"), watch=Log()))
         self.machine = Watch(lambda *sample: self.ledger.sample(*sample), limits.get("sample", 1.0))     # one for the run: its counters take 0.4 s to open
         if served:      # baked on one graph and served on a fresh one, so no store holds what is upstream of it
             D.land(self.doc.node("bake"), self.bake())
             self._shut()
-            self._open(Ledger(timed=lambda: self.stream.turn("monitor", "ledger")))
+            self._open(Ledger(timed=lambda: self.stream.turn("monitor", "ledger"), watch=Log()))
 
     def _open(self, ledger):
         cache = self.limits.get("cache_bytes")
         self.stream = Emitter()
         self.graph = Graph(self.doc, Decoder(self.path, **({} if cache is None else {"cache_bytes": cache})), self.tools,
                            open_bake=self.store.open_bake, stream=self.stream, **{k: v for k, v in self.limits.items() if k == "memo_bytes"})
-        self.ledger, self.log, self.pace = ledger, Log(), Pace()
+        self.ledger, self.pace = ledger, Pace()
         self.stream.on_event = ledger.event
         self.graph.sync()       # the plan, into the ledger
         self.worker = Worker(self.graph, every=EVERY, store=self.store)
@@ -188,14 +188,14 @@ class _Run:
         return self.baked[0]
 
     def settle(self):
-        """Waits until the buckets written so far are settled, those a class reads after them begun, so a class that judges buckets has judged them."""
+        """Waits until the buckets written so far are settled, so the log has been told of them and of the walks over them."""
         now = int(time.perf_counter() // self.ledger.width)
-        self.wait(lambda: (v := self.ledger.view()).first + len(v.buckets) > now + 3, "the next buckets")
+        self.wait(lambda: (self.ledger.view().settled or 0) >= now, "the buckets to settle")
 
     def seen(self):
+        self.settle()
         view = self.ledger.view()
-        self.log.read(view)
-        return Seen(self.log, view, context(self.graph))
+        return Seen(view.found, view, context(self.graph))
 
     def fresh(self):
         """A new graph, decoder and worker under the ledger it has, so the next walk is cold in one history."""

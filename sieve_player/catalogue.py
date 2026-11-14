@@ -1,14 +1,15 @@
 r"""The catalogue: the detectors, each a function from a ledger's view to the problems it shows, and the
-log, one entry per class and subject. A class of CLASSES judges a finished walk and a problem of
-its is costed in ms a row of that walk, so problems rank against each other and against the walk; a
-class of SPANS judges the buckets, a walk over them or none. A class is entered with a simulation
-in dev/simulations.py, which proves it fires alone. No graph is held and no Qt reached. A
+log, one entry per class and subject, which a ledger tells of each bucket as it settles. A class
+of CLASSES judges a walk and a problem of its is costed in ms a row of that walk, so problems rank
+against each other and against the walk; a class of SPANS judges the buckets, a walk over them or
+none. A class is entered with a simulation in dev/simulations.py, which proves it fires alone. No
+graph is held and no Qt reached. A
 problem and a resource carry their own words; laying entries out as a report is report.py's.
 What a reader shows of a walk is a value here, `rows`, `naming`, `needs`, `asked_of`, `gui`, `machine`, `tight`,
 `alike`, so the monitor and whatever else draws a node read one figure.
 """
 import math
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from typing import NamedTuple
 
 from .ledger import PARTS, View, WalkId, quantile, stores_after
@@ -187,39 +188,9 @@ def asked_of(view):
     return out
 
 
-def finished(view):
-    """The walks a detector judges: every walk its lane has begun another after, and a lane's last
-    once it has done its range, of those that did PARTS rows; with fewer a walk has no row to each
-    part of its range and a rate a row of it is no figure, however it ended."""
-    last = {w.lane: w for w in view.walks}
-    return [w for w in view.walks if w.done >= PARTS and (w is not last[w.lane] or w.done >= w.length)]
-
-
-def _before(view, walk, baselines=None):
-    """((keys, length), whether replanned) of the walk `walk`'s lane walked before it, by `view`
-    or, the view no longer holding that walk, by `baselines` as `_baseline` takes them; None with none."""
-    prev = None
-    for w in view.walks:
-        if w.id == walk.id:
-            break
-        if w.lane == walk.lane:
-            prev = w
-    if prev is not None:
-        return (prev.keys, prev.length), prev.replanned
-    b = (baselines or {}).get(walk.lane, _NO_BASELINE)
-    return b.last if b.t0 < walk.t0 else None
-
-
-def _began_in(view, walk, baselines=None):
-    return int(walk.t0 // view.width) >= view.first
-
-
-def _not_replanned(view, walk, baselines=None):
-    return not walk.replanned
-
-
-def _under_one_plan(view, walk, baselines=None):
-    return walk.plan is not None and not walk.replanned
+def shut(view, walk):
+    """Whether `walk` takes no more rows: it has done its range, closed short of it or not, or its lane has begun another."""
+    return walk.done >= walk.length or any(w.lane == walk.lane and w.t0 > walk.t0 for w in view.walks)
 
 
 _UNPROBED = ("unprobed", "row")
@@ -245,7 +216,7 @@ def _rows_ran(walk):
 
 def _against(base, walk):
     """(what `walk`'s runs cost at `base`'s ms a run, what they cost, [(ms over the walk, ms a run
-    in `base`, in `walk`, the runs, node, kind)]) over what `base`, a `_baseline`, and `walk` both
+    in `base`, in `walk`, the runs, node, kind)]) over what `base`, a `_Baseline.of`, and `walk` both
     hold; None when no node ran in both."""
     now = _per(walk)
     moved = [((now[key][1] - base[key]) * now[key][0], base[key], now[key][1], now[key][0], *key) for key in base.keys() & now.keys()]
@@ -263,13 +234,16 @@ class _Baseline(NamedTuple):
     t0: float
     ms: dict            # (node, kind) -> ms a run in the latest whole walk in which it ran and which was not slower than this
     between: dict       # `_rows_ran` -> the ms a row no span covered in the latest such walk that cold
-    last: tuple | None = None   # ((keys, length), whether replanned) of the walk begun at `t0`, as `_before` gives one
+    last: tuple | None = None   # ((keys, length), whether replanned) of the walk begun at `t0`
 
     def of(self, walk):
         """{(node, kind): ms a run} as `_per` keys them, to hold `walk` against: the unprobed among
-        them only by a walk as cold as it, a row a store held leaving another time between rows."""
+        them only by a walk as cold as it, a row a store held leaving another time between rows.
+        None for a walk under other keys or of another length, or with nothing to hold it against."""
+        if (self.keys, self.length) != (walk.keys, walk.length):
+            return None
         cold = _rows_ran(walk)
-        return self.ms | ({_UNPROBED: self.between[cold]} if cold in self.between else {})
+        return (self.ms | ({_UNPROBED: self.between[cold]} if cold in self.between else {})) or None
 
     def after(self, w):
         """This with `w`, the lane's next walk, taken."""
@@ -277,7 +251,7 @@ class _Baseline(NamedTuple):
         if w.replanned:
             return self._replace(t0=w.t0, last=last)
         b = self if (w.keys, w.length) == (self.keys, self.length) else _Baseline(w.keys, w.length, w.t0, {}, {})
-        if 0 < w.length <= w.done and ((c := _against(b.of(w), w)) is None or c[1] < SLOWER * c[0]):
+        if 0 < w.length <= w.done and ((c := _against(b.of(w) or {}, w)) is None or c[1] < SLOWER * c[0]):
             per = {key: ms for key, (_, ms) in _per(w).items()}
             return b._replace(t0=w.t0, between=b.between | {_rows_ran(w): per.pop(_UNPROBED)}, ms=b.ms | per, last=last)
         return b._replace(t0=w.t0, last=last)
@@ -286,48 +260,53 @@ class _Baseline(NamedTuple):
 _NO_BASELINE = _Baseline(None, 0, float("-inf"), {}, {})
 
 
-def _baseline(view, walk, baselines=None):
-    """What `walk` is slower than or not, by `_Baseline.of`: its lane's walks before it under its
-    keys and of its length since the last under others, from where the lane's of `baselines` ends,
-    {lane: _Baseline} as a Log keeps them of walks the view may no longer hold, and else from the
-    view's first. So a slowdown that stays is one in every walk of it, and a walk a node was held
-    in is no baseline of that node's. None with no such walk."""
-    b = (baselines or {}).get(walk.lane, _NO_BASELINE)
-    if b.t0 >= walk.t0:
-        b = _NO_BASELINE
-    for w in view.walks:
-        if w.id == walk.id:
-            return (b.of(walk) if (b.keys, b.length) == (walk.keys, walk.length) else {}) or None
-        if w.lane == walk.lane and w.t0 > b.t0:
-            b = b.after(w)
-    return None
+@dataclass
+class Sofar:
+    """What a Log holds of a walk it has not judged for the last time: what the settled buckets
+    the walk ran over have shown, and what its classes have found of it."""
+    at: int | None = None                           # the first bucket not yet taken; None before any
+    both: float = 0.0                               # ms the tools' wait and the GUI thread's turns coincide, the lesser of the two bucket by bucket
+    by: dict = field(default_factory=dict)          # a turn -> its ms in the buckets they coincided in
+    calls: dict = field(default_factory=dict)       # a slot -> its spans begun over the walk, and under `ms` what they took
+    ms: dict = field(default_factory=dict)
+    found: dict = field(default_factory=dict)       # class -> the keys of the problems it has shown of the walk, for each class that could judge it
+    base: dict | None = None                        # what the walk is held against, a `_Baseline.of`, and `prev`, its lane's walk before it as `_Baseline.last`
+    prev: tuple | None = None
+
+    def take(self, view, walk, end):
+        """Takes the settled buckets `walk` has run over, through bucket `end` on the probe's clock, each once."""
+        lo = max(int(walk.t0 // view.width) if self.at is None else self.at, view.first)
+        hi = min(end, int(walk.t1 // view.width), view.first + len(view.buckets) - 1)
+        for b in view.buckets[lo - view.first:max(hi + 1 - view.first, 0)]:
+            if b.wait > 0 and b.turns:
+                self.both += min(b.wait, sum(b.turns.values()))
+                for name, ms in b.turns.items():
+                    self.by[name] = self.by.get(name, 0.0) + ms
+            for name, n in b.calls.items():
+                if name.startswith(SLOT + " "):
+                    self.calls[name], self.ms[name] = self.calls.get(name, 0) + n, self.ms.get(name, 0.0) + b.turns.get(name, 0.0)
+        if hi >= lo:
+            self.at = hi + 1
 
 
-def _comparable(view, walk, baselines=None):
+def _comparable(walk, sofar):
     if walk.keys is None or walk.replanned:
         return False
-    prev = _before(view, walk, baselines)
-    if prev is not None and prev[0] != (walk.keys, walk.length):
-        return not prev[1]
-    base = _baseline(view, walk, baselines) if 0 < walk.length <= walk.done else None
-    return base is not None and _against(base, walk) is not None
+    if sofar.prev is not None and sofar.prev[0] != (walk.keys, walk.length):
+        return not sofar.prev[1]
+    return 0 < walk.length <= walk.done and sofar.base is not None and _against(sofar.base, walk) is not None
 
 
-def _signalled(view, walk, baselines=None):
+def _signalled(walk, sofar):
     walked = walk.nodes.get((walk.plan or {}).get("walk"))
-    return walked is not None and 2 * (walked.ran + walked.served) >= walk.done and _began_in(view, walk)
+    return walked is not None and 2 * (walked.ran + walked.served) >= walk.done
 
 
-# A class -> whether it can say anything of a finished walk; a class not here can of every one.
-JUDGES = {"unread": _under_one_plan, "grows": _not_replanned, "slower": _comparable, "waits": _began_in, "signals": _signalled}
-
-
-def judged(kind, view, walks=None, baselines=None):
-    """The walks class `kind` can judge, of `walks` or of every finished walk of `view`, `baselines`
-    being as `_baseline` takes them. One it cannot is no evidence either way: it shows no problem
-    of the class and shows none gone."""
-    can = JUDGES.get(kind)
-    return [w for w in (finished(view) if walks is None else walks) if can is None or can(view, w, baselines)]
+# A class -> whether it can say anything of a walk; a class not here can of every one. A walk it
+# cannot is no evidence either way: it shows no problem of the class and shows none gone.
+JUDGES = {"unread": lambda walk, sofar: walk.plan is not None and not walk.replanned, "grows": lambda walk, sofar: not walk.replanned,
+          "slower": _comparable, "signals": _signalled}
+WHOLE = ("slower",)     # the classes of a whole walk, judged once and when it takes no more rows
 
 
 def _problem(kind, walk, subject, line, ms, evidence, says, target, nodes=(), subject_is=NODE, turns=()):
@@ -339,211 +318,179 @@ def _problem(kind, walk, subject, line, ms, evidence, says, target, nodes=(), su
 UNREAD = 0.25       # the share of a walk's cost under folds no watched node asked for, at which each is a problem
 
 
-def unread(view, walks=None, baselines=None):
+def unread(view, w, sofar=None):
     """Work no watched node and no walked node asked for: everything under a density's fold of a
     node neither pinned nor selected while the walk ran, the runs and decodes the fold opened with it.
     A span is charged to the fold that opened it, the first to read its node in the document's
     order, so the evidence names the other such folds that would open it were that one gone. A node
     with no fold span under its own fold had no plane to fold, and its line and target say so."""
-    out = []
-    for w in judged("unread", view, walks, baselines):
-        watched, by = {*w.plan["pinned"], *w.selected}, {}
-        for nid, node in w.nodes.items():
-            for u, r in node.runs.items():
-                if u.demand == "fold" and u.asked not in watched:
-                    by.setdefault(u.asked, []).append((r.ms, r.count, nid, u.kind))
-        if sum(r[0] for rs in by.values() for r in rs) < UNREAD * cost(w) or not cost(w):
-            continue
-        opens = {asked: _through(w.plan.get("nodes") or {}, [asked]) for asked in by}
-        for asked, rs in by.items():
-            rs.sort(reverse=True)
-            what = ", ".join(f"{n} {nid} {kind}" for _, n, nid, kind in rs)
-            too = {(nid, kind): "" if kind == FOLD else ", ".join(a for a in by if a != asked and nid in opens[a]) for _, _, nid, kind in rs}
-            plane = any(kind == FOLD for *_, kind in rs)
-            out.append(_problem("unread", w, asked, (f"{asked}'s density is folded and it is neither pinned nor selected: {what}" if plane else
-                                                     f"{asked} is computed for a density and its output is no plane, so none is folded: {what}"),
-                                sum(r[0] for r in rs),
-                                [f"{nid} {kind} x{n}: {ms:.1f} ms" + (f"; a fold of {too[nid, kind]} opens it too" if too[nid, kind] else "")
-                                 for ms, n, nid, kind in rs],
-                                "Computed on every row and read by nothing",
-                                f"the fold of {asked}" if plane else f"{asked}, which has no plane to fold", [r[2] for r in rs]))
+    out, watched, by = [], {*w.plan["pinned"], *w.selected}, {}
+    for nid, node in w.nodes.items():
+        for u, r in node.runs.items():
+            if u.demand == "fold" and u.asked not in watched:
+                by.setdefault(u.asked, []).append((r.ms, r.count, nid, u.kind))
+    if sum(r[0] for rs in by.values() for r in rs) < UNREAD * cost(w) or not cost(w):
+        return out
+    opens = {asked: _through(w.plan.get("nodes") or {}, [asked]) for asked in by}
+    for asked, rs in by.items():
+        rs.sort(reverse=True)
+        what = ", ".join(f"{n} {nid} {kind}" for _, n, nid, kind in rs)
+        too = {(nid, kind): "" if kind == FOLD else ", ".join(a for a in by if a != asked and nid in opens[a]) for _, _, nid, kind in rs}
+        plane = any(kind == FOLD for *_, kind in rs)
+        out.append(_problem("unread", w, asked, (f"{asked}'s density is folded and it is neither pinned nor selected: {what}" if plane else
+                                                 f"{asked} is computed for a density and its output is no plane, so none is folded: {what}"),
+                            sum(r[0] for r in rs),
+                            [f"{nid} {kind} x{n}: {ms:.1f} ms" + (f"; a fold of {too[nid, kind]} opens it too" if too[nid, kind] else "")
+                             for ms, n, nid, kind in rs],
+                            "Computed on every row and read by nothing",
+                            f"the fold of {asked}" if plane else f"{asked}, which has no plane to fold", [r[2] for r in rs]))
     return out
 
 
 THRASH = 0.25       # recomputations a row of the walk at which a store is a problem
 
 
-def thrash(view, walks=None, baselines=None):
+def thrash(view, w, sofar=None):
     """A store computing or decoding again what it had discarded: the memo, or a decoder's cache,
     the plate's under the video node and a served reader's under the served one."""
-    out = []
-    for w in judged("thrash", view, walks, baselines):
-        stores, need = stores_at(view, w.t1), None
-        for store, n in w.recomputed.items():
-            if n < THRASH * w.done:
-                continue
-            need = needs(view, w) if need is None else need
-            node = next((nid for nid, k in (w.keys or {}).items() if k == store), store)
-            held = f"; it held {stores[store][0] / 2**20:.1f} of {(stores[store][1] or 0) / 2**20:.1f} MB at the walk's end" if store in stores else ""
-            line = (f"the memo ran again {n} results it had discarded" if store == "memo" else
-                    f"{node}'s cache decoded again {n} rows it had discarded") + f", over {w.done} rows{held}"
-            name = "memo" if store == "memo" else f"{node} cache"
-            fits = store in need and store in stores and stores[store][1]
-            out.append(_problem("thrash", w, "memo" if store == "memo" else node, line, w.recomputed_ms.get(store, 0.0),
-                                [f"{n} recomputations, {w.recomputed_ms.get(store, 0.0):.1f} ms", f"store {store}"],
-                                f"The {name} is {'recomputing' if store == 'memo' else 'decoding again'} what it threw out",
-                                f"the {w.lane or 'walk'} needs {size(need[store])}, the {name} holds {size(stores[store][1])}"
-                                if fits else f"the {name}'s limit", () if store == "memo" else [node],
-                                STORE if store == "memo" else NODE))
+    out, stores, need = [], stores_at(view, w.t1), None
+    for store, n in w.recomputed.items():
+        if n < THRASH * w.done:
+            continue
+        need = needs(view, w) if need is None else need
+        node = next((nid for nid, k in (w.keys or {}).items() if k == store), store)
+        held = f"; it held {stores[store][0] / 2**20:.1f} of {(stores[store][1] or 0) / 2**20:.1f} MB at the walk's last row" if store in stores else ""
+        line = (f"the memo ran again {n} results it had discarded" if store == "memo" else
+                f"{node}'s cache decoded again {n} rows it had discarded") + f", over {w.done} rows{held}"
+        name = "memo" if store == "memo" else f"{node} cache"
+        fits = store in need and store in stores and stores[store][1]
+        out.append(_problem("thrash", w, "memo" if store == "memo" else node, line, w.recomputed_ms.get(store, 0.0),
+                            [f"{n} recomputations, {w.recomputed_ms.get(store, 0.0):.1f} ms", f"store {store}"],
+                            f"The {name} is {'recomputing' if store == 'memo' else 'decoding again'} what it threw out",
+                            f"the {w.lane or 'walk'} needs {size(need[store])}, the {name} holds {size(stores[store][1])}"
+                            if fits else f"the {name}'s limit", () if store == "memo" else [node],
+                            STORE if store == "memo" else NODE))
     return out
 
 
-GROWS = 3.0         # a node's ms a run over the last quarter of the range against the first
+GROWS = 3.0         # a node's ms a run over the last quarter of the range it has run in against the first
+GROWS_BEFORE = GROWS ** 0.5     # and over the quarter before the last, so one long call at the rows last walked is no growth
 GROWS_SHARE = 0.1   # and the share of the walk's cost the growth is, below which it is not a problem
 
 
-def grows(view, walks=None, baselines=None):
+def grows(view, w, sofar=None):
     """A node whose cost a run grows along the range, a chain node run whole over the rows so far
     being the known case; read off the parts of the range its spans fell in, so rows a store held
     are not taken for cheap ones. A walk that went on after a sync is not judged: a node the new
     plan steps again from the range's first row does it all where the walk then stood."""
-    out = []
-    for w in judged("grows", view, walks, baselines):
-        total = cost(w)
-        for nid, node in w.nodes.items():
-            per = [ms / n for ms, n in zip(node.parts, node.counts) if n]
-            k = len(per) // 4
-            if not k:
-                continue
-            first, last = sum(per[:k]) / k, sum(per[-k:]) / k
-            over = sum(node.parts) - first * sum(node.counts)
-            if last < GROWS * first or over < GROWS_SHARE * total or not over:
-                continue
-            p = ((w.plan or {}).get("nodes") or {}).get(nid) or {}
-            whole = "; the plan runs it whole at every emit" if p.get("kind") == "series" and not p.get("steps") else ""
-            out.append(_problem("grows", w, nid, f"{nid} costs {last:.2f} ms a run at the range's end against {first:.2f} "
-                                f"at its start{whole}", over, ["ms a run along the range: " + " ".join(f"{x:.2f}" for x in per)],
-                                "Costs more a row the further the walk goes",
-                                nid + (", run whole at every emit" if whole else ""), [nid]))
+    out, total = [], cost(w)
+    for nid, node in w.nodes.items():
+        per = [ms / n for ms, n in zip(node.parts, node.counts) if n]
+        k = len(per) // 4
+        if not k:
+            continue
+        first, before, last = sum(per[:k]) / k, sum(per[-2 * k:-k]) / k, sum(per[-k:]) / k
+        over = sum(node.parts) - first * sum(node.counts)
+        if last < GROWS * first or before < GROWS_BEFORE * first or over < GROWS_SHARE * total or not over:
+            continue
+        p = ((w.plan or {}).get("nodes") or {}).get(nid) or {}
+        whole = "; the plan runs it whole at every emit" if p.get("kind") == "series" and not p.get("steps") else ""
+        out.append(_problem("grows", w, nid, f"{nid} costs {last:.2f} ms a run at the last rows walked against {first:.2f} "
+                            f"at the range's start{whole}", over, ["ms a run along the range: " + " ".join(f"{x:.2f}" for x in per)],
+                            "Costs more a row the further the walk goes",
+                            nid + (", run whole at every emit" if whole else ""), [nid]))
     return out
 
 
 SEEKS = 1           # the seeks a walk may make on one node: the one a walk beginning mid-clip opens with
 
 
-def seeks(view, walks=None, baselines=None):
+def seeks(view, w, sofar=None):
     """The walk's cursor seeking, on the plate's decoder or a served reader's."""
     out = []
-    for w in judged("seeks", view, walks, baselines):
-        for nid, node in w.nodes.items():
-            rs = [(u.demand, u.asked, r.count, r.ms) for u, r in node.runs.items() if u.kind == SEEK]
-            n = sum(r[2] for r in rs)
-            if n > SEEKS:
-                out.append(_problem("seeks", w, nid, f"the walk's cursor on {nid} sought {n} times over {w.done} rows",
-                                    sum(r[3] for r in rs), [f"under the {d} of {a}: {c} seeks, {ms:.1f} ms" for d, a, c, ms in rs],
-                                    "The walk's reads jump around the file instead of running forward",
-                                    f"the reads of {nid}", [nid]))
+    for nid, node in w.nodes.items():
+        rs = [(u.demand, u.asked, r.count, r.ms) for u, r in node.runs.items() if u.kind == SEEK]
+        n = sum(r[2] for r in rs)
+        if n > SEEKS:
+            out.append(_problem("seeks", w, nid, f"the walk's cursor on {nid} sought {n} times over {w.done} rows",
+                                sum(r[3] for r in rs), [f"under the {d} of {a}: {c} seeks, {ms:.1f} ms" for d, a, c, ms in rs],
+                                "The walk's reads jump around the file instead of running forward",
+                                f"the reads of {nid}", [nid]))
     return out
 
 
-def slower(view, walks=None, baselines=None):
-    """A whole walk that costs more than its `_baseline`, whatever the cause: each node's ms a run
-    in what the baseline holds of it, so a walk colder than those before is not a slower one, and
-    the ms a row no span covers, under the subject "unprobed"."""
-    out = []
-    for w in judged("slower", view, walks, baselines):
-        base = _baseline(view, w, baselines)
-        against = None if base is None else _against(base, w)      # with no baseline, another plan or range: there is nothing it is slower than
-        if against is None or against[1] < SLOWER * against[0]:
-            continue
-        expected, actual, moved = against
-        moved.sort(reverse=True)
-        _, a, b, _, nid, kind = moved[0]
-        between = (nid, kind) == _UNPROBED
-        out.append(_problem("slower", w, nid, f"a row costs {actual / w.done:.2f} ms in what ran before under this plan against "
-                            f"{expected / w.done:.2f} at what each cost in the lane's last walk that ran it and was not itself slower; {nid} went from {a:.2f} to "
-                            f"{b:.2f} ms a {kind}", actual - expected,
-                            [f"{n} {k}: {x:.3f} to {y:.3f} ms, {d:+.1f} ms over the walk" for d, x, y, _, n, k in moved],
-                            "Slower than it was under the same settings",
-                            "the time between rows, in no node" if between else nid,
-                            [n for d, _, _, _, n, k in moved if d > 0 and (n, k) != _UNPROBED], BETWEEN if between else NODE))
-    return out
+def slower(view, w, sofar):
+    """A whole walk that costs more than its lane's baseline, `sofar.base`, whatever the cause:
+    each node's ms a run in what the baseline holds of it, so a walk colder than those before is
+    not a slower one, and the ms a row no span covers, under the subject "unprobed"."""
+    against = None if sofar.base is None else _against(sofar.base, w)      # with no baseline, another plan or range: there is nothing it is slower than
+    if against is None or against[1] < SLOWER * against[0]:
+        return []
+    expected, actual, moved = against
+    moved.sort(reverse=True)
+    _, a, b, _, nid, kind = moved[0]
+    between = (nid, kind) == _UNPROBED
+    return [_problem("slower", w, nid, f"a row costs {actual / w.done:.2f} ms in what ran before under this plan against "
+                     f"{expected / w.done:.2f} at what each cost in the lane's last walk that ran it and was not itself slower; {nid} went from {a:.2f} to "
+                     f"{b:.2f} ms a {kind}", actual - expected,
+                     [f"{n} {k}: {x:.3f} to {y:.3f} ms, {d:+.1f} ms over the walk" for d, x, y, _, n, k in moved],
+                     "Slower than it was under the same settings",
+                     "the time between rows, in no node" if between else nid,
+                     [n for d, _, _, _, n, k in moved if d > 0 and (n, k) != _UNPROBED], BETWEEN if between else NODE)]
 
 
 WAITS = 0.1         # the tools' waits that coincide with the GUI thread's spans, as a share of the walk's cost
 TICK = 16.0         # ms; the CPU clock's step on Windows, see Event.cpu_ms: a walk's wait under one is not a figure
 
 
-def waits(view, walks=None, baselines=None):
-    """The worker waiting on the GUI thread: over the buckets a walk spans, what its tools spent
-    off their own CPU while the GUI thread was in a slot or a paint, the lesser of the two in each
-    bucket and no more than the walk's own wait, which is the steadier figure. A read's wait is the
-    decoder's threads and is not counted; a tool that sleeps coincides with nothing. A walk whose
-    beginning the view's buckets no longer reach is not judged."""
-    out = []
-    for w in judged("waits", view, walks, baselines):
-        both, by = 0.0, {}
-        for b in span(view, w):
-            if b.wait > 0 and b.turns:
-                both += min(b.wait, sum(b.turns.values()))
-                for name, ms in b.turns.items():
-                    by[name] = by.get(name, 0.0) + ms
-        both = min(both, w.wait)
-        if both < max(TICK, WAITS * cost(w)):
-            continue
-        top = sorted(by.items(), key=lambda x: -x[1])
-        out.append(_problem("waits", w, top[0][0], f"the walk's tools waited {both:.0f} ms off their CPU while the GUI thread "
-                            f"was in its own spans, {top[0][0]} the longest at {top[0][1]:.0f} ms", both,
-                            [*(f"{name}: {ms:.1f} ms" for name, ms in top),
-                             f"the walk's tools {w.wait:.1f} ms off their CPU, its reads {w.read_wait:.1f}"],
-                            "The walk waits while the interface thread is busy",
-                            "the " + " ".join(reversed(top[0][0].split(" ", 1))), subject_is=TURN, turns=[top[0][0]]))
-    return out
+def waits(view, w, sofar):
+    """The worker waiting on the GUI thread: over the settled buckets a walk has run over, what its
+    tools spent off their own CPU while the GUI thread was in a slot or a paint, the lesser of the
+    two in each bucket and no more than the walk's own wait, which is the steadier figure. A read's
+    wait is the decoder's threads and is not counted; a tool that sleeps coincides with nothing."""
+    both = min(sofar.both, w.wait)
+    if not sofar.by or both < max(TICK, WAITS * cost(w)):
+        return []
+    top = sorted(sofar.by.items(), key=lambda x: -x[1])
+    return [_problem("waits", w, top[0][0], f"the walk's tools waited {both:.0f} ms off their CPU while the GUI thread "
+                     f"was in its own spans, {top[0][0]} the longest at {top[0][1]:.0f} ms", both,
+                     [*(f"{name}: {ms:.1f} ms" for name, ms in top),
+                      f"the walk's tools {w.wait:.1f} ms off their CPU, its reads {w.read_wait:.1f}"],
+                     "The walk waits while the interface thread is busy",
+                     "the " + " ".join(reversed(top[0][0].split(" ", 1))), subject_is=TURN, turns=[top[0][0]])]
 
 
 SIGNALS = 0.04      # a slot's own spans as a share of the walk's cost, at which one run at most rows is a problem
 BRIEF = 1.0         # ms a call; a slot longer than this holds the interpreter and is waits' to find
 
 
-def signals(view, walks=None, baselines=None):
+def signals(view, w, sofar):
     """A slot of the GUI thread's run at one row in two of a walk or oftener, brief each time: a
-    worker signal a row, which a walk of short rows pays for at each. The cost is the slot's own spans and so the
-    floor: the interpreter changing hands at every call lands in the tools' spans and has no figure
-    of its own. Those spans are the GUI thread's and no part of what the walk's nodes cost, so the problem has no share. A walk whose walked node the stores held on more than half its rows is not judged, being over either way,
-    nor one whose beginning the view's buckets no longer reach."""
+    worker signal a row, which a walk of short rows pays for at each. The cost is the slot's own
+    spans and so the floor: the interpreter changing hands at every call lands in the tools' spans
+    and has no figure of its own. Those spans are the GUI thread's and no part of what the walk's
+    nodes cost, so the problem has no share. A walk whose walked node the stores held on more than
+    half its rows is not judged, being over either way."""
     out = []
-    for w in judged("signals", view, walks, baselines):
-        ms, calls = {}, {}
-        for b in span(view, w):
-            for name, n in b.calls.items():
-                if name.startswith(SLOT + " "):
-                    calls[name], ms[name] = calls.get(name, 0) + n, ms.get(name, 0.0) + b.turns.get(name, 0.0)
-        for name, n in calls.items():
-            if 2 * n < w.done or ms[name] > BRIEF * n or ms[name] < SIGNALS * cost(w):
-                continue
-            slot = name.split(" ", 1)[1]
-            p = _problem("signals", w, name, f"the {slot} slot ran {n} times over the walk's {w.done} rows, "
-                         f"{ms[name] / n * 1000:.0f} us each", ms[name],
-                         [f"{name}: {n} calls, {ms[name]:.1f} ms", f"the walk: {(w.t1 - w.t0) * 1000 / w.done:.3f} ms a row of wall"],
-                         "The interface is told of every row, and a row is short enough to feel it",
-                         f"how often {slot} is signalled", subject_is=TURN, turns=[name])
-            out.append(replace(p, share=None))
+    for name, n in sofar.calls.items():
+        ms = sofar.ms[name]
+        if 2 * n < w.done or ms > BRIEF * n or ms < SIGNALS * cost(w):
+            continue
+        slot = name.split(" ", 1)[1]
+        p = _problem("signals", w, name, f"the {slot} slot ran {n} times over the walk's {w.done} rows, "
+                     f"{ms / n * 1000:.0f} us each", ms,
+                     [f"{name}: {n} calls, {ms:.1f} ms", f"the walk: {(w.t1 - w.t0) * 1000 / w.done:.3f} ms a row of wall"],
+                     "The interface is told of every row, and a row is short enough to feel it",
+                     f"how often {slot} is signalled", subject_is=TURN, turns=[name])
+        out.append(replace(p, share=None))
     return out
 
 
-# Each takes a view, the walks of it to judge, every finished one when none are given, and the baselines `judged` takes, and judges those `judged` gives of them.
+# Each takes a view, one walk of it with PARTS rows done or more that its JUDGES entry passes, and the Log's Sofar of that walk.
 CLASSES = {"unread": unread, "thrash": thrash, "grows": grows, "seeks": seeks, "slower": slower, "waits": waits, "signals": signals}
 
 
-AHEAD = 1           # the buckets after its own a class of SPANS may read
-
-
-def _settled(view, start=None):
-    """(index on the probe's clock, bucket) of the buckets of `view` a class of SPANS judges, those
-    from index `start` on, or all: every one with AHEAD after it before the view's last, which the
-    ledger is still writing, so what a class reads of a bucket is the same in every later view."""
-    at = 0 if start is None else max(start - view.first, 0)
-    return [(view.first + i, view.buckets[i]) for i in range(at, len(view.buckets) - 1 - AHEAD)]
+BACK = 8.0          # s behind the bucket it judges that a class of SPANS reads; a ledger's history is never shorter
 
 
 def _spanned(kind, view, i, subject, subject_is, line, ms, rows, evidence, says, target, nodes=(), turns=()):
@@ -551,29 +498,37 @@ def _spanned(kind, view, i, subject, subject_is, line, ms, rows, evidence, says,
                    i * view.width, says, target, tuple(nodes), tuple(turns))
 
 
+def _range(view, first, last):
+    """(index on the probe's clock, bucket) of the buckets of `view` from index `first` through `last`."""
+    lo, hi = max(first - view.first, 0), min(last - view.first, len(view.buckets) - 1)
+    return [(view.first + i, view.buckets[i]) for i in range(lo, hi + 1)]
+
+
 LATE = 100.0        # ms the GUI thread's timer fires late at which a user feels it; what a heavy walk ordinarily leaves is under it
 COVERS = 0.5        # the share of a lateness a turn's ms or a node's one call is, at which it is what the GUI thread was late under
 
 
-def late(view, start=None):
-    """The GUI thread late past LATE, with a walk or without one, a problem for each settled bucket
-    that sampled it so. Its subject is what the buckets hold over the lateness: the turn whose ms
-    cover it; else the node one call of which ran as long on its own CPU, so holding the
-    interpreter; else that no span of the stream covers it. Its cost is the lateness over the rows
-    the lanes finished across it."""
+def late(view, first, last):
+    """The GUI thread late past LATE, with a walk or without one, a problem for each bucket from
+    `first` through `last` that sampled it so. Its subject is what the buckets hold over the
+    lateness, no further back than BACK: the turn whose ms cover it; else the node one call of
+    which, begun before the bucket's end, ran as long on its own CPU, so holding the interpreter;
+    else that no span of the stream covers it. Its cost is the lateness over the rows the lanes
+    finished across it."""
     out = []
-    for i, b in _settled(view, start):
+    for i, b in _range(view, first, last):
         if b.late < LATE:
             continue
         at = i - view.first
-        over = view.buckets[max(at - math.ceil(b.late / 1000 / view.width), 0):at + 1]
+        back = max(at - math.ceil(min(b.late / 1000, BACK) / view.width), 0)
+        over = view.buckets[back:at + 1]
         turns, calls = {}, {}
         for x in over:
             for name, ms in x.turns.items():
                 turns[name] = turns.get(name, 0.0) + ms
-        for x in (*over, *view.buckets[at + 1:at + 1 + AHEAD]):     # a call that held the interpreter may be told of after the sample it made late
-            for nid, (ms, cpu) in x.longest.items():
-                if cpu >= COVERS * ms and ms > calls.get(nid, 0.0):
+        for x in view.buckets[back:]:       # a call that held the interpreter is told of as it ends, the sample it made late behind it
+            for nid, (ms, cpu, t) in x.longest.items():
+                if t < (i + 1) * view.width and cpu >= COVERS * ms and ms > calls.get(nid, 0.0):
                     calls[nid] = ms
         turn, call = max(turns.items(), key=lambda x: x[1], default=("", 0.0)), max(calls.items(), key=lambda x: x[1], default=("", 0.0))
         evidence = [f"late {b.late:.0f} ms", *(f"{name}: {ms:.1f} ms" for name, ms in sorted(turns.items(), key=lambda x: -x[1])),
@@ -599,14 +554,14 @@ _BEGAN = {ASKED: "an ask that named neither a hand nor an edit", GIVEN: "what th
           SHAPE: "the nodes or the shape changed under the walk"}
 
 
-def restarts(view, start=None):
+def restarts(view, first, last):
     """A lane begun again and again by no hand of the user's with few rows finished: for each
-    settled bucket in which such a walk began, RESTARTS of them or more over the RESTARTS_OVER
-    seconds to it, the lane finishing fewer than PARTS rows a beginning, which is a walk no class
-    judges. A begin by a hand or an edit is not counted, however many, nor one that says not what
-    began it. Its cost is what every node ran over those seconds, over the rows the lane finished."""
+    bucket from `first` through `last` in which such a walk began, RESTARTS of them or more over
+    the RESTARTS_OVER seconds to it, the lane finishing fewer than PARTS rows a beginning. A begin
+    by a hand or an edit is not counted, however many, nor one that says not what began it. Its
+    cost is what every node ran over those seconds, over the rows the lane finished."""
     out, k = [], max(round(RESTARTS_OVER / view.width), 1)
-    for i, b in _settled(view, start):
+    for i, b in _range(view, first, last):
         at = i - view.first
         over = view.buckets[max(at - k + 1, 0):at + 1]
         for lane, began in b.begins.items():
@@ -628,17 +583,17 @@ def restarts(view, start=None):
     return out
 
 
-# Each takes a view and the index of the first bucket to judge, every settled one when none is given, and judges no walk.
+# Each takes a view and the indices of the first and the last bucket to judge, and judges no walk.
 SPANS = {"late": late, "restarts": restarts}
-STILL = 5.0         # s to a view's end inside which a problem of a class of SPANS, seen, still holds
+STILL = 5.0         # s to the last settled bucket's end inside which a problem of a class of SPANS, seen, still holds
 
 
 @dataclass
 class Entry:
-    problem: Problem        # its latest sighting, of those that hold while any does
+    problem: Problem        # its latest sighting
     first: float            # the first sighting's t
     count: int = 0          # the walks it was seen in; of a class of SPANS the buckets
-    holds: bool = True      # whether, in any lane, the last walk its class could judge shows it; of a class of SPANS whether it was seen inside STILL
+    holds: bool = True      # whether a walk still walking has shown it or, in any lane, the last walk its class could judge did; of a class of SPANS whether it was seen inside STILL
 
     def seen(self):
         """How often it was seen, as written."""
@@ -646,99 +601,101 @@ class Entry:
 
 
 class Log:
-    """The problems the catalogue has surfaced, one Entry per class and subject, by `Problem.key`. `read(view)` may
-    be called on any view of one ledger any number of times: a walk counts once toward an entry
-    however often it is read, and one its lane has begun another after, which no later event
-    changes, is judged in the first read that finds it so and never again. An entry holds while
-    any lane's last walk its class could judge, by `judged`, paid it: a walk the subject was held
-    throughout clears it, and the next that pays it has it hold again, its count kept. What a
-    walk is slower than is kept as the walks are read, so it is the same whatever the history holds.
-    A class of `spans` judges each bucket once, in the first read that finds it settled, so its
-    entries too are the same however often the log reads; `classes` given, `spans` is none but
-    those given with them."""
+    """The problems the catalogue has surfaced, one Entry per class and subject, by `Problem.key`:
+    a fold of the stream, made by the ledger it is the `watch` of, which calls `settled` in the
+    stream's order, so the entries are the same whatever history the ledger keeps and whenever it
+    is read. A reader takes `copy()`, a view's `found`, and judges nothing.
+
+    A class of `classes` has one reading, of a walk with PARTS rows done as each bucket it has run
+    over settles and once more when it takes no more rows and its last bucket has: what it shows at
+    any of those is found, and stands; a walk counts once toward an entry. A class of WHOLE is
+    judged at the last alone. An entry holds while a walk not yet judged for the last time has
+    shown it, or the last walk of any lane that its class could judge did. A class of `spans`
+    judges each bucket once, as it settles; `classes` given, `spans` is none but those given."""
 
     def __init__(self, classes=None, spans=None):
         self.classes = CLASSES if classes is None else classes
         self.spans = (SPANS if classes is None else {}) if spans is None else spans
-        self._spanned = 0       # the index of the first bucket no class of `spans` has judged
         self.entries = {}       # a Problem's key -> Entry
-        self.checked = set()    # the classes that have judged a walk
-        self._seen = {}         # a walk's id -> the entries it has counted toward
-        self._settled = set()   # the ids of the walks judged for the last time
-        self._shows = {}        # (class, a walk's id) -> {a Problem's key: Problem} as the class last judged it
-        self._latest = {}       # (lane, class) -> the id of the lane's last walk the class judged, kept when the history no longer holds the walk
-        self._baselines = {}    # lane -> _Baseline through the last of the lane's walks read that it had begun another after
-        self._last = {}         # lane -> its last walk as last read, for the baseline should the history drop it as the lane begins another
+        self.checked = set()    # the classes that have judged a walk or a bucket
+        self._spanned = None    # the index of the first bucket no class of `spans` has judged
+        self._sofar = {}        # a walk's id -> Sofar, of the walks not judged for the last time
+        self._final = set()     # the ids of those that were, while the ledger holds them
+        self._held = {}         # (lane, class) -> the keys the lane's last walk the class could judge showed
+        self._baselines = {}    # lane -> _Baseline through its last walk judged for the last time
 
-    def read(self, view):
-        """Takes what `view` shows into the entries and returns those it made, the first sightings."""
-        made, last = [], {w.lane: w for w in view.walks}
-        judge = [w for w in finished(view) if w.id not in self._settled]
-        for kind, detect in self.classes.items():
-            can = judged(kind, view, judge, self._baselines)
-            for w in can:
-                self.checked.add(kind)
-                self._shows[kind, w.id] = {}
-                was = self._latest.get((w.lane, kind))
-                if was is None or w.t0 >= was.t0:
-                    self._latest[w.lane, kind] = w.id
-            for p in detect(view, can, self._baselines):
-                key = p.key
-                e = self.entries.get(key)
-                if e is None:
-                    e = self.entries[key] = Entry(p, p.t)
-                    made.append(e)
-                seen = self._seen.setdefault(p.walk, set())
-                if key not in seen:
-                    seen.add(key)
-                    e.count += 1
-                self._shows.setdefault((kind, p.walk), {})[key] = p
-                if p.walk.t0 >= e.problem.walk.t0:
-                    e.problem = p
-        if view.buckets:
-            end = view.first + len(view.buckets) - 1 - AHEAD
+    def back(self, width):
+        """The buckets of `width` seconds behind the one it judges that a class may read."""
+        return math.ceil(BACK / width) + 1
+
+    def final(self, wid):
+        """Whether the walk of id `wid` has been judged for the last time."""
+        return wid in self._final
+
+    def settled(self, view, upto=None):
+        """Takes into the entries what `view` shows through bucket `upto` on the probe's clock, the
+        last settled, or through everything it holds when the stream has ended and `upto` is None."""
+        n = len(view.buckets)
+        end = view.first + n - 1 if upto is None else min(upto, view.first + n - 1)
+        if n and end >= view.first:
+            start = view.first if self._spanned is None else self._spanned
             for kind, detect in self.spans.items():
-                if self._spanned < end:
+                if start <= end:
                     self.checked.add(kind)
-                for p in detect(view, self._spanned):
-                    e = self.entries.get(p.key)
-                    if e is None:
-                        e = self.entries[p.key] = Entry(p, p.t)
-                        made.append(e)
+                for p in detect(view, start, end):
+                    e = self._sight(p)
                     e.count += 1
-                    if p.t >= e.problem.t:
-                        e.problem = p
-            self._spanned = max(self._spanned, end)
-        latest = {(kind, wid) for (_, kind), wid in self._latest.items()}
+            self._spanned = max(end + 1, start)
+        for w in view.walks:
+            if w.id in self._final or not w.done:
+                continue
+            s = self._sofar.setdefault(w.id, Sofar())
+            s.take(view, w, end)
+            final = shut(view, w) and (upto is None or w.t1 // view.width <= upto)
+            b = self._baselines.get(w.lane, _NO_BASELINE)
+            s.base, s.prev = b.of(w), b.last
+            if w.done >= PARTS:
+                for kind, detect in self.classes.items():
+                    if kind in WHOLE and not final or kind in JUDGES and not JUDGES[kind](w, s):
+                        continue
+                    self.checked.add(kind)
+                    keys = s.found.setdefault(kind, set())
+                    for p in detect(view, w, s):
+                        e = self._sight(p)
+                        if p.key not in keys:
+                            keys.add(p.key)
+                            e.count += 1
+            if final:
+                for kind, keys in s.found.items():
+                    self._held[w.lane, kind] = keys
+                self._baselines[w.lane] = b.after(w)
+                self._final.add(w.id)
+                del self._sofar[w.id]
+        held = {w.id for w in view.walks}
+        self._final &= held
+        self._sofar = {wid: s for wid, s in self._sofar.items() if wid in held}
+        shown = {key for s in self._sofar.values() for keys in s.found.values() for key in keys}
+        shown |= {key for keys in self._held.values() for key in keys}
         for key, e in self.entries.items():
             if key[0] in self.spans:
-                if view.buckets:
-                    e.holds = (view.first + len(view.buckets)) * view.width - e.problem.t <= STILL
-                continue
-            shown = [self._shows[at][key] for at in latest if key in self._shows.get(at, ())]
-            e.holds = bool(shown)
-            if shown:
-                e.problem = max(shown, key=lambda p: p.walk.t0)
-        held = {w.id for w in view.walks}
-        self._seen = {wid: s for wid, s in self._seen.items() if wid in held}
-        self._shows = {at: s for at, s in self._shows.items() if at[1] in held or at in latest}
-        self._settled = (self._settled | {w.id for w in judge if w is not last[w.lane]}) & held
-        dropped = [w for w in self._last.values() if w.id not in held]
-        for w in (*dropped, *view.walks):
-            b = self._baselines.get(w.lane, _NO_BASELINE)
-            if w is not last.get(w.lane) and w.t0 > b.t0:
-                self._baselines[w.lane] = b.after(w)
-        self._last = last
-        return made
+                if n:
+                    e.holds = (end + 1) * view.width - e.problem.t <= STILL
+            else:
+                e.holds = key in shown
+
+    def _sight(self, p):
+        """The entry of `p`, made if it is the first sighting, its problem `p` unless it has a later one."""
+        e = self.entries.get(p.key)
+        if e is None:
+            e = self.entries[p.key] = Entry(p, p.t)
+        elif p.t >= e.problem.t:
+            e.problem = p
+        return e
 
     def copy(self):
-        """A Log of the entries as they now stand, a reader's to hold while this one reads on."""
+        """A Log of the entries as they now stand, a reader's to hold while this one is told on; it is not one to tell."""
         out = Log(self.classes, self.spans)
-        out._spanned = self._spanned
         out.entries, out.checked = {key: replace(e) for key, e in self.entries.items()}, set(self.checked)
-        out._seen, out._settled = {wid: set(s) for wid, s in self._seen.items()}, set(self._settled)
-        out._shows, out._latest = {at: dict(s) for at, s in self._shows.items()}, dict(self._latest)
-        out._baselines, out._last = dict(self._baselines), dict(self._last)
         return out
 
     def ordered(self):

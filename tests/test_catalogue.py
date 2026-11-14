@@ -99,6 +99,13 @@ def test_the_log_holds_one_entry_a_class_and_subject_counted_cleared_and_ordered
     clip.lane = quiet.lane = "clip"
     log.read(View(0.25, 0, [], walks + [again, clip, quiet]))
     assert (e.count, e.holds, e.problem.walk) == (12, True, ("window", 11.0))     # cleared in one lane, it holds by another's last walk
+    short = rec(14.0, **SOUGHT)
+    short.done = 2
+    log.read(View(0.25, 0, [], walks + [again, clip, quiet, short, rec(15.0, video={("decode", "walk", "b"): [8, 8.0, 0]})]))
+    assert (e.count, e.holds) == (12, False)     # a walk of two rows is not judged
+    log.read(View(0.25, 0, [], walks + [again, clip, quiet, short, rec(16.0, **SOUGHT)]))
+    log.read(View(0.25, 0, [], [clip, quiet]))
+    assert (e.count, e.holds) == (13, True)      # its walk gone from the history, no walk has shown it gone
     five = rec(keys={"video": "kv"}, a={("run", "fold", "a"): [8, 20.0, 0]}, **SOUGHT, **GROWN)
     five.recomputed, five.recomputed_ms = {"memo": 8, "kv": 4}, {"memo": 4.0, "kv": 2.0}
     assert list(found(five)) == [("unread", "a"), ("grows", "c"), ("seeks", "video"), ("thrash", "memo"), ("thrash", "video")]     # by cost
@@ -111,10 +118,10 @@ def test_a_changed_param_between_two_walks_is_compared_with_nothing():
     led = Ledger()
     g.on_event = led.event
     g.sync()
-    walk(g, range(6))
+    walk(g, range(8))
     doc.node("slow").params["k"] = 20
     g.sync()
-    walk(g, range(6))
+    walk(g, range(8))
     first, second = led.view().walks
     assert second.nodes["slow"].runs[("run", "walk", "slow")].ms > 3 * first.nodes["slow"].runs[("run", "walk", "slow")].ms
     assert not slower(led.view())

@@ -116,13 +116,20 @@ def test_a_span_is_spread_over_its_buckets_and_a_cost_keeps_its_place_along_the_
     for r in range(64):
         led.event(event("step", r, 2.0 ** (r // 8), "grows", row=r))
         led.event(event("step", r + 0.5, 3.0, "flat", row=r))
+        led.event(event("cache", r + 0.6, 0.0, "video", row=r))
         led.event(event("progress", r + 0.9, row=r + 1, length=64))
     assert [w.start for w in led.view().walks] == [0]
     nodes = led.view().walks[0].nodes
     assert len(nodes["grows"].parts) == PARTS and nodes["grows"].parts[-1] == 128 * nodes["grows"].parts[0]
     assert set(nodes["flat"].parts) == {24.0} and nodes["flat"].counts == [8] * PARTS and nodes["flat"].ran == 64
+    assert nodes["video"].held == 64 and not any(nodes["video"].counts)     # a row a cache held has no place along the range
     unprobed = 63900.0 - sum(2.0 ** (r // 8) + 3.0 for r in range(64))      # from the begin to the last progress
     assert sum(b.unprobed for b in led.view().buckets) == pytest.approx(unprobed) == led.view().walks[0].unprobed
+
+    led = Ledger()
+    for t, lane in enumerate(("window", "clip", "window")):
+        led.event(event("begin", float(t), row=0, length=4, lane=lane))
+    assert [w.t0 for w in led.view().walks] == [1.0, 2.0]       # oldest first across lanes: a walk begun again takes no earlier walk's place
 
 
 def test_a_view_is_the_readers_to_hold_while_another_thread_feeds():

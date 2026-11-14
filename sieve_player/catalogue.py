@@ -8,7 +8,7 @@ What a reader shows of a walk is a value here, `rows`, `naming`, `needs`, `gui`,
 """
 from dataclasses import dataclass, replace
 
-from .ledger import View, WalkId, quantile
+from .ledger import PARTS, View, WalkId, quantile
 from .stream import CACHE, DECODE, FOLD, PAINT, READ, RUN, SEEK, SLOT, STEP
 
 COSTS = (RUN, STEP, FOLD, DECODE, SEEK, READ)      # the kinds a walk is compared with the last by
@@ -129,9 +129,10 @@ def needs(view, walk):
 
 def finished(view):
     """The walks a detector judges: every walk its lane has begun another after, and a lane's last
-    once it has done its range."""
+    once it has done its range, of those that did PARTS rows; with fewer a walk has no row to each
+    part of its range and a rate a row of it is no figure, however it ended."""
     last = {w.lane: w for w in view.walks}
-    return [w for w in view.walks if w.done and (w is not last[w.lane] or w.done >= w.length)]
+    return [w for w in view.walks if w.done >= PARTS and (w is not last[w.lane] or w.done >= w.length)]
 
 
 def _problem(kind, walk, subject, line, ms, evidence, says, target, nodes=()):
@@ -374,11 +375,12 @@ class Log:
         self._seen = {}         # a walk's id -> the entries it has counted toward
         self._settled = set()   # the ids of the walks judged for the last time
         self._shows = {}        # a walk's id -> {(class, subject): Problem} as it was last judged
+        self._latest = {}       # lane -> the id of the last walk of it judged, kept when the history no longer holds the walk
 
     def read(self, view):
         """Takes what `view` shows into the entries and returns those it made, the first sightings."""
         made, done, last = [], finished(view), {w.lane: w for w in view.walks}
-        latest = {w.lane: w.id for w in done}
+        latest = self._latest = self._latest | {w.lane: w.id for w in done}
         judge = [w for w in done if w.id not in self._settled]
         for w in judge:
             self._shows[w.id] = {}
@@ -403,7 +405,7 @@ class Log:
                 e.problem = max(shown, key=lambda p: p.walk.t0)
         held = {w.id for w in view.walks}
         self._seen = {wid: s for wid, s in self._seen.items() if wid in held}
-        self._shows = {wid: s for wid, s in self._shows.items() if wid in held}
+        self._shows = {wid: s for wid, s in self._shows.items() if wid in held or wid in latest.values()}
         self._settled = (self._settled | {w.id for w in judge if w is not last[w.lane]}) & held
         return made
 

@@ -84,7 +84,7 @@ class Node:
     ran: int = 0
     held: int = 0
     served: int = 0
-    parts: list = field(default_factory=lambda: [0.0] * PARTS)     # ms in order along the range
+    parts: list = field(default_factory=lambda: [0.0] * PARTS)     # ms in order along the range, of every span but a "cache": a row its reader's cache held is no cost of the node's there
     counts: list = field(default_factory=lambda: [0] * PARTS)      # the spans those ms were of
     bins: dict = field(default_factory=dict)        # kind -> the spans of it counted by their ms, BINS bins; see quantile()
     shape: list | None = None                       # of its output, as the last span that carried one had it
@@ -265,10 +265,9 @@ class Ledger:
         old, lane.walk = lane.walk, Walk(ev.lane, start, ev.length, self._plan, self._keys, ev.t, ev.t,
                                          selected=[] if self._selected is None else [self._selected])
         at = None if old is None or old.done else next((i for i, w in enumerate(self._walks) if w is old), None)
-        if at is None:
-            self._walks.append(lane.walk)
-        else:
-            self._walks[at] = lane.walk
+        if at is not None:
+            del self._walks[at]
+        self._walks.append(lane.walk)
         lane.kinds, lane.synced = {}, False
         lane.t, lane.at = ev.t, self._spent.get(ev.thread, 0.0)
         return lane
@@ -317,9 +316,10 @@ class Ledger:
         under = Under(ev.kind, ev.demand, ev.asked)
         was = node.runs.get(under, _NONE)
         node.runs[under] = Total(was.count + 1, was.ms + ev.ms, was.bytes + ev.bytes)
-        part = min(PARTS - 1, walk.done * PARTS // max(walk.length, 1))
-        node.parts[part] += ev.ms
-        node.counts[part] += 1
+        if ev.kind != CACHE:
+            part = min(PARTS - 1, walk.done * PARTS // max(walk.length, 1))
+            node.parts[part] += ev.ms
+            node.counts[part] += 1
         bins = node.bins.get(ev.kind)
         if bins is None:
             bins = node.bins[ev.kind] = [0] * BINS

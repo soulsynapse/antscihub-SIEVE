@@ -659,7 +659,7 @@ class Problems(QWidget):
             self.head.setText(f"{len(holds)} problem{'s hold' if len(holds) != 1 else ' holds'} · costliest first · pick one to see it below")
         cleared.sort(key=lambda e: -e.problem.t)
         self.foot.setText(" · ".join(
-            [*(["cleared: " + "; ".join(f"{e.problem.kind} {e.problem.subject}, {as_clock(window.now - e.problem.t)} ago" for e in cleared[:CLEARED])
+            [*(["cleared, last seen: " + "; ".join(f"{e.problem.kind} {e.problem.subject} {as_clock(window.now - e.problem.t)} ago" for e in cleared[:CLEARED])
                 + (f"; and {len(cleared) - CLEARED} earlier" if len(cleared) > CLEARED else "")]
                if cleared else []), *(["checked and quiet: " + ", ".join(quiet)] if quiet else [])]))
         self.foot.setVisible(bool(self.foot.text()) and not self.compact)

@@ -89,13 +89,14 @@ def test_each_class_reads_off_a_view_built_by_hand():
     quiet = [Bucket(), Bucket()]
     felt = View(0.25, 0, [Bucket(), Bucket(late=300.0, turns={"slot walked": 200.0}, rows={"window": 4}), *quiet,
                           Bucket(late=300.0, longest={"b": [250.0, 240.0]}), *quiet, Bucket(late=300.0, longest={"b": [250.0, 10.0]}),
-                          Bucket(late=99.0), Bucket(late=500.0)], [])     # under a turn, under one call on its own CPU, under one that waited; unfelt; unsettled
+                          Bucket(late=99.0), Bucket(late=500.0), Bucket()], [])     # under a turn, under one call on its own CPU, under one that waited; unfelt; the bucket after it unsettled
     assert [(p.key, p.ms_row, p.t) for p in SPANS["late"](felt)] == [(("late", "turn", "slot walked"), 75.0, 0.25), (("late", "node", "b"), None, 1.0),
                                                             (("late", "unrecorded", "nothing recorded"), None, 1.75)]
     begun = [Bucket(begins={"window": {"asked": 2, "hand": 9}}, rows={"window": 8}), Bucket(begins={"window": {"given": 1}}, rows={"window": 4}),
-             Bucket(begins={"window": {"hand": 5, "edit": 5}}), Bucket()]
+             Bucket(begins={"window": {"hand": 5, "edit": 5}}), Bucket(), Bucket()]
     (p,) = SPANS["restarts"](View(0.25, 0, begun, []))       # two by no hand are under it, the third is it, and a hand's and an edit's are none however many
-    assert (p.key, p.t, p.walk) == (("restarts", "lane", "window"), 0.25, None) and "3 times" in p.line and "went stale" in p.target
+    assert (p.key, p.t, p.walk) == (("restarts", "lane", "window"), 0.25, None) and "3 times in 0.50 s and finished" in p.line and "went stale" in p.target
+    assert all(q.says and q.target for q in (p, *SPANS["late"](felt)))
     assert not SPANS["restarts"](View(0.25, 0, [begun[0], replace(begun[1], rows={"window": 24}), *begun[2:]], []))      # rows enough finished a beginning
     turned = rec(b={("run", "walk", "b"): [8, 100.0, 0]})
     turned.wait = 80.0
@@ -165,7 +166,7 @@ def test_the_log_holds_one_entry_a_class_and_subject_counted_cleared_and_ordered
 def test_the_log_reads_the_same_however_few_walks_the_ledger_keeps(kept):
     """One stream into a ledger that keeps every walk and one that keeps `kept`, each read by its
     own Log after every event: the entries are equal throughout, those of the classes that judge
-    no walk among them."""
+    no walk among them, and equal at the end to those of a Log that reads the whole once."""
     def told(walks):
         t = 0.0
         for i, (lane, key, ms) in enumerate(walks):
@@ -174,6 +175,8 @@ def test_the_log_reads_the_same_however_few_walks_the_ledger_keeps(kept):
                 yield event("begin", t, row=0, length=8, lane=lane, facts={"by": "asked"})
             if i == 2:
                 yield "late", 300.0, t
+                yield "late", 0.0, t + 0.26
+                yield event("run", t - 0.2, 480.0, "x", thread="other", lane=None)      # told a bucket after the lateness it ran over
             yield event("begin", t, row=0, length=8, lane=lane)
             for r in range(8):
                 yield event("run", t, ms, "b", r, key=key, demand="walk", asked="b", lane=lane)
@@ -189,9 +192,12 @@ def test_the_log_reads_the_same_however_few_walks_the_ledger_keeps(kept):
             led.sample(*ev) if isinstance(ev, tuple) else led.event(ev)
             log.read(led.view())
         assert whole.entries == short.entries, (i, ev)
+    once = Log()
+    once.read(all_.view())
+    assert once.entries == whole.entries
     assert {k: (e.count, e.holds) for k, e in whole.entries.items()} == {
         ("slower", "node", "b"): (4, True),     # both lanes' slow walks, and the clip's last still slow
-        ("restarts", "lane", "window"): (1, False), ("late", "unrecorded", "nothing recorded"): (1, False)}
+        ("restarts", "lane", "window"): (1, False), ("late", "node", "x"): (1, False)}
 
 
 def test_a_changed_param_between_two_walks_is_compared_with_nothing():

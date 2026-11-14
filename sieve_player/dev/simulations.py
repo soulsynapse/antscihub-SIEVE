@@ -188,7 +188,7 @@ class _Run:
         return self.baked[0]
 
     def settle(self):
-        """Waits until the buckets written so far are settled, a later one begun, so a class that judges buckets has judged them."""
+        """Waits until the buckets written so far are settled, those a class reads after them begun, so a class that judges buckets has judged them."""
         now = int(time.perf_counter() // self.ledger.width)
         self.wait(lambda: (v := self.ledger.view()).first + len(v.buckets) > now + 3, "the next buckets")
 

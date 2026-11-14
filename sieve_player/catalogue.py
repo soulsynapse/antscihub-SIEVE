@@ -535,11 +535,15 @@ def signals(view, walks=None, baselines=None):
 CLASSES = {"unread": unread, "thrash": thrash, "grows": grows, "seeks": seeks, "slower": slower, "waits": waits, "signals": signals}
 
 
+AHEAD = 1           # the buckets after its own a class of SPANS may read
+
+
 def _settled(view, start=None):
     """(index on the probe's clock, bucket) of the buckets of `view` a class of SPANS judges, those
-    from index `start` on, or all: every one but the view's last, which the ledger is still writing."""
+    from index `start` on, or all: every one with AHEAD after it before the view's last, which the
+    ledger is still writing, so what a class reads of a bucket is the same in every later view."""
     at = 0 if start is None else max(start - view.first, 0)
-    return [(view.first + i, view.buckets[i]) for i in range(at, len(view.buckets) - 1)]
+    return [(view.first + i, view.buckets[i]) for i in range(at, len(view.buckets) - 1 - AHEAD)]
 
 
 def _spanned(kind, view, i, subject, subject_is, line, ms, rows, evidence, says, target, nodes=(), turns=()):
@@ -567,7 +571,7 @@ def late(view, start=None):
         for x in over:
             for name, ms in x.turns.items():
                 turns[name] = turns.get(name, 0.0) + ms
-        for x in (*over, view.buckets[at + 1]):     # a call that held the interpreter may be told of after the sample it made late
+        for x in (*over, *view.buckets[at + 1:at + 1 + AHEAD]):     # a call that held the interpreter may be told of after the sample it made late
             for nid, (ms, cpu) in x.longest.items():
                 if cpu >= COVERS * ms and ms > calls.get(nid, 0.0):
                     calls[nid] = ms
@@ -617,7 +621,7 @@ def restarts(view, start=None):
             if n < RESTARTS or rows >= PARTS * n:
                 continue
             why = "; ".join(_BEGAN.get(what, what) for what in sorted(by, key=lambda x: -by[x]))
-            out.append(_spanned("restarts", view, i, str(lane), LANE, f"the {lane} walk began again {n} times in {len(over) * view.width:.2f} s"
+            out.append(_spanned("restarts", view, i, str(lane), LANE, f"the {lane} walk began again {n} times in {len(over) * view.width:.2f} s "
                                 f"and finished {rows} rows: {why}", sum(ms for x in over for d in x.ms.values() for ms in d.values()), rows,
                                 [f"{_BEGAN.get(what, what)}: {c} beginnings" for what, c in by.items()],
                                 "The walk keeps starting over, and nothing the user did began it", f"what begins the {lane} walk again: {why}"))
@@ -692,7 +696,7 @@ class Log:
                 if p.walk.t0 >= e.problem.walk.t0:
                     e.problem = p
         if view.buckets:
-            end = view.first + len(view.buckets) - 1
+            end = view.first + len(view.buckets) - 1 - AHEAD
             for kind, detect in self.spans.items():
                 if self._spanned < end:
                     self.checked.add(kind)

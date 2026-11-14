@@ -850,6 +850,82 @@ then the projection is a reading in `catalogue.py` that an experiment prints and
   Check: the seams test.
   Ticked 2026-11-12: nothing in the package or the tests; the three experiments the fork leaves do.
 
+## The catalogue says what no finished walk shows
+
+Assumes: The catalogue and its simulations; The GUI thread's turn; The window says what is wrong first.
+
+Added 2026-11-14 from the architecture review of v5-cleaning-up-monitor at c7c4d7d9, and outside that
+branch's done condition. The player has been slow with the problems' list empty, and the one reading
+that showed it was the lateness track looking wrong: the evidence was in the ledger and no class's to
+say. Every class judges a finished walk, so what is wrong before a walk ends, or where no walk is, has
+no row. The log stays a reader of views polled on a timer; judging each walk once at its end was weighed
+that day and left, since it could reach none of what is below.
+
+A problem is cost that buys the user nothing asked for: waste, or the player's own overhead. Cost that
+is the price of what was asked is a fact to show and no problem: a range wider than a store holds and a
+walk slower than the clip plays are the player doing slowly what it was told to, which it is for. So
+three things weighed that day are not boxes. A walk slower than playback is the figure on the player's
+already. A node's growth said before its walk ends, and the rule it would need, a problem of a walk
+under way whose cost is projected and then confirmed or cleared, wait: `grows` says it at the walk's
+end, and the rule is the most state the log would take on for the least it would say.
+
+Facts to weigh. `catalogue.finished` is what a detector judges: a walk of `PARTS` rows its lane has
+begun another after, and a lane's last once it has done its range. A walk under way, a walk cut short
+under `PARTS`, and the scrub, which marks no beginning and so has no record, are judged by no class; the
+ledger keeps no record of a walk that finished no row, and a bucket counts a lane's rows and not its
+beginnings. No class reads `Bucket.late`: `catalogue.gui` gives the worst of it to the interface panel
+and the report. `waits` and `signals` count the GUI thread's time only under a turn that was emitted and
+only for a walk whose beginning the buckets still reach, and a tool that holds the interpreter is running
+and not waiting, so `waits` does not see it. `thrash` fires on a recomputation of what a store discarded,
+which one forward pass over a range never makes: what that walk cannot keep is paid by the next walk of
+the range. `catalogue.needs` stands from a walk's first rows, and `StoresPanel` draws it past the limit,
+of the window lane's last walk alone. `worker._Walk.turn` begins its range again when what it was given
+goes stale or the nodes or the shape change under it, and anything that restarts the range sets its
+`asked`; whether the stream says which of these began a walk, or that the user's hand did, is not known.
+A problem's cost is ms a row of the walk it was found in, by `catalogue._problem`, and the log's
+order is by it. A class is entered with a simulation and a source, and `tests/test_catalogue.py` holds
+the three sets equal; its two-ledger test holds the log's entries the same however few walks are kept.
+Where the tree has `Problem.subject_is`, a subject that is a lane is one more value of it.
+
+- [ ] The GUI thread running later than a user feels is a problem, with a walk or without one; the
+  lateness a heavy walk ordinarily leaves is under it and is none. Its subject is what the buckets hold
+  over the late span: the turn that covers it; else the worker's node that ran over it with no wait,
+  holding the interpreter; else that nothing recorded covers it, which is said as such.
+  Check: a simulation of each of the three surfaces the class alone, and every healthy run surfaces
+  nothing.
+- [ ] A lane that begins again and again with few rows finished, by no hand of the user's, is a problem
+  whose subject is the lane: how often it began against the rows it finished, and what began it again.
+  A range begun again by a drag, by the playhead or by an edit is the user's and is none, however often.
+  Check: a simulation of a walk the player itself restarts every few rows surfaces the class alone; a
+  drag and a playback through a pipeline slower than the clip surface nothing.
+- [ ] The stores panel says, of the last walk of every lane and from its first rows, what its range
+  needs of each store against the limit, and where the need is past the limit that the next walk of the
+  range computes it again. It is a line of the panel's and no problem: no entry, no row among the
+  problems, nothing on stderr.
+  Check: a one-off script walks the clip once past the cache's limit and reads the panel's line before
+  the walk's last row and the log empty after it.
+- [ ] The log's entries are the same however few walks the ledger keeps and however often it is read,
+  with the two classes above among its classes.
+  Check: `tests/test_catalogue.py`'s two-ledger test, the classes among those it reads; an invariant, so
+  a test.
+
+Fork: whether the stream says what began a walk again. Observed by reading `stream.py` and the
+worker's begins, and written in the check's output: where it does, or a begin can be made to carry it
+without the graph naming the user, the second box is built; where it cannot, the box waits and nothing
+is built that fires on a drag.
+
+Fork: what a late GUI thread is most often under. Observed on a dump of a session Kendrick felt slow,
+replayed by `python -m sieve_player.report`, and written as a finding: where a turn covers most of the
+lateness the first box's first subject is built first; where nothing recorded does, the box waits on
+the turn that is missing being emitted, which is The GUI thread's turn's to add. The observation is
+Kendrick's use and waits for him.
+
+Open: how a problem with no walk ranks among those costed in ms a row. Recommended: it leads the list
+unranked while no walk ran over its span, and ranks by the ms a row of the walk it overlapped where one
+did. A session builds on this only once Kendrick has edited the line.
+
+Open: the classes' names. The words above are descriptions and name nothing; the names are Kendrick's.
+
 ## Non-goals
 
 The fault itself. Whether the window walk folds a density for a node behind a served bake, or for any node

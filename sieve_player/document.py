@@ -5,12 +5,12 @@ Imports neither Qt nor cv2 nor any other part of the player. The document stores
 a function that needs a tool's facets is handed the tools, a mapping of name to module or the
 modules themselves. The video is a node under the reserved name VIDEO_TOOL so wires can name it;
 its path lives on the document, resolved against the document's folder on load. A node's band is
-read by the runtime before anything downstream sees the node, so it is saved with the node.
+read by the runtime before anything downstream sees the node, so it is saved with the node. A file
+that holds a bake node, a tool the player had once, loads without it, its readers wired to what it read.
 """
 import json
 import os
 from dataclasses import dataclass, field
-from typing import NamedTuple
 
 VERSION = 3                 # 3: pinned is a list in pin order; a 2's one id loads as a list of one. 2: the video node's scale is a rescale node's; a 1 with one loads with that node inserted
 VIDEO_TOOL = "video"        # the reserved tool name of the node the decoder is
@@ -18,6 +18,7 @@ VIDEO_OUTPUT = "output"     # the video node's one param: what the decoder hands
 VIDEO_OUTPUTS = ("bgr", "gray", "luma")    # luma: the decoder's own plane, a gray left in the stream's range
 VIDEO_PRODUCES = "bgr"      # what it hands out unless its output param names another of VIDEO_OUTPUTS
 RESCALE_TOOL, RESCALE_PARAM = "rescale", "scale"    # the tool and param a format-1 video node's scale becomes on load
+BAKE_TOOL = "bake"          # a tool the player had once: a node of it is taken out on load, see _lift_bakes
 PATH = "path"               # the type the video node's input expects and a selector produces
 INPUT = "in"                # every tool's first input; INPUTS declares more
 OVERLAYABLE = ("gray", "mask")  # the types the overlay flag is offered on: a single plane the frame can be heated with
@@ -29,59 +30,6 @@ class FormatError(ValueError):
     """The file is not a document this module can read."""
 
 
-class Plate(NamedTuple):
-    """How a bake's rows lie on the plate's: plate row = first + increment × row. Plate(0, 1) is the
-    plate's own."""
-    first: int
-    increment: int
-
-    def to_plate(self, row):
-        return self.first + self.increment * row
-
-    def from_plate(self, row):
-        return max(0, (row - self.first) // self.increment)
-
-
-@dataclass(frozen=True)
-class Bake:
-    """A bake as the node that serves it saves it: everything that makes the node a source, so
-    nothing need look in the store. `rows` is (first, last) of the plate, `count` the plate's rows,
-    `shape` the plane's or () for a series kind."""
-    key: str
-    kind: str
-    series: bool
-    rows: tuple
-    increment: int
-    fps: float
-    written_fps: float
-    shape: tuple
-    count: int
-
-    @classmethod
-    def from_dict(cls, d):
-        return cls(str(d["key"]), str(d["kind"]), bool(d["series"]), tuple(int(r) for r in d["rows"]), int(d["increment"]),
-                   float(d["fps"]), float(d["written_fps"]), tuple(int(x) for x in d["shape"]), int(d["count"]))
-
-    def to_dict(self):
-        return {"key": self.key, "kind": self.kind, "series": self.series, "rows": list(self.rows), "increment": self.increment,
-                "fps": self.fps, "written_fps": self.written_fps, "shape": list(self.shape), "count": self.count}
-
-    @property
-    def plate(self):
-        return Plate(self.rows[0], self.increment)
-
-    @property
-    def aligned(self):
-        """Whether the rows are the plate's: every row from the first to the last, so a document is
-        in the same row space served or live."""
-        return self.increment == 1 and self.rows == (0, self.count - 1)
-
-    @property
-    def written(self):
-        """The rows the file holds."""
-        return len(range(self.rows[0], self.rows[1] + 1, self.increment))
-
-
 @dataclass
 class Node:
     id: str
@@ -89,8 +37,6 @@ class Node:
     params: dict = field(default_factory=dict)
     pos: tuple = (0.0, 0.0)
     band: tuple | None = None                                       # (lo, hi) kept, of a plane's pixels or a signal's rows; None keeps every value
-    mode: str | None = None                                         # BAKED while the node serves its bake; None or LIVE is live
-    baked: Bake | None = None                                       # the bake in the store, once there is one; see served()
     extra: dict = field(default_factory=dict, repr=False)            # keys this module does not know
     unresolved: bool = field(default=False, compare=False)          # set by resolve(); not saved
 
@@ -218,9 +164,7 @@ class Document:
             "overlay": self.overlay,
             **({"pinned": list(self.pinned)} if self.pinned else {}),
             "nodes": [{"id": n.id, "tool": n.tool, "params": n.params, "pos": list(n.pos),
-                       **({"band": list(n.band)} if n.band is not None else {}),
-                       **({"mode": n.mode} if n.mode is not None else {}),
-                       **({"baked": n.baked.to_dict()} if n.baked is not None else {}), **n.extra} for n in self.nodes],
+                       **({"band": list(n.band)} if n.band is not None else {}), **n.extra} for n in self.nodes],
             "wires": [{"from": w.src, "to": w.dst, "input": w.input} for w in self.wires],
             **self.extra,
         }
@@ -231,7 +175,7 @@ class Document:
         if not isinstance(v, int) or v > VERSION:
             raise FormatError(f"document is format version {v!r}; this module reads up to {VERSION}")
         top = {"version", "video", "display", "overlay", "pinned", "nodes", "wires"}
-        node_keys = {"id", "tool", "params", "pos", "band", "mode", "baked"}
+        node_keys = {"id", "tool", "params", "pos", "band", "mode", "baked"}    # the last two were a bake node's, and are dropped
         pinned = d.get("pinned")
         doc = cls(video=d.get("video"), display=d.get("display"), overlay=d.get("overlay"),
                   pinned=[] if pinned is None else [str(pinned)] if isinstance(pinned, str) else [str(p) for p in pinned],
@@ -244,8 +188,6 @@ class Document:
             doc.nodes.append(Node(nd["id"], nd["tool"], dict(nd.get("params", {})),
                                   tuple(float(x) for x in nd.get("pos", (0, 0))),
                                   None if nd.get("band") is None else tuple(float(x) for x in nd["band"]),
-                                  BAKED if nd.get("mode") == "stale" else nd.get("mode"),    # stale was once saved; it serves
-                                  None if nd.get("baked") is None else Bake.from_dict(nd["baked"]),
                                   {k: v for k, v in nd.items() if k not in node_keys}))
         ids = {n.id for n in doc.nodes}
         for wd in d.get("wires", []):
@@ -257,6 +199,7 @@ class Document:
                 raise FormatError(f"pinned {nid!r} names a node the document lacks")
         doc.pinned = list(dict.fromkeys(doc.pinned))
         doc._lift_scale()
+        doc._lift_bakes()
         if known is not None:
             doc.resolve(known)
         return doc
@@ -279,6 +222,20 @@ class Document:
         for w in readers:
             w.src = node.id
         self.wires.append(Wire(v.id, node.id))
+
+    def _lift_bakes(self):
+        """Every node of BAKE_TOOL goes, each of its readers wired to what it read, or unwired when
+        it read nothing, and a flag it carried moved to what it read."""
+        for bake in [n for n in self.nodes if n.tool == BAKE_TOOL]:
+            fed_by = self.source(bake.id)
+            for w in [w for w in self.wires if w.src == bake.id]:
+                if fed_by is not None:
+                    w.src = fed_by.src
+            was = (self.display == bake.id, self.overlay == bake.id)
+            self.remove_node(bake.id)
+            if fed_by is not None:
+                self.display = fed_by.src if was[0] else self.display
+                self.overlay = fed_by.src if was[1] else self.overlay
 
 
 def save(doc, path):
@@ -431,8 +388,6 @@ def produces(doc, tools, nid, _seen=()):
     if node.tool == VIDEO_TOOL:
         out = video_output(doc)
         return "gray" if out == "luma" else out
-    if served(node):
-        return served(node).kind
     p = getattr(_by_name(tools).get(node.tool), "PRODUCES", None)
     if p != "same":
         return p
@@ -442,9 +397,6 @@ def produces(doc, tools, nid, _seen=()):
     return produces(doc, tools, w.src, (*_seen, nid))
 
 
-LIVE, BAKED = "live", "baked"   # a node's two modes: serving the chain, or the bake it holds; whether the bake is stale is the plan's to say
-
-
 def shown(selection, pinned):
     """The nodes the plot and the strip draw: `selection` first when there is one, then `pinned` in
     its order, each once."""
@@ -452,26 +404,13 @@ def shown(selection, pinned):
     return out + [nid for nid in pinned if nid != selection]
 
 
-def served(node):
-    """The Bake `node` serves while its mode is BAKED; None for a live node."""
-    return node.baked if node.mode == BAKED and node.baked else None
-
-
-def land(node, bake):
-    """Records `bake` as written for `node`, which serves it from here on."""
-    node.mode, node.baked = BAKED, bake
-
-
 def kind_of(doc, tools, nid, _seen=()):
     """The kind the plan gives `nid`: "video", "selector", else the tool's KIND; a KIND of "same"
     is the kind of the node wired into the first input, "frame" under the video node, while nothing
-    is wired or in a cycle; a served node's is its bake's. An unresolved tool reads as "frame", as
-    a tool that did not say does."""
+    is wired or in a cycle. An unresolved tool reads as "frame", as a tool that did not say does."""
     node = doc.node(nid)
     if node.tool == VIDEO_TOOL:
         return "video"
-    if served(node):
-        return "series" if served(node).series else "frame"
     tool = _by_name(tools).get(node.tool)
     if is_selector(tool):
         return "selector"
@@ -483,13 +422,6 @@ def kind_of(doc, tools, nid, _seen=()):
         return "frame"
     up = kind_of(doc, tools, w.src, (*_seen, nid))
     return "frame" if up in ("video", "selector") else up
-
-
-def mode_of(doc, tools, nid):
-    """LIVE or BAKED for a node whose tool bakes; None for any other node."""
-    if getattr(_by_name(tools).get(doc.node(nid).tool), "bake", None) is None:
-        return None
-    return BAKED if served(doc.node(nid)) else LIVE
 
 
 def video_output(doc):
@@ -524,14 +456,14 @@ def from_tools(tools, video=None):
 
 
 def fed(doc, nid, tools=None):
-    """Whether the video, or a served bake, reaches `nid` through every frame input's wires. With `tools`, a node whose
+    """Whether the video reaches `nid` through every frame input's wires. With `tools`, a node whose
     tool the names do not resolve, or a wire whose types do not fit, breaks the chain: what the
     runtime computes. Without them only the first input is known, and it alone is followed."""
     tools = None if tools is None else _by_name(tools)
 
     def reaches(nid, stack):
         node = doc.node(nid)
-        if node.tool == VIDEO_TOOL or served(node):
+        if node.tool == VIDEO_TOOL:
             return True
         if nid in stack:
             return False

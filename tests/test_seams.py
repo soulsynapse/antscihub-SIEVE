@@ -17,7 +17,7 @@ MAY_IMPORT = {
     "plan": {"document"},
     "stream": set(),                              # the Event, the kinds and the Emitter; a reader of a dump loads nothing else
     "stats": {"stream"},                          # a reader of the stream; the Graph it is made on is handed to it
-    "graph": {"document", "density", "plan", "stream"},     # Graph.density folds planes; sync holds a plan; it emits through an Emitter
+    "graph": {"decoder", "document", "density", "plan", "stream"},     # Graph.density folds planes; sync holds a plan; it emits through an Emitter; a served file is read by a Decoder
     "canvas": {"document", "menu", "theme"},
     "menu": {"theme"},
     "pane": {"document", "theme", "widgets"},
@@ -26,10 +26,8 @@ MAY_IMPORT = {
     "timeline": {"theme"},
     "decoder": set(),
     "held": set(),                                # a pickle and a stamp; the window writes and reads it
-    "writers": {"decoder"},                       # a baked clip reads back through the Decoder
-    "store": {"document", "writers"},             # where files land knows what a Bake is and which kinds write; never the reverse
-    "worker": {"decoder", "density", "document", "graph", "store", "stream"},     # of the stream, the words a begin says what began it by
-    "bare": {"decoder", "document", "graph", "registry", "store", "worker"},      # the clip walk's own process: no window, no stream's reader
+    "worker": {"decoder", "density", "graph", "stream"},     # of the stream, the words a begin says what began it by
+    "bare": {"decoder", "document", "graph", "registry", "worker"},      # the clip walk's own process: no window, no stream's reader
     "trace": {"stream"},
     "ledger": {"stream", "trace"},                # the span kinds and a dump's reader; no graph is held and no Qt reached
     "catalogue": {"ledger", "stream"},            # a detector reads a view, by the stream's names for a kind, and nothing else
@@ -37,7 +35,6 @@ MAY_IMPORT = {
     "machine": set(),                             # psutil and the system's counters; the player is not imported
     "pace": set(),                                # the worker's signals and a clock; the control and the monitor's header both read it
     "pacecontrol": {"pace", "theme"},             # the control the player's header and the monitor's both draw; it is neither's
-    "storecontrol": {"store", "theme"},           # the store as the header draws it; the window hands it the Store
 }
 
 
@@ -219,7 +216,7 @@ def test_the_scheduler_alone_begins_a_job_and_nothing_compares_a_generation():
         return [n for n in ast.walk(node) if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and n.func.attr == "begin"]
 
     assert {id(n) for n in begins(tree)} == {id(n) for n in begins(turn)}
-    assert sorted(ast.unparse(n.func.value) for n in begins(turn)) == ["bake", "clip", "win"]
+    assert sorted(ast.unparse(n.func.value) for n in begins(turn)) == ["clip", "win"]
     compared = [ast.unparse(n) for n in ast.walk(tree) if isinstance(n, ast.Compare)
                 and any(isinstance(o, ast.Attribute) and o.attr in ("gen", "asked") for o in [n.left, *n.comparators])]
     assert not compared, compared
@@ -250,17 +247,17 @@ def test_the_worker_reads_the_plan_off_one_snapshot_a_turn():
 def test_a_job_holds_what_it_reads_and_emits_and_reaches_nothing_through_the_worker():
     """A job is built from the graph, the cadence and the signals it is handed, named, so a test can
     drive one with a graph and a few signals and no QThread: no field or attribute of a job names the
-    worker, the chain run and the served-head test are functions over a graph, and a _Walk is
+    worker, the chain run is a function over a graph, and a _Walk is
     constructed with every field past the graph named."""
     tree = ast.parse((PKG / "worker.py").read_text(encoding="utf-8"))
-    jobs = [n for n in tree.body if isinstance(n, ast.ClassDef) and n.name in ("_Scrub", "_Walk", "_Bake")]
-    assert len(jobs) == 3
+    jobs = [n for n in tree.body if isinstance(n, ast.ClassDef) and n.name in ("_Scrub", "_Walk")]
+    assert len(jobs) == 2
     for job in jobs:
         named = {n.attr for n in ast.walk(job) if isinstance(n, ast.Attribute) and isinstance(n.value, ast.Name) and n.value.id == "self"}
         named |= {n.target.id for n in job.body if isinstance(n, ast.AnnAssign)}
         assert not named & {"w", "worker"}, (job.name, named & {"w", "worker"})
         assert "Worker" not in ast.unparse(job), job.name
     functions = {n.name for n in tree.body if isinstance(n, ast.FunctionDef)}
-    assert {"run_chain", "served_head"} <= functions
+    assert "run_chain" in functions
     walks = [n for n in ast.walk(tree) if isinstance(n, ast.Call) and ast.unparse(n.func) == "_Walk"]
     assert walks and all(len(n.args) <= 1 for n in walks), [ast.unparse(n) for n in walks]

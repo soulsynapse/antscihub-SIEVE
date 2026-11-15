@@ -1,15 +1,6 @@
 import pytest
 
-from sieve_player import store
 from sieve_player.worker import Worker
-
-
-@pytest.fixture
-def in_store(tmp_path, monkeypatch):
-    """The store's folder under tmp_path for the test, so no bake lands in the user's."""
-    folder = tmp_path / "store"
-    monkeypatch.setattr(store, "folder", lambda: str(folder))
-    return folder
 
 
 @pytest.fixture(autouse=True)

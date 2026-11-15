@@ -24,7 +24,7 @@ and the report prints that first. `--check` fails if this list and `__all__` dif
 read by nothing, or if a type under `tools/` is produced or expected by nothing.
 
 A tool's category is derived, never declared: `category(tool)` reads the facets by an ordered list,
-source, cache, measure, relate, convert, transform, the first rule that fits deciding, so a tool
+source, measure, relate, convert, transform, the first rule that fits deciding, so a tool
 lands in a Tab menu group the day it is written and nobody files it; docs/spec/tool-naming.md
 argues the list. `description(tool)` is the first sentence of its docstring less its label, and
 `signature(tool)` its types in and out, what the menu shows beside the name. The report prints the

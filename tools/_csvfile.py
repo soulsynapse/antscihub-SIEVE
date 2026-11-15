@@ -1,7 +1,7 @@
 """The file csv writes and resolve reads back: the key line, the atomic write, and the Write widget.
 Not a tool; a tool imports it and no other tool (tests/test_seams.py).
 
-The first line is a comment, `# sieve key=... rows=a-b footage=... [plate=first:increment] [kind=type]`, the node's key
+The first line is a comment, `# sieve key=... rows=a-b footage=... [kind=type]`, the node's key
 as the player computed it (see `sieve_player.graph`): it hashes the band and everything upstream, so
 a tool reads it back and says whether the file on disk is this graph's or stale; `kind` is the type
 the rows were written from, absent on a file written before it was carried. Readers skip the line
@@ -20,11 +20,9 @@ _KEY = re.compile(r"# sieve key=(\S*) rows=(\d+)-(\d+)")
 _KIND = re.compile(r" kind=(\S+)")
 
 
-def key_line(key, start, n, footage, plate=None, kind=None):
-    """`plate`, (first row, increment), says the rows are a bake's and how they map to the footage's:
-    footage row = first + increment × row; `kind` is the type the rows were written from."""
+def key_line(key, start, n, footage, kind=None):
+    """`kind` is the type the rows were written from."""
     line = f"# sieve key={key} rows={start}-{start + n - 1} footage={os.path.basename(str(footage))}"
-    line = line if plate is None else f"{line} plate={int(plate[0])}:{int(plate[1])}"
     return line if kind is None else f"{line} kind={kind}"
 
 

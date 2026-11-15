@@ -2,9 +2,14 @@
 document and newest first, in a file its caller names. FILE is the user's own, which the launcher
 hands the window; a window handed none notes nothing."""
 import os
+import tempfile
 import time
 
-from .store import app_folder
+
+def app_folder():
+    """Where the player keeps what outlives a launch: SIEVE under LOCALAPPDATA, else under the temp folder."""
+    return os.path.join(os.environ.get("LOCALAPPDATA") or tempfile.gettempdir(), "SIEVE")
+
 
 FILE = os.path.join(app_folder(), "recent.txt")    # a line a document, newest first: when it was noted, a tab, its path
 KEEP = 10

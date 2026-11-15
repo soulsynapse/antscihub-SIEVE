@@ -14,12 +14,11 @@ TELL = 0.1      # s between the lines that say how far the walk is
 HOLD = 64 << 20 # what the memo and the plate's cache may each hold: nothing reads a row again but a tool reading near its own
 
 
-def job(doc, video, tools, store, out):
+def job(doc, video, tools, out):
     """What a bare walk is started with: the document as it stands, where it lives, the video the
-    player has open, the tools by the folders their files are in, the store's folder and the file
-    the results go to."""
+    player has open, the tools by the folders their files are in and the file the results go to."""
     files = [os.path.abspath(t.__file__) for t in tools.values() if getattr(t, "__file__", None)]
-    return {"document": doc.to_dict(), "path": doc.path, "video": video, "store": store,
+    return {"document": doc.to_dict(), "path": doc.path, "video": video,
             "roots": sorted({os.path.dirname(f) for f in files}), "out": out}
 
 
@@ -49,18 +48,16 @@ def main(path):
     from .document import Document
     from .graph import Graph
     from .registry import discover
-    from .store import Store
-    from .worker import _Walk, served_head
+    from .worker import _Walk
 
     decmod.QUIET = True
     tools = {e.name: e.module for e in discover(*j["roots"]) if e.ok}
     doc = Document.from_dict(j["document"], tools)
     doc.path = j["path"]
-    st = Store(j["store"])
-    g = Graph(doc, Decoder(j["video"], cache_bytes=HOLD), tools, memo_bytes=HOLD, open_bake=st.open_bake)
+    g = Graph(doc, Decoder(j["video"], cache_bytes=HOLD), tools, memo_bytes=HOLD)
     g.sync()
     p = g.snapshot()
-    if not (g.fed(p.walk) or served_head(p)):
+    if not g.fed(p.walk):
         say(refused="nothing reaches a walked node")
         return 1
     t0 = [None]

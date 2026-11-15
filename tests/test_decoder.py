@@ -110,8 +110,8 @@ def test_a_stream_ending_short_of_the_container_is_said_once_on_stderr(video, tm
 
 
 def test_a_files_print_is_its_footages_wherever_it_lies_and_however_its_path_is_spelled(tmp_path):
-    """The video node's key is of this and of no path, so a bake and a held run made of a file
-    are found from a copy of it, on another machine and under another spelling."""
+    """The video node's key is of this and of no path, so a held run made of a file is found from
+    a copy of it, on another machine and under another spelling."""
     body = bytes(range(256)) * (3 * SLICE // 256)
     a, b, c = tmp_path / "a.mp4", tmp_path / "sub" / "b.mp4", tmp_path / "c.mp4"
     b.parent.mkdir()

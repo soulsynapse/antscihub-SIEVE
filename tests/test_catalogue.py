@@ -1,6 +1,5 @@
 """The catalogue: each class read off a view, each simulation surfacing its class alone, the log and an entry's text."""
 import json
-import shutil
 import time
 from dataclasses import replace
 
@@ -8,7 +7,7 @@ import pytest
 
 from sieve_player import document as D
 from sieve_player.catalogue import CLASSES, CLOCK, SOURCES, SPANS, STALLS, Log, cold, reach, stores_at, thrash, unread
-from sieve_player.dev.simulations import HEALTHY, SERVED, SIMULATIONS, run
+from sieve_player.dev.simulations import HEALTHY, SIMULATIONS, run
 from sieve_player.graph import Graph
 from sieve_player.ledger import Bucket, Ledger, Node, Total, Under, View, Walk
 from sieve_player.report import report, text
@@ -16,7 +15,6 @@ from tests.test_graph import TOOLS, Dec, gray, tool
 from tests.test_ledger import event, walk
 
 PLAN = {"nodes": {}, "chain": [], "walk": "b", "shown": "b", "over": None, "pinned": []}
-needs_ffmpeg = pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="a bake's clip writer runs ffmpeg from PATH")
 
 
 def runs(by):
@@ -323,19 +321,19 @@ def test_the_cold_projection_sums_what_the_plan_reaches_by_the_walk_each_node_la
 
 
 @pytest.mark.simulation
-@pytest.mark.parametrize("name", [pytest.param(n, marks=needs_ffmpeg) if n in SERVED else n for n in SIMULATIONS])
+@pytest.mark.parametrize("name", list(SIMULATIONS))
 def test_a_simulation_surfaces_its_class_alone(name, tmp_path):
     seen = run(name, tmp_path)
     assert {e.problem.kind for e in seen.log.ordered()} == {SIMULATIONS[name][1]}, [e.problem.line for e in seen.log.ordered()]
     subjects = {e.problem.subject for e in seen.log.ordered()}
-    want = {"unread": {"gray", "work"}, "memo": {"memo"}, "cache": {"video"}, "reader": {"bake"}, "grows": {"pile"},
+    want = {"unread": {"work"}, "memo": {"memo"}, "cache": {"video"}, "reader": {"cut"}, "grows": {"pile"},
             "seeks": {"video"}, "slower": {"work"}, "held": {"unprobed"}, "slot": {"slot walked"}, "signals": {"slot walked"},
             "frozen": {"slot walked"}, "holds": {"work"}, "unspanned": {"nothing recorded"}, "again": {"window"}, "stuck": {"window"}}[name]
-    assert want <= subjects and (name == "unread" or want == subjects)
+    assert want == subjects
 
 
 @pytest.mark.simulation
-@pytest.mark.parametrize("name", [pytest.param(n, marks=needs_ffmpeg) if n in SERVED else n for n in HEALTHY])
+@pytest.mark.parametrize("name", list(HEALTHY))
 def test_a_healthy_walk_surfaces_nothing(name, tmp_path):
     seen = run(name, tmp_path)
     assert not seen.log.entries and seen.view.walks[-1].done == seen.view.walks[-1].length
@@ -343,7 +341,6 @@ def test_a_healthy_walk_surfaces_nothing(name, tmp_path):
 
 
 @pytest.mark.simulation
-@needs_ffmpeg
 def test_an_entrys_text_is_enough_to_begin_on_the_fault(tmp_path):
     seen = run("unread", tmp_path)
     entry = seen.log.entries[("unread", "node", "work")]
@@ -351,8 +348,8 @@ def test_an_entrys_text_is_enough_to_begin_on_the_fault(tmp_path):
     labels = [ln.split()[0] for ln in t.splitlines() if ln and not ln.startswith((" ", "{", "}"))]
     assert labels == ["class", "subject", "line", "cost", "evidence", "walk", "plan", "stores", "video", "decoder", "commit",
                       "dump", "simulation", "source", "document"]
-    assert "window, rows 0..63, 64 of 64" in t and "work: frame, fed; reads gray; read by nothing" in t      # the served bake cut its wire
-    assert "gray: frame, fed; reads video; read by work" in t and "bake cache" in t and "clip.avi" in t
+    assert "window, rows 0..63, 64 of 64" in t and "work: frame, fed; reads gray; read by nothing" in t
+    assert "gray: frame, fed; reads video; read by work, edge" in t and "clip.avi" in t
     assert "sieve_player.dev.simulations unread" in t and entry.problem.source in t and seen.context["commit"] in t
     doc = D.Document.from_dict(json.loads(t.split("\ndocument\n", 1)[1]))
-    assert doc.node("bake").mode == D.BAKED and [n.id for n in doc.nodes] == ["video", "gray", "work", "bake", "edge", "mean", "pile"]
+    assert doc.source("edge").src == "gray" and [n.id for n in doc.nodes] == ["video", "gray", "work", "edge", "mean", "pile"]

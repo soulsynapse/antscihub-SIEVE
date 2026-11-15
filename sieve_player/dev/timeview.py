@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import math
 import os
+import subprocess
 import sys
 import tempfile
 import time
@@ -31,7 +32,6 @@ from ..ledger import coarsen, save
 from ..pace import clock as as_clock
 from ..pacecontrol import PaceControl
 from ..report import cost_said, report
-from ..store import commit
 from ..theme import GAP, GROUND, HEAD, INK, INK_2, LEVEL, LINE_LIFT, PAD, RADIUS, ROW_H, layer, qgray
 
 THREAD = "worker"               # the name graph.Readers.reap asserts of the worker's thread
@@ -896,6 +896,17 @@ def colours(graph):
     chain = list(graph.chain)
     ids = [n.id for n in doc.nodes if n.id not in chain]
     return {n: type_color(produces(doc, graph.tools, n)) for n in [*sorted(ids, key=lambda n: (of(n), ids.index(n))), *chain]}
+
+
+@lru_cache(maxsize=1)
+def commit():
+    """The repository commit this code runs under, read once, or "" when it is not a checkout or git is not there."""
+    try:
+        out = subprocess.run(["git", "rev-parse", "HEAD"], cwd=os.path.dirname(os.path.abspath(__file__)),
+                             capture_output=True, text=True, timeout=5)
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    return out.stdout.strip() if out.returncode == 0 else ""
 
 
 def context(graph, dump=None):

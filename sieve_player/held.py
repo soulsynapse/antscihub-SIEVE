@@ -124,7 +124,8 @@ class File:
                 self._had, self._end = had, f.tell()
                 while True:
                     start, rows, results, size = pickle.load(f)
-                    run = Run(start, rows, {nid: {k: _rows(v) for k, v in r.items()} for nid, r in results.items()}, size)
+                    # "plate": a field a result once carried that is no row of it, which a walk given the result would step
+                    run = Run(start, rows, {nid: {k: _rows(v) for k, v in r.items() if k != "plate"} for nid, r in results.items()}, size)
                     had.append((run, self._end, f.tell() - self._end))
                     self._end = f.tell()
         except Exception:       # the file's end, or a truncated or foreign pickle, which raises whatever its bytes spell
@@ -174,17 +175,15 @@ class File:
 
 class Chain(NamedTuple):
     """The series chain as the plan now has it: `keys`, node to key in the chain's order; `steps`,
-    the nodes of it a walk steps; `plate`, the row space its results are in."""
+    the nodes of it a walk steps."""
     keys: dict
     steps: frozenset
-    plate: object
 
 
-def good(result, key, plate):
-    """Whether `result` is a series node's result under `key` in the row space `plate`; never for
-    a `key` of None, a node the plan does not have."""
-    return (key is not None and isinstance(result, dict) and "signal" in result
-            and result.get("key") == key and result.get("plate") == plate)
+def good(result, key):
+    """Whether `result` is a series node's result under `key`; never for a `key` of None, a node
+    the plan does not have."""
+    return key is not None and isinstance(result, dict) and "signal" in result and result.get("key") == key
 
 
 class Runs:
@@ -210,9 +209,9 @@ class Runs:
 
     @staticmethod
     def _has(results, chain):
-        """The chain's nodes whose result in `results` is good under the key and plate it now has:
-        what every reader here and the limit take a run to be worth."""
-        return [nid for nid, key in chain.keys.items() if good(results.get(nid), key, chain.plate)]
+        """The chain's nodes whose result in `results` is good under the key it now has: what
+        every reader here and the limit take a run to be worth."""
+        return [nid for nid, key in chain.keys.items() if good(results.get(nid), key)]
 
     @staticmethod
     def _serves(results, chain):
@@ -221,7 +220,7 @@ class Runs:
     def hold(self, start, rows, results, chain):
         """Holds `results` as a run over `rows` rows from `start` when every chain node has `rows`
         rows in it under a key, unless a run held covers its rows with every node it has under the
-        same key and plate; whether the runs held changed. A run it so covers goes, and while the
+        same key; whether the runs held changed. A run it so covers goes, and while the
         runs together pass the limit the oldest goes that is not the one the chain has most of, a
         run it has nothing of before any other. What the chain has of a run is the run's rows for
         each node of `_has`, the longer run of two it has as much of and the one held last of two as
@@ -232,7 +231,7 @@ class Runs:
             return False
 
         def under(results):
-            return {nid: (r.get("key"), r.get("plate")) for nid, r in results.items()}.items()
+            return {nid: r.get("key") for nid, r in results.items()}.items()
         kept = {nid: results[nid] for nid in nodes}
         keys = under(kept)
         if any(run.start <= start and start + rows <= run.start + run.rows and keys <= under(run.results) for run in self.all):
@@ -281,18 +280,18 @@ class Runs:
                 spans.append((s, n))
         return spans
 
-    def from_first_row(self, nid, key, plate):
-        """The run from row 0 that reaches furthest with `nid`'s result under `key` in `plate`;
+    def from_first_row(self, nid, key):
+        """The run from row 0 that reaches furthest with `nid`'s result under `key`;
         None with none."""
-        return max((run for run in self.all if run.start == 0 and good(run.results.get(nid), key, plate)), key=lambda run: run.rows, default=None)
+        return max((run for run in self.all if run.start == 0 and good(run.results.get(nid), key)), key=lambda run: run.rows, default=None)
 
-    def beside(self, nid, key, plate, start, rows):
-        """`nid`'s signal under `key` in `plate` over the rows the runs have outside the `rows`
+    def beside(self, nid, key, start, rows):
+        """`nid`'s signal under `key` over the rows the runs have outside the `rows`
         from `start`: [(signal, its first row, gate or None)], the run that began earliest first
         as `over` serves, and no row twice."""
         drawn, out = [(start, start + rows)], []
         for s, n, results, _ in self._earliest():
-            if not good(h := results.get(nid), key, plate):
+            if not good(h := results.get(nid), key):
                 continue
             gate, at = h.get("gate"), s
             for a, b in sorted(drawn) + [(s + n, s + n)]:
@@ -305,14 +304,27 @@ class Runs:
 
 
 def _a_row(v, rows):
-    # never a tuple: a Plate is as long as a run of two rows
     return isinstance(v, (np.ndarray, list)) and len(v) == rows
 
 
 def rows_of(result, rows, at, n):
     """`result`, a series node's dict over `rows` rows, cut to `n` of them from `at`: every array
-    or list of `rows` items is cut, and the rest, its key and plate among them, stand."""
+    or list of `rows` items is cut, and the rest, its key among them, stand."""
     return {f: v[at:at + n] if _a_row(v, rows) else v for f, v in result.items()}
+
+
+UNITS = ("B", "KB", "MB", "GB", "TB")
+
+
+def in_units(n):
+    """(figure, unit): `n` bytes as the shortest figure, to one decimal past B, in the first of UNITS that holds it under 1024, or the last."""
+    for unit in UNITS[:-1]:
+        if n < 1024:
+            break
+        n /= 1024
+    else:
+        unit = UNITS[-1]
+    return (f"{n:.0f}" if unit == "B" else f"{n:.1f}"), unit
 
 
 def per_row(result):

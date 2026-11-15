@@ -8,7 +8,7 @@ import os
 import sys
 import time
 
-LOG_ENV = "SIEVE_LOG"       # the log's path; unset: stderr.log under store.app_folder(); 0: no log
+LOG_ENV = "SIEVE_LOG"       # the log's path; unset: stderr.log under recent.app_folder(); 0: no log
 
 
 class _Tee:
@@ -49,7 +49,7 @@ def log_path():
         return None
     if want:
         return want
-    from ..store import app_folder
+    from ..recent import app_folder
     return os.path.join(app_folder(), "stderr.log")
 
 

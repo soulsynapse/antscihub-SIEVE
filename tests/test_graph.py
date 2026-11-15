@@ -508,11 +508,10 @@ def test_events_name_the_demand_and_the_reader_and_memo_hits_leave_on_progress()
 
 
 def test_a_sync_event_carries_the_plan_it_began():
-    from sieve_player.store import Sidecar
     doc = fan_out()
-    D.land(doc.node("add"), Sidecar("k", "gray", "doc", "add", [0, 9], 1, 30.0, 30.0, [4, 6], "lossless").bake(10))
     doc.pin("same", TOOLS)
-    g = Graph(doc, Dec(), TOOLS)
+    cuts = Tool(**{**vars(gray), "cut_file": lambda video, footage, params: ("cut.mp4", "print")})
+    g = Graph(doc, Dec(), {**TOOLS, "gray": cuts})
     events = []
     g.on_event = events.append
     g.sync()
@@ -523,8 +522,8 @@ def test_a_sync_event_carries_the_plan_it_began():
         if n is not None and n not in reach:
             reach.add(n)
             todo += f["nodes"][n]["reads"].values()
-    assert f["nodes"]["add"]["served"] and f["nodes"]["gray"]["fed"] and not f["nodes"]["gray"]["served"]
-    assert reach == {"add"} and f["nodes"]["same"]["reads"] == {"in": "gray"}        # gray is fed, and nothing the walk reaches reads it
+    assert f["nodes"]["gray"]["served"] and f["nodes"]["gray"]["fed"] and not f["nodes"]["add"]["served"]
+    assert reach == {"add", "gray"} and f["nodes"]["gray"]["reads"] == {"in": None}  # a served node reads its file: the walk reaches no video
     assert (f["walk"], f["shown"], f["over"], f["pinned"], f["chain"]) == ("add", "add", None, ["same"], [])
     assert f["nodes"]["video"] == {"kind": "video", "fed": True, "static": False, "served": False, "steps": False,
                                    "whole_by": None, "reads": {"in": None}}

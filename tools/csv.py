@@ -77,7 +77,7 @@ def lines(result, start, fps, footage):
     if kind == "signal":
         sig = np.asarray(result["signal"], np.float32).reshape(-1)
         gate = np.asarray(result.get("gate", np.ones(len(sig), bool)), bool)
-        yield key_line(result.get("key", ""), start, len(sig), footage, result.get("plate"), kind) + "\n"
+        yield key_line(result.get("key", ""), start, len(sig), footage, kind) + "\n"
         yield ",".join(COLUMNS) + "\n"
         for i, (v, g) in enumerate(zip(sig, gate)):
             r = start + i
@@ -85,7 +85,7 @@ def lines(result, start, fps, footage):
         return
     rows = result["rows"]
     gate = np.asarray(result.get("gate", np.ones(len(rows), bool)), bool)
-    yield key_line(result.get("key", ""), start, len(rows), footage, result.get("plate"), kind) + "\n"
+    yield key_line(result.get("key", ""), start, len(rows), footage, kind) + "\n"
     if not len(rows):
         return
     dtype = rows[0].dtype

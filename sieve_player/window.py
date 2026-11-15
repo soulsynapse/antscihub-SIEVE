@@ -21,7 +21,7 @@ from PySide6.QtCore import QFileSystemWatcher, QProcess, QProcessEnvironment, QR
 from PySide6.QtGui import QImage, QKeySequence, QPainter, QPen, QPixmap, QShortcut
 from PySide6.QtWidgets import QFileDialog, QHBoxLayout, QMainWindow, QMenu, QMessageBox, QProgressBar, QPushButton, QSizePolicy, QVBoxLayout, QWidget
 
-from . import bare, dev, document, filemenu, held, recent, store, theme
+from . import bare, dev, document, filemenu, held, recent, theme
 from .canvas import Canvas
 from .catalogue import Log
 from .decoder import Decoder
@@ -30,7 +30,6 @@ from .ledger import Ledger, row_cost
 from .machine import Watch
 from .pace import Pace, clock
 from .pacecontrol import PaceControl
-from .storecontrol import StoreControl
 from .pane import Pane
 from .registry import CATEGORIES, Entry, category, description, signature
 from .stream import ASKED, EDIT, HAND, Emitter
@@ -318,17 +317,14 @@ def catalogue(items):
 
 
 class Header(QWidget):
-    """The row across the top, all at its right: what the clip walk or a refused store has to say, a
-    bare walk's bar, the store, whose press changes it, the walk's figure, the button that walks the
-    clip bare (bare.py) and the clip walk's."""
+    """The row across the top, all at its right: what the clip walk has to say, a bare walk's bar,
+    the walk's figure, the button that walks the clip bare (bare.py) and the clip walk's."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
         lay = QHBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(GAP)
-        self._refused = ""
-        self.store = StoreControl("click to choose the store's folder")
         self.note = readout(mono=True, wrap=False)
         self.note.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self.figure = PaceControl("click for the monitor")
@@ -345,19 +341,10 @@ class Header(QWidget):
         lay.addStretch(1)
         lay.addWidget(self.note)
         lay.addWidget(self.bar)
-        lay.addWidget(self.store)
         lay.addWidget(self.figure)
         lay.addWidget(self.bare)
         lay.addWidget(self.walk)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-
-    def show_store(self, st, refused=""):
-        """`st`, the Store the player writes to, read now; `refused` is why a choice was not taken,
-        said in the note until the next showing, if the note still says it then."""
-        self.store.set_store(st)
-        if refused or (self._refused and self.note.text() == self._refused):
-            self.note.setText(refused)
-        self._refused = refused
 
     def set_walking(self, on):
         self.walk.setText("Stop walk" if on else "Walk clip")
@@ -430,8 +417,7 @@ class PlayerWindow(QMainWindow):
         self._reload.setInterval(RELOAD_SETTLE_MS)
         self._reload.timeout.connect(self._pick_paths)
         self._driven = {}      # (node id, path or PARAMS input) -> (the keys set through it, the id of the node wired in)
-        self._gone = {}        # node -> why its bake could not be read when the document opened, for the graph's notes
-        self.store = store.current()   # where bakes land and are read from; the header's store control replaces it
+        self._cutting = set()  # the nodes a cut is running under: none serves its file, so the cut may land over it
 
         self.display = Display()
         self.plot = Plot()
@@ -456,10 +442,7 @@ class PlayerWindow(QMainWindow):
         self.plot.bandReleased.connect(self._band_released)
         self.plot.chipClicked.connect(lambda nid: self.canvas.select([nid]))
         self.plot.pinToggled.connect(self._toggle_pin)
-        self.pane.bakeAsked.connect(lambda nid: self.worker is not None
-                                    and self.worker.bake(nid, os.path.basename(self.doc.path or "")))
-        self.pane.bakeCancelled.connect(lambda nid: self.worker is not None and self.worker.cancel_bake())
-        self.pane.modeToggled.connect(self._toggle_mode)
+        self.pane.cutting.connect(self._cut)
         self.display.drawFailed.connect(self._draw_failed)
         self.display.picked.connect(self._picked)
         self.display.back.connect(self._back)
@@ -467,8 +450,6 @@ class PlayerWindow(QMainWindow):
         self._shown_last = None
         self.selection = None      # the node the canvas last selected, whose settings the pane shows until its card is closed and whose axis the plot draws
         self.header = Header()
-        self.header.show_store(self.store)
-        self.header.store.clicked.connect(self._choose_store)
         self.header.walk.clicked.connect(self._toggle_clip)
         self.header.bare.clicked.connect(self._toggle_bare)
         self.header.figure.clicked.connect(lambda: dev.show(self, "monitor"))
@@ -546,9 +527,6 @@ class PlayerWindow(QMainWindow):
         self._taken, self._driven = {}, {}     # the loaders' memory is the document's: its files are read anew
         self._shown_before, self._shown_last = [], doc.display
         doc.resolve(self.tools)
-        self._gone = self.store.missing(doc)    # asked here, where the document opens; said on the graph once there is one
-        for nid in self._gone:
-            doc.node(nid).mode = document.LIVE
         self.canvas.set_document(doc)
         self.pane.set_document(doc)
         self.selection = None
@@ -717,17 +695,14 @@ class PlayerWindow(QMainWindow):
         self.canvas.update()
         if self.graph is None:
             return
-        was = self._axis()
         self.graph.sync()
         self._restate()
         self._invalidate()
-        self._follow_axis(was)
         self.goto(self.row, commit=True)
 
     def reflag(self):
         """A flag moved: the runtime's plan follows and the frame shows the new node at the same row.
-        The memo and the walk stand; nothing a flag names is computed differently, unless the
-        display flag crossed a bake, which moves the document into the other row space."""
+        The memo and the walk stand; nothing a flag names is computed differently."""
         if self.doc.display != self._shown_last:
             if self._shown_last is not None:
                 self._shown_before.append(self._shown_last)
@@ -735,11 +710,8 @@ class PlayerWindow(QMainWindow):
         self.canvas.update()
         if self.graph is None:
             return
-        was = self._axis()
         self.graph.sync()
         self._restate()
-        if self._follow_axis(was):
-            self._invalidate()
         self.goto(self.row, commit=True)
 
     def _back(self):
@@ -764,55 +736,19 @@ class PlayerWindow(QMainWindow):
         else:
             self._params_changed(nid)
 
-    def _axis(self):
-        return (self.graph.axis, self.graph.plate)
-
-    def _follow_axis(self, was):
-        """The document's row space changed with the display flag: the count and fps are the new
-        space's, the playhead and window map across through the plate, and the traces, which were of
-        the other clip, clear. Returns whether it changed."""
-        if self._axis() == was:
-            return False
-        old, new = was[1] or document.Plate(0, 1), self.graph.plate or document.Plate(0, 1)
-        across = lambda r: new.from_plate(old.to_plate(r))
-        row, (s, n) = across(self.row), self.window_
-        self.fps, self.count = self.graph.fps, self.graph.count
-        self.timeline.strip.set_count(self.count, self.fps)
-        self.timeline.controls.set_count(self.count, self.fps)
-        self.results, self.clip_results = {}, {}
-        self.pane.set_source(self.decoder.path, self.fps)
-        if self.playing:
-            self.timer.start(max(1, int(round(1000 / self.fps))))
-        self.set_window(across(s), max(1, round(n * old.increment / new.increment)), playhead=row, by=EDIT)
-        return True
-
-    def _toggle_mode(self, nid):
-        node = self.doc.node(nid)
-        node.mode = document.LIVE if document.served(node) else document.BAKED
-        gone = self.store.missing(self.doc).get(nid)
-        if gone:
-            node.mode = document.LIVE
-        self.sync()
-        if gone:
-            self.graph.note(nid, gone)
-            self._restate()
-
-    def _choose_store(self):
-        path = QFileDialog.getExistingDirectory(self, "Store folder", self.store.folder)
-        if not path:
-            return
-        refused = store.choose(path)
-        if not refused:
-            self.store = store.current()
-            if self.worker is not None:
-                self.worker.store = self.store      # the next bake's; one running lands where it began
-        self.header.show_store(self.store, refused)
+    def _cut(self, nid, on):
+        """A cut began or ended under `nid`: while one runs the node serves no file, so the files
+        it writes may land over the ones it served, and at its end the node serves what landed."""
+        (self._cutting.add if on else self._cutting.discard)(nid)
+        if self.graph is not None:
+            self.graph.hold_off(nid, on)
+            self.sync()
 
     def _restate(self):
         if self.graph is None:
             return
-        self.canvas.grayed, self.canvas.stale = set(self.graph.off), set(self.graph.stale)
-        self.pane.show_modes(self.graph.stale)
+        self.canvas.served = {n.id for n in self.doc.nodes if (e := self.graph.entry(n.id)) is not None and e.file is not None}
+        self.pane.set_source(self.decoder.path, self.fps, {n.id: self.graph.footage(n.id) for n in self.doc.nodes})
         for n in self.doc.nodes:
             text = self.graph.standing(n.id)
             self.pane.set_standing(n.id, text)
@@ -1069,11 +1005,9 @@ class PlayerWindow(QMainWindow):
         self._unload()
         self.decoder = decoder
         self.stream = Emitter()
-        self.graph = Graph(self.doc, decoder, self.tools, open_bake=lambda bake, cache: self.store.open_bake(bake, cache), stream=self.stream,
-                           **({"memo_bytes": m} if (m := _gb(MEMO_ENV)) else {}))
-        for nid, why in self._gone.items():
-            self.graph.note(nid, why)
-        self._gone = {}
+        self.graph = Graph(self.doc, decoder, self.tools, stream=self.stream, **({"memo_bytes": m} if (m := _gb(MEMO_ENV)) else {}))
+        for nid in self._cutting:
+            self.graph.hold_off(nid, True)
         # the one line a report of this video's run needs beside the log's tracebacks
         print(f"SIEVE {time.strftime('%H:%M:%S')}: opened {path}: {decoder.width}x{decoder.height} at {decoder.fps:.3f} fps, "
               f"{decoder.count} rows claimed, luma plane {'read' if decoder.luma else 'converted'}; "
@@ -1087,7 +1021,7 @@ class PlayerWindow(QMainWindow):
         self.lateness = Lateness(self._sample, parent=self)
         self.machine = Watch(self._sample, still_out=self.stream.still_out)
         self.pace = Pace()
-        self.worker = Worker(self.graph, store=self.store, tell_every=TELL)
+        self.worker = Worker(self.graph, tell_every=TELL)
         self._tell_shown()
         self.fps, self.count = self.graph.fps, self.graph.count
         ct = self.timeline.controls
@@ -1096,8 +1030,7 @@ class PlayerWindow(QMainWindow):
                              ("walked", lambda _, n, *was: self._set_length(n)),   # the walk's own length: clamped, or closed early
                              ("walked", lambda *row: self._paced("window", *row)),
                              ("failed", self._failed), ("clipWalked", self._clip_walked), ("clipReady", self._clip_ready),
-                             ("clipRefused", self._clip_refused), ("baked", self.pane.show_bake), ("bakeDone", self._baked),
-                             ("bakeRefused", self._bake_refused), ("walkRefused", ct.progress.setText),
+                             ("clipRefused", self._clip_refused), ("walkRefused", ct.progress.setText),
                              ("shortened", self._shortened)):
             getattr(self.worker, signal).connect(self._timed("slot", signal, slot))
         self.worker.finished.connect(lambda w=self.worker: self._worker_ended(w))
@@ -1294,7 +1227,7 @@ class PlayerWindow(QMainWindow):
     def _as_given(self, part):
         """`part`, node to held result, as the worker takes it: node to (raw key, the result's fields
         as the tool made them, without what the player put beside them)."""
-        return {nid: (self.graph.entry(nid).raw_key, {f: v for f, v in r.items() if f not in ("gate", "key", "plate")})
+        return {nid: (self.graph.entry(nid).raw_key, {f: v for f, v in r.items() if f not in ("gate", "key")})
                 for nid, r in part.items()}
 
     def _show_held(self):
@@ -1310,8 +1243,7 @@ class PlayerWindow(QMainWindow):
         """The series chain as held.Runs is told it; one of no nodes with no video open."""
         g = self.graph
         entries = {} if g is None else {nid: e for nid in g.chain if (e := g.entry(nid)) is not None}
-        return held.Chain({nid: e.key for nid, e in entries.items()}, frozenset(nid for nid, e in entries.items() if e.steps),
-                          None if g is None else g.plate)
+        return held.Chain({nid: e.key for nid, e in entries.items()}, frozenset(nid for nid, e in entries.items() if e.steps))
 
     def _key(self, nid):
         """The key `nid` now has; None for a node the plan does not have."""
@@ -1366,7 +1298,7 @@ class PlayerWindow(QMainWindow):
 
     def _start_bare(self):
         folder = tempfile.mkdtemp(prefix="sieve-bare-")
-        job = bare.job(self.doc, self.decoder.path, self.tools, self.store.folder, os.path.join(folder, "results.pkl"))
+        job = bare.job(self.doc, self.decoder.path, self.tools, os.path.join(folder, "results.pkl"))
         with open(os.path.join(folder, "job.json"), "w", encoding="utf-8") as f:
             json.dump(job, f)
         p = QProcess(self)
@@ -1425,12 +1357,12 @@ class PlayerWindow(QMainWindow):
         self.header.note.setText(note)
         self.header.bare.setText("Walk bare")
 
-    def _paced(self, lane, done, total, ran, served):
-        self.pace.row(lane, done, total, ran, served)
+    def _paced(self, lane, done, total, ran):
+        self.pace.row(lane, done, total, ran)
         self.header.figure.set_figure(self.pace.figure(self.fps, self.count))
 
-    def _clip_walked(self, done, total, ran, served):
-        self._paced("clip", done, total, ran, served)
+    def _clip_walked(self, done, total, ran):
+        self._paced("clip", done, total, ran)
         self._clip_ended = done >= total > 0        # the results that follow are a walk's own, held at once
         if self._clip_asked:
             self.header.clear_note()
@@ -1493,10 +1425,10 @@ class PlayerWindow(QMainWindow):
         r = self.clip_results.get(nid)
         if self.graph is None:
             return r
-        key, plate = self._key(nid), self.graph.plate
-        if not held.good(r, key, plate):
+        key = self._key(nid)
+        if not held.good(r, key):
             r = None        # of a key the node has left, where the walk it came from had no rows to run the chain over again
-        best = self.runs.from_first_row(nid, key, plate)
+        best = self.runs.from_first_row(nid, key)
         return r if best is None or (isinstance(r, dict) and "signal" in r and len(r["signal"]) >= best.rows) else best.results[nid]
 
     def _show_size(self):
@@ -1504,7 +1436,7 @@ class PlayerWindow(QMainWindow):
         file, from the window's rows."""
         if self.selection is not None:
             per = held.per_row(self.results.get(self.selection))
-            figure, unit = store.in_units(per * self.count) if per else ("", "")
+            figure, unit = held.in_units(per * self.count) if per else ("", "")
             self.pane.set_size(self.selection, f"~{figure} {unit}" if per else "", unit, f"about {figure} {unit} held over the clip")
 
     def _show_takes(self):
@@ -1522,16 +1454,6 @@ class PlayerWindow(QMainWindow):
         text = f"{s * 1000:.0f} ms" if s < 1 else f"{s:.1f} s" if s < 10 else f"{s:.0f} s" if s < 60 else clock(s)
         self.pane.set_takes(nid, f"~{text}", f"about {text} of this node's own work over the clip's {self.count} rows, "
                                              f"at {ms:.2f} ms a run over the {lane} walk's {n}")
-
-    def _baked(self, nid, bake):
-        """Recorded here, on the GUI thread, since the document is the GUI's and the worker's alone to read."""
-        document.land(self.doc.node(nid), bake)
-        self.header.show_store(self.store)
-        self.sync()
-
-    def _bake_refused(self, nid, why):
-        self.pane.bake_refused(nid, why)
-        self._restate()
 
     def _clip_refused(self, why):
         self._clip_asked = False
@@ -1551,7 +1473,7 @@ class PlayerWindow(QMainWindow):
                 r, start = self.results.get(nid), self.result_start
             if isinstance(r, dict) and "signal" in r:
                 series[nid] = (r["signal"], start, r.get("gate"))
-                more[nid] = self.runs.beside(nid, self._key(nid), self.graph.plate, start, len(r["signal"]))
+                more[nid] = self.runs.beside(nid, self._key(nid), start, len(r["signal"]))
         self.timeline.strip.set_series(series, self.selection, more)
 
     def _set_length(self, rows):

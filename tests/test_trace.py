@@ -76,8 +76,8 @@ def test_the_trace_has_a_timestamp_duration_and_thread_on_every_event(tmp_path):
     first = {ev.node: ev for ev in events if ev.row == 0 and ev.kind in ("run", "decode")}
     assert total[id(first["add"])] >= first["add"].ms + total[id(first["gray"])]           # a run's total holds its reads
     assert total[id(first["video"])] == first["video"].ms                                 # a read opens nothing
-    read, cancelled = (Event(**{f: None for f in FIELDS} | {"kind": k, "ms": 1.0, "t": t, "thread": "w"}) for k, t in (("read", 1.0), ("cancel", 0.0)))
-    assert totals([read, cancelled])[id(cancelled)] == 2.0                                # a bake's row read and a cancelled run are spans too
+    read, cancelled = (Event(**{f: None for f in FIELDS} | {"kind": k, "ms": 1.0, "t": t, "thread": "w"}) for k, t in (("decode", 1.0), ("cancel", 0.0)))
+    assert totals([read, cancelled])[id(cancelled)] == 2.0                                # a cancelled run is a span too
 
 
 def test_two_threads_and_either_install_order_write_one_whole_dump(tmp_path):

@@ -11,7 +11,7 @@ import os
 from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtWidgets import QComboBox, QFileDialog, QFrame, QPushButton, QScrollArea, QVBoxLayout, QWidget
 
-from .document import BAKED, LIVE, VIDEO_OUTPUT, VIDEO_OUTPUTS, VIDEO_TOOL, is_selector, mode_of, paths, video_output
+from .document import VIDEO_OUTPUT, VIDEO_OUTPUTS, VIDEO_TOOL, is_selector, paths, video_output
 from .theme import CONTROL_W, GAP, HELD, PAD, WIDE_W, Badge, CloseMark, Form, Layer, readout
 
 VIDEO_FILTER = "Video (*.mp4 *.MP4 *.avi *.mov *.mkv *.mts *.MTS);;All (*)"
@@ -27,7 +27,7 @@ def _column(parent, spacing=GAP):
 class Video(QWidget):
     """The video node's settings: a picker, the chosen path and what cv2 says about it, and the
     decoder's one param, `output`, bgr as decoded, gray or luma, applied before its cache so a chain
-    that wants gray frames never holds the colour ones; a smaller frame is a rescale node's, or a bake's."""
+    that wants gray frames never holds the colour ones; a smaller frame is a rescale node's."""
     sourceChanged = Signal(str)
     paramChanged = Signal(str, object)     # (param name, value)
 
@@ -93,46 +93,6 @@ class Video(QWidget):
         self.button.setToolTip("" if free else f"{by} picks the video; unwire it to choose by hand")
 
 
-class BakeBlock(QWidget):
-    """The block under a tool with a `bake` facet: the node's mode, the button that asks the window
-    for a bake and cancels one running, the switch between serving the bake and going live, and the
-    line that says how far it is or why it stopped."""
-    asked = Signal()
-    cancelled = Signal()
-    toggled = Signal()      # the switch between serving the bake and going live
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        lay = _column(self)
-        self.mode, self.button, self.status = readout(mono=True), QPushButton("Bake"), readout()
-        self.switch = QPushButton("Go live")
-        self.form = Form([("mode", self.mode), ("bake", self.button), ("serve", self.switch)])
-        self.form.add_line(self.status)
-        lay.addWidget(self.form)
-        self.running = False
-        self.button.clicked.connect(lambda: (self.cancelled if self.running else self.asked).emit())
-        self.switch.clicked.connect(self.toggled)
-        self.switch.setEnabled(False)
-
-    def set_mode(self, mode, has_bake=False, stale=False):
-        """`mode` as the document says it, shown as stale when the plan says so; the switch offers
-        the other side only once a bake exists, and Bake is offered only live, since a bake is of the chain."""
-        self.mode.setText("stale" if stale else mode or "")
-        self.switch.setEnabled(has_bake)
-        self.button.setEnabled(mode != BAKED)
-        self.switch.setText("Serve bake" if mode == LIVE else "Go live")
-
-    def set_progress(self, done, total):
-        self.running = done < total
-        self.button.setText("Cancel" if self.running else "Bake")
-        self.status.setText(f"baking {done}/{total}" if self.running else f"baked {total} rows" if total else "")
-
-    def set_refused(self, why):
-        self.running = False
-        self.button.setText("Bake")
-        self.status.setText(why)
-
-
 class Pane(QWidget):
     """`tools` is the catalogue, name to module. `select(nid)` shows that node's surface, None
     shows nothing, and the x in a card's corner shows nothing and says `closed`; the node is
@@ -140,9 +100,7 @@ class Pane(QWidget):
     Its size hint is the shown card's height, so a host that stacks it under the canvas gives it only the room its content needs."""
     paramsChanged = Signal(str)   # this node's params in the document changed here
     videoPicked = Signal(str)
-    bakeAsked = Signal(str)       # the Bake button under this node
-    bakeCancelled = Signal(str)
-    modeToggled = Signal(str)     # the switch under this node: serve its bake, or go live
+    cutting = Signal(str, bool)   # this node's settings widget began, or ended, writing the files its tool's cut_file answers with
     closed = Signal()             # the x in the shown card's corner; the pane already shows nothing
 
     def __init__(self, tools, parent=None):
@@ -153,10 +111,9 @@ class Pane(QWidget):
         self.standings = {}   # tool node -> the line under its settings, see set_standing
         self.sizes = {}       # node -> the badge after its name that says what its result would take on disk, see set_size
         self.takes = {}       # node -> the badge after that one that says how long its work would take, see set_takes
-        self.bakes = {}       # node whose tool bakes -> its BakeBlock
         self.video = None
         self.current = None
-        self._src, self._fps = None, None
+        self._src, self._fps, self._of = None, None, {}
         lay = _column(self, 0)
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -198,7 +155,6 @@ class Pane(QWidget):
         self.standings.pop(nid, None)
         self.sizes.pop(nid, None)
         self.takes.pop(nid, None)
-        self.bakes.pop(nid, None)
         if self.video is not None and self.video.parent() is card:
             self.video = None
         self._lay.removeWidget(card)
@@ -243,18 +199,12 @@ class Pane(QWidget):
                 self.standings[node.id].hide()
                 card.add(self.standings[node.id])
                 if hasattr(w, "set_source"):
-                    w.set_source(self._src, self._fps)
+                    w.set_source(self._of.get(node.id, self._src), self._fps)
+                if hasattr(w, "cutting"):
+                    w.cutting.connect(lambda on, nid=node.id: self.cutting.emit(nid, on))
                 if is_selector(tool) or paths(tool):
                     self.notes[node.id] = readout()
                     card.add(self.notes[node.id])
-            if w is not None and getattr(tool, "bake", None) is not None:
-                block = BakeBlock()
-                block.set_mode(mode_of(self.doc, self.tools, node.id), node.baked is not None)
-                block.asked.connect(lambda nid=node.id: self.bakeAsked.emit(nid))
-                block.cancelled.connect(lambda nid=node.id: self.bakeCancelled.emit(nid))
-                block.toggled.connect(lambda nid=node.id: self.modeToggled.emit(nid))
-                card.add(block)
-                self.bakes[node.id] = block
         card.hide()
         self._lay.insertWidget(self._lay.count() - 1, card)
         self.cards[node.id] = card
@@ -306,19 +256,6 @@ class Pane(QWidget):
     def widget(self, nid):
         return self.widgets.get(nid)
 
-    def show_bake(self, nid, done, total):
-        if nid in self.bakes:
-            self.bakes[nid].set_progress(done, total)
-
-    def bake_refused(self, nid, why):
-        if nid in self.bakes:
-            self.bakes[nid].set_refused(why)
-
-    def show_modes(self, stale=()):
-        """Every mode line follows the document, and the plan's `stale` nodes, after a sync."""
-        for nid, block in self.bakes.items():
-            block.set_mode(mode_of(self.doc, self.tools, nid), self.doc.node(nid).baked is not None, nid in stale)
-
     def note(self, nid, text):
         """The line under a selector's settings, what its rule matched, or under a tool with path
         inputs, which files were picked for them."""
@@ -335,7 +272,7 @@ class Pane(QWidget):
 
     def set_size(self, nid, text, unit="", tip=""):
         """The badge after `nid`'s name that says what its result would take on disk, from the
-        window: `text` in the colour theme.HELD has for `unit`, one of store.UNITS, and `tip` the
+        window: `text` in the colour theme.HELD has for `unit`, one of held.UNITS, and `tip` the
         sentence under the pointer; a `text` of "" hides it."""
         badge = self.sizes.get(nid)
         if badge is not None:
@@ -348,8 +285,11 @@ class Pane(QWidget):
         if badge is not None:
             badge.say(text, tip=tip)
 
-    def set_source(self, path, fps):
-        """The video every settings widget with a `set_source` writes from; None when nothing is loaded."""
-        self._src, self._fps = path, fps
-        for w in [w for w in self.widgets.values() if hasattr(w, "set_source")]:
-            w.set_source(path, fps)
+    def set_source(self, path, fps, of=None):
+        """The footage every settings widget with a `set_source` writes from or beside: `path`, the
+        open video, or for a node of `of`, node to path, the file its inputs are frames of; None
+        when nothing is loaded. A widget is told only when its footage or the fps changed."""
+        was, self._src, self._fps, self._of = (self._src, self._fps, self._of), path, fps, dict(of or {})
+        for nid, w in self.widgets.items():
+            if hasattr(w, "set_source") and (was[2].get(nid, was[0]), was[1]) != (self._of.get(nid, path), fps):
+                w.set_source(self._of.get(nid, path), fps)

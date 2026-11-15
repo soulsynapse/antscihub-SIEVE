@@ -30,7 +30,7 @@ _HINTS = {
     "PARAMS": 'PARAMS = {"regions": from_region}  # INPUTS that also carry params: name -> params from the params of the node wired in',
     "select": "def select(folder, params): ...  # a selector: the path it picks under folder, or None",
     "matches": "def matches(folder, params): ...  # a selector: every path its rule matches, picked first",
-    "bake": "def bake(params, count): ...  # the node bakes: (the plate rows a bake writes over a clip of count rows, the frame writer's quality); a Bake button under it",
+    "cut_file": "def cut_file(video, footage, params): ...  # the node cuts the video into files: (the path of the file that holds what run hands out of video, whose decoder.footage_print is footage, under params; that file's own print), or None while there is none; a node that reads the video node serves it",
 }
 FACETS = tuple(_HINTS)
 
@@ -109,22 +109,19 @@ def types(entries, extra=()):
     return out
 
 
-CATEGORIES = ("source", "convert", "relate", "transform", "cache", "measure")   # the Tab menu's order: a pipeline's
+CATEGORIES = ("source", "convert", "relate", "transform", "measure")   # the Tab menu's order: a pipeline's
 
 
 def category(tool):
     """The group `tool` falls in, read off its facets by the first rule that fits: a source has no
-    `EXPECTS`; a cache has `bake`; a measure produces signal and does not expect it; a relate has
-    `INPUTS` and produces `same` or a type it expects; a convert produces a type it does not expect;
-    the rest transform. Measure sits before convert and cache before transform because each is the
-    other by shape."""
+    `EXPECTS`; a measure produces signal and does not expect it; a relate has `INPUTS` and produces
+    `same` or a type it expects; a convert produces a type it does not expect; the rest transform.
+    Measure sits before convert because it is one by shape."""
     ex = probe(tool, "EXPECTS")
     if ex is None:
         return "source"
     ex = {ex} if isinstance(ex, str) else set(ex)
     p = probe(tool, "PRODUCES")
-    if probe(tool, "bake") is not None:
-        return "cache"
     if p == "signal" and "signal" not in ex:
         return "measure"
     if probe(tool, "INPUTS") and (p == "same" or p in ex):

@@ -1,7 +1,8 @@
 r"""The simulations: each builds one fault on purpose with the player's own Graph and Worker, on a clip
-and a store it writes under the folder it is handed, and returns what the catalogue's log then holds.
-The graph is one, video, gray, work, bake, edge, then mean and pile as the chain; a fault is one
-departure from HEALTHY's ways of walking it. Those that serve a bake need ffmpeg, as a bake does.
+it writes under the folder it is handed, and returns what the catalogue's log then holds.
+The graph is one, video, gray, work, edge, then mean and pile as the chain; a fault is one
+departure from HEALTHY's ways of walking it. One that serves a file has cut between the video and
+gray, a node whose tool answers a second clip as its cut file.
 With --show the monitor is opened on the first one named and its fault repeated until it is closed;
 with --long the clip is LONG rows, and each entry says how far into its walk it was first found.
 
@@ -20,17 +21,14 @@ import numpy as np
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import QApplication
 
-from tools import bake
-
 from .. import document as D
 from ..catalogue import CLASSES, STALLS, WHOLE, Log
-from ..decoder import Decoder
+from ..decoder import Decoder, footage_print
 from ..graph import Graph
 from ..ledger import SETTLES_BY, Ledger
 from ..machine import Watch
 from ..pace import Pace
 from ..report import line
-from ..store import Store
 from ..stream import HAND, Emitter
 from ..worker import Worker
 from .timeview import Window, context
@@ -74,11 +72,11 @@ def _late(sample, interval_ms=50):
     return timer
 
 
-def _clip(path, rows):
+def _clip(path, rows, shift=0):
     w = cv2.VideoWriter(path, cv2.VideoWriter_fourcc(*"MJPG"), 30, (W, H))
     y, x = np.mgrid[:H, :W]
     for r in range(rows):
-        f = ((x * 2 + y + 5 * r) % 180).astype(np.uint8)
+        f = ((x * 2 + y + 5 * r + shift) % 180).astype(np.uint8)
         w.write(cv2.merge((f, f // 2, 255 - f)))
     w.release()
     return path
@@ -120,7 +118,13 @@ def _tools(rows):
     gray = frame("gray", "bgr", lambda f, p: f[..., 1] + np.uint8(p["k"]))
     work, edge = frame("work", "gray", lambda f, p: f), frame("edge", "gray", lambda f, p: f + np.uint8(p["k"]))
     work.ms = edge.ms = MS
-    return {t.NAME: t for t in (gray, work, bake, edge, mean, pile)}
+    return {t.NAME: t for t in (gray, work, edge, mean, pile)}
+
+
+def _cut(path):
+    """A node that passes its frame through, whose cut file is the clip at `path`."""
+    return Tool(NAME="cut", KIND="frame", EXPECTS="bgr", PRODUCES="bgr", DEFAULTS={}, run=lambda frames, row, params: frames(row),
+                cut_file=lambda video, footage, params: (path, footage_print(path)))
 
 
 class _Run:
@@ -129,8 +133,10 @@ class _Run:
 
     def __init__(self, folder, served=False, pinned=(), rows=ROWS, **limits):
         QApplication.instance() or QApplication([])
-        self.rows, self.tools, self.store = rows, _tools(rows), Store(os.path.join(folder, "store"))
+        self.rows, self.tools = rows, _tools(rows)
         self.path = _clip(os.path.join(folder, "clip.avi"), rows)
+        if served:      # another clip than the video's, so the two are keyed apart
+            self.tools = {"cut": _cut(_clip(os.path.join(folder, "cut.avi"), rows, shift=7)), **self.tools}
         self.doc = D.from_tools(list(self.tools.values()), self.path)
         self.doc.pinned = list(pinned)
         self.limits = {k: v * rows // ROWS if k == "memo_bytes" else v for k, v in limits.items()}
@@ -138,27 +144,21 @@ class _Run:
         self._open(Ledger(timed=lambda: self.stream.turn("monitor", "ledger"), watch=Log()))
         self.machine = Watch(lambda *sample: self.ledger.sample(*sample), limits.get("sample", 1.0),
                              still_out=lambda cpu: self.stream.still_out(cpu))     # one for the run: its counters take 0.4 s to open
-        if served:      # baked on one graph and served on a fresh one, so no store holds what is upstream of it
-            D.land(self.doc.node("bake"), self.bake())
-            self._shut()
-            self._open(Ledger(timed=lambda: self.stream.turn("monitor", "ledger"), watch=Log()))
 
     def _open(self, ledger):
         cache = self.limits.get("cache_bytes")
         self.stream = Emitter()
         self.graph = Graph(self.doc, Decoder(self.path, **({} if cache is None else {"cache_bytes": cache})), self.tools,
-                           open_bake=self.store.open_bake, stream=self.stream, **{k: v for k, v in self.limits.items() if k == "memo_bytes"})
+                           stream=self.stream, **{k: v for k, v in self.limits.items() if k == "memo_bytes"})
         self.ledger, self.pace = ledger, Pace()
         self.stream.on_event = ledger.event
         self.graph.sync()       # the plan, into the ledger
         self.graph.watch(self.doc.pinned)
-        self.worker = Worker(self.graph, every=EVERY, store=self.store)
-        self.walked, self.series, self.baked = [], [], []
+        self.worker = Worker(self.graph, every=EVERY)
+        self.walked, self.series = [], []
         self.worker.walked.connect(self.slot("walked", lambda done, n, *was: (self.walked.append((done, n)),
                                                                              self.pace.row("window", done, n, *was))))
         self.worker.seriesReady.connect(self.slot("seriesReady", lambda *a: self.series.append(a)))
-        self.worker.bakeDone.connect(lambda nid, b: self.baked.append(b))
-        self.worker.bakeRefused.connect(lambda nid, why: self.baked.append(RuntimeError(why)))
         self.lateness = _late(ledger.sample)    # one a graph: what opening the next keeps the GUI thread for is no lateness of a walk's
 
     def slot(self, name, fn):
@@ -192,14 +192,6 @@ class _Run:
         self.doc.node(nid).params.update(params)
         self.graph.sync()
         return self.worker.invalidate
-
-    def bake(self):
-        self.walk(0, 2)
-        self.worker.bake("bake", "simulation")
-        self.wait(lambda: self.baked, "the bake")
-        if isinstance(self.baked[0], Exception):
-            raise self.baked[0]
-        return self.baked[0]
 
     def settle(self):
         """Waits until the buckets written so far are settled, so the log has been told of them and of the walks over them."""
@@ -242,11 +234,13 @@ def _fault(**run):
     return mark
 
 
-@_fault(served=True)
+@_fault()
 def unread(r):
-    """A bake served on a fresh graph, and the graph told the plot shows gray and work where the
-    stream is told of neither: the window walk folds the two, which nothing reads."""
-    r.graph.watch(["gray", "work"])
+    """edge reading gray, so nothing reads work, and the graph told the plot shows work where the
+    stream is told of nothing: the window walk runs work for its fold, which nothing reads."""
+    r.doc.connect("gray", "edge")
+    r.graph.sync()
+    r.graph.watch(["work"])
     r.walk()
 
 
@@ -264,12 +258,11 @@ def cache(r):
     r.walk(ask=r.change("gray", k=1))
 
 
-@_fault(served=True, pinned=("gray", "work"), cache_bytes=8 * ROW * 3)
+@_fault(served=True, cache_bytes=8 * ROW * 3)
 def reader(r):
-    """A served reader's cache that holds eight rows, and a change under it; what is upstream is
-    pinned, so its folds are read."""
+    """A served file's cache that holds eight rows, and a change at gray, which decodes the window again."""
     r.walk()
-    r.walk(ask=r.change("edge", k=1))
+    r.walk(ask=r.change("gray", k=1))
 
 
 @_fault()
@@ -303,7 +296,7 @@ def held(r):
     r.walk(r.rows // 2, r.rows // 2)
 
 
-@_fault(pinned=("gray", "work", "bake", "edge"))
+@_fault(pinned=("gray", "work", "edge"))
 def slot(r):
     """A slot of the GUI thread's that spins at every row, holding the interpreter the worker then
     waits for. The wait lands in whatever span the worker is in, the folds among them, so the frame
@@ -312,7 +305,7 @@ def slot(r):
     r.walk()
 
 
-@_fault(pinned=("gray", "work", "bake", "edge"))
+@_fault(pinned=("gray", "work", "edge"))
 def signals(r):
     """Rows a tenth as long, and a slot of the GUI thread's that does a little at every one. The
     frame nodes are pinned, so the folds of so short a row are read."""
@@ -439,7 +432,7 @@ def _given_long(r):
     hook = r.worker.clipReady.connect(lambda results, start, fps: made.append(results))
     r.walk()        # the window is the clip, so what its chain made is what a clip walk would step
     r.tools["pile"].long = r.rows, STALLS + 1.5
-    r.worker.give_clip(r.rows, {nid: (g.entry(nid).raw_key, {f: v for f, v in r.series[-1][0][nid].items() if f not in ("gate", "key", "plate")})
+    r.worker.give_clip(r.rows, {nid: (g.entry(nid).raw_key, {f: v for f, v in r.series[-1][0][nid].items() if f not in ("gate", "key")})
                                 for nid in g.chain if g.entry(nid).steps or nid in g.heads})
     r.worker.walk_clip(HAND)
     r.wait(lambda: made, "the clip walk given its stepped nodes")
@@ -459,10 +452,9 @@ SIMULATIONS = {"unread": (unread, "unread"), "memo": (memo, "thrash"), "cache": 
                "held": (held, "slower"), "slot": (slot, "waits"), "signals": (signals, "signals"),
                "frozen": (frozen, "late"), "holds": (holds, "late"), "unspanned": (unspanned, "late"),
                "again": (again, "restarts"), "stuck": (stuck, "stalls"), "unreturned": (unreturned, "late")}     # name -> (it, the class it builds)
-SERVED = {"unread", "reader", "bake"}      # the simulations that write a bake
 HEALTHY = {"walk": _healthy(_Run.walk), "rewalk": _healthy(_Run.walk, _Run.walk),
            "midclip": _healthy(lambda r: r.walk(r.rows // 4, r.rows // 2)), "scrub": _healthy(_scrubbed),
-           "bake": _healthy(_Run.walk, _Run.bake), "drag": _healthy(lambda r: _again(r, HAND)),
+           "drag": _healthy(lambda r: _again(r, HAND)),
            "behind": _healthy(_behind), "stopped": _healthy(lambda r: _clip_walk(r, r.rows // 2, r.worker.stop_clip)),
            "wholelong": _healthy(_whole_long), "givenlong": _healthy(_given_long)}      # each a way of walking the graph that is no fault
 

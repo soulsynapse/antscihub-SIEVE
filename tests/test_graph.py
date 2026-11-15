@@ -593,6 +593,7 @@ def test_the_window_and_the_clip_are_one_walk_over_two_ranges():
     head.fold = lambda frame: np.asarray([float(frame.mean())])
     doc = D.from_tools([gray, head])
     g = Graph(doc, Dec(), {**TOOLS, "head": head})
+    g.watch(["gray"])
     events = []
     g.on_event = events.append
     w = Worker(g, every=3)

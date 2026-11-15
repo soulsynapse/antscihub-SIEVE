@@ -6,7 +6,7 @@ one row is their min and max, so nothing is hidden and nothing is added, and the
 selection's gate keeps are washed. A bar along its bottom edge is over the rows held."""
 import numpy as np
 from PySide6.QtCore import QPoint, QPointF, QRectF, Qt, Signal
-from PySide6.QtGui import QColor, QPainter, QPen, QPolygonF
+from PySide6.QtGui import QColor, QPainter, QPen, QPixmap, QPolygonF
 from PySide6.QtWidgets import QDoubleSpinBox, QHBoxLayout, QLabel, QPushButton, QSizePolicy, QWidget
 
 from . import theme
@@ -40,6 +40,7 @@ class Strip(QWidget):
         self._mode = None        # "head" | "body" | "place"
         self._draft = None       # (start, length) while a window drag is live
         self._grab = 0           # row offset of the grab point inside the body
+        self._still = None       # (what it was painted for, the pixmap of all but the hover and the playhead), or None once what it shows changed
         self.setFixedHeight(self.H)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.setMouseTracking(True)
@@ -51,7 +52,7 @@ class Strip(QWidget):
 
     def set_count(self, count, fps):
         self.count, self.fps = max(1, count), fps
-        self.update()
+        self._redraw()
 
     def set_playhead(self, row):
         self.playhead = row
@@ -59,7 +60,7 @@ class Strip(QWidget):
 
     def set_window(self, start, length):
         self.window = (start, length)
-        self.update()
+        self._redraw()
 
     def set_hover(self, row):
         self.hover = row
@@ -75,12 +76,17 @@ class Strip(QWidget):
         self.series = {nid: cast(*seg) for nid, seg in series.items()}
         self.more = {nid: [cast(*seg) for seg in segs] for nid, segs in (more or {}).items() if nid in self.series}
         self.selection = selection
-        self.update()
+        self._redraw()
 
     def set_held(self, spans):
         """The stretches of the clip, (start, rows) each, a window placed wholly inside one of which
         costs the series chain nothing; drawn as a bar along the bottom edge."""
         self.held = [(int(s), int(n)) for s, n in spans]
+        self._redraw()
+
+    def _redraw(self):
+        """What is drawn under the hover and the playhead changed: the next paint draws it anew."""
+        self._still = None
         self.update()
 
     def _x(self, row):
@@ -100,7 +106,26 @@ class Strip(QWidget):
         return "body" if y <= self.GRAB else "head"
 
     def paintEvent(self, _):
+        # a playhead or a hover that moves must draw no row of any series: only their lines go over the pixmap
+        key = (self.size(), self.devicePixelRatioF())
+        if self._still is None or self._still[0] != key:
+            still = QPixmap(self.size() * key[1])
+            still.setDevicePixelRatio(key[1])
+            still.fill(Qt.transparent)
+            self._paint_still(still)
+            self._still = (key, still)
         p = QPainter(self)
+        p.drawPixmap(0, 0, self._still[1])
+        if self.hover >= 0:
+            p.setPen(QPen(qgray(theme.INK_2), 1))
+            x = int(self._x(self.hover))
+            p.drawLine(x, 1, x, self.height() - 2)
+        p.setPen(QPen(qgray(theme.HEAD), 1.5))
+        x = int(self._x(self.playhead))
+        p.drawLine(x, 1, x, self.height() - 2)
+
+    def _paint_still(self, onto):
+        p = QPainter(onto)
         p.setRenderHint(QPainter.Antialiasing, True)
         box = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
         p.setPen(QPen(qgray(theme.layer(2) + theme.LINE_LIFT), 1))
@@ -117,13 +142,7 @@ class Strip(QWidget):
         for s, n in self.held:
             x0 = self._x(s)
             p.fillRect(QRectF(x0, self.height() - 1 - self.HELD, max(1.0, self._x(s + n) - x0), self.HELD), qgray(theme.INK_2))
-        if self.hover >= 0:
-            p.setPen(QPen(qgray(theme.INK_2), 1))
-            x = int(self._x(self.hover))
-            p.drawLine(x, 1, x, self.height() - 2)
-        p.setPen(QPen(qgray(theme.HEAD), 1.5))
-        x = int(self._x(self.playhead))
-        p.drawLine(x, 1, x, self.height() - 2)
+        p.end()
 
     def _paint_series(self, p):
         """The pinned in ink first, the selection over them in its colour with its gate's wash."""
@@ -180,7 +199,7 @@ class Strip(QWidget):
         else:  # the window's front jumps to the click and the press goes on as a drag
             n = self.window[1]
             self._draft, self._grab = (max(0, min(self.count - n, row)), n), 0
-            self.update()
+            self._redraw()
         self._show_bubble(e)
 
     def mouseMoveEvent(self, e):
@@ -198,7 +217,7 @@ class Strip(QWidget):
         else:
             n = self.window[1]
             self._draft = (max(0, min(self.count - n, row - self._grab)), n)
-            self.update()
+            self._redraw()
         self._show_bubble(e)
 
     def mouseReleaseEvent(self, e):
@@ -211,7 +230,7 @@ class Strip(QWidget):
             (self.windowPlaced if self._mode == "place" else self.windowChanged).emit(*self._draft)
         self._mode, self._draft = None, None
         self._bubble.hide()
-        self.update()
+        self._redraw()
 
     def leaveEvent(self, _):
         if self._mode is None:

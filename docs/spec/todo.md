@@ -13,3 +13,11 @@ This is kendrick's running list of todos.
 - Bar at the bottom that says how much of the store is being used
 - Move the mb size for series to next to the name as a badge of sorts
 - Add preferences window
+- field inputs should be dropdowns, never manually entered
+- anything with a slider should also be able to manually enter the number
+
+## Node displays
+- Since nodes carry all their stuff, we can add visual toggles for stuff
+  - Color coding?
+  - in/out icons?
+  - 

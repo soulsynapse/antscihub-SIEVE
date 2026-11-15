@@ -7,7 +7,7 @@ of the runtime nothing.
 """
 import numpy as np
 from PySide6.QtCore import QPointF, QRect, QRectF, Qt, Signal
-from PySide6.QtGui import QFontMetrics, QImage, QMouseEvent, QPainter, QPainterPath, QPen, QPolygonF, QRegion
+from PySide6.QtGui import QFontMetrics, QImage, QMouseEvent, QPainter, QPainterPath, QPen, QPixmap, QPolygonF, QRegion
 from PySide6.QtWidgets import QSizePolicy, QVBoxLayout, QWidget
 
 from . import density, theme
@@ -170,6 +170,7 @@ class Plot(QWidget):
         self.selection, self.pinned = None, []
         self._mode = None       # "head" | the index of the handle held
         self._y_hover = None
+        self._still = None      # (what it was painted for, the pixmap of all but the cursors and readouts), or None once what it shows changed
         self.setFixedHeight(ROW_H * self.ROWS)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.setMouseTracking(True)
@@ -177,20 +178,27 @@ class Plot(QWidget):
 
     # -- what is shown ---------------------------------------------------
     def set_window(self, start, length, fps=None):
+        if (int(start), int(length), float(fps or self.fps)) == (self.start, self.length, self.fps):
+            return
         self.start, self.length = int(start), int(length)
         if fps:
             self.fps = float(fps)
         self._crop()
-        self.update()
+        self._redraw()
         self.headMoved.emit()
 
     def set_lines(self, lines, start):
         self.lines = {nid: Line(v, start, g) for nid, (v, g) in lines.items()}
-        self.update()
+        self._redraw()
 
     def set_fields(self, fields, start):
         self.fields = {nid: Field(c, start) for nid, c in fields.items()}
         self._crop()
+        self._redraw()
+
+    def _redraw(self):
+        """What is drawn under the cursors changed: the next paint draws it anew."""
+        self._still = None
         self.update()
 
     def _crop(self):
@@ -199,15 +207,15 @@ class Plot(QWidget):
 
     def set_bands(self, bands):
         self.bands = {nid: [float(v) for v in (b if b is not None else OPEN)] for nid, b in bands.items()}
-        self.update()
+        self._redraw()
 
     def set_selection(self, nid):
         self.selection = nid
-        self.update()
+        self._redraw()
 
     def set_pinned(self, ids):
         self.pinned = list(ids)
-        self.update()
+        self._redraw()
 
     def set_playhead(self, row):
         self.playhead = row
@@ -338,7 +346,27 @@ class Plot(QWidget):
 
     # -- painting --------------------------------------------------------
     def paintEvent(self, _):
+        # a playhead or a hover that moves must draw no row of any series: only they and their readouts go over the pixmap
+        held = self._mode not in (None, "head")
+        key = (self.size(), self.devicePixelRatioF(), held)
+        if self._still is None or self._still[0] != key:
+            still = QPixmap(self.size() * key[1])
+            still.setDevicePixelRatio(key[1])
+            still.fill(Qt.transparent)
+            self._paint_still(still, held)
+            self._still = (key, still)
         p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing, True)
+        p.drawPixmap(0, 0, self._still[1])
+        if self.length >= 2:
+            self._paint_cursor(p, self._inner())
+            self._paint_readouts(p)
+            self._paint_readout(p, self._inner(), self.selection)
+        p.end()
+
+    def _paint_still(self, onto, held):
+        p = QPainter(onto)
+        p.setFont(self.font())
         p.setRenderHint(QPainter.Antialiasing, True)
         inner = self._inner()
         p.setPen(Qt.NoPen)
@@ -352,7 +380,6 @@ class Plot(QWidget):
             return
         sel = self.selection
         fid = self.field_shown()
-        held = self._mode not in (None, "head")
         if fid is not None:
             self._paint_field(p, inner, fid, 1.0 if fid == sel else FADED_FIELD if held else FIELD_ALPHA)
         if sel in self.lines:
@@ -366,9 +393,6 @@ class Plot(QWidget):
         if self._handled():
             self._paint_levels(p, inner, sel)
             self._paint_axis(p, inner)
-        self._paint_cursor(p, inner)
-        self._paint_readouts(p)
-        self._paint_readout(p, inner, sel)
         self._paint_chips(p)
         p.end()
 

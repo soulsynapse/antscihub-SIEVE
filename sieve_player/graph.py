@@ -285,6 +285,7 @@ class Graph:
         self._notes = {}                    # node -> (its key, what the run said): a tool raising, a chain node fed no signal
         self.shown = self.over = self.series = None
         self.chain, self.heads, self.unrun_series = [], [], []
+        self._watched = ()                  # what the plot shows, by watch()
         self.sync()
 
     @property
@@ -404,11 +405,23 @@ class Graph:
             out = self._compute(plan, nid, row)
         return out if fold is None or out is None else fold(out)
 
-    def frame_nodes(self):
-        """Every fed frame node, in document order: what the walk computes at each row beside the
-        walked node, so every node's plane can be counted over the window, a branch's too."""
+    def drawing(self):
+        """The fed frame nodes whose tool has a draw(), in document order: what the display reads
+        at its row beside the shown node, on the walked path or off it."""
         with self._lock:
-            return [nid for nid, e in self._plan.items() if e.kind == "frame" and e.fed]
+            return [nid for nid, e in self._plan.items() if e.kind == "frame" and e.fed and hasattr(e.tool, "draw")]
+
+    def watch(self, nodes):
+        """`nodes` are what the plot shows, the selection and the pinned; any thread."""
+        with self._lock:
+            self._watched = tuple(nodes)
+
+    def folded(self):
+        """The fed frame nodes among those watch() was told of, in its order: what the window walk
+        folds a density for, a branch the walk does not reach among them. Whether a node's output
+        is a plane is density()'s to say, at a row."""
+        with self._lock:
+            return [nid for nid in self._watched if (e := self._plan.get(nid)) is not None and e.kind == "frame" and e.fed]
 
     @property
     def series_tool(self):

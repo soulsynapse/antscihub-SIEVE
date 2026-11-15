@@ -59,6 +59,8 @@ class _Scrub:
             g.compute(g.shown, row)
             if g.over is not None:
                 g.compute(g.over, row)
+            for nid in g.drawing():
+                g.compute(nid, row)
         self.rowReady.emit(row)
 
     def cancelled(self):
@@ -109,7 +111,9 @@ class _Walk:
     served: int = 0     # and those that read a bake's file, whatever ran beside the read
     bytes: int = 0
     stack: object = None
-    dens: dict = field(default_factory=dict)      # node -> (length, BINS) counts, for the planes the walk computes
+    dens: dict = field(default_factory=dict)      # node -> (length, BINS) counts, for the planes the walk folds
+    at: dict = field(default_factory=dict)        # node -> the rows of the range folded for it; one whose output is no plane is at the range's end, with no counts
+    refolding: bool = False     # the range is walked and a refold is under way: a walk of its own in the stream, see refold()
     # fold id -> (the stack's buffer, rows, that head's own folding of the stack); the buffer is held, not
     # its id, since a freed buffer's address comes back for the next stack of the same shape
     folded: dict = field(default_factory=dict)
@@ -118,7 +122,7 @@ class _Walk:
     def begin(self, start, length, by=ASKED):
         """Starts over `length` rows from `start`, dropping every row held, and tells the probe a walk
         began and `by` what, or with no row to walk that the range it was short of is closed."""
-        if self.i < self.length and not length:
+        if (self.i < self.length or self.refolding) and not length:
             self.graph.progress(self.i, self.i, (self.bytes, STACK_BYTES))
         self.start, self.length = start, length
         self.drop()
@@ -127,7 +131,8 @@ class _Walk:
 
     def drop(self):
         self.i = self.ran = self.served = self.bytes = 0
-        self.stack, self.dens, self.folded, self.stepped = None, {}, {}, {}
+        self.stack, self.dens, self.at, self.folded, self.stepped = None, {}, {}, {}, {}
+        self.refolding = False
 
     def turn(self):
         g = self.graph
@@ -142,10 +147,8 @@ class _Walk:
         before = g.tally()
         out = np.asarray(g.walk_row(row)) if read else None
         ran, served = (a != b for a, b in zip(before, g.tally()))
-        planes = {nid: v for nid in g.frame_nodes() if (v := g.density(nid, row)) is not None} if self.densities is not None and not headed else {}
         stacked = bool(g.chain) and read      # without a chain to run nothing reads the stack, and the rows are not held
-        if self.i and ((self.stack is not None) != stacked or (stacked and not _fits(self.stack, out))
-                       or planes.keys() != self.dens.keys()):
+        if self.i and ((self.stack is not None) != stacked or (stacked and not _fits(self.stack, out))):
             self.drop()      # the nodes or the shape changed under the walk; start over
             g.began(self.start, self.length, SHAPE)
             return
@@ -155,15 +158,13 @@ class _Walk:
                             f"{', '.join(g.heads)} do not share a fold()")
                 return
             self.stack = _stack_for(self.length, out) if stacked else None
-            self.dens = {nid: np.zeros((self.length, density.BINS), np.uint32) for nid in planes}
         if stacked:
             self.stack[self.i] = out
             self.bytes += nbytes(out)
-        for nid, v in planes.items():
-            self.dens[nid][self.i] = v
         if not self.spared:
             self.step(self.i + 1)
         self.i += 1
+        self.fold()
         self.served += headed or served
         self.ran += ran and not served and not headed
         if self.bytes > STACK_BYTES:
@@ -175,6 +176,50 @@ class _Walk:
             g.progress(self.i, self.length, (self.bytes, STACK_BYTES))
         if self.i == self.length or self.i % self.every == 0:
             self.emit()
+
+    def folding(self):
+        """The nodes whose densities this range folds: what the graph was told the plot shows, on
+        the window, and none on the clip or where a served series node heads the chain."""
+        return [] if self.densities is None or self.graph.walk is None else self.graph.folded()
+
+    def behind(self):
+        """Whether a node the plot shows has a row of the range unfolded."""
+        return any(self.at.get(nid, 0) < self.length for nid in self.folding())
+
+    def fold(self):
+        """Folds one row more of each node in folding() that is short of the range, each from where
+        its own count stands, so a node the plot comes to show later is folded from the range's
+        first row beside the rest. A node whose output is no plane is computed once and no more."""
+        for nid in self.folding():
+            r = self.at.get(nid, 0)
+            if r >= self.length:
+                continue
+            v = self.graph.density(nid, self.start + r)
+            if v is None:
+                self.at[nid] = self.length
+                continue
+            if nid not in self.dens:
+                self.dens[nid] = np.zeros((self.length, density.BINS), np.uint32)
+            self.dens[nid][r] = v
+            self.at[nid] = r + 1
+
+    def refold(self):
+        """A turn of a range already walked while behind(): fold() alone, the chain's rows standing
+        as they are. In the stream it is a walk of the same range begun by a hand, its progress the
+        rows every node of folding() has, and it is closed where the plot leaves those nodes first."""
+        g = self.graph
+        if not self.refolding:
+            g.began(self.start, self.length, HAND)
+        self.fold()
+        done = min((self.at.get(nid, 0) for nid in self.folding()), default=self.length)
+        self.refolding = done < self.length
+        g.progress(done, self.length, (self.bytes, STACK_BYTES))
+        if not self.refolding or done % self.every == 0:
+            self.show()
+
+    def show(self):
+        if self.densities is not None:
+            self.densities.emit({nid: d[: self.at[nid]] for nid, d in self.dens.items()}, self.start)
 
     def step(self, rows):
         """Brings every node the plan steps up to `rows` of the range; one whose raw key is not the
@@ -233,8 +278,7 @@ class _Walk:
         if not self.i:
             return
         g = self.graph
-        if self.densities is not None:
-            self.densities.emit({nid: d[: self.i] for nid, d in self.dens.items()}, self.start)
+        self.show()
         results = None
         if self.stale_given():
             return              # the next turn begins the range again without it
@@ -531,9 +575,11 @@ class Worker(QThread):
     bakeDone = Signal(str, object)            # the node's bake landed, as the Bake the node is to save (document.land)
     bakeRefused = Signal(str, str)            # the bake did not start or did not finish, and why; the node's standing says the same
 
-    def __init__(self, graph, every=30, store=None):
+    def __init__(self, graph, every=30, store=None, tell_every=0.0):
         """`every` is the cadence, in rows walked, at which either range runs its chain; `store`, a
-        store.Store, is where a bake lands, the current one unless another is handed in."""
+        store.Store, is where a bake lands, the current one unless another is handed in;
+        `tell_every`, the seconds between a range's `walked` or `clipWalked`, its end always told,
+        and 0 tells of every row."""
         super().__init__()
         self.graph, self.every = graph, every
         self._cv = threading.Condition()
@@ -545,9 +591,9 @@ class Worker(QThread):
         self._bake = _Bake(graph, every, current() if store is None else store, self.baked, self.bakeDone, self.bakeRefused,
                            lambda: self.walk_clip(HAND))     # a series bake's clip walk is the bake's, which a hand asked for
         self._win = _Walk(graph, name="window", every=every, progress=self.walked, ready=self.seriesReady,
-                          refused=self.walkRefused, failed=self.failed, densities=self.densityReady)
+                          refused=self.walkRefused, failed=self.failed, densities=self.densityReady, tell_every=tell_every)
         self._clip = _Walk(graph, name="clip", every=every, progress=self.clipWalked, ready=self.clipReady,
-                           refused=self.clipRefused, failed=self.failed, bake=self._bake)
+                           refused=self.clipRefused, failed=self.failed, bake=self._bake, tell_every=tell_every)
 
     @property
     def store(self):
@@ -585,11 +631,19 @@ class Worker(QThread):
     def set_window(self, start, length, spared=False, given=None, by=ASKED):
         """Walk the window from `start`. `spared`, the caller holds the chain's results over it and
         the chain is not run; `given`, node to (raw key, fields over the window), it holds those
-        stepped nodes' and the walk steps the rest from them. The frame nodes are computed and
-        their densities folded either way. `by`, one of stream.BEGUN_BY, is what the walk's begin
+        stepped nodes' and the walk steps the rest from them. The densities of what the plot shows,
+        by watch(), are folded either way. `by`, one of stream.BEGUN_BY, is what the walk's begin
         says began it: the caller says where a hand or an edit did."""
         with self._cv:
             self._win.ask, self._win.asked, self._win.by = (start, length, spared, dict(given or {})), True, by
+            self._cv.notify()
+
+    def watch(self, nodes):
+        """`nodes` are what the plot shows, as Graph.watch takes them: the window folds the
+        densities of those and no other, one it had not folded from the window's first row, with
+        the rows the chain has standing."""
+        self.graph.watch(nodes)
+        with self._cv:
             self._cv.notify()
 
     def invalidate(self):
@@ -689,7 +743,7 @@ class Worker(QThread):
 
     def _turn(self):
         """The ladder: a scrub, then a bake's change of state, then a bake row behind a finished
-        window, then the window walk, then the clip walk. Returns the first rung due as what
+        window, then the window walk, then a refold of the window, then the clip walk. Returns the first rung due as what
         its events serve and the (job, call) steps that are its turn, or None when no rung
         is, which is the condition the loop waits on, so waking means turning. Called under the
         lock; the ask of the rung picked is taken here, so one landing meanwhile is not lost."""
@@ -719,6 +773,8 @@ class Worker(QThread):
             return "bake", [(bake, bake.turn)]
         if fed and win.i < win.length:
             return "walk", [(win, win.turn)]
+        if fed and (win.refolding or win.behind()):
+            return "walk", [(win, win.refold)]
         if clip.asked:
             on, by, clip.asked = self._clip_on, clip.by, False
 

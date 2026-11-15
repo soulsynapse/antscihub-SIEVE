@@ -28,6 +28,11 @@ def test_a_series_is_drawn_at_its_rows_and_a_column_is_its_rows_envelope():
     assert green(img.pixelColor(85, y_body)) and img.pixelColor(50, y_body) == ground   # the gated columns alone are washed
     ink = img.pixelColor(7, y_top)                          # b, pinned, at its own top over rows 50..99: ink, no colour
     assert ink.red() == ink.green() == ink.blue() and ink.red() > ground.red() + 30 and img.pixelColor(2, y_top) == ground
+    drawn = s._still
+    s.set_playhead(500)
+    s.set_hover(200)
+    moved = s.grab().toImage()
+    assert s._still is drawn and moved.pixelColor(50, y_top) != ground and moved.pixelColor(75, y_top) == img.pixelColor(75, y_top)   # a cursor that moves draws no row again
     s.set_series({"a": (np.array([1.0, 1.0, 1.0]), 100, None)}, "a")
     c = s.grab().toImage().pixelColor(10, y_top)
     assert c.blue() > c.red() and c.green() > c.red()       # no gate: a plain series, teal

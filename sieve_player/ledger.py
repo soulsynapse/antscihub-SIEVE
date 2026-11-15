@@ -29,6 +29,7 @@ BINS = 26 * OCTAVE  # up to 2 ** 16 ms; a span past either end is counted in the
 AHEAD = 1           # the buckets behind the newest left unsettled for a span of a thread that says nothing of when it rests
 SETTLES_BY = 8.0    # s behind the newest at which a bucket is settled whatever is still out, so no history drops one unjudged
 
+ROW_RUNS = (RUN, STEP, DECODE)  # the spans that are a node's work on one row of a walk in order, which seeks nowhere; see row_cost
 _RAN = {RUN, STEP, FOLD, DECODE, SEEK}
 _FILE = {DECODE, SEEK, READ}            # what a served node's file answered, its reader's cache not holding the row
 _READS = _FILE | {CACHE}                # the kinds whose wall above CPU is a decoder's own threads at work and no wait
@@ -549,6 +550,24 @@ def stores_after(held, told):
     if any(not s.endswith(" stack") for s in told):
         held = {s: v for s, v in held.items() if s.endswith(" stack")}
     return {**held, **told}
+
+
+def row_cost(walks, nid, key):
+    """(ms a run, the runs counted, the walk's lane): `nid`'s own work on one row at the mean of its
+    ROW_RUNS in the latest of `walks`, oldest first, that has any and was walked under one plan in
+    which `nid` had `key`. A row a store held emits no run, so the mean is of cold rows. None with
+    no such walk; a walk that ran `nid` whole as a chain node is none, its run being of no one row."""
+    for w in reversed(walks):
+        node, plan = w.nodes.get(nid), w.plan or {}
+        if node is None or w.replanned or (w.keys or {}).get(nid) != key:
+            continue
+        if nid in (plan.get("chain") or ()) and not plan["nodes"][nid]["steps"]:
+            continue
+        runs = [r for under, r in node.runs.items() if under.kind in ROW_RUNS]
+        n = sum(r.count for r in runs)
+        if n:
+            return sum(r.ms for r in runs) / n, n, w.lane
+    return None
 
 
 def coarsen(view, k):

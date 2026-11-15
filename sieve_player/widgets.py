@@ -55,23 +55,29 @@ class Slider(QSlider):
 
 
 class ValueField(QLineEdit):
-    """A slider's value as a field that reads as a readout until hovered or focused."""
+    """A slider's value as a field that reads as a readout until hovered or focused. Escape puts
+    back the text `setText` last gave it, whatever was typed since, and leaves the field."""
 
     def __init__(self, text):
         super().__init__(text)
+        self._given = text
         self.setProperty("role", "value")
         self.setFont(mono_font())
         self.setFixedSize(VALUE_W, ROW_H)
         self.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        self.setTextMargins(-2, 0, -2, 0)   # QLineEdit's own 2 px, so VALUE_W holds what a label's did
+        self.setTextMargins(-2, 0, -2, 0)   # QLineEdit's own 2 px, so VALUE_W holds what a label's would
 
     def focusInEvent(self, e):
         super().focusInEvent(e)
         QTimer.singleShot(0, self.selectAll)   # after the press that gave focus has placed its cursor
 
+    def setText(self, text):
+        self._given = text
+        super().setText(text)
+
     def keyPressEvent(self, e):
         if e.key() == Qt.Key_Escape:
-            self.undo()
+            super().setText(self._given)
             self.clearFocus()
         else:
             super().keyPressEvent(e)
@@ -130,7 +136,7 @@ class ParamWidget(QWidget):
 
         def commit():
             try:
-                s.setValue(max(lo, min(hi, parse(out.text()))))
+                s.setValue(max(s.minimum(), min(s.maximum(), parse(out.text()))))
             except (ValueError, OverflowError):
                 pass
             out.setText(fmt(s.value()))

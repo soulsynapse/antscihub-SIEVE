@@ -145,7 +145,7 @@ The frame is on the left, the node canvas over the selected node's parameters on
 the timeline across the bottom. The node with the display flag is what the frame shows; the node
 with the overlay flag, a second disc offered only on a node producing one plane (`document.OVERLAYABLE`),
 is heated over it, cold-to-hot in v2's ramp, and a click on the flag it carries turns it off; selection
-only chooses what the pane shows. A worker thread computes and the GUI thread
+only chooses whose card the pane shows and whose series the plot and the strip draw in colour. A worker thread computes and the GUI thread
 reads: every node's output is memoized under a key built from its params and its
 upstream, and the display shows what the memo holds.
 

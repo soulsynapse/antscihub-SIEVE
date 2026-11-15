@@ -4,7 +4,7 @@ The document is the store and a card a view over it, as a Houdini parameter pane
 a tool's settings widget must take the stored values and its knobs are the node's whole param set,
 so one that cannot be told them is shown as a defect, never as its own defaults. The pane writes
 params into the document and says what changed; it knows nothing of the runtime, and what it
-shows of a run, the standing line, the window hands it. A node's plot is the window's, under the frame.
+shows of a run, the standing line and a card's badges, the window hands it. A node's plot is the window's, under the frame.
 """
 import os
 
@@ -95,7 +95,8 @@ class Video(QWidget):
 
 class BakeBlock(QWidget):
     """The block under a tool with a `bake` facet: the node's mode, the button that asks the window
-    for a bake and cancels one running, and the line that says how far it is or why it stopped."""
+    for a bake and cancels one running, the switch between serving the bake and going live, and the
+    line that says how far it is or why it stopped."""
     asked = Signal()
     cancelled = Signal()
     toggled = Signal()      # the switch between serving the bake and going live
@@ -135,9 +136,8 @@ class BakeBlock(QWidget):
 class Pane(QWidget):
     """`tools` is the catalogue, name to module. `select(nid)` shows that node's surface, None
     shows nothing, and the x in a card's corner shows nothing and says `closed`; the node is
-    untouched. `video` is the video node's widget, `widget(nid)` a tool node's settings widget,
-    Its size hint is the shown card's
-    height, so a host that stacks it under the canvas gives it only the room its content needs."""
+    untouched. `video` is the video node's widget, `widget(nid)` a tool node's settings widget.
+    Its size hint is the shown card's height, so a host that stacks it under the canvas gives it only the room its content needs."""
     paramsChanged = Signal(str)   # this node's params in the document changed here
     videoPicked = Signal(str)
     bakeAsked = Signal(str)       # the Bake button under this node
@@ -333,13 +333,13 @@ class Pane(QWidget):
             lab.setText(text)
             lab.setVisible(bool(text))
 
-    def set_size(self, nid, text, tip=""):
+    def set_size(self, nid, text, unit="", tip=""):
         """The badge after `nid`'s name that says what its result would take on disk, from the
-        window: `text` a figure and its unit, as store.fmt_bytes writes one, coloured by the unit,
-        and `tip` the sentence under the pointer; "" hides it."""
+        window: `text` in the colour theme.HELD has for `unit`, one of store.UNITS, and `tip` the
+        sentence under the pointer; a `text` of "" hides it."""
         badge = self.sizes.get(nid)
         if badge is not None:
-            badge.say(text, HELD.get(text.rsplit(" ", 1)[-1]), tip)
+            badge.say(text, HELD.get(unit), tip)
 
     def set_takes(self, nid, text, tip=""):
         """The badge after `nid`'s size that says how long its work would take, from the window;

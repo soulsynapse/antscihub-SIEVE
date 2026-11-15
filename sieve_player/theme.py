@@ -4,8 +4,9 @@ Ground is a dark gray and everything sits on it. Each surface layered on top is 
 nothing is inset past layer 3, so there are exactly four grays. A form is a table: descriptions
 left-aligned in one column sized to the widest, every control one width and one height in the
 next. Editable controls are wells the ground shows through; measured results are flat fields
-lifted above their surface, so depth alone says what can be touched. Section names are the only
-white; inside a section there is one ink and a dimmer one for readouts.
+lifted above their surface, so depth alone says what can be touched, but for a slider's value, a
+well only under the pointer or the caret. Section names are the only white; inside a section there
+is one ink and a dimmer one for readouts, and on a card's head a badge's colour and a dim close mark.
 """
 from __future__ import annotations
 
@@ -36,7 +37,7 @@ HEAD_GAP = 14      # below a section name, px; the room that makes it read as a 
 RADIUS = 4
 HEAD = 255         # section names, the only pure white on screen
 INK = 200          # everything inside a section: descriptions and values alike
-INK_2 = 140        # tertiary: readouts, slider handles, unchecked boxes
+INK_2 = 140        # tertiary: readouts, a slider's filled groove, a grip's dots, an unchecked glyph
 INK_ALPHA = 110    # a pinned node's line in the plot and the strip, of 255; the selection is in colour
 SHUT_ALPHA = 45    # that line over the rows its own band shuts out
 FADED_ALPHA = 18   # that line while a handle of the selection's is held
@@ -44,8 +45,8 @@ FIELD_ALPHA = 0.55 # a pinned field under the selection's lines, of 1
 FADED_FIELD = 0.1  # that field while a handle is held
 LINE_LIFT = 20     # a layer's hairline edge is this much lighter than the layer
 MEASURED_LIFT = 18 # a measured result is a flat field this much lighter than the surface it sits on
-HOVER_LIFT = 4     # a node under the pointer is this much lighter, its edge brightened to match
-HOVER_EDGE = 125   # QColor.lighter() factor for that node's edge, percent
+HOVER_LIFT = 4     # a node or a drawn control under the pointer is this much lighter, its edge brightened to match
+HOVER_EDGE = 125   # QColor.lighter() factor for that edge, percent
 FONT_PX = 12       # integer logical pixels, so glyphs sit on the grid under display scaling; see _size
 FONT_WEIGHT = 500  # regular Inter reads thin on dark; 500 fills the stroke without reading bold
 HINTING = 3        # QFont.HintingPreference: full. DirectWrite ignores it; see play()
@@ -54,7 +55,7 @@ GLYPH = 16         # a line icon beside 12px text, px
 GLYPH_STROKE = 2.25  # Tabler ships 2, which reads thin at GLYPH; widened at render, never in the files
 CLOSE_CELLS = 5    # a CloseMark's x, cells across; odd, so its two strokes share one centre cell
 CLOSE_INSET = 4    # that x from the top and the right of its button, cells
-CLOSE_SIDE = 13    # its button, px: the x and its inset again on the far side, at one cell a px
+CLOSE_SIDE = CLOSE_CELLS + 2 * CLOSE_INSET   # its button, px: the x and its inset again on the far side, at one cell a px
 CLOSE_INK = 100    # the x at rest: there for a pointer that looks for it, no part of the card's reading
 BADGE_H = 18       # a badge beside a layer's name, px
 BADGE_PAD = 6      # its text from its left and right edge, px
@@ -249,6 +250,16 @@ def depth_of(w: QWidget) -> int:
     return 0
 
 
+def paint_hover(p: QPainter, w: QWidget) -> None:
+    """A control's lift under the pointer, over the whole of `w`: the fill and edge of the layer `w`
+    sits on, each lightened. `p` is left antialiased, with that edge's pen and that fill's brush."""
+    base = layer(depth_of(w) + 1)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+    p.setPen(QPen(qgray(base + LINE_LIFT).lighter(HOVER_EDGE), 1))
+    p.setBrush(qgray(base + HOVER_LIFT))
+    p.drawRoundedRect(QRectF(w.rect()).adjusted(0.5, 0.5, -0.5, -0.5), RADIUS, RADIUS)
+
+
 class GlyphButton(QAbstractButton):
     """A square the height of a form row with a line glyph centred, as the canvas's column draws its
     buttons: lifted under the pointer, dim when disabled. Named a second glyph, it is checkable and
@@ -266,12 +277,8 @@ class GlyphButton(QAbstractButton):
     def paintEvent(self, event) -> None:
         del event
         p = QPainter(self)
-        p.setRenderHint(QPainter.Antialiasing, True)
-        base = layer(depth_of(self) + 1)
         if self.underMouse() and self.isEnabled():
-            p.setPen(QPen(qgray(base + LINE_LIFT).lighter(HOVER_EDGE), 1))
-            p.setBrush(qgray(base + HOVER_LIFT))
-            p.drawRoundedRect(QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5), RADIUS, RADIUS)
+            paint_hover(p, self)
         name = self.on if self.isChecked() and self.on else self.off
         ink = INK_2 - 50 if not self.isEnabled() else INK if self.isChecked() or not self.isCheckable() else INK_2
         pm = glyph(name, ink, GLYPH, self.devicePixelRatioF())

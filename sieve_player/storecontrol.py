@@ -43,12 +43,9 @@ class StoreControl(QAbstractButton):
     def paintEvent(self, event):
         del event
         p = QPainter(self)
-        p.setRenderHint(QPainter.Antialiasing, True)
         base = theme.layer(theme.depth_of(self) + 1)
         if self.underMouse() and self.isEnabled():
-            p.setPen(QPen(theme.qgray(base + theme.LINE_LIFT).lighter(theme.HOVER_EDGE), 1))
-            p.setBrush(theme.qgray(base + theme.HOVER_LIFT))
-            p.drawRoundedRect(QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5), theme.RADIUS, theme.RADIUS)
+            theme.paint_hover(p, self)
         h, x = self.height(), self.EDGE
         p.setFont(self.font())
         bar = QRectF(x, (h - self.BAR_H) / 2, self.BAR_W, self.BAR_H)

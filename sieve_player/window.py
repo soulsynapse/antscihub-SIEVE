@@ -26,14 +26,14 @@ from .canvas import Canvas
 from .catalogue import Log
 from .decoder import Decoder
 from .graph import Graph, nbytes
-from .ledger import Ledger
+from .ledger import Ledger, row_cost
 from .machine import Watch
 from .pace import Pace, clock
 from .pacecontrol import PaceControl
 from .storecontrol import StoreControl
 from .pane import Pane
 from .registry import CATEGORIES, Entry, category, description, signature
-from .stream import ASKED, DECODE, EDIT, HAND, RUN, STEP, Emitter
+from .stream import ASKED, EDIT, HAND, Emitter
 from .theme import GAP, PAD, ROW_H, readout
 from .timeline import Timeline
 from .trace import Dump
@@ -43,7 +43,6 @@ from .worker import Worker
 HOLD_MS = 2000              # how long the held runs rest, nothing new held, before they are written beside the document
 HELD_BYTES = 512 << 20      # what the held runs may take together, as graph.nbytes counts them, before the oldest go
 TELL = 0.1                  # s between the worker's tellings of a walk's rows; docs/findings/2026-11-13-a-signal-a-row.md
-ROW_RUNS = (RUN, STEP, DECODE)  # the spans that are a node's work on one row of a walk in order, which seeks nowhere; see _show_takes
 DUMP_ENV = "SIEVE_DUMP"  # names the file every video opened in this process dumps its stream to
 MEMO_ENV, CACHE_ENV = "SIEVE_MEMO_GB", "SIEVE_CACHE_GB"   # the memo's and the decoder cache's limits; unset, each class's default
 
@@ -328,6 +327,7 @@ class Header(QWidget):
         lay = QHBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(GAP)
+        self._refused = ""
         self.store = StoreControl("click to choose the store's folder")
         self.note = readout(mono=True, wrap=False)
         self.note.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
@@ -352,10 +352,12 @@ class Header(QWidget):
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
     def show_store(self, st, refused=""):
-        """`st`, the Store the player writes to, read now; `refused` is why a choice was not taken, said in the note."""
+        """`st`, the Store the player writes to, read now; `refused` is why a choice was not taken,
+        said in the note until the next showing, if the note still says it then."""
         self.store.set_store(st)
-        if refused:
+        if refused or (self._refused and self.note.text() == self._refused):
             self.note.setText(refused)
+        self._refused = refused
 
     def set_walking(self, on):
         self.walk.setText("Stop walk" if on else "Walk clip")
@@ -429,7 +431,7 @@ class PlayerWindow(QMainWindow):
         self._reload.timeout.connect(self._pick_paths)
         self._driven = {}      # (node id, path or PARAMS input) -> (the keys set through it, the id of the node wired in)
         self._gone = {}        # node -> why its bake could not be read when the document opened, for the graph's notes
-        self.store = store.current()   # where bakes land and are read from; Store… replaces it
+        self.store = store.current()   # where bakes land and are read from; the header's store control replaces it
 
         self.display = Display()
         self.plot = Plot()
@@ -1223,8 +1225,8 @@ class PlayerWindow(QMainWindow):
         self._resume = False
 
     def seek(self, row, commit):
-        """Move the playhead, clamped to the loop window. Only the handle and the spinboxes move
-        the window; a gesture on the playhead never does."""
+        """Move the playhead, clamped to the loop window. Only the handle, a press in the strip
+        outside the window and the spinboxes move the window; a gesture on the playhead never does."""
         if self.graph is None:
             return
         s, n = self.window_
@@ -1502,35 +1504,24 @@ class PlayerWindow(QMainWindow):
         file, from the window's rows."""
         if self.selection is not None:
             per = held.per_row(self.results.get(self.selection))
-            size = store.fmt_bytes(per * self.count) if per else ""
-            self.pane.set_size(self.selection, f"~{size}" if per else "", f"about {size} held over the clip")
+            figure, unit = store.in_units(per * self.count) if per else ("", "")
+            self.pane.set_size(self.selection, f"~{figure} {unit}" if per else "", unit, f"about {figure} {unit} held over the clip")
 
     def _show_takes(self):
         """The selected node's card says about how long its own work would take over the clip, every
-        row run at the mean of its ROW_RUNS in the latest walk that has any under the key it now
-        has; a held row emits no run, so the mean is of cold rows. Nothing with no such walk, nor
-        for a chain node the walk runs whole, whose run is of no one row."""
+        row at what ledger.row_cost makes of the key it now has; nothing where that is None."""
         nid = self.selection
         if nid is None or self.ledger is None or self.graph is None:
             return
-        key = self._key(nid)
-        for w in reversed(self.ledger.view().walks):
-            node, plan = w.nodes.get(nid), w.plan or {}
-            if node is None or w.replanned or (w.keys or {}).get(nid) != key:
-                continue
-            if nid in (plan.get("chain") or ()) and not plan["nodes"][nid]["steps"]:
-                continue
-            runs = [r for under, r in node.runs.items() if under.kind in ROW_RUNS]
-            n = sum(r.count for r in runs)
-            if not n:
-                continue
-            ms = sum(r.ms for r in runs) / n
-            s = ms * self.count / 1000
-            text = f"{s * 1000:.0f} ms" if s < 1 else f"{s:.1f} s" if s < 10 else f"{s:.0f} s" if s < 60 else clock(s)
-            self.pane.set_takes(nid, f"~{text}", f"about {text} of this node's own work over the clip's {self.count} rows, "
-                                                 f"at {ms:.2f} ms a run over the {w.lane} walk's {n}")
+        cost = row_cost(self.ledger.view().walks, nid, self._key(nid))
+        if cost is None:
+            self.pane.set_takes(nid, "")
             return
-        self.pane.set_takes(nid, "")
+        ms, n, lane = cost
+        s = ms * self.count / 1000
+        text = f"{s * 1000:.0f} ms" if s < 1 else f"{s:.1f} s" if s < 10 else f"{s:.0f} s" if s < 60 else clock(s)
+        self.pane.set_takes(nid, f"~{text}", f"about {text} of this node's own work over the clip's {self.count} rows, "
+                                             f"at {ms:.2f} ms a run over the {lane} walk's {n}")
 
     def _baked(self, nid, bake):
         """Recorded here, on the GUI thread, since the document is the GUI's and the worker's alone to read."""

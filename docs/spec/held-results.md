@@ -87,7 +87,7 @@ Assumes: A walk's results are held.
   Check: the same one-off reads the stretches drawn after two moves.
 - [x] The card of a series node whose window has a result says about how many bytes that node's result
   over the whole clip would add to the file, from the rows walked.
-  Check: the same one-off reads the line against a clip run's size.
+  Check: the same one-off reads the card's badge against a clip run's size.
 
 ## Not here
 

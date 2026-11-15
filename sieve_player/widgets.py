@@ -1,6 +1,6 @@
 """Optional bases so a tool file stays one screen long: a settings form and its rows."""
-from PySide6.QtCore import Qt, Signal
-from PySide6.QtWidgets import QCheckBox, QComboBox, QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem, QSlider, QVBoxLayout, QWidget
+from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtWidgets import QCheckBox, QComboBox, QHBoxLayout, QLineEdit, QListWidget, QListWidgetItem, QSlider, QVBoxLayout, QWidget
 
 from .theme import CONTROL_W, GAP, ROW_H, VALUE_W, Form, mono_font, readout
 
@@ -54,14 +54,39 @@ class Slider(QSlider):
         e.accept()
 
 
+class ValueField(QLineEdit):
+    """A slider's value as a field that reads as a readout until hovered or focused."""
+
+    def __init__(self, text):
+        super().__init__(text)
+        self.setProperty("role", "value")
+        self.setFont(mono_font())
+        self.setFixedSize(VALUE_W, ROW_H)
+        self.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.setTextMargins(-2, 0, -2, 0)   # QLineEdit's own 2 px, so VALUE_W holds what a label's did
+
+    def focusInEvent(self, e):
+        super().focusInEvent(e)
+        QTimer.singleShot(0, self.selectAll)   # after the press that gave focus has placed its cursor
+
+    def keyPressEvent(self, e):
+        if e.key() == Qt.Key_Escape:
+            self.undo()
+            self.clearFocus()
+        else:
+            super().keyPressEvent(e)
+
+
 class ParamWidget(QWidget):
     """Has .changed and .params(). Add rows with add_int / add_float / add_bool / add_text /
-    add_choice / add_list; each is one line of the form, a knob: slider and its mono readout together
-    fill the one control width. The int and float rows return their slider, for a tool that also
-    sets the value from elsewhere, and add_list its ChoiceList, which the tool fills. A text row
-    commits on Enter or focus loss, as a Houdini field does, so a half-typed pattern is never a
-    change. `set_driven(names, by)` greys the rows a wire drives, as Blender does a driven property:
-    they take no typed value until the wire is broken."""
+    add_choice / add_list; each is one line of the form, a knob: slider and its mono value together
+    fill the one control width. The value is a field: a number typed there and committed moves the
+    slider, held to the slider's range and step, and anything else is put back. The int and float
+    rows return their slider, for a tool that also sets the value from elsewhere, and add_list its
+    ChoiceList, which the tool fills. A typed row commits on Enter or focus loss, as a Houdini field
+    does, so a half-typed number or pattern is never a change. `set_driven(names, by)` greys the
+    rows a wire drives, as Blender does a driven property: they take no typed value until the wire
+    is broken."""
     changed = Signal()
 
     def __init__(self, parent=None):
@@ -89,7 +114,9 @@ class ParamWidget(QWidget):
             row.setEnabled(name not in names)
             row.setToolTip(f"driven by {by}; break the wire to edit" if name in names else "")
 
-    def _slider(self, name, lo, hi, value, fmt):
+    def _slider(self, name, lo, hi, value, fmt, parse):
+        """`fmt` is a slider position as text and `parse` typed text as a position, raising
+        ValueError or OverflowError for text that is no number."""
         w = QWidget()
         h = QHBoxLayout(w)
         h.setContentsMargins(0, 0, 0, 0)
@@ -98,11 +125,16 @@ class ParamWidget(QWidget):
         s.setRange(lo, hi)
         s.setValue(value)
         s.setFixedWidth(CONTROL_W - VALUE_W - GAP)
-        out = QLabel(fmt(value))
-        out.setFont(mono_font())
-        out.setFixedWidth(VALUE_W)
-        out.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        out = ValueField(fmt(value))
         s.valueChanged.connect(lambda v: (out.setText(fmt(v)), self.changed.emit()))
+
+        def commit():
+            try:
+                s.setValue(max(lo, min(hi, parse(out.text()))))
+            except (ValueError, OverflowError):
+                pass
+            out.setText(fmt(s.value()))
+        out.editingFinished.connect(commit)
         h.addWidget(s)
         h.addWidget(out)
         w.setFixedWidth(CONTROL_W)
@@ -111,13 +143,14 @@ class ParamWidget(QWidget):
         return s
 
     def add_int(self, name, lo, hi, value):
-        s = self._slider(name, lo, hi, int(value), str)
+        s = self._slider(name, lo, hi, int(value), str, lambda t: round(float(t)))
         self._get[name], self._set[name] = s.value, lambda v: s.setValue(int(v))
         return s
 
     def add_float(self, name, lo, hi, value, decimals=2):
         k = 10 ** decimals
-        s = self._slider(name, round(lo * k), round(hi * k), round(value * k), lambda v: f"{v / k:.{decimals}f}")
+        s = self._slider(name, round(lo * k), round(hi * k), round(value * k), lambda v: f"{v / k:.{decimals}f}",
+                         lambda t: round(float(t) * k))
         self._get[name], self._set[name] = lambda: s.value() / k, lambda v: s.setValue(round(v * k))
         return s
 

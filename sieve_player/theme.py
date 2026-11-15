@@ -49,7 +49,7 @@ HOVER_EDGE = 125   # QColor.lighter() factor for that node's edge, percent
 FONT_PX = 12       # integer logical pixels, so glyphs sit on the grid under display scaling; see _size
 FONT_WEIGHT = 500  # regular Inter reads thin on dark; 500 fills the stroke without reading bold
 HINTING = 3        # QFont.HintingPreference: full. DirectWrite ignores it; see play()
-VALUE_W = 36       # a slider's mono readout
+VALUE_W = 36       # a slider's mono value field
 GLYPH = 16         # a line icon beside 12px text, px
 GLYPH_STROKE = 2.25  # Tabler ships 2, which reads thin at GLYPH; widened at render, never in the files
 BADGE_H = 18       # a badge beside a layer's name, px
@@ -186,6 +186,8 @@ def sheet() -> str:
         border-radius: {RADIUS}px;
         padding: 0px 6px;
     }}
+    QLineEdit[role="value"] {{ background: transparent; padding: 0px; }}
+    QLineEdit[role="value"]:hover, QLineEdit[role="value"]:focus {{ background: {gray(ctl)}; }}
     QListWidget {{ background: {gray(ctl)}; border: none; border-radius: {RADIUS}px; outline: none; padding: 2px; }}
     QListWidget::item {{ padding: 1px 4px; border-radius: {RADIUS}px; }}
     QListWidget::item:hover {{ background: {gray(layer(2))}; }}

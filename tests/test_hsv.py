@@ -12,6 +12,7 @@ BOUNDS = {**inrange.DEFAULTS, "h_lo": 100, "h_hi": 130, "s_lo": 100, "v_lo": 100
 
 class Dec:
     path, fps, count = "fake.mp4", 30.0, 4
+    footage_print = path
     decodes = seeks = reads = cache_hits = cache_bytes = 0
     step_ms = seek_ms = None
     output, scale = "bgr", 1.0

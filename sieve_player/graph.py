@@ -275,7 +275,7 @@ class Graph:
         self._lock = threading.Lock()
         self.halt = False                   # set by whoever is stopping the worker: every Frames read from then on raises Cancelled
         self.stream = stream or Emitter()
-        self._base = None                   # the video node's key: the file and what the decoder hands out; set at sync()
+        self._base = None                   # the video node's key: the footage and what the decoder hands out; set at sync()
         self._hits = {}                     # lane -> {node: [results the memo held, folds it held]} since that lane's last progress
         # The stores report what they discard into the same stream: the memo's entry by its key and row,
         # the decoder cache's frame by its row under the video's key, a served reader's under the served node's.
@@ -303,7 +303,7 @@ class Graph:
         decoder's output, which the video node's param sets."""
         output = video_output(self.doc)
         self.decoder.output = output        # a change empties its cache; a read in flight under the old plan is cancelled
-        self._base = base_key(self.decoder.path, output)
+        self._base = base_key(self.decoder.footage_print, output)
         p = plan(self.doc, self.tools, self._base)
         self.readers.keep({e.bake.key for e in p.entries.values() if e.bake is not None})
         with self._lock:
@@ -484,13 +484,14 @@ class Graph:
             "caches": {k: {"bytes": d.cache_bytes, "limit": getattr(d, "cache_limit", None), "hits": d.cache_hits,
                            "misses": d.reads - d.cache_hits, "discards": getattr(d, "evictions", 0)} for k, d in caches.items()}})
 
-    def began(self, start, length):
+    def began(self, start, length, by=None):
         """A walk of this thread's lane began, over `length` rows from `start`: a "begin" event with
-        the range's first row as its row. Whoever drives the walk says so as it starts or starts over,
+        the range's first row as its row and, where `by`, one of stream.BEGUN_BY, says what began
+        it, that as its facts' "by". Whoever drives the walk says so as it starts or starts over,
         so a reader tells the walk's first row from what the walk before ran after its last. The
         lane's hits not yet reported were the walk before's and are dropped."""
         self._hits.pop(self.stream.lane, None)
-        self.stream.emit("begin", None, start, None, 0, length=length)
+        self.stream.emit("begin", None, start, None, 0, length=length, facts=None if by is None else {"by": by})
 
     def tally(self):
         """What the stores have been asked for and did not hold, as two counts off the counters they

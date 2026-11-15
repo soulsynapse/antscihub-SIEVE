@@ -54,7 +54,7 @@ the rule that keeps the video node from growing again is that a param of its is 
 where it changes the decoder's work, which `output` does and a resize does not.
 
 - [x] The video node's params are `output` alone; the decoder has no scale, and the video node's key
-  hashes the path and the output.
+  hashes the footage and the output: the path until 2026-11-14, `decoder.footage_print` since.
   Check: a test reads the video node's settings and the plan's base key with no scale in either.
 - [x] A saved document whose video node carries a scale loads with a rescale node of that factor
   between the video node and every node that read it, so what reaches each reader is the plane it

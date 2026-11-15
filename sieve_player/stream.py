@@ -13,13 +13,23 @@ CACHE, DECODE, SEEK, READ = "cache", "decode", "seek", "read"
 SLOT, PAINT = "slot", "paint"
 DUMP, MONITOR = "dump", "monitor"
 SYNC, WATCH, EVICT, UNCACHE, BEGIN, PROGRESS = "sync", "watch", "evict", "uncache", "begin", "progress"
+REST, WAKE = "rest", "wake"
 
 NODES = (RUN, STEP, FOLD, ERROR, CANCEL, CACHE, DECODE, SEEK, READ)     # a node's spans of Emitter.probe: a tool's run and the video's or a served file's read
 TURNS = (SLOT, PAINT)           # the GUI thread's spans of Emitter.turn, a thread's own time under no node
 OWN = (DUMP, MONITOR)           # a reader's own work: the dump's writer, and the ledger's bookkeeping on a thread that emits
-INSTANTS = (SYNC, WATCH, EVICT, UNCACHE, BEGIN, PROGRESS)               # no duration: a boundary, a discard, a walk's beginning, its rows done
+INSTANTS = (SYNC, WATCH, EVICT, UNCACHE, BEGIN, PROGRESS, REST, WAKE)   # no duration: a boundary, a discard, a walk's beginning, its rows done,
+                                                                        # and a thread with nothing to do and with something again
 SPANS = (*NODES, *OWN, *TURNS)  # the kinds with a duration
 KINDS = (*SPANS, *INSTANTS)     # every value of Event.kind; a reader takes one by membership in a set drawn from these
+
+HAND, EDIT, ASKED, GIVEN, SHAPE = "hand", "edit", "asked", "given", "shape"
+BEGUN_BY = (HAND, EDIT, ASKED, GIVEN, SHAPE)    # a begin's "by": the user's hand on the range or the walk, an edit of the document, an ask that says
+                                                # neither, and the walk's own, what it was given gone stale or the nodes or the shape changed under it
+THE_USERS = (HAND, EDIT)                        # of BEGUN_BY, the beginnings the user made
+
+PLAN_FACTS = ("nodes", "chain", "walk", "shown", "over", "pinned", "selected")      # a sync's facts: plan.facts() and, by Emitter.sync, the selection
+NODE_FACTS = ("kind", "fed", "static", "served", "steps", "whole_by", "reads")      # each node's under its "nodes"
 
 
 @dataclass(frozen=True, slots=True)
@@ -52,7 +62,7 @@ class Event:
     demand: str | None  # "walk" | "fold" | "display" | "bake": what asked at the top for everything under it; see Emitter.demand()
     asked: str | None   # the node the demand named: the walked or chain node, the folded one, the shown or overlaid, a bake's input
     lane: str | None    # "window" | "clip" | "scrub" | "bake": the worker's range the row belonged to; None off the worker
-    facts: dict | None  # sync: the plan begun and the selection, see plan.facts() and Emitter.sync(); progress: the lane's memo hits and the stores, see Graph.progress()
+    facts: dict | None  # sync: the plan begun and the selection, see plan.facts() and Emitter.sync(); progress: the lane's memo hits and the stores, see Graph.progress(); begin: "by", what began the walk, see Graph.began()
     shape: tuple | None # of what a span read or made: a decode's or a read's frame, a run's result, a fold's plane; None for what has none
 
 
@@ -65,6 +75,7 @@ class Emitter:
         self.on_event = None
         self.watched = None                 # the node the player shows beside the pinned; see watch()
         self._thread = threading.local()    # the spans open on this thread, so a span's time excludes those it opened; its demand, serves and lane
+        self._stacks = {}                   # a thread's name -> (its ident, its native id, the spans open on it), for still_out() on another thread
 
     @property
     def lane(self):
@@ -82,6 +93,31 @@ class Emitter:
                                 threading.current_thread().name, cpu_ms, getattr(p, "serves", None), length, keys,
                                 reader, demand, asked, getattr(p, "lane", None), facts, shape))
 
+    def _stack(self):
+        stack = self._thread.__dict__.get("stack")
+        if stack is None:
+            me = threading.current_thread()
+            stack = self._thread.stack = []
+            self._stacks[me.name] = me.ident, me.native_id, stack
+        return stack
+
+    def still_out(self, cpu=lambda ident, native: None):
+        """What each thread is in as this is called, from any thread: {a thread's name: [node, start,
+        ms, CPU ms]} of the innermost span of probe() it has not left, the ms and the CPU ms as an
+        Event's, exclusive of the spans that ended inside it, so far. `cpu(ident, native id)` gives
+        the CPU seconds of the thread of that threading ident and native id as time.thread_time()
+        reads them there, or None, and the CPU ms is then None. A thread in no such span is not in
+        it, and nothing is with `on_event` unset as the span was entered."""
+        out, now = {}, time.perf_counter()
+        for name, (ident, native, stack) in list(self._stacks.items()):
+            for inner, inner_cpu, *node in reversed(list(stack)):
+                if node:
+                    nid, t, c = node
+                    used = cpu(ident, native)
+                    out[name] = [nid, t, (now - t - inner) * 1000, None if used is None else (used - c - inner_cpu) * 1000]
+                    break
+        return out
+
     def sync(self, keys, facts):
         """A "sync" event, a boundary with no node, row or time: what runs next ran under a new plan,
         whose `keys` and `facts` it carries, with "selected", the watched node, among the facts."""
@@ -94,6 +130,14 @@ class Emitter:
         if nid != self.watched:
             self.watched = nid
             self.emit(WATCH, nid, None, None, 0)
+
+    def rest(self, resting):
+        """This thread has nothing to do from here, or with `resting` false has something again: a
+        "rest" or a "wake". A thread that says either is one whose silence between the two is no
+        span still out, and whose silence after a wake may be; the worker says a wake as it starts and both around its wait.
+        Neither serves anything nor is in a lane, whatever the thread did last."""
+        self._thread.serves = self._thread.lane = None
+        self.emit(REST if resting else WAKE, None, None, None, 0)
 
     def serving(self, what, lane=None):
         """What the events this thread emits from here on served, "scrub", "walk" or "bake", and the
@@ -129,10 +173,10 @@ class Emitter:
         if self.on_event is None:
             yield [None, 0, None]
             return
-        stack = self._thread.__dict__.setdefault("stack", [])
-        stack.append([0.0, 0.0])             # wall and CPU the runs opened inside this one took
+        stack = self._stack()
         ev = [RUN, 0, None]
         t, c = time.perf_counter(), time.thread_time()
+        stack.append([0.0, 0.0, nid, t, c])     # wall and CPU the runs opened inside this one took; what still_out() says of it
         try:
             yield ev
         except BaseException as exc:
@@ -141,7 +185,7 @@ class Emitter:
             raise
         finally:
             total, cpu = time.perf_counter() - t, time.thread_time() - c
-            inner, inner_cpu = stack.pop()
+            inner, inner_cpu = stack.pop()[:2]
             if stack:
                 stack[-1][0] += total
                 stack[-1][1] += cpu
@@ -157,7 +201,7 @@ class Emitter:
         if self.on_event is None:
             yield
             return
-        stack = self._thread.__dict__.setdefault("stack", [])
+        stack = self._stack()
         stack.append([0.0, 0.0])
         t, c = time.perf_counter(), time.thread_time()
         try:

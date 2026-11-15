@@ -8,7 +8,7 @@ stream does not carry, the document and the decoder's facts, a text takes as a d
 import json
 import sys
 
-from .catalogue import Log, alike, cost, gui, machine, needs, rows, size, span, store_name, tight
+from .catalogue import NODE, Log, alike, cost, gui, machine, needs, rows, size, store_name, stores_at, tight
 from .ledger import Total, Under, replay
 
 
@@ -26,8 +26,8 @@ def report(entries, view, context=None):
     for i, e in enumerate(entries, 1):
         p = e.problem
         since = "" if c.get("now") is None else f" · first seen {c['now'] - e.first:.0f} s before this"
-        out += ["", f"{i}  {p.kind} · {p.subject} · {p.ms_row:.2f} ms a row" + ("" if p.share is None else f" · {p.share:.0%}")
-                + f" · {e.count} walk{'s' * (e.count != 1)}{since}{'' if e.holds else ' · cleared'}",
+        out += ["", f"{i}  {p.kind} · {p.subject} · {cost_said(p)}" + ("" if p.share is None else f" · {p.share:.0%}")
+                + f" · {e.seen()}{since}{'' if e.holds else ' · cleared'}",
                 f"   {p.says}: {p.target}", f"   {p.line}", *("   " + x for x in p.evidence),
                 f"   from  {p.source}", f"   repro python -m sieve_player.dev.simulations {p.kind}"]
         for n in p.nodes:
@@ -36,10 +36,10 @@ def report(entries, view, context=None):
     def said(w):
         return (f"{w.lane} · rows {w.start}..{(w.start or 0) + w.length - 1} · {w.done} done · "
                 f"{(cost(w) + w.unprobed) / max(w.done, 1):.2f} ms a row" + (" · under more than one plan" if w.replanned else ""))
-    at = next((i for i, w in enumerate(view.walks) if entries and w.id == entries[0].problem.walk), len(view.walks) - 1)
+    at = _walk_of(entries[0].problem, view) if entries else len(view.walks) - 1
     out.append("")
     if at < 0:
-        out.append("WALK     no longer in the history")
+        out.append("WALK     " + ("none ran over it" if entries[0].problem.walk is None else "no longer in the history"))
     else:
         w = view.walks[at]
         prev = next((x for x in reversed(view.walks[:at]) if x.lane == w.lane), None)
@@ -58,7 +58,7 @@ def report(entries, view, context=None):
                        f"  {','.join(named.get(r.node, []))}".rstrip())
         res, like = machine(view, w), alike(view, w)
         late, turns = gui(view, w)
-        stores, need = next((b.stores for b in reversed(span(view, w)) if b.stores), {}), needs(view, w)
+        stores, need = stores_at(view, w.t1), needs(view, w)
         out += [f"         {'unprobed':<16}{w.unprobed / max(w.done, 1):>7.2f}", "",
                 "MACHINE  " + "\n         ".join([tight(res), *(f"{r.name} {r.value} · {r.note}" for r in res),
                                                  *([f"{len(like)} walks under this plan and as cold, {min(like):.2f} to {max(like):.2f} ms a row"]
@@ -75,10 +75,22 @@ def report(entries, view, context=None):
     return "\n".join(out)
 
 
+def cost_said(p):
+    """A problem's cost as written; one with no row to cost it by says so."""
+    return "no row finished over it" if p.ms_row is None else f"{p.ms_row:.2f} ms a row"
+
+
+def _walk_of(p, view):
+    """The index in `view.walks` of the walk problem `p` was found in, or for one found in no walk
+    of the latest that ran over its moment; -1 with none."""
+    over = (lambda w: w.t0 <= p.t <= w.t1) if p.walk is None else (lambda w: w.id == p.walk)
+    return next((i for i in reversed(range(len(view.walks))) if over(view.walks[i])), -1)
+
+
 def line(entry):
     p = entry.problem
     share = "" if p.share is None else f" {p.share:.0%}"
-    return (f"{p.kind:<7} {p.subject:<14} {p.ms_row:7.2f} ms/row{share:>5}  x{entry.count}"
+    return (f"{p.kind:<7} {p.subject:<14} " + ("      -" if p.ms_row is None else f"{p.ms_row:7.2f}") + f" ms/row{share:>5}  x{entry.count}"
             f"{'' if entry.holds else '  cleared'}  {p.line}")
 
 
@@ -88,13 +100,15 @@ def text(entry, view, context=None):
     no view holds: "document", the document as saved, "video", "decoder", "memo_limit", "commit",
     "dump"; a part it lacks reads "-"."""
     p, c = entry.problem, context or {}
-    w = next((w for w in view.walks if w.id == p.walk), None)
+    at = _walk_of(p, view)
+    w = None if at < 0 else view.walks[at]
     out = [f"class      {p.kind}", f"subject    {p.subject}", f"line       {p.line}",
-           f"cost       {p.ms_row:.3f} ms a row" + ("" if p.share is None else f", {p.share:.0%} of what the walk's nodes cost")
-           + f"; seen in {entry.count} walk{'s' * (entry.count != 1)}, {'still holds' if entry.holds else "not in the lane's last walk"}",
+           f"cost       {cost_said(p)}" + ("" if p.share is None else f", {p.share:.0%} of what the walk's nodes cost")
+           + f"; seen {'in ' * (p.walk is not None)}{entry.seen()}, "
+           + ("still holds" if entry.holds else "not seen of late" if p.walk is None else "in no lane's last walk"),
            "evidence", *("  " + e for e in p.evidence)]
     if w is None:
-        out.append("walk       no longer in the history")
+        out.append("walk       " + ("none ran over it" if p.walk is None else "no longer in the history"))
     else:
         out.append(f"walk       {w.lane}, rows {w.start}..{(w.start or 0) + w.length - 1}, {w.done} of {w.length} done in "
                    f"{w.t1 - w.t0:.2f} s, {cost(w):.0f} ms in its nodes" + (", under more than one plan" if w.replanned else ""))
@@ -107,7 +121,7 @@ def text(entry, view, context=None):
         nodes = (w.plan or {}).get("nodes") or {}
         out.append("plan       " + ("-" if not nodes else f"walk {w.plan['walk']}, chain {w.plan['chain']}, shown {w.plan['shown']}, "
                                     f"overlaid {w.plan['over']}, pinned {w.plan['pinned']}, selected {w.selected}"))
-        if p.subject in nodes:
+        if p.subject_is == NODE and p.subject in nodes:
             readers = [n for n, f in nodes.items() if p.subject in f["reads"].values()]
             for nid in dict.fromkeys([p.subject, *(s for s in nodes[p.subject]["reads"].values() if s), *readers]):
                 f = nodes[nid]
@@ -115,10 +129,8 @@ def text(entry, view, context=None):
                          *([f"whole by {f['whole_by']}"] if f["whole_by"] else [])]
                 out.append(f"  {nid}: {', '.join(flags)}; reads {', '.join(str(s) for s in f['reads'].values())}; "
                            f"read by {', '.join(n for n, x in nodes.items() if nid in x['reads'].values()) or 'nothing'}")
-        names = {k: n for n, k in (w.keys or {}).items()}
-        stores = next((b.stores for b in reversed(view.buckets) if b.stores), {})
-        out.append("stores     " + (", ".join(f"{'memo' if s == 'memo' else names.get(s, s) + ' cache'} {b / 2**20:.1f} of "
-                                              f"{(limit or 0) / 2**20:.1f} MB" for s, (b, limit) in stores.items()) or "-"))
+        out.append("stores     " + (", ".join(f"{store_name(s, view)} {b / 2**20:.1f} of {(limit or 0) / 2**20:.1f} MB"
+                                              for s, (b, limit) in stores_at(view, w.t1).items()) or "-"))
     d = c.get("decoder")
     out += [f"video      {c.get('video', '-')}",
             "decoder    " + ("-" if not d else ", ".join(f"{k} {v}" for k, v in d.items())) + f"; memo limit {c.get('memo_limit', '-')}",
@@ -129,6 +141,6 @@ def text(entry, view, context=None):
 
 
 if __name__ == "__main__":
-    log = Log()
-    log.read(replay(sys.argv[1]).view())
-    print("\n".join(line(e) for e in log.ordered()) or "nothing found")
+    ledger = replay(sys.argv[1], watch=Log())
+    ledger.end()
+    print("\n".join(line(e) for e in ledger.view().found.ordered()) or "nothing found")

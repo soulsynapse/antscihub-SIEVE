@@ -46,7 +46,7 @@ def hint(facet):
 
 
 def is_tool(obj):
-    return bool(probe(obj, MARKER)) and isinstance(probe(obj, "NAME"), str)
+    return bool(probe(obj, MARKER)) and isinstance(probe(obj, "NAME"), str) and bool(probe(obj, "NAME"))     # a node's id is its tool's name, so a name is not empty
 
 
 @dataclass

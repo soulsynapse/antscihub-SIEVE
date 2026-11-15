@@ -6,18 +6,19 @@ import pytest
 
 from sieve_player import document as D
 from sieve_player.graph import Graph
-from sieve_player.ledger import PARTS, Ledger, replay, save, saved
+from sieve_player.ledger import BACKLOG, PARTS, Ledger, replay, save, saved
 from sieve_player.stream import Event
 from sieve_player.trace import FIELDS, Dump
 from tests.test_graph import TOOLS, Dec, add, gray
 
 
-def walk(g, rows):
+def walk(g, rows, every=1):
     g.serving("walk", "window")
     g.began(rows[0], len(rows))
     for i, r in enumerate(rows):
         g.walk_row(r)
-        g.progress(i + 1, len(rows))
+        if (i + 1) % every == 0 or i + 1 == len(rows):
+            g.progress(i + 1, len(rows))
 
 
 def event(kind, t, ms=0.0, node=None, row=None, **more):
@@ -56,20 +57,33 @@ def test_a_dump_replays_into_the_ledger_the_live_one_was(tmp_path):
     save(seen, tmp_path / "history.json", document=doc.to_dict())      # the hand-over for a slowdown of no class: history, plans, document
     back, more = saved(tmp_path / "history.json")
     assert back.view() == seen and D.Document.from_dict(more["document"]).node("add").params["k"] == 2
+    short = Ledger()
+    short.event(event("sync", 0.0, facts={k: v for k, v in first.plan.items() if k != "pinned"}))
+    with pytest.raises(ValueError, match="a sync's facts.*pinned"):      # a fact gone from a sync fails where the ledger takes it, not where one is read
+        short.view()
 
 
 def test_a_walk_says_how_cold_it_was_and_what_a_store_made_it_compute_again():
-    g = Graph(D.from_tools([gray, add]), Dec(), TOOLS)
-    led = Ledger()
-    g.on_event = led.event
-    g.sync()
-    walk(g, range(6))
-    walk(g, range(6))
-    walk(g, range(3, 9))
-    cold, held, half = ({n: (v.ran, v.held, v.served) for n, v in w.nodes.items()} for w in led.view().walks)
-    assert cold == {"add": (6, 0, 0), "gray": (6, 0, 0), "video": (6, 0, 0)}
-    assert held == {"add": (0, 6, 0)} and half == {"add": (3, 3, 0), "gray": (3, 0, 0), "video": (3, 0, 0)}
-    assert not any(w.recomputed for w in led.view().walks)
+    for every in (1, 4):        # a row counts once however many rows a progress tells of
+        g = Graph(D.from_tools([gray, add]), Dec(), TOOLS)
+        led = Ledger()
+        g.on_event = led.event
+        g.sync()
+        walk(g, range(6), every)
+        walk(g, range(6), every)
+        walk(g, range(3, 9), every)
+        cold, held, half = ({n: (v.ran, v.held, v.served) for n, v in w.nodes.items()} for w in led.view().walks)
+        assert cold == {"add": (6, 0, 0), "gray": (6, 0, 0), "video": (6, 0, 0)}
+        assert held == {"add": (0, 6, 0)} and half == {"add": (3, 3, 0), "gray": (3, 0, 0), "video": (3, 0, 0)}
+        assert not any(w.recomputed for w in led.view().walks)
+
+    led = Ledger()      # two rows run and folded and two held, told at once: a row its run and its fold were both of is one row
+    led.event(event("begin", 0.0, row=0, length=4))
+    for r in (0, 1):
+        led.event(event("run", float(r), 1.0, "a", row=r))
+        led.event(event("fold", r + 0.5, 1.0, "a", row=r))
+    led.event(event("progress", 4.0, row=4, length=4, facts={"hits": {"a": 2}, "fold_hits": {"a": 2}}))
+    assert (led.view().walks[0].nodes["a"].ran, led.view().walks[0].nodes["a"].held) == (2, 2)
 
     g = Graph(D.from_tools([gray, add]), Dec(), TOOLS, memo_bytes=3 * 48)      # a row is gray's plane and add's, 24 bytes each
     led = Ledger()
@@ -89,10 +103,11 @@ def test_a_span_is_spread_over_its_buckets_and_a_cost_keeps_its_place_along_the_
     led.event(event("decode", 2.05, 20.0, "video", reader="outer"))
     led.event(event("run", 2.0, 80.0, "outer"))                # 100 ms in all, the decode inside it from 50 to 70
     led.event(event("fold", 2.2, 100.0, "outer"))              # after the run and inside nothing: its own from where it began
+    led.event(event("monitor", 2.3, 10.0, "outer"))            # a reader's own work is no node's, whatever it is named
     v = led.view()
     assert [b.ms.get("w", {}).get("slow") for b in v.buckets[:4]] == [pytest.approx(250.0)] * 3 + [None] and v.first == 4
     assert v.buckets[4].ms["w"] == {"outer": pytest.approx(80.0 + 50.0), "video": pytest.approx(20.0)}
-    assert v.buckets[5].ms["w"] == {"outer": pytest.approx(50.0)}
+    assert v.buckets[5].ms["w"] == {"outer": pytest.approx(50.0)} and v.buckets[5].own == {"w": {"monitor outer": pytest.approx(10.0)}}
     led.event(event("run", 100.0, 3100.0, "long"))             # thirteen buckets touched
     assert len(led.view().buckets) == 8 and led.view().first == 405 and len(v.buckets) == 6     # the bound; the view held is as it was
 
@@ -109,20 +124,35 @@ def test_a_span_is_spread_over_its_buckets_and_a_cost_keeps_its_place_along_the_
     assert [b.wait for b in v.buckets] == [pytest.approx(187.5), pytest.approx(112.5)] and v.buckets[1].read_wait == pytest.approx(40.0)
     assert (v.walks[0].wait, v.walks[0].read_wait) == (300.0, 40.0)
 
+    for every in (1, 32):       # a span's place is its row's, however many rows a progress tells of
+        led = Ledger()
+        led.event(event("begin", -2.0, row=5, length=9))            # a drag: begun and begun again with no row between
+        led.event(event("run", -1.5, 1.0, "dropped", row=5))
+        led.event(event("begin", 0.0, row=100, length=64))
+        for r in range(64):
+            led.event(event("step", r, 2.0 ** (r // 8), "grows", row=100 + r))
+            led.event(event("step", r + 0.5, 3.0, "flat", row=100 + r))
+            led.event(event("cache", r + 0.6, 0.0, "video", row=100 + r))
+            if (r + 1) % every == 0:
+                led.event(event("progress", r + 0.9, row=r + 1, length=64))
+        assert [w.start for w in led.view().walks] == [100]
+        nodes = led.view().walks[0].nodes
+        assert len(nodes["grows"].parts) == PARTS and nodes["grows"].parts[-1] == 128 * nodes["grows"].parts[0]
+        assert set(nodes["flat"].parts) == {24.0} and nodes["flat"].counts == [8] * PARTS and nodes["flat"].ran == 64
+        assert nodes["video"].held == 64 and not any(nodes["video"].counts)     # a row a cache held has no place along the range
+        unprobed = 63900.0 - sum(2.0 ** (r // 8) + 3.0 for r in range(64))      # from the begin to the last progress
+        assert sum(b.unprobed for b in led.view().buckets) == pytest.approx(unprobed) == led.view().walks[0].unprobed
+
     led = Ledger()
-    led.event(event("begin", -2.0, row=5, length=9))            # a drag: begun and begun again with no row between
-    led.event(event("run", -1.5, 1.0, "dropped", row=5))
-    led.event(event("begin", 0.0, row=0, length=64))
-    for r in range(64):
-        led.event(event("step", r, 2.0 ** (r // 8), "grows", row=r))
-        led.event(event("step", r + 0.5, 3.0, "flat", row=r))
-        led.event(event("progress", r + 0.9, row=r + 1, length=64))
-    assert [w.start for w in led.view().walks] == [0]
-    nodes = led.view().walks[0].nodes
-    assert len(nodes["grows"].parts) == PARTS and nodes["grows"].parts[-1] == 128 * nodes["grows"].parts[0]
-    assert set(nodes["flat"].parts) == {24.0} and nodes["flat"].counts == [8] * PARTS and nodes["flat"].ran == 64
-    unprobed = 63900.0 - sum(2.0 ** (r // 8) + 3.0 for r in range(64))      # from the begin to the last progress
-    assert sum(b.unprobed for b in led.view().buckets) == pytest.approx(unprobed) == led.view().walks[0].unprobed
+    for t, lane in enumerate(("window", "clip", "window")):
+        led.event(event("begin", float(t), row=0, length=4, lane=lane))
+    assert [w.t0 for w in led.view().walks] == [1.0, 2.0]       # oldest first across lanes: a walk begun again takes no earlier walk's place
+
+    led = Ledger(walks=2)
+    for t, lane in enumerate(("clip", "window", "window", "window")):
+        led.event(event("begin", float(t), row=0, length=9, lane=lane))
+        led.event(event("progress", t + 0.5, row=1, length=9, lane=lane))
+    assert [(w.lane, w.t0) for w in led.view().walks] == [("clip", 0.0), ("window", 3.0)]      # a walk under way is not dropped for another lane's
 
 
 def test_a_view_is_the_readers_to_hold_while_another_thread_feeds():
@@ -140,3 +170,28 @@ def test_a_view_is_the_readers_to_hold_while_another_thread_feeds():
     for ev in events:
         alone.event(ev)
     assert led.view() == alone.view() and early == kept and led.view().walks[0].done == 4000
+
+
+def test_the_queue_is_bounded_with_no_reader_whether_events_or_samples_feed_it(capsys):
+    for feed in (lambda led, i: led.sample("late", 1.0, i * 0.1), lambda led, i: led.event(event("slot", i * 0.1, 1.0, "walked"))):
+        led = Ledger()
+        for i in range(3 * BACKLOG):
+            feed(led, i)
+            assert len(led._q) <= BACKLOG + 1
+        assert not capsys.readouterr().err
+        led.event(event("progress", 3 * BACKLOG * 0.1, row=1, length=1, facts={"memo": {}}))     # an event the bookkeeping fails on is the emitter's to survive
+        for i in range(BACKLOG + 1):
+            feed(led, i)
+        assert "KeyError" in capsys.readouterr().err and len(led._q) <= BACKLOG + 1 and led.view().buckets
+
+    class Raises:       # a watch's fault is neither the emitter's nor a reader's, and is said once
+        back, final, copy, clock = (lambda self, width: 0), (lambda self, wid: True), (lambda self: self), (lambda self, view: None)
+
+        def settled(self, view, upto):
+            raise RuntimeError("the watch's")
+
+    led = Ledger(watch=Raises())
+    for i in range(2 * BACKLOG):
+        led.event(event("slot", i * 0.1, 1.0, "walked"))
+    view, err = led.view(), capsys.readouterr().err
+    assert err.count("raised in settled") == 1 and "not kept" not in err and view.found is None and view.buckets

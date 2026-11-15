@@ -109,6 +109,11 @@ def test_newer_version_refused(tmp_path):
     (tmp_path / "a.sieve").write_text(json.dumps({"version": D.VERSION + 1, "nodes": []}), encoding="utf-8")
     with pytest.raises(D.FormatError, match=f"{D.VERSION + 1}.*{D.VERSION}"):
         D.load(tmp_path / "a.sieve")
+    for bad in ("", 3):      # an id is a string and not empty, from a file as from add_node
+        with pytest.raises(D.FormatError, match="not a string or is empty"):
+            D.Document.from_dict({"version": D.VERSION, "nodes": [{"id": bad, "tool": "gray"}]})
+    with pytest.raises(ValueError, match="not a string or is empty"):
+        D.Document().add_node("")
 
 
 def test_unresolved_tool_kept(tmp_path):

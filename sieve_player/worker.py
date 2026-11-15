@@ -23,6 +23,7 @@ from .decoder import EndOfStream
 from .document import INPUT
 from .graph import Cancelled, Memo, Series, fed_row, gated, nbytes
 from .store import Sidecar, current, kinds, writer
+from .stream import ASKED, EDIT, GIVEN, HAND, SHAPE
 
 STACK_BYTES = 512 << 20   # the most a walk's stack and stepped results, the window's or the clip's, may take, as nbytes counts them
 STOP_PATIENCE_MS = 10_000  # how long stop() waits before saying on stderr what it is waiting for
@@ -95,6 +96,7 @@ class _Walk:
     densities: object = None    # Signal(object, int) the window's plane densities go out on; None, and the walk folds none
     bake: object = None # the _Bake this range writes for, the clip's alone: told the result at the end and a refusal
     asked: bool = False # set under the worker's lock by anything that restarts this range; the scheduler takes it
+    by: str = ASKED     # what last set `asked`, one of stream.BEGUN_BY; the scheduler takes it with the ask
     tell_every: float = 0.0     # s between a turn's tellings of the rows done, the range's end always told; 0 tells of each row
     told: float = 0.0   # when a turn last told, on perf_counter
     ask: tuple = (0, 0, False, {})  # (start, length, spared, given) the range was asked over; the clip's is the clip
@@ -113,12 +115,15 @@ class _Walk:
     folded: dict = field(default_factory=dict)
     stepped: dict = field(default_factory=dict)   # node -> _Stepped
 
-    def begin(self, start, length):
-        """Starts over `length` rows from `start`, dropping every row held, and tells the probe a walk began."""
+    def begin(self, start, length, by=ASKED):
+        """Starts over `length` rows from `start`, dropping every row held, and tells the probe a walk
+        began and `by` what, or with no row to walk that the range it was short of is closed."""
+        if self.i < self.length and not length:
+            self.graph.progress(self.i, self.i, (self.bytes, STACK_BYTES))
         self.start, self.length = start, length
         self.drop()
         if length:
-            self.graph.began(start, length)
+            self.graph.began(start, length, by)
 
     def drop(self):
         self.i = self.ran = self.served = self.bytes = 0
@@ -131,7 +136,7 @@ class _Walk:
         if self.stale_given():
             self.given = {}      # the chain moved on from what was given: the range is walked for all of it
             self.drop()
-            g.began(self.start, self.length)
+            g.began(self.start, self.length, GIVEN)
             return
         read = not headed and not self.spared and any(h not in self.given for h in g.heads or [None])   # whether anything reads the walked node's row
         before = g.tally()
@@ -142,7 +147,7 @@ class _Walk:
         if self.i and ((self.stack is not None) != stacked or (stacked and not _fits(self.stack, out))
                        or planes.keys() != self.dens.keys()):
             self.drop()      # the nodes or the shape changed under the walk; start over
-            g.began(self.start, self.length)
+            g.began(self.start, self.length, SHAPE)
             return
         if not self.i:
             if stacked and self.length * nbytes(out) > STACK_BYTES:
@@ -247,9 +252,10 @@ class _Walk:
         return any((e := self.graph.entry(nid)) is None or not e.steps or e.raw_key != key for nid, (key, _) in self.given.items())
 
     def halt(self):
-        """Stopped: the rows it has stand, and the count says so."""
+        """Stopped: the rows it has stand, and the count says so, to the window and to the probe."""
         self.length = self.i
         self.report()
+        self.graph.progress(self.i, self.length, (self.bytes, STACK_BYTES))
 
     def report(self):
         self.progress.emit(self.i, self.length, self.ran, self.served)
@@ -259,7 +265,6 @@ class _Walk:
         with its progress alone: the handlers that close on a tool's first raise must not raise on
         its second."""
         self.halt()
-        self.graph.progress(self.i, self.length, (self.bytes, STACK_BYTES))
         try:
             self.emit()
         except Exception as exc:
@@ -537,7 +542,8 @@ class Worker(QThread):
         self._series_dirty = False
         self._clip_on = False                 # whether a clip walk is wanted
         self._scrub = _Scrub(graph, self.rowReady, self.failed)
-        self._bake = _Bake(graph, every, current() if store is None else store, self.baked, self.bakeDone, self.bakeRefused, self.walk_clip)
+        self._bake = _Bake(graph, every, current() if store is None else store, self.baked, self.bakeDone, self.bakeRefused,
+                           lambda: self.walk_clip(HAND))     # a series bake's clip walk is the bake's, which a hand asked for
         self._win = _Walk(graph, name="window", every=every, progress=self.walked, ready=self.seriesReady,
                           refused=self.walkRefused, failed=self.failed, densities=self.densityReady)
         self._clip = _Walk(graph, name="clip", every=every, progress=self.clipWalked, ready=self.clipReady,
@@ -576,13 +582,14 @@ class Worker(QThread):
             self._want = row
             self._cv.notify()
 
-    def set_window(self, start, length, spared=False, given=None):
+    def set_window(self, start, length, spared=False, given=None, by=ASKED):
         """Walk the window from `start`. `spared`, the caller holds the chain's results over it and
         the chain is not run; `given`, node to (raw key, fields over the window), it holds those
         stepped nodes' and the walk steps the rest from them. The frame nodes are computed and
-        their densities folded either way."""
+        their densities folded either way. `by`, one of stream.BEGUN_BY, is what the walk's begin
+        says began it: the caller says where a hand or an edit did."""
         with self._cv:
-            self._win.ask, self._win.asked = (start, length, spared, dict(given or {})), True
+            self._win.ask, self._win.asked, self._win.by = (start, length, spared, dict(given or {})), True, by
             self._cv.notify()
 
     def invalidate(self):
@@ -592,6 +599,7 @@ class Worker(QThread):
         asks for its clip walk again."""
         with self._cv:
             self._win.asked = self._clip.asked = True
+            self._win.by = self._clip.by = EDIT
             self._win.ask = (*self._win.ask[:2], False, {})    # what was held was of the graph that is gone
             self._clip_on = False
             b = self._bake.at
@@ -616,10 +624,10 @@ class Worker(QThread):
         with self._cv:
             self._clip.ask = (0, rows, False, dict(given))
 
-    def walk_clip(self):
-        """Walk the whole clip, from its first row, once the window is walked."""
+    def walk_clip(self, by=ASKED):
+        """Walk the whole clip, from its first row, once the window is walked; `by` as set_window's."""
         with self._cv:
-            self._clip.asked = True
+            self._clip.asked, self._clip.by = True, by
             self._clip_on = True
             self._cv.notify()
 
@@ -650,13 +658,19 @@ class Worker(QThread):
 
     def _serve(self):
         """The loop: waits until a rung is due, takes its turn, and reads the asks again."""
+        self.graph.stream.rest(False)       # a turn due as the thread starts is taken with no wait: the stream is told from the first that this thread says when it rests
         while True:
             with self._cv:
-                while not self._stop and (turn := self._turn()) is None:
-                    self._cv.wait()
-                if self._stop:
-                    self._bake.abandon("the video was closed")
-                    return
+                turn = None if self._stop else self._turn()
+            if turn is None:
+                self.graph.stream.rest(True)        # outside the lock: a reader of the stream may fold on this thread
+                with self._cv:
+                    while not self._stop and (turn := self._turn()) is None:
+                        self._cv.wait()
+                    if self._stop:
+                        self._bake.abandon("the video was closed")
+                        return
+                self.graph.stream.rest(False)
             serves, steps = turn
             self.graph.readers.reap()
             job = None
@@ -689,13 +703,13 @@ class Worker(QThread):
         count = g.count
         fed = g.fed(g.walk) or served_head(g)
         if win.asked:
-            (start, length, spared, given), win.asked = win.ask, False
+            (start, length, spared, given), by, win.asked = win.ask, win.by, False
             s = max(0, min(start, count - 1))
             n = max(0, min(length, count - s)) if fed else 0   # nothing reaches a walked node and no served series node heads the chain: nothing to walk until the next change
 
             def begin():
                 win.spared, win.given = spared, given if n == length else {}  # given is over the rows asked: a clamped range takes none
-                win.begin(s, n)
+                win.begin(s, n, by)
             return "walk", [(win, begin)]
         if self._series_dirty:
             self._series_dirty = False
@@ -706,13 +720,13 @@ class Worker(QThread):
         if fed and win.i < win.length:
             return "walk", [(win, win.turn)]
         if clip.asked:
-            on, clip.asked = self._clip_on, False
+            on, by, clip.asked = self._clip_on, clip.by, False
 
             _, rows, _, given = clip.ask
 
             def begin():
                 clip.given = given if rows == count else {}
-                clip.begin(0, count if on and fed else 0)
+                clip.begin(0, count if on and fed else 0, by)
                 if clip.length and clip.given and not clip.stale_given() and all(
                         nid in clip.given for nid in g.chain if g.entry(nid).steps or nid in g.heads):
                     clip.i = clip.length - 1    # nothing is left to step and no head reads a row: the last turn runs what runs whole and ends the walk

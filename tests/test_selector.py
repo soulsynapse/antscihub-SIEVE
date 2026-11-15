@@ -20,7 +20,7 @@ class Dec:
     decodes = seeks = 0
 
     def __init__(self, path):
-        self.path = path
+        self.path = self.footage_print = path
 
     def read(self, row):
         return None

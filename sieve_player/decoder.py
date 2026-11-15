@@ -4,7 +4,9 @@ in use; a short jump ahead reads through, since a seek decodes from the last key
 costs what the decoder has measured it to cost here; anything else seeks. A seek lands one row
 short and reads through it, because the tools that difference frames ask for row - 1 right after
 row, and that second ask would otherwise be a second seek. The frame a seek reads is numbered by its
-own time, never by where the plugin says the seek landed."""
+own time, never by where the plugin says the seek landed; on a file where a stepped frame's time
+gives another row than the count, a varying rate or frames missing, no seek is numbered and every
+row is stepped to from row 0."""
 import hashlib
 import os
 import sys
@@ -99,7 +101,9 @@ def _first_ms(path):
 
 
 class _Cursor:
-    __slots__ = ("cap", "pos", "path", "luma")      # pos: the row the next step reads; None once a step has failed, so the next read seeks
+    # pos: the row the next step reads; None once a step has failed, so the next read seeks.
+    # counted: pos is a count of steps from row 0, where after a seek it is the landing's time and the steps since
+    __slots__ = ("cap", "pos", "path", "luma", "counted")
 
     def __init__(self, path, luma):
         self.path, self.luma, self.cap = path, luma, None
@@ -115,7 +119,7 @@ class _Cursor:
             self.luma = luma
         self.cap = cv2.VideoCapture(self.path, cv2.CAP_FFMPEG)
         self.cap.set(cv2.CAP_PROP_CONVERT_RGB, 0 if self.luma else 1)
-        self.pos = 0
+        self.pos, self.counted = 0, True
 
 
 SLICE = 1 << 20     # the bytes of a file's head, and of its tail, that footage_print reads
@@ -186,6 +190,7 @@ class Decoder:
         self._inexact_said = False
         self._first_ms = None                   # row 0's time, read at the first seek
         self._earliest_landing = 0              # the row a seek to row 0 read, once one has read past row 0
+        self._counts_only = False               # a stepped frame's time gave another row than the count: no seek is numbered on this file
 
     @contextmanager
     def scrub(self):
@@ -291,7 +296,9 @@ class Decoder:
                 cur = self._cursors[self._use] = _Cursor(self.path, self._luma_read())
             if cur.luma != self._luma_read():
                 cur.reopen(self._luma_read())   # here, under the lock a read holds, never from the setter
-            if cur.pos is None or not 0 <= row - cur.pos <= self._read_through():
+            if self._counts_only and not cur.counted:
+                cur.pos = None
+            if cur.pos is None or row < cur.pos or (row - cur.pos > self._read_through() and not self._counts_only):
                 t = time.perf_counter()
                 f = self._seek(cur, max(0, row - LOOKBEHIND))
                 self.seeks += 1
@@ -303,16 +310,18 @@ class Decoder:
     def _seek(self, cur, target):
         """Reads a row at or before `target` and returns its frame, the cursor left after it; or
         returns None with the cursor reopened at row 0, where no seek lands that early, which is
-        learned of a file once. A landing past the target is asked again further back. The row is
+        learned of a file once, and on a file whose times do not count its rows. A landing past the
+        target is asked again further back. The row is
         the one the frame's own time gives: the plugin does not check where a seek to row 0 or 1
         landed, and of a target it could not get behind it says the row before the one it reads
         next; docs/findings/2026-11-15-why-no-seek-lands-in-the-mts-first-thirty-rows.md."""
         back = 0
-        while target >= self._earliest_landing:
+        while not self._counts_only and target >= self._earliest_landing:
             ask = max(0, target - back)
             cur.cap.set(cv2.CAP_PROP_POS_FRAMES, ask)
             cur.pos = ask       # the row an end of stream at this read is said of
             f = self._step(cur, landing=True)
+            cur.counted = False
             landed = cur.pos - 1
             if landed != ask and not self._inexact_said:
                 self._inexact_said = True
@@ -344,6 +353,15 @@ class Decoder:
         self.decodes += 1
         if ok and landing:
             cur.pos = self._row_read(cur)
+        elif ok and not self._counts_only and (timed := self._row_read(cur)) != cur.pos:
+            self._counts_only = True
+            print(f"{os.path.basename(self.path)}: the frame stepped to as row {cur.pos} is timed as row {timed}; the file's "
+                  "frame rate varies or frames are missing, so no seek is numbered on it and every row is stepped to "
+                  "from row 0", file=sys.stderr)
+            self.empty()        # a row a seek read before this may be cached under another row's number
+            if not cur.counted:
+                cur.reopen()
+                return None
         if not ok:
             row, cur.pos = cur.pos, None
             if 0 <= row < self.count:

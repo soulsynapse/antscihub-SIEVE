@@ -52,6 +52,10 @@ HINTING = 3        # QFont.HintingPreference: full. DirectWrite ignores it; see 
 VALUE_W = 36       # a slider's mono value field
 GLYPH = 16         # a line icon beside 12px text, px
 GLYPH_STROKE = 2.25  # Tabler ships 2, which reads thin at GLYPH; widened at render, never in the files
+CLOSE_CELLS = 5    # a CloseMark's x, cells across; odd, so its two strokes share one centre cell
+CLOSE_INSET = 4    # that x from the top and the right of its button, cells
+CLOSE_SIDE = 13    # its button, px: the x and its inset again on the far side, at one cell a px
+CLOSE_INK = 100    # the x at rest: there for a pointer that looks for it, no part of the card's reading
 BADGE_H = 18       # a badge beside a layer's name, px
 BADGE_PAD = 6      # its text from its left and right edge, px
 BADGE_GAP = 10     # between a layer's name, each badge and a corner, px
@@ -280,6 +284,43 @@ class GlyphButton(QAbstractButton):
         return super().event(e)
 
 
+class CloseMark(QAbstractButton):
+    """An x for a layer's top right corner, where `Layer.tuck_corner` keeps it: dim at rest, in ink
+    under the pointer. The x is whole device pixels with no antialiasing, a cell the whole device
+    pixels in a px, rounded down, set the same count of cells from the button's top as from its
+    right; so it is sharp and on the corner's diagonal at any screen scale, and under CLOSE_CELLS px
+    across on a fractional one, never over.
+
+    It is the one mark drawn this way and at this size, for a settings card's corner alone. Any
+    other glyph on a card is a GlyphButton's, at GLYPH, and a close elsewhere is not built from this."""
+
+    def __init__(self, tip: str = "", parent=None) -> None:
+        super().__init__(parent)
+        self.setFixedSize(CLOSE_SIDE, CLOSE_SIDE)
+        self.setToolTip(tip)
+        self.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+
+    def paintEvent(self, event) -> None:
+        del event
+        p = QPainter(self)
+        to_device = p.deviceTransform()
+        corner, (to_px, _) = to_device.map(QPointF(self.width(), 0)), to_device.inverted()
+        cell = max(1, int(self.devicePixelRatioF()))
+        left = round(corner.x()) - (CLOSE_INSET + CLOSE_CELLS) * cell
+        top = round(corner.y()) + CLOSE_INSET * cell
+        ink = qgray(INK if self.underMouse() else CLOSE_INK)
+        for i in range(CLOSE_CELLS):
+            for j in {i, CLOSE_CELLS - 1 - i}:
+                p.fillRect(to_px.mapRect(QRectF(left + j * cell, top + i * cell, cell, cell)), ink)
+        p.end()
+
+    def event(self, e):
+        if e.type() in (e.Type.HoverEnter, e.Type.HoverLeave):
+            self.update()
+        return super().event(e)
+
+
 class Badge(QWidget):
     """A figure beside a layer's name: mono text in one colour on a wash of it. It takes no room
     while it has no text."""
@@ -334,7 +375,7 @@ class Layer(QFrame):
         self.body = QVBoxLayout(self)
         self.body.setContentsMargins(PAD, PAD, PAD, PAD)
         self.body.setSpacing(GAP)
-        self.head = self.head_row = None
+        self.head = self.head_row = self._tucked = None
         if name:
             self.head = QLabel(name[0].upper() + name[1:])
             self.head.setProperty("role", "name")
@@ -349,6 +390,22 @@ class Layer(QFrame):
 
     def add(self, w: QWidget, stretch: int = 0) -> None:
         self.body.addWidget(w, stretch)
+
+    def tuck_corner(self, w: QWidget) -> None:
+        """Keeps `w` in the layer's top right corner, flush with its edges and outside its layout:
+        it takes no room, and a head long enough to reach it runs under it."""
+        self._tucked = w
+        w.setParent(self)
+        w.raise_()
+        self._place_tucked()
+
+    def _place_tucked(self) -> None:
+        self._tucked.move(self.width() - self._tucked.width(), 0)
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        if self._tucked is not None:
+            self._place_tucked()
 
     def add_badge(self, w: QWidget) -> None:
         """Puts `w` after the name and the badges already there; the layer must have a name. The

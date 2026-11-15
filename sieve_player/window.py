@@ -444,6 +444,8 @@ class PlayerWindow(QMainWindow):
         self.canvas.flagged.connect(self.reflag)
         self.pane.paramsChanged.connect(self._params_changed)
         self.pane.videoPicked.connect(self.load)
+        # the canvas reports a selection only when it changes, so the closed card's node is let go: a click on it opens the card again
+        self.pane.closed.connect(lambda: self.canvas.select([]))
         self.plot.pressed.connect(self._scrub_begin)
         self.plot.dragged.connect(lambda r: self.seek(r, commit=False))
         self.plot.released.connect(self._scrub_end)
@@ -461,7 +463,7 @@ class PlayerWindow(QMainWindow):
         self.display.back.connect(self._back)
         self._shown_before = []    # the display flag's past, most recent last, for a right click; the document's session
         self._shown_last = None
-        self.selection = None      # the node the canvas last selected, whose settings the pane shows and whose axis the plot draws
+        self.selection = None      # the node the canvas last selected, whose settings the pane shows until its card is closed and whose axis the plot draws
         self.header = Header()
         self.header.show_store(self.store)
         self.header.store.clicked.connect(self._choose_store)

@@ -12,7 +12,7 @@ from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtWidgets import QComboBox, QFileDialog, QFrame, QPushButton, QScrollArea, QVBoxLayout, QWidget
 
 from .document import BAKED, LIVE, VIDEO_OUTPUT, VIDEO_OUTPUTS, VIDEO_TOOL, is_selector, mode_of, paths, video_output
-from .theme import CONTROL_W, GAP, HELD, PAD, WIDE_W, Badge, Form, Layer, readout
+from .theme import CONTROL_W, GAP, HELD, PAD, WIDE_W, Badge, CloseMark, Form, Layer, readout
 
 VIDEO_FILTER = "Video (*.mp4 *.MP4 *.avi *.mov *.mkv *.mts *.MTS);;All (*)"
 
@@ -134,7 +134,8 @@ class BakeBlock(QWidget):
 
 class Pane(QWidget):
     """`tools` is the catalogue, name to module. `select(nid)` shows that node's surface, None
-    shows nothing. `video` is the video node's widget, `widget(nid)` a tool node's settings widget,
+    shows nothing, and the x in a card's corner shows nothing and says `closed`; the node is
+    untouched. `video` is the video node's widget, `widget(nid)` a tool node's settings widget,
     Its size hint is the shown card's
     height, so a host that stacks it under the canvas gives it only the room its content needs."""
     paramsChanged = Signal(str)   # this node's params in the document changed here
@@ -142,6 +143,7 @@ class Pane(QWidget):
     bakeAsked = Signal(str)       # the Bake button under this node
     bakeCancelled = Signal(str)
     modeToggled = Signal(str)     # the switch under this node: serve its bake, or go live
+    closed = Signal()             # the x in the shown card's corner; the pane already shows nothing
 
     def __init__(self, tools, parent=None):
         super().__init__(parent)
@@ -209,6 +211,9 @@ class Pane(QWidget):
         self.sizes[node.id], self.takes[node.id] = Badge(), Badge()
         card.add_badge(self.sizes[node.id])
         card.add_badge(self.takes[node.id])
+        close = CloseMark("Close these settings; the node stays")
+        close.clicked.connect(self._close)
+        card.tuck_corner(close)
         if node.tool == VIDEO_TOOL:
             self.video = Video()
             self.video.set_params(self.doc)
@@ -269,6 +274,10 @@ class Pane(QWidget):
         for i, card in self.cards.items():
             card.setVisible(i == self.current)
         self.updateGeometry()
+
+    def _close(self):
+        self.select(None)
+        self.closed.emit()
 
     def sizeHint(self):
         """As tall as the shown card at the pane's width; the host caps it and the scroll area takes

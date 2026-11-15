@@ -112,8 +112,8 @@ def test_a_stream_ending_short_of_the_container_is_said_once_on_stderr(video, tm
 def test_a_row_by_a_seek_is_the_row_a_walk_reads_where_the_plugin_says_another(video, tmp_path):
     """A transport stream with B-frames: no seek lands before its second keyframe, and the plugin
     says of one to row 0 that it did. Then a file with twenty frames gone and their times kept, where
-    a frame's time gives another row than the count past the gap: once a step has crossed it no
-    seek is numbered, and the rows are the walk's still."""
+    a frame's time at the container's rate is another row than its place among the frames: a seek
+    is numbered by that place, and the rows are the walk's."""
     import shutil
     import subprocess
     ffmpeg = shutil.which("ffmpeg") or pytest.skip("no ffmpeg to write a transport stream")
@@ -139,6 +139,7 @@ def test_a_row_by_a_seek_is_the_row_a_walk_reads_where_the_plugin_says_another(v
     d = Decoder(gap, cache_bytes=1)
     for r in (90, 70, 45, 21, 60, 5):
         assert np.array_equal(d.read(r), in_order[r]), r
+    assert d.seeks == 6 and not d._counts_only
     d.close()
 
 

@@ -3,10 +3,11 @@ which takes the display's jumps so they never land on the walk's. A sequential r
 in use; a short jump ahead reads through, since a seek decodes from the last keyframe anyway and
 costs what the decoder has measured it to cost here; anything else seeks. A seek lands one row
 short and reads through it, because the tools that difference frames ask for row - 1 right after
-row, and that second ask would otherwise be a second seek. The frame a seek reads is numbered by its
-own time, never by where the plugin says the seek landed; on a file where a stepped frame's time
-gives another row than the count, a varying rate or frames missing, no seek is numbered and every
-row is stepped to from row 0."""
+row, and that second ask would otherwise be a second seek. A row is a frame's place among the file's
+frames in the order they are shown: the frame a seek reads is numbered by where its own time lies
+among the times of the file's packets, `frame_times`, never by where the plugin says the seek landed
+nor by a frame rate. On a file whose packets do not give its frames' times no seek is numbered and
+every row is stepped to from row 0."""
 import hashlib
 import os
 import sys
@@ -91,18 +92,32 @@ def probe(src):
     return _probe(src, os.stat(src).st_mtime)
 
 
-def _first_ms(path):
-    """CAP_PROP_POS_MSEC after row 0 is read on a capture of its own; 0.0 where nothing reads."""
-    cap = cv2.VideoCapture(path, cv2.CAP_FFMPEG)
-    try:
-        return cap.get(cv2.CAP_PROP_POS_MSEC) if cap.read()[0] else 0.0
-    finally:
-        cap.release()
+_times = {}        # path -> (the file's size and mtime when read, its frame times)
+
+
+def frame_times(path):
+    """The time in ms of every frame of the video stream of `path`, ascending, so the time at r is
+    row r's: each packet's CAP_PROP_POS_MSEC, read with no frame decoded, which is what the same
+    property says after that frame is read. The whole file is read for it where the container
+    holds no index of its packets; read again only when the file's size or mtime moved. Empty
+    where the plugin hands out no packets."""
+    path = str(path)
+    st = os.stat(path)
+    stamp = st.st_size, st.st_mtime_ns
+    if _times.get(path, (None,))[0] != stamp:
+        raw, out = cv2.VideoCapture(path, cv2.CAP_FFMPEG, [cv2.CAP_PROP_FORMAT, -1]), []
+        try:
+            while raw.grab():
+                out.append(raw.get(cv2.CAP_PROP_POS_MSEC))
+        finally:
+            raw.release()
+        _times[path] = (stamp, np.sort(np.asarray(out, np.float64)))
+    return _times[path][1]
 
 
 class _Cursor:
     # pos: the row the next step reads; None once a step has failed, so the next read seeks.
-    # counted: pos is a count of steps from row 0, where after a seek it is the landing's time and the steps since
+    # counted: pos is a count of steps from row 0, where after a seek it is the landing's place among the frame times and the steps since
     __slots__ = ("cap", "pos", "path", "luma", "counted")
 
     def __init__(self, path, luma):
@@ -188,9 +203,10 @@ class Decoder:
         self.step_ms = self.seek_ms = None      # running means of what a step and a seek cost on this file
         self.on_evict = None                    # (row, bytes) for each frame the cache drops, after the lock
         self._inexact_said = False
-        self._first_ms = None                   # row 0's time, read at the first seek
+        self._times = None                      # frame_times of the file, read at the first seek
+        self._near = 0.0                        # how far a frame's time may lie from a packet's and be that packet's, ms
         self._earliest_landing = 0              # the row a seek to row 0 read, once one has read past row 0
-        self._counts_only = False               # a stepped frame's time gave another row than the count: no seek is numbered on this file
+        self._counts_only = False               # the packets' times do not give the frames': no seek is numbered on this file
 
     @contextmanager
     def scrub(self):
@@ -310,17 +326,26 @@ class Decoder:
     def _seek(self, cur, target):
         """Reads a row at or before `target` and returns its frame, the cursor left after it; or
         returns None with the cursor reopened at row 0, where no seek lands that early, which is
-        learned of a file once, and on a file whose times do not count its rows. A landing past the
-        target is asked again further back. The row is
-        the one the frame's own time gives: the plugin does not check where a seek to row 0 or 1
-        landed, and of a target it could not get behind it says the row before the one it reads
-        next; docs/findings/2026-11-15-why-no-seek-lands-in-the-mts-first-thirty-rows.md."""
+        learned of a file once, and on a file whose packets do not give its frames' times. A landing
+        past the target is asked again further back. The row is the frame's own time's place among
+        `frame_times`: the plugin does not check where a seek to row 0 or 1 landed, and of a target
+        it could not get behind it says the row before the one it reads next;
+        docs/findings/2026-11-15-why-no-seek-lands-in-the-mts-first-thirty-rows.md."""
+        if self._times is None:
+            self._times = frame_times(self.path)
+            steps = np.diff(self._times)
+            self._near = min(0.5, float(steps.min()) / 2) if len(steps) else 0.5
+            if not len(self._times):
+                self._unnumbered("the plugin hands out no packet of it")
         back = 0
         while not self._counts_only and target >= self._earliest_landing:
             ask = max(0, target - back)
             cur.cap.set(cv2.CAP_PROP_POS_FRAMES, ask)
             cur.pos = ask       # the row an end of stream at this read is said of
             f = self._step(cur, landing=True)
+            if cur.pos is None:
+                self._unnumbered(f"the frame a seek to row {ask} read has the time of no packet")
+                break
             cur.counted = False
             landed = cur.pos - 1
             if landed != ask and not self._inexact_said:
@@ -336,10 +361,17 @@ class Decoder:
         return None
 
     def _row_read(self, cur):
-        """The row the cursor's last read handed out, by the frame's time against row 0's."""
-        if self._first_ms is None:
-            self._first_ms = _first_ms(self.path)
-        return int((cur.cap.get(cv2.CAP_PROP_POS_MSEC) - self._first_ms) * self.fps / 1000 + 0.5)
+        """The row the cursor's last read handed out, by its time's place among the frame times; None for a time that is no packet's."""
+        ms = cur.cap.get(cv2.CAP_PROP_POS_MSEC)
+        r = int(np.searchsorted(self._times, ms - self._near))
+        return r if r < len(self._times) and abs(self._times[r] - ms) <= self._near else None
+
+    def _unnumbered(self, why):
+        """From here no seek is numbered on the file; said once, and the cache, which may hold a row a seek misnumbered, emptied."""
+        self._counts_only = True
+        print(f"{os.path.basename(self.path)}: {why}, so no seek is numbered on it and every row is stepped to from row 0",
+              file=sys.stderr)
+        self.empty()
 
     def _read_through(self):
         """Rows ahead of the cursor it is cheaper to step through than to seek over."""
@@ -353,12 +385,11 @@ class Decoder:
         self.decodes += 1
         if ok and landing:
             cur.pos = self._row_read(cur)
-        elif ok and not self._counts_only and (timed := self._row_read(cur)) != cur.pos:
-            self._counts_only = True
-            print(f"{os.path.basename(self.path)}: the frame stepped to as row {cur.pos} is timed as row {timed}; the file's "
-                  "frame rate varies or frames are missing, so no seek is numbered on it and every row is stepped to "
-                  "from row 0", file=sys.stderr)
-            self.empty()        # a row a seek read before this may be cached under another row's number
+            if cur.pos is None:
+                return None
+        elif ok and self._times is not None and not self._counts_only and (timed := self._row_read(cur)) != cur.pos:
+            self._unnumbered(f"the frame stepped to as row {cur.pos} has the time of "
+                             f"{'no packet' if timed is None else f'the packet of row {timed}'}")
             if not cur.counted:
                 cur.reopen()
                 return None

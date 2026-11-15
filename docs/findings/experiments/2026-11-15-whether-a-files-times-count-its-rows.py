@@ -1,6 +1,7 @@
 """One-off: whether sieve_player's Decoder finds, of a file read in order, a stepped frame whose time
-gives another row than the count. Reads the first ROWS rows in order, or to the stream's end, inside
-BUDGET seconds, and says how many it read and whether the Decoder now numbers no seek on the file.
+is not that of the packet its count names. Reads one row far on, so the Decoder has sought and holds
+the file's frame times, then the first ROWS rows in order, or to the stream's end, inside BUDGET
+seconds, and says how many it read and whether the Decoder now numbers no seek on the file.
 Run from the repo root:
 python docs/findings/experiments/2026-11-15-whether-a-files-times-count-its-rows.py <video> [rows]"""
 import os
@@ -18,6 +19,7 @@ began = time.perf_counter()
 d = Decoder(path, cache_bytes=1)
 read = 0
 try:
+    d.read(min(ROWS, d.count) - 1)
     for r in range(min(ROWS, d.count)):
         if time.perf_counter() - began > BUDGET:
             break
@@ -25,7 +27,6 @@ try:
         read += 1
 except EndOfStream:
     pass
-print(f"{path}: {read} rows in order, {d.fps:.3f} rows a second by the container; "
-      f"{'a time gave another row than the count' if d._counts_only else 'every time gave the count'}; "
-      f"{time.perf_counter() - began:.0f} s")
+said = "a time was not its row's packet's" if d._counts_only else "every time was its row's packet's"
+print(f"{path}: {read} rows in order after {d.seeks} seeks, {len(d._times)} frame times; {said}; {time.perf_counter() - began:.0f} s")
 d.close()

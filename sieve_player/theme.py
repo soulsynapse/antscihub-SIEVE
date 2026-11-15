@@ -89,7 +89,7 @@ def layer(depth: int) -> int:
 @lru_cache(maxsize=None)
 def glyph(name: str, ink: int, size: int = GLYPH, ratio: float = 1.0) -> QPixmap:
     """GLYPHS/<name>.svg drawn in the gray `ink` at `size` px, for a screen of pixel `ratio`. The
-    files keep Tabler's `currentColor` and 2-unit stroke; both are set here."""
+    files keep Tabler's `currentColor`, and a line glyph its 2-unit stroke; both are set here."""
     src = (GLYPHS / f"{name}.svg").read_text(encoding="utf-8")
     src = src.replace("currentColor", qgray(ink).name()).replace('stroke-width="2"', f'stroke-width="{GLYPH_STROKE}"')
     pm = QPixmap(round(size * ratio), round(size * ratio))

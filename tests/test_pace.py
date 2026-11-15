@@ -48,6 +48,7 @@ def test_the_worker_s_signals_give_the_figure_with_no_consumer_on_the_probe_and_
 
     def walk():
         g.serving("walk", "window")
+        w._win.plan = g.snapshot()
         w._win.begin(100, 40)
         while w._win.i < w._win.length:
             w._win.turn()

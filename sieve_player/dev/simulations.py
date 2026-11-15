@@ -151,6 +151,7 @@ class _Run:
         self.ledger, self.pace = ledger, Pace()
         self.stream.on_event = ledger.event
         self.graph.sync()       # the plan, into the ledger
+        self.graph.watch(self.doc.pinned)
         self.worker = Worker(self.graph, every=EVERY, store=self.store)
         self.walked, self.series, self.baked = [], [], []
         self.worker.walked.connect(self.slot("walked", lambda done, n, *was: (self.walked.append((done, n)),
@@ -243,7 +244,9 @@ def _fault(**run):
 
 @_fault(served=True)
 def unread(r):
-    """A bake served on a fresh graph: the window walk folds gray and work, which nothing reads."""
+    """A bake served on a fresh graph, and the graph told the plot shows gray and work where the
+    stream is told of neither: the window walk folds the two, which nothing reads."""
+    r.graph.watch(["gray", "work"])
     r.walk()
 
 

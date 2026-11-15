@@ -26,7 +26,8 @@ strip alone (the 2026-11-12 spec's Why). A result carries the key its node had a
 print (`decoder.footage_print`; the video's path until 2026-11-14) and the decoder's output at the root (`plan.key_of`, `plan.base_key`). A stepped node's value at a
 row can depend on the row its walk began at, `track`'s ids and its first rows among them
 (`docs/findings/2026-11-13-a-windows-tracks-against-the-clips.md`), so rows of two walks are not stitched.
-The window walk's rows also feed the display, the densities and the frame tools' draws.
+The window walk also folds the densities of the nodes the plot shows; the frame and the frame tools'
+draws are computed at the display's row, by its own request.
 
 - [x] A window walk that reached the window's last row, and a clip walk that reached the clip's, are
   each held as a run as they end, a run let go when another covers its rows with every node it has

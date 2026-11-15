@@ -57,6 +57,14 @@ class Plan:
     rows: tuple | None = None                     # (count, fps) of that file; None in the plate's space, where the decoder's are
     stale: set = field(default_factory=set)       # served nodes whose live key is not the key they were baked under
 
+    @property
+    def walk(self):
+        return walked(self.entries, self.chain, self.shown)
+
+    @property
+    def fold(self):
+        return shared_fold(self.entries, self.heads)
+
 
 def walked(entries, chain, shown):
     """The node the worker computes over the window: what the chain's head reads, else what is
@@ -82,7 +90,7 @@ def facts(p, pinned):
     stream's to add, see stream.Emitter.sync()."""
     return {"nodes": {nid: {"kind": e.kind, "fed": e.fed, "static": e.static, "served": e.bake is not None,
                             "steps": e.steps, "whole_by": e.whole_by, "reads": dict(e.srcs)} for nid, e in p.entries.items()},
-            "chain": list(p.chain), "walk": walked(p.entries, p.chain, p.shown), "shown": p.shown, "over": p.over,
+            "chain": list(p.chain), "walk": p.walk, "shown": p.shown, "over": p.over,
             "pinned": list(pinned)}
 
 

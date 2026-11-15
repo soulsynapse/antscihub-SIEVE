@@ -41,7 +41,8 @@ from .worker import Worker
 
 HOLD_MS = 2000              # how long the held runs rest, nothing new held, before they are written beside the document
 HELD_BYTES = 512 << 20      # what the held runs may take together, as graph.nbytes counts them, before the oldest go
-DUMP_ENV = "SIEVE_DUMP"    # names the file every video opened in this process dumps its stream to
+TELL = 0.1                  # s between the worker's tellings of a walk's rows; docs/findings/2026-11-13-a-signal-a-row.md
+DUMP_ENV = "SIEVE_DUMP"   # names the file every video opened in this process dumps its stream to
 MEMO_ENV, CACHE_ENV = "SIEVE_MEMO_GB", "SIEVE_CACHE_GB"   # the memo's and the decoder cache's limits; unset, each class's default
 
 
@@ -663,14 +664,21 @@ class PlayerWindow(QMainWindow):
             self.stream.watch(nid)
         self.pane.select(nid)
         self.plot.set_selection(nid)
+        self._tell_shown()
         self._show_pinned()
         self._show_size()
 
     def _show_plot(self):
         """The plot and the strip follow the document's pinned set and bands."""
         self.plot.set_pinned(self.doc.pinned)
+        self._tell_shown()
         self._show_bands()
         self._show_pinned()
+
+    def _tell_shown(self):
+        """The worker folds the densities of what the plot shows."""
+        if self.worker is not None:
+            self.worker.watch(document.shown(self.selection, self.doc.pinned))
 
     def _show_bands(self):
         self.plot.set_bands({n.id: n.band for n in self.doc.nodes})
@@ -1079,7 +1087,8 @@ class PlayerWindow(QMainWindow):
         self.lateness = Lateness(self._sample, parent=self)
         self.machine = Watch(self._sample, still_out=self.stream.still_out)
         self.pace = Pace()
-        self.worker = Worker(self.graph, store=self.store)
+        self.worker = Worker(self.graph, store=self.store, tell_every=TELL)
+        self._tell_shown()
         self.fps, self.count = self.graph.fps, self.graph.count
         ct = self.timeline.controls
         for signal, slot in (("rowReady", self._row_ready), ("seriesReady", self._window_ready),
@@ -1242,8 +1251,9 @@ class PlayerWindow(QMainWindow):
 
     # -- slots ----------------------------------------------------------
     def _show(self, row):
-        """The shown node's frame at `row` from the memo, with the overlay node's plane over it if the
-        memo has that too; False when either is not there yet, so a commit asks the worker for both."""
+        """The shown node's frame at `row` from the memo, with the overlay node's plane over it and
+        the drawing frame nodes' outputs if the memo has those too; False when any is not there
+        yet, so a commit asks the worker for them all."""
         frame = self.graph.peek(row)
         if frame is None:
             return False
@@ -1259,7 +1269,8 @@ class PlayerWindow(QMainWindow):
         over = self.graph.over
         plane = None if over is None else self.graph.peek(row, over)
         self.display.set_overlay(plane, None if over is None else self.graph.key(over))
-        return over is None or plane is not None
+        drawn = all(self.display.frame_results.get(nid, True) is not None for nid in self.graph.drawing())
+        return drawn and (over is None or plane is not None)
 
     def _row_ready(self, row):
         if row == self.row and self.graph is not None:
@@ -1268,8 +1279,8 @@ class PlayerWindow(QMainWindow):
     def _ask_window(self, by=ASKED):
         """Asks the worker for the window: spared the chain where a held run covers it, whose rows
         are then the window's results at once; else given what a run holds of the chain's stepped
-        nodes, so only the rest is stepped. The window's frames are walked either way. `by` as
-        set_window's."""
+        nodes, so only the rest is stepped. The densities the plot shows are folded either way.
+        `by` as set_window's."""
         s, n = self.window_
         chain = self._chain()
         got = self.runs.over(s, n, chain)

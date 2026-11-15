@@ -1,4 +1,4 @@
-"""density: a measured plane folds to counts on a fixed log1p axis, every fed frame node gets one, and the plot crops to the bins the window occupies."""
+"""density: a measured plane folds to counts on a fixed log1p axis, the walk folds one for each fed frame node the plot shows, and the plot crops to the bins the window occupies."""
 import os
 
 import numpy as np
@@ -31,18 +31,53 @@ def test_an_integer_plane_leaves_no_empty_bin_between_its_values():
     assert [density.value_of(b) for b in range(5)] == [0.0, 1.0, 2.0, 3.0, 4.0]
 
 
-def test_every_fed_frame_node_is_counted_a_branch_too():
+def test_the_walk_folds_what_the_plot_shows_a_branch_too_and_no_other_node():
+    from PySide6.QtWidgets import QApplication
+    from sieve_player.worker import Worker
     from test_graph import TOOLS, Dec, D, Graph, add, gray, same, tool
 
+    QApplication.instance() or QApplication([])
+
     head = tool("head", kind="series", produces="signal")
+    head.run = lambda series, params: {"signal": np.asarray(series.data, np.float64).reshape(len(series.data), -1)[:, 0]}
     doc = D.from_tools([gray, add, head])                     # video -> gray -> add -> head
     doc.add_node("same", (0, 300))
     doc.connect("gray", "same")                               # a branch the series never reads
     g = Graph(doc, Dec(), {**TOOLS, "head": head})
-    assert g.walk == "add" and g.frame_nodes() == ["gray", "add", "same"]
+    assert g.walk == "add" and g.folded() == []
+    g.watch(["same", "head", "nowhere"])
+    assert g.folded() == ["same"]                             # of what the plot shows, the fed frame nodes
+    w, fields, begun = Worker(g, every=3), [], []
+    w.densityReady.connect(lambda f, start: fields.append({nid: len(c) for nid, c in f.items()}))
+    g.on_event = lambda ev: ev.kind == "begin" and begun.append(ev.row)
+
+    def turns(w=w):
+        while True:
+            with w._cv:
+                turn = w._turn()
+            if turn is None:
+                return
+            for job, act in turn[1]:
+                g.serving(turn[0], job.name)
+                act()
+
+    w.set_window(2, 4)
+    turns()
+    assert fields[-1] == {"same": 4}
+    stack = w._win.stack
+    w.watch(["add", "same"])                                  # shown once the window is walked: folded from its first row, the chain's rows standing
+    turns()
+    assert fields[-1] == {"same": 4, "add": 4} and w._win.stack is stack is not None and w._win.i == 4
+    assert begun == [2, 2] and not w._win.refolding
+    paced, sent = Worker(g, every=1, tell_every=3600.0), []   # short of tell_every from its start a range sends its end alone
+    paced.densityReady.connect(lambda f, start: sent.append(len(f["same"])))
+    paced.seriesReady.connect(lambda r, start, fps: sent.append("chain"))
+    paced.set_window(2, 4)
+    turns(paced)
+    assert sent == [4, "chain"]
     doc.disconnect("same")
     g.sync()
-    assert g.frame_nodes() == ["gray", "add"]
+    assert g.folded() == ["add"]
 
 
 def test_plot_crops_to_the_occupied_bins_and_paints():
@@ -66,6 +101,12 @@ def test_plot_crops_to_the_occupied_bins_and_paints():
     f = w.fields["a"]
     assert (f.lo, f.hi) == (40 - f.MARGIN, 120 + f.MARGIN)        # cropped on arrival, before any paint
     assert not w.grab().isNull()
+    drawn = w._still
+    w.set_playhead(9)
+    w.set_hover(8)
+    assert not w.grab().isNull() and w._still is drawn            # a cursor that moves draws no row again
+    w.set_fields({"a": counts}, 7)
+    assert w._still is None
     assert w._row(w._inner().left()) == 7
     # the handles start at the axis's ends and keep every shown bin; dragged in, they drop the bins outside
     assert f.kept(w.levels("a")).all()

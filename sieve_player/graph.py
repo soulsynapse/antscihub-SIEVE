@@ -13,7 +13,7 @@ import numpy as np
 
 from . import density
 from .document import INPUT, video_output
-from .plan import _key, base_key, facts, plan, shared_fold, walked
+from .plan import _key, base_key, facts, plan
 from .stream import Emitter
 
 def inband(v, band):
@@ -154,8 +154,8 @@ class Memo:
 
 class Cancelled(Exception):
     """A run read a frame after the graph had moved on under it, or while the worker was stopping:
-    what it was computing is for a plan that is gone, so the read raises instead of serving it. A
-    walk raises it too, of a result it was given that the plan has left. The worker drops the row;
+    what it was computing is for a plan that is gone, so the read raises instead of serving it.
+    The worker drops the row;
     a tool that catches Exception around a read should let this one through."""
 
 
@@ -285,6 +285,7 @@ class Graph:
         self._notes = {}                    # node -> (its key, what the run said): a tool raising, a chain node fed no signal
         self.shown = self.over = self.series = None
         self.chain, self.heads, self.unrun_series = [], [], []
+        self._watched = ()                  # what the plot shows, by watch()
         self.sync()
 
     @property
@@ -310,7 +311,7 @@ class Graph:
             self._rows, self.axis = p.rows, p.axis
             self.plate = None if p.axis is None else p.entries[p.axis].bake.plate
             self.off, self.stale = {nid for nid, e in p.entries.items() if e.off}, set(p.stale)
-            self._plan = p.entries
+            self._plan, self._whole = p.entries, p
             self.shown, self.over = p.shown, p.over
             self.series = p.chain[0] if p.chain else None
             self.heads, self.chain, self.unrun_series = p.heads, p.chain, p.unrun
@@ -341,11 +342,10 @@ class Graph:
             d.on_evict = lambda row, n: self.stream.emit("uncache", None, row, key, n)
         return r
 
-    def baked_series(self, nid):
-        """A served series node's whole file: its tables one a row, or its float32 signal. Worker threads only."""
-        with self._lock:
-            e = self._plan.get(nid)
-        return self._reader(nid, e).data
+    def baked_series(self, nid, p=None):
+        """A served series node's whole file: its tables one a row, or its float32 signal, the node
+        as the Plan `p` has it, the current one with none. Worker threads only."""
+        return self._reader(nid, (p or self.snapshot()).entries[nid]).data
 
     def close(self):
         self.readers.close()
@@ -374,41 +374,51 @@ class Graph:
                 self._notes.pop(nid, None)
 
     # -- what the worker and the display ask -------------------------------
-    def _walk(self):
-        return walked(self._plan, self.chain, self.shown)
+    def snapshot(self):
+        """The Plan of the last sync, whole: built there and never touched after, so what is read
+        off one is of one graph whatever syncs meanwhile. Any thread."""
+        with self._lock:
+            return self._whole
 
     @property
     def walk(self):
         """The node the worker computes over the window: what the series node reads, else what is
         shown. None when the series node is not fed, so its tool never sees a type it does not expect."""
-        with self._lock:
-            return self._walk()
-
-    def _fold(self):
-        return shared_fold(self._plan, self.heads)
+        return self.snapshot().walk
 
     @property
     def fold(self):
         """The fold the walk stacks rows through: the heads' when every one of them has the same,
         None when they differ or none has one, so that the stack holds the rows as they are."""
-        with self._lock:
-            return self._fold()
+        return self.snapshot().fold
 
-    def walk_row(self, row):
+    def walk_row(self, row, p=None):
         """The walked node at `row` as the worker stacks it: through the heads' shared fold() when
         they have one, so what the window holds is what the series tools asked for and never the
-        frame. Worker threads only."""
-        with self._lock:
-            plan, nid, fold = self._plan, self._walk(), self._fold()
+        frame; under the Plan `p`, the current one with none. Worker threads only."""
+        p = p or self.snapshot()
+        nid, fold = p.walk, p.fold
         with self.demand("walk", nid):
-            out = self._compute(plan, nid, row)
+            out = self._compute(p.entries, nid, row)
         return out if fold is None or out is None else fold(out)
 
-    def frame_nodes(self):
-        """Every fed frame node, in document order: what the walk computes at each row beside the
-        walked node, so every node's plane can be counted over the window, a branch's too."""
+    def drawing(self):
+        """The fed frame nodes whose tool has a draw(), in document order: what the display reads
+        at its row beside the shown node, on the walked path or off it."""
         with self._lock:
-            return [nid for nid, e in self._plan.items() if e.kind == "frame" and e.fed]
+            return [nid for nid, e in self._plan.items() if e.kind == "frame" and e.fed and hasattr(e.tool, "draw")]
+
+    def watch(self, nodes):
+        """`nodes` are what the plot shows, the selection and the pinned; any thread."""
+        with self._lock:
+            self._watched = tuple(nodes)
+
+    def folded(self):
+        """The fed frame nodes among those watch() was told of, in its order: what the window walk
+        folds a density for, a branch the walk does not reach among them. Whether a node's output
+        is a plane is density()'s to say, at a row."""
+        with self._lock:
+            return [nid for nid in self._watched if (e := self._plan.get(nid)) is not None and e.kind == "frame" and e.fed]
 
     @property
     def series_tool(self):

@@ -109,6 +109,27 @@ def test_a_stream_ending_short_of_the_container_is_said_once_on_stderr(video, tm
     d.close()
 
 
+def test_a_row_by_a_seek_is_the_row_a_walk_reads_where_the_plugin_says_another(video, tmp_path):
+    """A transport stream with B-frames: no seek lands before its second keyframe, and the plugin
+    says of one to row 0 that it did."""
+    import shutil
+    import subprocess
+    ffmpeg = shutil.which("ffmpeg") or pytest.skip("no ffmpeg to write a transport stream")
+    ts = tmp_path / "v.ts"
+    subprocess.check_call([ffmpeg, "-y", "-loglevel", "error", "-i", str(video), "-frames:v", "90", "-pix_fmt", "yuv420p",
+                          "-c:v", "libx264", "-g", "30", "-bf", "2", "-f", "mpegts", str(ts)])
+    walk = Decoder(ts)
+    in_order = [walk.read(r) for r in range(90)]
+    assert walk.seeks == 0
+    walk.close()
+    d = Decoder(ts, cache_bytes=1)                    # the last row only, so every row behind is a seek
+    d.read(80)
+    for r in (61, 45, 31, 30, 20, 5, 1, 0):
+        assert np.array_equal(d.read(r), in_order[r]), r
+    assert d.seeks == 9
+    d.close()
+
+
 def test_a_files_print_is_its_footages_wherever_it_lies_and_however_its_path_is_spelled(tmp_path):
     """The video node's key is of this and of no path, so a held run made of a file is found from
     a copy of it, on another machine and under another spelling."""

@@ -13,6 +13,14 @@ def in_store(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def unasked(monkeypatch):
+    """No player window a test leaves changed waits on a dialog: the answer is "discard" unless the
+    test sets its own."""
+    from sieve_player.window import PlayerWindow
+    monkeypatch.setattr(PlayerWindow, "ask_unsaved", lambda self: "discard")
+
+
+@pytest.fixture(autouse=True)
 def reaped(monkeypatch):
     """Every worker a test made is stopped at teardown and its graph closed with its decoder, so an
     assertion failing between a start and the test's own stop() leaves no thread reading a clip the

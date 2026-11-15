@@ -251,7 +251,7 @@ class GeometryWindow(QMainWindow):
         self.editor.plate = video.plate
         self.message.setText(self._plate_line())
         self.view.viewport().update()
-        self.setWindowTitle(f"Geometry — {os.path.basename(video.path)}  {video.plate[1]}×{video.plate[0]}[*]")
+        self.setWindowTitle(f"Geometry - {os.path.basename(video.path)}  {video.plate[1]}×{video.plate[0]}[*]")
         self.video_label.setText(os.path.basename(video.path))
         self.video_label.setToolTip(video.path)
         self.seek_bar.blockSignals(True)
@@ -421,7 +421,7 @@ class GeometryWindow(QMainWindow):
             self.folder_label.setText("the first video opened settles it, or Save as")
         else:
             name = os.path.basename(self.file)
-            self.name_label.setText(f"{name} — unsaved changes" if dirty else name)
+            self.name_label.setText(f"{name} (unsaved changes)" if dirty else name)
             self.folder_label.setText(os.path.dirname(self.file))
         self.setWindowModified(dirty)
         self.save_button.setEnabled(dirty)

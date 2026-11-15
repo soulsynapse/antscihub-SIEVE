@@ -19,7 +19,7 @@ import cv2
 import numpy as np
 from PySide6.QtCore import QFileSystemWatcher, QProcess, QProcessEnvironment, QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import QImage, QKeySequence, QPainter, QPen, QPixmap, QShortcut
-from PySide6.QtWidgets import QFileDialog, QHBoxLayout, QMainWindow, QProgressBar, QPushButton, QSizePolicy, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QFileDialog, QHBoxLayout, QMainWindow, QMessageBox, QProgressBar, QPushButton, QSizePolicy, QVBoxLayout, QWidget
 
 from . import bare, dev, document, held, store, theme
 from .canvas import Canvas
@@ -72,7 +72,8 @@ class Lateness(QTimer):
             self.sample("late", max(0.0, (now - self._due) * 1000), now)
         self._due = now + self.interval() / 1000
 
-DOCUMENT_FILTER = "SIEVE document (*.json);;All (*)"
+DOCUMENT_SUFFIX = "json"
+DOCUMENT_FILTER = f"SIEVE document (*.{DOCUMENT_SUFFIX});;All (*)"
 
 
 def _save_held(file, runs, failed):
@@ -398,7 +399,7 @@ class PlayerWindow(QMainWindow):
         modules, self.tools, broken = catalogue(list(tools) if from_file else [*source, *tools])
         if not from_file:
             modules = catalogue(source)[0]
-        self.doc = None
+        self.doc = self._written = None           # the document, and its text as last opened, made or saved
         self.decoder = self.graph = self.stream = self.worker = None
         self.ledger = self.lateness = self.machine = None     # the open video's stream kept over time, and the GUI thread's and the machine's samplers into it
         self.pace = None                          # the open video's walks as the header's figure reads them
@@ -495,6 +496,7 @@ class PlayerWindow(QMainWindow):
         self.setCentralWidget(central)
 
         menu = self.menuBar().addMenu("File")
+        menu.addAction("New", QKeySequence.New, self._new)
         menu.addAction("Open…", QKeySequence.Open, self._open_dialog)
         menu.addAction("Save", QKeySequence.Save, self.save_document)
         menu.addAction("Save As…", QKeySequence.SaveAs, self._save_as)
@@ -547,6 +549,7 @@ class PlayerWindow(QMainWindow):
         self._show_plot()
         self._retitle()
         self._pick_video()
+        self._written = self._text()
 
     def open_document(self, path):
         """Open a saved document; a file that will not read is reported in the transport and leaves
@@ -570,19 +573,64 @@ class PlayerWindow(QMainWindow):
         except OSError as e:
             self.timeline.controls.progress.setText(f"could not save {os.path.basename(str(path))}: {e}")
             return False
+        self._written = self._text()
         self._unwritten |= was != self.doc.path
         self._write_held(wait=True)
         self._retitle()
         return True
 
+    def _text(self):
+        return json.dumps(self.doc.to_dict(), sort_keys=True, default=repr)
+
+    def differs(self):
+        """Whether the document is other than it was when last opened, made or saved."""
+        return self.doc is not None and self._text() != self._written
+
+    def ask_unsaved(self):
+        """"save", "discard" or "cancel", asked by a dialog naming the document."""
+        name = os.path.basename(self.doc.path) if self.doc.path else "The document"
+        box = QMessageBox(self)
+        box.setWindowTitle("Unsaved changes")
+        box.setText(f"{name} has unsaved changes.")
+        buttons = QMessageBox.StandardButton
+        box.setStandardButtons(buttons.Save | buttons.Discard | buttons.Cancel)
+        box.setDefaultButton(buttons.Save)
+        box.exec()
+        return {buttons.Save: "save", buttons.Discard: "discard"}.get(box.standardButton(box.clickedButton()), "cancel")
+
+    def _leaving(self):
+        """True when the document may be left behind: it does not differ, or the user chose Discard,
+        or chose Save and the save was taken."""
+        if not self.differs():
+            return True
+        answer = self.ask_unsaved()
+        return self.save_document() if answer == "save" else answer == "discard"
+
+    def _new(self):
+        if self._leaving():
+            self.set_document(document.from_tools([]))
+
     def _open_dialog(self):
-        path, _ = QFileDialog.getOpenFileName(self, "Open document", "", DOCUMENT_FILTER)
+        if not self._leaving():
+            return
+        path, _ = QFileDialog.getOpenFileName(self, "Open document", os.path.dirname(self._save_as_start()), DOCUMENT_FILTER)
         if path:
             self.open_document(path)
 
+    def _save_as_start(self):
+        """The file a save dialog opens on: the document's own, else one named for the open video
+        and beside it, else a bare name in whatever folder the dialog falls to."""
+        if self.doc.path:
+            return self.doc.path
+        if self.decoder is not None:
+            return f"{os.path.splitext(self.decoder.path)[0]}.{DOCUMENT_SUFFIX}"
+        return f"untitled.{DOCUMENT_SUFFIX}"
+
     def _save_as(self):
-        path, _ = QFileDialog.getSaveFileName(self, "Save document", self.doc.path or "", DOCUMENT_FILTER)
-        return bool(path) and self.save_document(path)
+        dialog = QFileDialog(self, "Save document", self._save_as_start(), DOCUMENT_FILTER)
+        dialog.setAcceptMode(QFileDialog.AcceptSave)
+        dialog.setDefaultSuffix(DOCUMENT_SUFFIX)
+        return bool(dialog.exec()) and self.save_document(dialog.selectedFiles()[0])
 
     def _retitle(self):
         parts = [self.title]
@@ -590,7 +638,7 @@ class PlayerWindow(QMainWindow):
             parts.append(os.path.basename(self.doc.path))
         if self.decoder is not None:
             parts.append(os.path.basename(self.decoder.path))
-        self.setWindowTitle(" — ".join(parts))
+        self.setWindowTitle(" - ".join(parts))
 
     def _select(self, nid):
         self.selection = nid
@@ -1086,6 +1134,8 @@ class PlayerWindow(QMainWindow):
         self.header.set_walking(False)
         self.header.clear_note()
         self.header.setEnabled(False)
+        self.timeline.setEnabled(False)
+        self.timeline.controls.progress.setText("no video")
         self.timeline.strip.set_series({})
         self.timeline.strip.set_held([])
         self.row, self.window_ = 0, (0, 0)
@@ -1491,6 +1541,9 @@ class PlayerWindow(QMainWindow):
             self.split.setSizes([int(w * self.SPLIT), w - int(w * self.SPLIT)])
 
     def closeEvent(self, e):
+        if not self._leaving():
+            e.ignore()
+            return
         self.timer.stop()
         self._unload()
         super().closeEvent(e)

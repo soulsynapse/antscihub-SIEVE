@@ -14,7 +14,7 @@ import sys
 from functools import lru_cache
 from pathlib import Path
 
-from PySide6.QtCore import QPointF, QRectF, Qt
+from PySide6.QtCore import QPointF, QRectF, QSize, Qt
 from PySide6.QtGui import QColor, QFont, QFontDatabase, QFontMetrics, QPainter, QPen, QPixmap
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (QAbstractButton, QAbstractSpinBox, QApplication, QComboBox, QFrame, QGridLayout,
@@ -52,6 +52,11 @@ HINTING = 3        # QFont.HintingPreference: full. DirectWrite ignores it; see 
 VALUE_W = 36       # a slider's mono readout
 GLYPH = 16         # a line icon beside 12px text, px
 GLYPH_STROKE = 2.25  # Tabler ships 2, which reads thin at GLYPH; widened at render, never in the files
+BADGE_H = 18       # a badge beside a layer's name, px
+BADGE_PAD = 6      # its text from its left and right edge, px
+BADGE_GAP = 10     # between a layer's name, each badge and a corner, px
+BADGE_FILL = 38    # a badge's wash of its own colour, of 255
+BADGE_INK = 200    # its text in that colour, of 255
 ACCENT = QColor(88, 146, 255)   # what is viewed: the loop window, a wire, a checked box
 SERIES = QColor(100, 232, 204)  # a trace's series: v2's plot accent
 GATE = QColor(104, 240, 130)    # the gate, and a detector trace's series: v2's detection green
@@ -63,6 +68,7 @@ RED = QColor(232, 72, 72)       # an input nothing feeds, a wire whose types no 
 GATED = QColor(96, 210, 120, 72)  # GATE as a trace's wash over its gated rows
 LEVEL = QColor(240, 110, 100)   # a trace's handles: v2's band color, softer than RED, which is an error
 EXCLUDED = QColor(0, 0, 0, 72)  # the values a trace's band shuts out
+HELD = {"KB": GATE, "MB": QColor(245, 204, 72), "GB": RED, "TB": RED}   # a size's badge by its unit; one in bytes is a badge's own gray
 DENSITY = ((32, 110, 138), (70, 180, 200), (190, 240, 248))   # a density's ramp above its field: v2's cyan, never HEAT, which is a value not a count
 TYPE_HUES = {"bgr": 30, "gray": 165, "mask": 210, "path": 275}   # a connector's hue per product type; a type not here is hashed
 TYPE_SV = (150, 225)            # every connector's saturation and value, so the hue alone says the type
@@ -272,9 +278,52 @@ class GlyphButton(QAbstractButton):
         return super().event(e)
 
 
+class Badge(QWidget):
+    """A figure beside a layer's name: mono text in one colour on a wash of it. It takes no room
+    while it has no text."""
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self._text, self._ink = "", qgray(INK_2)
+        self.setFont(mono_font())
+        self.hide()
+
+    def say(self, text: str, ink: QColor | None = None, tip: str = "") -> None:
+        """Shows `text` in `ink`, the readouts' gray with none, with `tip` under the pointer; "" hides it."""
+        self._text, self._ink = text, qgray(INK_2) if ink is None else QColor(ink)
+        self.setToolTip(tip)
+        self.setVisible(bool(text))
+        self.updateGeometry()
+        self.update()
+
+    def text(self) -> str:
+        return self._text
+
+    def sizeHint(self) -> QSize:
+        return QSize(self.fontMetrics().horizontalAdvance(self._text) + 2 * BADGE_PAD, BADGE_H)
+
+    def minimumSizeHint(self) -> QSize:
+        return self.sizeHint()
+
+    def paintEvent(self, event) -> None:
+        del event
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing, True)
+        fill, ink = QColor(self._ink), QColor(self._ink)
+        fill.setAlpha(BADGE_FILL)
+        ink.setAlpha(BADGE_INK)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(fill)
+        p.drawRoundedRect(QRectF(self.rect()), RADIUS, RADIUS)
+        p.setPen(ink)
+        p.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, self._text)
+        p.end()
+
+
 class Layer(QFrame):
     """A surface one step lighter than whatever it sits on, named in white if it has a name. A named
-    layer's head is a row: the name left, and whatever `add_corner` gives it at the right."""
+    layer's head is a row: the name left, what `add_badge` gives it straight after the name, and
+    whatever `add_corner` gives it at the right."""
 
     def __init__(self, depth: int, name: str = "", parent=None) -> None:
         super().__init__(parent)
@@ -289,13 +338,22 @@ class Layer(QFrame):
             self.head.setProperty("role", "name")
             self.head_row = QHBoxLayout()
             self.head_row.setContentsMargins(0, 0, 0, 0)
-            self.head_row.setSpacing(GAP)
-            self.head_row.addWidget(self.head, 1)
+            self.head_row.setSpacing(BADGE_GAP)
+            self.head_row.addWidget(self.head)
+            self.head_row.addStretch(1)
+            self._badges = 0
             self.body.addLayout(self.head_row)
             self.body.addSpacing(max(0, HEAD_GAP - GAP))
 
     def add(self, w: QWidget, stretch: int = 0) -> None:
         self.body.addWidget(w, stretch)
+
+    def add_badge(self, w: QWidget) -> None:
+        """Puts `w` after the name and the badges already there; the layer must have a name. The
+        head is a badge's height from then on, so one appearing moves nothing under it."""
+        self._badges += 1
+        self.head_row.insertWidget(self._badges, w, 0, Qt.AlignmentFlag.AlignVCenter)
+        self.head.setMinimumHeight(BADGE_H)
 
     def add_corner(self, w: QWidget) -> None:
         """Puts `w` at the right end of the head row; the layer must have a name."""

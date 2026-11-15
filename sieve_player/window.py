@@ -33,7 +33,7 @@ from .pacecontrol import PaceControl
 from .storecontrol import StoreControl
 from .pane import Pane
 from .registry import CATEGORIES, Entry, category, description, signature
-from .stream import ASKED, EDIT, HAND, Emitter
+from .stream import ASKED, DECODE, EDIT, HAND, RUN, STEP, Emitter
 from .theme import GAP, PAD, ROW_H, readout
 from .timeline import Timeline
 from .trace import Dump
@@ -43,7 +43,8 @@ from .worker import Worker
 HOLD_MS = 2000              # how long the held runs rest, nothing new held, before they are written beside the document
 HELD_BYTES = 512 << 20      # what the held runs may take together, as graph.nbytes counts them, before the oldest go
 TELL = 0.1                  # s between the worker's tellings of a walk's rows; docs/findings/2026-11-13-a-signal-a-row.md
-DUMP_ENV = "SIEVE_DUMP"   # names the file every video opened in this process dumps its stream to
+ROW_RUNS = (RUN, STEP, DECODE)  # the spans that are a node's work on one row of a walk in order, which seeks nowhere; see _show_takes
+DUMP_ENV = "SIEVE_DUMP"  # names the file every video opened in this process dumps its stream to
 MEMO_ENV, CACHE_ENV = "SIEVE_MEMO_GB", "SIEVE_CACHE_GB"   # the memo's and the decoder cache's limits; unset, each class's default
 
 
@@ -661,6 +662,7 @@ class PlayerWindow(QMainWindow):
         self._tell_shown()
         self._show_pinned()
         self._show_size()
+        self._show_takes()
 
     def _show_plot(self):
         """The plot and the strip follow the document's pinned set and bands."""
@@ -1335,6 +1337,7 @@ class PlayerWindow(QMainWindow):
         self._update_gate()
         self._show_pinned()
         self._show_size()
+        self._show_takes()
 
     # -- the clip walk ---------------------------------------------------
     def _toggle_clip(self):
@@ -1497,7 +1500,35 @@ class PlayerWindow(QMainWindow):
         file, from the window's rows."""
         if self.selection is not None:
             per = held.per_row(self.results.get(self.selection))
-            self.pane.set_size(self.selection, f"about {store.fmt_bytes(per * self.count)} held over the clip" if per else "")
+            size = store.fmt_bytes(per * self.count) if per else ""
+            self.pane.set_size(self.selection, f"~{size}" if per else "", f"about {size} held over the clip")
+
+    def _show_takes(self):
+        """The selected node's card says about how long its own work would take over the clip, every
+        row run at the mean of its ROW_RUNS in the latest walk that has any under the key it now
+        has; a held row emits no run, so the mean is of cold rows. Nothing with no such walk, nor
+        for a chain node the walk runs whole, whose run is of no one row."""
+        nid = self.selection
+        if nid is None or self.ledger is None or self.graph is None:
+            return
+        key = self._key(nid)
+        for w in reversed(self.ledger.view().walks):
+            node, plan = w.nodes.get(nid), w.plan or {}
+            if node is None or w.replanned or (w.keys or {}).get(nid) != key:
+                continue
+            if nid in (plan.get("chain") or ()) and not plan["nodes"][nid]["steps"]:
+                continue
+            runs = [r for under, r in node.runs.items() if under.kind in ROW_RUNS]
+            n = sum(r.count for r in runs)
+            if not n:
+                continue
+            ms = sum(r.ms for r in runs) / n
+            s = ms * self.count / 1000
+            text = f"{s * 1000:.0f} ms" if s < 1 else f"{s:.1f} s" if s < 10 else f"{s:.0f} s" if s < 60 else clock(s)
+            self.pane.set_takes(nid, f"~{text}", f"about {text} of this node's own work over the clip's {self.count} rows, "
+                                                 f"at {ms:.2f} ms a run over the {w.lane} walk's {n}")
+            return
+        self.pane.set_takes(nid, "")
 
     def _baked(self, nid, bake):
         """Recorded here, on the GUI thread, since the document is the GUI's and the worker's alone to read."""

@@ -12,7 +12,7 @@ from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtWidgets import QComboBox, QFileDialog, QFrame, QPushButton, QScrollArea, QVBoxLayout, QWidget
 
 from .document import BAKED, LIVE, VIDEO_OUTPUT, VIDEO_OUTPUTS, VIDEO_TOOL, is_selector, mode_of, paths, video_output
-from .theme import CONTROL_W, GAP, PAD, WIDE_W, Form, Layer, readout
+from .theme import CONTROL_W, GAP, HELD, PAD, WIDE_W, Badge, Form, Layer, readout
 
 VIDEO_FILTER = "Video (*.mp4 *.MP4 *.avi *.mov *.mkv *.mts *.MTS);;All (*)"
 
@@ -149,7 +149,8 @@ class Pane(QWidget):
         self.doc = None
         self.cards, self.widgets, self.notes = {}, {}, {}
         self.standings = {}   # tool node -> the line under its settings, see set_standing
-        self.sizes = {}       # tool node -> the line that says what its result would take on disk, see set_size
+        self.sizes = {}       # node -> the badge after its name that says what its result would take on disk, see set_size
+        self.takes = {}       # node -> the badge after that one that says how long its work would take, see set_takes
         self.bakes = {}       # node whose tool bakes -> its BakeBlock
         self.video = None
         self.current = None
@@ -194,6 +195,7 @@ class Pane(QWidget):
         self.notes.pop(nid, None)
         self.standings.pop(nid, None)
         self.sizes.pop(nid, None)
+        self.takes.pop(nid, None)
         self.bakes.pop(nid, None)
         if self.video is not None and self.video.parent() is card:
             self.video = None
@@ -204,6 +206,9 @@ class Pane(QWidget):
 
     def _build(self, node):
         card = Layer(1, node.id)
+        self.sizes[node.id], self.takes[node.id] = Badge(), Badge()
+        card.add_badge(self.sizes[node.id])
+        card.add_badge(self.takes[node.id])
         if node.tool == VIDEO_TOOL:
             self.video = Video()
             self.video.set_params(self.doc)
@@ -232,9 +237,6 @@ class Pane(QWidget):
                 self.standings[node.id] = readout()
                 self.standings[node.id].hide()
                 card.add(self.standings[node.id])
-                self.sizes[node.id] = readout()
-                self.sizes[node.id].hide()
-                card.add(self.sizes[node.id])
                 if hasattr(w, "set_source"):
                     w.set_source(self._src, self._fps)
                 if is_selector(tool) or paths(tool):
@@ -322,13 +324,20 @@ class Pane(QWidget):
             lab.setText(text)
             lab.setVisible(bool(text))
 
-    def set_size(self, nid, text):
-        """The line under `nid`'s settings that says what its result would take on disk, from the
-        window; "" hides it."""
-        lab = self.sizes.get(nid)
-        if lab is not None:
-            lab.setText(text)
-            lab.setVisible(bool(text))
+    def set_size(self, nid, text, tip=""):
+        """The badge after `nid`'s name that says what its result would take on disk, from the
+        window: `text` a figure and its unit, as store.fmt_bytes writes one, coloured by the unit,
+        and `tip` the sentence under the pointer; "" hides it."""
+        badge = self.sizes.get(nid)
+        if badge is not None:
+            badge.say(text, HELD.get(text.rsplit(" ", 1)[-1]), tip)
+
+    def set_takes(self, nid, text, tip=""):
+        """The badge after `nid`'s size that says how long its work would take, from the window;
+        "" hides it."""
+        badge = self.takes.get(nid)
+        if badge is not None:
+            badge.say(text, tip=tip)
 
     def set_source(self, path, fps):
         """The video every settings widget with a `set_source` writes from; None when nothing is loaded."""

@@ -51,7 +51,7 @@ def test_the_walk_folds_what_the_plot_shows_a_branch_too_and_no_other_node():
     w.densityReady.connect(lambda f, start: fields.append({nid: len(c) for nid, c in f.items()}))
     g.on_event = lambda ev: ev.kind == "begin" and begun.append(ev.row)
 
-    def turns():
+    def turns(w=w):
         while True:
             with w._cv:
                 turn = w._turn()
@@ -69,6 +69,12 @@ def test_the_walk_folds_what_the_plot_shows_a_branch_too_and_no_other_node():
     turns()
     assert fields[-1] == {"same": 4, "add": 4} and w._win.stack is stack is not None and w._win.i == 4
     assert begun == [2, 2] and not w._win.refolding
+    paced, sent = Worker(g, every=1, tell_every=3600.0), []   # short of tell_every from its start a range sends its end alone
+    paced.densityReady.connect(lambda f, start: sent.append(len(f["same"])))
+    paced.seriesReady.connect(lambda r, start, fps: sent.append("chain"))
+    paced.set_window(2, 4)
+    turns(paced)
+    assert sent == [4, "chain"]
     doc.disconnect("same")
     g.sync()
     assert g.folded() == ["add"]

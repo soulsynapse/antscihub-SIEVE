@@ -182,9 +182,13 @@ class Strip(QWidget):
         p.setBrush(line)
         if len(xs) == 1:   # one column: a polygon of one x has no area and no length, so its span is a line
             p.drawLine(QPointF(xs[0], y(hi[0])), QPointF(xs[0], max(y(lo[0]), y(hi[0]) + 1)))
-        else:
-            p.drawPolygon(QPolygonF([QPointF(x, y(v)) for x, v in zip(xs, hi)]
-                                    + [QPointF(x, y(v)) for x, v in zip(xs[::-1], lo[::-1])]))
+        else:   # the fill has no outline, which would add a pixel to every column's span; the line along the maxima is what shows where a column's span is nothing
+            upper = [QPointF(x, y(v)) for x, v in zip(xs, hi)]
+            p.setPen(Qt.NoPen)
+            p.drawPolygon(QPolygonF(upper + [QPointF(x, y(v)) for x, v in zip(xs[::-1], lo[::-1])]))
+            p.setPen(QPen(line, 1))
+            p.setBrush(Qt.NoBrush)
+            p.drawPolyline(QPolygonF(upper))
 
     def mousePressEvent(self, e):
         if e.button() != Qt.LeftButton:

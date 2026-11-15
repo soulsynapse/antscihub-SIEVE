@@ -90,7 +90,7 @@ class _Walk:
     and walked under, the rows it holds, and the signals its progress, chain result and refusal go out on."""
     graph: object
     name: str           # "window" or "clip": the lane its events are in
-    every: int          # the cadence, in rows, at which the chain's result goes out
+    every: int          # the cadence, in rows, at which the chain's result and the densities go out, and no oftener than tell_every
     progress: object    # Signal(int, int, int, int): rows done, rows in the range, and of those done the rows that ran and that read a bake
     ready: object       # Signal(object, int, float): the chain's {node: result}, start, fps
     refused: object     # Signal(str): the range closed short, and why
@@ -101,6 +101,7 @@ class _Walk:
     by: str = ASKED     # what last set `asked`, one of stream.BEGUN_BY; the scheduler takes it with the ask
     tell_every: float = 0.0     # s between a turn's tellings of the rows done, the range's end always told; 0 tells of each row
     told: float = 0.0   # when a turn last told, on perf_counter
+    sent: float = 0.0   # when the range began or show() last ran, on perf_counter
     ask: tuple = (0, 0, False, {})  # (start, length, spared, given) the range was asked over; the clip's is the clip
     spared: bool = False        # the chain's results over the range are held elsewhere: nothing is stacked or stepped and no result goes out
     given: dict = field(default_factory=dict)     # node -> (raw key, its result's fields over the range), held elsewhere: stepped nodes the walk does not step
@@ -125,6 +126,7 @@ class _Walk:
         if (self.i < self.length or self.refolding) and not length:
             self.graph.progress(self.i, self.i, (self.bytes, STACK_BYTES))
         self.start, self.length = start, length
+        self.sent = time.perf_counter()
         self.drop()
         if length:
             self.graph.began(start, length, by)
@@ -174,8 +176,12 @@ class _Walk:
             self.told = time.perf_counter() if self.tell_every else 0.0
             self.report()
             g.progress(self.i, self.length, (self.bytes, STACK_BYTES))
-        if self.i == self.length or self.i % self.every == 0:
+        if self.i == self.length or (self.i % self.every == 0 and self.spaced()):
             self.emit()
+
+    def spaced(self):
+        """Whether `tell_every` has passed since the range began or its densities and chain result last went out."""
+        return not self.tell_every or time.perf_counter() - self.sent >= self.tell_every
 
     def folding(self):
         """The nodes whose densities this range folds: what the graph was told the plot shows, on
@@ -214,10 +220,11 @@ class _Walk:
         done = min((self.at.get(nid, 0) for nid in self.folding()), default=self.length)
         self.refolding = done < self.length
         g.progress(done, self.length, (self.bytes, STACK_BYTES))
-        if not self.refolding or done % self.every == 0:
+        if not self.refolding or (done % self.every == 0 and self.spaced()):
             self.show()
 
     def show(self):
+        self.sent = time.perf_counter()
         if self.densities is not None:
             self.densities.emit({nid: d[: self.at[nid]] for nid, d in self.dens.items()}, self.start)
 
@@ -579,7 +586,7 @@ class Worker(QThread):
         """`every` is the cadence, in rows walked, at which either range runs its chain; `store`, a
         store.Store, is where a bake lands, the current one unless another is handed in;
         `tell_every`, the seconds between a range's `walked` or `clipWalked`, its end always told,
-        and 0 tells of every row."""
+        and 0 tells of every row; a range's chain result and densities go out no oftener, its end's always."""
         super().__init__()
         self.graph, self.every = graph, every
         self._cv = threading.Condition()

@@ -161,6 +161,8 @@ class Plot(QWidget):
     STUB = 6     # px: a handle's line runs this far past the field's edge
     DOT = 3.2    # px: the radius of the dot it ends in
     HEAD_R = 5.0 # px: the playhead's circle
+    LINE = 1.6   # px: a line whose rows are fewer than the pixel columns
+    READOUT_ALPHA = 204   # of 255: the field's own gray behind a hover readout's text
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -453,7 +455,7 @@ class Plot(QWidget):
             p.setBrush(color)
             p.drawPolygon(QPolygonF(top + bottom))
         else:
-            p.setPen(QPen(color, 1.6))
+            p.setPen(QPen(color, self.LINE))
             p.setBrush(Qt.NoBrush)
             p.drawPolyline(QPolygonF([QPointF(x, self._y(v, nid)) for x, v in zip(xs, values)]))
 
@@ -559,9 +561,9 @@ class Plot(QWidget):
             dot = QPointF(self._x(self.hover), self._y(v, nid))
             text = f"{nid} {v:.4g}"
             w = fm.horizontalAdvance(text) + 2
-            x = dot.x() + self.DOT + 4
+            x = dot.x() + self.DOT + 6
             if x + w > inner.right():
-                x = dot.x() - self.DOT - 4 - w
+                x = dot.x() - self.DOT - 6 - w
             out.append([nid, text, dot, QRectF(x, dot.y() - h / 2, w, h)])
         out.sort(key=lambda r: r[3].top())
         for a, b in zip(out, out[1:]):
@@ -577,6 +579,8 @@ class Plot(QWidget):
         for nid, text, dot, rect in self.readouts():
             colour = (theme.GATE if self.lines[nid].gate is not None else theme.SERIES) if nid == self.selection else qgray(theme.INK)
             p.setPen(Qt.NoPen)
+            p.setBrush(qgray(theme.layer(0) + theme.MEASURED_LIFT, self.READOUT_ALPHA))   # a line may run under the text
+            p.drawRoundedRect(rect.adjusted(-3, 0, 3, 0), 3, 3)
             p.setBrush(colour)
             p.drawEllipse(dot, self.DOT, self.DOT)
             p.setPen(colour)

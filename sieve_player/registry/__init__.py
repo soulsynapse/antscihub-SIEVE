@@ -27,10 +27,9 @@ _HINTS = {
     "OPTIONAL": 'OPTIONAL = ("bg",)  # the INPUTS the node computes without; run reads an unwired one as None',
     "STATIC": "STATIC = True  # the same output at every row: computed once per key, held once, counted per change",
     "PATHS": 'PATHS = {"settings": load_settings}  # path inputs: name -> params from the file',
-    "PARAMS": 'PARAMS = {"regions": from_region}  # INPUTS that also carry params: name -> params from the params of the node wired in',
     "select": "def select(folder, params): ...  # a selector: the path it picks under folder, or None",
     "matches": "def matches(folder, params): ...  # a selector: every path its rule matches, picked first",
-    "cut_file": "def cut_file(video, footage, params): ...  # the node cuts the video into files: (the path of the file that holds what run hands out of video, whose decoder.footage_print is footage, under params; that file's own print), or None while there is none; a node that reads the video node serves it",
+    "cut_file": "def cut_file(video, footage, params): ...  # the node cuts the video into files: (the path of the file that holds what run hands out of video, whose decoder.footage_print is footage, under params; that file's own print), or None while there is none; a node that reads the video node, or a node that serves a file, in which case video is that file, serves it",
 }
 FACETS = tuple(_HINTS)
 

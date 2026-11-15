@@ -4,7 +4,8 @@ import pytest
 
 from tests.test_blobs import fed, m
 from tests.test_track import table
-from tools import blobs, blobs_to_mask
+from tools import blobs
+from tools.retired import blobs_to_mask
 
 L = np.zeros((8, 8), np.uint8)
 L[1:7, 1:3] = 255

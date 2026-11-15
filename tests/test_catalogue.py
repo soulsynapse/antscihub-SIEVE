@@ -328,7 +328,8 @@ def test_a_simulation_surfaces_its_class_alone(name, tmp_path):
     subjects = {e.problem.subject for e in seen.log.ordered()}
     want = {"unread": {"work"}, "memo": {"memo"}, "cache": {"video"}, "reader": {"cut"}, "grows": {"pile"},
             "seeks": {"video"}, "slower": {"work"}, "held": {"unprobed"}, "slot": {"slot walked"}, "signals": {"slot walked"},
-            "frozen": {"slot walked"}, "holds": {"work"}, "unspanned": {"nothing recorded"}, "again": {"window"}, "stuck": {"window"}}[name]
+            "frozen": {"slot walked"}, "holds": {"work"}, "unspanned": {"nothing recorded"}, "again": {"window"}, "stuck": {"window"},
+            "unreturned": {"work"}}[name]
     assert want == subjects
 
 

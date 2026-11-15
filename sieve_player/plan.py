@@ -95,8 +95,8 @@ def plan(doc, tools, base, cut_files=None):
     `cut_files`, node to (path, footage print), the file each cutting node's tool says holds what
     the node hands out. A raw key names what a tool computes from, so the memo holds under it; the
     key adds the band, which is applied on read, so what downstream sees is keyed by it and the
-    node's own run is not. A node of `cut_files` that reads the video node itself serves its file:
-    it reads nothing, and its key is the one a document opened on that file gives its video node, so
+    node's own run is not. A node of `cut_files` that reads the video node itself, or a node that
+    serves a file, serves its file: it reads nothing, and its key is the one a document opened on that file gives its video node, so
     everything below it is keyed as that document's is. A node reads one piece of the plate: one
     whose inputs are of two, the plate among them, is not fed, nor is anything that reads it, and
     its standing says which. A chain node is stepped when its tool steps and everything it reads on
@@ -105,9 +105,12 @@ def plan(doc, tools, base, cut_files=None):
     cut_files = cut_files or {}
     keys, raw_keys, pieces = {}, {}, {}
 
-    def file_of(nid):
+    def file_of(nid, stack=()):
         w = doc.source(nid)
-        return cut_files.get(nid) if w is not None and doc.node(w.src).tool == VIDEO_TOOL else None
+        if w is None or nid not in cut_files or nid in stack:
+            return None
+        whole = doc.node(w.src).tool == VIDEO_TOOL or file_of(w.src, (*stack, nid)) is not None
+        return cut_files[nid] if whole else None
 
     def wired(nid):
         tool = tools.get(doc.node(nid).tool)

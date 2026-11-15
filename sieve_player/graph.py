@@ -15,7 +15,7 @@ import numpy as np
 
 from . import density
 from .decoder import Decoder
-from .document import INPUT, video_output
+from .document import INPUT, VIDEO_TOOL, video_output
 from .plan import _key, base_key, facts, plan
 from .stream import Emitter
 
@@ -299,20 +299,27 @@ class Graph:
 
     def cut_files(self):
         """Node to (path, footage print): what each node whose tool has a cut_file facet says of the
-        file that holds what it hands out of the open video, asked now; a node in `without`, and a
-        tool that raises, has none."""
-        out = {}
-        for n in self.doc.nodes:
-            ask = getattr(self.tools.get(n.tool), "cut_file", None)
-            if ask is None or n.id in self.without:
-                continue
-            try:
-                found = ask(self.decoder.path, self.decoder.footage_print, n.params)
-            except Exception:       # a tool's rule is user code; one that fails serves nothing
-                found = None
-            if found is not None:
-                out[n.id] = tuple(found)
-        return out
+        file that holds what it hands out of the footage it reads, asked now: the open video for a
+        node that reads the video node, the file the node above answered with for one that reads
+        that node. A node that reads neither, a node in `without`, and a tool that raises, has none."""
+        found = {}
+
+        def of(nid):
+            if nid not in found:
+                found[nid] = None
+                node, w = self.doc.node(nid), self.doc.source(nid)
+                ask = getattr(self.tools.get(node.tool), "cut_file", None)
+                if ask is not None and w is not None and nid not in self.without:
+                    plate = self.doc.node(w.src).tool == VIDEO_TOOL
+                    up = (self.decoder.path, self.decoder.footage_print) if plate else of(w.src)
+                    try:
+                        said = ask(*up, node.params) if up is not None else None
+                    except Exception:       # a tool's rule is user code; one that fails serves nothing
+                        said = None
+                    found[nid] = tuple(said) if said is not None else None
+            return found[nid]
+
+        return {n.id: of(n.id) for n in self.doc.nodes if of(n.id) is not None}
 
     def hold_off(self, nid, on):
         """While `on`, `nid` serves no file, so one may be written over what it served; sync() after."""

@@ -19,6 +19,7 @@ VIDEO_OUTPUTS = ("bgr", "gray", "luma")    # luma: the decoder's own plane, a gr
 VIDEO_PRODUCES = "bgr"      # what it hands out unless its output param names another of VIDEO_OUTPUTS
 RESCALE_TOOL, RESCALE_PARAM = "rescale", "scale"    # the tool and param a format-1 video node's scale becomes on load
 BAKE_TOOL = "bake"          # a tool the player had once: a node of it is taken out on load, see _lift_bakes
+CUT_TOOL, REGION_TOOL = "crop2", "region"   # crop2 the player had once, cutting what a region wired into it drew: see _lift_cuts
 PATH = "path"               # the type the video node's input expects and a selector produces
 INPUT = "in"                # every tool's first input; INPUTS declares more
 OVERLAYABLE = ("gray", "mask")  # the types the overlay flag is offered on: a single plane the frame can be heated with
@@ -200,6 +201,7 @@ class Document:
         doc.pinned = list(dict.fromkeys(doc.pinned))
         doc._lift_scale()
         doc._lift_bakes()
+        doc._lift_cuts()
         if known is not None:
             doc.resolve(known)
         return doc
@@ -236,6 +238,27 @@ class Document:
             if fed_by is not None:
                 self.display = fed_by.src if was[0] else self.display
                 self.overlay = fed_by.src if was[1] else self.overlay
+
+    def _lift_cuts(self):
+        """Every node of CUT_TOOL becomes a REGION_TOOL node under the id it had: it takes the
+        plate, shapes and choice of the region that was wired into its `regions`, and that region's
+        geometry wire, and the region goes, its display flag moved to the node, when nothing else
+        reads it."""
+        for cut in [n for n in self.nodes if n.tool == CUT_TOOL]:
+            cut.tool = REGION_TOOL
+            fed_by = self.source(cut.id, "regions")
+            self.wires = [w for w in self.wires if (w.dst, w.input) != (cut.id, "regions")]
+            was = self.node(fed_by.src) if fed_by is not None else None
+            if was is None or was.tool != REGION_TOOL:
+                continue
+            cut.params = {**cut.params, **{k: was.params[k] for k in ("plate", "shapes", "choice") if k in was.params}}
+            geometry = self.source(was.id, "geometry")
+            if geometry is not None:
+                self.wires.append(Wire(geometry.src, cut.id, "geometry"))
+            if not any(w.src == was.id for w in self.wires):
+                shown = self.display == was.id
+                self.remove_node(was.id)
+                self.display = cut.id if shown else self.display
 
 
 def save(doc, path):
@@ -289,12 +312,6 @@ def expects(tool):
 def paths(tool):
     """A tool's path inputs: name to the loader that turns the file into params; empty if none."""
     return dict(getattr(tool, "PATHS", None) or {})
-
-
-def wired_params(tool):
-    """A tool's inputs that also carry params, as PARAMS declares them: name to the function that
-    turns the params of the node wired in into params of this one; empty if none."""
-    return dict(getattr(tool, "PARAMS", None) or {})
 
 
 def static(tool):

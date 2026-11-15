@@ -21,7 +21,7 @@ from PySide6.QtCore import QFileSystemWatcher, QProcess, QProcessEnvironment, QR
 from PySide6.QtGui import QImage, QKeySequence, QPainter, QPen, QPixmap, QShortcut
 from PySide6.QtWidgets import QFileDialog, QHBoxLayout, QMainWindow, QMenu, QMessageBox, QProgressBar, QPushButton, QSizePolicy, QVBoxLayout, QWidget
 
-from . import bare, dev, document, filemenu, held, recent, theme
+from . import bare, dev, document, filemenu, held, recent, store, theme
 from .canvas import Canvas
 from .catalogue import Log
 from .decoder import Decoder
@@ -30,6 +30,7 @@ from .ledger import Ledger, row_cost
 from .machine import Watch
 from .pace import Pace, clock
 from .pacecontrol import PaceControl
+from .storecontrol import StoreControl
 from .pane import Pane
 from .registry import CATEGORIES, Entry, category, description, signature
 from .stream import ASKED, EDIT, HAND, Emitter
@@ -317,8 +318,9 @@ def catalogue(items):
 
 
 class Header(QWidget):
-    """The row across the top, all at its right: what the clip walk has to say, a bare walk's bar,
-    the walk's figure, the button that walks the clip bare (bare.py) and the clip walk's."""
+    """The row across the top, all at its right: what the clip walk or a refused store has to say, a
+    bare walk's bar, the store, whose press changes it, the walk's figure, the button that walks the
+    clip bare (bare.py) and the clip walk's."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -327,6 +329,8 @@ class Header(QWidget):
         lay.setSpacing(GAP)
         self.note = readout(mono=True, wrap=False)
         self.note.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self._refused = ""
+        self.store = StoreControl("click to choose the store's folder")
         self.figure = PaceControl("click for the monitor")
         self.walk = QPushButton("Walk clip")
         self.walk.setFixedSize(80, ROW_H)
@@ -341,10 +345,19 @@ class Header(QWidget):
         lay.addStretch(1)
         lay.addWidget(self.note)
         lay.addWidget(self.bar)
+        lay.addWidget(self.store)
         lay.addWidget(self.figure)
         lay.addWidget(self.bare)
         lay.addWidget(self.walk)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+
+    def show_store(self, folder, refused=""):
+        """`folder`, the store, read now; `refused` is why a choice was not taken, said in the note
+        until the next showing, if the note still says it then."""
+        self.store.set_store(folder)
+        if refused or (self._refused and self.note.text() == self._refused):
+            self.note.setText(refused)
+        self._refused = refused
 
     def set_walking(self, on):
         self.walk.setText("Stop walk" if on else "Walk clip")
@@ -417,7 +430,6 @@ class PlayerWindow(QMainWindow):
         self._reload.setInterval(RELOAD_SETTLE_MS)
         self._reload.timeout.connect(self._pick_paths)
         self._driven = {}      # (node id, path input) -> (the keys set through it, the id of the node wired in)
-        self._cutting = set()  # the nodes a cut is running under: none serves its file, so the cut may land over it
 
         self.display = Display()
         self.plot = Plot()
@@ -442,7 +454,6 @@ class PlayerWindow(QMainWindow):
         self.plot.bandReleased.connect(self._band_released)
         self.plot.chipClicked.connect(lambda nid: self.canvas.select([nid]))
         self.plot.pinToggled.connect(self._toggle_pin)
-        self.pane.cutting.connect(self._cut)
         self.display.drawFailed.connect(self._draw_failed)
         self.display.picked.connect(self._picked)
         self.display.back.connect(self._back)
@@ -450,6 +461,8 @@ class PlayerWindow(QMainWindow):
         self._shown_last = None
         self.selection = None      # the node the canvas last selected, whose settings the pane shows until its card is closed and whose axis the plot draws
         self.header = Header()
+        self.header.show_store(store.folder())
+        self.header.store.clicked.connect(self._choose_store)
         self.header.walk.clicked.connect(self._toggle_clip)
         self.header.bare.clicked.connect(self._toggle_bare)
         self.header.figure.clicked.connect(lambda: dev.show(self, "monitor"))
@@ -736,19 +749,12 @@ class PlayerWindow(QMainWindow):
         else:
             self._params_changed(nid)
 
-    def _cut(self, nid, on):
-        """A cut began or ended under `nid`: while one runs the node serves no file, so the files
-        it writes may land over the ones it served, and at its end the node serves what landed."""
-        (self._cutting.add if on else self._cutting.discard)(nid)
-        if self.graph is not None:
-            self.graph.hold_off(nid, on)
-            self.sync()
-
     def _restate(self):
         if self.graph is None:
             return
         self.canvas.served = {n.id for n in self.doc.nodes if (e := self.graph.entry(n.id)) is not None and e.file is not None}
         self.pane.set_source(self.decoder.path, self.fps, {n.id: self.graph.footage(n.id) for n in self.doc.nodes})
+        self.pane.set_cut_files_in_use(self.graph.cut_files_in_use())
         for n in self.doc.nodes:
             text = self.graph.standing(n.id)
             self.pane.set_standing(n.id, text)
@@ -788,8 +794,19 @@ class PlayerWindow(QMainWindow):
             self.graph.note(nid, line)
             self._restate()
 
+    def _choose_store(self):
+        path = QFileDialog.getExistingDirectory(self, "Store folder", store.folder())
+        if not path:
+            return
+        refused = store.choose(path)
+        self.header.show_store(store.folder(), refused)
+        if not refused:
+            self.sync()     # the cutting nodes are asked again, of the store chosen
+
     def _params_changed(self, nid):
         self.canvas.update()   # a band moved recolours its node's dot
+        if hasattr(self.tools.get(self.doc.node(nid).tool), "cut_file"):
+            self.header.show_store(store.folder())      # its card may have cut a file
         if document.is_selector(self.tools.get(self.doc.node(nid).tool)):
             self._pick_video()
             return
@@ -969,8 +986,6 @@ class PlayerWindow(QMainWindow):
         self.decoder = decoder
         self.stream = Emitter()
         self.graph = Graph(self.doc, decoder, self.tools, stream=self.stream, **({"memo_bytes": m} if (m := _gb(MEMO_ENV)) else {}))
-        for nid in self._cutting:
-            self.graph.hold_off(nid, True)
         # the one line a report of this video's run needs beside the log's tracebacks
         print(f"SIEVE {time.strftime('%H:%M:%S')}: opened {path}: {decoder.width}x{decoder.height} at {decoder.fps:.3f} fps, "
               f"{decoder.count} rows claimed, luma plane {'read' if decoder.luma else 'converted'}; "

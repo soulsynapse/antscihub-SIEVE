@@ -206,8 +206,8 @@ class Readers:
     """The Decoders open on served files, one per path, opened on the worker at the first read and
     kept while a node serves the path. `keep()` retires the rest at sync and `reap()` closes them on
     the worker between computations, since a close from the GUI thread would pull a file from under
-    a read in flight. A file open here cannot be replaced or removed on Windows, so whoever writes
-    over one has the node held off (Graph.hold_off) and tries again until the reap has closed it."""
+    a read in flight. A file open here cannot be replaced or removed on Windows, so a tool never
+    writes over a file its cut_file has answered with."""
 
     def __init__(self):
         self._held, self._retired = {}, []
@@ -233,6 +233,11 @@ class Readers:
     def keep(self, paths):
         with self._lock:
             self._retired += [self._held.pop(k) for k in list(self._held) if k not in paths]
+
+    def open_paths(self):
+        """Every path a Decoder here has open, held or retired and not yet reaped. GUI-safe."""
+        with self._lock:
+            return {*self._held, *(r.path for r in self._retired)}
 
     def decoders(self):
         """Every Decoder held. GUI-safe."""
@@ -265,7 +270,7 @@ class Graph:
         self.readers = Readers()
         self._lately = []                   # the served files' Decoders in the order they were last read, latest first
         self._prints = {}                   # served path -> (its size and mtime when read, its footage print)
-        self.without = set()                # nodes whose file is not to be served: held off by whoever is writing over it, see hold_off()
+        self._in_use = {}                   # cutting node -> the files its tool's cut_files answered at the last sync
         self.memo = Memo(memo_bytes)
         self._lock = threading.Lock()
         self.halt = False                   # set by whoever is stopping the worker: every Frames read from then on raises Cancelled
@@ -297,12 +302,17 @@ class Graph:
     def cut_file(self, nid, up):
         """(path, footage print) of the file `nid`'s tool says holds its cut of the footage it
         reads, asked now: `up` is that footage as (path, print), None for the open video. None for
-        a node in `without`, a tool that raises or answers with none, and a file that cannot be read."""
-        if nid in self.without:
-            return None
+        a tool that raises or answers with none, and a file that cannot be read. A tool with the
+        cut_files facet is asked that too, for `cut_files_in_use`."""
         node = self.doc.node(nid)
+        tool, of = self.tools[node.tool], up or (self.decoder.path, self.decoder.footage_print)
         try:
-            path = self.tools[node.tool].cut_file(*(up or (self.decoder.path, self.decoder.footage_print)), node.params)
+            if hasattr(tool, "cut_files"):
+                self._in_use[nid] = [str(p) for p in tool.cut_files(*of, node.params)]
+        except Exception:       # as below
+            pass
+        try:
+            path = tool.cut_file(*of, node.params)
             if path is None:
                 return None
             path = str(path)
@@ -313,9 +323,11 @@ class Graph:
             return None
         return path, self._prints[path][1]
 
-    def hold_off(self, nid, on):
-        """While `on`, `nid` serves no file, so one may be written over what it served; sync() after."""
-        (self.without.add if on else self.without.discard)(nid)
+    def cut_files_in_use(self):
+        """Every file a cutting node of the last sync's plan would serve under some choice of its
+        params, as its tool's cut_files answered, and every served file still open here. The
+        thread that syncs."""
+        return {p for paths in self._in_use.values() for p in paths} | self.readers.open_paths()
 
     def sync(self):
         """Re-read the document: the plan, pure in the document, the tools and what the cutting
@@ -324,6 +336,7 @@ class Graph:
         output = video_output(self.doc)
         self.decoder.output = output        # a change empties its cache; a read in flight under the old plan is cancelled
         self._base = base_key(self.decoder.footage_print, output)
+        self._in_use = {}
         p = plan(self.doc, self.tools, self._base, self.cut_file)
         self.readers.keep({e.file[0] for e in p.entries.values() if e.file is not None})
         for d in self.readers.decoders():

@@ -21,18 +21,22 @@ utility, `python -m utilities.geometry`, on the footage the node reads and the f
 `geometry`, in a process of its own; a save there reaches the region through the window's watch on
 the file.
 
-Cut writes every shape, whatever is chosen, from the footage the node reads in one ffmpeg pass, at
-`quality` and without sound, a frame out for each frame in, to `<video>-crops/<name>.mp4`, with
-`crops.json` beside them (tools/_cutfile.py); one under way when the card goes is cancelled.
-`quality` changes nothing `run` hands out. `cut_file` is what the player serves in place of `run`
-while the node reads the video node, or a node that serves a file, whose file is then the video
-cut: the chosen shape's clip, once the record says it is of this footage at the rect the shape has
-now and the clip is the size it landed at. A clip cut at `standard` is H.264's rendering of the cut
-and not its pixels, so a served node hands out other values than the same node run. The node's key is then the one a document opened on the clip gives its video node, so
-everything after it is that document's. A shape moved since the cut, or no shape chosen, and the
-node cuts the frame as it did, and the card says which. The clip is of the video file and not of
-what is wired into `in`, so the two differ where a node that serves no file sits between the video
-and this one, and the player serves no clip there.
+Cut writes a clip for every shape that has none, whatever is chosen, from the footage the node reads
+in one ffmpeg pass, at `quality` and without sound, a frame out for each frame in, into the
+player's store (tools/_cutfile.py); one under way when the card goes is cancelled. A clip is named
+by its footage, its rect and its quality, so no clip is written over: a shape that moved, or another
+quality, is a clip not yet cut, and the one it had stays until it is deleted. `quality` changes
+nothing `run` hands out. `cut_file` is what the player serves in place of `run` while the node reads
+the video node, or a node that serves a file, whose file is then the video cut: the clip of this
+footage at the chosen shape's rect and the node's quality, while it is the size it landed at. A clip
+cut at `standard` is H.264's rendering of the cut and not its pixels, so a served node hands out
+other values than the same node run. The node's key is then the one a document opened on the clip
+gives its video node, so everything after it is that document's. With no clip for the chosen shape,
+or no shape chosen, the node cuts the frame as it did, and the card says which. The clip is of the
+video file and not of what is wired into `in`, so the two differ where a node that serves no file
+sits between the video and this one, and the player serves no clip there. `cut_files` is every clip
+the node would serve under some choice; the card counts the store's clips of this footage that no
+node of the document would, and deletes them on a press.
 
 `table` is the shapes as a blobs table, one record each; no tool hands it out.
 """
@@ -45,7 +49,7 @@ import sys
 import cv2
 import numpy as np
 
-from tools._cutfile import QUALITIES, Cut, folder_for, footage_of, record
+from tools._cutfile import QUALITIES, Cut, delete, folder_for, footage_of, landed, rect_key, unused, whole
 from tools._draw import contour as draw_contour
 from tools._table import moments, plane_dtype, with_column
 
@@ -265,32 +269,17 @@ def launch(argv, cwd):
 
 
 def clip_of(video, footage, params):
-    """(the clip a Cut of `video` wrote for the chosen shape, "") or (None, why there is none): the
-    record beside the clips must name the video, be of `footage`, the video's print, where it holds
-    one, be of this plate, and hold the chosen shape at the rect it has now, and the clip must be
-    there at the size the record holds for it, where it holds one."""
-    choice = params.get("choice")
+    """(the clip of `video`, whose print is `footage`, at the chosen shape's rect and the params'
+    quality, "") or (None, why there is none)."""
+    choice, quality = params.get("choice"), params.get("quality", DEFAULTS["quality"])
     rect = dict(crops(params)).get(choice) if choice else None
     if not video or rect is None:
         return None, "a clip is one shape's; choose one"
-    found = record(folder_for(video))
-    if found is None:
-        return None, "none cut of this video"
-    if found.get("video") != os.path.basename(str(video)) or found.get("footage", footage) != footage:
-        return None, "the clips cut are of another video"
-    if list(found.get("plate", ())) != list(params["plate"]):
-        return None, "the clips cut are of a plate of another size"
-    y0, y1, x0, x1 = rect
-    cut = [c for c in found.get("crops", ()) if c.get("name") == choice]
-    if not cut:
-        return None, f"{choice} was not among the shapes cut"
-    if [cut[0].get(k) for k in "xywh"] != [x0, y0, x1 - x0, y1 - y0]:
-        return None, f"{choice} has moved since it was cut"
-    path = os.path.join(folder_for(video), cut[0]["file"])
-    if not os.path.isfile(path):
-        return None, f"{cut[0]['file']} is gone"
-    if cut[0].get("bytes", os.path.getsize(path)) != os.path.getsize(path):
-        return None, f"{cut[0]['file']} is not the clip that was cut"
+    path = landed(folder_for(video, footage)).get(rect_key(footage, rect, quality))
+    if path is None:
+        return None, f"{choice} is not cut at {quality}"
+    if not whole(path):
+        return None, f"{os.path.basename(path)} is not the size it was cut at; delete it and cut again"
     return path, ""
 
 
@@ -299,22 +288,28 @@ def cut_file(video, footage, params):
     return clip_of(video, footage, params)[0]
 
 
+def cut_files(video, footage, params):
+    """Every clip in the store for a shape of `params` at their quality."""
+    have, quality = landed(folder_for(video, footage)), params.get("quality", DEFAULTS["quality"])
+    return [have[k] for _, rect in crops(params) if (k := rect_key(footage, rect, quality)) in have]
+
+
 def settings(parent=None):
-    from PySide6.QtCore import QTimer, Signal
+    from PySide6.QtCore import QTimer
     from PySide6.QtWidgets import QProgressBar, QPushButton
 
     from sieve_player import ParamWidget
+    from sieve_player.held import in_units
     from sieve_player.theme import readout
 
     class _Widget(ParamWidget):
-        cutting = Signal(bool)      # a Cut began, or ended: while one runs the player serves none of this node's clips, so they can be replaced
-
         def __init__(self, parent=None):
             super().__init__(parent)
             self.plate, self.shapes = list(DEFAULTS["plate"]), list(DEFAULTS["shapes"])
             self._get["plate"], self._set["plate"] = lambda: self.plate, lambda v: self._set_geometry(v, self.shapes)
             self._get["shapes"], self._set["shapes"] = lambda: self.shapes, lambda v: self._set_geometry(self.plate, v)
             self.video = self.file = self.cut = None
+            self.in_use = ()
             running = self._running = []    # the Cut under way, reached by the slot below once this widget's own attributes are gone
             self.destroyed.connect(lambda: [cut.cancel() for cut in running])
             self.serving, self.clip = readout(), readout()
@@ -335,6 +330,10 @@ def settings(parent=None):
             self.form.add_line(self.bar)
             self.form.add_line(self.status)
             self.button.clicked.connect(self._press)
+            self.spare, self.sweep = readout(), QPushButton("Delete unused")
+            self.form.add_line(self.spare)
+            self.form.add_row("", self.sweep)
+            self.sweep.clicked.connect(self._sweep)
             self.timer = QTimer(self)
             self.timer.setInterval(POLL_MS)
             self.timer.timeout.connect(self._poll)
@@ -346,6 +345,30 @@ def settings(parent=None):
 
         def set_paths(self, paths):
             self.file = paths.get("geometry")
+
+        def set_cut_files_in_use(self, paths):
+            self.in_use = tuple(paths)
+            self._show()    # the player asked the tools again: the store may be another, or hold other files
+
+        def _unused(self):
+            try:
+                return unused(folder_for(self.video, footage_of(self.video)), self.in_use) if self.video else []
+            except OSError:
+                return []
+
+        def _show_unused(self):
+            found = self._unused()
+            self.sweep.setVisible(bool(found))
+            self.spare.setVisible(bool(found))
+            if found:
+                figure, unit = in_units(sum(n for _, _, n in found))
+                self.spare.setText(f"{len(found)} clip{'s' if len(found) != 1 else ''} of this footage that no node of this document "
+                                   f"would serve, {figure} {unit}; another document may use them")
+
+        def _sweep(self):
+            kept = delete([path for path, _, _ in self._unused()])
+            self.status.setText("; ".join(f"{os.path.basename(p)} stays: {why}" for p, why in kept))
+            self._show_unused()
 
         def _open_utility(self):
             try:
@@ -373,6 +396,7 @@ def settings(parent=None):
             else:
                 status = "no geometry; wire a file selector into geometry"
             self.chooser.show([(n, n, "") for n in names], choice, status)
+            self._show_unused()
             if not names:
                 self.serving.setText("")
                 self.clip.setText("")
@@ -396,12 +420,11 @@ def settings(parent=None):
                 return
             try:
                 p = self.params()
-                self.cut = Cut(self.video, crops(p), p["plate"], p["quality"])
+                self.cut = Cut(self.video, crops(p), p["quality"])
             except (ValueError, OSError) as e:
                 self.status.setText(str(e))
                 return
             self._running[:] = [self.cut]
-            self.cutting.emit(True)
             self.button.setText("Cancel")
             self.bar.setRange(0, self.cut.total)       # a count of 0 is Qt's busy bar
             self.bar.setValue(0)
@@ -416,7 +439,11 @@ def settings(parent=None):
             if 0 < done <= total:
                 minutes = math.ceil(spent * (total - done) / done / 60)
                 left = f", about {minutes} min left" if minutes > 1 else ", under a minute left"
-            self.status.setText(f"cutting {len(self.cut.found)} clips, {self.cut.quality}: frame {done} of {total}{left}")
+            self.status.setText(f"cutting {self._clips()}, {self.cut.quality}: frame {done} of {total}{left}")
+
+        def _clips(self):
+            n = len(self.cut.todo)
+            return f"{n} clip{'s' if n != 1 else ''}"
 
         def _poll(self):
             said = self.cut.poll()
@@ -425,12 +452,12 @@ def settings(parent=None):
                 return
             self.timer.stop()
             self.bar.hide()
-            self.status.setText(said or f"cut {len(self.cut.found)} clips into {self.cut.folder}")
+            self.status.setText(said or f"cut {self._clips()} into {self.cut.folder}")
             self.button.setText("Cut")
             self.cut = None
             self._running.clear()
             self._show()
-            self.cutting.emit(False)
+            self.changed.emit()     # the params stand; the files they name have changed, and the player asks cut_file again
 
     return _Widget(parent)
 

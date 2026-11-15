@@ -100,7 +100,6 @@ class Pane(QWidget):
     Its size hint is the shown card's height, so a host that stacks it under the canvas gives it only the room its content needs."""
     paramsChanged = Signal(str)   # this node's params in the document changed here
     videoPicked = Signal(str)
-    cutting = Signal(str, bool)   # this node's settings widget began, or ended, writing the files its tool's cut_file answers with
     closed = Signal()             # the x in the shown card's corner; the pane already shows nothing
 
     def __init__(self, tools, parent=None):
@@ -114,7 +113,7 @@ class Pane(QWidget):
         self.video = None
         self.current = None
         self._src, self._fps, self._of = None, None, {}
-        self._cuts = set()    # nodes whose widget said a cut began and has not said it ended
+        self._in_use = ()     # the cut files the document's nodes would serve, see set_cut_files_in_use
         lay = _column(self, 0)
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -149,13 +148,7 @@ class Pane(QWidget):
         if self.current not in self.cards:
             self.select(None)
 
-    def _cut(self, nid, on):
-        (self._cuts.add if on else self._cuts.discard)(nid)
-        self.cutting.emit(nid, on)
-
     def _drop(self, nid):
-        if nid in self._cuts:
-            self._cut(nid, False)       # the widget goes with its cut and can no longer say it ended
         card = self.cards.pop(nid)
         self.widgets.pop(nid, None)
         self.notes.pop(nid, None)
@@ -207,8 +200,8 @@ class Pane(QWidget):
                 card.add(self.standings[node.id])
                 if hasattr(w, "set_source"):
                     w.set_source(self._of.get(node.id, self._src), self._fps)
-                if hasattr(w, "cutting"):
-                    w.cutting.connect(lambda on, nid=node.id: self._cut(nid, on))
+                if hasattr(w, "set_cut_files_in_use"):
+                    w.set_cut_files_in_use(self._in_use)
                 if is_selector(tool) or paths(tool):
                     self.notes[node.id] = readout()
                     card.add(self.notes[node.id])
@@ -291,6 +284,14 @@ class Pane(QWidget):
         badge = self.takes.get(nid)
         if badge is not None:
             badge.say(text, tip=tip)
+
+    def set_cut_files_in_use(self, paths):
+        """The cut files some node of the document would serve, from the runtime through the
+        window, for a settings widget that lists the files nothing uses."""
+        self._in_use = tuple(paths)
+        for w in self.widgets.values():
+            if hasattr(w, "set_cut_files_in_use"):
+                w.set_cut_files_in_use(self._in_use)
 
     def set_source(self, path, fps, of=None):
         """The footage every settings widget with a `set_source` writes from or beside: `path`, the

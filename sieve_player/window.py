@@ -387,13 +387,15 @@ class Column(QWidget):
 
 
 class PlayerWindow(QMainWindow):
-    def __init__(self, source, title="SIEVE", tools=(), log=None):
+    def __init__(self, source, title="SIEVE", tools=(), log=None, noted=None):
         """`source` is a list of tools, which become the document, or the path of a saved document.
         The catalogue the Tab menu offers and the document's names index is `tools`, plus the list
         when `source` is one. Either list holds tool modules or registry entries; see `catalogue`.
-        `log` names where stderr also goes, for a line that sends the user there."""
+        `log` names where stderr also goes, for a line that sends the user there. `noted` is the file
+        the documents this window opens and saves are noted in and Open Recent reads, as
+        recent.FILE is; with None nothing is noted and Open Recent has none."""
         super().__init__()
-        self.title, self.log = title, log or "stderr"
+        self.title, self.log, self.noted = title, log or "stderr", noted
         self.setStyleSheet(theme.sheet())
         from_file = isinstance(source, (str, os.PathLike))
         modules, self.tools, broken = catalogue(list(tools) if from_file else [*source, *tools])
@@ -565,7 +567,7 @@ class PlayerWindow(QMainWindow):
             self.timeline.controls.progress.setText(f"could not open {os.path.basename(str(path))}: {e}")
             return False
         self.set_document(doc)
-        recent.note(path)
+        self._note()
         return True
 
     def save_document(self, path=None):
@@ -580,14 +582,18 @@ class PlayerWindow(QMainWindow):
             self.timeline.controls.progress.setText(f"could not save {os.path.basename(str(path))}: {e}")
             return False
         self._written = self._text()
-        recent.note(self.doc.path)
+        self._note()
         self._unwritten |= was != self.doc.path
         self._write_held(wait=True)
         self._retitle()
         return True
 
+    def _note(self):
+        if self.noted:
+            recent.note(self.noted, self.doc.path)
+
     def _text(self):
-        return json.dumps(self.doc.to_dict(), sort_keys=True, default=repr)
+        return json.dumps(self.doc.to_dict(), sort_keys=True)
 
     def differs(self):
         """Whether the document is other than it was when last opened, made or saved."""
@@ -625,7 +631,8 @@ class PlayerWindow(QMainWindow):
             self.open_document(path)
 
     def _fill_recent(self):
-        filemenu.fill(self._recent, lambda path: self._leaving() and self.open_document(path))
+        filemenu.fill(self._recent, recent.entries(self.noted) if self.noted else [],
+                      lambda path: self._leaving() and self.open_document(path))
 
     def _save_as_start(self):
         """The file a save dialog opens on: the document's own, else one named for the open video

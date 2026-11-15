@@ -10,3 +10,6 @@ This is kendrick's running list of todos.
 - Drag box highlighting should select partially included nodes, not exclude them
 - Move the monitor button with the bar to above the timeline
 - Make things that invalidate the cache loud so it doesn't surprise the user
+- Bar at the bottom that says how much of the store is being used
+- Move the mb size for series to next to the name as a badge of sorts
+- Add preferences window

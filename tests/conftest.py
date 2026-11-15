@@ -1,6 +1,6 @@
 import pytest
 
-from sieve_player import recent, store
+from sieve_player import store
 from sieve_player.worker import Worker
 
 
@@ -10,12 +10,6 @@ def in_store(tmp_path, monkeypatch):
     folder = tmp_path / "store"
     monkeypatch.setattr(store, "folder", lambda: str(folder))
     return folder
-
-
-@pytest.fixture(autouse=True)
-def unnoted(tmp_path, monkeypatch):
-    """The recent documents' file under tmp_path for the test, so no test's document lands in the user's list."""
-    monkeypatch.setattr(recent, "FILE", str(tmp_path / "app" / "recent.txt"))
 
 
 @pytest.fixture(autouse=True)

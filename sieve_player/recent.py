@@ -1,5 +1,6 @@
-"""The documents lately opened or saved: their paths, each with when it was noted, in a file under
-the app folder, newest first, which the File menu's Open Recent reads."""
+"""The documents lately opened or saved: their paths, each with when it was noted, a line a
+document and newest first, in a file its caller names. FILE is the user's own, which the launcher
+hands the window; a window handed none notes nothing."""
 import os
 import time
 
@@ -9,9 +10,9 @@ FILE = os.path.join(app_folder(), "recent.txt")    # a line a document, newest f
 KEEP = 10
 
 
-def _noted():
+def _noted(file):
     try:
-        with open(FILE, encoding="utf-8") as f:
+        with open(file, encoding="utf-8") as f:
             lines = [line.strip("\r\n") for line in f if line.strip()]
     except OSError:
         return []
@@ -25,23 +26,22 @@ def _noted():
     return out
 
 
-def entries():
+def entries(file):
     """(path, when it was noted as time.time() gives it, or None for a line that says no time) for
-    each noted path that is a file now, newest first; one whose file is away stays noted."""
-    return [(p, when) for p, when in _noted() if os.path.isfile(p)]
+    each path noted in `file` that is a file now, newest first; one whose file is away stays noted."""
+    return [(p, when) for p, when in _noted(file) if os.path.isfile(p)]
 
 
-def paths():
-    return [p for p, _ in entries()]
-
-
-def note(path):
-    """Puts `path` first of at most KEEP, noted now; a list that will not write is left as it was."""
+def note(file, path):
+    """Puts `path` first of at most KEEP in `file`, noted now; a list that will not write is left
+    as it was, whole."""
     path = os.path.abspath(path)
-    kept = [(path, time.time()), *((p, when) for p, when in _noted() if os.path.normcase(p) != os.path.normcase(path))][:KEEP]
+    kept = [(path, time.time()), *((p, when) for p, when in _noted(file) if os.path.normcase(p) != os.path.normcase(path))][:KEEP]
+    part = f"{file}.part"
     try:
-        os.makedirs(os.path.dirname(FILE), exist_ok=True)
-        with open(FILE, "w", encoding="utf-8", newline="\n") as f:
+        os.makedirs(os.path.dirname(file), exist_ok=True)
+        with open(part, "w", encoding="utf-8", newline="\n") as f:
             f.write("".join(f"{when:.0f}\t{p}\n" if when is not None else f"{p}\n" for p, when in kept))
+        os.replace(part, file)
     except OSError:
         pass

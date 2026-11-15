@@ -1,7 +1,6 @@
 """The File menu's Open Recent as the player draws it: a row a document, its name and when it was
-noted over its folder and the video it names. `fill` reads recent's entries and each document's
-file for its video; the window hands it the submenu and what opening a path does."""
-import json
+noted over its folder and the video it names. The window hands `fill` the submenu, recent's
+entries and what opening a path does; each document's file is read for its video."""
 import os
 import time
 from datetime import datetime
@@ -10,7 +9,7 @@ from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QFontMetricsF, QPainter
 from PySide6.QtWidgets import QMenu, QWidget, QWidgetAction
 
-from . import recent, theme
+from . import document, theme
 from .theme import GAP, HEAD, INK_2, RADIUS
 
 ROW_W, ROW_H = 420, 42      # a recent document's row, px: two lines
@@ -31,17 +30,6 @@ def when_text(when, now):
     if days == 1:
         return "yesterday"
     return f"{then.day} {then:%b}" if then.year == today.year else f"{then.day} {then:%b %Y}"
-
-
-def video_of(path):
-    """The file name of the video the document at `path` has written in it; "" for none, and for
-    a document that will not read."""
-    try:
-        with open(path, encoding="utf-8") as f:
-            video = json.load(f).get("video")
-    except (OSError, ValueError, AttributeError):
-        return ""
-    return os.path.basename(video) if isinstance(video, str) else ""
 
 
 class Row(QWidget):
@@ -110,15 +98,16 @@ class Row(QWidget):
         p.end()
 
 
-def fill(menu, opened):
-    """Empties `menu` and gives it a Row for each of recent's entries, each calling `opened(path)`
-    when chosen, or one line saying there are none. An action's text is its document's path."""
+def fill(menu, entries, opened):
+    """Empties `menu` and gives it a Row for each (path, when) of `entries`, as recent.entries
+    gives them, each calling `opened(path)` when chosen, or one line saying there are none. An
+    action's text is its document's path."""
     menu.clear()
     now = time.time()
-    for path, when in recent.entries():
+    for path, when in entries:
         action = QWidgetAction(menu)
         action.setText(path)
-        action.setDefaultWidget(Row(action, menu, path, when_text(when, now), video_of(path)))
+        action.setDefaultWidget(Row(action, menu, path, when_text(when, now), os.path.basename(document.video_written_in(path))))
         action.triggered.connect(lambda _=False, path=path: opened(path))
         menu.addAction(action)
     if menu.isEmpty():

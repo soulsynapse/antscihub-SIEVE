@@ -112,12 +112,13 @@ def test_new_and_close_over_a_changed_document_ask_and_an_unchanged_one_is_left_
     QApplication.instance() or QApplication([])
     path = tmp_path / "doc.json"
     D.save(D.from_tools([gray], clip(tmp_path / "v.avi")), path)
-    win = PlayerWindow(str(path), "t", [gray])
+    noted = str(tmp_path / "app" / "recent.txt")
+    win = PlayerWindow(str(path), "t", [gray], noted=noted)
     asked = []
     win.ask_unsaved = lambda: asked[-1]
     assert not win.differs()                                            # opening the document and its video changed nothing a save would write
     win._fill_recent()
-    assert recent.paths() == [str(path)] == [a.text() for a in win._recent.actions()]
+    assert [p for p, _ in recent.entries(noted)] == [str(path)] == [a.text() for a in win._recent.actions()]
     win.doc.node("gray").pos = (5.0, 7.0)
     asked.append("cancel")
     win._new()

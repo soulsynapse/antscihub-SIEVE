@@ -33,7 +33,7 @@ def play(source, path=None, title="SIEVE", tools=()):
     from PySide6.QtCore import Qt
     from PySide6.QtWidgets import QApplication
 
-    from . import theme
+    from . import recent, theme
     from .window import PlayerWindow
 
     app = QApplication.instance()
@@ -43,7 +43,7 @@ def play(source, path=None, title="SIEVE", tools=()):
         app = QApplication(sys.argv)
     app._watchdog = console.watch(app, log)
     theme.install_font(app)
-    win = PlayerWindow(source, title, tools, log=None if log is None else log.name)
+    win = PlayerWindow(source, title, tools, log=None if log is None else log.name, noted=recent.FILE)
     win.showMaximized()
     theme.paint_caption(win)
     if path:

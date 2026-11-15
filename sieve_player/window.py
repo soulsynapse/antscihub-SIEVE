@@ -21,7 +21,7 @@ from PySide6.QtCore import QFileSystemWatcher, QProcess, QProcessEnvironment, QR
 from PySide6.QtGui import QImage, QKeySequence, QPainter, QPen, QPixmap, QShortcut
 from PySide6.QtWidgets import QFileDialog, QHBoxLayout, QMainWindow, QMessageBox, QProgressBar, QPushButton, QSizePolicy, QVBoxLayout, QWidget
 
-from . import bare, dev, document, held, store, theme
+from . import bare, dev, document, held, recent, store, theme
 from .canvas import Canvas
 from .catalogue import Log
 from .decoder import Decoder
@@ -498,6 +498,8 @@ class PlayerWindow(QMainWindow):
         menu = self.menuBar().addMenu("File")
         menu.addAction("New", QKeySequence.New, self._new)
         menu.addAction("Open…", QKeySequence.Open, self._open_dialog)
+        self._recent = menu.addMenu("Open Recent")
+        self._recent.aboutToShow.connect(self._fill_recent)
         menu.addAction("Save", QKeySequence.Save, self.save_document)
         menu.addAction("Save As…", QKeySequence.SaveAs, self._save_as)
         dev.install(self)
@@ -560,6 +562,7 @@ class PlayerWindow(QMainWindow):
             self.timeline.controls.progress.setText(f"could not open {os.path.basename(str(path))}: {e}")
             return False
         self.set_document(doc)
+        recent.note(path)
         return True
 
     def save_document(self, path=None):
@@ -574,6 +577,7 @@ class PlayerWindow(QMainWindow):
             self.timeline.controls.progress.setText(f"could not save {os.path.basename(str(path))}: {e}")
             return False
         self._written = self._text()
+        recent.note(self.doc.path)
         self._unwritten |= was != self.doc.path
         self._write_held(wait=True)
         self._retitle()
@@ -616,6 +620,13 @@ class PlayerWindow(QMainWindow):
         path, _ = QFileDialog.getOpenFileName(self, "Open document", os.path.dirname(self._save_as_start()), DOCUMENT_FILTER)
         if path:
             self.open_document(path)
+
+    def _fill_recent(self):
+        self._recent.clear()
+        for path in recent.paths():
+            self._recent.addAction(path.replace("&", "&&"), lambda path=path: self._leaving() and self.open_document(path))
+        if self._recent.isEmpty():
+            self._recent.addAction("No recent documents").setEnabled(False)
 
     def _save_as_start(self):
         """The file a save dialog opens on: the document's own, else one named for the open video

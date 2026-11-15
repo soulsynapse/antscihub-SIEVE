@@ -99,6 +99,7 @@ class Pane(QWidget):
     untouched. `video` is the video node's widget, `widget(nid)` a tool node's settings widget.
     Its size hint is the shown card's height, so a host that stacks it under the canvas gives it only the room its content needs."""
     paramsChanged = Signal(str)   # this node's params in the document changed here
+    storeChanged = Signal(str)    # this node's settings widget wrote or removed files of the store, its params as they were
     videoPicked = Signal(str)
     closed = Signal()             # the x in the shown card's corner; the pane already shows nothing
 
@@ -202,6 +203,8 @@ class Pane(QWidget):
                     w.set_source(self._of.get(node.id, self._src), self._fps)
                 if hasattr(w, "set_cut_files_in_use"):
                     w.set_cut_files_in_use(self._in_use)
+                if hasattr(w, "storeChanged"):
+                    w.storeChanged.connect(lambda nid=node.id: self.storeChanged.emit(nid))
                 if is_selector(tool) or paths(tool):
                     self.notes[node.id] = readout()
                     card.add(self.notes[node.id])

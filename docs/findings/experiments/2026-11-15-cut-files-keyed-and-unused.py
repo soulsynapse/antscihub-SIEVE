@@ -62,7 +62,7 @@ def cut(card, what):
     t = time.perf_counter()
     card.button.click()
     assert card.cut is not None, card.status.text()
-    wrote = [label for label, _, _ in card.cut.todo]
+    wrote = [t[0] for t in card.cut.todo]
     spin(lambda: card.cut is None, what)
     print(f"{what}: wrote {wrote} in {time.perf_counter() - t:.1f} s; {card.status.text().split(' into ')[0]}")
 

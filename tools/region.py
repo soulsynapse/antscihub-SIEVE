@@ -35,8 +35,9 @@ gives its video node, so everything after it is that document's. With no clip fo
 or no shape chosen, the node cuts the frame as it did, and the card says which. The clip is of the
 video file and not of what is wired into `in`, so the two differ where a node that serves no file
 sits between the video and this one, and the player serves no clip there. `cut_files` is every clip
-the node would serve under some choice; the card counts the store's clips of this footage that no
-node of the document would, and deletes them on a press.
+the node would serve under some choice and quality; the card counts the store's clips of this
+footage that no node of the document would, and deletes them on a press. The card says
+`storeChanged` once a Cut has ended or clips were deleted.
 
 `table` is the shapes as a blobs table, one record each; no tool hands it out.
 """
@@ -49,7 +50,7 @@ import sys
 import cv2
 import numpy as np
 
-from tools._cutfile import QUALITIES, Cut, delete, folder_for, footage_of, landed, rect_key, unused, whole
+from tools._cutfile import QUALITIES, Cut, delete, folder_for, footage_of, landed, rect_key, rect_piece, unused, whole
 from tools._draw import contour as draw_contour
 from tools._table import moments, plane_dtype, with_column
 
@@ -289,13 +290,13 @@ def cut_file(video, footage, params):
 
 
 def cut_files(video, footage, params):
-    """Every clip in the store for a shape of `params` at their quality."""
-    have, quality = landed(folder_for(video, footage)), params.get("quality", DEFAULTS["quality"])
-    return [have[k] for _, rect in crops(params) if (k := rect_key(footage, rect, quality)) in have]
+    """Every clip in the store for a shape of `params` at any quality."""
+    have = landed(folder_for(video, footage))
+    return [have[k] for _, rect in crops(params) for quality in QUALITIES if (k := rect_key(footage, rect, quality)) in have]
 
 
 def settings(parent=None):
-    from PySide6.QtCore import QTimer
+    from PySide6.QtCore import QTimer, Signal
     from PySide6.QtWidgets import QProgressBar, QPushButton
 
     from sieve_player import ParamWidget
@@ -303,6 +304,8 @@ def settings(parent=None):
     from sieve_player.theme import readout
 
     class _Widget(ParamWidget):
+        storeChanged = Signal()     # files of the store were written or removed here, the params as they were
+
         def __init__(self, parent=None):
             super().__init__(parent)
             self.plate, self.shapes = list(DEFAULTS["plate"]), list(DEFAULTS["shapes"])
@@ -370,6 +373,7 @@ def settings(parent=None):
             kept = delete([path for path, _, _ in self._unused()])
             self.status.setText("; ".join(f"{os.path.basename(p)} stays: {why}" for p, why in kept))
             self._show_unused()
+            self.storeChanged.emit()
 
         def _open_utility(self):
             try:
@@ -418,9 +422,12 @@ def settings(parent=None):
             if not self.video:
                 self.status.setText("no video to cut")
                 return
+            p = self.params()
+            if not p["shapes"]:
+                self.status.setText("no shapes; wire a file selector into geometry")
+                return
             try:
-                p = self.params()
-                self.cut = Cut(self.video, crops(p), p["quality"])
+                self.cut = Cut(self.video, [rect_piece(name, rect) for name, rect in crops(p)], p["quality"])
             except (ValueError, OSError) as e:
                 self.status.setText(str(e))
                 return
@@ -456,7 +463,8 @@ def settings(parent=None):
             self.button.setText("Cut")
             self.cut = None
             self._running.clear()
-            self.changed.emit()     # the params stand; the files they name have changed, and the player asks cut_file again
+            self._show()
+            self.storeChanged.emit()
 
     return _Widget(parent)
 

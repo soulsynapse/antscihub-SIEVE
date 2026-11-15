@@ -82,19 +82,22 @@ Assumes: A cut file's name is its key.
 
 - [x] A Cut writes the clips its shapes name that have not landed, and only those, in one pass; with
   every one landed there is nothing to cut and the card says so. A clip is written under a name of
-  its own that is no cut file's and takes its final name once whole. A final name found taken at
-  that moment is left as it is and the new clip is dropped.
+  its own that is no cut file's and takes its final name once whole, by a step that fails where a
+  file has that name: the file there is left as it is and the new clip is dropped. A key a Cut of
+  the same process is still writing is not written by another.
   Check: `tests/test_cut_file.py`, an invariant: over a stand-in for the encoder, every path that
   existed before a Cut began has the bytes it had when the Cut ends, landed, failed or cancelled.
-- [x] A sidecar beside each cut file says its footage, extent, recipe, label and size in bytes, and
-  is whole before the cut file has its final name. A cut file is served while it is the size its
+- [x] A sidecar beside each cut file says its footage, extent, recipe, label and size in bytes. It
+  is written whole and takes its name after the cut file has its own, so a sidecar is only ever
+  beside a cut file its own writer landed. A cut file is served while it is the size its
   sidecar says, and one whose sidecar is gone is served with its size unchecked, the name being its
   identity. The sidecar is never read for which file a node serves.
   Check: `tests/test_cut_file.py`, with the refused size it holds already.
 - [x] Nothing holds a node off its file: `Graph.hold_off` and `Graph.without`, the `cutting` signal
   and what the pane and the window keep of it, and a landing's wait on an open reader are gone, and
   the README's facet row says nothing of them. A node serves the clip a Cut landed for it once the
-  Cut ends, with nothing else pressed.
+  Cut ends, with nothing else pressed. A Cut is handed each piece as a label, an extent and the
+  encoder's arguments that keep that part, and reads nothing of the extent.
   Check: `tests/test_cut_file.py`, a seam: two nodes each serving a clip of one folder, both read, a
   shape of one moved, and the Cut for it lands while both readers are open.
 - [x] A Cut still ends with its card, and at the interpreter's exit, leaving no cut file that is not
@@ -127,7 +130,9 @@ Assumes: A landing writes no name that exists, The store.
   in it, and deleted on a press with what was cut of them, beside a line saying that another
   document may use them. A tool says what its node names by a `cut_files` facet beside `cut_file`,
   and the player hands every card the union. A file a reader of the player's has open is not among
-  them; one another process has open stays at the press, and the card says so.
+  them; one another process has open stays at the press, and the card says so. A card that wrote or
+  removed files of the store says `storeChanged`, its params as they were, and the player reads the
+  store and asks the cutting nodes again.
   Check: a one-off under `docs/findings/experiments/`.
 
 ## Not here

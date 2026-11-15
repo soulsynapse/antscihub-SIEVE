@@ -112,6 +112,9 @@ def test_a_graph_reads_a_served_nodes_rows_from_its_file_and_from_its_run_once_i
         answer[0] = None
         g.sync()
         assert g.compute("cut", 2).shape == (48, 64, 3) and g.footage("gray") == plate and g.entry("cut").file is None
+        cuts.cut_file = lambda video, footage, params: 1 / 0
+        g.sync()
+        assert g.standing("cut").startswith("cut_file raised: ZeroDivisionError") and g.entry("cut").file is None
     finally:
         g.close()
         g.decoder.close()
@@ -188,8 +191,9 @@ def test_a_cut_however_it_ends_leaves_every_path_that_was_there_as_it_was(tmp_pa
     video = tmp_path / "v.mp4"
     video.write_bytes(b"plate")
     folder = folder_of(video)
-    found = region.crops(params())
-    keys = {name: C.rect_key(footage_print(video), rect, "standard") for name, rect in found}
+    rects = dict(region.crops(params()))
+    found = [C.rect_piece(name, rect) for name, rect in rects.items()]
+    keys = {name: C.rect_key(footage_print(video), rect, "standard") for name, rect in rects.items()}
     for name, said in ((C.file_for("nest", keys["nest"]), b"nest"), ("another.mp4", b"another")):
         (folder / name).write_bytes(said)
     held = lambda: {p.name: p.read_bytes() for p in folder.iterdir()}
@@ -197,15 +201,20 @@ def test_a_cut_however_it_ends_leaves_every_path_that_was_there_as_it_was(tmp_pa
     for code, end in (("sys.exit(3)", "ffmpeg exited 3: "), ("time.sleep(30)", "cancelled"), (WRITES, "")):
         encoder(monkeypatch, code)
         cut = C.Cut(str(video), found, "standard")
-        assert [label for label, _, _ in cut.todo] == ["dish"]      # nest's clip is there
+        assert [t[0] for t in cut.todo] == ["dish"]                 # nest's clip is there
         if end == "cancelled":
+            with pytest.raises(ValueError, match="being cut"):      # a key a Cut is writing is no other Cut's to write
+                C.Cut(str(video), found, "standard")
             cut.cancel()
         assert ended(cut) == end
         after = held()
         assert {n: after[n] for n in before} == before and not [n for n in after if C.PART in n]
+    with monkeypatch.context() as m:    # another writer has both names as a Cut lands, unseen when it looks at the folder: its files stay
+        m.setattr(C, "landed", lambda folder: {})
+        assert ended(C.Cut(str(video), found, "standard")) == "" and held() == after
     dish = C.landed(str(folder))[keys["dish"]]
     assert set(after) - set(before) == {os.path.basename(dish), os.path.basename(dish) + C.SIDECAR}
-    assert C.sidecar(dish)["bytes"] == 4 and C.sidecar(dish)["extent"] == C.rect_extent(dict(found)["dish"]) and C.whole(dish)
+    assert C.sidecar(dish)["bytes"] == 4 and C.sidecar(dish)["extent"] == C.rect_extent(rects["dish"]) and C.whole(dish)
     with pytest.raises(ValueError, match="nothing to cut"):
         C.Cut(str(video), found, "standard")
 
@@ -229,7 +238,7 @@ def test_a_cut_for_a_moved_shape_lands_while_two_nodes_read_their_clips_of_the_f
         g.sync()
         assert g.entry("region").file is None and g.entry("other").file[0] == was["other"]
         encoder(monkeypatch)
-        assert ended(C.Cut(plate, region.crops(params("nest", MOVED)), "standard")) == ""
+        assert ended(C.Cut(plate, [C.rect_piece(*crop) for crop in region.crops(params("nest", MOVED))], "standard")) == ""
         g.sync()
         now = g.entry("region").file[0]
         assert now not in was.values() and now in g.cut_files_in_use() and g.readers.held(was["other"]) is not None

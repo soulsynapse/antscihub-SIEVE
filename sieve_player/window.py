@@ -443,6 +443,7 @@ class PlayerWindow(QMainWindow):
         self.canvas.changed.connect(self.sync)
         self.canvas.flagged.connect(self.reflag)
         self.pane.paramsChanged.connect(self._params_changed)
+        self.pane.storeChanged.connect(self._store_changed)
         self.pane.videoPicked.connect(self.load)
         # the canvas reports a selection only when it changes, so the closed card's node is let go: a click on it opens the card again
         self.pane.closed.connect(lambda: self.canvas.select([]))
@@ -813,13 +814,21 @@ class PlayerWindow(QMainWindow):
         if document.is_selector(self.tools.get(self.doc.node(nid).tool)):
             self._pick_video()
             return
-        if self.graph is None:
-            return
-        keys, named = self._keys(), self.graph.cut_files_named()
+        if self.graph is not None:
+            self._asked_again(nid)
+
+    def _store_changed(self, nid):
+        """`nid`'s card wrote or removed files of the store: the store is read and the cutting
+        nodes asked again, the document as it was."""
+        self.header.show_store(store.folder())
+        if self.graph is not None:
+            self._asked_again(nid)
+
+    def _asked_again(self, nid):
+        """The graph synced after a change at `nid`, and the walk begun again only where a key moved."""
+        keys = self._keys()
         self.graph.sync()
         self._restate()
-        if self.graph.cut_files_named() != named:
-            self.header.show_store(store.folder())      # a card cut a file, or its params name others
         if self._keys() == keys:
             self.goto(self.row, commit=True)    # nothing is computed differently; a drawer may draw the params as they now are
         elif nid in self.graph.chain:

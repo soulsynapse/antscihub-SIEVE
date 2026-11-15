@@ -30,6 +30,7 @@ QUALITIES = ("lossless", "standard")
 _X264 = ("-c:v", "libx264", "-preset", "medium", "-fps_mode", "passthrough", "-an")
 ENCODE = {"lossless": (*_X264, "-qp", "0"), "standard": (*_X264, "-crf", "18")}    # in the key: other arguments are other files
 PART, SIDECAR = store.PART, ".json"
+GOING = ".going"    # after the name of a clip being deleted: no cut file's name, and no part file's
 KEYED = re.compile(r"-([0-9a-f]{16})\.mp4$")
 LABEL_LEN = 40
 SAID_LINES = 5      # how much of ffmpeg's stderr a failure carries
@@ -75,6 +76,22 @@ def key(footage, extent, recipe):
 
 def rect_key(footage, rect, quality):
     return key(footage, rect_extent(rect), recipe(quality))
+
+
+def rect_piece(label, rect):
+    """The piece a Cut is handed for the clip of `rect`, (y0, y1, x0, x1), under `label`."""
+    y0, y1, x0, x1 = rect
+    return label, rect_extent(rect), ("-vf", f"crop={x1 - x0}:{y1 - y0}:{x0}:{y0}:exact=1")
+
+
+def take_name(part, final):
+    """Gives the file at `part` the name `final`, whole or not at all; FileExistsError, with both
+    files as they were, when a file has that name."""
+    if os.name == "nt":
+        os.rename(part, final)      # refuses a name that is taken, where POSIX's rename writes over it
+    else:
+        os.link(part, final)
+        os.remove(part)
 
 
 def file_for(label, key):
@@ -133,7 +150,7 @@ def delete(paths):
     anything cut of it does, so what is left is still found under a clip."""
     kept = []
     for path in paths:
-        going = path + PART
+        going = path + GOING
         try:
             os.rename(path, going)      # refused while a reader has the clip open, before anything under it goes
         except OSError as e:
@@ -153,12 +170,13 @@ def delete(paths):
 
 
 def command(video, pieces, quality=QUALITIES[1], progress=None):
-    """ffmpeg's command line cutting `video` once into the file `part` for each (part, rect) of
-    `pieces`, its progress report written to the file `progress` when one is named."""
+    """ffmpeg's command line cutting `video` once into the file `part` for each (part, args) of
+    `pieces`, `args` being the output's arguments that keep its part of the video, its progress
+    report written to the file `progress` when one is named."""
     argv = [shutil.which("ffmpeg") or "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
             *(["-progress", progress] if progress else []), "-i", str(video)]
-    for part, (y0, y1, x0, x1) in pieces:
-        argv += ["-map", "0:v:0", "-vf", f"crop={x1 - x0}:{y1 - y0}:{x0}:{y0}:exact=1", *ENCODE[quality], "-f", "mp4", part]
+    for part, args in pieces:
+        argv += ["-map", "0:v:0", *args, *ENCODE[quality], "-f", "mp4", part]
     return argv
 
 
@@ -172,28 +190,31 @@ def _stop_running():
 
 
 class Cut:
-    """One ffmpeg run cutting `video` into a cut file for each (label, rect) of `found` whose key
-    has none in the folder yet, rects as (y0, y1, x0, x1), at `quality`; `todo` is those it writes.
-    `poll()` is None while it runs, then "" once each has landed with its sidecar, or what went
-    wrong. No path that was there when it began is written, replaced or removed by it, however it
-    ends, and it leaves no part file; a key another writer landed meanwhile keeps that writer's
-    file. `cancel()` stops it, and one still running when the interpreter exits is cancelled.
+    """One ffmpeg run cutting `video` into a cut file for each (label, extent, args) of `found`
+    whose key has none in the folder yet and is in no Cut of this process still running, at
+    `quality`: `extent` says which part of the video the file holds and is what its key is of,
+    `args` are ffmpeg's output arguments that keep that part; `todo` is those it writes. `poll()`
+    is None while it runs, then "" once each has landed with its sidecar, or what went wrong. No
+    path that was there when it began is written, replaced or removed by it, however it ends, and
+    it leaves no part file; a key another writer landed meanwhile keeps that writer's file.
+    `cancel()` stops it, and one still running when the interpreter exits is cancelled.
     `progress()` is (frames written, the video's frames as its container counts them, seconds since
-    the start). ValueError with no shapes, or with every one's file landed already."""
+    the start). ValueError with nothing in `found`, or with every file of it landed or under way."""
 
     def __init__(self, video, found, quality):
         self.video, self.quality = str(video), str(quality)
         if not found:
-            raise ValueError("no shapes; wire a file selector into geometry")
+            raise ValueError("nothing to cut")
         self.footage = footage_of(self.video)
         self.folder = folder_for(self.video, self.footage)
-        have, self.todo = landed(self.folder), []      # todo: (label, rect, key)
-        for label, rect in found:
-            k = rect_key(self.footage, rect, self.quality)
-            if k not in have and all(k != t[2] for t in self.todo):
-                self.todo.append((label, tuple(rect), k))
+        have, self.todo = landed(self.folder), []      # todo: (label, extent, args, key)
+        under_way = {t[3] for cut in _running if _same(cut.folder) == _same(self.folder) for t in cut.todo}
+        for label, extent, args in found:
+            k = key(self.footage, extent, recipe(self.quality))
+            if k not in have and k not in under_way and all(k != t[3] for t in self.todo):
+                self.todo.append((label, extent, tuple(args), k))
         if not self.todo:
-            raise ValueError(f"nothing to cut: every shape's clip is here at {self.quality}")
+            raise ValueError(f"nothing to cut: every clip is {'here or being cut' if under_way else 'here'} at {self.quality}")
         os.makedirs(self.folder, exist_ok=True)
         self.parts = []
         for _ in self.todo:
@@ -207,7 +228,7 @@ class Cut:
         fd, self.report = tempfile.mkstemp(suffix=".progress")
         os.close(fd)
         self.t0, self.done = time.perf_counter(), 0
-        pieces = [(part, rect) for part, (_, rect, _) in zip(self.parts, self.todo)]
+        pieces = [(part, args) for part, (_, _, args, _) in zip(self.parts, self.todo)]
         self.proc = subprocess.Popen(command(self.video, pieces, self.quality, self.report),
                                      stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=self.log)
         self.said = None
@@ -252,15 +273,20 @@ class Cut:
         return self._say("" if code == 0 else f"ffmpeg exited {code}: {said}" if code else f"the clips did not land: {said}")
 
     def _land(self):
-        for part, (label, rect, k) in zip(self.parts, self.todo):
+        for part, (label, extent, _, k) in zip(self.parts, self.todo):
             if k in landed(self.folder):
                 continue
             final = os.path.join(self.folder, file_for(label, k))
             with open(part + SIDECAR, "w", encoding="utf-8", newline="\n") as f:
-                json.dump({"video": os.path.basename(self.video), "footage": self.footage, "extent": rect_extent(rect),
+                json.dump({"video": os.path.basename(self.video), "footage": self.footage, "extent": extent,
                            "recipe": recipe(self.quality), "label": label, "bytes": os.path.getsize(part)}, f, indent=1)
-            os.replace(part + SIDECAR, final + SIDECAR)     # whole before the clip has its name; one left by a clip since removed goes
-            os.rename(part, final)
+            if not os.path.exists(final) and os.path.exists(final + SIDECAR):
+                os.remove(final + SIDECAR)      # left by a clip since removed: it would say that clip's size of this one
+            try:
+                take_name(part, final)          # the clip's name is the claim: a sidecar is written only beside a clip its writer landed
+            except FileExistsError:
+                continue
+            os.replace(part + SIDECAR, final + SIDECAR)
 
     def cancel(self):
         if self.said is not None:

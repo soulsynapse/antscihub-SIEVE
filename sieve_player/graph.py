@@ -269,6 +269,7 @@ class Graph:
         self.readers = Readers()
         self._lately = []                   # the served files' Decoders in the order they were last read, latest first
         self._in_use = set()                # the files the cutting nodes' tools named at the last sync, see cut_files_named
+        self._failing, self._failed = {}, {}    # node -> what its tool's cut_file or cut_files raised: at the sync under way, and at the last
         self.memo = Memo(memo_bytes)
         self._lock = threading.Lock()
         self.halt = False                   # set by whoever is stopping the worker: every Frames read from then on raises Cancelled
@@ -306,7 +307,8 @@ class Graph:
         try:
             path = tool.cut_file(*of, node.params)
             return None if path is None else (str(path), footage_print_by_stamp(path))
-        except Exception:       # a tool's rule is user code; one that fails serves nothing
+        except Exception as exc:       # a tool's rule is user code; one that fails serves nothing, and the node's standing says so
+            self._failing[nid] = f"cut_file raised: {type(exc).__name__}: {exc}"
             return None
 
     def _named(self, entries):
@@ -317,8 +319,8 @@ class Graph:
             if hasattr(e.tool, "cut_files"):
                 try:
                     out |= {str(p) for p in e.tool.cut_files(*self._footage(entries, nid), e.params)}
-                except Exception:
-                    pass
+                except Exception as exc:
+                    self._failing.setdefault(nid, f"cut_files raised: {type(exc).__name__}: {exc}")
         return out
 
     def cut_files_named(self):
@@ -338,13 +340,14 @@ class Graph:
         output = video_output(self.doc)
         self.decoder.output = output        # a change empties its cache; a read in flight under the old plan is cancelled
         self._base = base_key(self.decoder.footage_print, output)
+        self._failing = {}
         p = plan(self.doc, self.tools, self._base, self.cut_file)
         self._in_use = self._named(p.entries)
         self.readers.keep({e.file[0] for e in p.entries.values() if e.file is not None})
         for d in self.readers.decoders():
             d.output = output
         with self._lock:
-            self._plan, self._whole = p.entries, p
+            self._plan, self._whole, self._failed = p.entries, p, self._failing
             self.shown, self.over = p.shown, p.over
             self.series = p.chain[0] if p.chain else None
             self.heads, self.chain, self.unrun_series = p.heads, p.chain, p.unrun
@@ -409,16 +412,18 @@ class Graph:
         self.readers.close()
 
     def standing(self, nid):
-        """One line on why `nid` does not run, else what its run said under its current key, else
-        "". The plan's reasons: an input unwired, mismatched or waiting on an unfed node, a series
-        node off the chain, a cycle. The notes: a tool raising, a chain node fed no signal."""
+        """One line on why `nid` does not run, else what its tool raised when the last sync asked
+        it for its cut files, else what its run said under its current key, else "". The plan's
+        reasons: an input unwired, mismatched or waiting on an unfed node, a series node off the
+        chain, a cycle. The notes: a tool raising, a chain node fed no signal."""
         with self._lock:
             e = self._plan.get(nid)
             note = self._notes.get(nid)
+            failed = self._failed.get(nid)
         if e is None:
             return ""
-        if e.standing:
-            return e.standing
+        if e.standing or failed:
+            return e.standing or failed
         return note[1] if note is not None and note[0] == e.key else ""
 
     def note(self, nid, text):

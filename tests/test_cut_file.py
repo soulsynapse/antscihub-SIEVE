@@ -115,6 +115,13 @@ def test_a_graph_reads_a_served_nodes_rows_from_its_file_and_from_its_run_once_i
         cuts.cut_file = lambda video, footage, params: 1 / 0
         g.sync()
         assert g.standing("cut").startswith("cut_file raised: ZeroDivisionError") and g.entry("cut").file is None
+
+        def absent(video, footage, params):
+            raise FileNotFoundError("nest is not cut")
+        cuts.cut_file = absent                              # to serve a file and none there: the node does not run on the frame
+        g.sync()
+        assert g.standing("cut") == "nest is not cut" and not g.fed("cut") and g.compute("cut", 2) is None
+        assert g.standing("gray") == "in waits on cut" and g.compute("gray", 2) is None
     finally:
         g.close()
         g.decoder.close()
@@ -262,15 +269,18 @@ def test_region_answers_the_clip_of_this_footage_at_the_chosen_shapes_rect_and_q
     nest.write_bytes(b"nest")
     ask = lambda footage=print_, **change: region.cut_file(str(video), footage, params(**change))
     assert ask() == str(nest) and region.cut_files(str(video), print_, params("")) == [str(nest)]
-    assert ask(choice="") is None and ask(choice="dish") is None and ask(shapes=MOVED) is None
-    assert ask(quality="lossless") is None and ask(footage="another") is None
+    assert ask(choice="") is None and ask(choice="no shape of the file") is None
+    for change in ({"choice": "dish"}, {"shapes": MOVED}, {"quality": "lossless"}, {"footage": "another"}):
+        with pytest.raises(FileNotFoundError, match="serve clip"):
+            ask(**change)
     unserved = params(**{"serve clip": False})
     assert ask(**{"serve clip": False}) is None and region.cut_files(str(video), print_, unserved) == [str(nest)]
     sidecar = folder / (nest.name + C.SIDECAR)
     sidecar.write_text(json.dumps({"bytes": 4}), encoding="utf-8")
     assert ask() == str(nest)
     sidecar.write_text(json.dumps({"bytes": 9}), encoding="utf-8")
-    assert ask() is None                                                # a clip of another size than landed
+    with pytest.raises(FileNotFoundError, match="not the size"):          # a clip of another size than landed
+        ask()
     sidecar.unlink()
     os.rename(nest, folder / C.file_for("renamed", key))
     assert ask() == str(folder / C.file_for("renamed", key))            # the label names nothing

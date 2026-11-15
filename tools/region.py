@@ -28,13 +28,15 @@ by its footage, its rect and its quality, so no clip is written over: a shape th
 quality, is a clip not yet cut, and the one it had stays until it is deleted. `quality` changes
 nothing `run` hands out. `cut_file` is what the player serves in place of `run` while the node reads
 the video node, or a node that serves a file, whose file is then the video cut: the clip of this
-footage at the chosen shape's rect and the node's quality, while it is the size it landed at and
-`serve clip` is on; off, the node cuts the frame whatever the store holds, so the document says
-which of the two its results are of. A clip
+footage at the chosen shape's rect and the node's quality, while `serve clip` is on; off, the node
+cuts the frame whatever the store holds, so the document says which of the two its results are of.
+With `serve clip` on, a shape chosen and no clip of it at the size it landed at, `cut_file` raises
+FileNotFoundError and the node does not run until the clip is cut or `serve clip` is off: the
+document's results are never the clip's on one machine and the frame's on another. A clip
 cut at `standard` is H.264's rendering of the cut and not its pixels, so a served node hands out
 other values than the same node run. The node's key is then the one a document opened on the clip
-gives its video node, so everything after it is that document's. With no clip for the chosen shape,
-or no shape chosen, the node cuts the frame as it did, and the card says which. The clip is of the
+gives its video node, so everything after it is that document's. With no shape chosen the node
+hands on the whole plate and serves nothing. The clip is of the
 video file and not of what is wired into `in`, so the two differ where a node that serves no file
 sits between the video and this one, and the player serves no clip there. `cut_files` is every clip
 the node would serve under some choice and quality; the card counts the store's clips of this
@@ -287,8 +289,14 @@ def clip_of(video, footage, params):
 
 
 def cut_file(video, footage, params):
-    """`clip_of`'s clip while `serve clip` is on, else None."""
-    return clip_of(video, footage, params)[0] if params.get("serve clip", DEFAULTS["serve clip"]) else None
+    """`clip_of`'s clip while `serve clip` is on; None with it off, and with no shape chosen;
+    FileNotFoundError saying why where it is on, a shape is chosen and no whole clip of it is there."""
+    if not params.get("serve clip", DEFAULTS["serve clip"]):
+        return None
+    path, why = clip_of(video, footage, params)
+    if path is None and video and params.get("choice") in dict(crops(params)):
+        raise FileNotFoundError(f"{why}; cut it, or turn serve clip off")
+    return path
 
 
 def cut_files(video, footage, params):
@@ -416,7 +424,8 @@ def settings(parent=None):
             except OSError as e:
                 path, why = None, str(e)
             unserved = "" if p["serve clip"] else ", not served: serve clip is off, and the node cuts the frame"
-            self.clip.setText(f"clip {os.path.basename(path)}{unserved}" if path else f"no clip: {why}")
+            waits = "; the node does not run until it is cut or serve clip is off" if p["serve clip"] and choice in names and self.video else ""
+            self.clip.setText(f"clip {os.path.basename(path)}{unserved}" if path else f"no clip: {why}{waits}")
 
         def _press(self):
             if self.cut is not None:

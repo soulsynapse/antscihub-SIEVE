@@ -276,13 +276,18 @@ def test_the_scheduler_alone_begins_a_job_and_nothing_compares_a_generation():
 def test_the_worker_reads_the_plan_off_one_snapshot_a_turn():
     """What the plan says is read off the Plan _turn took, never off the graph, whose accessors
     each answer for whatever plan is current as they are called: two of them in one turn are two
-    graphs once a sync lands between. invalidate() is the GUI thread's, one read."""
+    graphs once a sync lands between. What the graph computes or lists for a job it is handed that
+    Plan to do under. invalidate() is the GUI thread's, one read."""
     tree = ast.parse((PKG / "worker.py").read_text(encoding="utf-8"))
     says = {"heads", "chain", "series_chain", "entry", "key", "walk", "fold", "fed", "shown", "over", "series", "source"}
     theirs = {id(n) for f in ast.walk(tree) if isinstance(f, ast.FunctionDef) and f.name == "invalidate" for n in ast.walk(f)}
     read = [ast.unparse(n) for n in ast.walk(tree) if isinstance(n, ast.Attribute) and n.attr in says
             and ast.unparse(n.value) in ("g", "graph", "self.graph") and id(n) not in theirs]
     assert not read, read
+    under = {"compute", "density", "drawing", "folded", "walk_row"}     # Graph's methods that take the Plan they answer under
+    bare = [ast.unparse(n) for n in ast.walk(tree) if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+            and n.func.attr in under and not any(ast.unparse(a) in ("p", "self.plan") for a in [*n.args, *(k.value for k in n.keywords)])]
+    assert not bare, bare
     takes = [n for n in ast.walk(tree) if isinstance(n, ast.Attribute) and n.attr == "snapshot"]
     turn = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == "_turn")
     assert {id(n) for n in takes} - {id(n) for n in ast.walk(turn)} == {id(n) for f in ast.walk(tree)

@@ -96,7 +96,9 @@ def plan(doc, tools, base, cut_file=None):
     of the footage it reads, or None: `up` is that footage as the node above answered, None for the
     video. It is asked only of a node whose tool has the cut_file facet and that reads the video
     node or a node that serves a file, and only such a node serves one; with no `cut_file` none
-    does. A raw key names what a tool computes from, so the memo holds under it; the key adds the
+    does. A str for an answer is why a node that is to serve a file has none: the node is not fed,
+    nor is anything that reads it, and the str is its standing, so what a document computes is
+    never one thing with a file in the store and another without. A raw key names what a tool computes from, so the memo holds under it; the key adds the
     band, which is applied on read, so what downstream sees is keyed by it and the node's own run
     is not. A node that serves its file reads nothing, and its key is the one a document opened on
     that file gives its video node, so everything below it is keyed as that document's is. A node reads one piece of the plate: one
@@ -104,7 +106,7 @@ def plan(doc, tools, base, cut_file=None):
     its standing says which. A chain node is stepped when its tool steps and everything it reads on
     the chain is stepped; the first node that runs whole ends the prefix for every node after it,
     and a stepping tool so ended names that node in `whole_by`."""
-    keys, raw_keys, pieces, files = {}, {}, {}, {}
+    keys, raw_keys, pieces, files, refused = {}, {}, {}, {}, {}
 
     def cuts(nid):
         return getattr(tools.get(doc.node(nid).tool), "cut_file", None) is not None
@@ -119,6 +121,8 @@ def plan(doc, tools, base, cut_file=None):
                     said = cut_file(nid, None)
                 elif (up := file_of(w.src, (*stack, nid))) is not None:
                     said = cut_file(nid, up)
+            if isinstance(said, str):
+                refused[nid], said = said, None
             files[nid] = None if said is None else tuple(said)
         return files[nid]
 
@@ -178,7 +182,9 @@ def plan(doc, tools, base, cut_file=None):
         if len(set(of.values())) > 1:
             (a, pa), (b, pb) = next(((a, pa), (b, pb)) for a, pa in of.items() for b, pb in of.items() if pa != pb)
             crossings[n.id] = f"reads across a cut: {a} is of {said(pa)}, {b} of {said(pb)}"
-    blocked, more = set(), set(crossings)
+    for n in doc.nodes:
+        file_of(n.id)
+    blocked, more = set(), {*crossings, *refused}
     while more:
         blocked |= more
         more = {n.id for n in doc.nodes if n.id not in blocked and any(s in blocked for s in wired(n.id).values())}
@@ -206,7 +212,7 @@ def plan(doc, tools, base, cut_file=None):
         enders[nid] = nid if own else enders.get(e.src)
         e.steps, e.whole_by = enders[nid] is None, None if own else enders[nid]
     for nid, e in entries.items():
-        e.standing = crossings.get(nid) or _standing(doc, tools, entries, heads, chain, nid)
+        e.standing = crossings.get(nid) or refused.get(nid) or _standing(doc, tools, entries, heads, chain, nid)
     over = doc.overlay if doc.overlay in entries and produces(doc, tools, doc.overlay) in OVERLAYABLE else None
     return Plan(entries, heads, chain, [s for s in series if s not in chain], doc.display if doc.display in entries else None, over)
 

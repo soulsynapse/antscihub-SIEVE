@@ -5,7 +5,8 @@ import numpy as np
 import pytest
 
 from tests.test_blobs import fed
-from tools import blobs, blobs_to_mask, filter, sample
+from tools import blobs, filter, sample
+from tools.retired import blobs_to_mask
 from tools import _table
 
 M = np.zeros((8, 8), np.uint8)

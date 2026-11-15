@@ -6,7 +6,8 @@ import pytest
 
 from tests.test_blobs import fed
 from tests.test_track import table as points
-from tools import inside, region
+from tools import region
+from tools.retired import inside
 from tools._table import plane, plane_dtype
 
 H, W = 40, 60

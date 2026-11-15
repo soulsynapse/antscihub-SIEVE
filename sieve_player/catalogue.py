@@ -13,9 +13,9 @@ from dataclasses import dataclass, field, replace
 from typing import NamedTuple
 
 from .ledger import PARTS, View, WalkId, quantile, stores_after
-from .stream import ASKED, CACHE, DECODE, FOLD, GIVEN, MONITOR, PAINT, READ, RUN, SEEK, SHAPE, SLOT, STEP, THE_USERS
+from .stream import ASKED, CACHE, DECODE, FOLD, GIVEN, MONITOR, PAINT, RUN, SEEK, SHAPE, SLOT, STEP, THE_USERS
 
-COSTS = (RUN, STEP, FOLD, DECODE, SEEK, READ)      # the kinds a walk is compared with its baseline by
+COSTS = (RUN, STEP, FOLD, DECODE, SEEK)      # the kinds a walk is compared with its baseline by
 SLOWER = 1.5        # what the nodes of a walk cost, against the same runs at its baseline's ms a run
 
 SOURCES = {
@@ -790,7 +790,7 @@ class Row:
     per_mp: float | None    # that median over the megapixels a span read: its own plane for a read or a fold, its inputs' for a run
 
     def asked_by(self):
-        return {"walk": "the walk", "fold": f"fold of {self.asked}", "display": "the display", "bake": "a bake"}.get(self.demand, "-")
+        return {"walk": "the walk", "fold": f"fold of {self.asked}", "display": "the display"}.get(self.demand, "-")
 
     def rate_if_free(self, rate):
         """The walk's multiple of realtime were the node free, `rate` being its multiple now; None when either is not known."""
@@ -825,7 +825,7 @@ def rows(walk, view=None):
         if kind == RUN:
             read = [_pixels(view, walk, src) for src in (plan.get(nid) or {}).get("reads", {}).values() if src]
             px = sum(read) if read and None not in read else None
-        elif kind in (DECODE, SEEK, CACHE, READ, FOLD):
+        elif kind in (DECODE, SEEK, CACHE, FOLD):
             px = _pixels(view, walk, nid)
         out[nid] = Row(nid, ms / walk.done, n, kind, most.demand, most.asked, total / (total - ms) if total > ms else None,
                        median, quantile(bins, 0.99), median / (px / 1e6) if median is not None and px else None)
@@ -849,7 +849,7 @@ def _through(nodes, starts):
     return seen
 
 
-_COLD = (RUN, STEP, DECODE, READ)     # what a row nothing holds pays a node; a seek is a walk's opening, a fold the window's and a cache's row one a store held
+_COLD = (RUN, STEP, DECODE)     # what a row nothing holds pays a node; a seek is a walk's opening, a fold the window's and a cache's row one a store held
 
 
 @dataclass(frozen=True)

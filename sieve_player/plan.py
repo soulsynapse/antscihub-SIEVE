@@ -1,15 +1,15 @@
 """The plan: what the runtime will compute, read off the document and the tools alone.
 
-`plan()` is pure: the same document, tools and video key give the same plan, with no decoder, thread
-or memo in sight, so a test or `python -m sieve_player doc.json --plan` reads it as a table. The Graph calls
-it at every sync and holds the result under its lock; nothing here is touched after it is built.
+`plan()` is pure in the document, the tools, the video key and what `cut_file` answers, with no decoder,
+thread, memo or disk of its own in sight, so a test or `python -m sieve_player doc.json --plan` reads it as a table. The
+Graph calls it at every sync and holds the result under its lock; nothing here is touched after it is built.
 """
 import hashlib
 import json
 from dataclasses import dataclass, field
 
 from .document import (INPUT, OVERLAYABLE, VIDEO_TOOL, fed, fits, frame_inputs, is_selector, kind_of, optional, produces,
-                       served, static, wants)
+                       static, video_output, wants)
 
 
 def _key(*parts):
@@ -38,10 +38,9 @@ class Entry:
     static: bool        # the same output at every row, declared or inherited from every input: memoized under the raw key alone, row None
     standing: str = ""  # why the node does not run, as the plan sees it; "" when it runs
     types: dict = field(default_factory=dict)   # frame input name -> what the node wired into it produces, or None
-    axis: str | None = None                     # the served, unaligned bake at or upstream of the node, whose rows it is in; None in the plate's
-    bake: object = None                         # the Bake the node serves (document.served), or None
-    off: bool = False                           # in another row space than the display: not fed, the standing says so
-    steps: bool = False                         # a chain node the walk steps a row at a time, a served head included; a chain node without it runs whole
+    file: tuple | None = None                   # (path, footage print) of the file the node serves in place of its run, or None
+    piece: str | None = None                    # the nearest node upstream whose tool cuts, by its cut_file: the node's inputs are of that node's piece of the plate; None for the plate
+    steps: bool = False                         # a chain node the walk steps a row at a time; a chain node without it runs whole
     whole_by: str | None = None                 # a stepping tool run whole: the chain node that ended the prefix; None on every other node
 
 
@@ -53,9 +52,6 @@ class Plan:
     unrun: list = field(default_factory=list)     # every series node not in the chain; its standing says why
     shown: str | None = None                      # the display flag, when it names a node
     over: str | None = None                       # the overlay flag, when it names a one-plane node
-    axis: str | None = None                       # the served, unaligned bake the display is behind: the document's row space is its file's
-    rows: tuple | None = None                     # (count, fps) of that file; None in the plate's space, where the decoder's are
-    stale: set = field(default_factory=set)       # served nodes whose live key is not the key they were baked under
 
     @property
     def walk(self):
@@ -88,100 +84,117 @@ def facts(p, pinned):
     stepping tool run whole, and the node each input reads; beside them the chain in run order, the
     walked, shown and overlaid nodes, and `pinned`, the document's. The player's selection is the
     stream's to add, see stream.Emitter.sync()."""
-    return {"nodes": {nid: {"kind": e.kind, "fed": e.fed, "static": e.static, "served": e.bake is not None,
+    return {"nodes": {nid: {"kind": e.kind, "fed": e.fed, "static": e.static, "served": e.file is not None,
                             "steps": e.steps, "whole_by": e.whole_by, "reads": dict(e.srcs)} for nid, e in p.entries.items()},
             "chain": list(p.chain), "walk": p.walk, "shown": p.shown, "over": p.over,
             "pinned": list(pinned)}
 
 
-def plan(doc, tools, base):
-    """The plan for `doc` under `tools`, name to module, with `base` the video node's key. A raw
-    key names what a tool computes from, so the memo holds under it; the key adds the band, which
-    is applied on read, so what downstream sees is keyed by it and the node's own run is not. A
-    served node (document.served) is a source: fed with nothing wired in, keyed by its bake, and
-    its live key, what the chain as it stands would give it, every bake upstream still served, is
-    kept beside to say whether it is stale. The row
-    axis is the bake the display flag is behind when that bake is not aligned with the plate, else
-    the plate's; a node in the other space is not fed, its standing saying so. A chain node is
-    stepped when its tool steps and everything it reads on the chain is stepped, a served head's
-    rows counting as stepped; the first node that runs whole ends the prefix for every node after
-    it, and a stepping tool so ended names that node in `whole_by`."""
-    keys, raw_keys, live_keys = {}, {}, {}
+def plan(doc, tools, base, cut_file=None):
+    """The plan for `doc` under `tools`, name to module, with `base` the video node's key and
+    `cut_file(nid, up)` answering (path, footage print) of the file that holds a cutting node's cut
+    of the footage it reads, or None: `up` is that footage as the node above answered, None for the
+    video. It is asked only of a node whose tool has the cut_file facet and that reads the video
+    node or a node that serves a file, and only such a node serves one; with no `cut_file` none
+    does. A raw key names what a tool computes from, so the memo holds under it; the key adds the
+    band, which is applied on read, so what downstream sees is keyed by it and the node's own run
+    is not. A node that serves its file reads nothing, and its key is the one a document opened on
+    that file gives its video node, so everything below it is keyed as that document's is. A node reads one piece of the plate: one
+    whose inputs are of two, the plate among them, is not fed, nor is anything that reads it, and
+    its standing says which. A chain node is stepped when its tool steps and everything it reads on
+    the chain is stepped; the first node that runs whole ends the prefix for every node after it,
+    and a stepping tool so ended names that node in `whole_by`."""
+    keys, raw_keys, pieces, files = {}, {}, {}, {}
 
-    def bake_of(nid):
-        return served(doc.node(nid))
+    def cuts(nid):
+        return getattr(tools.get(doc.node(nid).tool), "cut_file", None) is not None
 
-    def sources(nid, live=False):
+    def file_of(nid, stack=()):
+        if nid in stack:
+            return None
+        if nid not in files:
+            w, said = doc.source(nid), None
+            if cut_file is not None and w is not None and cuts(nid):
+                if doc.node(w.src).tool == VIDEO_TOOL:
+                    said = cut_file(nid, None)
+                elif (up := file_of(w.src, (*stack, nid))) is not None:
+                    said = cut_file(nid, up)
+            files[nid] = None if said is None else tuple(said)
+        return files[nid]
+
+    def wired(nid):
         tool = tools.get(doc.node(nid).tool)
         names = [INPUT] if tool is None or is_selector(tool) else frame_inputs(tool)
-        if bake_of(nid) and not live:
-            return {name: None for name in names}
         return {name: (w.src if (w := doc.source(nid, name)) else None) for name in names}
+
+    def sources(nid):
+        return {name: None for name in wired(nid)} if file_of(nid) else wired(nid)
 
     def static_of(nid, stack=()):
         """Declared by the tool, or inherited: a frame node fed on every input by static nodes is
-        static in fact, since no frame tool reads the row itself. A served bake reads its file per row."""
+        static in fact, since no frame tool reads the row itself. A served node reads its file per row."""
         tool = tools.get(doc.node(nid).tool)
-        if static(tool) or tool is None or kind_of(doc, tools, nid) != "frame" or bake_of(nid) or nid in stack:
+        if static(tool) or tool is None or kind_of(doc, tools, nid) != "frame" or file_of(nid) or nid in stack:
             return static(tool)
         srcs = sources(nid).values()
         return bool(srcs) and all(s is not None and static_of(s, (*stack, nid)) for s in srcs)
 
-    def up_key(nid, stack=(), live=False):
-        # `live` un-serves `nid` alone: a served bake upstream keeps its served key, which is what the chain gives
-        ups = [key_of(src, stack) if src is not None and src not in stack else "none" for src in sources(nid, live).values()]
+    def up_key(nid, stack=()):
+        ups = [key_of(src, stack) if src is not None and src not in stack else "none" for src in sources(nid).values()]
         return ups[0] if len(ups) == 1 else _key(*ups)
 
-    def key_of(nid, stack=(), live=False):
-        held = live_keys if live else keys
-        if nid not in held:
+    def key_of(nid, stack=()):
+        if nid not in keys:
             node = doc.node(nid)
             if node.tool == VIDEO_TOOL:
-                held[nid] = base
-                if not live:
-                    raw_keys[nid] = base
-            elif bake_of(node.id) and not live:
-                # hashed, not the bake's key itself: the file is not the chain, in its rows or its bytes,
-                # so nothing memoized under the live key is served for it
-                keys[nid] = raw_keys[nid] = _key("served", bake_of(nid).key)
-            else:
-                raw = _key(up_key(nid, (*stack, nid), live), node.tool, json.dumps(node.params, sort_keys=True))
-                if not live:
-                    raw_keys[nid] = raw
-                held[nid] = raw if node.band is None else _key(raw, node.band)
-        return held[nid]
+                keys[nid] = raw_keys[nid] = base
+                return base
+            raw = (base_key(file_of(nid)[1], video_output(doc)) if file_of(nid)
+                   else _key(up_key(nid, (*stack, nid)), node.tool, json.dumps(node.params, sort_keys=True)))
+            raw_keys[nid] = raw
+            keys[nid] = raw if node.band is None else _key(raw, node.band)
+        return keys[nid]
 
-    def axis_of(nid, stack=()):
-        """The nearest served, unaligned bake at or upstream of `nid`, or None."""
-        b = bake_of(nid)
-        if b and not b.aligned:
-            return nid
-        if nid in stack:
-            return None
-        for src in sources(nid).values():
-            if src is not None and (a := axis_of(src, (*stack, nid))) is not None:
-                return a
-        return None
+    def pieces_of(nid, stack=()):
+        """Input name -> the cutting node that input is of, None for the plate, over the inputs wired."""
+        if nid not in pieces:
+            out = {}
+            for name, src in wired(nid).items():
+                if src is None or src in stack:
+                    continue
+                if cuts(src):
+                    out[name] = src
+                else:
+                    out[name] = next(iter(pieces_of(src, (*stack, nid)).values()), None)
+            pieces[nid] = out
+        return pieces[nid]
 
-    axis = axis_of(doc.display) if doc.display in {n.id for n in doc.nodes} else None
-    rows = None if axis is None else (bake_of(axis).written, bake_of(axis).written_fps)
-    entries, series, stale = {}, [], set()
+    def said(piece):
+        return "the plate" if piece is None else piece
+
+    crossings = {}
+    for n in doc.nodes:
+        of = pieces_of(n.id)
+        if len(set(of.values())) > 1:
+            (a, pa), (b, pb) = next(((a, pa), (b, pb)) for a, pa in of.items() for b, pb in of.items() if pa != pb)
+            crossings[n.id] = f"reads across a cut: {a} is of {said(pa)}, {b} of {said(pb)}"
+    blocked, more = set(), set(crossings)
+    while more:
+        blocked |= more
+        more = {n.id for n in doc.nodes if n.id not in blocked and any(s in blocked for s in wired(n.id).values())}
+    entries, series = {}, []
     for n in doc.nodes:
         tool = tools.get(n.tool)
         kind = kind_of(doc, tools, n.id)      # a selector answers a path, once, before the decoder; never a row
         srcs = sources(n.id)
         src = srcs[INPUT]
-        off = kind not in ("video", "selector") and axis_of(n.id) != axis
         entries[n.id] = Entry(tool, kind, dict(n.params), n.band, src, key_of(n.id), raw_keys[n.id],
-                              up_key(n.id) if src else None, fed(doc, n.id, tools) and not off, srcs, static_of(n.id),
+                              up_key(n.id) if src else None, fed(doc, n.id, tools) and n.id not in blocked, srcs, static_of(n.id),
                               types={name: produces(doc, tools, s) if s else None for name, s in srcs.items()},
-                              axis=axis_of(n.id), off=off, bake=bake_of(n.id))
-        if bake_of(n.id) and key_of(n.id, live=True) != bake_of(n.id).key:
-            stale.add(n.id)
+                              file=file_of(n.id), piece=next(iter(pieces_of(n.id).values()), None))
         if kind == "series":
             series.append(n.id)
     roots = [s for s in series if entries[s].src is None or entries[entries[s].src].kind != "series"]
-    roots.sort(key=lambda s: entries[s].bake is None)      # a served series node heads the chain from its file, before any walked head
     heads = [s for s in roots if entries[s].src == entries[roots[0]].src and (entries[s].fed or s == roots[0])] if roots else []
     chain = list(heads)
     for nid in chain:
@@ -189,24 +202,18 @@ def plan(doc, tools, base):
     enders = {}
     for nid in chain:
         e = entries[nid]
-        own = e.bake is None and getattr(e.tool, "step", None) is None
+        own = getattr(e.tool, "step", None) is None
         enders[nid] = nid if own else enders.get(e.src)
         e.steps, e.whole_by = enders[nid] is None, None if own else enders[nid]
     for nid, e in entries.items():
-        e.standing = _standing(doc, tools, entries, heads, chain, nid, axis)
+        e.standing = crossings.get(nid) or _standing(doc, tools, entries, heads, chain, nid)
     over = doc.overlay if doc.overlay in entries and produces(doc, tools, doc.overlay) in OVERLAYABLE else None
-    return Plan(entries, heads, chain, [s for s in series if s not in chain],
-                doc.display if doc.display in entries else None, over, axis, rows, stale)
+    return Plan(entries, heads, chain, [s for s in series if s not in chain], doc.display if doc.display in entries else None, over)
 
 
-def _standing(doc, tools, entries, heads, chain, nid, axis=None):
+def _standing(doc, tools, entries, heads, chain, nid):
     e = entries[nid]
-    if e.kind in ("video", "selector") or e.tool is None:
-        return ""
-    if e.off:
-        where = "in the plate's" if axis is None else f"behind {axis}"
-        return f"in {'the plate' if e.axis is None else e.axis}'s row space; the display is {where}"
-    if served(doc.node(nid)):
+    if e.kind in ("video", "selector") or e.tool is None or e.file is not None:
         return ""
     for name, src in e.srcs.items():
         if src is None:
@@ -221,7 +228,5 @@ def _standing(doc, tools, entries, heads, chain, nid, axis=None):
     if e.kind == "series" and nid not in chain:
         if entries[e.src].kind == "series":
             return f"in waits on {e.src}"
-        if entries[heads[0]].src is None:
-            return f"unrun: reads {e.src}; {heads[0]} heads the chain from its bake"
         return f"unrun: reads {e.src}; the walk is {entries[heads[0]].src}, which {heads[0]} reads"
     return "" if e.fed else "in a cycle"

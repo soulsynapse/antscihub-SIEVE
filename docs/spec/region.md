@@ -5,7 +5,7 @@ registry's facet table and type report (`python -m sieve_player.registry`), the 
 what a tool may offer and what feeds what, with the root README's rule that a tool does one thing
 and a variation is a second tool beside it, and with docs/spec/identity.md, whose Attach already
 speaks of a region's blob on every ant inside it and whose Sample built membership from a region's
-mask. docs/spec/bake.md names crop as the transform the bake is for and defers it here;
+mask. docs/spec/retired/bake.md names crop as the transform the bake is for and defers it here;
 docs/spec/sources.md holds the fan-out this spec does not take, many rects of one plate under one
 pipeline, which is a run over parameter sets and stays the processing run's.
 

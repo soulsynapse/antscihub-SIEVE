@@ -5,10 +5,10 @@ is held for `snapshot()`'s counters and for its `on_event`.
 import threading
 from collections import deque
 
-from .stream import CACHE, CANCEL, DECODE, PROGRESS, READ, RUN, SEEK, STEP
+from .stream import CACHE, CANCEL, DECODE, PROGRESS, RUN, SEEK, STEP
 
 WINDOW = 64     # rows a running mean spans; the decoder's step and seek means keep their own literal, see Decoder._mean
-MEANS = (RUN, STEP, CANCEL, CACHE, DECODE, SEEK, READ)      # the kinds a node's mean is of
+MEANS = (RUN, STEP, CANCEL, CACHE, DECODE, SEEK)      # the kinds a node's mean is of
 
 
 def _mean(mean, x, n):

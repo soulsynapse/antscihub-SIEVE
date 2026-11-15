@@ -4,12 +4,13 @@ from sieve_player import store
 from sieve_player.worker import Worker
 
 
-@pytest.fixture
+@pytest.fixture(autouse=True)
 def in_store(tmp_path, monkeypatch):
-    """The store's folder under tmp_path for the test, so no bake lands in the user's."""
-    folder = tmp_path / "store"
-    monkeypatch.setattr(store, "folder", lambda: str(folder))
-    return folder
+    """The store's folder and the file its choice is kept in are under tmp_path for the test, so
+    none reads or writes the user's."""
+    monkeypatch.setattr(store, "CHOICE", str(tmp_path / "app" / "store.txt"))
+    monkeypatch.setenv(store.STORE_ENV, str(tmp_path / "store"))
+    return tmp_path / "store"
 
 
 @pytest.fixture(autouse=True)

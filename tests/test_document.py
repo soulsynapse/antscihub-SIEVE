@@ -168,6 +168,33 @@ def test_a_scale_on_the_video_node_loads_as_a_rescale_node_before_every_reader()
     assert "rescale" not in {n.id for n in D.Document.from_dict(d).nodes} and "scale" not in D.Document.from_dict(d).node("video").params
 
 
+def test_a_crop2_in_a_file_loads_as_a_region_holding_what_the_region_wired_into_it_held():
+    d = D.from_tools([gray]).to_dict()
+    shapes = [{"name": "nest", "circle": [5, 5, 2]}]
+    d["nodes"] += [{"id": "file", "tool": "file"}, {"id": "region", "tool": "region", "params": {"plate": [9, 9], "shapes": shapes, "choice": "nest"}},
+                   {"id": "crop2", "tool": "crop2", "params": {"quality": "lossless"}}]
+    d["wires"] = [{"from": "video", "to": "region"}, {"from": "file", "to": "region", "input": "geometry"}, {"from": "video", "to": "crop2"},
+                  {"from": "region", "to": "crop2", "input": "regions"}, {"from": "crop2", "to": "gray"}]
+    d["display"] = "region"
+    doc = D.Document.from_dict(d)
+    cut = doc.node("crop2")
+    assert [n.id for n in doc.nodes if n.tool == "region"] == ["crop2"] and doc.display == "crop2"
+    assert cut.params == {"quality": "lossless", "plate": [9, 9], "shapes": shapes, "choice": "nest"}
+    assert {(w.src, w.dst, w.input) for w in doc.wires} == {("video", "crop2", "in"), ("file", "crop2", "geometry"), ("crop2", "gray", "in")}
+    d["wires"].append({"from": "region", "to": "gray"})       # a region something else reads stays
+    assert sorted(n.id for n in D.Document.from_dict(d).nodes if n.tool == "region") == ["crop2", "region"]
+
+
+def test_a_bake_node_in_a_file_loads_as_its_readers_wired_to_what_it_read():
+    d = two_nodes().to_dict()
+    d["nodes"] += [{"id": "bake", "tool": "bake", "params": {}, "mode": "baked", "baked": {"key": "k"}}, {"id": "threshold", "tool": "threshold"}]
+    d["wires"] += [{"from": "gray", "to": "bake"}, {"from": "bake", "to": "threshold"}]
+    d["display"], d["pinned"] = "bake", ["bake"]
+    doc = D.Document.from_dict(d)
+    assert [n.id for n in doc.nodes] == ["video", "gray", "threshold"] and doc.source("threshold").src == "gray"
+    assert (doc.display, doc.pinned) == ("gray", []) and "bake" not in json.dumps(doc.to_dict())
+
+
 def test_validate_type_cycle_unfed():
     doc = D.from_tools(TOOLS)
     doc.connect("video", "threshold")                       # bgr into a gray input

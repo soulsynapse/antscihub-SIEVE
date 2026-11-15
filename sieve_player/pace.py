@@ -16,13 +16,12 @@ def clock(seconds):
 @dataclass(frozen=True)
 class Figure:
     """A walk as the control draws it. `what` says which time `seconds` is: "takes", the clip at this
-    rate, given for a window walk only while it is cold, no row served and no more than COLD of them
-    held; "left" and "took", the clip walk's own; "", and `seconds` is None."""
+    rate, given for a window walk only while it is cold, no more than COLD of its rows held; "left"
+    and "took", the clip walk's own; "", and `seconds` is None."""
     lane: str               # "window" or "clip"
     done: int
     total: int
     ran: int                # of the rows done, those a store did not hold
-    served: int             # and those that read a bake's file
     over: bool              # the walk reached its last row or was stopped
     multiple: float | None  # rows a second over the clip's rows a second; None until a second signal is in
     seconds: float | None
@@ -31,13 +30,13 @@ class Figure:
 
     @property
     def held(self):
-        return self.done - self.ran - self.served
+        return self.done - self.ran
 
     def words(self):
         """The figure in words, for where the control's marks are not enough."""
         rate = "no rate yet" if self.multiple is None else f"{self.multiple:.1f}x realtime"
         lines = [f"{self.lane} walk, {self.done} of {self.total} rows, {rate}",
-                 f"{self.ran} ran, {self.held} held by a store, {self.served} served from a bake"]
+                 f"{self.ran} ran, {self.held} held by a store"]
         if self.what == "takes":
             lines.append(f"the clip, {clock(self.clip_s)}, would take ~{clock(self.seconds)} at this rate")
         elif self.what:
@@ -51,7 +50,7 @@ class _Walk:
     def __init__(self, t, done, total):
         self.began = self.t = t
         self.since = (t, done)      # where the rate counts from: the walk's first signal, or its first after the other lane's turn
-        self.done, self.total, self.ran, self.served = done, total, 0, 0
+        self.done, self.total, self.ran = done, total, 0
         self.over, self.rate = False, None
 
 
@@ -65,7 +64,7 @@ class Pace:
     def __init__(self, clock=time.perf_counter):
         self._clock, self._walks, self._lane = clock, {}, None
 
-    def row(self, lane, done, total, ran=0, served=0):
+    def row(self, lane, done, total, ran=0):
         if not total:
             return      # a clip walk that was not asked for reports 0 of 0
         t, w = self._clock(), self._walks.get(lane)
@@ -76,7 +75,7 @@ class Pace:
             w.since = (t, w.done)
         if done > w.done and t > w.since[0]:
             w.rate = (done - w.since[1]) / (t - w.since[0])
-        w.t, w.done, w.ran, w.served = t, done, ran, served
+        w.t, w.done, w.ran = t, done, ran
         w.over = done >= total
         self._lane = lane
 
@@ -91,7 +90,7 @@ class Pace:
                 what, seconds = "took", w.t - w.began
             elif w.rate:
                 what, seconds = "left", (w.total - w.done) / w.rate
-        elif w.rate and not w.served and w.done - w.ran <= COLD * w.done:
+        elif w.rate and w.done - w.ran <= COLD * w.done:
             what, seconds = "takes", count / w.rate
-        return Figure(self._lane, w.done, w.total, w.ran, w.served, w.over,
+        return Figure(self._lane, w.done, w.total, w.ran, w.over,
                       w.rate / fps if w.rate else None, seconds, what, count / fps)

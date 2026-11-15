@@ -5,17 +5,17 @@ and the pinned in dimmed ink, each as the plot does over the window: a column co
 one row is their min and max, so nothing is hidden and nothing is added, and the rows the
 selection's gate keeps are washed. A bar along its bottom edge is over the rows held."""
 import numpy as np
-from PySide6.QtCore import QPoint, QPointF, QRectF, Qt, Signal
-from PySide6.QtGui import QColor, QPainter, QPen, QPixmap, QPolygonF
+from PySide6.QtCore import QPoint, QPointF, QRectF, QSize, Qt, Signal
+from PySide6.QtGui import QColor, QIcon, QPainter, QPen, QPixmap, QPolygonF
 from PySide6.QtWidgets import QDoubleSpinBox, QHBoxLayout, QLabel, QPushButton, QSizePolicy, QWidget
 
 from . import theme
-from .theme import GAP, INK_ALPHA, ROW_H, Layer, desc_label, gray, mono_font, qgray, readout
+from .theme import GAP, GLYPH, INK, INK_ALPHA, ROW_H, Layer, desc_label, glyph, gray, mono_font, qgray, readout
 
 
-def timecode(row, fps):
-    s = row / fps if fps else 0.0
-    return f"{int(s // 60):02d}:{s % 60:06.3f}"
+def timecode(row, fps, places=3):
+    s = round(row / fps, places) if fps else 0.0
+    return f"{int(s // 60):02d}:{s % 60:0{places + 3}.{places}f}"
 
 
 class Strip(QWidget):
@@ -248,8 +248,7 @@ class Strip(QWidget):
         row = self._row(e.position().x())
         text = f"{row}  {timecode(row, self.fps)}"
         if self._draft:
-            s, n = self._draft
-            text = f"[{s} .. {s + n})  {timecode(s, self.fps)} + {n / self.fps:.2f}s"
+            text = timecode(self._draft[0], self.fps, places=1)
         self._bubble.setText(text)
         self._bubble.adjustSize()
         g = self.mapToGlobal(QPoint(int(e.position().x()), 0))
@@ -268,10 +267,11 @@ class Controls(QWidget):
         lay = QHBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(GAP)
-        self.play = QPushButton("Play")
-        self.play.setFixedWidth(60)
+        self.play = QPushButton()
+        self.play.setIconSize(QSize(GLYPH, GLYPH))
+        self.set_playing(False)
         back, fwd = QPushButton("−1"), QPushButton("+1")
-        for b in (back, fwd):
+        for b in (self.play, back, fwd):
             b.setFixedWidth(36)
         self.start = QDoubleSpinBox(decimals=3, suffix=" s")
         self.length = QDoubleSpinBox(decimals=3, suffix=" s")
@@ -311,7 +311,8 @@ class Controls(QWidget):
             sb.blockSignals(False)
 
     def set_playing(self, on):
-        self.play.setText("Pause" if on else "Play")
+        self.play.setIcon(QIcon(glyph("player-pause" if on else "player-play", INK, GLYPH, self.devicePixelRatioF())))
+        self.play.setToolTip("Pause  (Space)" if on else "Play  (Space)")
 
     def set_readout(self, row):
         self.readout.setText(f"{timecode(row, self.fps)}   {self.fps:.2f} fps   row {row}")

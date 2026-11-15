@@ -26,10 +26,11 @@ from .canvas import Canvas
 from .catalogue import Log
 from .decoder import Decoder
 from .graph import Graph, nbytes
-from .ledger import Ledger
+from .ledger import Ledger, row_cost
 from .machine import Watch
 from .pace import Pace, clock
 from .pacecontrol import PaceControl
+from .storecontrol import StoreControl
 from .pane import Pane
 from .registry import CATEGORIES, Entry, category, description, signature
 from .stream import ASKED, EDIT, HAND, Emitter
@@ -42,7 +43,7 @@ from .worker import Worker
 HOLD_MS = 2000              # how long the held runs rest, nothing new held, before they are written beside the document
 HELD_BYTES = 512 << 20      # what the held runs may take together, as graph.nbytes counts them, before the oldest go
 TELL = 0.1                  # s between the worker's tellings of a walk's rows; docs/findings/2026-11-13-a-signal-a-row.md
-DUMP_ENV = "SIEVE_DUMP"   # names the file every video opened in this process dumps its stream to
+DUMP_ENV = "SIEVE_DUMP"  # names the file every video opened in this process dumps its stream to
 MEMO_ENV, CACHE_ENV = "SIEVE_MEMO_GB", "SIEVE_CACHE_GB"   # the memo's and the decoder cache's limits; unset, each class's default
 
 
@@ -317,18 +318,17 @@ def catalogue(items):
 
 
 class Header(QWidget):
-    """The row across the top: the store's folder, what it holds and what the disk has free with the
-    button that changes it, at the left; what the clip walk has to say, a bare walk's bar, the walk's
-    figure, the button that walks the clip bare (bare.py) and the clip walk's, at the right."""
+    """The row across the top, all at its right: what the clip walk or a refused store has to say, a
+    bare walk's bar, the store, whose press changes it, the walk's figure, the button that walks the
+    clip bare (bare.py) and the clip walk's."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
         lay = QHBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(GAP)
-        self.store_note = readout(mono=True, wrap=False)
-        self.store = QPushButton("Store…")
-        self.store.setFixedSize(80, ROW_H)
+        self._refused = ""
+        self.store = StoreControl("click to choose the store's folder")
         self.note = readout(mono=True, wrap=False)
         self.note.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self.figure = PaceControl("click for the monitor")
@@ -342,25 +342,22 @@ class Header(QWidget):
         self.bar.setFixedSize(160, ROW_H)
         self.bar.setTextVisible(False)
         self.bar.hide()
-        lay.addWidget(self.store)
-        lay.addWidget(self.store_note)
         lay.addStretch(1)
         lay.addWidget(self.note)
         lay.addWidget(self.bar)
+        lay.addWidget(self.store)
         lay.addWidget(self.figure)
         lay.addWidget(self.bare)
         lay.addWidget(self.walk)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
     def show_store(self, st, refused=""):
-        """`st`, the Store the player writes to, as its line reads it; `refused` is why a choice was not taken."""
-        held, free = st.status()
-        n, stray = st.strays()
-        line = f"{st.folder}  holds {store.fmt_bytes(held)}, {store.fmt_bytes(free)} free"
-        if n:
-            line += f"; {n} part file{'s' if n > 1 else ''} of a bake that died with its process, {store.fmt_bytes(stray)}"
-        self.store_note.setText(f"{refused}; {line}" if refused else line)
-        self.store_note.setToolTip(st.folder)
+        """`st`, the Store the player writes to, read now; `refused` is why a choice was not taken,
+        said in the note until the next showing, if the note still says it then."""
+        self.store.set_store(st)
+        if refused or (self._refused and self.note.text() == self._refused):
+            self.note.setText(refused)
+        self._refused = refused
 
     def set_walking(self, on):
         self.walk.setText("Stop walk" if on else "Walk clip")
@@ -434,7 +431,7 @@ class PlayerWindow(QMainWindow):
         self._reload.timeout.connect(self._pick_paths)
         self._driven = {}      # (node id, path or PARAMS input) -> (the keys set through it, the id of the node wired in)
         self._gone = {}        # node -> why its bake could not be read when the document opened, for the graph's notes
-        self.store = store.current()   # where bakes land and are read from; Store… replaces it
+        self.store = store.current()   # where bakes land and are read from; the header's store control replaces it
 
         self.display = Display()
         self.plot = Plot()
@@ -449,6 +446,8 @@ class PlayerWindow(QMainWindow):
         self.canvas.flagged.connect(self.reflag)
         self.pane.paramsChanged.connect(self._params_changed)
         self.pane.videoPicked.connect(self.load)
+        # the canvas reports a selection only when it changes, so the closed card's node is let go: a click on it opens the card again
+        self.pane.closed.connect(lambda: self.canvas.select([]))
         self.plot.pressed.connect(self._scrub_begin)
         self.plot.dragged.connect(lambda r: self.seek(r, commit=False))
         self.plot.released.connect(self._scrub_end)
@@ -466,7 +465,7 @@ class PlayerWindow(QMainWindow):
         self.display.back.connect(self._back)
         self._shown_before = []    # the display flag's past, most recent last, for a right click; the document's session
         self._shown_last = None
-        self.selection = None      # the node the canvas last selected, whose settings the pane shows and whose axis the plot draws
+        self.selection = None      # the node the canvas last selected, whose settings the pane shows until its card is closed and whose axis the plot draws
         self.header = Header()
         self.header.show_store(self.store)
         self.header.store.clicked.connect(self._choose_store)
@@ -667,6 +666,7 @@ class PlayerWindow(QMainWindow):
         self._tell_shown()
         self._show_pinned()
         self._show_size()
+        self._show_takes()
 
     def _show_plot(self):
         """The plot and the strip follow the document's pinned set and bands."""
@@ -1225,8 +1225,8 @@ class PlayerWindow(QMainWindow):
         self._resume = False
 
     def seek(self, row, commit):
-        """Move the playhead, clamped to the loop window. Only the handle and the spinboxes move
-        the window; a gesture on the playhead never does."""
+        """Move the playhead, clamped to the loop window. Only the handle, a press in the strip
+        outside the window and the spinboxes move the window; a gesture on the playhead never does."""
         if self.graph is None:
             return
         s, n = self.window_
@@ -1341,6 +1341,7 @@ class PlayerWindow(QMainWindow):
         self._update_gate()
         self._show_pinned()
         self._show_size()
+        self._show_takes()
 
     # -- the clip walk ---------------------------------------------------
     def _toggle_clip(self):
@@ -1503,7 +1504,24 @@ class PlayerWindow(QMainWindow):
         file, from the window's rows."""
         if self.selection is not None:
             per = held.per_row(self.results.get(self.selection))
-            self.pane.set_size(self.selection, f"about {store.fmt_bytes(per * self.count)} held over the clip" if per else "")
+            figure, unit = store.in_units(per * self.count) if per else ("", "")
+            self.pane.set_size(self.selection, f"~{figure} {unit}" if per else "", unit, f"about {figure} {unit} held over the clip")
+
+    def _show_takes(self):
+        """The selected node's card says about how long its own work would take over the clip, every
+        row at what ledger.row_cost makes of the key it now has; nothing where that is None."""
+        nid = self.selection
+        if nid is None or self.ledger is None or self.graph is None:
+            return
+        cost = row_cost(self.ledger.view().walks, nid, self._key(nid))
+        if cost is None:
+            self.pane.set_takes(nid, "")
+            return
+        ms, n, lane = cost
+        s = ms * self.count / 1000
+        text = f"{s * 1000:.0f} ms" if s < 1 else f"{s:.1f} s" if s < 10 else f"{s:.0f} s" if s < 60 else clock(s)
+        self.pane.set_takes(nid, f"~{text}", f"about {text} of this node's own work over the clip's {self.count} rows, "
+                                             f"at {ms:.2f} ms a run over the {lane} walk's {n}")
 
     def _baked(self, nid, bake):
         """Recorded here, on the GUI thread, since the document is the GUI's and the worker's alone to read."""

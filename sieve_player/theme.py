@@ -4,8 +4,9 @@ Ground is a dark gray and everything sits on it. Each surface layered on top is 
 nothing is inset past layer 3, so there are exactly four grays. A form is a table: descriptions
 left-aligned in one column sized to the widest, every control one width and one height in the
 next. Editable controls are wells the ground shows through; measured results are flat fields
-lifted above their surface, so depth alone says what can be touched. Section names are the only
-white; inside a section there is one ink and a dimmer one for readouts.
+lifted above their surface, so depth alone says what can be touched, but for a slider's value, a
+well only under the pointer or the caret. Section names are the only white; inside a section there
+is one ink and a dimmer one for readouts, and on a card's head a badge's colour and a dim close mark.
 """
 from __future__ import annotations
 
@@ -14,7 +15,7 @@ import sys
 from functools import lru_cache
 from pathlib import Path
 
-from PySide6.QtCore import QPointF, QRectF, Qt
+from PySide6.QtCore import QPointF, QRectF, QSize, Qt
 from PySide6.QtGui import QColor, QFont, QFontDatabase, QFontMetrics, QPainter, QPen, QPixmap
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (QAbstractButton, QAbstractSpinBox, QApplication, QComboBox, QFrame, QGridLayout,
@@ -36,7 +37,7 @@ HEAD_GAP = 14      # below a section name, px; the room that makes it read as a 
 RADIUS = 4
 HEAD = 255         # section names, the only pure white on screen
 INK = 200          # everything inside a section: descriptions and values alike
-INK_2 = 140        # tertiary: readouts, slider handles, unchecked boxes
+INK_2 = 140        # tertiary: readouts, a slider's filled groove, a grip's dots, an unchecked glyph
 INK_ALPHA = 110    # a pinned node's line in the plot and the strip, of 255; the selection is in colour
 SHUT_ALPHA = 45    # that line over the rows its own band shuts out
 FADED_ALPHA = 18   # that line while a handle of the selection's is held
@@ -44,14 +45,23 @@ FIELD_ALPHA = 0.55 # a pinned field under the selection's lines, of 1
 FADED_FIELD = 0.1  # that field while a handle is held
 LINE_LIFT = 20     # a layer's hairline edge is this much lighter than the layer
 MEASURED_LIFT = 18 # a measured result is a flat field this much lighter than the surface it sits on
-HOVER_LIFT = 4     # a node under the pointer is this much lighter, its edge brightened to match
-HOVER_EDGE = 125   # QColor.lighter() factor for that node's edge, percent
+HOVER_LIFT = 4     # a node or a drawn control under the pointer is this much lighter, its edge brightened to match
+HOVER_EDGE = 125   # QColor.lighter() factor for that edge, percent
 FONT_PX = 12       # integer logical pixels, so glyphs sit on the grid under display scaling; see _size
 FONT_WEIGHT = 500  # regular Inter reads thin on dark; 500 fills the stroke without reading bold
 HINTING = 3        # QFont.HintingPreference: full. DirectWrite ignores it; see play()
-VALUE_W = 36       # a slider's mono readout
+VALUE_W = 36       # a slider's mono value field
 GLYPH = 16         # a line icon beside 12px text, px
 GLYPH_STROKE = 2.25  # Tabler ships 2, which reads thin at GLYPH; widened at render, never in the files
+CLOSE_CELLS = 5    # a CloseMark's x, cells across; odd, so its two strokes share one centre cell
+CLOSE_INSET = 4    # that x from the top and the right of its button, cells
+CLOSE_SIDE = CLOSE_CELLS + 2 * CLOSE_INSET   # its button, px: the x and its inset again on the far side, at one cell a px
+CLOSE_INK = 100    # the x at rest: there for a pointer that looks for it, no part of the card's reading
+BADGE_H = 18       # a badge beside a layer's name, px
+BADGE_PAD = 6      # its text from its left and right edge, px
+BADGE_GAP = 10     # between a layer's name, each badge and a corner, px
+BADGE_FILL = 38    # a badge's wash of its own colour, of 255
+BADGE_INK = 200    # its text in that colour, of 255
 ACCENT = QColor(88, 146, 255)   # what is viewed: the loop window, a wire, a checked box
 SERIES = QColor(100, 232, 204)  # a trace's series: v2's plot accent
 GATE = QColor(104, 240, 130)    # the gate, and a detector trace's series: v2's detection green
@@ -63,6 +73,7 @@ RED = QColor(232, 72, 72)       # an input nothing feeds, a wire whose types no 
 GATED = QColor(96, 210, 120, 72)  # GATE as a trace's wash over its gated rows
 LEVEL = QColor(240, 110, 100)   # a trace's handles: v2's band color, softer than RED, which is an error
 EXCLUDED = QColor(0, 0, 0, 72)  # the values a trace's band shuts out
+HELD = {"KB": GATE, "MB": QColor(245, 204, 72), "GB": RED, "TB": RED}   # a size's badge by its unit; one in bytes is a badge's own gray
 DENSITY = ((32, 110, 138), (70, 180, 200), (190, 240, 248))   # a density's ramp above its field: v2's cyan, never HEAT, which is a value not a count
 TYPE_HUES = {"bgr": 30, "gray": 165, "mask": 210, "path": 275}   # a connector's hue per product type; a type not here is hashed
 TYPE_SV = (150, 225)            # every connector's saturation and value, so the hue alone says the type
@@ -89,7 +100,7 @@ def layer(depth: int) -> int:
 @lru_cache(maxsize=None)
 def glyph(name: str, ink: int, size: int = GLYPH, ratio: float = 1.0) -> QPixmap:
     """GLYPHS/<name>.svg drawn in the gray `ink` at `size` px, for a screen of pixel `ratio`. The
-    files keep Tabler's `currentColor` and 2-unit stroke; both are set here."""
+    files keep Tabler's `currentColor`, and a line glyph its 2-unit stroke; both are set here."""
     src = (GLYPHS / f"{name}.svg").read_text(encoding="utf-8")
     src = src.replace("currentColor", qgray(ink).name()).replace('stroke-width="2"', f'stroke-width="{GLYPH_STROKE}"')
     pm = QPixmap(round(size * ratio), round(size * ratio))
@@ -180,6 +191,8 @@ def sheet() -> str:
         border-radius: {RADIUS}px;
         padding: 0px 6px;
     }}
+    QLineEdit[role="value"] {{ background: transparent; padding: 0px; }}
+    QLineEdit[role="value"]:hover, QLineEdit[role="value"]:focus {{ background: {gray(ctl)}; }}
     QListWidget {{ background: {gray(ctl)}; border: none; border-radius: {RADIUS}px; outline: none; padding: 2px; }}
     QListWidget::item {{ padding: 1px 4px; border-radius: {RADIUS}px; }}
     QListWidget::item:hover {{ background: {gray(layer(2))}; }}
@@ -237,6 +250,16 @@ def depth_of(w: QWidget) -> int:
     return 0
 
 
+def paint_hover(p: QPainter, w: QWidget) -> None:
+    """A control's lift under the pointer, over the whole of `w`: the fill and edge of the layer `w`
+    sits on, each lightened. `p` is left antialiased, with that edge's pen and that fill's brush."""
+    base = layer(depth_of(w) + 1)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+    p.setPen(QPen(qgray(base + LINE_LIFT).lighter(HOVER_EDGE), 1))
+    p.setBrush(qgray(base + HOVER_LIFT))
+    p.drawRoundedRect(QRectF(w.rect()).adjusted(0.5, 0.5, -0.5, -0.5), RADIUS, RADIUS)
+
+
 class GlyphButton(QAbstractButton):
     """A square the height of a form row with a line glyph centred, as the canvas's column draws its
     buttons: lifted under the pointer, dim when disabled. Named a second glyph, it is checkable and
@@ -254,12 +277,8 @@ class GlyphButton(QAbstractButton):
     def paintEvent(self, event) -> None:
         del event
         p = QPainter(self)
-        p.setRenderHint(QPainter.Antialiasing, True)
-        base = layer(depth_of(self) + 1)
         if self.underMouse() and self.isEnabled():
-            p.setPen(QPen(qgray(base + LINE_LIFT).lighter(HOVER_EDGE), 1))
-            p.setBrush(qgray(base + HOVER_LIFT))
-            p.drawRoundedRect(QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5), RADIUS, RADIUS)
+            paint_hover(p, self)
         name = self.on if self.isChecked() and self.on else self.off
         ink = INK_2 - 50 if not self.isEnabled() else INK if self.isChecked() or not self.isCheckable() else INK_2
         pm = glyph(name, ink, GLYPH, self.devicePixelRatioF())
@@ -272,9 +291,89 @@ class GlyphButton(QAbstractButton):
         return super().event(e)
 
 
+class CloseMark(QAbstractButton):
+    """An x for a layer's top right corner, where `Layer.tuck_corner` keeps it: dim at rest, in ink
+    under the pointer. The x is whole device pixels with no antialiasing, a cell the whole device
+    pixels in a px, rounded down, set the same count of cells from the button's top as from its
+    right; so it is sharp and on the corner's diagonal at any screen scale, and under CLOSE_CELLS px
+    across on a fractional one, never over.
+
+    It is the one mark drawn this way and at this size, for a settings card's corner alone. Any
+    other glyph on a card is a GlyphButton's, at GLYPH, and a close elsewhere is not built from this."""
+
+    def __init__(self, tip: str = "", parent=None) -> None:
+        super().__init__(parent)
+        self.setFixedSize(CLOSE_SIDE, CLOSE_SIDE)
+        self.setToolTip(tip)
+        self.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+
+    def paintEvent(self, event) -> None:
+        del event
+        p = QPainter(self)
+        to_device = p.deviceTransform()
+        corner, (to_px, _) = to_device.map(QPointF(self.width(), 0)), to_device.inverted()
+        cell = max(1, int(self.devicePixelRatioF()))
+        left = round(corner.x()) - (CLOSE_INSET + CLOSE_CELLS) * cell
+        top = round(corner.y()) + CLOSE_INSET * cell
+        ink = qgray(INK if self.underMouse() else CLOSE_INK)
+        for i in range(CLOSE_CELLS):
+            for j in {i, CLOSE_CELLS - 1 - i}:
+                p.fillRect(to_px.mapRect(QRectF(left + j * cell, top + i * cell, cell, cell)), ink)
+        p.end()
+
+    def event(self, e):
+        if e.type() in (e.Type.HoverEnter, e.Type.HoverLeave):
+            self.update()
+        return super().event(e)
+
+
+class Badge(QWidget):
+    """A figure beside a layer's name: mono text in one colour on a wash of it. It takes no room
+    while it has no text."""
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self._text, self._ink = "", qgray(INK_2)
+        self.setFont(mono_font())
+        self.hide()
+
+    def say(self, text: str, ink: QColor | None = None, tip: str = "") -> None:
+        """Shows `text` in `ink`, the readouts' gray with none, with `tip` under the pointer; "" hides it."""
+        self._text, self._ink = text, qgray(INK_2) if ink is None else QColor(ink)
+        self.setToolTip(tip)
+        self.setVisible(bool(text))
+        self.updateGeometry()
+        self.update()
+
+    def text(self) -> str:
+        return self._text
+
+    def sizeHint(self) -> QSize:
+        return QSize(self.fontMetrics().horizontalAdvance(self._text) + 2 * BADGE_PAD, BADGE_H)
+
+    def minimumSizeHint(self) -> QSize:
+        return self.sizeHint()
+
+    def paintEvent(self, event) -> None:
+        del event
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing, True)
+        fill, ink = QColor(self._ink), QColor(self._ink)
+        fill.setAlpha(BADGE_FILL)
+        ink.setAlpha(BADGE_INK)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(fill)
+        p.drawRoundedRect(QRectF(self.rect()), RADIUS, RADIUS)
+        p.setPen(ink)
+        p.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, self._text)
+        p.end()
+
+
 class Layer(QFrame):
     """A surface one step lighter than whatever it sits on, named in white if it has a name. A named
-    layer's head is a row: the name left, and whatever `add_corner` gives it at the right."""
+    layer's head is a row: the name left, what `add_badge` gives it straight after the name, and
+    whatever `add_corner` gives it at the right."""
 
     def __init__(self, depth: int, name: str = "", parent=None) -> None:
         super().__init__(parent)
@@ -283,19 +382,44 @@ class Layer(QFrame):
         self.body = QVBoxLayout(self)
         self.body.setContentsMargins(PAD, PAD, PAD, PAD)
         self.body.setSpacing(GAP)
-        self.head = self.head_row = None
+        self.head = self.head_row = self._tucked = None
         if name:
             self.head = QLabel(name[0].upper() + name[1:])
             self.head.setProperty("role", "name")
             self.head_row = QHBoxLayout()
             self.head_row.setContentsMargins(0, 0, 0, 0)
-            self.head_row.setSpacing(GAP)
-            self.head_row.addWidget(self.head, 1)
+            self.head_row.setSpacing(BADGE_GAP)
+            self.head_row.addWidget(self.head)
+            self.head_row.addStretch(1)
+            self._badges = 0
             self.body.addLayout(self.head_row)
             self.body.addSpacing(max(0, HEAD_GAP - GAP))
 
     def add(self, w: QWidget, stretch: int = 0) -> None:
         self.body.addWidget(w, stretch)
+
+    def tuck_corner(self, w: QWidget) -> None:
+        """Keeps `w` in the layer's top right corner, flush with its edges and outside its layout:
+        it takes no room, and a head long enough to reach it runs under it."""
+        self._tucked = w
+        w.setParent(self)
+        w.raise_()
+        self._place_tucked()
+
+    def _place_tucked(self) -> None:
+        self._tucked.move(self.width() - self._tucked.width(), 0)
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        if self._tucked is not None:
+            self._place_tucked()
+
+    def add_badge(self, w: QWidget) -> None:
+        """Puts `w` after the name and the badges already there; the layer must have a name. The
+        head is a badge's height from then on, so one appearing moves nothing under it."""
+        self._badges += 1
+        self.head_row.insertWidget(self._badges, w, 0, Qt.AlignmentFlag.AlignVCenter)
+        self.head.setMinimumHeight(BADGE_H)
 
     def add_corner(self, w: QWidget) -> None:
         """Puts `w` at the right end of the head row; the layer must have a name."""

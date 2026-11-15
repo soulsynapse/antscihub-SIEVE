@@ -9,6 +9,7 @@ panes, unless something is being typed into. A type nobody declared matches ever
 unresolved node or an unfed pass-through wires like any other and the red wire says afterwards
 whether the types fit; only a node's own connectors are refused, a longer cycle is the document's.
 """
+import math
 import zlib
 
 from PySide6.QtCore import QCoreApplication, QEvent, QLineF, QPointF, QRectF, Qt, Signal
@@ -28,7 +29,7 @@ BAND_STUB = 10             # the band dot: a disc this far out from the node's l
                            # trace's handle runs past the plot to its dot; where a band will be wired in
 HIT = 3                    # slack around a flag or a connector, px
 WIRE_W = 1.5
-WIRE_BEND = 24             # the least a wire runs vertically out of a connector before it turns
+WIRE_BEND = 24             # the least a wire runs vertically out of a connector before it turns; the most a pulled wire's half does
 SNAP = 10                  # a dragged wire's loose end lands on a connector within this, view px
 LIT = 2                    # the halo on a connector a dragged wire may land on, px beyond the disc
 DIM = 70                   # alpha of a connector it may not
@@ -90,7 +91,7 @@ class Canvas(QWidget):
         self._pending = None                    # (end, id, input) of a wire grown into space, while the menu
                                                 # it opened is up; the loose end stays drawn at the menu
         self._pull = None                       # (wire, point) of a wire pulled by its body, from the press
-                                                # until the menu it opened closes; drawn bent through the point
+                                                # until the menu it opened closes; drawn cornered at the point
         self._menu = None                       # the Tab menu, while one is open
         self._hot = None                        # the index of the button under the pointer
         self._over = None                       # the wire under the pointer, when no node or connector is
@@ -284,6 +285,18 @@ class Canvas(QWidget):
         k = max(WIRE_BEND, abs(b.y() - a.y()) / 2)
         path = QPainterPath(a)
         path.cubicTo(QPointF(a.x(), a.y() + k), QPointF(b.x(), b.y() - k), b)
+        return path
+
+    @staticmethod
+    def taut_path(pin, held, down, bend=WIRE_BEND):
+        """Half of a pulled wire, from connector `pin` to the point `held`: a vertical tangent at
+        the connector, downward if `down`, and none imposed at `held`, so two halves meet there in
+        a corner. `bend` is the most it runs vertically before it turns; two halves whose bends
+        sum to no more than the gap between their connectors do not cross."""
+        d = held - pin
+        k = min(bend, math.hypot(d.x(), d.y()) / 2)
+        path = QPainterPath(pin)
+        path.cubicTo(QPointF(pin.x(), pin.y() + (k if down else -k)), held, held)
         return path
 
     def path_of(self, w):
@@ -617,10 +630,12 @@ class Canvas(QWidget):
             src, dst = self.doc.node(w.src), self.doc.node(w.dst)
             ok = dst.unresolved or src.unresolved or fits(self.doc, self.tools, w)
             if self._pull is not None and w is self._pull[0]:
-                # bent through the pulled point, an end of each half: the gap the node will fill
+                # cornered at the pulled point, an end of each half: the gap the node will fill
                 p.setPen(QPen(qgray(theme.HEAD), WIRE_W))
-                p.drawPath(self.wire_path(self.pin_out(src), self._pull[1]))
-                p.drawPath(self.wire_path(self._pull[1], self.pin_in(dst, w.input)))
+                a, b = self.pin_out(src), self.pin_in(dst, w.input)
+                bend = min(WIRE_BEND, abs(b.y() - a.y()) / 2)
+                p.drawPath(self.taut_path(a, self._pull[1], True, bend))
+                p.drawPath(self.taut_path(b, self._pull[1], False, bend))
                 continue
             if w is self._insert or w is self._over:
                 p.setPen(QPen(qgray(theme.HEAD), WIRE_W + 1))
@@ -823,7 +838,7 @@ class Canvas(QWidget):
             self._end_move()
         elif kind == "box":
             shift, base = rest
-            inside = [n.id for n in self.doc.nodes if self._box is not None and self._box.contains(self.box(n))]
+            inside = [n.id for n in self.doc.nodes if self._box is not None and self._box.intersects(self.box(n))]
             self._box = None
             self.select([*base, *(i for i in inside if i not in base)] if shift else inside)
             self.update()

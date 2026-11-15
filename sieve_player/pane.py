@@ -4,7 +4,7 @@ The document is the store and a card a view over it, as a Houdini parameter pane
 a tool's settings widget must take the stored values and its knobs are the node's whole param set,
 so one that cannot be told them is shown as a defect, never as its own defaults. The pane writes
 params into the document and says what changed; it knows nothing of the runtime, and what it
-shows of a run, the standing line, the window hands it. A node's plot is the window's, under the frame.
+shows of a run, the standing line and a card's badges, the window hands it. A node's plot is the window's, under the frame.
 """
 import os
 
@@ -12,7 +12,7 @@ from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtWidgets import QComboBox, QFileDialog, QFrame, QPushButton, QScrollArea, QVBoxLayout, QWidget
 
 from .document import BAKED, LIVE, VIDEO_OUTPUT, VIDEO_OUTPUTS, VIDEO_TOOL, is_selector, mode_of, paths, video_output
-from .theme import CONTROL_W, GAP, PAD, WIDE_W, Form, Layer, readout
+from .theme import CONTROL_W, GAP, HELD, PAD, WIDE_W, Badge, CloseMark, Form, Layer, readout
 
 VIDEO_FILTER = "Video (*.mp4 *.MP4 *.avi *.mov *.mkv *.mts *.MTS);;All (*)"
 
@@ -95,7 +95,8 @@ class Video(QWidget):
 
 class BakeBlock(QWidget):
     """The block under a tool with a `bake` facet: the node's mode, the button that asks the window
-    for a bake and cancels one running, and the line that says how far it is or why it stopped."""
+    for a bake and cancels one running, the switch between serving the bake and going live, and the
+    line that says how far it is or why it stopped."""
     asked = Signal()
     cancelled = Signal()
     toggled = Signal()      # the switch between serving the bake and going live
@@ -134,14 +135,15 @@ class BakeBlock(QWidget):
 
 class Pane(QWidget):
     """`tools` is the catalogue, name to module. `select(nid)` shows that node's surface, None
-    shows nothing. `video` is the video node's widget, `widget(nid)` a tool node's settings widget,
-    Its size hint is the shown card's
-    height, so a host that stacks it under the canvas gives it only the room its content needs."""
+    shows nothing, and the x in a card's corner shows nothing and says `closed`; the node is
+    untouched. `video` is the video node's widget, `widget(nid)` a tool node's settings widget.
+    Its size hint is the shown card's height, so a host that stacks it under the canvas gives it only the room its content needs."""
     paramsChanged = Signal(str)   # this node's params in the document changed here
     videoPicked = Signal(str)
     bakeAsked = Signal(str)       # the Bake button under this node
     bakeCancelled = Signal(str)
     modeToggled = Signal(str)     # the switch under this node: serve its bake, or go live
+    closed = Signal()             # the x in the shown card's corner; the pane already shows nothing
 
     def __init__(self, tools, parent=None):
         super().__init__(parent)
@@ -149,7 +151,8 @@ class Pane(QWidget):
         self.doc = None
         self.cards, self.widgets, self.notes = {}, {}, {}
         self.standings = {}   # tool node -> the line under its settings, see set_standing
-        self.sizes = {}       # tool node -> the line that says what its result would take on disk, see set_size
+        self.sizes = {}       # node -> the badge after its name that says what its result would take on disk, see set_size
+        self.takes = {}       # node -> the badge after that one that says how long its work would take, see set_takes
         self.bakes = {}       # node whose tool bakes -> its BakeBlock
         self.video = None
         self.current = None
@@ -194,6 +197,7 @@ class Pane(QWidget):
         self.notes.pop(nid, None)
         self.standings.pop(nid, None)
         self.sizes.pop(nid, None)
+        self.takes.pop(nid, None)
         self.bakes.pop(nid, None)
         if self.video is not None and self.video.parent() is card:
             self.video = None
@@ -204,6 +208,12 @@ class Pane(QWidget):
 
     def _build(self, node):
         card = Layer(1, node.id)
+        self.sizes[node.id], self.takes[node.id] = Badge(), Badge()
+        card.add_badge(self.sizes[node.id])
+        card.add_badge(self.takes[node.id])
+        close = CloseMark("Close these settings; the node stays")
+        close.clicked.connect(self._close)
+        card.tuck_corner(close)
         if node.tool == VIDEO_TOOL:
             self.video = Video()
             self.video.set_params(self.doc)
@@ -232,9 +242,6 @@ class Pane(QWidget):
                 self.standings[node.id] = readout()
                 self.standings[node.id].hide()
                 card.add(self.standings[node.id])
-                self.sizes[node.id] = readout()
-                self.sizes[node.id].hide()
-                card.add(self.sizes[node.id])
                 if hasattr(w, "set_source"):
                     w.set_source(self._src, self._fps)
                 if is_selector(tool) or paths(tool):
@@ -267,6 +274,10 @@ class Pane(QWidget):
         for i, card in self.cards.items():
             card.setVisible(i == self.current)
         self.updateGeometry()
+
+    def _close(self):
+        self.select(None)
+        self.closed.emit()
 
     def sizeHint(self):
         """As tall as the shown card at the pane's width; the host caps it and the scroll area takes
@@ -322,13 +333,20 @@ class Pane(QWidget):
             lab.setText(text)
             lab.setVisible(bool(text))
 
-    def set_size(self, nid, text):
-        """The line under `nid`'s settings that says what its result would take on disk, from the
-        window; "" hides it."""
-        lab = self.sizes.get(nid)
-        if lab is not None:
-            lab.setText(text)
-            lab.setVisible(bool(text))
+    def set_size(self, nid, text, unit="", tip=""):
+        """The badge after `nid`'s name that says what its result would take on disk, from the
+        window: `text` in the colour theme.HELD has for `unit`, one of store.UNITS, and `tip` the
+        sentence under the pointer; a `text` of "" hides it."""
+        badge = self.sizes.get(nid)
+        if badge is not None:
+            badge.say(text, HELD.get(unit), tip)
+
+    def set_takes(self, nid, text, tip=""):
+        """The badge after `nid`'s size that says how long its work would take, from the window;
+        "" hides it."""
+        badge = self.takes.get(nid)
+        if badge is not None:
+            badge.say(text, tip=tip)
 
     def set_source(self, path, fps):
         """The video every settings widget with a `set_source` writes from; None when nothing is loaded."""

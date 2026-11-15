@@ -49,9 +49,7 @@ class PaceControl(QAbstractButton):
         p.setRenderHint(QPainter.Antialiasing, True)
         base = theme.layer(theme.depth_of(self) + 1)
         if self.hint and self.underMouse() and self.isEnabled():
-            p.setPen(QPen(theme.qgray(base + theme.LINE_LIFT).lighter(theme.HOVER_EDGE), 1))
-            p.setBrush(theme.qgray(base + theme.HOVER_LIFT))
-            p.drawRoundedRect(QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5), theme.RADIUS, theme.RADIUS)
+            theme.paint_hover(p, self)
         ratio, h, top = self.devicePixelRatioF(), self.height(), (self.height() - theme.GLYPH) / 2
         dim = theme.INK_2 - 50
         x = self.EDGE

@@ -98,7 +98,7 @@ def kinds():
 
 @dataclass(frozen=True)
 class Store:
-    """One folder bakes land in. Reading it, `status`, `held`, `strays`, `free`, `sidecar`,
+    """One folder bakes land in. Reading it, `held`, `strays`, `disk`, `free`, `sidecar`,
     `absent`, `missing` and `open_bake`, touches nothing on disk; `probe` and `write_sidecar` write,
     and a writer opened at `place` lands its file there."""
     folder: str
@@ -139,24 +139,24 @@ class Store:
             return 0, 0
         return len(parts), sum(parts)
 
-    def free(self):
-        """The bytes free on the disk the folder is, or would be, on: asked of the nearest folder
-        up from it that exists; 0 when none can be asked."""
+    def disk(self):
+        """(bytes in all, bytes free) of the disk the folder is, or would be, on: asked of the
+        nearest folder up from it that exists; (0, 0) when none can be asked."""
         path = os.path.abspath(self.folder)
         while not os.path.isdir(path):
             up = os.path.dirname(path)
             if up == path:
-                return 0
+                return 0, 0
             path = up
         try:
-            return shutil.disk_usage(path).free
+            usage = shutil.disk_usage(path)
         except OSError:
-            return 0
+            return 0, 0
+        return usage.total, usage.free
 
-    def status(self):
-        """(bytes held, bytes free): what the player shows of the store. Whether it can be written
-        is `probe()`'s to say, since answering that writes."""
-        return self.held(), self.free()
+    def free(self):
+        """The bytes free on that disk; 0 when it cannot be asked."""
+        return self.disk()[1]
 
     def absent(self, bake):
         """Why `bake`, a node's saved Bake, cannot be read from here, or "" when its file is there."""
@@ -222,10 +222,19 @@ def commit():
     return out.stdout.strip() if out.returncode == 0 else ""
 
 
-def fmt_bytes(n):
-    """`n` bytes as the shortest figure to one decimal in B, KB, MB, GB or TB."""
-    for unit in ("B", "KB", "MB", "GB"):
+UNITS = ("B", "KB", "MB", "GB", "TB")
+
+
+def in_units(n):
+    """(figure, unit): `n` bytes as the shortest figure, to one decimal past B, in the first of UNITS that holds it under 1024, or the last."""
+    for unit in UNITS[:-1]:
         if n < 1024:
-            return f"{n:.0f} {unit}" if unit == "B" else f"{n:.1f} {unit}"
+            break
         n /= 1024
-    return f"{n:.1f} TB"
+    else:
+        unit = UNITS[-1]
+    return (f"{n:.0f}" if unit == "B" else f"{n:.1f}"), unit
+
+
+def fmt_bytes(n):
+    return " ".join(in_units(n))

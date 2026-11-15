@@ -162,7 +162,7 @@ class Plot(QWidget):
     DOT = 3.2    # px: the radius of the dot it ends in
     HEAD_R = 5.0 # px: the playhead's circle
     LINE = 1.6   # px: a line whose rows are fewer than the pixel columns
-    READOUT_ALPHA = 204   # of 255: the field's own gray behind a hover readout's text
+    READOUT_ALPHA = 102   # of 255: the field's own gray behind a hover readout's text
 
     def __init__(self, parent=None):
         super().__init__(parent)

@@ -387,7 +387,11 @@ class Graph:
             yield
 
     def close(self):
+        """Closes every served file's reader and empties the memo, so a closed Graph something still
+        refers to holds no result; the plate's decoder is its opener's to close. For the owner once
+        the worker has stopped."""
         self.readers.close()
+        self.memo.empty()
 
     def standing(self, nid):
         """One line on why `nid` does not run, else what its run said under its current key, else

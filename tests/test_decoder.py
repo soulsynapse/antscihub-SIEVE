@@ -90,6 +90,7 @@ def test_scrub_leaves_the_walk_cursor_alone(video):
         d.read(10_000)
     assert d.count == 300 and d.read(0)[0, 0, 0] == 0 and d.count == 300   # a read after the end seeks; it never steps the dead capture and reads its failure as row -1
     d.close()
+    assert d.cache_bytes == 0 and d.cached(0) is None          # closed, it holds no frame
 
 
 def test_a_stream_ending_short_of_the_container_is_said_once_on_stderr(video, tmp_path, capsys):

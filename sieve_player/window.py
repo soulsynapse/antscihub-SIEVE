@@ -17,7 +17,7 @@ import traceback
 
 import cv2
 import numpy as np
-from PySide6.QtCore import QFileSystemWatcher, QProcess, QProcessEnvironment, QRectF, Qt, QTimer, Signal
+from PySide6.QtCore import QFileSystemWatcher, QObject, QProcess, QProcessEnvironment, QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import QImage, QKeySequence, QPainter, QPen, QPixmap, QShortcut
 from PySide6.QtWidgets import QFileDialog, QHBoxLayout, QMainWindow, QMenu, QMessageBox, QProgressBar, QPushButton, QSizePolicy, QVBoxLayout, QWidget
 
@@ -388,6 +388,7 @@ class PlayerWindow(QMainWindow):
             modules = catalogue(source)[0]
         self.doc = self._written = None           # the document, and its text as last opened, made or saved
         self.decoder = self.graph = self.stream = self.worker = None
+        self._wired = []                          # the open video's worker's connections
         self.ledger = self.lateness = self.machine = None     # the open video's stream kept over time, and the GUI thread's and the machine's samplers into it
         self.pace = None                          # the open video's walks as the header's figure reads them
         self.dump = None                          # the stream's file, while DUMP_ENV names one
@@ -995,8 +996,8 @@ class PlayerWindow(QMainWindow):
                              ("failed", self._failed), ("clipWalked", self._clip_walked), ("clipReady", self._clip_ready),
                              ("clipRefused", self._clip_refused), ("walkRefused", ct.progress.setText),
                              ("shortened", self._shortened)):
-            getattr(self.worker, signal).connect(self._timed("slot", signal, slot))
-        self.worker.finished.connect(lambda w=self.worker: self._worker_ended(w))
+            self._wired.append(getattr(self.worker, signal).connect(self._timed("slot", signal, self._while_open(self.worker, slot))))
+        self._wired.append(self.worker.finished.connect(lambda w=self.worker: self._worker_ended(w)))
         self.header.setEnabled(True)
         self.timeline.strip.set_count(self.count, self.fps)
         ct.set_count(self.count, self.fps)
@@ -1020,6 +1021,14 @@ class PlayerWindow(QMainWindow):
         self.ledger.sample(name, value, t)
         if self.dump is not None:
             self.dump.sample(name, value, t)
+
+    def _while_open(self, worker, slot):
+        """`slot` as a callable that does nothing once `worker` is not the open video's: a signal
+        queued before its video was unloaded is delivered after."""
+        def while_open(*args):
+            if self.worker is worker:
+                slot(*args)
+        return while_open
 
     def _timed(self, kind, name, fn):
         """`fn` as a callable whose every call is a span of the GUI thread's in the stream of the
@@ -1051,6 +1060,9 @@ class PlayerWindow(QMainWindow):
         self.header.figure.set_figure(None)
         self.graph.close()
         self.decoder.close()
+        for made in self._wired:    # a connection holds its slot, and the slots hold the worker and through it the graph
+            QObject.disconnect(made)
+        self._wired = []
         self.decoder = self.graph = self.stream = self.worker = None
         self.results, self.clip_results, self._clip_asked = {}, {}, False
         self.header.set_walking(False)

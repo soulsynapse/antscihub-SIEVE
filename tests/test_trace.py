@@ -160,5 +160,8 @@ def test_the_window_attaches_a_ledger_that_holds_the_gui_threads_slots_and_paint
     view = win.ledger.view()
     assert {"slot walked", "slot seriesReady", "paint plot"} <= {name for b in view.buckets for name in b.turns}
     assert view.walks[-1].lane == "window" and view.walks[-1].plan["walk"] == "gray"
+    graph, decoder = win.graph, win.decoder
+    assert graph.memo.bytes and decoder.cache_bytes
     win.close()
     assert win.ledger is None
+    assert not graph.memo.bytes and not decoder.cache_bytes     # an unloaded video holds no result and no frame, whoever still refers to it

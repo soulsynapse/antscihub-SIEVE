@@ -319,6 +319,9 @@ class Decoder:
                 self.on_evict(r, n)
 
     def close(self):
+        """Releases the captures and drops every cached frame, so a closed Decoder something still
+        refers to holds none of the file."""
         for cur in self._cursors.values():
             if cur is not None:
                 cur.cap.release()
+        self.empty()

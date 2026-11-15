@@ -109,11 +109,12 @@ def test_a_stream_ending_short_of_the_container_is_said_once_on_stderr(video, tm
     d.close()
 
 
-def test_a_row_by_a_seek_is_the_row_a_walk_reads_where_the_plugin_says_another(video, tmp_path):
+def test_a_row_by_a_seek_is_the_row_a_walk_reads_where_the_plugin_says_another(video, tmp_path, monkeypatch):
     """A transport stream with B-frames: no seek lands before its second keyframe, and the plugin
     says of one to row 0 that it did. Then a file with twenty frames gone and their times kept, where
     a frame's time at the container's rate is another row than its place among the frames: a seek
-    is numbered by that place, and the rows are the walk's."""
+    is numbered by that place, and the rows are the walk's. With a store set the table is kept
+    there under the file's print, and is the table a process that has read no packet takes."""
     import shutil
     import subprocess
     ffmpeg = shutil.which("ffmpeg") or pytest.skip("no ffmpeg to write a transport stream")
@@ -133,6 +134,8 @@ def test_a_row_by_a_seek_is_the_row_a_walk_reads_where_the_plugin_says_another(v
     gap = tmp_path / "gap.mp4"
     subprocess.check_call([ffmpeg, "-y", "-loglevel", "error", "-i", str(video), "-frames:v", "120", "-pix_fmt", "yuv420p",
                           "-vf", r"select=not(between(n\,20\,39))", "-fps_mode", "passthrough", "-c:v", "libx264", "-g", "30", str(gap)])
+    import sieve_player.decoder as decoder
+    monkeypatch.setattr(decoder, "STORE", lambda: str(tmp_path / "store"))
     walk = Decoder(gap)
     in_order = [walk.read(r) for r in range(100)]
     walk.close()
@@ -140,6 +143,12 @@ def test_a_row_by_a_seek_is_the_row_a_walk_reads_where_the_plugin_says_another(v
     for r in (90, 70, 45, 21, 60, 5):
         assert np.array_equal(d.read(r), in_order[r]), r
     assert d.seeks == 6 and not d._counts_only
+    kept = tmp_path / "store" / decoder.TIMES_DIR / f"{d.footage_print}.npy"
+    assert np.array_equal(np.load(kept), d._times) and len(d._times) == 120
+    np.save(kept, d._times[:7])
+    decoder._times.clear()
+    assert len(decoder.frame_times(gap)) == 7       # the kept table, and no reading of the packets
+    decoder._times.clear()
     d.close()
 
 

@@ -66,8 +66,10 @@ frames sharing one where the container's rate rounds them together.
 
 ## What the Decoder does with it
 
-`decoder.frame_times` reads the table, once a file and process, at a Decoder's first seek. The frame
-a seek reads is numbered by its time's place in it. With the table held, a stepped frame's time is
+`decoder.frame_times` reads the table and keeps it in the store, `frame-times/<footage print>.npy`,
+so a file's packets are read once and a later launch loads the table. The window begins the reading
+on a thread of its own as a video opens; a seek that comes before it is done waits on it and begins
+no second. A Decoder takes the table at its first seek. The frame a seek reads is numbered by its time's place in it. With the table held, a stepped frame's time is
 compared with the time at its count; one that differs, or a landing whose time is no packet's, or a
 file the plugin hands out no packets of, ends the numbering of seeks on that file: it is said once
 on stderr, the cache is emptied, and every row is stepped to from row 0, as c4788dcf did for any
@@ -80,11 +82,20 @@ row's packet's, and seeks stayed numbered.
 
 ## What it costs
 
-The table's read above, at a Decoder's first seek, on the worker's thread under the lock a read
-holds: about a second a gigabyte here with the file cached. A transport stream has no index of its
-packets and is read whole for it; from a disk that has not the file cached that is the disk's time
-for the file. A second Decoder on the file in the same process, a served reader's or a rebuilt
-graph's, reads none.
+The table's read above, once a file: about a second a gigabyte here with the file cached. The
+packets themselves are read, so from a disk that has not the file cached it is the disk's time for
+the file. By `experiments/2026-11-15-what-a-kept-table-of-frame-times-costs.py`, the reading and
+then the kept table with the process's own copy dropped:
+
+| file | off the packets, s | from the kept table, ms | the table, bytes |
+| --- | --- | --- | --- |
+| `00000.MTS` | 1.24 | 0.7 | 304928 |
+| `GX010047c2_02_17_26.MP4` | 2.34 | 0.6 | 90752 |
+
+The kept table's figure has the footage print already taken in the process; a launch takes it anew,
+two megabytes of the file read and digested. What a user waits is a first seek made before the
+reading begun at the open is done, on a file no table is kept of; the wait is on the worker's
+thread, under the lock a read holds, and the window draws meanwhile.
 
 By `experiments/2026-11-15-what-timing-every-step-costs.py`, 300 rows in order on one capture, the
 read and the `CAP_PROP_POS_MSEC` after it timed apart:
@@ -103,9 +114,14 @@ The place in the table, a binary search, is not in that figure.
   from row 0. None was tried.
 - What a node computed from a row a seek misnumbered, before a file was found out, stays in the
   memo under that row. The Decoder empties its own cache and reaches no other store.
-- The table is held in the process and written nowhere, so each launch, and a bare walk's process,
-  reads it again.
+- A table is kept under the footage print, which reads a file's size and its first and last
+  megabyte: of two files as long that differ only between those, the second takes the first's
+  table, its stepped frames' times differ from it, and it falls to stepping from row 0.
+- A kept table outlives its file and nothing removes it; the store's control counts its bytes with
+  the rest.
+- A bare walk's process and a tool run alone set no store and keep no table.
 
 Not run: a file of varying rate from a phone or a screen recorder, where the times are the device's
-and not ffmpeg's `select`; a file from a cold disk; a file the plugin hands out no packets of; the
+and not ffmpeg's `select`; a file from a cold disk; the reading begun at an open against a walk
+begun beside it, both reading one disk; a file the plugin hands out no packets of; the
 player on screen over either gap file.

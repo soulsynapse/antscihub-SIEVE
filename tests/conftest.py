@@ -14,6 +14,15 @@ def in_store(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def nothing_read_ahead(monkeypatch):
+    """No window a test opens a video in leaves a thread reading the file's packets: what the store
+    holds, and whether a clip can be removed, would be that thread's to decide. A seek reads them."""
+    from sieve_player import decoder
+    monkeypatch.setattr(decoder, "read_frame_times_ahead", lambda path: None)
+    monkeypatch.setattr(decoder, "STORE", None)
+
+
+@pytest.fixture(autouse=True)
 def unasked(monkeypatch):
     """No player window a test leaves changed waits on a dialog: the answer is "discard" unless the
     test sets its own."""

@@ -11,6 +11,7 @@ every row is stepped to from row 0."""
 import hashlib
 import os
 import sys
+import tempfile
 import threading
 import time
 from collections import OrderedDict
@@ -92,27 +93,77 @@ def probe(src):
     return _probe(src, os.stat(src).st_mtime)
 
 
+STORE = None       # the window sets it: a function answering the store's folder, where frame_times keeps each file's; None keeps none
+TIMES_DIR = "frame-times"   # the folder of the store they lie in, each `<footage print>.npy`
 _times = {}        # path -> (the file's size and mtime when read, its frame times)
+_times_lock = threading.Lock()      # one reading at a time: a seek waits on a reading begun ahead of it and starts no second
+
+
+def _times_file(path):
+    """Where the frame times of the file at `path` are kept, or None with no store set."""
+    return None if STORE is None else os.path.join(STORE(), TIMES_DIR, f"{footage_print_by_stamp(path)}.npy")
+
+
+def _kept_times(file):
+    """The frame times `file` holds, or None with no such file or one that is not a table of them."""
+    try:
+        out = np.load(file, allow_pickle=False)
+    except (OSError, ValueError, EOFError):
+        return None
+    return out if out.ndim == 1 and out.dtype == np.float64 and bool(np.all(np.diff(out) >= 0)) else None
+
+
+def _keep_times(file, times):
+    """Writes `times` at `file`, whole or not at all; a store that cannot be written keeps none."""
+    part = None
+    try:
+        os.makedirs(os.path.dirname(file), exist_ok=True)
+        fd, part = tempfile.mkstemp(suffix=".tmp", dir=os.path.dirname(file))
+        with os.fdopen(fd, "wb") as f:
+            np.save(f, times)
+        os.replace(part, file)
+    except OSError:
+        if part is not None and os.path.exists(part):
+            os.remove(part)
 
 
 def frame_times(path):
     """The time in ms of every frame of the video stream of `path`, ascending, so the time at r is
     row r's: each packet's CAP_PROP_POS_MSEC, read with no frame decoded, which is what the same
-    property says after that frame is read. The whole file is read for it where the container
-    holds no index of its packets; read again only when the file's size or mtime moved. Empty
-    where the plugin hands out no packets."""
+    property says after that frame is read. The whole file is read for it, once: the table is kept
+    in the store under the file's footage print where STORE is set, and in this process while the
+    file's size and mtime stand. Empty where the plugin hands out no packets. Any thread; OSError
+    with no file."""
     path = str(path)
     st = os.stat(path)
     stamp = st.st_size, st.st_mtime_ns
-    if _times.get(path, (None,))[0] != stamp:
-        raw, out = cv2.VideoCapture(path, cv2.CAP_FFMPEG, [cv2.CAP_PROP_FORMAT, -1]), []
+    with _times_lock:
+        if _times.get(path, (None,))[0] != stamp:
+            file = _times_file(path)
+            times = None if file is None else _kept_times(file)
+            if times is None:
+                raw, out = cv2.VideoCapture(path, cv2.CAP_FFMPEG, [cv2.CAP_PROP_FORMAT, -1]), []
+                try:
+                    while raw.grab():
+                        out.append(raw.get(cv2.CAP_PROP_POS_MSEC))
+                finally:
+                    raw.release()
+                times = np.sort(np.asarray(out, np.float64))
+                if file is not None and len(times):
+                    _keep_times(file, times)
+            _times[path] = (stamp, times)
+        return _times[path][1]
+
+
+def read_frame_times_ahead(path):
+    """Reads `frame_times(path)` on a thread of its own and does not wait, so a first seek finds
+    the table read; a file that cannot be read is left for whoever reads it next to say."""
+    def read():
         try:
-            while raw.grab():
-                out.append(raw.get(cv2.CAP_PROP_POS_MSEC))
-        finally:
-            raw.release()
-        _times[path] = (stamp, np.sort(np.asarray(out, np.float64)))
-    return _times[path][1]
+            frame_times(path)
+        except OSError:
+            pass
+    threading.Thread(target=read, name="frame-times", daemon=True).start()
 
 
 class _Cursor:
@@ -203,7 +254,7 @@ class Decoder:
         self.step_ms = self.seek_ms = None      # running means of what a step and a seek cost on this file
         self.on_evict = None                    # (row, bytes) for each frame the cache drops, after the lock
         self._inexact_said = False
-        self._times = None                      # frame_times of the file, read at the first seek
+        self._times = None                      # frame_times of the file, taken at the first seek
         self._near = 0.0                        # how far a frame's time may lie from a packet's and be that packet's, ms
         self._earliest_landing = 0              # the row a seek to row 0 read, once one has read past row 0
         self._counts_only = False               # the packets' times do not give the frames': no seek is numbered on this file

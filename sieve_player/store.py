@@ -98,7 +98,7 @@ def kinds():
 
 @dataclass(frozen=True)
 class Store:
-    """One folder bakes land in. Reading it, `status`, `held`, `strays`, `free`, `sidecar`,
+    """One folder bakes land in. Reading it, `status`, `held`, `strays`, `disk`, `free`, `sidecar`,
     `absent`, `missing` and `open_bake`, touches nothing on disk; `probe` and `write_sidecar` write,
     and a writer opened at `place` lands its file there."""
     folder: str
@@ -139,19 +139,24 @@ class Store:
             return 0, 0
         return len(parts), sum(parts)
 
-    def free(self):
-        """The bytes free on the disk the folder is, or would be, on: asked of the nearest folder
-        up from it that exists; 0 when none can be asked."""
+    def disk(self):
+        """(bytes in all, bytes free) of the disk the folder is, or would be, on: asked of the
+        nearest folder up from it that exists; (0, 0) when none can be asked."""
         path = os.path.abspath(self.folder)
         while not os.path.isdir(path):
             up = os.path.dirname(path)
             if up == path:
-                return 0
+                return 0, 0
             path = up
         try:
-            return shutil.disk_usage(path).free
+            usage = shutil.disk_usage(path)
         except OSError:
-            return 0
+            return 0, 0
+        return usage.total, usage.free
+
+    def free(self):
+        """The bytes free on that disk; 0 when it cannot be asked."""
+        return self.disk()[1]
 
     def status(self):
         """(bytes held, bytes free): what the player shows of the store. Whether it can be written

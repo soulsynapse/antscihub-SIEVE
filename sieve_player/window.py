@@ -30,6 +30,7 @@ from .ledger import Ledger
 from .machine import Watch
 from .pace import Pace, clock
 from .pacecontrol import PaceControl
+from .storecontrol import StoreControl
 from .pane import Pane
 from .registry import CATEGORIES, Entry, category, description, signature
 from .stream import ASKED, EDIT, HAND, Emitter
@@ -317,18 +318,16 @@ def catalogue(items):
 
 
 class Header(QWidget):
-    """The row across the top: the store's folder, what it holds and what the disk has free with the
-    button that changes it, at the left; what the clip walk has to say, a bare walk's bar, the walk's
-    figure, the button that walks the clip bare (bare.py) and the clip walk's, at the right."""
+    """The row across the top, all at its right: what the clip walk or a refused store has to say, a
+    bare walk's bar, the store, whose press changes it, the walk's figure, the button that walks the
+    clip bare (bare.py) and the clip walk's."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
         lay = QHBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(GAP)
-        self.store_note = readout(mono=True, wrap=False)
-        self.store = QPushButton("Store…")
-        self.store.setFixedSize(80, ROW_H)
+        self.store = StoreControl("click to choose the store's folder")
         self.note = readout(mono=True, wrap=False)
         self.note.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self.figure = PaceControl("click for the monitor")
@@ -342,25 +341,20 @@ class Header(QWidget):
         self.bar.setFixedSize(160, ROW_H)
         self.bar.setTextVisible(False)
         self.bar.hide()
-        lay.addWidget(self.store)
-        lay.addWidget(self.store_note)
         lay.addStretch(1)
         lay.addWidget(self.note)
         lay.addWidget(self.bar)
+        lay.addWidget(self.store)
         lay.addWidget(self.figure)
         lay.addWidget(self.bare)
         lay.addWidget(self.walk)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
     def show_store(self, st, refused=""):
-        """`st`, the Store the player writes to, as its line reads it; `refused` is why a choice was not taken."""
-        held, free = st.status()
-        n, stray = st.strays()
-        line = f"{st.folder}  holds {store.fmt_bytes(held)}, {store.fmt_bytes(free)} free"
-        if n:
-            line += f"; {n} part file{'s' if n > 1 else ''} of a bake that died with its process, {store.fmt_bytes(stray)}"
-        self.store_note.setText(f"{refused}; {line}" if refused else line)
-        self.store_note.setToolTip(st.folder)
+        """`st`, the Store the player writes to, read now; `refused` is why a choice was not taken, said in the note."""
+        self.store.set_store(st)
+        if refused:
+            self.note.setText(refused)
 
     def set_walking(self, on):
         self.walk.setText("Stop walk" if on else "Walk clip")

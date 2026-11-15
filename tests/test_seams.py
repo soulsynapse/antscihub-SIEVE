@@ -37,6 +37,7 @@ MAY_IMPORT = {
     "machine": set(),                             # psutil and the system's counters; the player is not imported
     "pace": set(),                                # the worker's signals and a clock; the control and the monitor's header both read it
     "pacecontrol": {"pace", "theme"},             # the control the player's header and the monitor's both draw; it is neither's
+    "storecontrol": {"store", "theme"},           # the store as the header draws it; the window hands it the Store
 }
 
 

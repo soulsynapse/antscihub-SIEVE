@@ -13,9 +13,9 @@ from . import theme
 from .theme import GAP, INK_ALPHA, ROW_H, Layer, desc_label, gray, mono_font, qgray, readout
 
 
-def timecode(row, fps):
-    s = row / fps if fps else 0.0
-    return f"{int(s // 60):02d}:{s % 60:06.3f}"
+def timecode(row, fps, places=3):
+    s = round(row / fps, places) if fps else 0.0
+    return f"{int(s // 60):02d}:{s % 60:0{places + 3}.{places}f}"
 
 
 class Strip(QWidget):
@@ -248,8 +248,7 @@ class Strip(QWidget):
         row = self._row(e.position().x())
         text = f"{row}  {timecode(row, self.fps)}"
         if self._draft:
-            s, n = self._draft
-            text = f"[{s} .. {s + n})  {timecode(s, self.fps)} + {n / self.fps:.2f}s"
+            text = timecode(self._draft[0], self.fps, places=1)
         self._bubble.setText(text)
         self._bubble.adjustSize()
         g = self.mapToGlobal(QPoint(int(e.position().x()), 0))

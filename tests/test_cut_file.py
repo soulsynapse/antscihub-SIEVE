@@ -215,6 +215,10 @@ def test_a_cut_for_a_moved_shape_lands_while_two_nodes_read_their_clips_of_the_f
         now = g.entry("region").file[0]
         assert now not in was.values() and now in g.cut_files_in_use() and g.readers.held(was["other"]) is not None
         assert {p: open(p, "rb").read() for p in was.values()} == said
+        doc.add_node("absent", id="between")
+        doc.connect("video", "between"), doc.connect("between", "other")
+        g.sync()
+        assert g.entry("other").file is None and was["other"] in g.cut_files_named()     # named where it is not served
     finally:
         g.close()
         g.decoder.close()

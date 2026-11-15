@@ -24,6 +24,7 @@ import weakref
 import cv2
 
 from sieve_player import store
+from sieve_player.decoder import footage_print_by_stamp as footage_of
 
 QUALITIES = ("lossless", "standard")
 _X264 = ("-c:v", "libx264", "-preset", "medium", "-fps_mode", "passthrough", "-an")
@@ -141,20 +142,6 @@ def delete(paths):
         except OSError as e:
             kept.append((path, e.strerror or str(e)))
     return kept
-
-
-_prints = {}        # path -> (what the file was when read, its footage print)
-
-
-def footage_of(path):
-    """decoder.footage_print of the file at `path`, read again only when its size or mtime moved; OSError with no file."""
-    from sieve_player.decoder import footage_print
-
-    st = os.stat(path)
-    stamp = st.st_size, st.st_mtime_ns
-    if _prints.get(path, (None,))[0] != stamp:
-        _prints[path] = (stamp, footage_print(path))
-    return _prints[path][1]
 
 
 def command(video, pieces, quality=QUALITIES[1], progress=None):

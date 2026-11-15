@@ -6,7 +6,6 @@ mid-computation works from one consistent plan and the next computation sees the
 are read from the document's nodes; the runtime holds none of its own. A node is computed as None
 when nothing reaches it: no wire, an unresolved tool, or a wire whose types do not fit.
 """
-import os
 import threading
 from collections import OrderedDict
 from contextlib import ExitStack, contextmanager
@@ -14,7 +13,7 @@ from contextlib import ExitStack, contextmanager
 import numpy as np
 
 from . import density
-from .decoder import Decoder, EndOfStream, footage_print
+from .decoder import Decoder, EndOfStream, footage_print_by_stamp
 from .document import INPUT, VIDEO_TOOL, video_output
 from .plan import _key, base_key, facts, plan
 from .stream import Emitter
@@ -269,8 +268,7 @@ class Graph:
         self.tools = tools if hasattr(tools, "get") else {t.NAME: t for t in tools}
         self.readers = Readers()
         self._lately = []                   # the served files' Decoders in the order they were last read, latest first
-        self._prints = {}                   # served path -> (its size and mtime when read, its footage print)
-        self._in_use = {}                   # cutting node -> the files its tool's cut_files answered at the last sync
+        self._in_use = set()                # the files the cutting nodes' tools named at the last sync, see cut_files_named
         self.memo = Memo(memo_bytes)
         self._lock = threading.Lock()
         self.halt = False                   # set by whoever is stopping the worker: every Frames read from then on raises Cancelled
@@ -302,32 +300,36 @@ class Graph:
     def cut_file(self, nid, up):
         """(path, footage print) of the file `nid`'s tool says holds its cut of the footage it
         reads, asked now: `up` is that footage as (path, print), None for the open video. None for
-        a tool that raises or answers with none, and a file that cannot be read. A tool with the
-        cut_files facet is asked that too, for `cut_files_in_use`."""
+        a tool that raises or answers with none, and a file that cannot be read."""
         node = self.doc.node(nid)
         tool, of = self.tools[node.tool], up or (self.decoder.path, self.decoder.footage_print)
         try:
-            if hasattr(tool, "cut_files"):
-                self._in_use[nid] = [str(p) for p in tool.cut_files(*of, node.params)]
-        except Exception:       # as below
-            pass
-        try:
             path = tool.cut_file(*of, node.params)
-            if path is None:
-                return None
-            path = str(path)
-            st = os.stat(path)
-            if self._prints.get(path, (None,))[0] != (st.st_size, st.st_mtime_ns):
-                self._prints[path] = ((st.st_size, st.st_mtime_ns), footage_print(path))
+            return None if path is None else (str(path), footage_print_by_stamp(path))
         except Exception:       # a tool's rule is user code; one that fails serves nothing
             return None
-        return path, self._prints[path][1]
+
+    def _named(self, entries):
+        """Every file a node of `entries` whose tool has the cut_files facet names of the footage
+        it reads, whether or not the plan would serve one there; a tool that raises names none."""
+        out = set()
+        for nid, e in entries.items():
+            if hasattr(e.tool, "cut_files"):
+                try:
+                    out |= {str(p) for p in e.tool.cut_files(*self._footage(entries, nid), e.params)}
+                except Exception:
+                    pass
+        return out
+
+    def cut_files_named(self):
+        """Every file a cutting node of the last sync's plan would serve under some choice of its
+        params were it served, as its tool's cut_files answered of the footage `footage` says it
+        reads. The thread that syncs."""
+        return set(self._in_use)
 
     def cut_files_in_use(self):
-        """Every file a cutting node of the last sync's plan would serve under some choice of its
-        params, as its tool's cut_files answered, and every served file still open here. The
-        thread that syncs."""
-        return {p for paths in self._in_use.values() for p in paths} | self.readers.open_paths()
+        """`cut_files_named` and every served file still open here. The thread that syncs."""
+        return self._in_use | self.readers.open_paths()
 
     def sync(self):
         """Re-read the document: the plan, pure in the document, the tools and what the cutting
@@ -336,8 +338,8 @@ class Graph:
         output = video_output(self.doc)
         self.decoder.output = output        # a change empties its cache; a read in flight under the old plan is cancelled
         self._base = base_key(self.decoder.footage_print, output)
-        self._in_use = {}
         p = plan(self.doc, self.tools, self._base, self.cut_file)
+        self._in_use = self._named(p.entries)
         self.readers.keep({e.file[0] for e in p.entries.values() if e.file is not None})
         for d in self.readers.decoders():
             d.output = output
@@ -384,12 +386,16 @@ class Graph:
         else the open video. GUI-safe."""
         with self._lock:
             plan = self._plan
-        e = plan.get(nid)
+        return self._footage(plan, nid)[0]
+
+    def _footage(self, entries, nid):
+        """`footage` under the plan's `entries`, as (path, footage print)."""
+        e = entries.get(nid)
         while e is not None and e.piece is not None:
-            e = plan[e.piece]
+            e = entries[e.piece]
             if e.file is not None:
-                return e.file[0]
-        return self.decoder.path
+                return e.file
+        return self.decoder.path, self.decoder.footage_print
 
     @contextmanager
     def scrubbing(self):

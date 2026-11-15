@@ -803,18 +803,24 @@ class PlayerWindow(QMainWindow):
         if not refused:
             self.sync()     # the cutting nodes are asked again, of the store chosen
 
+    def _keys(self):
+        return {nid: e.key for nid, e in self.graph.snapshot().entries.items()}
+
     def _params_changed(self, nid):
         self.canvas.update()   # a band moved recolours its node's dot
-        if hasattr(self.tools.get(self.doc.node(nid).tool), "cut_file"):
-            self.header.show_store(store.folder())      # its card may have cut a file
         if document.is_selector(self.tools.get(self.doc.node(nid).tool)):
             self._pick_video()
             return
         if self.graph is None:
             return
+        keys, named = self._keys(), self.graph.cut_files_named()
         self.graph.sync()
         self._restate()
-        if nid in self.graph.chain:
+        if self.graph.cut_files_named() != named:
+            self.header.show_store(store.folder())      # a card cut a file, or its params name others
+        if self._keys() == keys:
+            self.goto(self.row, commit=True)    # nothing is computed differently; a drawer may draw the params as they now are
+        elif nid in self.graph.chain:
             if self._spared or self._given or self.runs.over(*self.window_, self._chain()) is not None:
                 self._ask_window(EDIT)  # what was held is no longer the chain's, or a run now is: the walk begins again with what is held now
             self.worker.rerun_series()

@@ -128,6 +128,19 @@ def footage_print(path):
     return h.hexdigest()[:16]
 
 
+_prints = {}        # path -> (the file's size and mtime when read, its footage print)
+
+
+def footage_print_by_stamp(path):
+    """`footage_print` of the file at `path`, read again only when its size or mtime moved; OSError with no file."""
+    path = str(path)
+    st = os.stat(path)
+    stamp = st.st_size, st.st_mtime_ns
+    if _prints.get(path, (None,))[0] != stamp:
+        _prints[path] = (stamp, footage_print(path))
+    return _prints[path][1]
+
+
 class Decoder:
     """Opens an indexed container; a file that will not open, or whose container claims no rows (a
     raw stream, which cannot be seeked), raises IOError saying which. `footage_print` is the

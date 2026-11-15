@@ -9,6 +9,7 @@ panes, unless something is being typed into. A type nobody declared matches ever
 unresolved node or an unfed pass-through wires like any other and the red wire says afterwards
 whether the types fit; only a node's own connectors are refused, a longer cycle is the document's.
 """
+import math
 import zlib
 
 from PySide6.QtCore import QCoreApplication, QEvent, QLineF, QPointF, QRectF, Qt, Signal
@@ -284,6 +285,18 @@ class Canvas(QWidget):
         k = max(WIRE_BEND, abs(b.y() - a.y()) / 2)
         path = QPainterPath(a)
         path.cubicTo(QPointF(a.x(), a.y() + k), QPointF(b.x(), b.y() - k), b)
+        return path
+
+    @staticmethod
+    def taut_path(pin, held, down, bend=WIRE_BEND):
+        """Half of a pulled wire, from connector `pin` to the point `held`: a vertical tangent at
+        the connector, downward if `down`, and none imposed at `held`, so two halves meet there in
+        a corner. `bend` is the most it runs vertically before it turns; two halves whose bends
+        sum to no more than the gap between their connectors do not cross."""
+        d = held - pin
+        k = min(bend, math.hypot(d.x(), d.y()) / 2)
+        path = QPainterPath(pin)
+        path.cubicTo(QPointF(pin.x(), pin.y() + (k if down else -k)), held, held)
         return path
 
     def path_of(self, w):
@@ -619,8 +632,10 @@ class Canvas(QWidget):
             if self._pull is not None and w is self._pull[0]:
                 # bent through the pulled point, an end of each half: the gap the node will fill
                 p.setPen(QPen(qgray(theme.HEAD), WIRE_W))
-                p.drawPath(self.wire_path(self.pin_out(src), self._pull[1]))
-                p.drawPath(self.wire_path(self._pull[1], self.pin_in(dst, w.input)))
+                a, b = self.pin_out(src), self.pin_in(dst, w.input)
+                bend = min(WIRE_BEND, abs(b.y() - a.y()) / 2)
+                p.drawPath(self.taut_path(a, self._pull[1], True, bend))
+                p.drawPath(self.taut_path(b, self._pull[1], False, bend))
                 continue
             if w is self._insert or w is self._over:
                 p.setPen(QPen(qgray(theme.HEAD), WIRE_W + 1))

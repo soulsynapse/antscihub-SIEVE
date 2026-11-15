@@ -14,7 +14,7 @@ from contextlib import ExitStack, contextmanager
 import numpy as np
 
 from . import density
-from .decoder import Decoder
+from .decoder import Decoder, EndOfStream
 from .document import INPUT, VIDEO_TOOL, video_output
 from .plan import _key, base_key, facts, plan
 from .stream import Emitter
@@ -290,7 +290,8 @@ class Graph:
     @property
     def count(self):
         """The document's rows: the decoder's, read live, since a container's header may claim rows
-        the stream lacks and the decoder corrects itself at the first read past the end."""
+        the stream lacks and the decoder corrects itself at the first read past the end, its own or
+        a served file's."""
         return self.decoder.count
 
     @property
@@ -594,7 +595,12 @@ class Graph:
             d = self._reader(nid, e)
             with self.probe(nid, row, e.raw_key, reader) as ev:
                 decodes, seeks = d.decodes, d.seeks
-                v = d.read(row)
+                try:
+                    v = d.read(row)
+                except EndOfStream:
+                    # the file is the plate cut, row for row: where it ends the plate's stream does, which nothing may have read that far to find
+                    self.decoder.count = min(self.decoder.count, d.count)
+                    raise
                 ev[0] = "seek" if d.seeks != seeks else "decode" if d.decodes != decodes else "cache"
                 ev[1], ev[2] = v.nbytes, v.shape
             return v if raw or e.band is None else banded(v, e.band)

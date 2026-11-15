@@ -4,8 +4,10 @@ import json
 import os
 from types import SimpleNamespace as Tool
 
+import pytest
+
 from sieve_player import document as D
-from sieve_player.decoder import Decoder, footage_print
+from sieve_player.decoder import Decoder, EndOfStream, footage_print
 from sieve_player.graph import Graph
 from sieve_player.plan import base_key, plan
 from tests.test_crop import clip
@@ -56,7 +58,7 @@ def test_a_node_whose_inputs_are_of_two_pieces_of_the_plate_is_not_fed_and_says_
 
 
 def test_a_graph_reads_a_served_nodes_rows_from_its_file_and_from_its_run_while_held_off(tmp_path):
-    plate, piece = clip(tmp_path / "plate.avi"), clip(tmp_path / "piece.avi", h=24, w=32)
+    plate, piece = clip(tmp_path / "plate.avi"), clip(tmp_path / "piece.avi", n=4, h=24, w=32)
     asked = []
     cuts = Tool(**{**vars(cut), "cut_file": lambda video, footage, params: asked.append(video) or (piece, footage_print(piece))})
     doc = D.from_tools([cuts, gray], plate)
@@ -68,6 +70,9 @@ def test_a_graph_reads_a_served_nodes_rows_from_its_file_and_from_its_run_while_
         assert g.compute("cut", 2).shape == (24, 32, 3) and g.compute("gray", 2).shape == (24, 32)
         assert (g.footage("gray"), g.footage("cut")) == (piece, plate) and g.readers.open_on([piece])
         assert g.key("cut") == base_key(footage_print(piece), "bgr") != g.key("video")
+        with pytest.raises(EndOfStream):
+            g.compute("cut", 4)
+        assert g.count == 4                                 # the served file's end is the plate's, which no read of the plate found
         g.hold_off("cut", True)
         g.sync()
         assert g.compute("cut", 2).shape == (48, 64, 3) and g.footage("gray") == plate and g.entry("cut").file is None

@@ -1,7 +1,7 @@
 """`python -m sieve_player.bare job.json`: the clip walked in a process of its own, with no stream
 listened to and no interface beside it, and the series chain's results left in a file. The window
 starts it (PlayerWindow's Bare) and reads its stdout, one JSON object a line: `{"done", "total",
-"rate"}` as rows land, then one of `{"results": path}`, `{"refused": why}` or `{"failed": [row,
+"rate"}` as rows land, `{"count"}` where the stream ended short of the rows claimed, then one of `{"results": path}`, `{"refused": why}` or `{"failed": [row,
 node, text]}`. The job is `job()`'s dict. The walk is worker._Walk's own, driven on this thread.
 """
 import json
@@ -44,7 +44,7 @@ def main(path):
     for root in j["roots"]:
         sys.path.insert(0, os.path.dirname(root))
     from . import decoder as decmod
-    from .decoder import Decoder
+    from .decoder import Decoder, EndOfStream
     from .document import Document
     from .graph import Graph
     from .registry import discover
@@ -73,6 +73,12 @@ def main(path):
     try:
         while walk.i < walk.length:
             walk.turn()
+    except EndOfStream:     # as the Worker takes it: the walk closes at the rows it has
+        say(count=g.count)
+        walk.ended()
+        if failed.last:
+            say(failed=[failed.last[0], failed.last[1], "the chain raised over the rows the stream had"])
+            return 1
     except Exception as e:
         say(failed=[walk.start + walk.i, getattr(e, "sieve_node", ""), f"{type(e).__name__}: {e}"])
         return 1

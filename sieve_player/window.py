@@ -1303,6 +1303,9 @@ class PlayerWindow(QMainWindow):
                 left = f", {clock((total - done) / rate)} left" if rate else ""
                 self.header.note.setText(f"bare: {done} of {total} rows, {rate:.0f} a second{left}")
                 self._bare_rate = rate
+            elif "count" in said:
+                self.decoder.count = min(self.decoder.count, said["count"])   # the bare walk found the stream's end; this process's decoder may not have read that far
+                self._shortened(self.decoder.count)
             elif "results" in said:
                 took = time.perf_counter() - self._bare_t
                 if self.doc.to_dict() != self._bare_doc:

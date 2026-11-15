@@ -305,6 +305,18 @@ def load(path, known=None):
     return doc
 
 
+def video_written_in(path):
+    """The video the document at `path` names, as the file has it written; "" for none, and for a
+    file that will not read as a document's. Nothing else of the file is checked, its version
+    included."""
+    try:
+        with open(path, encoding="utf-8") as f:
+            video = json.load(f).get("video")
+    except (OSError, ValueError, AttributeError):
+        return ""
+    return video if isinstance(video, str) else ""
+
+
 def _by_name(tools):
     """`tools` as a mapping of name to module, whether given as one or as the modules."""
     return tools if hasattr(tools, "get") else {t.NAME: t for t in tools}

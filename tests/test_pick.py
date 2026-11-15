@@ -14,6 +14,7 @@ from PySide6.QtTest import QTest  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from sieve_player import document as D  # noqa: E402
+from sieve_player import recent  # noqa: E402
 from sieve_player.registry import FACETS, hint  # noqa: E402
 from sieve_player.window import PlayerWindow  # noqa: E402
 from tests.test_crop import clip  # noqa: E402
@@ -105,3 +106,25 @@ def test_a_right_click_walks_the_display_flag_back_skipping_a_node_that_is_gone(
     QTest.mouseClick(win.display, Qt.RightButton)
     assert win.doc.display == win._shown_last                         # a loaded document starts with no past
     win.close()
+
+
+def test_new_and_close_over_a_changed_document_ask_and_an_unchanged_one_is_left_unasked(tmp_path):
+    QApplication.instance() or QApplication([])
+    path = tmp_path / "doc.json"
+    D.save(D.from_tools([gray], clip(tmp_path / "v.avi")), path)
+    noted = str(tmp_path / "app" / "recent.txt")
+    win = PlayerWindow(str(path), "t", [gray], noted=noted)
+    asked = []
+    win.ask_unsaved = lambda: asked[-1]
+    assert not win.differs()                                            # opening the document and its video changed nothing a save would write
+    win._fill_recent()
+    assert [p for p, _ in recent.entries(noted)] == [str(path)] == [a.text() for a in win._recent.actions()]
+    win.doc.node("gray").pos = (5.0, 7.0)
+    asked.append("cancel")
+    win._new()
+    assert win.doc.node("gray") is not None and not win.close() and win.differs()
+    asked.append("save")
+    win._new()
+    assert [n.tool for n in win.doc.nodes] == ["video"] and D.load(path).node("gray").pos == (5.0, 7.0)
+    asked.append(None)                                                  # asking from here on is no answer, so no leaving
+    assert not win.differs() and win.close()

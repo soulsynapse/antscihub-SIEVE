@@ -327,7 +327,7 @@ class Icons(QWidget):
             self.pick_info.setText("")
             return
         self.pick_name.setText(icon.name)
-        lines = [f"category: {', '.join(icon.cats) or '—'}", f"tags: {', '.join(icon.tags) or '—'}"]
+        lines = [f"category: {', '.join(icon.cats) or 'none'}", f"tags: {', '.join(icon.tags) or 'none'}"]
         if icon.filled:
             lines.append("has a filled style")
         kind = self.sheet.marks.kind(icon.name)

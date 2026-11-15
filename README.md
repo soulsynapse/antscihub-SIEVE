@@ -1,4 +1,4 @@
-# SIEVE — Signal Isolation of Ethological Video Events
+# SIEVE: Signal Isolation of Ethological Video Events
 
 SIEVE runs independent video-analysis scripts as nodes in one graph, under one shared player, so no
 script needs a GUI of its own. A script is a **tool**; `sieve_player` is the player; a pipeline is a

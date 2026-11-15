@@ -156,10 +156,15 @@ def sheet() -> str:
     QMainWindow, QMainWindow > QWidget {{ background: {gray(GROUND)}; }}
     QScrollArea, QScrollArea > QWidget > QWidget {{ background: transparent; }}
     QSplitter::handle {{ background: {gray(GROUND)}; }}
-    QMenuBar {{ background: {gray(GROUND)}; }}
-    QMenuBar::item:selected {{ background: {gray(layer(1))}; }}
-    QMenu {{ background: {gray(layer(2))}; border: 1px solid {gray(layer(2) + LINE_LIFT)}; }}
+    QMenuBar {{ background: {gray(GROUND)}; padding: 2px {PAD}px 0px {PAD}px; }}
+    QMenuBar::item {{ background: transparent; padding: 2px 8px; border-radius: {RADIUS}px; }}
+    QMenuBar::item:selected, QMenuBar::item:pressed {{ background: {gray(layer(1))}; color: {gray(HEAD)}; }}
+    QMenu {{ background: {gray(layer(2))}; border: 1px solid {gray(layer(2) + LINE_LIFT)}; border-radius: {RADIUS}px; padding: 4px; min-width: {CONTROL_W + 40}px; }}
+    QMenu::item {{ padding: 3px 8px; border-radius: {RADIUS}px; }}
     QMenu::item:selected {{ background: {gray(layer(3))}; }}
+    QMenu::item:disabled {{ color: {gray(INK_2 - 50)}; }}
+    QMenu::separator {{ height: 1px; background: {gray(layer(2) + LINE_LIFT)}; margin: 4px 8px; }}
+    QMenu::right-arrow {{ image: url("{(GLYPHS / 'chevron.svg').as_posix()}"); width: 14px; height: 14px; margin-right: 6px; }}
     QLabel[role="desc"] {{ color: {gray(INK)}; }}
     QLabel[role="name"] {{ color: {gray(HEAD)}; }}
     QLabel[role="readout"] {{ color: {gray(INK_2)}; }}
@@ -213,6 +218,13 @@ def sheet() -> str:
     QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background: transparent; }}
     QToolTip {{ background: {gray(layer(2))}; color: {gray(INK)}; border: 1px solid {gray(layer(2) + LINE_LIFT)}; padding: 2px 6px; }}
     """
+
+
+def round_menu(menu: QWidget) -> None:
+    """Lets a QMenu's rounded corners show what is under them: the sheet rounds its panel, and a
+    popup's own window is a square with the system's shadow until it is frameless and clear."""
+    menu.setWindowFlags(menu.windowFlags() | Qt.WindowType.FramelessWindowHint | Qt.WindowType.NoDropShadowWindowHint)
+    menu.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
 
 
 def depth_of(w: QWidget) -> int:

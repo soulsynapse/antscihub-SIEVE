@@ -19,9 +19,9 @@ import cv2
 import numpy as np
 from PySide6.QtCore import QFileSystemWatcher, QProcess, QProcessEnvironment, QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import QImage, QKeySequence, QPainter, QPen, QPixmap, QShortcut
-from PySide6.QtWidgets import QFileDialog, QHBoxLayout, QMainWindow, QMessageBox, QProgressBar, QPushButton, QSizePolicy, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QFileDialog, QHBoxLayout, QMainWindow, QMenu, QMessageBox, QProgressBar, QPushButton, QSizePolicy, QVBoxLayout, QWidget
 
-from . import bare, dev, document, held, recent, store, theme
+from . import bare, dev, document, filemenu, held, recent, store, theme
 from .canvas import Canvas
 from .catalogue import Log
 from .decoder import Decoder
@@ -500,9 +500,12 @@ class PlayerWindow(QMainWindow):
         menu.addAction("Open…", QKeySequence.Open, self._open_dialog)
         self._recent = menu.addMenu("Open Recent")
         self._recent.aboutToShow.connect(self._fill_recent)
+        menu.addSeparator()
         menu.addAction("Save", QKeySequence.Save, self.save_document)
         menu.addAction("Save As…", QKeySequence.SaveAs, self._save_as)
         dev.install(self)
+        for m in self.menuBar().findChildren(QMenu):
+            theme.round_menu(m)
 
         st, ct = self.timeline.strip, self.timeline.controls
         st.pressed.connect(self._scrub_begin)
@@ -622,11 +625,7 @@ class PlayerWindow(QMainWindow):
             self.open_document(path)
 
     def _fill_recent(self):
-        self._recent.clear()
-        for path in recent.paths():
-            self._recent.addAction(path.replace("&", "&&"), lambda path=path: self._leaving() and self.open_document(path))
-        if self._recent.isEmpty():
-            self._recent.addAction("No recent documents").setEnabled(False)
+        filemenu.fill(self._recent, lambda path: self._leaving() and self.open_document(path))
 
     def _save_as_start(self):
         """The file a save dialog opens on: the document's own, else one named for the open video

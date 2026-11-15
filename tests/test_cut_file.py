@@ -264,6 +264,8 @@ def test_region_answers_the_clip_of_this_footage_at_the_chosen_shapes_rect_and_q
     assert ask() == str(nest) and region.cut_files(str(video), print_, params("")) == [str(nest)]
     assert ask(choice="") is None and ask(choice="dish") is None and ask(shapes=MOVED) is None
     assert ask(quality="lossless") is None and ask(footage="another") is None
+    unserved = params(**{"serve clip": False})
+    assert ask(**{"serve clip": False}) is None and region.cut_files(str(video), print_, unserved) == [str(nest)]
     sidecar = folder / (nest.name + C.SIDECAR)
     sidecar.write_text(json.dumps({"bytes": 4}), encoding="utf-8")
     assert ask() == str(nest)

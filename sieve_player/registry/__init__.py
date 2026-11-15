@@ -34,6 +34,19 @@ _HINTS = {
 }
 FACETS = tuple(_HINTS)
 
+# What a settings widget may have beside changed, params() and set_params(): the name the pane or
+# the window looks for -> the line that supplies it. A name spelled otherwise is never called.
+WIDGET_FACETS = {
+    "set_source": "def set_source(self, path, fps): ...  # the footage the node's inputs are frames of, the video or the file a cutting node above it serves",
+    "set_paths": "def set_paths(self, paths): ...  # {input: the file each wired path input picked}",
+    "set_playhead": "def set_playhead(self, row): ...  # a chain node's card: the row shown",
+    "show_result": "def show_result(self, result, start, fps): ...  # a chain node's card: its result over the rows from start",
+    "set_driven": "def set_driven(self, names, by=None): ...  # the params a wire drives, and the node that drives them",
+    "show_matches": "def show_matches(self, folder, found, picked): ...  # a selector's card: every path its rule matches, and the one picked",
+    "set_cut_files_in_use": "def set_cut_files_in_use(self, paths): ...  # the files the document's cutting nodes name, see cut_files",
+    "storeChanged": "storeChanged = Signal()  # files of the store were written or removed here, the params as they were",
+}
+
 
 def probe(tool, facet):
     """The attribute, or None: the tool did not say. Reads only; never calls."""
@@ -152,4 +165,4 @@ def signature(tool):
     return f"{', '.join(ins)} → {probe(tool, 'PRODUCES')}".strip()
 
 
-__all__ = ["MARKER", "FACETS", "Entry", "is_tool", "probe", "hint", "discover", "types", "CATEGORIES", "category", "description", "signature"]
+__all__ = ["MARKER", "FACETS", "WIDGET_FACETS", "Entry", "is_tool", "probe", "hint", "discover", "types", "CATEGORIES", "category", "description", "signature"]

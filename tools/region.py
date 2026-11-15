@@ -28,7 +28,9 @@ by its footage, its rect and its quality, so no clip is written over: a shape th
 quality, is a clip not yet cut, and the one it had stays until it is deleted. `quality` changes
 nothing `run` hands out. `cut_file` is what the player serves in place of `run` while the node reads
 the video node, or a node that serves a file, whose file is then the video cut: the clip of this
-footage at the chosen shape's rect and the node's quality, while it is the size it landed at. A clip
+footage at the chosen shape's rect and the node's quality, while it is the size it landed at and
+`serve clip` is on; off, the node cuts the frame whatever the store holds, so the document says
+which of the two its results are of. A clip
 cut at `standard` is H.264's rendering of the cut and not its pixels, so a served node hands out
 other values than the same node run. The node's key is then the one a document opened on the clip
 gives its video node, so everything after it is that document's. With no clip for the chosen shape,
@@ -56,7 +58,7 @@ from tools._table import moments, plane_dtype, with_column
 
 SIEVE_TOOL = True
 NAME, KIND, EXPECTS, PRODUCES = "region", "frame", ("bgr", "gray", "mask", "hsv", "flow"), "same"
-DEFAULTS = {"plate": [], "shapes": [], "choice": "", "quality": "standard"}
+DEFAULTS = {"plate": [], "shapes": [], "choice": "", "quality": "standard", "serve clip": True}
 PATHS = {"geometry": lambda path: load_geometry(path)}
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))   # where `utilities` is found
 MIN_ARC_POINTS = 16     # a circle's contour has at least this many vertices, and one per pixel of circumference past it
@@ -285,8 +287,8 @@ def clip_of(video, footage, params):
 
 
 def cut_file(video, footage, params):
-    """`clip_of`'s clip, or None with no clip."""
-    return clip_of(video, footage, params)[0]
+    """`clip_of`'s clip while `serve clip` is on, else None."""
+    return clip_of(video, footage, params)[0] if params.get("serve clip", DEFAULTS["serve clip"]) else None
 
 
 def cut_files(video, footage, params):
@@ -324,6 +326,7 @@ def settings(parent=None):
             self.form.add_line(self.launched)
             self.draw.clicked.connect(self._open_utility)
             self.add_choice("quality", QUALITIES, DEFAULTS["quality"])
+            self.add_bool("serve clip", DEFAULTS["serve clip"])
             self.button, self.status = QPushButton("Cut"), readout()
             self.bar = QProgressBar()
             self.bar.setTextVisible(False)
@@ -412,7 +415,8 @@ def settings(parent=None):
                 path, why = clip_of(self.video, footage_of(self.video), p) if self.video else (None, "no video")
             except OSError as e:
                 path, why = None, str(e)
-            self.clip.setText(f"clip {os.path.basename(path)}" if path else f"no clip: {why}")
+            unserved = "" if p["serve clip"] else ", not served: serve clip is off, and the node cuts the frame"
+            self.clip.setText(f"clip {os.path.basename(path)}{unserved}" if path else f"no clip: {why}")
 
         def _press(self):
             if self.cut is not None:

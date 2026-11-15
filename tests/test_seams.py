@@ -186,6 +186,27 @@ def test_a_tool_reaches_the_player_through_the_modules_named_here():
     assert not bad, bad
 
 
+def test_a_settings_widget_is_told_and_says_by_the_registrys_names_alone():
+    """The pane and the window find what a settings widget has by name, so a name one side spells
+    its own way is never called: every name they look for, and every `set_`, `show_` or signal a
+    class under tools/ has, is one of registry.WIDGET_FACETS."""
+    from sieve_player.registry import WIDGET_FACETS
+
+    known = {*WIDGET_FACETS, "changed", "set_params"}
+    sought = {name for part in ("pane", "window")
+              for name in re.findall(r'hasattr\(w, "(\w+)"\)', (PKG / f"{part}.py").read_text(encoding="utf-8"))}
+    assert sought == set(WIDGET_FACETS), sought ^ set(WIDGET_FACETS)
+    bad = {}
+    for path in TOOLS.glob("*.py"):
+        for cls in (n for n in ast.walk(ast.parse(path.read_text(encoding="utf-8"))) if isinstance(n, ast.ClassDef)):
+            has = {n.name for n in cls.body if isinstance(n, ast.FunctionDef) and n.name.startswith(("set_", "show_"))}
+            has |= {t.id for n in cls.body if isinstance(n, ast.Assign) and "Signal(" in ast.unparse(n.value)
+                    for t in n.targets if isinstance(t, ast.Name)}
+            if has - known:
+                bad[path.name] = sorted(has - known)
+    assert not bad, bad
+
+
 def test_a_utility_imports_neither_the_player_nor_a_tool():
     """A utility runs as its own process on what its command line hands it, so it can be run,
     copied or replaced without the player."""

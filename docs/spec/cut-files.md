@@ -71,9 +71,11 @@ Assumes: nothing.
   Check: `tests/test_cut_file.py`, with the box above: the key moves with the quality and with the
   constant.
 - [x] `region.cut_file` answers the path its footage, the chosen shape's rect and the node's quality
-  name when a cut file has landed there, and None otherwise: a moved shape, another quality and
-  another footage are each a file not yet cut, and the card says the chosen shape's clip is not cut.
-  No record of the folder is read to decide it.
+  name when a cut file has landed there and the node's `serve clip` is on, and None otherwise: a
+  moved shape, another quality and another footage are each a file not yet cut, and the card says
+  the chosen shape's clip is not cut. With `serve clip` off the node runs whatever the store holds,
+  its clips are still among those `cut_files` names, and the card says the clip is not served. No
+  record of the folder is read to decide it.
   Check: `tests/test_cut_file.py`, in place of the test of region's answer off its record.
 
 ## A landing writes no name that exists

@@ -32,6 +32,7 @@ category beside each tool.
 
 - `MARKER`
 - `FACETS`
+- `WIDGET_FACETS` -- what a settings widget may have beside `changed`, `params()` and `set_params()`, each name to the line that supplies it; `tests/test_seams.py` holds the pane, the window and the tools to these names
 - `Entry` -- `name`, `module`, `path`, `error`; `get(facet)`, `missing`, `ok`
 - `is_tool(obj)`
 - `probe(tool, facet)`

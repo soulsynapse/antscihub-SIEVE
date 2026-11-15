@@ -240,7 +240,6 @@ def test_a_served_series_heads_rows_step_the_chain_under_it_one_at_a_time(in_sto
 def test_a_walk_given_a_stepped_heads_result_stacks_nothing_and_walks_again_when_the_plan_leaves_it(monkeypatch):
     """The turns are taken here, on the test's thread, so the plan can be moved inside one."""
     from PySide6.QtWidgets import QApplication
-    from sieve_player.graph import Cancelled
     from sieve_player.worker import Worker
     from tests.test_graph import Dec, TOOLS as FRAME, gray as fgray
     QApplication.instance() or QApplication([])
@@ -253,18 +252,22 @@ def test_a_walk_given_a_stepped_heads_result_stacks_nothing_and_walks_again_when
     w.seriesReady.connect(lambda r, s, fps: got.append(r))
     win = w._win
 
+    def turn():
+        win.plan = g.snapshot()     # as the scheduler does before a turn
+        win.turn()
+
     def walk(given):
         win.given = dict(given)
         win.begin(0, 7)
         while win.i < win.length:
-            win.turn()
+            turn()
         return got[-1]
     whole = walk({})
     given = {"track": (g.entry("track").raw_key, {f: v for f, v in whole["track"].items() if f not in ("gate", "key", "plate")})}
     assert equal(walk(given), whole) and win.stack is None
     win.given = dict(given)
     win.begin(0, 7)
-    win.turn()
+    turn()
     tally = g.tally
 
     def moved():
@@ -272,11 +275,11 @@ def test_a_walk_given_a_stepped_heads_result_stacks_nothing_and_walks_again_when
         doc.node("track").params["max_step"] = 9.0
         g.sync()
         return tally()
-    monkeypatch.setattr(g, "tally", moved)      # between the turn's look at what it was given and its step
-    with pytest.raises(Cancelled):
-        win.turn()
+    monkeypatch.setattr(g, "tally", moved)      # inside a turn: it ends under the plan it began in, and the next begins the range again
+    turn()
+    assert win.given == given
     while win.i < win.length:
-        win.turn()
+        turn()
     assert win.given == {} and equal(got[-1], run_chain(g, win.stack, 0, 7, {}))
 
 

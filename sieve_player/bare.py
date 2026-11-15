@@ -59,7 +59,8 @@ def main(path):
     st = Store(j["store"])
     g = Graph(doc, Decoder(j["video"], cache_bytes=HOLD), tools, memo_bytes=HOLD, open_bake=st.open_bake)
     g.sync()
-    if not (g.fed(g.walk) or served_head(g)):
+    p = g.snapshot()
+    if not (g.fed(p.walk) or served_head(p)):
         say(refused="nothing reaches a walked node")
         return 1
     t0 = [None]
@@ -70,7 +71,7 @@ def main(path):
         say(done=done, total=total, rate=(done - t0[0][1]) / dt if dt > 0 else 0.0)
 
     ready, refused, failed = _Told(), _Told(), _Told()
-    walk = _Walk(g, name="clip", every=g.count, progress=_Told(told), ready=ready, refused=refused, failed=failed, tell_every=TELL)
+    walk = _Walk(g, name="clip", every=g.count, progress=_Told(told), ready=ready, refused=refused, failed=failed, tell_every=TELL, plan=p)
     walk.begin(0, g.count)
     try:
         while walk.i < walk.length:

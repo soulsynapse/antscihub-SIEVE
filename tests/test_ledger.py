@@ -183,3 +183,15 @@ def test_the_queue_is_bounded_with_no_reader_whether_events_or_samples_feed_it(c
         for i in range(BACKLOG + 1):
             feed(led, i)
         assert "KeyError" in capsys.readouterr().err and len(led._q) <= BACKLOG + 1 and led.view().buckets
+
+    class Raises:       # a watch's fault is neither the emitter's nor a reader's, and is said once
+        back, final, copy, clock = (lambda self, width: 0), (lambda self, wid: True), (lambda self: self), (lambda self, view: None)
+
+        def settled(self, view, upto):
+            raise RuntimeError("the watch's")
+
+    led = Ledger(watch=Raises())
+    for i in range(2 * BACKLOG):
+        led.event(event("slot", i * 0.1, 1.0, "walked"))
+    view, err = led.view(), capsys.readouterr().err
+    assert err.count("raised in settled") == 1 and "not kept" not in err and view.found is None and view.buckets

@@ -36,7 +36,7 @@ SOURCES = {
     "restarts": "worker._Walk.turn, a range begun again where what it was given went stale or the nodes or the shape changed "
                 "under it, and Worker.set_window or walk_clip asked by no hand and no edit; the evidence says which",
     "stalls": "no one place: a tool's call, a read or the worker's own code between two rows that does not return; "
-              "the stream says which lane and not yet what the thread is in",
+              "the stream says which lane, and the node where its thread was sampled in one's span",
 }
 
 
@@ -46,7 +46,7 @@ LANE, UNRECORDED = "lane", "unrecorded"                             # and of a c
 
 @dataclass(frozen=True)
 class Problem:
-    kind: str               # the class, a key of CLASSES
+    kind: str               # the class, a key of CLASSES, SPANS or CLOCK
     subject: str            # the node it is about, a cache being its node's; "memo" for the memo
     subject_is: str         # NODE; STORE for the memo; TURN for a span of the GUI thread's; BETWEEN for the time between rows; LANE; UNRECORDED
     line: str

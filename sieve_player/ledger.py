@@ -1,4 +1,4 @@
-"""The ledger: the probe's stream kept over time, with no opinion of it. Wall time is cut into buckets
+"""The ledger: the probe's stream kept over time, with no opinion of what is wrong in it. Wall time is cut into buckets
 of one width over a bounded history, and each walk of a lane is one record. It is fed events and
 samples and nothing else, holding no graph and importing no Qt, so a dump replays into one. `event`
 and `sample` only queue; the bookkeeping is done by whoever takes a `view()`, or by the thread that
@@ -206,7 +206,8 @@ class Ledger:
     `clock(view)` each time the stream's latest time enters another bucket's width, settled or not,
     each with a view that is the ledger's own and not to be kept. It gives `back(width)`, the buckets behind
     one it reads, which the history is never shorter than with SETTLES_BY's beside them, `final(id)`, whether it is done with a
-    walk, before which the walk is not dropped, and `copy()`, what a view carries as its `found`."""
+    walk, before which the walk is not dropped, and `copy()`, what a view carries as its `found`. A
+    watch that raises in any but `back` is said once on stderr and told nothing more, neither `event` nor `view()` raising for it."""
 
     def __init__(self, width=0.25, history=2400, walks=64, discards=1 << 17, timed=nullcontext, watch=None):
         self.width, self._discards, self._timed, self._kept, self._watch = width, discards, timed, walks, watch
@@ -219,6 +220,7 @@ class Ledger:
         self._q = deque()
         self._lock = threading.Lock()   # held to fold and to take a view; an emitter that finds it taken leaves the folding
         self._buckets, self._newest = {}, None
+        self._first = None              # the lowest index of `_buckets`, or None where it is to be read off them again
         self._walks = deque()
         self._lanes = {}
         self._plan = self._keys = self._selected = None
@@ -254,18 +256,28 @@ class Ledger:
             self._fold()
             if self._watch is not None and self._newest is not None:
                 self._settled = self._newest
-                self._watch.settled(self._view(False), None)
+                self._tell("settled", self._view(False), None)
+
+    def _tell(self, said, *args):
+        """What the watch's `said` gives of `args`. A watch that raises is said once on stderr and
+        told nothing more: None is given, and no view carries a `found` from then on."""
+        try:
+            return getattr(self._watch, said)(*args)
+        except Exception:
+            print(f"SIEVE {time.strftime('%H:%M:%S')}: ledger: its watch, a {type(self._watch).__name__}, raised in {said} and is told "
+                  f"nothing more\n{traceback.format_exc()}", file=sys.stderr)
+            self._watch = None
 
     def _view(self, kept):
         """The View now; `kept`, one a reader may hold, and else the ledger's own records for `watch` to read and leave."""
         walking = {id(lane.walk) for lane in self._lanes.values()}
         walks = [w.copy() if kept and id(w) in walking else w for w in self._walks]
-        found = self._watch.copy() if kept and self._watch is not None else None
+        found = self._tell("copy") if kept and self._watch is not None else None
         since, by = self._no_row_since()
         spent = {name: dict(self._lanes[name].spans) for name in since}
         if self._newest is None:
             return View(self.width, 0, [], walks, self._settled, found, self._now, since, by, dict(self._out), spent)
-        first = min(self._buckets)
+        first = self._lowest()
         buckets = [self._buckets.get(i, _EMPTY) for i in range(first, self._newest + 1)]
         if kept:
             for b in buckets:
@@ -294,10 +306,10 @@ class Ledger:
         if newest is None:
             s = max(s, min([self._newest - 1 - AHEAD, *(int(t // w) - 1 for thread, t in self._clear.items() if thread not in self._resting),
                             *(() if self._loop is None else (int(self._loop // w) - 1,))]))
-        if s >= min(self._buckets) and (self._settled is None or s > self._settled):
+        if s >= self._lowest() and (self._settled is None or s > self._settled):
             self._settled = s
             if self._watch is not None:
-                self._watch.settled(self._view(False), s)
+                self._tell("settled", self._view(False), s)
 
     def _fold(self):
         q = self._q
@@ -366,7 +378,7 @@ class Ledger:
             self._settle()
             if self._watch is not None and (i := int(self._now // self.width)) != self._told:
                 self._told = i
-                self._watch.clock(self._view(False))
+                self._tell("clock", self._view(False))
 
     def _bucket(self, i):
         """Bucket `i` to write into, or None for one older than the history."""
@@ -375,12 +387,20 @@ class Ledger:
             self._newest = i
             for old in [k for k in self._buckets if k <= i - self.history]:
                 del self._buckets[old]
+                self._first = None
         elif i <= self._newest - self.history:
             return None
         b = self._buckets.get(i)
         if b is None or b.shared:
+            if b is None and self._first is not None and i < self._first:
+                self._first = i
             b = self._buckets[i] = Bucket() if b is None else b.copy()
         return b
+
+    def _lowest(self):
+        if self._first is None:
+            self._first = min(self._buckets)
+        return self._first
 
     def _over(self, t0, t1):
         """(bucket, share) for each bucket in the history that [t0, t1] lies in, the shares by overlap."""
@@ -402,7 +422,7 @@ class Ledger:
         if len(self._walks) > self._kept:
             walking = {id(x.walk) for x in self._lanes.values()}
             for i, w in enumerate(self._walks):
-                if id(w) not in walking and (self._watch is None or not w.done or self._watch.final(w.id)):
+                if id(w) not in walking and (self._watch is None or not w.done or self._tell("final", w.id) or self._watch is None):
                     del self._walks[i]
                     break
         self._bucket(int(ev.t // self.width))   # so a walk in a view began before the view's first bucket only when the history has dropped its beginning

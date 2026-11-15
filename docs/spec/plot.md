@@ -6,7 +6,7 @@ plots this spec moves and the live statement of how a series is drawn losslessly
 sieve_player/timeline.py, whose Strip is the whole-clip view the plot is the windowed twin of; with
 sieve_player/pane.py, which today holds every plot inside its node's card and the pin in the card's
 corner; with sieve_player/document.py, where the pinned flag and a node's band live; and with
-docs/spec/bake.md's Reading back, which settled that a series is drawn at its rows and never
+docs/spec/retired/bake.md's Reading back, which settled that a series is drawn at its rows and never
 stretched. The theme's rule that a rendering neither hides nor adds a value holds throughout: a
 column is its rows' envelope, a series scaled to its own range is the same series, and a value is
 read by pointing, never by a shared scale that does not exist.

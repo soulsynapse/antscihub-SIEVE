@@ -22,10 +22,15 @@ TOOLS = {t.NAME: t for t in (cut, gray, add, same, both)}
 FILE = {"cut": ("piece.mp4", "print")}
 
 
+def asker(files):
+    """plan()'s cut_file over a table: what each node of `files` answers, whatever footage it is asked of."""
+    return lambda nid, up: files.get(nid)
+
+
 def test_a_served_node_and_all_after_it_are_keyed_as_the_document_opened_on_its_file():
     doc = D.from_tools([cut, gray, add])
     alone = plan(D.from_tools([gray, add]), TOOLS, base_key("print", "bgr"))
-    served, live = plan(doc, TOOLS, "plate", FILE), plan(doc, TOOLS, "plate")
+    served, live = plan(doc, TOOLS, "plate", asker(FILE)), plan(doc, TOOLS, "plate")
     assert served.entries["cut"].file == FILE["cut"] and served.entries["cut"].srcs == {"in": None} and served.entries["cut"].fed
     assert {n: served.entries[n].key for n in ("cut", "gray", "add")} == {"cut": alone.entries["video"].key, **{n: alone.entries[n].key for n in ("gray", "add")}}
     assert live.entries["cut"].file is None and live.entries["add"].key != served.entries["add"].key
@@ -33,13 +38,13 @@ def test_a_served_node_and_all_after_it_are_keyed_as_the_document_opened_on_its_
     doc.add_node("cut", id="inner")
     doc.connect("cut", "inner")
     inner = {"inner": ("inner.mp4", "inner print")}     # a cut of a served file is served; of a run it is not
-    assert plan(doc, TOOLS, "plate", {**FILE, **inner}).entries["inner"].key == base_key("inner print", "bgr")
-    assert plan(doc, TOOLS, "plate", inner).entries["inner"].file is None
+    assert plan(doc, TOOLS, "plate", asker({**FILE, **inner})).entries["inner"].key == base_key("inner print", "bgr")
+    assert plan(doc, TOOLS, "plate", asker(inner)).entries["inner"].file is None
     between = D.from_tools([same, cut, gray])       # the file is of the video, not of what a node between hands the cut
     between.nodes[1].tool, between.nodes[1].id = "pass", "pass"
     between.wires = [D.Wire("video", "pass"), D.Wire("pass", "cut"), D.Wire("cut", "gray")]
     through = Tool(**{**vars(cut), "NAME": "pass", "cut_file": None})
-    assert plan(between, {**TOOLS, "pass": through}, "plate", FILE).entries["cut"].file is None
+    assert plan(between, {**TOOLS, "pass": through}, "plate", asker(FILE)).entries["cut"].file is None
 
 
 def test_a_node_whose_inputs_are_of_two_pieces_of_the_plate_is_not_fed_and_says_which():
@@ -51,8 +56,8 @@ def test_a_node_whose_inputs_are_of_two_pieces_of_the_plate_is_not_fed_and_says_
     doc.connect("whole", "both", "other")
     doc.add_node("add")
     doc.connect("both", "add")
-    for files in (None, FILE):       # refused cut or uncut: what a node may read never follows whether a file is there
-        e = plan(doc, TOOLS, "plate", files).entries
+    for ask in (None, asker(FILE)):       # refused cut or uncut: what a node may read never follows whether a file is there
+        e = plan(doc, TOOLS, "plate", ask).entries
         assert e["both"].standing == "reads across a cut: in is of cut, other of the plate" and not e["both"].fed
         assert not e["add"].fed and e["add"].standing == "in waits on both" and e["gray"].fed and e["whole"].fed
 
@@ -60,7 +65,7 @@ def test_a_node_whose_inputs_are_of_two_pieces_of_the_plate_is_not_fed_and_says_
 def test_a_graph_reads_a_served_nodes_rows_from_its_file_and_from_its_run_while_held_off(tmp_path):
     plate, piece = clip(tmp_path / "plate.avi"), clip(tmp_path / "piece.avi", n=4, h=24, w=32)
     asked = []
-    cuts = Tool(**{**vars(cut), "cut_file": lambda video, footage, params: asked.append(video) or (piece, footage_print(piece))})
+    cuts = Tool(**{**vars(cut), "cut_file": lambda video, footage, params: asked.append(video) or piece})
     doc = D.from_tools([cuts, gray], plate)
     doc.add_node("cut", id="inner")
     doc.connect("cut", "inner")
@@ -68,7 +73,7 @@ def test_a_graph_reads_a_served_nodes_rows_from_its_file_and_from_its_run_while_
     try:
         assert sorted(asked) == sorted([plate, piece])      # the cut below a served one is asked of the served file
         assert g.compute("cut", 2).shape == (24, 32, 3) and g.compute("gray", 2).shape == (24, 32)
-        assert (g.footage("gray"), g.footage("cut")) == (piece, plate) and g.readers.open_on([piece])
+        assert (g.footage("gray"), g.footage("cut")) == (piece, plate) and g.readers.held(piece) is not None
         assert g.key("cut") == base_key(footage_print(piece), "bgr") != g.key("video")
         with pytest.raises(EndOfStream):
             g.compute("cut", 4)
@@ -76,6 +81,27 @@ def test_a_graph_reads_a_served_nodes_rows_from_its_file_and_from_its_run_while_
         g.hold_off("cut", True)
         g.sync()
         assert g.compute("cut", 2).shape == (48, 64, 3) and g.footage("gray") == plate and g.entry("cut").file is None
+    finally:
+        g.close()
+        g.decoder.close()
+
+
+def test_the_served_files_share_the_plates_cache_limit_and_the_one_read_latest_has_it(tmp_path):
+    plate, files = clip(tmp_path / "plate.avi"), {n: clip(tmp_path / f"{n}.avi", n=4, h=24, w=32) for n in ("a", "b")}
+    frame = 24 * 32 * 3
+    tools = {n: Tool(**{**vars(cut), "NAME": n, "cut_file": lambda video, footage, params, n=n: files[n]}) for n in files}
+    doc = D.from_tools([tools["a"]], plate)
+    doc.add_node("b")
+    doc.connect("video", "b")
+    g = Graph(doc, Decoder(plate, cache_bytes=3 * frame), tools)
+    try:
+        held = lambda n: g.readers.held(files[n]).cache_bytes
+        for row in range(3):
+            g.compute("a", row)
+        assert held("a") == 3 * frame
+        for row in range(3):
+            g.compute("b", row)
+        assert held("b") == 3 * frame and held("a") == frame       # a frame stays whatever the limit
     finally:
         g.close()
         g.decoder.close()
@@ -100,12 +126,14 @@ def test_region_answers_the_chosen_shapes_clip_while_the_record_is_of_this_foota
         return region.cut_file(str(video), print_, params)
     record.at = 10 ** 18
 
-    assert record() == (str(folder / "nest.mp4"), footage_print(folder / "nest.mp4"))
+    assert record() == str(folder / "nest.mp4")
     assert record(footage=None) is not None                             # a record that names the video and holds no print of it
     assert record(footage="another") is None and record(video="w.mp4") is None and record(plate=[24, 32]) is None
     assert record() is not None and region.cut_file(str(video), print_, {**params, "choice": ""}) is None
     assert region.cut_file(str(video), print_, {**params, "choice": "dish"}) is None       # a shape the cut did not write
     moved = [{"name": "nest", "polygon": [[12, 10], [32, 10], [32, 20], [12, 20]]}]
     assert region.cut_file(str(video), print_, {**params, "shapes": moved}) is None
+    held = {"name": "nest", "file": "nest.mp4", "x": x0, "y": y0, "w": x1 - x0, "h": y1 - y0}
+    assert record(crops=[{**held, "bytes": 4}]) is not None and record(crops=[{**held, "bytes": 9}]) is None   # a clip of another size than landed
     (folder / "nest.mp4").unlink()
     assert region.cut_file(str(video), print_, params) is None

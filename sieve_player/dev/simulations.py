@@ -23,7 +23,7 @@ from PySide6.QtWidgets import QApplication
 
 from .. import document as D
 from ..catalogue import CLASSES, STALLS, WHOLE, Log
-from ..decoder import Decoder, footage_print
+from ..decoder import Decoder
 from ..graph import Graph
 from ..ledger import SETTLES_BY, Ledger
 from ..machine import Watch
@@ -124,7 +124,7 @@ def _tools(rows):
 def _cut(path):
     """A node that passes its frame through, whose cut file is the clip at `path`."""
     return Tool(NAME="cut", KIND="frame", EXPECTS="bgr", PRODUCES="bgr", DEFAULTS={}, run=lambda frames, row, params: frames(row),
-                cut_file=lambda video, footage, params: (path, footage_print(path)))
+                cut_file=lambda video, footage, params: path)
 
 
 class _Run:

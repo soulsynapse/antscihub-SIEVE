@@ -29,7 +29,7 @@ _HINTS = {
     "PATHS": 'PATHS = {"settings": load_settings}  # path inputs: name -> params from the file',
     "select": "def select(folder, params): ...  # a selector: the path it picks under folder, or None",
     "matches": "def matches(folder, params): ...  # a selector: every path its rule matches, picked first",
-    "cut_file": "def cut_file(video, footage, params): ...  # the node cuts the video into files: (the path of the file that holds what run hands out of video, whose decoder.footage_print is footage, under params; that file's own print), or None while there is none; a node that reads the video node, or a node that serves a file, in which case video is that file, serves it",
+    "cut_file": "def cut_file(video, footage, params): ...  # the node cuts the video into files: the path of the file the tool wrote of what run hands out of video, whose decoder.footage_print is footage, under params, exact or lossy as the tool wrote it, or None while there is none; a node that reads the video node, or a node that serves a file, in which case video is that file, serves it",
 }
 FACETS = tuple(_HINTS)
 

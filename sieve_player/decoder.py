@@ -226,6 +226,34 @@ class Decoder:
     def cache_limit(self):
         return self._cache_limit
 
+    @cache_limit.setter
+    def cache_limit(self, n):
+        """Takes hold at once: the frames least lately read go until the cache is within it, one
+        frame staying whatever the limit, and `on_evict` is told of each. Any thread."""
+        with self._cache_lock:
+            self._cache_limit = n
+            gone = self._trim()
+        self._tell(gone)
+
+    def _trim(self):
+        gone = []
+        while self._cache_bytes > self._cache_limit and len(self._cache) > 1:
+            r, old = self._cache.popitem(last=False)
+            self._cache_bytes -= old.nbytes
+            gone.append((r, old.nbytes))
+        self.evictions += len(gone)
+        return gone
+
+    def _tell(self, gone):
+        if self.on_evict is not None:
+            for r, n in gone:
+                self.on_evict(r, n)
+
+    def ends_at(self, row):
+        """The stream is known to end at `row`, by a reader of another file of this footage or
+        another process's of this one: the count comes down to it, and never goes up."""
+        self.count = min(self.count, row)
+
     def read(self, row) -> np.ndarray:
         self.reads += 1
         f = self.cached(row)
@@ -300,7 +328,6 @@ class Decoder:
         return x if mean is None else mean + (x - mean) / min(n, 64)
 
     def _put(self, row, bgr):
-        gone = []
         with self._cache_lock:
             if not self._fits(bgr):
                 return
@@ -309,14 +336,8 @@ class Decoder:
                 return
             self._cache[row] = bgr
             self._cache_bytes += bgr.nbytes
-            while self._cache_bytes > self._cache_limit and len(self._cache) > 1:
-                r, old = self._cache.popitem(last=False)
-                self._cache_bytes -= old.nbytes
-                gone.append((r, old.nbytes))
-            self.evictions += len(gone)
-        if self.on_evict is not None:
-            for r, n in gone:
-                self.on_evict(r, n)
+            gone = self._trim()
+        self._tell(gone)
 
     def close(self):
         for cur in self._cursors.values():

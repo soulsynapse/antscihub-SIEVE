@@ -14,7 +14,7 @@ from contextlib import ExitStack, contextmanager
 import numpy as np
 
 from . import density
-from .decoder import Decoder, EndOfStream
+from .decoder import Decoder, EndOfStream, footage_print
 from .document import INPUT, VIDEO_TOOL, video_output
 from .plan import _key, base_key, facts, plan
 from .stream import Emitter
@@ -207,7 +207,7 @@ class Readers:
     kept while a node serves the path. `keep()` retires the rest at sync and `reap()` closes them on
     the worker between computations, since a close from the GUI thread would pull a file from under
     a read in flight. A file open here cannot be replaced or removed on Windows, so whoever writes
-    over one waits for `open_on()` to say it is closed."""
+    over one has the node held off (Graph.hold_off) and tries again until the reap has closed it."""
 
     def __init__(self):
         self._held, self._retired = {}, []
@@ -239,12 +239,6 @@ class Readers:
         with self._lock:
             return list(self._held.values())
 
-    def open_on(self, paths):
-        """Whether a Decoder, held or retired and not yet closed, is open on any of `paths`. GUI-safe."""
-        paths = {os.path.normcase(os.path.abspath(p)) for p in paths}
-        with self._lock:
-            return any(os.path.normcase(os.path.abspath(d.path)) in paths for d in [*self._held.values(), *self._retired])
-
     def reap(self):
         """Closes the retired readers; the worker's alone, between computations, since a close under a read in flight pulls the file from it."""
         assert threading.current_thread().name == "worker", "Readers.reap off the worker thread"
@@ -269,6 +263,8 @@ class Graph:
         self.doc, self.decoder = doc, decoder
         self.tools = tools if hasattr(tools, "get") else {t.NAME: t for t in tools}
         self.readers = Readers()
+        self._lately = []                   # the served files' Decoders in the order they were last read, latest first
+        self._prints = {}                   # served path -> (its size and mtime when read, its footage print)
         self.without = set()                # nodes whose file is not to be served: held off by whoever is writing over it, see hold_off()
         self.memo = Memo(memo_bytes)
         self._lock = threading.Lock()
@@ -298,41 +294,37 @@ class Graph:
     def fps(self):
         return self.decoder.fps
 
-    def cut_files(self):
-        """Node to (path, footage print): what each node whose tool has a cut_file facet says of the
-        file that holds what it hands out of the footage it reads, asked now: the open video for a
-        node that reads the video node, the file the node above answered with for one that reads
-        that node. A node that reads neither, a node in `without`, and a tool that raises, has none."""
-        found = {}
-
-        def of(nid):
-            if nid not in found:
-                found[nid] = None
-                node, w = self.doc.node(nid), self.doc.source(nid)
-                ask = getattr(self.tools.get(node.tool), "cut_file", None)
-                if ask is not None and w is not None and nid not in self.without:
-                    plate = self.doc.node(w.src).tool == VIDEO_TOOL
-                    up = (self.decoder.path, self.decoder.footage_print) if plate else of(w.src)
-                    try:
-                        said = ask(*up, node.params) if up is not None else None
-                    except Exception:       # a tool's rule is user code; one that fails serves nothing
-                        said = None
-                    found[nid] = tuple(said) if said is not None else None
-            return found[nid]
-
-        return {n.id: of(n.id) for n in self.doc.nodes if of(n.id) is not None}
+    def cut_file(self, nid, up):
+        """(path, footage print) of the file `nid`'s tool says holds its cut of the footage it
+        reads, asked now: `up` is that footage as (path, print), None for the open video. None for
+        a node in `without`, a tool that raises or answers with none, and a file that cannot be read."""
+        if nid in self.without:
+            return None
+        node = self.doc.node(nid)
+        try:
+            path = self.tools[node.tool].cut_file(*(up or (self.decoder.path, self.decoder.footage_print)), node.params)
+            if path is None:
+                return None
+            path = str(path)
+            st = os.stat(path)
+            if self._prints.get(path, (None,))[0] != (st.st_size, st.st_mtime_ns):
+                self._prints[path] = ((st.st_size, st.st_mtime_ns), footage_print(path))
+        except Exception:       # a tool's rule is user code; one that fails serves nothing
+            return None
+        return path, self._prints[path][1]
 
     def hold_off(self, nid, on):
         """While `on`, `nid` serves no file, so one may be written over what it served; sync() after."""
         (self.without.add if on else self.without.discard)(nid)
 
     def sync(self):
-        """Re-read the document: the plan, pure in the document, the tools and the cut files (see
-        `plan`), and the decoders' output, which the video node's param sets."""
+        """Re-read the document: the plan, pure in the document, the tools and what the cutting
+        nodes' tools answer now (see `plan`), and the decoders' output, which the video node's
+        param sets."""
         output = video_output(self.doc)
         self.decoder.output = output        # a change empties its cache; a read in flight under the old plan is cancelled
         self._base = base_key(self.decoder.footage_print, output)
-        p = plan(self.doc, self.tools, self._base, self.cut_files())
+        p = plan(self.doc, self.tools, self._base, self.cut_file)
         self.readers.keep({e.file[0] for e in p.entries.values() if e.file is not None})
         for d in self.readers.decoders():
             d.output = output
@@ -362,6 +354,13 @@ class Graph:
             exc.sieve_node = nid
             self.note(nid, str(exc))
             raise
+        held = self.readers.decoders()
+        self._lately = [d, *(o for o in self._lately if o is not d and any(o is h for h in held))]
+        left = self.decoder.cache_limit     # shared by the served files' caches, the one read latest first: it may fill the whole of it
+        for o in self._lately:
+            if o.cache_limit != left:
+                o.cache_limit = left
+            left = max(0, left - o.cache_bytes)
         if d.on_evict is None:
             key = e.raw_key
             d.on_evict = lambda row, n: self.stream.emit("uncache", None, row, key, n)
@@ -595,7 +594,7 @@ class Graph:
                     v = d.read(row)
                 except EndOfStream:
                     # the file is the plate cut, row for row: where it ends the plate's stream does, which nothing may have read that far to find
-                    self.decoder.count = min(self.decoder.count, d.count)
+                    self.decoder.ends_at(d.count)
                     raise
                 ev[0] = "seek" if d.seeks != seeks else "decode" if d.decodes != decodes else "cache"
                 ev[1], ev[2] = v.nbytes, v.shape

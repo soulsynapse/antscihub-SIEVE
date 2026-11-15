@@ -114,6 +114,7 @@ class Pane(QWidget):
         self.video = None
         self.current = None
         self._src, self._fps, self._of = None, None, {}
+        self._cuts = set()    # nodes whose widget said a cut began and has not said it ended
         lay = _column(self, 0)
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -148,7 +149,13 @@ class Pane(QWidget):
         if self.current not in self.cards:
             self.select(None)
 
+    def _cut(self, nid, on):
+        (self._cuts.add if on else self._cuts.discard)(nid)
+        self.cutting.emit(nid, on)
+
     def _drop(self, nid):
+        if nid in self._cuts:
+            self._cut(nid, False)       # the widget goes with its cut and can no longer say it ended
         card = self.cards.pop(nid)
         self.widgets.pop(nid, None)
         self.notes.pop(nid, None)
@@ -201,7 +208,7 @@ class Pane(QWidget):
                 if hasattr(w, "set_source"):
                     w.set_source(self._of.get(node.id, self._src), self._fps)
                 if hasattr(w, "cutting"):
-                    w.cutting.connect(lambda on, nid=node.id: self.cutting.emit(nid, on))
+                    w.cutting.connect(lambda on, nid=node.id: self._cut(nid, on))
                 if is_selector(tool) or paths(tool):
                     self.notes[node.id] = readout()
                     card.add(self.notes[node.id])

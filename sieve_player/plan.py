@@ -1,7 +1,7 @@
 """The plan: what the runtime will compute, read off the document and the tools alone.
 
-`plan()` is pure: the same document, tools, video key and cut files give the same plan, with no decoder,
-thread, memo or disk in sight, so a test or `python -m sieve_player doc.json --plan` reads it as a table. The
+`plan()` is pure in the document, the tools, the video key and what `cut_file` answers, with no decoder,
+thread, memo or disk of its own in sight, so a test or `python -m sieve_player doc.json --plan` reads it as a table. The
 Graph calls it at every sync and holds the result under its lock; nothing here is touched after it is built.
 """
 import hashlib
@@ -90,27 +90,37 @@ def facts(p, pinned):
             "pinned": list(pinned)}
 
 
-def plan(doc, tools, base, cut_files=None):
+def plan(doc, tools, base, cut_file=None):
     """The plan for `doc` under `tools`, name to module, with `base` the video node's key and
-    `cut_files`, node to (path, footage print), the file each cutting node's tool says holds what
-    the node hands out. A raw key names what a tool computes from, so the memo holds under it; the
-    key adds the band, which is applied on read, so what downstream sees is keyed by it and the
-    node's own run is not. A node of `cut_files` that reads the video node itself, or a node that
-    serves a file, serves its file: it reads nothing, and its key is the one a document opened on that file gives its video node, so
-    everything below it is keyed as that document's is. A node reads one piece of the plate: one
+    `cut_file(nid, up)` answering (path, footage print) of the file that holds a cutting node's cut
+    of the footage it reads, or None: `up` is that footage as the node above answered, None for the
+    video. It is asked only of a node whose tool has the cut_file facet and that reads the video
+    node or a node that serves a file, and only such a node serves one; with no `cut_file` none
+    does. A raw key names what a tool computes from, so the memo holds under it; the key adds the
+    band, which is applied on read, so what downstream sees is keyed by it and the node's own run
+    is not. A node that serves its file reads nothing, and its key is the one a document opened on
+    that file gives its video node, so everything below it is keyed as that document's is. A node reads one piece of the plate: one
     whose inputs are of two, the plate among them, is not fed, nor is anything that reads it, and
     its standing says which. A chain node is stepped when its tool steps and everything it reads on
     the chain is stepped; the first node that runs whole ends the prefix for every node after it,
     and a stepping tool so ended names that node in `whole_by`."""
-    cut_files = cut_files or {}
-    keys, raw_keys, pieces = {}, {}, {}
+    keys, raw_keys, pieces, files = {}, {}, {}, {}
+
+    def cuts(nid):
+        return getattr(tools.get(doc.node(nid).tool), "cut_file", None) is not None
 
     def file_of(nid, stack=()):
-        w = doc.source(nid)
-        if w is None or nid not in cut_files or nid in stack:
+        if nid in stack:
             return None
-        whole = doc.node(w.src).tool == VIDEO_TOOL or file_of(w.src, (*stack, nid)) is not None
-        return cut_files[nid] if whole else None
+        if nid not in files:
+            w, said = doc.source(nid), None
+            if cut_file is not None and w is not None and cuts(nid):
+                if doc.node(w.src).tool == VIDEO_TOOL:
+                    said = cut_file(nid, None)
+                elif (up := file_of(w.src, (*stack, nid))) is not None:
+                    said = cut_file(nid, up)
+            files[nid] = None if said is None else tuple(said)
+        return files[nid]
 
     def wired(nid):
         tool = tools.get(doc.node(nid).tool)
@@ -152,7 +162,7 @@ def plan(doc, tools, base, cut_files=None):
             for name, src in wired(nid).items():
                 if src is None or src in stack:
                     continue
-                if getattr(tools.get(doc.node(src).tool), "cut_file", None) is not None:
+                if cuts(src):
                     out[name] = src
                 else:
                     out[name] = next(iter(pieces_of(src, (*stack, nid)).values()), None)

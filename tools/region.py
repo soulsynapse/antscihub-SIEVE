@@ -23,11 +23,12 @@ the file.
 
 Cut writes every shape, whatever is chosen, from the footage the node reads in one ffmpeg pass, at
 `quality` and without sound, a frame out for each frame in, to `<video>-crops/<name>.mp4`, with
-`crops.json` beside them holding which footage they are of and each clip's place on the plate.
+`crops.json` beside them (tools/_cutfile.py); one under way when the card goes is cancelled.
 `quality` changes nothing `run` hands out. `cut_file` is what the player serves in place of `run`
 while the node reads the video node, or a node that serves a file, whose file is then the video
 cut: the chosen shape's clip, once the record says it is of this footage at the rect the shape has
-now. The node's key is then the one a document opened on the clip gives its video node, so
+now and the clip is the size it landed at. A clip cut at `standard` is H.264's rendering of the cut
+and not its pixels, so a served node hands out other values than the same node run. The node's key is then the one a document opened on the clip gives its video node, so
 everything after it is that document's. A shape moved since the cut, or no shape chosen, and the
 node cuts the frame as it did, and the card says which. The clip is of the video file and not of
 what is wired into `in`, so the two differ where a node that serves no file sits between the video
@@ -38,33 +39,23 @@ and this one, and the player serves no clip there.
 import json
 import math
 import os
-import re
-import shutil
 import subprocess
 import sys
-import tempfile
-import time
 
 import cv2
 import numpy as np
 
+from tools._cutfile import QUALITIES, Cut, folder_for, footage_of, record
 from tools._draw import contour as draw_contour
 from tools._table import moments, plane_dtype, with_column
 
 SIEVE_TOOL = True
 NAME, KIND, EXPECTS, PRODUCES = "region", "frame", ("bgr", "gray", "mask", "hsv", "flow"), "same"
-QUALITIES = ("lossless", "standard")
 DEFAULTS = {"plate": [], "shapes": [], "choice": "", "quality": "standard"}
 PATHS = {"geometry": lambda path: load_geometry(path)}
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))   # where `utilities` is found
 MIN_ARC_POINTS = 16     # a circle's contour has at least this many vertices, and one per pixel of circumference past it
-CRF = "18"          # the standard quality
-PRESET = "medium"
-PART = ".part"
-SAID_LINES = 5      # how much of ffmpeg's stderr a failure carries
 POLL_MS = 200
-RECORD = "crops.json"
-LAND_PATIENCE = 5.0 # s a finished cut waits on a clip a reader still has open, which Windows will not replace
 
 
 def _number(v, what):
@@ -273,49 +264,11 @@ def launch(argv, cwd):
     subprocess.Popen(argv, cwd=cwd)
 
 
-def folder_for(video):
-    return os.path.splitext(str(video))[0] + "-crops"
-
-
-def file_for(name):
-    return re.sub(r"[^\w.-]", "_", name) + ".mp4"
-
-
-_records, _prints = {}, {}      # path -> (what the file was when read, what was read): a sync asks cut_file again
-
-
-def _stamp(path):
-    st = os.stat(path)
-    return st.st_size, st.st_mtime_ns
-
-
-def record(folder):
-    """What the Cut that last landed in `folder` wrote of its clips, or None with none there or one that does not read."""
-    path = os.path.join(folder, RECORD)
-    try:
-        stamp = _stamp(path)
-        if _records.get(path, (None,))[0] != stamp:
-            with open(path, encoding="utf-8") as f:
-                _records[path] = (stamp, json.load(f))
-    except (OSError, ValueError):
-        return None
-    return _records[path][1]
-
-
-def _print(path):
-    from sieve_player.decoder import footage_print
-
-    stamp = _stamp(path)
-    if _prints.get(path, (None,))[0] != stamp:
-        _prints[path] = (stamp, footage_print(path))
-    return _prints[path][1]
-
-
 def clip_of(video, footage, params):
     """(the clip a Cut of `video` wrote for the chosen shape, "") or (None, why there is none): the
     record beside the clips must name the video, be of `footage`, the video's print, where it holds
     one, be of this plate, and hold the chosen shape at the rect it has now, and the clip must be
-    there."""
+    there at the size the record holds for it, where it holds one."""
     choice = params.get("choice")
     rect = dict(crops(params)).get(choice) if choice else None
     if not video or rect is None:
@@ -334,127 +287,16 @@ def clip_of(video, footage, params):
     if [cut[0].get(k) for k in "xywh"] != [x0, y0, x1 - x0, y1 - y0]:
         return None, f"{choice} has moved since it was cut"
     path = os.path.join(folder_for(video), cut[0]["file"])
-    return (path, "") if os.path.isfile(path) else (None, f"{cut[0]['file']} is gone")
+    if not os.path.isfile(path):
+        return None, f"{cut[0]['file']} is gone"
+    if cut[0].get("bytes", os.path.getsize(path)) != os.path.getsize(path):
+        return None, f"{cut[0]['file']} is not the clip that was cut"
+    return path, ""
 
 
 def cut_file(video, footage, params):
-    """(`clip_of`'s clip, that clip's decoder.footage_print), or None with no clip."""
-    path, _ = clip_of(video, footage, params)
-    return (path, _print(path)) if path else None
-
-
-def command(video, folder, found, quality=DEFAULTS["quality"], progress=None):
-    """ffmpeg's command line cutting `video` once into a part file per (name, rect) of `found` under
-    `folder`, its progress report written to the file `progress` when one is named."""
-    rate = ["-qp", "0"] if quality == QUALITIES[0] else ["-crf", CRF]
-    argv = [shutil.which("ffmpeg") or "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
-            *(["-progress", progress] if progress else []), "-i", str(video)]
-    for name, (y0, y1, x0, x1) in found:
-        argv += ["-map", "0:v:0", "-vf", f"crop={x1 - x0}:{y1 - y0}:{x0}:{y0}:exact=1", "-c:v", "libx264", *rate,
-                 "-preset", PRESET, "-fps_mode", "passthrough", "-an", "-f", "mp4", os.path.join(folder, file_for(name) + PART)]
-    return argv
-
-
-class Cut:
-    """One ffmpeg run cutting `video` into a clip per shape of `params`. `poll()` is None while it
-    runs and while a clip it would replace is still open in a reader, then "" once every clip and
-    the record have landed in `folder`, or what went wrong, with no part file left behind;
-    `cancel()` stops it and leaves the folder as it was. The record is never of a clip it does not
-    describe: the one there goes before the first clip lands and the new one is written after the
-    last. `progress()` is (frames written, the video's frames as its container counts them, seconds
-    since the start). ValueError when two shapes would write one file or there is nothing to cut."""
-
-    def __init__(self, video, params):
-        self.video, self.plate, self.quality = str(video), list(params["plate"]), str(params["quality"])
-        self.found = crops(params)
-        files = [file_for(name) for name, _ in self.found]
-        if not files:
-            raise ValueError("no shapes; wire a file selector into geometry")
-        if len(set(files)) != len(files):
-            raise ValueError(f"two shapes would write one file: {sorted(f for f in set(files) if files.count(f) > 1)}")
-        self.folder = folder_for(video)
-        os.makedirs(self.folder, exist_ok=True)
-        cap = cv2.VideoCapture(self.video)
-        self.total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        cap.release()
-        self.log = tempfile.TemporaryFile()
-        fd, self.report = tempfile.mkstemp(suffix=".progress")
-        os.close(fd)
-        self.t0, self.done = time.perf_counter(), 0
-        self.proc = subprocess.Popen(command(video, self.folder, self.found, self.quality, self.report),
-                                     stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=self.log)
-        self.said, self.exited = None, None
-
-    def progress(self):
-        try:
-            with open(self.report, "rb") as f:
-                f.seek(max(0, os.path.getsize(self.report) - 1024))
-                at = re.findall(rb"^frame=\s*(\d+)", f.read(), re.M)
-            if at:
-                self.done = int(at[-1])
-        except OSError:
-            pass
-        return self.done, self.total, time.perf_counter() - self.t0
-
-    def _parts(self):
-        return [os.path.join(self.folder, file_for(name) + PART) for name, _ in self.found]
-
-    def _clear(self):
-        for p in (*self._parts(), self.report):
-            if os.path.exists(p):
-                os.remove(p)
-
-    def poll(self):
-        if self.said is not None:
-            return self.said
-        code = self.proc.poll()
-        if code is None:
-            return None
-        if self.exited is None:
-            self.exited = time.perf_counter()
-            self.log.seek(0)
-            said = " | ".join(self.log.read().decode(errors="replace").strip().splitlines()[-SAID_LINES:])
-            self.log.close()
-            if code != 0:
-                self._clear()
-                self.said = f"ffmpeg exited {code}: {said}"
-                return self.said
-        try:
-            self._land()
-        except OSError as e:
-            if time.perf_counter() - self.exited < LAND_PATIENCE:
-                return None
-            self._clear()
-            self.said = f"the clips did not land: {e}"
-            return self.said
-        self.said = ""
-        return self.said
-
-    def _land(self):
-        from sieve_player.decoder import footage_print
-
-        record = os.path.join(self.folder, RECORD)
-        if os.path.exists(record):
-            os.remove(record)
-        for p in self._parts():
-            if os.path.exists(p):
-                os.replace(p, p[:-len(PART)])
-        with open(record, "w", encoding="utf-8", newline="\n") as f:
-            json.dump({"video": os.path.basename(self.video), "footage": footage_print(self.video), "plate": self.plate,
-                       "quality": self.quality,
-                       "crops": [{"name": name, "file": file_for(name), "x": x0, "y": y0, "w": x1 - x0, "h": y1 - y0}
-                                 for name, (y0, y1, x0, x1) in self.found]}, f, indent=1)
-        if os.path.exists(self.report):
-            os.remove(self.report)
-
-    def cancel(self):
-        if self.proc.poll() is None:
-            self.proc.kill()
-            self.proc.wait()
-        if not self.log.closed:
-            self.log.close()
-        self._clear()
-        self.said = "cancelled"
+    """`clip_of`'s clip, or None with no clip."""
+    return clip_of(video, footage, params)[0]
 
 
 def settings(parent=None):
@@ -473,6 +315,8 @@ def settings(parent=None):
             self._get["plate"], self._set["plate"] = lambda: self.plate, lambda v: self._set_geometry(v, self.shapes)
             self._get["shapes"], self._set["shapes"] = lambda: self.shapes, lambda v: self._set_geometry(self.plate, v)
             self.video = self.file = self.cut = None
+            running = self._running = []    # the Cut under way, reached by the slot below once this widget's own attributes are gone
+            self.destroyed.connect(lambda: [cut.cancel() for cut in running])
             self.serving, self.clip = readout(), readout()
             self.chooser = self.add_list("choice", DEFAULTS["choice"])
             self.chooser.changed.connect(self._show)
@@ -537,7 +381,7 @@ def settings(parent=None):
             what = choice if choice in names else "the whole plate"
             self.serving.setText(f"serving {what}, {x1 - x0}x{y1 - y0} at {x0}, {y0}")
             try:
-                path, why = clip_of(self.video, _print(self.video), p) if self.video else (None, "no video")
+                path, why = clip_of(self.video, footage_of(self.video), p) if self.video else (None, "no video")
             except OSError as e:
                 path, why = None, str(e)
             self.clip.setText(f"clip {os.path.basename(path)}" if path else f"no clip: {why}")
@@ -551,10 +395,12 @@ def settings(parent=None):
                 self.status.setText("no video to cut")
                 return
             try:
-                self.cut = Cut(self.video, self.params())
+                p = self.params()
+                self.cut = Cut(self.video, crops(p), p["plate"], p["quality"])
             except (ValueError, OSError) as e:
                 self.status.setText(str(e))
                 return
+            self._running[:] = [self.cut]
             self.cutting.emit(True)
             self.button.setText("Cancel")
             self.bar.setRange(0, self.cut.total)       # a count of 0 is Qt's busy bar
@@ -582,6 +428,7 @@ def settings(parent=None):
             self.status.setText(said or f"cut {len(self.cut.found)} clips into {self.cut.folder}")
             self.button.setText("Cut")
             self.cut = None
+            self._running.clear()
             self._show()
             self.cutting.emit(False)
 

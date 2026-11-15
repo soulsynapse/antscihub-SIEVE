@@ -1,5 +1,5 @@
-"""Frame tool: the frame cut to the box of a shape of a geometry file; a frame of any plane kind in,
-out as in at the cut's shape, with a button that cuts the video into a clip a shape, and the chosen
+"""Frame tool: the frame cut to the box of the chosen shape of a geometry file, or whole with none
+chosen; a frame of any plane kind in, out as in at the cut's shape, with a button that cuts the video into a clip a shape, and the chosen
 shape's clip served in its place once it is cut.
 
 The file, written by a drawing utility and found by a `file` selector wired into `geometry`, is
@@ -11,7 +11,7 @@ the drawing utility's own, is ignored, and the loader's answer is the same with 
 malformed file, saying what was wrong.
 
 `choice`, empty or a name, chooses the cut: the chosen shape's box, or with none chosen, or a name
-the file lacks, the box around every shape. A box is the shape's extent, grown outward to even
+the file lacks, the whole plate. A box is the shape's extent, grown outward to even
 pixels where the plate allows, so the clip H.264 writes is the cut served. A frame whose shape is
 not the plate's raises with the two shapes, so a region wired after a rescale is seen and never
 scaled, as does a file with no shapes. `pick` answers a click inside a shape, on a frame of the
@@ -183,14 +183,12 @@ def crops(params):
 
 
 def served(params):
-    """The rect `run` cuts: the chosen shape's, or the box around every shape's when none is chosen
-    or the choice names none; ValueError with no shapes."""
+    """The rect `run` cuts: the chosen shape's, or the whole plate's when none is chosen or the
+    choice names none; ValueError with no shapes."""
     found = crops(params)
     if not found:
         raise ValueError("no shapes; wire a file selector into geometry" if not params["plate"] else "the geometry file has no shapes")
-    rects = [r for name, r in found if name == params["choice"]] or [r for _, r in found]
-    y0, y1, x0, x1 = zip(*rects)
-    return min(y0), max(y1), min(x0), max(x1)
+    return dict(found).get(params["choice"]) or (0, params["plate"][0], 0, params["plate"][1])
 
 
 def run(frames, row, params):
@@ -523,9 +521,9 @@ def settings(parent=None):
             p = self.params()
             names, choice = [s["name"] for s in self.shapes], p["choice"]
             if choice and choice not in names:
-                status = f"{choice} is not in the file; every shape"
+                status = f"{choice} is not in the file; the whole plate"
             elif choice:
-                status = "chosen; click again for every shape"
+                status = "chosen; click again for the whole plate"
             elif self.plate:
                 status = f"plate {self.plate[1]}x{self.plate[0]}, {len(names)} shape{'s' if len(names) != 1 else ''}"
             else:
@@ -536,7 +534,7 @@ def settings(parent=None):
                 self.clip.setText("")
                 return
             y0, y1, x0, x1 = served(p)
-            what = choice if choice in names else f"all {len(names)} shapes"
+            what = choice if choice in names else "the whole plate"
             self.serving.setText(f"serving {what}, {x1 - x0}x{y1 - y0} at {x0}, {y0}")
             try:
                 path, why = clip_of(self.video, _print(self.video), p) if self.video else (None, "no video")

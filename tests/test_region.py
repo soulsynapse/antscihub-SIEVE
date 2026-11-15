@@ -1,4 +1,4 @@
-"""region: a geometry file's shapes, the frame cut to the chosen one's box or to the box around all, each
+"""region: a geometry file's shapes, the frame cut to the chosen one's box or left whole with none chosen, each
 shape a filled record of `table`, a frame that is not the plate refused, a click inside a shape picking it on
 the plate and on the cut, and the card's button opening the geometry utility on the video and the wired file."""
 import json
@@ -100,8 +100,8 @@ def test_the_choice_narrows_to_one_record_a_missing_name_reads_as_every_shape_a_
     assert region.table([H, W], params()["shapes"], "gone")["name"].tolist() == ["nest", "dish"]
     plate = np.arange(H * W, dtype=np.uint16).reshape(H, W)
     assert np.array_equal(region.run(fed(plate), 0, params("nest")), plate[10:32, 10:32])       # the box, grown to even pixels
-    assert np.array_equal(region.run(fed(plate), 0, params("gone")), plate[10:32, 10:54])
-    assert np.array_equal(region.run(fed(plate), 0, params()), plate[10:32, 10:54])
+    assert np.array_equal(region.run(fed(plate), 0, params("gone")), plate)
+    assert np.array_equal(region.run(fed(plate), 0, params()), plate)
     w = region.settings()
     w.set_params(params("gone"))
     assert "gone is not in the file" in w.chooser.status.text()
@@ -119,7 +119,6 @@ def test_the_choice_narrows_to_one_record_a_missing_name_reads_as_every_shape_a_
     assert region.pick((2, 2), (H, W), 0, result, params()) is None
     assert region.pick((10, 10), (H // 2, W // 2), 0, result, params()) is None
     assert region.pick((10, 10), (22, 22), 0, result, params("nest")) == {"choice": ""}        # on the cut, at its place on the plate
-    assert region.pick((35, 10), (22, 44), 0, result, params()) == {"choice": "dish"}
 
 
 def test_a_frame_of_another_shape_than_the_plate_is_refused_and_said():
@@ -135,7 +134,7 @@ def test_a_frame_of_another_shape_than_the_plate_is_refused_and_said():
     assert e.value.sieve_node == "region" and "the frame is 30x20 and the file's plate 60x40" in g.standing("region")
     doc.connect("bgr", "region")
     g.sync()
-    assert g.standing("region") == "" and g.compute("region", 0).shape == (22, 44, 3)
+    assert g.standing("region") == "" and g.compute("region", 0).shape == (H, W, 3)
     doc.node("region").params["plate"] = []
     g.sync()
     with pytest.raises(ValueError, match="no geometry"):

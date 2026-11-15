@@ -337,6 +337,7 @@ def settings(parent=None):
             self.timer = QTimer(self)
             self.timer.setInterval(POLL_MS)
             self.timer.timeout.connect(self._poll)
+            self.changed.connect(self._show)    # the quality is in what the clip line says
             self._show()
 
         def set_source(self, path, fps):
@@ -348,7 +349,7 @@ def settings(parent=None):
 
         def set_cut_files_in_use(self, paths):
             self.in_use = tuple(paths)
-            self._show()    # the player asked the tools again: the store may be another, or hold other files
+            self._show()    # the files the document names moved, or the store is another
 
         def _unused(self):
             try:
@@ -381,7 +382,6 @@ def settings(parent=None):
         def _set_geometry(self, plate, shapes):
             if (list(plate), list(shapes)) != (self.plate, self.shapes):
                 self.plate, self.shapes = list(plate), list(shapes)
-                self._show()
                 self.changed.emit()
 
         def _show(self):
@@ -456,7 +456,6 @@ def settings(parent=None):
             self.button.setText("Cut")
             self.cut = None
             self._running.clear()
-            self._show()
             self.changed.emit()     # the params stand; the files they name have changed, and the player asks cut_file again
 
     return _Widget(parent)

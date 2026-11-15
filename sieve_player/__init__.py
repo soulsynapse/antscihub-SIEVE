@@ -1,4 +1,5 @@
-"""sieve_player: the shared window SIEVE tools run inside. `play(...)` is the whole API.
+"""sieve_player: the shared window SIEVE tools run inside. `play(...)` opens it; what a tool may
+import of the package is tests/test_seams.py's to say.
 
 The names in `__all__` are imported on first use, so importing one submodule (the document, say)
 pulls in neither Qt nor cv2. Where stderr, a crash's stacks and Qt's warnings go is `dev/console.py`'s."""

@@ -115,7 +115,7 @@ def unused(folder, in_use):
     and those of everything cut of it."""
     held = {_same(p) for p in in_use}
     try:
-        names = sorted(n for n in os.listdir(folder) if n.endswith(".mp4"))
+        names = sorted(n for n in os.listdir(folder) if KEYED.search(n))
     except OSError:
         return []
     out = []
@@ -129,18 +129,26 @@ def unused(folder, in_use):
 
 def delete(paths):
     """Removes each clip of `paths`, its sidecar and everything cut of it. Answers [(path, why)]
-    for each clip still there, or with something cut of it still there, one a reader has open
-    among them."""
+    for each clip still there, one a reader has open among them: a clip stays under its name while
+    anything cut of it does, so what is left is still found under a clip."""
     kept = []
     for path in paths:
+        going = path + PART
         try:
-            os.remove(path)
-            if os.path.exists(path + SIDECAR):
-                os.remove(path + SIDECAR)
+            os.rename(path, going)      # refused while a reader has the clip open, before anything under it goes
+        except OSError as e:
+            kept.append((path, e.strerror or str(e)))
+            continue
+        try:
             if _under(path) and os.path.isdir(_under(path)):
                 shutil.rmtree(_under(path))
         except OSError as e:
+            os.rename(going, path)
             kept.append((path, e.strerror or str(e)))
+            continue
+        os.remove(going)
+        if os.path.exists(path + SIDECAR):
+            os.remove(path + SIDECAR)
     return kept
 
 

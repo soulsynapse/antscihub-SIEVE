@@ -6,7 +6,7 @@ a function that needs a tool's facets is handed the tools, a mapping of name to 
 modules themselves. The video is a node under the reserved name VIDEO_TOOL so wires can name it;
 its path lives on the document, resolved against the document's folder on load. A node's band is
 read by the runtime before anything downstream sees the node, so it is saved with the node. A file
-that holds a bake node, a tool the player had once, loads without it, its readers wired to what it read.
+that holds a node of a tool the player had once loads without it, or with it as the tool that took its place: _lift_bakes, _lift_cuts.
 """
 import json
 import os

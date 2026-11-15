@@ -802,6 +802,8 @@ class PlayerWindow(QMainWindow):
         self.header.show_store(store.folder(), refused)
         if not refused:
             self.sync()     # the cutting nodes are asked again, of the store chosen
+            if self.graph is not None:
+                self.pane.set_cut_files_in_use(self.graph.cut_files_in_use(), again=True)
 
     def _keys(self):
         return {nid: e.key for nid, e in self.graph.snapshot().entries.items()}

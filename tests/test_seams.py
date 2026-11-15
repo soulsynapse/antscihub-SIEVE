@@ -164,6 +164,28 @@ def test_a_tool_imports_what_tools_share_and_never_another_tool():
     assert not bad, bad
 
 
+TOOLS_MAY_IMPORT = {"decoder", "held", "store", "theme"}    # the player's modules a tool may name, beside what the package hands out
+TOOLS_MAY_TAKE = {"ParamWidget", "play", "document"}        # and the names a tool may take of the package itself
+
+
+def test_a_tool_reaches_the_player_through_the_modules_named_here():
+    """What a tool imports of sieve_player is the player's surface to tools: a module or a name
+    not listed is one the player cannot change without a tool breaking, so it is added here first."""
+    bad = {}
+    for path in TOOLS.rglob("*.py"):
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if isinstance(node, ast.ImportFrom) and node.level == 0 and (node.module or "").split(".")[0] == "sieve_player":
+                parts = node.module.split(".")
+                took = {parts[1]} - TOOLS_MAY_IMPORT if len(parts) > 1 else {a.name for a in node.names} - TOOLS_MAY_TAKE - TOOLS_MAY_IMPORT
+            elif isinstance(node, ast.Import):
+                took = {a.name for a in node.names if a.name.split(".")[0] == "sieve_player"}
+            else:
+                continue
+            if took:
+                bad.setdefault(str(path.relative_to(TOOLS)), set()).update(took)
+    assert not bad, bad
+
+
 def test_a_utility_imports_neither_the_player_nor_a_tool():
     """A utility runs as its own process on what its command line hands it, so it can be run,
     copied or replaced without the player."""

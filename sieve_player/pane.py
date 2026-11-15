@@ -285,10 +285,13 @@ class Pane(QWidget):
         if badge is not None:
             badge.say(text, tip=tip)
 
-    def set_cut_files_in_use(self, paths):
+    def set_cut_files_in_use(self, paths, again=False):
         """The cut files some node of the document would serve, from the runtime through the
-        window, for a settings widget that lists the files nothing uses."""
-        self._in_use = tuple(paths)
+        window, for a settings widget that lists the files nothing uses. A widget is told only when
+        the files changed, or `again`: the store they are read from is another."""
+        was, self._in_use = self._in_use, tuple(sorted(paths))
+        if was == self._in_use and not again:
+            return
         for w in self.widgets.values():
             if hasattr(w, "set_cut_files_in_use"):
                 w.set_cut_files_in_use(self._in_use)

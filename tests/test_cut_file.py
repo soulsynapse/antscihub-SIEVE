@@ -150,7 +150,7 @@ def test_a_cut_files_key_is_of_its_footage_extent_and_recipe_and_reads_the_exten
         key({"rect": [0, 8, 0, 8]})
 
 
-def test_a_videos_cut_files_lie_under_its_print_and_a_cut_files_under_it_and_go_with_it(tmp_path, in_store):
+def test_a_videos_cut_files_lie_under_its_print_and_a_cut_files_under_it_and_go_with_it(tmp_path, in_store, monkeypatch):
     video = tmp_path / "v.mp4"
     video.write_bytes(b"plate")
     folder = folder_of(video)
@@ -159,10 +159,29 @@ def test_a_videos_cut_files_lie_under_its_print_and_a_cut_files_under_it_and_go_
     below = Path(C.folder_for(piece, "the piece's print"))
     assert below == folder / "0123456789abcdef"                         # of a cut file, whatever its print
     below.mkdir()
-    for path, said in ((piece, b"nest"), (below / C.file_for("ant", "fedcba9876543210"), b"ant"), (folder / C.file_for("dish", "0" * 16), b"dish")):
+    for path, said in ((piece, b"nest"), (below / C.file_for("ant", "fedcba9876543210"), b"ant"), (folder / C.file_for("dish", "0" * 16), b"dish"),
+                       (folder / "notes.mp4", b"no cut file")):
         path.write_bytes(said)
-    assert C.unused(str(folder), [str(folder / C.file_for("dish", "0" * 16))]) == [(str(piece), "nest-0123456789abcdef", 7)]
-    assert C.delete([str(piece)]) == [] and sorted(p.name for p in folder.iterdir()) == [C.file_for("dish", "0" * 16)]
+    listed = [(str(piece), "nest-0123456789abcdef", 7)]
+    assert C.unused(str(folder), [str(folder / C.file_for("dish", "0" * 16))]) == listed
+    with monkeypatch.context() as m:        # what is cut of a clip will not go: the clip stays under its name, still listed
+        m.setattr(C.shutil, "rmtree", lambda path: (_ for _ in ()).throw(OSError(13, "in use")))
+        assert C.delete([str(piece)]) == [(str(piece), "in use")]
+        assert C.unused(str(folder), [str(folder / C.file_for("dish", "0" * 16))]) == listed
+    assert C.delete([str(piece)]) == [] and sorted(p.name for p in folder.iterdir()) == [C.file_for("dish", "0" * 16), "notes.mp4"]
+
+
+def test_a_card_is_told_the_files_in_use_when_they_change_and_when_the_store_is_another():
+    from PySide6.QtWidgets import QApplication
+
+    from sieve_player.pane import Pane
+
+    QApplication.instance() or QApplication([])
+    pane, told = Pane({}), []
+    pane.widgets["region"] = Tool(set_cut_files_in_use=told.append)
+    for paths, again in ((["b", "a"], False), (["a", "b"], False), (["a", "b"], True), (["a"], False)):
+        pane.set_cut_files_in_use(paths, again)
+    assert told == [("a", "b"), ("a", "b"), ("a",)]
 
 
 def test_a_cut_however_it_ends_leaves_every_path_that_was_there_as_it_was(tmp_path, monkeypatch):

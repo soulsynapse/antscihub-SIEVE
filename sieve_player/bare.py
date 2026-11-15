@@ -19,7 +19,7 @@ def job(doc, video, tools, store, out):
     player has open, the tools by the folders their files are in, the store's folder and the file
     the results go to."""
     files = [os.path.abspath(t.__file__) for t in tools.values() if getattr(t, "__file__", None)]
-    return {"document": doc.to_dict(), "path": doc.path, "video": os.path.abspath(video), "store": store,
+    return {"document": doc.to_dict(), "path": doc.path, "video": video, "store": store,
             "roots": sorted({os.path.dirname(f) for f in files}), "out": out}
 
 

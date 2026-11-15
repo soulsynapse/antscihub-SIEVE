@@ -22,8 +22,8 @@ Assumes: nothing.
 
 Facts to weigh. A window moved ten rows drops its whole result, and a clip walk's rows are read by the
 strip alone (the 2026-11-12 spec's Why). A result carries the key its node had as the chain ran
-(`worker.run_chain`); a key is the node's tool, its params, its band and the keys upstream, the video's
-path and the decoder's output at the root (`plan.key_of`, `plan.base_key`). A stepped node's value at a
+(`worker.run_chain`); a key is the node's tool, its params, its band and the keys upstream, the footage's
+print (`decoder.footage_print`; the video's path until 2026-11-14) and the decoder's output at the root (`plan.key_of`, `plan.base_key`). A stepped node's value at a
 row can depend on the row its walk began at, `track`'s ids and its first rows among them
 (`docs/findings/2026-11-13-a-windows-tracks-against-the-clips.md`), so rows of two walks are not stitched.
 The window walk's rows also feed the display, the densities and the frame tools' draws.

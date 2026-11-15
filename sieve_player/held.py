@@ -12,7 +12,7 @@ from typing import NamedTuple
 import numpy as np
 
 EXT = ".series"
-VERSION = 4
+VERSION = 5
 SAMPLE = 256    # the most rows per_row pickles
 COPY = 1 << 20  # the most bytes of a kept record in memory as the file is made again
 
@@ -34,11 +34,10 @@ def tools_print(tools):
     return h.hexdigest()
 
 
-def stamp(video, tools_digest):
-    """What a held file is good under: the footage's size and date, which its key does not see, and
-    `tools_digest`, taken when the tools were loaded."""
-    st = os.stat(video)
-    return (VERSION, st.st_size, st.st_mtime_ns, tools_digest)
+def stamp(tools_digest):
+    """What a held file is good under: `tools_digest`, taken when the tools were loaded. Which
+    footage a run is of is in its keys, by decoder.footage_print, and no part of this."""
+    return (VERSION, tools_digest)
 
 
 class Run(NamedTuple):

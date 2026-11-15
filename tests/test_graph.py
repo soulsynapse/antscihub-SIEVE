@@ -19,6 +19,7 @@ from sieve_player.plan import base_key, plan
 
 class Dec:
     path, fps, count = "fake.mp4", 30.0, 10
+    footage_print = path
     decodes = seeks = reads = cache_hits = cache_bytes = 0
     step_ms = seek_ms = None
     output, scale = "bgr", 1.0

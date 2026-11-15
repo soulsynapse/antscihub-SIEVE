@@ -9,14 +9,13 @@ from sieve_player import held
 
 
 def test_a_held_file_reads_back_under_its_stamp_and_as_nothing_under_any_other(tmp_path):
-    video, tool = tmp_path / "clip.mp4", tmp_path / "tools" / "t.py"
+    tool = tmp_path / "tools" / "t.py"
     tool.parent.mkdir()
-    video.write_bytes(b"footage")
     tool.write_text("A = 1\n", encoding="utf-8", newline="\n")
     tools = {"t": type("M", (), {"__file__": str(tool)})}
-    stamp = held.stamp(video, held.tools_print(tools))
+    stamp = held.stamp(held.tools_print(tools))
     path = held.path_for(str(tmp_path / "doc.json"))
-    read = lambda: held.File(path, held.stamp(video, held.tools_print(tools))).load()
+    read = lambda: held.File(path, held.stamp(held.tools_print(tools))).load()
     result = {"signal": np.arange(4, dtype=np.float32), "key": "k", "plate": (0, 1, 2, 3)}     # a tuple as long as the run
     held.File(path, stamp).write([(10, 4, {"count": result}, 16)])
     (start, rows, results, _), = read()
@@ -27,8 +26,6 @@ def test_a_held_file_reads_back_under_its_stamp_and_as_nothing_under_any_other(t
     assert read() == []
     tool.write_text("A = 1\n", encoding="utf-8", newline="\n")
     assert read() != []
-    video.write_bytes(b"other footage")
-    assert read() == []
     with open(path, "wb") as f:
         f.write(b"not a pickle")
     assert held.File(path, stamp).load() == [] and held.File(str(tmp_path / "absent"), stamp).load() == []

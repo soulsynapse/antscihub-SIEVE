@@ -4,6 +4,7 @@ in use; a short jump ahead reads through, since a seek decodes from the last key
 costs what the decoder has measured it to cost here; anything else seeks. A seek lands one row
 short and reads through it, because the tools that difference frames ask for row - 1 right after
 row, and that second ask would otherwise be a second seek."""
+import hashlib
 import os
 import sys
 import threading
@@ -107,12 +108,34 @@ class _Cursor:
         self.pos = 0
 
 
+SLICE = 1 << 20     # the bytes of a file's head, and of its tail, that footage_print reads
+
+
+def footage_print(path):
+    """Which footage the file at `path` is, the same wherever it lies and however its path is
+    spelled: a digest of its size, its first SLICE bytes and its last, so two files as long that
+    differ only between those are one. Of a `path` that is no file, the digest of the path."""
+    path = str(path)
+    if not os.path.isfile(path):
+        return hashlib.sha1(path.encode()).hexdigest()[:16]
+    size = os.path.getsize(path)
+    h = hashlib.sha1(str(size).encode())
+    with open(path, "rb") as f:
+        h.update(f.read(SLICE))
+        if size > SLICE:
+            f.seek(max(SLICE, size - SLICE))
+            h.update(f.read(SLICE))
+    return h.hexdigest()[:16]
+
+
 class Decoder:
     """Opens an indexed container; a file that will not open, or whose container claims no rows (a
-    raw stream, which cannot be seeked), raises IOError saying which."""
+    raw stream, which cannot be seeked), raises IOError saying which. `footage_print` is the
+    file's, by the function of that name, taken as it opens."""
 
     def __init__(self, path, cache_bytes=4 << 30):
         self.path = str(path)
+        self.footage_print = footage_print(self.path)
         walk = _Cursor(self.path, luma=False)
         if not walk.cap.isOpened():
             raise IOError(f"cannot open {path}")

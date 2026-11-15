@@ -1034,7 +1034,7 @@ class PlayerWindow(QMainWindow):
         self.timeline.setEnabled(True)
         self.worker.start()
         self.sync()
-        self._stamp = held.stamp(path, self._tools_digest)
+        self._stamp = held.stamp(self._tools_digest)
         self._file = held.File(held.path_for(self.doc.path), self._stamp) if self.doc.path else None
         self.runs.take(self._file.load() if self._file is not None else [])
         self.set_window(0, min(self.count, round(10 * self.fps)), by=HAND)

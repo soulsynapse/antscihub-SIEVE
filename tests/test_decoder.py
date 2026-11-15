@@ -4,7 +4,7 @@ import cv2
 import numpy as np
 import pytest
 
-from sieve_player.decoder import Decoder
+from sieve_player.decoder import SLICE, Decoder, footage_print
 
 
 @pytest.fixture(scope="module")
@@ -107,3 +107,16 @@ def test_a_stream_ending_short_of_the_container_is_said_once_on_stderr(video, tm
     d.read(0)
     assert "inexactly" not in capsys.readouterr().err and d.seeks == 1
     d.close()
+
+
+def test_a_files_print_is_its_footages_wherever_it_lies_and_however_its_path_is_spelled(tmp_path):
+    """The video node's key is of this and of no path, so a bake and a held run made of a file
+    are found from a copy of it, on another machine and under another spelling."""
+    body = bytes(range(256)) * (3 * SLICE // 256)
+    a, b, c = tmp_path / "a.mp4", tmp_path / "sub" / "b.mp4", tmp_path / "c.mp4"
+    b.parent.mkdir()
+    a.write_bytes(body)
+    b.write_bytes(body)
+    c.write_bytes(body[:-1] + b"x")
+    assert footage_print(a) == footage_print(b) == footage_print(str(a).replace("\\", "/")) == footage_print(tmp_path / "sub" / ".." / "a.mp4")
+    assert footage_print(c) != footage_print(a) and footage_print(a) != footage_print(tmp_path / "absent.mp4")

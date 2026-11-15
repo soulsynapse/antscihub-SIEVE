@@ -838,7 +838,7 @@ class Canvas(QWidget):
             self._end_move()
         elif kind == "box":
             shift, base = rest
-            inside = [n.id for n in self.doc.nodes if self._box is not None and self._box.contains(self.box(n))]
+            inside = [n.id for n in self.doc.nodes if self._box is not None and self._box.intersects(self.box(n))]
             self._box = None
             self.select([*base, *(i for i in inside if i not in base)] if shift else inside)
             self.update()

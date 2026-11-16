@@ -53,7 +53,10 @@ where it wrote. No tool is known to write into its input, by a search and not by
 Assumes: What a read hands is read-only.
 
 Facts to weigh. A node read under a band is handed `np.where`'s array, which no store holds, so a
-result that is that array is the memo's own. `peek` reads the memo or a cache by the entry's kind
+result that is that array is the memo's own. A run may read rows other than its own and hand one
+on, as a tool that keeps every nth row or the rows of a period would, so a reference's row is the
+row read and not the node's. A cut whose rect moves by the row is part of a buffer at every row.
+`peek` reads the memo or a cache by the entry's kind
 and runs nothing. A static node's result is pinned and outlives every walk, where a cache's frame
 goes when the cache needs the room.
 
@@ -84,6 +87,6 @@ Assumes: The memo holds no view.
 
 ## Not here
 
-A node that hands on its input unchanged still runs, and has a key of its own: docs/spec/pass-through.md
-holds the plan leaving such a node out. One limit over the memo and the caches. Arrays behind a
+A node that hands on its input unchanged still runs, and has a key of its own; what a node's key is
+of is docs/spec/a-key-of-what-the-run-reads.md's. One limit over the memo and the caches. Arrays behind a
 table's object column. What a walk's stack and the held runs hold.

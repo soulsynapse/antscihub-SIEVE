@@ -173,7 +173,7 @@ found is what is there and not what a comparison went looking for.
   what goes through it, and lists for each module what it holds by job.
   Check: every module under `sieve_player/` is in one line or more, and each job cites
   `file:name`.
-- [ ] It lists what `sieve_player/window.py` holds by job, each with the lines it takes, and marks
+- [x] It lists what `sieve_player/window.py` holds by job, each with the lines it takes, and marks
   each job as composition, the window's own, or another owner's.
   Check: the lines sum to the file.
 - [ ] Part 5 lists each thing the tree writes more than twice, with every place by `file:name`,

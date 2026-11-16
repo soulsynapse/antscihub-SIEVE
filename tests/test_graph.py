@@ -1012,9 +1012,11 @@ def test_the_memo_holds_no_view_and_names_another_stores_array_by_reference():
     assert g.memo.bytes == 2 * 64 + 2 * 36 + 2 * 72                              # two references, two strips, the new plane and the pinned one
     assert out["whole"] is frame and out["again"] is frame and g.peek(2, "whole") is frame and g.peek(2, "again") is frame
     assert (out["strip"] == 2).all() and (out["own_strip"] == 3).all() and (out["fixed"] == 2).all() and out["fixed"] is not frame
-    runs, decodes = whole.runs, dec.decodes
+    runs, decodes, hits, misses = whole.runs, dec.decodes, g.memo.hits, g.memo.misses
     assert g.compute("again", 2) is frame and whole.runs == runs                # held by the cache: nothing runs
+    assert (g.memo.hits, g.memo.misses) == (hits + 1, misses)                   # one read answered is one hit, through two references
     dec.held.clear()                                                            # the cache lets the frame go
     assert g.peek(2, "whole") is None and (g.compute("again", 2) == 2).all()
+    assert (g.memo.hits, g.memo.misses) == (hits + 1, misses + 3)               # a reference to an array let go is a miss: the peek, again, whole
     assert whole.runs == runs + 1 and dec.decodes == decodes + 1 and g.memo.bytes == 2 * 64 + 2 * 36 + 2 * 72
     assert g.peek(0, "fixed") is not None                                       # the pinned plane is the memo's own and stays

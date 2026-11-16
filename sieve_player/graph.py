@@ -129,19 +129,28 @@ class Memo:
 
     _size = staticmethod(nbytes)
 
-    def get(self, k):
+    def get(self, k, count=True):
+        """The entry under `k`, or None; a hit or a miss is counted unless `count` is False, for a
+        caller that says by `counted` whether the read was answered."""
         with self._lock:
             if k in self._pinned:
-                self.hits += 1
+                self.hits += count
                 return self._pinned[k][1]
             for d in (self._big, self._small):
                 v = d.get(k)
                 if v is not None:
                     d.move_to_end(k)
-                    self.hits += 1
+                    self.hits += count
                     return v
-            self.misses += 1
+            self.misses += count
             return None
+
+    def counted(self, hit):
+        with self._lock:
+            if hit:
+                self.hits += 1
+            else:
+                self.misses += 1
 
     def empty(self):
         """Drops every entry, pinned ones with the rest, and tells `on_evict` of none: what is
@@ -664,8 +673,16 @@ class Graph:
             if v.key in files:
                 d = self.readers.held(files[v.key])
                 return None if d is None else d.cached(v.row)
-            v = self.memo.get((v.key, v.row))
+            v = self.memo.get((v.key, v.row), count=False)
         return v
+
+    def _memoized(self, mk):
+        """(the memo's entry under `mk`, the array it stands for): one hit where there is an array,
+        one miss where there is none, a reference whose store let the array go among them."""
+        got = self.memo.get(mk, count=False)
+        v = self._held(got)
+        self.memo.counted(v is not None)
+        return got, v
 
     def _compute(self, plan, nid, row, raw=False, reader=None):
         e = plan.get(nid)
@@ -695,8 +712,7 @@ class Graph:
             v.setflags(write=False)
             return v if raw or e.band is None else banded(v, e.band)
         mk = (e.raw_key, None if e.static else row)
-        got = self.memo.get(mk)
-        v = self._held(got)
+        got, v = self._memoized(mk)
         if v is None:
             frames = Frames(self, plan, nid, e.srcs, e.src_key, e.types)
             with self.probe(nid, row, e.raw_key, reader) as ev:
@@ -757,7 +773,7 @@ class Graph:
             d = self.readers.held(e.file[0])
             v = None if d is None else d.cached(row)
             return v if v is None or e.band is None else banded(v, e.band)
-        v = self._held(self.memo.get((e.raw_key, None if e.static else row)))
+        v = self._memoized((e.raw_key, None if e.static else row))[1]
         return v if v is None or e.band is None else banded(v, e.band)
 
 

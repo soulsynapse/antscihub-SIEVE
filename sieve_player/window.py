@@ -443,6 +443,7 @@ class PlayerWindow(QMainWindow):
         self.canvas.selectionChanged.connect(lambda ids: ids and self._select(ids[-1]))
         self.canvas.changed.connect(self.sync)
         self.canvas.flagged.connect(self.reflag)
+        self.canvas.pinToggled.connect(self._toggle_pin)
         self.pane.paramsChanged.connect(self._params_changed)
         self.pane.storeChanged.connect(self._store_changed)
         self.pane.videoPicked.connect(self.load)

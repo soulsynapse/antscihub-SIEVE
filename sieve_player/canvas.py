@@ -65,6 +65,7 @@ class Canvas(QWidget):
     selectionChanged = Signal(list)   # the selected node ids, in selection order
     changed = Signal()                # the document's nodes or wires changed here: what is computed
     flagged = Signal()                # a flag moved: what is looked at, nothing to recompute
+    pinToggled = Signal(str)          # a node's body was double-clicked: the node id
 
     def __init__(self, tools, broken=None, info=None, order=(), parent=None):
         super().__init__(parent)
@@ -788,6 +789,27 @@ class Canvas(QWidget):
             self.select([node.id])
         if node.id in self.selected:
             self._drag = ("move", pos, {i: self.doc.node(i).pos for i in self.selected})
+
+    def mouseDoubleClickEvent(self, e):
+        node = self._body_at(e) if e.button() == Qt.LeftButton else None
+        if node is None:
+            self.mousePressEvent(e)     # Qt's own default: the second press of a fast pair is a press
+        else:
+            self.pinToggled.emit(node.id)
+
+    def _body_at(self, e):
+        """The node whose body is under the event, where a press would select or move it and start
+        nothing else; None under a button, a connector or a flag, and while a menu, a drag or a held
+        key has the press."""
+        if self.doc is None or self._drag is not None or self._menu is not None or self._space or self._y \
+                or self.button_at(e.position()) is not None:
+            return None
+        pos = self.to_doc(e.position())
+        node = self.node_at(pos) if self.pin_at(pos) is None else None
+        if node is None:
+            return None
+        flags = [self.flag(node)] * self.can_display(node) + [self.overlay_flag(node)] * self.can_overlay(node)
+        return None if any(f.adjusted(-HIT, -HIT, HIT, HIT).contains(pos) for f in flags) else node
 
     def mouseMoveEvent(self, e):
         if self._drag is None:

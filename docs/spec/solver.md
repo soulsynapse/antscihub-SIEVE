@@ -5,7 +5,7 @@ deliverables were ticked that day, the worker's last. The two after it were adde
 from an architect review of the branch at b588358c and ticked that day; every box is ticked.
 Read with the registry's facet table and type report (`python -m sieve_player.registry`), the live
 statement of what a tool may offer and what feeds what, and with
-docs/findings/2026-11-08-bake-window-fit.md, the measurement this spec answers. docs/spec/bake.md
+docs/findings/2026-11-08-bake-window-fit.md, the measurement this spec answers. docs/spec/retired/bake.md
 is the spec before it and nothing here changes a bake; the series bake's relation to a stepped
 chain is in Open.
 

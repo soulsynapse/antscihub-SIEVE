@@ -1,27 +1,32 @@
-"""The store control: a store.Store drawn as one button, for the player's header. It reads the
-store it is handed and the theme, and nothing of the window it sits in.
+"""The store control: the store's folder drawn as one button, for the player's header. It reads the
+folder it is handed, through store.py, and the theme, and nothing of the window it sits in.
 """
 from PySide6.QtCore import QRectF, Qt
 from PySide6.QtGui import QBrush, QFontMetrics, QPainter, QPen
 from PySide6.QtWidgets import QAbstractButton
 
-from . import theme
-from .store import fmt_bytes
+from . import store, theme
+from .held import in_units
 from .theme import GAP, ROW_H
 
 
+def fmt_bytes(n):
+    return " ".join(in_units(n))
+
+
 class StoreControl(QAbstractButton):
-    """A Store as one control, drawn and not written: a bar and the bytes held. The bar's width is
-    the disk the folder is on: the store's files bright, the part files of a bake that died with its
+    """The store as one control, drawn and not written: a bar and the bytes held. The bar's width is
+    the disk the folder is on: the store's files bright, the part files of a cut that died with its
     process hatched, what else is on the disk dim, and the rest free. A store that holds anything is
     a pixel of the bar at least. The tooltip is the folder and the whole of it in words, then `hint`,
-    what a press does. Its width never follows its text."""
+    what a press does. The folder is read when it is set and again as the pointer comes over the
+    control. Its width never follows its text."""
     BAR_W, BAR_H, EDGE = 100, 8, 6
     OTHER = 105     # the gray of what else is on the disk, between the bar's ground and the store's own
 
     def __init__(self, hint="", parent=None):
         super().__init__(parent)
-        self.hint = hint
+        self.hint, self.folder = hint, None
         self.held, self.stray, self.total, self.free = 0, 0, 0, 0
         self.setFont(theme.mono_font())
         self._size_w = QFontMetrics(self.font()).horizontalAdvance("0000.0 GB")
@@ -29,14 +34,14 @@ class StoreControl(QAbstractButton):
         self.setAttribute(Qt.WA_Hover, True)
         self.setCursor(Qt.PointingHandCursor)
 
-    def set_store(self, st):
-        """`st`, the store.Store to draw, read now: a file landing in it later is not seen until this is called again."""
-        self.held = st.held()
-        n, self.stray = st.strays()
-        self.total, self.free = st.disk()
-        lines = [st.folder, f"holds {fmt_bytes(self.held)}; {fmt_bytes(self.free)} free of {fmt_bytes(self.total)} on its disk"]
+    def set_store(self, folder):
+        """`folder`, the store to draw, read now."""
+        self.folder = folder
+        self.held, n, self.stray = store.held(folder)
+        self.total, self.free = store.disk(folder)
+        lines = [folder, f"holds {fmt_bytes(self.held)}; {fmt_bytes(self.free)} free of {fmt_bytes(self.total)} on its disk"]
         if n:
-            lines.append(f"{n} part file{'s' if n > 1 else ''} of a bake that died with its process, {fmt_bytes(self.stray)}")
+            lines.append(f"{n} part file{'s' if n > 1 else ''} of a cut that died with its process, {fmt_bytes(self.stray)}")
         self.setToolTip("\n".join(lines + [self.hint] if self.hint else lines))
         self.update()
 
@@ -70,6 +75,8 @@ class StoreControl(QAbstractButton):
         p.end()
 
     def event(self, e):
+        if e.type() == e.Type.HoverEnter and self.folder is not None:
+            self.set_store(self.folder)     # a file deleted from it since is told to nobody
         if e.type() in (e.Type.HoverEnter, e.Type.HoverLeave):
             self.update()
         return super().event(e)

@@ -1,6 +1,6 @@
-"""region: a geometry file's shapes as one STATIC table, each record a filled shape with its name, the
-choice narrowing to one, a frame that is not the plate refused, a click inside a shape picking it, and the
-card's button opening the geometry utility on the video and the wired file."""
+"""region: a geometry file's shapes, the frame cut to the chosen one's box or left whole with none chosen, each
+shape a filled record of `table`, a frame that is not the plate refused, a click inside a shape picking it on
+the plate and on the cut, and the card's button opening the geometry utility on the video and the wired file."""
 import json
 import os
 
@@ -14,7 +14,8 @@ from sieve_player.graph import Graph  # noqa: E402
 from tests.test_graph import Dec, tool  # noqa: E402
 from tests.test_blobs import fed  # noqa: E402
 from tests.test_track import table as points  # noqa: E402
-from tools import attach, blobs_to_mask, filter as filter_, region, rescale, sample  # noqa: E402
+from tools import attach, filter as filter_, region, rescale, sample  # noqa: E402
+from tools.retired import blobs_to_mask  # noqa: E402
 from tools._table import plane, plane_dtype  # noqa: E402
 
 H, W = 40, 60
@@ -60,7 +61,7 @@ def test_the_loader_reads_a_polygon_and_a_circle_and_refuses_what_is_not_one(tmp
 def test_each_shape_is_a_filled_record_the_mask_paints_back_and_the_tools_read():
     import cv2
 
-    out = region.run(fed(frame()), 0, params())
+    out = region.table([H, W], params()["shapes"])
     assert len(out) == 2 and plane(out) == (H, W) and out["name"].tolist() == ["nest", "dish"]
     painted = blobs_to_mask.mask(out[out["name"] == "nest"], "contour")
     fill = np.zeros((H, W), np.uint8)
@@ -95,9 +96,12 @@ def test_the_choice_narrows_to_one_record_a_missing_name_reads_as_every_shape_a_
     region.draw(painter, 0, None, 0, params("dish"))
     painter.end()
     assert image.pixelColor(25, 15) == QColor(80, 220, 120) and image.pixelColor(53, 20) == QColor(255, 200, 80)
-    assert region.run(fed(frame()), 0, params("dish"))["name"].tolist() == ["dish"]
-    assert region.run(fed(frame()), 0, params(""))["name"].tolist() == ["nest", "dish"]
-    assert region.run(fed(frame()), 0, params("gone"))["name"].tolist() == ["nest", "dish"]
+    assert region.table([H, W], params()["shapes"], "dish")["name"].tolist() == ["dish"]
+    assert region.table([H, W], params()["shapes"], "gone")["name"].tolist() == ["nest", "dish"]
+    plate = np.arange(H * W, dtype=np.uint16).reshape(H, W)
+    assert np.array_equal(region.run(fed(plate), 0, params("nest")), plate[10:32, 10:32])       # the box, grown to even pixels
+    assert np.array_equal(region.run(fed(plate), 0, params("gone")), plate)
+    assert np.array_equal(region.run(fed(plate), 0, params()), plate)
     w = region.settings()
     w.set_params(params("gone"))
     assert "gone is not in the file" in w.chooser.status.text()
@@ -114,6 +118,7 @@ def test_the_choice_narrows_to_one_record_a_missing_name_reads_as_every_shape_a_
     assert region.pick((45, 20), (H, W), 0, result, params("nest")) == {"choice": "dish"}
     assert region.pick((2, 2), (H, W), 0, result, params()) is None
     assert region.pick((10, 10), (H // 2, W // 2), 0, result, params()) is None
+    assert region.pick((10, 10), (22, 22), 0, result, params("nest")) == {"choice": ""}        # on the cut, at its place on the plate
 
 
 def test_a_frame_of_another_shape_than_the_plate_is_refused_and_said():
@@ -129,13 +134,7 @@ def test_a_frame_of_another_shape_than_the_plate_is_refused_and_said():
     assert e.value.sieve_node == "region" and "the frame is 30x20 and the file's plate 60x40" in g.standing("region")
     doc.connect("bgr", "region")
     g.sync()
-    assert g.standing("region") == "" and len(g.compute("region", 0)) == 2 and len(g.compute("region", 5)) == 2
-    assert region.STATIC and g.entry("region").static
-    doc.add_node("blobs-to-mask", (0, 0), blobs_to_mask.DEFAULTS)
-    doc.connect("region", "blobs-to-mask")
-    g.sync()
-    assert not getattr(blobs_to_mask, "STATIC", False) and g.entry("blobs-to-mask").static and not g.entry("rescale").static
-    assert g.compute("blobs-to-mask", 0) is g.compute("blobs-to-mask", 7)
+    assert g.standing("region") == "" and g.compute("region", 0).shape == (H, W, 3)
     doc.node("region").params["plate"] = []
     g.sync()
     with pytest.raises(ValueError, match="no geometry"):

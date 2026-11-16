@@ -16,7 +16,7 @@ from contextlib import nullcontext
 from dataclasses import dataclass, field, fields, replace
 from typing import NamedTuple
 
-from .stream import (BEGIN, CACHE, CANCEL, DECODE, EVICT, FOLD, NODE_FACTS, NODES, OWN, PLAN_FACTS, PROGRESS, READ, REST, RUN, SEEK, STEP, SYNC,
+from .stream import (BEGIN, CACHE, CANCEL, DECODE, EVICT, FOLD, NODE_FACTS, NODES, OWN, PLAN_FACTS, PROGRESS, REST, RUN, SEEK, STEP, SYNC,
                      TURNS, UNCACHE, WAKE, WATCH)
 from .trace import read_dump
 
@@ -31,7 +31,7 @@ SETTLES_BY = 8.0    # s behind the newest at which a bucket is settled whatever 
 
 ROW_RUNS = (RUN, STEP, DECODE)  # the spans that are a node's work on one row of a walk in order, which seeks nowhere; see row_cost
 _RAN = {RUN, STEP, FOLD, DECODE, SEEK}
-_FILE = {DECODE, SEEK, READ}            # what a served node's file answered, its reader's cache not holding the row
+_FILE = {DECODE, SEEK}                  # what a served node's file answered, its reader's cache not holding the row
 _READS = _FILE | {CACHE}                # the kinds whose wall above CPU is a decoder's own threads at work and no wait
 
 
@@ -531,7 +531,7 @@ class Ledger:
             hits, folds = facts.get("hits", {}), facts.get("fold_hits", {})
             for nid in lane.kinds.keys() | hits.keys() | folds.keys():
                 kinds, node = lane.kinds.get(nid, {}), walk.nodes.setdefault(nid, Node())
-                file = _FILE if nid in served else {READ}
+                file = _FILE if nid in served else set()
                 answered = set().union(*(at for k, at in kinds.items() if k in file))
                 ran = set().union(*(at for k, at in kinds.items() if k in _RAN and k not in file)) - answered
                 left = rows

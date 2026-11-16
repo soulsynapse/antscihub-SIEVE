@@ -8,11 +8,13 @@ when nothing reaches it: no wire, an unresolved tool, or a wire whose types do n
 """
 import threading
 from collections import OrderedDict
+from contextlib import ExitStack, contextmanager
 
 import numpy as np
 
 from . import density
-from .document import INPUT, video_output
+from .decoder import Decoder, EndOfStream, footage_print_by_stamp
+from .document import INPUT, VIDEO_TOOL, video_output
 from .plan import _key, base_key, facts, plan
 from .stream import Emitter
 
@@ -200,55 +202,56 @@ class Series:
 
 
 class Readers:
-    """The readers open on served bakes, one per key, opened on the worker at the first read and
-    kept while a node serves the key. `keep()` retires the rest at sync and `reap()` closes them on
+    """The Decoders open on served files, one per path, opened on the worker at the first read and
+    kept while a node serves the path. `keep()` retires the rest at sync and `reap()` closes them on
     the worker between computations, since a close from the GUI thread would pull a file from under
-    a read in flight; `release()` closes one so its file can be replaced or removed, which on
-    Windows a file open in cv2 refuses."""
+    a read in flight. A file open here cannot be replaced or removed on Windows, so a tool never
+    writes over a file its cut_file has answered with."""
 
-    def __init__(self, open_bake):
-        self._open, self._held, self._retired = open_bake, {}, []
+    def __init__(self):
+        self._held, self._retired = {}, []
         self._lock = threading.Lock()
 
-    def get(self, bake, cache_bytes):
-        """The reader on `bake`, opened here when none is: IOError when it cannot be. Worker threads only."""
+    def get(self, path, cache_bytes, output):
+        """The Decoder on `path`, opened here when none is, handing out `output`: IOError when it
+        cannot be opened. Worker threads only."""
         with self._lock:
-            r = self._held.get(bake.key)
-        if r is None:
-            if self._open is None:
-                raise IOError("no store to read the bake from")
-            r = self._open(bake, cache_bytes)
+            d = self._held.get(path)
+        if d is None:
+            d = Decoder(path, cache_bytes=cache_bytes)
+            d.output = output
             with self._lock:
-                self._held[bake.key] = r
-        return r
+                self._held[path] = d
+        return d
 
-    def held(self, key):
-        """The reader open on `key`, or None; never opens one. GUI-safe."""
+    def held(self, path):
+        """The Decoder open on `path`, or None; never opens one. GUI-safe."""
         with self._lock:
-            return self._held.get(key)
+            return self._held.get(path)
 
-    def keep(self, keys):
+    def keep(self, paths):
         with self._lock:
-            self._retired += [self._held.pop(k) for k in list(self._held) if k not in keys]
+            self._retired += [self._held.pop(k) for k in list(self._held) if k not in paths]
+
+    def open_paths(self):
+        """Every path a Decoder here has open, held or retired and not yet reaped. GUI-safe."""
+        with self._lock:
+            return {*self._held, *(r.path for r in self._retired)}
 
     def decoders(self):
-        """The Decoder of each reader held that reads a clip. GUI-safe."""
+        """Every Decoder held. GUI-safe."""
         with self._lock:
-            return [d for r in self._held.values() if (d := getattr(r, "decoder", None)) is not None]
+            return list(self._held.values())
 
     def reap(self):
         """Closes the retired readers; the worker's alone, between computations, since a close under a read in flight pulls the file from it."""
         assert threading.current_thread().name == "worker", "Readers.reap off the worker thread"
         with self._lock:
-            gone, self._retired = self._retired, []
+            gone = list(self._retired)
         for r in gone:
             r.close()
-
-    def release(self, key):
         with self._lock:
-            r = self._held.pop(key, None)
-        if r is not None:
-            r.close()
+            self._retired = [r for r in self._retired if all(r is not g for g in gone)]
 
     def close(self):
         """Closes every reader, held or retired: for the owner once the worker has stopped."""
@@ -259,18 +262,14 @@ class Readers:
 
 
 class Graph:
-    def __init__(self, doc, decoder, tools, memo_bytes=4 << 30, open_bake=None, stream=None):
-        """`open_bake(bake, cache_bytes)` opens a served node's file as a reader, or raises IOError;
-        without it a served node's read raises. Whether the file is there is asked where the document
-        opens, Store.missing, not here. `stream` is the Emitter it emits through, one of its own when
-        none is handed."""
+    def __init__(self, doc, decoder, tools, memo_bytes=4 << 30, stream=None):
+        """`stream` is the Emitter it emits through, one of its own when none is handed."""
         self.doc, self.decoder = doc, decoder
         self.tools = tools if hasattr(tools, "get") else {t.NAME: t for t in tools}
-        self.readers = Readers(open_bake)
-        self._rows = None                   # (count, fps) of the file the document is in the row space of; None for the plate's
-        self.axis = None                    # the served node whose file that is
-        self.off, self.plate = set(), None  # nodes in the other row space; the axis's Plate, for a csv's key line
-        self.stale = set()                  # served nodes whose live key is not the one they were baked under; the plan's verdict, shown and never saved
+        self.readers = Readers()
+        self._lately = []                   # the served files' Decoders in the order they were last read, latest first
+        self._in_use = set()                # the files the cutting nodes' tools named at the last sync, see cut_files_named
+        self._failing, self._failed = {}, {}    # node -> what its tool's cut_file or cut_files raised: at the sync under way, and at the last
         self.memo = Memo(memo_bytes)
         self._lock = threading.Lock()
         self.halt = False                   # set by whoever is stopping the worker: every Frames read from then on raises Cancelled
@@ -290,28 +289,69 @@ class Graph:
 
     @property
     def count(self):
-        """The document's rows: the served file's while the display is behind an unaligned bake,
-        else the decoder's, read live, since a container's header may claim rows the stream lacks
-        and the decoder corrects itself at the first read past the end."""
-        return self._rows[0] if self._rows else self.decoder.count
+        """The document's rows: the decoder's, read live, since a container's header may claim rows
+        the stream lacks and the decoder corrects itself at the first read past the end, its own or
+        a served file's."""
+        return self.decoder.count
 
     @property
     def fps(self):
-        return self._rows[1] if self._rows else self.decoder.fps
+        return self.decoder.fps
+
+    def cut_file(self, nid, up):
+        """(path, footage print) of the file `nid`'s tool says holds its cut of the footage it
+        reads, asked now: `up` is that footage as (path, print), None for the open video. A str,
+        what was said, where the tool raises FileNotFoundError or the file it names is gone: the
+        node is to serve a file and has none, and `plan` does not run it. None for a tool that
+        raises anything else or answers with none, and a file that cannot be read."""
+        node = self.doc.node(nid)
+        tool, of = self.tools[node.tool], up or (self.decoder.path, self.decoder.footage_print)
+        try:
+            path = tool.cut_file(*of, node.params)
+            return None if path is None else (str(path), footage_print_by_stamp(path))
+        except FileNotFoundError as exc:
+            return str(exc)
+        except Exception as exc:       # a tool's rule is user code; one that fails serves nothing, and the node's standing says so
+            self._failing[nid] = f"cut_file raised: {type(exc).__name__}: {exc}"
+            return None
+
+    def _named(self, entries):
+        """Every file a node of `entries` whose tool has the cut_files facet names of the footage
+        it reads, whether or not the plan would serve one there; a tool that raises names none."""
+        out = set()
+        for nid, e in entries.items():
+            if hasattr(e.tool, "cut_files"):
+                try:
+                    out |= {str(p) for p in e.tool.cut_files(*self._footage(entries, nid), e.params)}
+                except Exception as exc:
+                    self._failing.setdefault(nid, f"cut_files raised: {type(exc).__name__}: {exc}")
+        return out
+
+    def cut_files_named(self):
+        """Every file a cutting node of the last sync's plan would serve under some choice of its
+        params were it served, as its tool's cut_files answered of the footage `footage` says it
+        reads. The thread that syncs."""
+        return set(self._in_use)
+
+    def cut_files_in_use(self):
+        """`cut_files_named` and every served file still open here. The thread that syncs."""
+        return self._in_use | self.readers.open_paths()
 
     def sync(self):
-        """Re-read the document: the plan, pure in the document and the tools (see `plan`), and the
-        decoder's output, which the video node's param sets."""
+        """Re-read the document: the plan, pure in the document, the tools and what the cutting
+        nodes' tools answer now (see `plan`), and the decoders' output, which the video node's
+        param sets."""
         output = video_output(self.doc)
         self.decoder.output = output        # a change empties its cache; a read in flight under the old plan is cancelled
         self._base = base_key(self.decoder.footage_print, output)
-        p = plan(self.doc, self.tools, self._base)
-        self.readers.keep({e.bake.key for e in p.entries.values() if e.bake is not None})
+        self._failing = {}
+        p = plan(self.doc, self.tools, self._base, self.cut_file)
+        self._in_use = self._named(p.entries)
+        self.readers.keep({e.file[0] for e in p.entries.values() if e.file is not None})
+        for d in self.readers.decoders():
+            d.output = output
         with self._lock:
-            self._rows, self.axis = p.rows, p.axis
-            self.plate = None if p.axis is None else p.entries[p.axis].bake.plate
-            self.off, self.stale = {nid for nid, e in p.entries.items() if e.off}, set(p.stale)
-            self._plan, self._whole = p.entries, p
+            self._plan, self._whole, self._failed = p.entries, p, self._failing
             self.shown, self.over = p.shown, p.over
             self.series = p.chain[0] if p.chain else None
             self.heads, self.chain, self.unrun_series = p.heads, p.chain, p.unrun
@@ -329,38 +369,65 @@ class Graph:
             d.empty()
 
     def _reader(self, nid, e):
-        """The reader on `nid`'s bake; a file that cannot be read is the node's to say, in its standing."""
+        """The Decoder on the file `nid` serves; a file that cannot be read is the node's to say, in its standing."""
         try:
-            r = self.readers.get(e.bake, self.decoder.cache_limit)
+            d = self.readers.get(e.file[0], self.decoder.cache_limit, self.decoder.output)
         except OSError as exc:
             exc.sieve_node = nid
             self.note(nid, str(exc))
             raise
-        d = getattr(r, "decoder", None)
-        if d is not None and d.on_evict is None:
+        held = self.readers.decoders()
+        self._lately = [d, *(o for o in self._lately if o is not d and any(o is h for h in held))]
+        left = self.decoder.cache_limit     # shared by the served files' caches, the one read latest first: it may fill the whole of it
+        for o in self._lately:
+            if o.cache_limit != left:
+                o.cache_limit = left
+            left = max(0, left - o.cache_bytes)
+        if d.on_evict is None:
             key = e.raw_key
             d.on_evict = lambda row, n: self.stream.emit("uncache", None, row, key, n)
-        return r
+        return d
 
-    def baked_series(self, nid, p=None):
-        """A served series node's whole file: its tables one a row, or its float32 signal, the node
-        as the Plan `p` has it, the current one with none. Worker threads only."""
-        return self._reader(nid, (p or self.snapshot()).entries[nid]).data
+    def footage(self, nid):
+        """The file `nid`'s inputs are frames of: the one the nearest cutting node above it serves,
+        else the open video. GUI-safe."""
+        with self._lock:
+            plan = self._plan
+        return self._footage(plan, nid)[0]
+
+    def _footage(self, entries, nid):
+        """`footage` under the plan's `entries`, as (path, footage print)."""
+        e = entries.get(nid)
+        while e is not None and e.piece is not None:
+            e = entries[e.piece]
+            if e.file is not None:
+                return e.file
+        return self.decoder.path, self.decoder.footage_print
+
+    @contextmanager
+    def scrubbing(self):
+        """Reads inside land on each open decoder's scrub cursor, the plate's and every served file's."""
+        with ExitStack() as stack:
+            for d in [self.decoder, *self.readers.decoders()]:
+                stack.enter_context(d.scrub())
+            yield
 
     def close(self):
         self.readers.close()
 
     def standing(self, nid):
-        """One line on why `nid` does not run, else what its run said under its current key, else
-        "". The plan's reasons: an input unwired, mismatched or waiting on an unfed node, a series
-        node off the chain, a cycle. The notes: a tool raising, a chain node fed no signal."""
+        """One line on why `nid` does not run, else what its tool raised when the last sync asked
+        it for its cut files, else what its run said under its current key, else "". The plan's
+        reasons: an input unwired, mismatched or waiting on an unfed node, a file it is to serve
+        and has not, a series node off the chain, a cycle. The notes: a tool raising, a chain node fed no signal."""
         with self._lock:
             e = self._plan.get(nid)
             note = self._notes.get(nid)
+            failed = self._failed.get(nid)
         if e is None:
             return ""
-        if e.standing:
-            return e.standing
+        if e.standing or failed:
+            return e.standing or failed
         return note[1] if note is not None and note[0] == e.key else ""
 
     def note(self, nid, text):
@@ -402,23 +469,26 @@ class Graph:
             out = self._compute(p.entries, nid, row)
         return out if fold is None or out is None else fold(out)
 
-    def drawing(self):
+    def drawing(self, p=None):
         """The fed frame nodes whose tool has a draw(), in document order: what the display reads
-        at its row beside the shown node, on the walked path or off it."""
-        with self._lock:
-            return [nid for nid, e in self._plan.items() if e.kind == "frame" and e.fed and hasattr(e.tool, "draw")]
+        at its row beside the shown node, on the walked path or off it; under the Plan `p`, the
+        current one with none."""
+        entries = (p or self.snapshot()).entries
+        return [nid for nid, e in entries.items() if e.kind == "frame" and e.fed and hasattr(e.tool, "draw")]
 
     def watch(self, nodes):
         """`nodes` are what the plot shows, the selection and the pinned; any thread."""
         with self._lock:
             self._watched = tuple(nodes)
 
-    def folded(self):
+    def folded(self, p=None):
         """The fed frame nodes among those watch() was told of, in its order: what the window walk
-        folds a density for, a branch the walk does not reach among them. Whether a node's output
-        is a plane is density()'s to say, at a row."""
+        folds a density for, a branch the walk does not reach among them; under the Plan `p`, the
+        current one with none. Whether a node's output is a plane is density()'s to say, at a row."""
+        entries = (p or self.snapshot()).entries
         with self._lock:
-            return [nid for nid in self._watched if (e := self._plan.get(nid)) is not None and e.kind == "frame" and e.fed]
+            watched = self._watched
+        return [nid for nid in watched if (e := entries.get(nid)) is not None and e.kind == "frame" and e.fed]
 
     @property
     def series_tool(self):
@@ -458,14 +528,13 @@ class Graph:
             e = self._plan.get(nid)
         return e is not None and e.fed
 
-    def compute(self, nid, row, raw=False, demand="display"):
+    def compute(self, nid, row, raw=False, demand="display", p=None):
         """Output of `nid` at `row`, memoized; None for a node nothing reaches. Worker threads only.
-        The whole recursion runs in the plan current at the call, so what lands in the memo under a
-        key was computed from the graph that key describes. `raw` is the plane before the node's band,
-        what its density counts, so the axis holds while a handle moves. `demand` is what the caller
-        answers, the display unless it says "bake"."""
-        with self._lock:
-            plan = self._plan
+        The whole recursion runs in the Plan `p`, the one current at the call with none, so what
+        lands in the memo under a key was computed from the graph that key describes. `raw` is the
+        plane before the node's band, what its density counts, so the axis holds while a handle
+        moves. `demand` is what the caller answers, the display unless it says otherwise."""
+        plan = (p or self.snapshot()).entries
         with self.demand(demand, nid):
             return self._compute(plan, nid, row, raw)
 
@@ -485,7 +554,7 @@ class Graph:
         m = self.memo
         caches = {self._base: self.decoder}
         for e in plan.values():
-            if e.bake is not None and (d := getattr(self.readers.held(e.bake.key), "decoder", None)) is not None:
+            if e.file is not None and (d := self.readers.held(e.file[0])) is not None:
                 caches[e.raw_key] = d
         self.stream.emit("progress", None, done, None, 0, length=length, facts={
             **({} if stack is None else {"stack": {"bytes": stack[0], "limit": stack[1]}}),
@@ -504,19 +573,12 @@ class Graph:
         self.stream.emit("begin", None, start, None, 0, length=length, facts=None if by is None else {"by": by})
 
     def tally(self):
-        """What the stores have been asked for and did not hold, as two counts off the counters they
-        keep: the memo's misses with the plate decoder's reads its cache did not answer, and the same
-        reads of every served reader open now. Taken before and after a computation, either having
-        moved says which the computation was; a miss from another thread between the two is counted
-        with it, the counters being every thread's, and the second falls when a sync retires a reader."""
-        with self._lock:
-            plan = self._plan
-        d = self.decoder
-        served = 0
-        for e in plan.values():
-            if e.bake is not None and (r := getattr(self.readers.held(e.bake.key), "decoder", None)) is not None:
-                served += r.reads - r.cache_hits
-        return self.memo.misses + d.reads - d.cache_hits, served
+        """What the stores have been asked for and did not hold, off the counters they keep: the
+        memo's misses with the reads no cache answered, the plate decoder's and every open served
+        file's. Taken before and after a computation, its having moved says the computation ran; a
+        miss from another thread between the two is counted with it, the counters being every
+        thread's, and it falls when a sync retires a reader."""
+        return self.memo.misses + sum(d.reads - d.cache_hits for d in [self.decoder, *self.readers.decoders()])
 
     def _hit(self, nid, fold):
         self._hits.setdefault(self.stream.lane, {}).setdefault(nid, [0, 0])[fold] += 1
@@ -554,14 +616,18 @@ class Graph:
                 ev[0] = "seek" if d.seeks != seeks else "decode" if d.decodes != decodes else "cache"
                 ev[1], ev[2] = v.nbytes, v.shape
             return v
-        if e.bake is not None:
-            r = self._reader(nid, e)
-            d = getattr(r, "decoder", None)
+        if e.file is not None:
+            d = self._reader(nid, e)
             with self.probe(nid, row, e.raw_key, reader) as ev:
-                decodes, seeks = (d.decodes, d.seeks) if d else (0, 0)
-                v = r.read(row)
-                ev[0] = "read" if d is None else "seek" if d.seeks != seeks else "decode" if d.decodes != decodes else "cache"
-                ev[1], ev[2] = nbytes(v), getattr(v, "shape", None)
+                decodes, seeks = d.decodes, d.seeks
+                try:
+                    v = d.read(row)
+                except EndOfStream:
+                    # the file is the plate cut, row for row: where it ends the plate's stream does, which nothing may have read that far to find
+                    self.decoder.ends_at(d.count)
+                    raise
+                ev[0] = "seek" if d.seeks != seeks else "decode" if d.decodes != decodes else "cache"
+                ev[1], ev[2] = v.nbytes, v.shape
             return v if raw or e.band is None else banded(v, e.band)
         mk = (e.raw_key, None if e.static else row)
         v = self.memo.get(mk)
@@ -583,11 +649,11 @@ class Graph:
             self._hit(nid, 0)
         return v if raw or e.band is None else banded(v, e.band)
 
-    def density(self, nid, row):
+    def density(self, nid, row, p=None):
         """`nid`'s plane at `row` folded to (BINS,) counts, memoized under its own key and probed on
-        the node as a "fold"; None when the output is not a plane. Worker threads only."""
-        with self._lock:
-            plan = self._plan
+        the node as a "fold"; None when the output is not a plane; under the Plan `p`, the current
+        one with none. Worker threads only."""
+        plan = (p or self.snapshot()).entries
         e = plan.get(nid)
         if e is None or e.kind != "frame" or not e.fed:
             return None
@@ -614,8 +680,8 @@ class Graph:
             return None
         if e.kind == "video":
             return self.decoder.cached(row)
-        if e.bake is not None:
-            d = getattr(self.readers.held(e.bake.key), "decoder", None)
+        if e.file is not None:
+            d = self.readers.held(e.file[0])
             v = None if d is None else d.cached(row)
             return v if v is None or e.band is None else banded(v, e.band)
         v = self.memo.get((e.raw_key, None if e.static else row))

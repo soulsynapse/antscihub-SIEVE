@@ -9,13 +9,13 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 
 RUN, STEP, FOLD, ERROR, CANCEL = "run", "step", "fold", "error", "cancel"
-CACHE, DECODE, SEEK, READ = "cache", "decode", "seek", "read"
+CACHE, DECODE, SEEK = "cache", "decode", "seek"
 SLOT, PAINT = "slot", "paint"
 DUMP, MONITOR = "dump", "monitor"
 SYNC, WATCH, EVICT, UNCACHE, BEGIN, PROGRESS = "sync", "watch", "evict", "uncache", "begin", "progress"
 REST, WAKE = "rest", "wake"
 
-NODES = (RUN, STEP, FOLD, ERROR, CANCEL, CACHE, DECODE, SEEK, READ)     # a node's spans of Emitter.probe: a tool's run and the video's or a served file's read
+NODES = (RUN, STEP, FOLD, ERROR, CANCEL, CACHE, DECODE, SEEK)     # a node's spans of Emitter.probe: a tool's run and the video's or a served file's read
 TURNS = (SLOT, PAINT)           # the GUI thread's spans of Emitter.turn, a thread's own time under no node
 OWN = (DUMP, MONITOR)           # a reader's own work: the dump's writer, and the ledger's bookkeeping on a thread that emits
 INSTANTS = (SYNC, WATCH, EVICT, UNCACHE, BEGIN, PROGRESS, REST, WAKE)   # no duration: a boundary, a discard, a walk's beginning, its rows done,
@@ -55,13 +55,13 @@ class Event:
     cpu_ms: float       # the thread's CPU time over the same span, exclusive likewise; wall far above it is a wait. On
                         # Windows thread_time ticks at the scheduler quantum (~16 ms), so one event's is 0 or a tick and
                         # only a sum over many events is a figure
-    serves: str | None  # "scrub" | "walk" | "bake": what the worker was doing; None off the worker (bench, tests)
+    serves: str | None  # "scrub" | "walk": what the worker was doing; None off the worker (bench, tests)
     length: int | None  # progress and begin: rows in the lane's range, `row` being the rows done, or on a begin the range's first
     keys: dict | None   # sync only: every node's key under the new plan, band included; diff two to see what a drag changed
     reader: str | None  # the node whose read opened this run or read; None for one no node's read opened
-    demand: str | None  # "walk" | "fold" | "display" | "bake": what asked at the top for everything under it; see Emitter.demand()
-    asked: str | None   # the node the demand named: the walked or chain node, the folded one, the shown or overlaid, a bake's input
-    lane: str | None    # "window" | "clip" | "scrub" | "bake": the worker's range the row belonged to; None off the worker
+    demand: str | None  # "walk" | "fold" | "display": what asked at the top for everything under it; see Emitter.demand()
+    asked: str | None   # the node the demand named: the walked or chain node, the folded one, the shown or overlaid
+    lane: str | None    # "window" | "clip" | "scrub": the worker's range the row belonged to; None off the worker
     facts: dict | None  # sync: the plan begun and the selection, see plan.facts() and Emitter.sync(); progress: the lane's memo hits and the stores, see Graph.progress(); begin: "by", what began the walk, see Graph.began()
     shape: tuple | None # of what a span read or made: a decode's or a read's frame, a run's result, a fold's plane; None for what has none
 
@@ -140,15 +140,15 @@ class Emitter:
         self.emit(REST if resting else WAKE, None, None, None, 0)
 
     def serving(self, what, lane=None):
-        """What the events this thread emits from here on served, "scrub", "walk" or "bake", and the
+        """What the events this thread emits from here on served, "scrub" or "walk", and the
         lane they are in; the worker says before each job's turn, since only it knows, and nothing
         else sets it."""
         self._thread.serves, self._thread.lane = what, lane
 
     @contextmanager
     def demand(self, what, nid):
-        """Names what this thread's events answer while the body runs: `what`, "walk", "fold",
-        "display" or "bake", asked of `nid`. The graph's entries open their own; the worker opens one
+        """Names what this thread's events answer while the body runs: `what`, "walk", "fold"
+        or "display", asked of `nid`. The graph's entries open their own; the worker opens one
         around a chain node's probe, which is under no entry of the graph's."""
         p = self._thread
         held, p.demand = getattr(p, "demand", (None, None)), (what, nid)

@@ -1,5 +1,5 @@
 """crop: the frame cut to the roi's box at row 0 plus a border, the same at every row under one key, a mask cut
-against itself meeting the frame, an empty roi said on the node, the cut shown at its shape and baked at it."""
+against itself meeting the frame, an empty roi said on the node, and the cut shown at its shape."""
 import os
 import time
 
@@ -98,29 +98,3 @@ def test_a_displayed_crop_shows_the_cut_at_its_shape_and_the_plan_lists_it(tmp_p
     win.close()
 
 
-@pytest.mark.skipif(__import__("shutil").which("ffmpeg") is None, reason="a bake's clip writer runs ffmpeg from PATH")
-def test_a_bake_after_a_crop_writes_and_serves_the_cut(tmp_path, in_store):
-    from PySide6.QtWidgets import QApplication
-    from sieve_player import store
-    from sieve_player.decoder import Decoder
-    from sieve_player.worker import Worker
-    from tests.test_baking import run_bake
-    from tools import bake
-
-    QApplication.instance() or QApplication([])
-    path = clip(tmp_path / "v.avi")
-    doc = cropped_doc(path)
-    doc.add_node("bake")
-    doc.connect("crop", "bake")
-    doc.path = str(tmp_path / "doc.json")
-    g = Graph(doc, Decoder(path), {t.NAME: t for t in (gray, threshold, crop, bake)}, open_bake=store.current().open_bake)
-    w = Worker(g)
-    done, refused = run_bake(w)
-    w.stop()
-    g.halt = False
-    assert done and not refused, refused
-    assert store.Store(str(in_store)).sidecar(done[0][1]).shape == [21, 31] and doc.node("bake").baked.shape == (21, 31)
-    g.sync()
-    assert g.compute("bake", 2).shape == (21, 31)       # the writer pads an odd side; the served row is the cut's
-    g.close()
-    g.decoder.close()

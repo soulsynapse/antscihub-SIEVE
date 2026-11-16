@@ -17,7 +17,7 @@ MAY_IMPORT = {
     "plan": {"document"},
     "stream": set(),                              # the Event, the kinds and the Emitter; a reader of a dump loads nothing else
     "stats": {"stream"},                          # a reader of the stream; the Graph it is made on is handed to it
-    "graph": {"document", "density", "plan", "stream"},     # Graph.density folds planes; sync holds a plan; it emits through an Emitter
+    "graph": {"decoder", "document", "density", "plan", "stream"},     # Graph.density folds planes; sync holds a plan; it emits through an Emitter; a served file is read by a Decoder
     "canvas": {"document", "menu", "theme"},
     "menu": {"theme"},
     "pane": {"document", "theme", "widgets"},
@@ -26,18 +26,17 @@ MAY_IMPORT = {
     "timeline": {"theme"},
     "decoder": set(),
     "held": set(),                                # a pickle and a stamp; the window writes and reads it
-    "writers": {"decoder"},                       # a baked clip reads back through the Decoder
-    "store": {"document", "writers"},             # where files land knows what a Bake is and which kinds write; never the reverse
-    "worker": {"decoder", "density", "document", "graph", "store", "stream"},     # of the stream, the words a begin says what began it by
-    "bare": {"decoder", "document", "graph", "registry", "store", "worker"},      # the clip walk's own process: no window, no stream's reader
+    "worker": {"decoder", "density", "graph", "stream"},     # of the stream, the words a begin says what began it by
+    "bare": {"decoder", "document", "graph", "registry", "worker"},      # the clip walk's own process: no window, no stream's reader
     "trace": {"stream"},
     "ledger": {"stream", "trace"},                # the span kinds and a dump's reader; no graph is held and no Qt reached
     "catalogue": {"ledger", "stream"},            # a detector reads a view, by the stream's names for a kind, and nothing else
     "report": {"catalogue", "ledger"},            # the catalogue's findings as text; the catalogue renders none and never imports it
     "machine": set(),                             # psutil and the system's counters; the player is not imported
     "pace": set(),                                # the worker's signals and a clock; the control and the monitor's header both read it
+    "store": {"recent"},                          # where the user's files are kept is where the store's default and its choice are
+    "storecontrol": {"held", "store", "theme"},   # the store as the header draws it, in the units a held size is said in
     "pacecontrol": {"pace", "theme"},             # the control the player's header and the monitor's both draw; it is neither's
-    "storecontrol": {"store", "theme"},           # the store as the header draws it; the window hands it the Store
 }
 
 
@@ -165,6 +164,49 @@ def test_a_tool_imports_what_tools_share_and_never_another_tool():
     assert not bad, bad
 
 
+TOOLS_MAY_IMPORT = {"decoder", "held", "store", "theme"}    # the player's modules a tool may name, beside what the package hands out
+TOOLS_MAY_TAKE = {"ParamWidget", "play", "document"}        # and the names a tool may take of the package itself
+
+
+def test_a_tool_reaches_the_player_through_the_modules_named_here():
+    """What a tool imports of sieve_player is the player's surface to tools: a module or a name
+    not listed is one the player cannot change without a tool breaking, so it is added here first."""
+    bad = {}
+    for path in TOOLS.rglob("*.py"):
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if isinstance(node, ast.ImportFrom) and node.level == 0 and (node.module or "").split(".")[0] == "sieve_player":
+                parts = node.module.split(".")
+                took = {parts[1]} - TOOLS_MAY_IMPORT if len(parts) > 1 else {a.name for a in node.names} - TOOLS_MAY_TAKE - TOOLS_MAY_IMPORT
+            elif isinstance(node, ast.Import):
+                took = {a.name for a in node.names if a.name.split(".")[0] == "sieve_player"}
+            else:
+                continue
+            if took:
+                bad.setdefault(str(path.relative_to(TOOLS)), set()).update(took)
+    assert not bad, bad
+
+
+def test_a_settings_widget_is_told_and_says_by_the_registrys_names_alone():
+    """The pane and the window find what a settings widget has by name, so a name one side spells
+    its own way is never called: every name they look for, and every `set_`, `show_` or signal a
+    class under tools/ has, is one of registry.WIDGET_FACETS."""
+    from sieve_player.registry import WIDGET_FACETS
+
+    known = {*WIDGET_FACETS, "changed", "set_params"}
+    sought = {name for part in ("pane", "window")
+              for name in re.findall(r'hasattr\(w, "(\w+)"\)', (PKG / f"{part}.py").read_text(encoding="utf-8"))}
+    assert sought == set(WIDGET_FACETS), sought ^ set(WIDGET_FACETS)
+    bad = {}
+    for path in TOOLS.glob("*.py"):
+        for cls in (n for n in ast.walk(ast.parse(path.read_text(encoding="utf-8"))) if isinstance(n, ast.ClassDef)):
+            has = {n.name for n in cls.body if isinstance(n, ast.FunctionDef) and n.name.startswith(("set_", "show_"))}
+            has |= {t.id for n in cls.body if isinstance(n, ast.Assign) and "Signal(" in ast.unparse(n.value)
+                    for t in n.targets if isinstance(t, ast.Name)}
+            if has - known:
+                bad[path.name] = sorted(has - known)
+    assert not bad, bad
+
+
 def test_a_utility_imports_neither_the_player_nor_a_tool():
     """A utility runs as its own process on what its command line hands it, so it can be run,
     copied or replaced without the player."""
@@ -219,7 +261,7 @@ def test_the_scheduler_alone_begins_a_job_and_nothing_compares_a_generation():
         return [n for n in ast.walk(node) if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and n.func.attr == "begin"]
 
     assert {id(n) for n in begins(tree)} == {id(n) for n in begins(turn)}
-    assert sorted(ast.unparse(n.func.value) for n in begins(turn)) == ["bake", "clip", "win"]
+    assert sorted(ast.unparse(n.func.value) for n in begins(turn)) == ["clip", "win"]
     compared = [ast.unparse(n) for n in ast.walk(tree) if isinstance(n, ast.Compare)
                 and any(isinstance(o, ast.Attribute) and o.attr in ("gen", "asked") for o in [n.left, *n.comparators])]
     assert not compared, compared
@@ -234,13 +276,18 @@ def test_the_scheduler_alone_begins_a_job_and_nothing_compares_a_generation():
 def test_the_worker_reads_the_plan_off_one_snapshot_a_turn():
     """What the plan says is read off the Plan _turn took, never off the graph, whose accessors
     each answer for whatever plan is current as they are called: two of them in one turn are two
-    graphs once a sync lands between. invalidate() is the GUI thread's, one read."""
+    graphs once a sync lands between. What the graph computes or lists for a job it is handed that
+    Plan to do under. invalidate() is the GUI thread's, one read."""
     tree = ast.parse((PKG / "worker.py").read_text(encoding="utf-8"))
     says = {"heads", "chain", "series_chain", "entry", "key", "walk", "fold", "fed", "shown", "over", "series", "source"}
     theirs = {id(n) for f in ast.walk(tree) if isinstance(f, ast.FunctionDef) and f.name == "invalidate" for n in ast.walk(f)}
     read = [ast.unparse(n) for n in ast.walk(tree) if isinstance(n, ast.Attribute) and n.attr in says
             and ast.unparse(n.value) in ("g", "graph", "self.graph") and id(n) not in theirs]
     assert not read, read
+    under = {"compute", "density", "drawing", "folded", "walk_row"}     # Graph's methods that take the Plan they answer under
+    bare = [ast.unparse(n) for n in ast.walk(tree) if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+            and n.func.attr in under and not any(ast.unparse(a) in ("p", "self.plan") for a in [*n.args, *(k.value for k in n.keywords)])]
+    assert not bare, bare
     takes = [n for n in ast.walk(tree) if isinstance(n, ast.Attribute) and n.attr == "snapshot"]
     turn = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == "_turn")
     assert {id(n) for n in takes} - {id(n) for n in ast.walk(turn)} == {id(n) for f in ast.walk(tree)
@@ -250,17 +297,17 @@ def test_the_worker_reads_the_plan_off_one_snapshot_a_turn():
 def test_a_job_holds_what_it_reads_and_emits_and_reaches_nothing_through_the_worker():
     """A job is built from the graph, the cadence and the signals it is handed, named, so a test can
     drive one with a graph and a few signals and no QThread: no field or attribute of a job names the
-    worker, the chain run and the served-head test are functions over a graph, and a _Walk is
+    worker, the chain run is a function over a graph, and a _Walk is
     constructed with every field past the graph named."""
     tree = ast.parse((PKG / "worker.py").read_text(encoding="utf-8"))
-    jobs = [n for n in tree.body if isinstance(n, ast.ClassDef) and n.name in ("_Scrub", "_Walk", "_Bake")]
-    assert len(jobs) == 3
+    jobs = [n for n in tree.body if isinstance(n, ast.ClassDef) and n.name in ("_Scrub", "_Walk")]
+    assert len(jobs) == 2
     for job in jobs:
         named = {n.attr for n in ast.walk(job) if isinstance(n, ast.Attribute) and isinstance(n.value, ast.Name) and n.value.id == "self"}
         named |= {n.target.id for n in job.body if isinstance(n, ast.AnnAssign)}
         assert not named & {"w", "worker"}, (job.name, named & {"w", "worker"})
         assert "Worker" not in ast.unparse(job), job.name
     functions = {n.name for n in tree.body if isinstance(n, ast.FunctionDef)}
-    assert {"run_chain", "served_head"} <= functions
+    assert "run_chain" in functions
     walks = [n for n in ast.walk(tree) if isinstance(n, ast.Call) and ast.unparse(n.func) == "_Walk"]
     assert walks and all(len(n.args) <= 1 for n in walks), [ast.unparse(n) for n in walks]

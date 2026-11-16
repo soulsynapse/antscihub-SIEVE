@@ -1,6 +1,6 @@
 """Where the player's diagnostics go once the console may be gone: stderr teed into a log, the
-previous launch's kept beside it, C-level stderr sent nowhere so cv2's plugin stops warning on
-every frame, and faulthandler, the Qt warning handler and the watchdog writing to the same place.
+previous launch's kept beside it, C-level stderr sent nowhere, libav's printing with it, and
+faulthandler, the Qt warning handler and the watchdog writing to the same place.
 `start()` before anything imports cv2, since the plugin keeps the stderr handle it loads with; `watch(app)`
 once the QApplication exists."""
 import faulthandler
@@ -8,7 +8,7 @@ import os
 import sys
 import time
 
-LOG_ENV = "SIEVE_LOG"       # the log's path; unset: stderr.log under store.app_folder(); 0: no log
+LOG_ENV = "SIEVE_LOG"       # the log's path; unset: stderr.log under recent.app_folder(); 0: no log
 
 
 class _Tee:
@@ -49,7 +49,7 @@ def log_path():
         return None
     if want:
         return want
-    from ..store import app_folder
+    from ..recent import app_folder
     return os.path.join(app_folder(), "stderr.log")
 
 
@@ -73,8 +73,8 @@ def log_stderr(path):
 
 
 def hush_c_stderr():
-    """Sends C-level stderr nowhere, keeping Python's: cv2's FFmpeg plugin warns on every unconverted
-    frame and libavcodec on every seek, and neither reads a log level set in-process.
+    """Sends C-level stderr nowhere, keeping Python's: libav, the decoder's and cv2's plugin's, writes
+    there what it makes of a stream.
     SIEVE_C_STDERR=1 leaves it alone. Returns whether it was done."""
     if os.environ.get("SIEVE_C_STDERR"):
         return False
@@ -96,11 +96,10 @@ def hush_c_stderr():
 
 
 def start():
-    """Hushes C-level stderr, telling the decoder so, and opens the log; the first line on stderr
+    """Hushes C-level stderr and opens the log; the first line on stderr
     carries the launch time and the log's name, or that it would not open. Returns the log, or
     None when there is none."""
-    from .. import decoder
-    decoder.QUIET = hush_c_stderr() or decoder.QUIET
+    hush_c_stderr()
     log = None if log_path() is None else log_stderr(log_path())
     stamp = time.strftime("%Y-%m-%d %H:%M:%S")
     if log is not None:

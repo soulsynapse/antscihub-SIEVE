@@ -27,12 +27,25 @@ _HINTS = {
     "OPTIONAL": 'OPTIONAL = ("bg",)  # the INPUTS the node computes without; run reads an unwired one as None',
     "STATIC": "STATIC = True  # the same output at every row: computed once per key, held once, counted per change",
     "PATHS": 'PATHS = {"settings": load_settings}  # path inputs: name -> params from the file',
-    "PARAMS": 'PARAMS = {"regions": from_region}  # INPUTS that also carry params: name -> params from the params of the node wired in',
     "select": "def select(folder, params): ...  # a selector: the path it picks under folder, or None",
     "matches": "def matches(folder, params): ...  # a selector: every path its rule matches, picked first",
-    "bake": "def bake(params, count): ...  # the node bakes: (the plate rows a bake writes over a clip of count rows, the frame writer's quality); a Bake button under it",
+    "cut_file": "def cut_file(video, footage, params): ...  # the node cuts the video into files: the path of the file the tool wrote of what run hands out of video, whose decoder.footage_print is footage, under params, exact or lossy as the tool wrote it, or None where the node is to run; FileNotFoundError, saying why, where the params say to serve a file and there is none, and the node then does not run; a node that reads the video node, or a node that serves a file, in which case video is that file, serves it; never a file written over",
+    "cut_files": "def cut_files(video, footage, params): ...  # beside cut_file: every file the node would serve under some choice of its params",
 }
 FACETS = tuple(_HINTS)
+
+# What a settings widget may have beside changed, params() and set_params(): the name the pane or
+# the window looks for -> the line that supplies it. A name spelled otherwise is never called.
+WIDGET_FACETS = {
+    "set_source": "def set_source(self, path, fps): ...  # the footage the node's inputs are frames of, the video or the file a cutting node above it serves",
+    "set_paths": "def set_paths(self, paths): ...  # {input: the file each wired path input picked}",
+    "set_playhead": "def set_playhead(self, row): ...  # a chain node's card: the row shown",
+    "show_result": "def show_result(self, result, start, fps): ...  # a chain node's card: its result over the rows from start",
+    "set_driven": "def set_driven(self, names, by=None): ...  # the params a wire drives, and the node that drives them",
+    "show_matches": "def show_matches(self, folder, found, picked): ...  # a selector's card: every path its rule matches, and the one picked",
+    "set_cut_files_in_use": "def set_cut_files_in_use(self, paths): ...  # the files the document's cutting nodes name, see cut_files",
+    "storeChanged": "storeChanged = Signal()  # files of the store were written or removed here, the params as they were",
+}
 
 
 def probe(tool, facet):
@@ -109,22 +122,19 @@ def types(entries, extra=()):
     return out
 
 
-CATEGORIES = ("source", "convert", "relate", "transform", "cache", "measure")   # the Tab menu's order: a pipeline's
+CATEGORIES = ("source", "convert", "relate", "transform", "measure")   # the Tab menu's order: a pipeline's
 
 
 def category(tool):
     """The group `tool` falls in, read off its facets by the first rule that fits: a source has no
-    `EXPECTS`; a cache has `bake`; a measure produces signal and does not expect it; a relate has
-    `INPUTS` and produces `same` or a type it expects; a convert produces a type it does not expect;
-    the rest transform. Measure sits before convert and cache before transform because each is the
-    other by shape."""
+    `EXPECTS`; a measure produces signal and does not expect it; a relate has `INPUTS` and produces
+    `same` or a type it expects; a convert produces a type it does not expect; the rest transform.
+    Measure sits before convert because it is one by shape."""
     ex = probe(tool, "EXPECTS")
     if ex is None:
         return "source"
     ex = {ex} if isinstance(ex, str) else set(ex)
     p = probe(tool, "PRODUCES")
-    if probe(tool, "bake") is not None:
-        return "cache"
     if p == "signal" and "signal" not in ex:
         return "measure"
     if probe(tool, "INPUTS") and (p == "same" or p in ex):
@@ -155,4 +165,4 @@ def signature(tool):
     return f"{', '.join(ins)} → {probe(tool, 'PRODUCES')}".strip()
 
 
-__all__ = ["MARKER", "FACETS", "Entry", "is_tool", "probe", "hint", "discover", "types", "CATEGORIES", "category", "description", "signature"]
+__all__ = ["MARKER", "FACETS", "WIDGET_FACETS", "Entry", "is_tool", "probe", "hint", "discover", "types", "CATEGORIES", "category", "description", "signature"]

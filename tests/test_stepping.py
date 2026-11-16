@@ -1,8 +1,7 @@
 """The step facet: the registry lists it and reports who offers it without calling a tool,
 tests/stepping.py's oracle passes a tool whose step agrees with its run and names the row where a
 peeking one diverges, the plan says of each chain node whether the walk steps it or runs it whole
-and which node ended the prefix, and the walk steps the prefix once a row, a served head's rows
-included, runs the suffix per emit, restarts a changed node from the window's first row,
+and which node ended the prefix, and the walk steps the prefix once a row, runs the suffix per emit, restarts a changed node from the window's first row,
 emits at one cadence over both ranges, and given a stepped head's result stacks no row for it
 and walks the range again once the plan has left that result."""
 import os
@@ -20,9 +19,9 @@ from sieve_player.plan import base_key, plan
 from sieve_player.worker import run_chain
 from sieve_player.registry.__main__ import check, report
 from tests import stepping
-from tools import bake, blobs, gray, kinematics, smooth, track, tracks_filter, transitions
+from tools import blobs, gray, kinematics, smooth, track, tracks_filter, transitions
 
-TOOLS = {t.NAME: t for t in (bake, blobs, gray, kinematics, smooth, track, tracks_filter, transitions)}
+TOOLS = {t.NAME: t for t in (blobs, gray, kinematics, smooth, track, tracks_filter, transitions)}
 BASE = base_key("fake.mp4", "bgr")
 
 SUMMING = SimpleNamespace(NAME="summing",
@@ -72,20 +71,6 @@ def test_the_plan_names_where_stepping_ends_and_the_node_that_ended_it():
     p = plan(D.from_tools([gray, blobs, track, kinematics, transitions]), TOOLS, BASE)
     assert p.chain == ["track", "kinematics", "transitions"] and verdicts(p) == {nid: (True, None) for nid in p.chain}
     assert not any(e.steps or e.whole_by for nid, e in p.entries.items() if nid not in p.chain)
-
-
-def test_a_served_series_head_is_stepped_into_the_chain_under_it():
-    """A baked blobs node served in place of the walked head hands its rows one at a time, so the
-    plan steps it and the stepping chain under it as it would a walked head's."""
-    doc = D.from_tools([gray, blobs, bake, track, kinematics])
-    assert doc.source("track").src == "bake"
-    live = plan(doc, TOOLS, BASE)
-    assert live.chain == ["track", "kinematics"] and verdicts(live) == {"track": (True, None), "kinematics": (True, None)}
-    D.land(doc.node("bake"), D.Bake("k", "blobs", True, (0, 9), 1, 30.0, 30.0, (), 10))
-    served = plan(doc, TOOLS, BASE)
-    assert served.heads == ["bake"] and served.chain == ["bake", "track", "kinematics"]
-    assert verdicts(served) == {nid: (True, None) for nid in served.chain}
-    assert all(served.entries[nid].standing == "" for nid in served.chain)
 
 
 # -- the walk steps ------------------------------------------------------
@@ -206,37 +191,6 @@ def test_the_walk_steps_the_prefix_once_a_row_runs_the_suffix_per_emit_and_match
     w.stop()
 
 
-def test_a_served_series_heads_rows_step_the_chain_under_it_one_at_a_time(in_store):
-    """A baked blobs file served in place of the walked head is stepped a row at a time, through
-    bake's own step, and track under it is stepped once per row and never handed the file's rows whole."""
-    from sieve_player import store
-    from sieve_player.writers import TablesWriter
-    from tests.test_graph import Dec, TOOLS as FRAME, gray as fgray
-    table = frame_tool("table", "gray", "blobs", blobs_at)
-    tools = {**FRAME, "table": table, "bake": bake, "track": track}
-    doc = D.from_tools([fgray, table, bake, track])
-    os.makedirs(in_store)
-    wr = TablesWriter(store.current().place("k", ".tables"), "blobs", 30.0, "lossless")
-    for r in range(10):
-        wr.write(blobs_at(np.full((4, 6), r + 1, np.uint8), {}))
-    wr.close()
-    side = store.current().write_sidecar(store.Sidecar("k", "blobs", "doc", "bake", [0, 9], 1, 30.0, 30.0, [], "lossless"))
-    D.land(doc.node("bake"), side.bake(10))
-    dec = Dec()
-    dec.cache_limit = 0        # the reader takes the plate decoder's limit, which the fake has none of
-    g = Graph(doc, dec, tools, open_bake=store.current().open_bake)
-    assert g.heads == ["bake"] and g.chain == ["bake", "track"] and g.walk is None
-    w, events, got = stepping_worker(g, 4, 0, 10)
-    wait_for(lambda: got and len(got[-1]["track"]["signal"]) == 10)
-    steps, runs = steps_and_runs(events, g.chain)
-    assert sorted(steps) == sorted([(n, r) for n in ("bake", "track") for r in range(10)]) and runs == []
-    assert not [ev for ev in events if ev.node in ("gray", "table") and ev.serves == "walk"]
-    assert [len(r["track"]["signal"]) for r in got] == [4, 8, 10]
-    assert equal(got[-1], run_chain(w.graph, None, 0, 10, {}))
-    w.stop()
-    g.close()
-
-
 def test_a_walk_given_a_stepped_heads_result_stacks_nothing_and_walks_again_when_the_plan_leaves_it(monkeypatch):
     """The turns are taken here, on the test's thread, so the plan can be moved inside one."""
     from PySide6.QtWidgets import QApplication
@@ -263,7 +217,7 @@ def test_a_walk_given_a_stepped_heads_result_stacks_nothing_and_walks_again_when
             turn()
         return got[-1]
     whole = walk({})
-    given = {"track": (g.entry("track").raw_key, {f: v for f, v in whole["track"].items() if f not in ("gate", "key", "plate")})}
+    given = {"track": (g.entry("track").raw_key, {f: v for f, v in whole["track"].items() if f not in ("gate", "key")})}
     assert equal(walk(given), whole) and win.stack is None
     win.given = dict(given)
     win.begin(0, 7)

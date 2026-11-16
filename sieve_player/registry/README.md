@@ -8,9 +8,7 @@ supply it. No facet has a meaningful None (pass-through is `PRODUCES = "same"`).
 `FACETS` only if something in `sieve_player` outside this package reads it. A selector, a tool
 whose `PRODUCES` is `"path"` with no `EXPECTS`, says `select` instead of `run`, and `matches` if
 it can count what its rule covers. A tool with `PATHS` has a path input per key, which a selector
-feeds; the value is called with the picked file and answers the params to merge. A tool with
-`PARAMS` names inputs of its `INPUTS` whose wire carries params as well: the value is called with
-the params of the node wired in and answers the params to merge, again whenever those change. A series tool
+feeds; the value is called with the picked file and answers the params to merge. A series tool
 that steps says `step` beside `run`: handed the state it returned for the row before, None at the
 first, one folded row and its index, it returns the next state and that row's share of `run`'s
 result, so the shares accumulated over a series equal `run` over it; `run` stays mandatory and is
@@ -24,7 +22,7 @@ and the report prints that first. `--check` fails if this list and `__all__` dif
 read by nothing, or if a type under `tools/` is produced or expected by nothing.
 
 A tool's category is derived, never declared: `category(tool)` reads the facets by an ordered list,
-source, cache, measure, relate, convert, transform, the first rule that fits deciding, so a tool
+source, measure, relate, convert, transform, the first rule that fits deciding, so a tool
 lands in a Tab menu group the day it is written and nobody files it; docs/spec/tool-naming.md
 argues the list. `description(tool)` is the first sentence of its docstring less its label, and
 `signature(tool)` its types in and out, what the menu shows beside the name. The report prints the
@@ -34,6 +32,7 @@ category beside each tool.
 
 - `MARKER`
 - `FACETS`
+- `WIDGET_FACETS` -- what a settings widget may have beside `changed`, `params()` and `set_params()`, each name to the line that supplies it; `tests/test_seams.py` holds the pane, the window and the tools to these names
 - `Entry` -- `name`, `module`, `path`, `error`; `get(facet)`, `missing`, `ok`
 - `is_tool(obj)`
 - `probe(tool, facet)`

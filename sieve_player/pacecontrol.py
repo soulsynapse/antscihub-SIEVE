@@ -2,7 +2,7 @@
 It reads the figure it is handed and the theme, and nothing of the window either sits in.
 """
 from PySide6.QtCore import QPointF, QRectF, Qt
-from PySide6.QtGui import QBrush, QFontMetrics, QPainter, QPen
+from PySide6.QtGui import QFontMetrics, QPainter, QPen
 from PySide6.QtWidgets import QAbstractButton
 
 from . import theme
@@ -13,8 +13,8 @@ from .theme import GAP, ROW_H
 class PaceControl(QAbstractButton):
     """A pace.Figure as one control, drawn and not written: the lane's glyph, the rate as a multiple
     of realtime, a bar and a time. The bar's width is the range and its filled part the rows done,
-    cut by what they were: those a store held dim, those that ran bright, those that read a bake
-    hatched, in that order and not at the rows' places, the figure holding counts. The time is under
+    cut by what they were: those a store held dim, those that ran bright, in that order and not at
+    the rows' places, the figure holding counts. The time is under
     the glyph of what it is, the clip at this rate, the clip walk's rest or what it took, and a dash
     where the figure gives none. The tooltip is the figure's words, then `hint`, what a press does;
     without one it does not show as pressable. Its width never follows its text."""
@@ -64,11 +64,8 @@ class PaceControl(QAbstractButton):
         p.setRenderHint(QPainter.Antialiasing, False)
         p.fillRect(bar, theme.qgray(theme.GROUND - theme.STEP))
         at = bar.left()
-        for rows, brush in ((f.held, theme.qgray(self.HELD)), (f.ran, theme.qgray(theme.INK)), (f.served, None)):
+        for rows, brush in ((f.held, theme.qgray(self.HELD)), (f.ran, theme.qgray(theme.INK))):
             w = self.BAR_W * rows / f.total if f.total else 0
-            if brush is None:
-                p.fillRect(QRectF(at, bar.top(), w, self.BAR_H), theme.qgray(self.HELD - 45))
-                brush = QBrush(theme.qgray(theme.INK), Qt.BDiagPattern)
             p.fillRect(QRectF(at, bar.top(), w, self.BAR_H), brush)
             at += w
         p.setPen(QPen(theme.qgray(base + theme.LINE_LIFT), 1))

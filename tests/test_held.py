@@ -5,7 +5,7 @@ import os
 
 import numpy as np
 
-from sieve_player import held
+from sieve_player import held, theme
 
 
 def test_a_held_file_reads_back_under_its_stamp_and_as_nothing_under_any_other(tmp_path):
@@ -16,12 +16,12 @@ def test_a_held_file_reads_back_under_its_stamp_and_as_nothing_under_any_other(t
     stamp = held.stamp(held.tools_print(tools))
     path = held.path_for(str(tmp_path / "doc.json"))
     read = lambda: held.File(path, held.stamp(held.tools_print(tools))).load()
-    result = {"signal": np.arange(4, dtype=np.float32), "key": "k", "plate": (0, 1, 2, 3)}     # a tuple as long as the run
+    result = {"signal": np.arange(4, dtype=np.float32), "key": "k", "said": (0, 1, 2, 3)}      # a tuple as long as the run is no row of it
     held.File(path, stamp).write([(10, 4, {"count": result}, 16)])
     (start, rows, results, _), = read()
     assert (start, rows) == (10, 4) and held.rows_of(results["count"], rows, 1, 2)["signal"].tolist() == [1.0, 2.0]
     assert held.rows_of(results["count"], rows, 1, 2)["key"] == "k"
-    assert held.rows_of(results["count"], rows, 1, 2)["plate"] == (0, 1, 2, 3)
+    assert held.rows_of(results["count"], rows, 1, 2)["said"] == (0, 1, 2, 3)
     tool.write_text("A = 2\n", encoding="utf-8", newline="\n")
     assert read() == []
     tool.write_text("A = 1\n", encoding="utf-8", newline="\n")
@@ -59,10 +59,15 @@ def test_a_run_is_pickled_once_however_the_file_is_written_after(tmp_path):
     assert [s for s, *_ in held.File(file.path, ("stamp",)).load()] == [0, 20, 30]
 
 
+def test_bytes_are_said_in_the_first_unit_that_holds_them_under_1024_and_a_badge_has_a_colour_for_no_other():
+    assert [held.in_units(n) for n in (0, 1536, 3 << 30, 1 << 50)] == [("0", "B"), ("1.5", "KB"), ("3.0", "GB"), ("1024.0", "TB")]
+    assert set(theme.HELD) <= set(held.UNITS)
+
+
 def test_a_range_is_served_from_the_run_that_covers_it_under_the_chains_keys_and_the_limit_lets_go_of_left_keys_first():
-    now, moved = held.Chain({"a": "ka", "b": "kb"}, frozenset({"a"}), None), held.Chain({"a": "ka", "b": "kb2"}, frozenset({"a"}), None)
+    now, moved = held.Chain({"a": "ka", "b": "kb"}, frozenset({"a"})), held.Chain({"a": "ka", "b": "kb2"}, frozenset({"a"}))
     runs = held.Runs(18, lambda v: 1)       # a run of two nodes of three values counts six
-    of = lambda start, rows, chain: {nid: {"signal": np.arange(start, start + rows, dtype=np.float32), "key": k, "plate": None}
+    of = lambda start, rows, chain: {nid: {"signal": np.arange(start, start + rows, dtype=np.float32), "key": k, "gate": None}
                                      for nid, k in chain.keys.items()}
     hold = lambda start, rows, chain: runs.hold(start, rows, of(start, rows, chain), chain)
     assert hold(10, 4, now) and not hold(10, 4, now) and not runs.hold(10, 5, of(10, 4, now), now)
@@ -72,11 +77,11 @@ def test_a_range_is_served_from_the_run_that_covers_it_under_the_chains_keys_and
     part = runs.part(12, 3, moved)
     assert list(part) == ["a"] and part["a"]["signal"].tolist() == [12.0, 13.0, 14.0]       # b is not stepped, nor under its key
     assert hold(30, 4, moved) and hold(40, 4, now) and len(runs) == 3
-    assert runs.from_first_row("a", "ka", None)[:2] == (0, 20) and runs.from_first_row("b", "kb2", None) is None
+    assert runs.from_first_row("a", "ka")[:2] == (0, 20) and runs.from_first_row("b", "kb2") is None
     assert hold(50, 4, moved) and [run[0] for run in runs] == [0, 40, 50]       # 0 has the most rows of a under its key, what part hands a walk: the oldest other goes
-    assert [(at, signal.tolist()) for signal, at, _ in runs.beside("a", "ka", None, 41, 2)] == [
+    assert [(at, signal.tolist()) for signal, at, _ in runs.beside("a", "ka", 41, 2)] == [
         (0, [float(i) for i in range(20)]), (40, [40.0]), (43, [43.0]), (50, [50.0, 51.0, 52.0, 53.0])]
-    gone = held.Chain({"a": "ka2", "b": "kb3"}, frozenset({"a"}), None)
+    gone = held.Chain({"a": "ka2", "b": "kb3"}, frozenset({"a"}))
     assert hold(60, 4, gone) and [run[0] for run in runs] == [40, 50, 60]       # no node of 0 is under a key the chain has: it goes first, however long
     assert not runs.hold(70, 4, {nid: {**r, "key": None} for nid, r in of(70, 4, gone).items()}, gone)      # under no key, good to no reader
     twice = held.Runs(18, lambda v: 1)
@@ -86,10 +91,7 @@ def test_a_range_is_served_from_the_run_that_covers_it_under_the_chains_keys_and
     full = held.Runs(6, lambda v: 1)        # room for one run
     assert full.hold(0, 4, of(0, 4, now), now) and full.hold(0, 4, of(0, 4, moved), moved)     # as long as the run of keys left, which goes
     assert not full.hold(0, 4, of(0, 4, now), moved) and [run.results["b"]["key"] for run in full] == ["kb2"]      # let go at once: nothing held changed
-    plated = held.Chain(moved.keys, moved.steps, "plate")
-    assert full.hold(0, 4, {nid: {**r, "plate": "plate"} for nid, r in of(0, 4, moved).items()}, plated)       # the same keys in another plate are not covered
-    assert full.over(0, 4, plated) is not None and full.over(0, 4, moved) is None
-    assert full.hold(10, 4, {nid: {**r, "plate": "plate"} for nid, r in of(10, 4, moved).items()}, plated)
+    assert full.hold(10, 4, of(10, 4, moved), moved)
     assert [run.start for run in full] == [10]      # of two the chain has as much of, as long, the one held last stays
     touching = held.Runs(100, lambda v: 1)
     assert touching.hold(0, 4, of(0, 4, now), now) and touching.hold(4, 4, of(4, 4, now), now)

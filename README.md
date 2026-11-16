@@ -22,12 +22,11 @@ also writes to a log, the previous launch's kept beside it as `.prev.log`; `SIEV
 file or, as `0`, turns it off, and `sieve_player.dev.console.log_path` says where it goes unset. `SIEVE_DUMP`
 names a file every video opened dumps the probe's stream to (`sieve_player/trace.py`);
 `SIEVE_QT_TRACE` narrows the Qt warning handler to warnings containing its text, or `0` leaves
-Qt's own printing alone; `SIEVE_C_STDERR=1` leaves C-level stderr alone, so cv2's plugin warns on
-every unconverted frame, and libav says why a stream ended where it did, which the player's own
+Qt's own printing alone; `SIEVE_C_STDERR=1` leaves C-level stderr alone, so libav says
+why a stream ended where it did, which the player's own
 line at the correction cannot. `SIEVE_MEMO_GB` and `SIEVE_CACHE_GB` set the memo's and the
 decoder cache's limits; unset or `0`, each is the default in its class, and the line the player prints on
-opening a video says what both are. `SIEVE_STORE` names the store, the folder bakes land in, while
-no folder has been chosen in the player; `sieve_player.store.folder` says where it is otherwise.
+opening a video says what both are.
 
 ## A tool
 
@@ -57,7 +56,8 @@ def run(series, params) -> dict               # series.data is (T, ...), the rea
                                               # through fold() if there is one; the dict carries "signal",
                                               # a (T,) array; the gate is the player's, never the tool's
 def settings(parent=None) -> ParamWidget      # optionally show_result(result, start, fps), set_playhead(row),
-                                              # set_source(path, fps): the video, for a tool that writes a file (csv),
+                                              # set_source(path, fps): the footage the node's inputs are frames of, the video or
+                                              # the file a cutting node above it serves, for a tool that writes a file (csv),
                                               # set_paths({input: path}): the file each wired path input picked,
                                               # for a card that opens the file in another program
 def step(state, row, i, params) -> (state, dict)  # optional: the tool steps row by row where the plan lets it,
@@ -73,7 +73,7 @@ def step(state, row, i, params) -> (state, dict)  # optional: the tool steps row
 
 # a tool on a wire of any kind: KIND = "same" makes the node a frame node on a frame wire and a
 # series node on a signal or tracks wire, so run is called either way, run(frames, row, params) or
-# run(series, params), and settles which by its arguments (bake).
+# run(series, params), and settles which by its arguments.
 
 # a selector: which file, by rule
 NAME = "file"; KIND = "selector"; PRODUCES = "path"
@@ -85,7 +85,7 @@ How the player treats a tool, as `sieve_player/graph.py`, `pane.py` and `window.
 - Types are strings the player compares for equality; it attaches no meaning to them beyond the
   video node producing `"bgr"`, or `"gray"` when its `output` param says so. That one param is the
   decoder's, applied before its cache, so a chain that wants gray frames never holds the colour
-  ones and no gray node is needed for that; a smaller frame is tools/rescale's, or a bake's, and a
+  ones and no gray node is needed for that; a smaller frame is tools/rescale's, and a
   document saved with a scale on the video node loads with a rescale node inserted for it. An
   `EXPECTS` tuple accepts any of its members, and `PRODUCES = "same"` hands out whatever the tool
   reads.
@@ -130,8 +130,8 @@ Facets the player reads when a tool has them:
 | a `"signal"` array in a series result | the node's line in the plot under the frame, drawn while the node is selected or pinned. Its two handles are the node's band, in the signal's units, saved with the node: the player adds `"gate"`, the rows inside it (outside when lo is above hi), washes them on the line, zeroes the rest of the signal before a series node downstream reads it, and draws a green border on the frame while the playhead is in a row the last chain node gates. Every chain node's result also gets `"key"`, the node's key (`graph`), which hashes its band and everything upstream: a tool that writes a file records it, and can read it back to say whether the file on disk is this graph's (csv) |
 | `INPUTS = {input: types}` | a frame input after the first, with the types it expects; `run` reads it as `frames(row, input)`, and the node's key and `frames.key` follow it |
 | `PATHS = {input: loader}` | a path input a selector feeds; the loader turns the file into params |
-| `PARAMS = {input: function}` | an input of `INPUTS` whose wire carries params too: the function turns the params of the node wired in into params of this one, merged as a path input's are and again whenever the source's change |
-| `def bake(params, count) -> (rows, quality)` | the node bakes: a Bake button under it, and the worker writes the node's input over the plate rows the tool reads off its own params into the store (`sieve_player/store.py`) under the node's key, a row at a time between scrubs, frame kinds as a clip at the quality the tool names and tables and signals as files that read back equal (`sieve_player/writers.py`); a cancelled or failed bake leaves nothing and says why in the node's standing. The node's mode, live or baked, is the document's, saved with the node and drawn on it; baked, the node is a source: fed with nothing wired in, keyed by its bake, handing out the file's kind with nothing upstream run or decoded; a change upstream shows it stale, the plan's verdict and never saved, and the switch under it goes live or serves the bake again, and a document reopens baked while the store has the file. While the display flag is behind a bake with an increment or a range, the document's rows, count and fps are the file's, nodes in the plate's row space are grayed and do not run, and a csv's key line carries `plate=first:increment`; with the flag upstream of every bake the document is the plate's and the nodes behind the bake are the grayed ones |
+| `def cut_file(video, footage, params) -> path or None` | the node cuts the video into files: at every sync the player asks which file the tool wrote of what `run` hands out of `video`, whose `decoder.footage_print` is `footage`, under the node's params; the file may be a lossy encoding of it, and what is served is the file. While the node reads the video node, or a node that serves a file, in which case `video` is that file, the player serves the file in place of the run: nothing upstream is run or decoded for it, its key is the one a document opened on the file gives its video node, so everything after it is keyed as that document is, and its face on the canvas says `cut`. With None for an answer, or a node that serves none between the video and it, it runs. A tool whose params say to serve a file that is not there raises FileNotFoundError saying why: the node and everything that reads it then do not run, and what it said is the node's standing, so a document's results never depend on what the store holds. A file a node serves is open in the player, and in a bare walk's process, and cannot be replaced or removed while it is, so a tool never writes over a file it has answered with: a cut of another part, or another encoding, is a file of another name in the store, the folder the header's store control shows and a press on it chooses (`tools/_cutfile.py`, `sieve_player/store.py`), and a settings widget that has written or removed one says so by a `storeChanged` signal, its params as they were, for the player to read the store and ask again. A tool whose `cut_file` or `cut_files` raises serves and names nothing, and its node's standing says what was raised. The served files' decoders share one cache limit, the video decoder's: the file read latest may fill the whole of it, and the others keep what is left, the one read longest ago giving way first. A node reads one piece of the plate: one whose inputs are of two cutting nodes, or of one and of the plate, does not run, nor does what reads it, and its standing says which. A widget's `set_source` below a served node is handed the served file (region) |
+| `def cut_files(video, footage, params) -> paths` | beside `cut_file`: every file the node would serve under some choice of its params, asked of the footage the node reads wherever it sits, served there or not. The player hands their union over the document's cutting nodes to each settings widget with a `set_cut_files_in_use(paths)`, so a card can list the files of its footage that no node of the document uses (region) |
 | `STATIC = True` | the output is the same at every row: the memo holds it once under the key and never evicts it while the node stands under that key, and the monitor counts its run per change rather than per row |
 | a plane as output | the node's density, v2's plot: its pixels per row counted on a fixed log axis, drawn as a field under the lines in the plot while the node is selected or pinned, for every fed frame node; a mask or a field has none. Its two handles are the node's band, saved with the node: the player zeroes every pixel outside it (inside it when lo is above hi) before anything downstream reads the node |
 

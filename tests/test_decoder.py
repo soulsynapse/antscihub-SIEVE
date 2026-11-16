@@ -19,9 +19,7 @@ def video(tmp_path_factory):
     return path
 
 
-def test_gray_output_is_converted_before_the_cache_and_a_switch_empties_it(video, monkeypatch):
-    import sieve_player.decoder as decoder
-    monkeypatch.setattr(decoder, "QUIET", True)
+def test_gray_output_is_converted_before_the_cache_and_a_switch_empties_it(video):
     d = Decoder(video)
     bgr = d.read(3)
     assert bgr.shape == (48, 64, 3) and d.cached(3) is not None
@@ -31,19 +29,17 @@ def test_gray_output_is_converted_before_the_cache_and_a_switch_empties_it(video
     assert f.shape == (48, 64) and f.dtype == np.uint8 and d.cached(3) is f
     assert d.luma and not d.limited and abs(int(f[0, 0]) - 3) <= 1   # the luma plane itself; MJPEG is full range
     assert np.abs(f.astype(int) - cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)).max() <= 2   # the ramp too: a switch mid-stream garbles columns
-    assert d.cache_bytes == 4 * 48 * 64                      # gray rows only: the switch reopened at row 0 and read through
+    assert d.cache_bytes == 2 * 48 * 64                      # gray rows only: row 3 behind the cursor is a seek, landing a row short
     d.output = "bgr"
     assert d.cached(3) is None and np.abs(d.read(3).astype(int) - bgr).max() <= 2
     with pytest.raises(ValueError):
         d.output = "hsv"
 
 
-def test_a_raw_stream_is_refused_and_its_remux_opens_with_limited_range_luma(video, tmp_path, monkeypatch):
+def test_a_raw_stream_is_refused_and_its_remux_opens_with_limited_range_luma(video, tmp_path):
     import shutil
     import subprocess
-    import sieve_player.decoder as decoder
     from sieve_player.decoder import probe
-    monkeypatch.setattr(decoder, "QUIET", True)
     ffmpeg = shutil.which("ffmpeg") or pytest.skip("no ffmpeg to write a raw stream")
     raw, mp4 = tmp_path / "v.h264", tmp_path / "v.mp4"
     subprocess.check_call([ffmpeg, "-y", "-loglevel", "error", "-i", str(video), "-frames:v", "10",
@@ -57,9 +53,9 @@ def test_a_raw_stream_is_refused_and_its_remux_opens_with_limited_range_luma(vid
     d = Decoder(mp4, cache_bytes=1)                    # the last row only, so a row behind is a decode
     assert d.count == 10 and probe(mp4)[3] == 10 and abs(d.fps - 30.0) < 0.01   # the framerate given to the remux, on mp4's timescale
     assert d.read(7).shape[:2] == (48, 64) and d.decodes == 8 and d.seeks == 0
-    d.output = "gray"                                  # reopens at the top, so row 2 is a step
+    d.output = "gray"                                  # the cursor stays past row 7, so row 2 is a seek to row 1 and a step
     g = d.read(2)
-    assert g.shape == (48, 64) and d.seeks == 0 and d.decodes == 11
+    assert g.shape == (48, 64) and d.seeks == 1 and d.decodes == 10
     assert d.luma and d.limited                        # libx264 writes limited range: the plane is expanded to full
     assert abs(int(g[0, 0]) - 2) <= 3                  # row 2 was written as 2 everywhere
     d.output = "luma"
@@ -109,9 +105,58 @@ def test_a_stream_ending_short_of_the_container_is_said_once_on_stderr(video, tm
     d.close()
 
 
+def test_a_row_by_a_seek_is_the_row_a_walk_reads_where_the_plugin_says_another(video, tmp_path, monkeypatch):
+    """A transport stream with B-frames: no seek lands before its second keyframe, and the plugin
+    says of one to row 0 that it did. Then a file with twenty frames gone and their times kept, where
+    a frame's time at the container's rate is another row than its place among the frames: a seek
+    is numbered by that place, and the rows are the walk's. With a store set the table is kept
+    there under the file's print, and is the table a process that has read no packet takes; a kept
+    table that is not the file's is read anew at the first frame that disagrees with it, and kept."""
+    import shutil
+    import subprocess
+    ffmpeg = shutil.which("ffmpeg") or pytest.skip("no ffmpeg to write a transport stream")
+    ts = tmp_path / "v.ts"
+    subprocess.check_call([ffmpeg, "-y", "-loglevel", "error", "-i", str(video), "-frames:v", "90", "-pix_fmt", "yuv420p",
+                          "-c:v", "libx264", "-g", "30", "-bf", "2", "-f", "mpegts", str(ts)])
+    walk = Decoder(ts)
+    in_order = [walk.read(r) for r in range(90)]
+    assert walk.seeks == 0
+    walk.close()
+    d = Decoder(ts, cache_bytes=1)                    # the last row only, so every row behind is a seek
+    d.read(80)
+    for r in (61, 45, 31, 30, 20, 5, 1, 0):
+        assert np.array_equal(d.read(r), in_order[r]), r
+    assert d.seeks == 9
+    d.close()
+    gap = tmp_path / "gap.mp4"
+    subprocess.check_call([ffmpeg, "-y", "-loglevel", "error", "-i", str(video), "-frames:v", "120", "-pix_fmt", "yuv420p",
+                          "-vf", r"select=not(between(n\,20\,39))", "-fps_mode", "passthrough", "-c:v", "libx264", "-g", "30", str(gap)])
+    import sieve_player.decoder as decoder
+    monkeypatch.setattr(decoder, "STORE", lambda: str(tmp_path / "store"))
+    walk = Decoder(gap)
+    in_order = [walk.read(r) for r in range(100)]
+    walk.close()
+    d = Decoder(gap, cache_bytes=1)
+    for r in (90, 70, 45, 21, 60, 5):
+        assert np.array_equal(d.read(r), in_order[r]), r
+    assert d.seeks and not d._counts_only         # how many of the six were seeks is by what a seek was measured to cost
+    kept = tmp_path / "store" / decoder.TIMES_DIR / f"{d.footage_print}.npy"
+    assert np.array_equal(np.load(kept), d._times) and len(d._times) == 120
+    np.save(kept, d._times[:7])
+    decoder._times.clear()
+    assert len(decoder.frame_times(gap)) == 7       # the kept table, and no reading of the packets
+    d.close()
+    d = Decoder(gap, cache_bytes=1)
+    for r in (90, 70, 45, 21, 60, 5):
+        assert np.array_equal(d.read(r), in_order[r]), r
+    assert not d._counts_only and len(d._times) == 120 and len(np.load(kept)) == 120
+    decoder._times.clear()
+    d.close()
+
+
 def test_a_files_print_is_its_footages_wherever_it_lies_and_however_its_path_is_spelled(tmp_path):
-    """The video node's key is of this and of no path, so a bake and a held run made of a file
-    are found from a copy of it, on another machine and under another spelling."""
+    """The video node's key is of this and of no path, so a held run made of a file is found from
+    a copy of it, on another machine and under another spelling."""
     body = bytes(range(256)) * (3 * SLICE // 256)
     a, b, c = tmp_path / "a.mp4", tmp_path / "sub" / "b.mp4", tmp_path / "c.mp4"
     b.parent.mkdir()

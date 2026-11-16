@@ -2,7 +2,7 @@
 listened to and no interface beside it, and the series chain's results left in a file. The window
 starts it (PlayerWindow's Bare) and reads its stdout, one JSON object a line: `{"done", "total",
 "rate"}` as rows land, `{"count"}` where the stream ended short of the rows claimed, then one of `{"results": path}`, `{"refused": why}` or `{"failed": [row,
-node, text]}`. The job is `job()`'s dict. The walk is worker._Walk's own, driven on this thread.
+node, text]}`. The job is `job()`'s dict. The walk is walk._Walk's own, driven on this thread.
 """
 import json
 import os
@@ -47,7 +47,7 @@ def main(path):
     from .document import Document
     from .graph import Graph
     from .registry import discover
-    from .worker import _Walk
+    from .walk import _Walk
 
     tools = {e.name: e.module for e in discover(*j["roots"]) if e.ok}
     doc = Document.from_dict(j["document"], tools)

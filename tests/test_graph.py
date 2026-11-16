@@ -744,7 +744,8 @@ def test_a_clip_stack_of_tables_is_counted_through_its_object_columns():
     """nbytes reads the arrays behind an object field; the clip walk stops where the running total
     passes STACK_BYTES, the rows it has standing, where the first row's forecast let it start."""
     from PySide6.QtWidgets import QApplication
-    from sieve_player import worker as W
+    from sieve_player import walk as W
+    from sieve_player.worker import Worker
     QApplication.instance() or QApplication([])
     t = np.empty(2, dtype=[("x", "<i4"), ("contour", object)])
     t["contour"] = [np.zeros((100, 2), np.int32), None]
@@ -758,7 +759,7 @@ def test_a_clip_stack_of_tables_is_counted_through_its_object_columns():
     g = Graph(doc, Dec(), {**TOOLS, "table": table, "head": head})
     led = Ledger()
     g.on_event = led.event
-    w = W.Worker(g)
+    w = Worker(g)
     W.STACK_BYTES = 10_000           # ten rows of row 0's 424 B pass the forecast; the contours grow 400 B a row
     refused, walked, clips = [], [], []
     w.clipRefused.connect(refused.append)
@@ -810,7 +811,8 @@ def test_a_window_stack_stops_at_the_byte_limit_as_the_clip_stack_does():
     """The window's stack is forecast from the first row and summed as it fills; past STACK_BYTES the
     walk closes at the rows it has, the chain runs over them, and the transport is told why."""
     from PySide6.QtWidgets import QApplication
-    from sieve_player import worker as W
+    from sieve_player import walk as W
+    from sieve_player.worker import Worker
     QApplication.instance() or QApplication([])
     t = np.dtype([("x", "<i4"), ("contour", object)])
     table = tool("table", produces="blobs", fn=lambda f, p: np.array([(0, np.zeros((50 * int(f.flat[0]), 2), np.int32))], dtype=t))
@@ -818,7 +820,7 @@ def test_a_window_stack_stops_at_the_byte_limit_as_the_clip_stack_does():
     head.run = lambda series, params: {"signal": np.array([len(r) for r in series.data], np.float32)}
     doc = D.from_tools([gray, table, head])
     g = Graph(doc, Dec(), {**TOOLS, "table": table, "head": head})
-    w = W.Worker(g)
+    w = Worker(g)
     W.STACK_BYTES = 10_000
     refused, walked, got = [], [], []
     w.walkRefused.connect(refused.append)

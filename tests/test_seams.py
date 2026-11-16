@@ -26,8 +26,13 @@ MAY_IMPORT = {
     "timeline": {"theme"},
     "decoder": set(),
     "held": set(),                                # a pickle and a stamp; the window writes and reads it
-    "worker": {"decoder", "density", "graph", "stream"},     # of the stream, the words a begin says what began it by
-    "bare": {"decoder", "document", "graph", "registry", "worker"},      # the clip walk's own process: no window, no stream's reader
+    "walk": {"density", "graph", "stream"},         # of the stream, the words a begin says what began it by; no Qt, see below
+    "worker": {"decoder", "graph", "stream", "walk"},
+    "bare": {"decoder", "document", "graph", "registry", "walk"},      # the clip walk's own process: no window, no stream's reader, no Qt
+    "density": set(),
+    "recent": set(),
+    "theme": set(),
+    "filemenu": {"document", "theme"},
     "trace": {"stream"},
     "ledger": {"stream", "trace"},                # the span kinds and a dump's reader; no graph is held and no Qt reached
     "catalogue": {"ledger", "stream"},            # a detector reads a view, by the stream's names for a kind, and nothing else
@@ -38,6 +43,7 @@ MAY_IMPORT = {
     "storecontrol": {"held", "store", "theme"},   # the store as the header draws it, in the units a held size is said in
     "pacecontrol": {"pace", "theme"},             # the control the player's header and the monitor's both draw; it is neither's
 }
+ROOTS = {"__init__", "__main__", "window"}        # what composes the rest and may import any of it
 
 
 def imports_of(name):
@@ -54,9 +60,16 @@ def imports_of(name):
     return out
 
 
+def jobs_tree():
+    """The worker's ladder and the walk it turns, parsed as one module: what is asserted of a job holds across both files."""
+    return ast.parse("\n".join((PKG / f"{name}.py").read_text(encoding="utf-8") for name in ("worker", "walk")))
+
+
 def test_imports_run_one_way():
     for name, allowed in MAY_IMPORT.items():
         assert imports_of(name) <= allowed, f"{name} imports {imports_of(name) - allowed}"
+    unsaid = {p.stem for p in PKG.glob("*.py")} - set(MAY_IMPORT) - ROOTS
+    assert not unsaid, f"neither in MAY_IMPORT nor a root: {sorted(unsaid)}"
 
 
 def test_nothing_under_dev_imports_the_window():
@@ -228,7 +241,7 @@ def test_a_utility_imports_neither_the_player_nor_a_tool():
 def test_the_worker_walks_the_clip_with_no_twin_of_a_window_field_or_method():
     """One _Walk serves the window and the clip; a private worker name beside its `_c` or `_clip`
     prefixed twin is the second copy of the walk coming back."""
-    tree = ast.parse((PKG / "worker.py").read_text(encoding="utf-8"))
+    tree = jobs_tree()
     names = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name) and node.value.id == "self":
@@ -254,7 +267,7 @@ def test_the_scheduler_alone_begins_a_job_and_nothing_compares_a_generation():
     a flag the ladder takes under the lock, so no generation counter is compared, by a job or by
     anyone. A job's due-ness is read in one place, _turn, which is both what the loop waits on and
     what it serves: no job answers `pending`, and nothing outside _turn reads an ask or a `due`."""
-    tree = ast.parse((PKG / "worker.py").read_text(encoding="utf-8"))
+    tree = jobs_tree()
     turn = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == "_turn")
 
     def begins(node):
@@ -278,7 +291,7 @@ def test_the_worker_reads_the_plan_off_one_snapshot_a_turn():
     each answer for whatever plan is current as they are called: two of them in one turn are two
     graphs once a sync lands between. What the graph computes or lists for a job it is handed that
     Plan to do under. invalidate() is the GUI thread's, one read."""
-    tree = ast.parse((PKG / "worker.py").read_text(encoding="utf-8"))
+    tree = jobs_tree()
     says = {"heads", "chain", "series_chain", "entry", "key", "walk", "fold", "fed", "shown", "over", "series", "source"}
     theirs = {id(n) for f in ast.walk(tree) if isinstance(f, ast.FunctionDef) and f.name == "invalidate" for n in ast.walk(f)}
     read = [ast.unparse(n) for n in ast.walk(tree) if isinstance(n, ast.Attribute) and n.attr in says
@@ -299,7 +312,7 @@ def test_a_job_holds_what_it_reads_and_emits_and_reaches_nothing_through_the_wor
     drive one with a graph and a few signals and no QThread: no field or attribute of a job names the
     worker, the chain run is a function over a graph, and a _Walk is
     constructed with every field past the graph named."""
-    tree = ast.parse((PKG / "worker.py").read_text(encoding="utf-8"))
+    tree = jobs_tree()
     jobs = [n for n in tree.body if isinstance(n, ast.ClassDef) and n.name in ("_Scrub", "_Walk")]
     assert len(jobs) == 2
     for job in jobs:
@@ -309,5 +322,6 @@ def test_a_job_holds_what_it_reads_and_emits_and_reaches_nothing_through_the_wor
         assert "Worker" not in ast.unparse(job), job.name
     functions = {n.name for n in tree.body if isinstance(n, ast.FunctionDef)}
     assert "run_chain" in functions
+    assert "PySide6" not in (PKG / "walk.py").read_text(encoding="utf-8")   # bare.py drives a walk in a process that loads no Qt
     walks = [n for n in ast.walk(tree) if isinstance(n, ast.Call) and ast.unparse(n.func) == "_Walk"]
     assert walks and all(len(n.args) <= 1 for n in walks), [ast.unparse(n) for n in walks]

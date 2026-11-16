@@ -16,7 +16,7 @@ from sieve_player import document as D
 from sieve_player import registry
 from sieve_player.graph import Graph, nbytes
 from sieve_player.plan import base_key, plan
-from sieve_player.worker import run_chain
+from sieve_player.walk import run_chain
 from sieve_player.registry.__main__ import check, report
 from tests import stepping
 from tools import blobs, gray, kinematics, smooth, track, tracks_filter, transitions
@@ -238,7 +238,7 @@ def test_a_walk_given_a_stepped_heads_result_stacks_nothing_and_walks_again_when
 
 
 def test_the_cadence_is_one_setting_read_over_both_ranges_and_the_throttle_is_gone():
-    from sieve_player import worker as W
+    from sieve_player import walk as W
     from tests.test_graph import Dec, TOOLS as FRAME, gray as fgray, tool
     assert not hasattr(W, "CHAIN_SHARE") and "share" not in {f.name for f in fields(W._Walk)}
     head = tool("head", kind="series", produces="signal")

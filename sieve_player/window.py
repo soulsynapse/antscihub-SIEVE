@@ -164,12 +164,11 @@ RELOAD_SETTLE_MS = 150   # a loader re-reads a changed file this long after the 
 class Display(QWidget):
     drawFailed = Signal(str, str)   # a tool's draw() or pick() raised: the node, the line
     picked = Signal(str, dict)      # a drawer claimed a left click: the node, the params to merge
-    back = Signal()                 # a right click: show the node shown before this one
 
     """The frame, the overlay heated over it, the gate border, and each drawing node's draw() on
     top, in node order, each handed its own node's result: a series node's over the window, a
     frame node's at the row. A left click is offered to the drawers whose pick() claims it, the
-    one drawn last first; a right click asks for the node shown before."""
+    one drawn last first."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -280,9 +279,6 @@ class Display(QWidget):
         return (fx, fy) if 0 <= fx < self._pix.width() and 0 <= fy < self._pix.height() else None
 
     def mousePressEvent(self, e):
-        if e.button() == Qt.RightButton:
-            self.back.emit()
-            return
         if e.button() != Qt.LeftButton or (point := self.to_frame(e.position())) is None:
             return
         shape = (self._pix.height(), self._pix.width())
@@ -459,9 +455,6 @@ class PlayerWindow(QMainWindow):
         self.plot.pinToggled.connect(self._toggle_pin)
         self.display.drawFailed.connect(self._draw_failed)
         self.display.picked.connect(self._picked)
-        self.display.back.connect(self._back)
-        self._shown_before = []    # the display flag's past, most recent last, for a right click; the document's session
-        self._shown_last = None
         self.selection = None      # the node the canvas last selected, whose settings the pane shows until its card is closed and whose axis the plot draws
         self.header = Header()
         self.header.show_store(store.folder())
@@ -541,7 +534,6 @@ class PlayerWindow(QMainWindow):
         self._unload()
         self.doc = doc
         self._taken, self._driven = {}, {}     # the loaders' memory is the document's: its files are read anew
-        self._shown_before, self._shown_last = [], doc.display
         doc.resolve(self.tools)
         self.canvas.set_document(doc)
         self.pane.set_document(doc)
@@ -719,27 +711,12 @@ class PlayerWindow(QMainWindow):
     def reflag(self):
         """A flag moved: the runtime's plan follows and the frame shows the new node at the same row.
         The memo and the walk stand; nothing a flag names is computed differently."""
-        if self.doc.display != self._shown_last:
-            if self._shown_last is not None:
-                self._shown_before.append(self._shown_last)
-            self._shown_last = self.doc.display
         self.canvas.update()
         if self.graph is None:
             return
         self.graph.sync()
         self._restate()
         self.goto(self.row, commit=True)
-
-    def _back(self):
-        """A right click on the frame: the display flag returns to the node it showed before, skipping
-        any since removed; nothing with nothing before."""
-        ids = {n.id for n in self.doc.nodes} if self.doc is not None else set()
-        while self._shown_before:
-            nid = self._shown_before.pop()
-            if nid in ids and nid != self.doc.display:
-                self.doc.display = self._shown_last = nid
-                self.reflag()
-                return
 
     def _picked(self, nid, params):
         """A drawer answered a click: its params land in the document as a card's change does, through

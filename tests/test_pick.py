@@ -1,5 +1,5 @@
 """A click on the frame: offered to the drawers whose pick() claims it, last drawn first, the answer landing in the
-document through the card; one that raises is dropped and said; a right click walks the display flag back."""
+document through the card; one that raises is dropped and said."""
 import os
 import time
 from types import SimpleNamespace as Tool
@@ -79,37 +79,6 @@ def test_a_click_is_offered_last_drawn_first_a_raising_pick_is_dropped_and_said_
     loud.pick = lambda *a: None
     click(win)
     assert seen == [("quiet", (48, 64))] and win.doc.node("quiet").params["choice"] == ""   # unclaimed: nothing lands
-    win.close()
-
-
-def test_a_right_click_walks_the_display_flag_back_skipping_a_node_that_is_gone():
-    QApplication.instance() or QApplication([])
-    a, b, c = (drawer(n, None) for n in ("a", "b", "c"))
-    tools = [gray, a, b, c]
-    win = PlayerWindow(tools, "t")
-    assert win.doc.display == "c"                                      # from_tools flags the last frame tool
-    for nid in ("a", "b", "c"):
-        win.canvas.set_flag(nid)
-    QTest.mouseClick(win.display, Qt.RightButton)
-    assert win.doc.display == "b"
-    QTest.mouseClick(win.display, Qt.RightButton)
-    assert win.doc.display == "a"
-    QTest.mouseClick(win.display, Qt.RightButton)
-    assert win.doc.display == "c"
-    QTest.mouseClick(win.display, Qt.RightButton)
-    assert win.doc.display == "c"                                      # nothing before: nothing to do
-    win.canvas.set_flag("a")
-    win.canvas.set_flag("b")
-    win.canvas.set_flag("c")
-    win.canvas.select(["b"])
-    win.canvas.delete_selected()
-    win.canvas.changed.emit()
-    assert win.doc.display == "c"
-    QTest.mouseClick(win.display, Qt.RightButton)
-    assert win.doc.display == "a"                                      # b is gone, skipped
-    win.set_document(D.from_tools(tools))
-    QTest.mouseClick(win.display, Qt.RightButton)
-    assert win.doc.display == win._shown_last                         # a loaded document starts with no past
     win.close()
 
 

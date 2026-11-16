@@ -49,8 +49,7 @@ Picking which shape the graph looks at is the one place the frame earns a click.
 draws its shapes on the frame as every table tool does, and a click on a shape is the most direct
 way to say which one; the pane's list says the same thing more slowly. The click sets a param and
 nothing else: which node the frame shows stays the display flag's, as a viewport click in Houdini
-or Blender selects and never changes what the viewport displays, and the frame remembers where it
-has been so a right click walks back.
+or Blender selects and never changes what the viewport displays.
 
 ## How to read this
 
@@ -274,21 +273,6 @@ a pick is treated the same.
   of another shape answers nothing; its draw marks the chosen shape apart from the rest.
   Check: a test picks at a point inside a shape and reads the choice, picks it again and reads it
   cleared, picks outside and reads None, and picks on a frame of half the shape and reads None.
-
-## The display remembers
-
-Assumes: nothing.
-
-Looking at a dish means moving the display flag to the crop and coming back to the plate to pick the
-next, so the frame keeps where it has been and a right click walks back; it knows nothing of crops.
-
-- [x] A right click on the frame moves the display flag to the node it showed before the current
-  one, and again to the one before that; the memory is the document's session, cleared when a
-  document loads, a node gone from the document is skipped, and with nothing before there is
-  nothing to do.
-  Check: an offscreen test moves the flag across three nodes, right-clicks twice and reads the
-  flag on the first; deletes the middle node, moves forward and back, and reads the middle
-  skipped.
 
 ## Non-goals
 

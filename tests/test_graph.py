@@ -117,6 +117,13 @@ def test_reads_the_video_node():
     g = Graph(fan_out(), Dec(), TOOLS)
     assert g.compute("video", 3).shape == (4, 6, 3)
     assert (g.compute("gray", 3) == 4).all()
+    seen = []
+    add.run, keep = (lambda frames, row, params: seen.append((frames.key, frames.fps, frames.count)) or frames(row)), add.run
+    try:
+        g.compute("add", 3)
+    finally:
+        add.run = keep
+    assert seen == [(g.key("gray"), 30.0, 10)]                         # what a run reads off frames beside its rows
 
 
 def test_fan_out_computes_once():

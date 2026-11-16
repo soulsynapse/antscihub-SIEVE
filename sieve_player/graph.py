@@ -210,12 +210,12 @@ class Frames:
     def __init__(self, graph, plan, nid, sources, key, types=None):
         self._graph, self._plan, self._nid, self._sources = graph, plan, nid, sources
         self._raw_key, self._types = plan[nid].raw_key, types or {}
+        self.key, self.fps, self.count = key, graph.fps, graph.count
         self.handed = []        # [(array, Ref)]: each array a read handed the run that a store holds, and where
 
     def named(self, ref, default=None):
         """The array handed under `ref`, or `default` where the run read none there."""
         return next((a for a, r in self.handed if r == ref), default)
-        self.key, self.fps, self.count = key, graph.fps, graph.count
 
     def type(self, input=INPUT):
         return self._types.get(input)

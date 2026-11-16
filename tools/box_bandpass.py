@@ -1,4 +1,4 @@
-"""Frame tool: the frame's mean over a small box less its mean over a large one; gray in, gray out.
+"""Frame tool: the frame's mean over a small box less its mean over a large one; gray or a mask in, gray out.
 
 The small box, of `inner` px about each pixel, smooths away what is finer than it, sensor noise
 and texture; the large one, of `outer`, is the local background, so lighting and shading broader
@@ -17,7 +17,7 @@ import cv2
 import numpy as np
 
 SIEVE_TOOL = True
-NAME, KIND, EXPECTS, PRODUCES = "box-bandpass", "frame", "gray", "gray"
+NAME, KIND, EXPECTS, PRODUCES = "box-bandpass", "frame", ("gray", "mask"), "gray"
 MODES = ("darker", "brighter", "absolute")
 PRECISIONS = ("8 bit", "16 bit", "32 bit")
 DEFAULTS = {"mode": "darker", "inner": 1, "outer": 15, "precision": "16 bit"}

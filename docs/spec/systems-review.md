@@ -5,6 +5,38 @@ On v5-systems-review, branched from v5. This spec builds one document over sever
 under `sieve_player/`, `tools/` or `utilities/` changes on this branch: the review proposes, and
 what is built of it is decided after it is read.
 
+## The ask
+
+Kendrick's two messages, as he wrote them. Where a line below reads otherwise, these stand.
+
+> lets do a systems review of SIEVE as a whole. I think there are a few things some modules are
+> holding that they probably should not be, and there is a lot of opportunity to put dedicated
+> systems in place to alieviate things that keep getting reinvented
+
+> Actually, hold on. Lets do this systematically. Open a branch and make a spec for this, for
+> reviewing specific things. You should compare architectures to mature software, houdini, blender,
+> nuke, raven, bonsai, sleap, imagej, vaporsynth, and other tracking and editing software, and see
+> where I'm clearly feeling development friction. You should assess what SIEVE wants to be and what
+> systems are likely to be in place, and check if they are or have earned their place yet. You
+> should not look at the tests or the other specs during the review, many of the specs are very
+> stale and were only used during development. The spec for the systems should have sections with
+> checklist deliverables in chunks that can reasonably be investigated. The final deliverable
+> should be what sieve wants to be, then a list of what a seasoned user from other platforms would
+> expect as features, what the systems in place to deliver these things would be, citing how other
+> platforms do it (comparison tables at the end of those will be helpful). You shouldn't just stick
+> to a single list of other programs, every time you do a comparison, you should figure out what
+> the *best* example of that system is that applies here and include it so I can learn from it.
+> Then you should look at the systems that are actually in place for SIEVE, and look at which
+> things were built by attrition and a dedicated system or something similar would fit well and
+> save future work, rooted in how other reference projects handle what that system does. The spec
+> should be built such that it can be done in chunks and the final product should finish with a
+> useful assessment of the high level systems present currently, and a list of opportunities and
+> frictions with three columns: importance to the user, out of 10, importance to speed and
+> reliability of development, out of 10, number of times it would have solved problems for me, and
+> one other column of your choosing that you think would be useful. Again the spec will build this
+> document over sessions. It shouldn't be overly wordy, it should be written to be convincing and
+> clear. A useful heuristic to use is "what would a senior developer of ___ think here?"
+
 ## Why
 
 Modules hold things that are not theirs, and the same small machinery keeps being written again

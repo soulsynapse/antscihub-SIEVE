@@ -1,4 +1,4 @@
-"""Frame tool: what of the frame is narrower than a square and darker, or brighter, than its surround; gray in, gray out.
+"""Frame tool: what of the frame is narrower than a square and darker, or brighter, than its surround; gray or a mask in, gray out.
 
 `mode` is the sign kept, as bg-subtract's: `darker`, the black top hat, the frame's closing less
 the frame, an ant on a pale substrate; `brighter`, the white, the frame less its opening. The
@@ -12,7 +12,7 @@ to a whole level, 0 for none.
 import cv2
 
 SIEVE_TOOL = True
-NAME, KIND, EXPECTS, PRODUCES = "top-hat", "frame", "gray", "gray"
+NAME, KIND, EXPECTS, PRODUCES = "top-hat", "frame", ("gray", "mask"), "gray"
 MODES = ("darker", "brighter")
 OPS = {"darker": cv2.MORPH_BLACKHAT, "brighter": cv2.MORPH_TOPHAT}
 DEFAULTS = {"mode": "darker", "radius": 15, "inner": 2}

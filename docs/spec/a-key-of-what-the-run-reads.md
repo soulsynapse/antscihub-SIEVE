@@ -31,15 +31,15 @@ Facts to weigh. `served` raises with no shapes, where `run` raises too. A tool's
 read the node's params and never its key. A node's band is in its key and not its raw key, and is
 the player's.
 
-- [ ] The registry's facet table lists a facet, `key_params(params)`, with its hint line: a JSON
+- [x] The registry's facet table lists a facet, `key_params(params)`, with its hint line: a JSON
   value that is the same for any two params under which `run` hands out the same result of the
   same input. A tool without it is keyed by its whole params, as now.
   Check: `tests/test_registry.py`, the facet read from the table with its hint.
-- [ ] A node's raw key is of its source's key, its tool and what the facet answers; where the facet
+- [x] A node's raw key is of its source's key, its tool and what the facet answers; where the facet
   raises, of its whole params.
   Check: `tests/test_graph.py`, a seam: under a tool with the facet, two params it answers alike
   have one key below them and two it answers apart have two.
-- [ ] region has the facet and answers the plate and the rect it cuts: a shape moved that is not
+- [x] region has the facet and answers the plate and the rect it cuts: a shape moved that is not
   the chosen one, a shape renamed, `quality` and `serve clip` leave every key below a region that
   runs as it was, and a chosen shape whose rect moved does not.
   Check: `tests/test_region.py`, a seam: the keys below a region across each of those changes,

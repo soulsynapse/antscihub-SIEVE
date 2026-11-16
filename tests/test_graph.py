@@ -223,6 +223,24 @@ def test_key_follows_params_and_wiring():
     doc.connect("video", "add")
     g.sync()
     assert g.key("add") != k_add                                      # rewired
+    doc.connect("gray", "add")
+    gray.key_params = lambda p: p["k"]                                # a tool that says what of its params its run reads
+    try:
+        g.sync()
+        k_add = g.key("add")
+        doc.node("gray").params["note"] = "unread"
+        g.sync()
+        assert g.key("add") == k_add                                  # a param the facet leaves out moves no key below
+        doc.node("gray").params["k"] = 3
+        g.sync()
+        assert g.key("add") != k_add
+        gray.key_params, k_add = (lambda p: p["absent"]), g.key("add")
+        g.sync()
+        doc.node("gray").params["note"] = "read"
+        g.sync()
+        assert g.key("add") not in (k_add, g.key("gray"))             # a facet that raises: keyed by all its params
+    finally:
+        del gray.key_params
 
 
 def test_rewire_during_walk():

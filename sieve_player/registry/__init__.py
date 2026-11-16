@@ -27,6 +27,7 @@ _HINTS = {
     "OPTIONAL": 'OPTIONAL = ("bg",)  # the INPUTS the node computes without; run reads an unwired one as None',
     "STATIC": "STATIC = True  # the same output at every row: computed once per key, held once, counted per change",
     "PATHS": 'PATHS = {"settings": load_settings}  # path inputs: name -> params from the file',
+    "key_params": "def key_params(params): ...  # what of params run reads, a JSON value, the same for any two params under which run hands out the same result of the same input: the node is keyed by it in place of its params",
     "select": "def select(folder, params): ...  # a selector: the path it picks under folder, or None",
     "matches": "def matches(folder, params): ...  # a selector: every path its rule matches, picked first",
     "cut_file": "def cut_file(video, footage, params): ...  # the node cuts the video into files: the path of the file the tool wrote of what run hands out of video, whose decoder.footage_print is footage, under params, exact or lossy as the tool wrote it, or None where the node is to run; FileNotFoundError, saying why, where the params say to serve a file and there is none, and the node then does not run; a node that reads the video node, or a node that serves a file, in which case video is that file, serves it; never a file written over",

@@ -141,6 +141,29 @@ def test_a_frame_of_another_shape_than_the_plate_is_refused_and_said():
         g.compute("region", 0)
 
 
+def test_a_region_is_keyed_by_the_rect_it_cuts_and_run_reads_no_more_of_its_params():
+    below = tool("below", "bgr", "bgr")
+    bgr = tool("bgr", "bgr", "bgr", lambda f, p: np.arange(H * W * 3, dtype=np.uint8).reshape(H, W, 3))
+    doc = D.from_tools([bgr, region, below])
+    node = doc.node("region")
+    g = Graph(doc, Dec(), {t.NAME: t for t in (bgr, region, below)})
+    moved = [{"name": "nest", "polygon": SQUARE}, {"name": "dish", "circle": [44.0, 21.0, 6.0]}]
+    renamed = [{"name": "home", "polygon": SQUARE}, GEOMETRY["shapes"][1]]
+    alike = [{**params("nest"), "quality": "standard", "serve clip": False},
+             {**params("nest"), "quality": "lossless", "serve clip": True},
+             {**params("nest"), "shapes": moved}, {**params("home"), "shapes": renamed}]
+    apart = [{**params("dish"), "shapes": moved}, params("dish"), params()]
+    seen = []
+    for p in (*alike, *apart):
+        node.params = {**region.DEFAULTS, **p}
+        g.sync()
+        seen.append((g.key("below"), region.key_params(node.params), region.run(lambda row: g.compute("bgr", 0), 0, node.params)))
+    assert len({k for k, _, _ in seen[:4]}) == 1 and len({k for k, _, _ in seen}) == 4
+    for i, (ka, fa, a) in enumerate(seen):                  # a param run comes to read and the facet does not is found here
+        for kb, fb, b in seen[i + 1:]:
+            assert (ka == kb) == (fa == fb) and (fa != fb or np.array_equal(a, b))
+
+
 def test_the_cards_button_opens_the_utility_on_the_video_and_the_wired_file_from_any_directory(tmp_path, monkeypatch):
     import subprocess
 

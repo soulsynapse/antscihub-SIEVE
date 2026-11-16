@@ -93,6 +93,11 @@ Three are one fault, in the plugin's reader, at one offset. The rest land in the
 numpy and at addresses in no module, which is how a freed or overwritten object is met: wherever
 it is next touched. That reading is of the table alone.
 
+The three in the plugin's reader are all before `023c46ce` of 11-15 17:33, which took the decoder
+off `cv2.VideoCapture`, and none is after it. What still opens a video through that reader is
+`tools/_cutfile.py:Cut.__init__`, for a count, and `utilities/geometry/video.py:Video`. So that
+fault may have gone with the plugin; a day without it is not yet evidence that it has.
+
 From PowerShell:
 
     Get-WinEvent -FilterHashtable @{LogName='Application'; ProviderName='Application Error';

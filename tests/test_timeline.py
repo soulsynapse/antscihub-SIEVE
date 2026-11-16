@@ -31,8 +31,23 @@ def test_a_series_is_drawn_at_its_rows_and_a_column_is_its_rows_envelope():
     drawn = s._still
     s.set_playhead(500)
     s.set_hover(200)
+    s.set_window(100, 300)
     moved = s.grab().toImage()
     assert s._still is drawn and moved.pixelColor(50, y_top) != ground and moved.pixelColor(75, y_top) == img.pixelColor(75, y_top)   # a cursor that moves draws no row again
     s.set_series({"a": (np.array([1.0, 1.0, 1.0]), 100, None)}, "a")
     c = s.grab().toImage().pixelColor(10, y_top)
     assert c.blue() > c.red() and c.green() > c.red()       # no gate: a plain series, teal
+    rng = np.random.default_rng(0)
+    for count, width in ((20000, 300), (300, 300), (40, 300)):  # many rows a column, one, and columns between the rows
+        signal, grown = rng.random(count), Strip()
+        grown.resize(width, grown.H)
+        grown.set_count(count, 30.0)
+        for n in np.linspace(1, count, 9).astype(int):
+            series = {"a": (signal[:n], 0, signal[:n] > 0.5), "b": (signal[:n // 2 + 1] * 2, 0, None)}
+            more = {"a": [(signal[n + 3:], n + 3, signal[n + 3:] > 0.5)]} if n < count // 2 else {}
+            whole = Strip()
+            whole.resize(width, whole.H)
+            whole.set_count(count, 30.0)
+            for strip in (grown, whole):
+                strip.set_series(series, "a", more)
+            assert grown.grab().toImage() == whole.grab().toImage(), (count, n)     # the columns drawn anew as a series grows leave what a whole paint draws

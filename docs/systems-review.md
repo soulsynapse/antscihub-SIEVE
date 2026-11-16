@@ -2,7 +2,9 @@
 
 Built a part a session by `docs/spec/systems-review.md`, which says what each part holds and the
 order they are written in; a part not yet here is not yet written. The evidence it argues from is
-`docs/findings/2026-11-16-what-came-back.md`, cited by class as F01 to F25. A figure here is of the
+`docs/findings/2026-11-16-what-came-back.md`, cited by class as F01 to F25, of which F09 is not
+used, F01 holding it; the classes are as that finding has them after they were read with
+Kendrick, and its last section has how he holds each. A figure here is of the
 tree and the log at 2026-11-16, on v5-systems-review at `69903324`.
 
 ## 1. What SIEVE wants to be, and the pressures it is and is not under
@@ -71,6 +73,10 @@ The second and sixth rows are one fact read twice, and it is the reading here mo
 dispute: that a session without memory stands to the player as a third-party author stands to
 Houdini, so that a declared, checked surface for tools answers a pressure SIEVE is under although
 it has one author. The rows a reference is under and SIEVE is not are the first and the last.
+Kendrick, reading the ledger's classes: sessions writing the code and helping him assess it is how
+SIEVE got where it is and is "a non issue", so the sixth row is how the tree is written and no
+friction of his. What the second row then argues for is a surface a tool declares and the player
+checks, and nothing of one that is held still or given versions.
 
 ### Among its neighbours
 
@@ -96,7 +102,7 @@ fetched on 2026-11-16 and read through a summarising fetch, so a quotation is as
 
 Three things the table says. SIEVE is the only row with both evaluations; that the classes of the
 walk and the thread that drives it (F02, F03, F21) lie where the two meet is this session's
-reading, and part 4 is where it is checked. On the wire it stands with Bonsai, frames and what is
+reading, and nothing in part 4 checks it. On the wire it stands with Bonsai, frames and what is
 measured of them in one graph, and apart from Houdini, Nuke and VapourSynth, each of which carries
 one kind. And in what it is for it stands nearest Raven, a band over a signal that leaves a table
 of where things were, while Houdini, Raven, SLEAP and ImageJ each have a second form that runs
@@ -116,8 +122,15 @@ Direction, none of it in the tree.
   the nine documents.
 - Names. A pass over the tools' and the regions' names is his to make after a conversation
   (2026-11-09, as the ledger records it; `09094ef1` cancelled two renames).
-- Less of the monitor. `46899a83` records his word that its log is largely not needed; F20, the
-  class with the most commits coming back, is in large part that log's.
+- More of pull. Kendrick, reading the ledger's classes: "pull is probably one of the most
+  important things to build out", and what is asked for is in places made out where it should be
+  said (F08).
+- A tool named period, which cuts bouts out of a clip for further work, the next he means to
+  build, and one that leans on a key being right (F05).
+
+The monitor is not headed for less. What `46899a83` records as largely not needed is one reader
+of it that has since gone, as the ledger's finding says under What this could not see; Kendrick
+calls the monitor extremely helpful and finds a hang by it.
 
 ## 4. The systems SIEVE has, and what each module holds
 
@@ -139,7 +152,7 @@ where it does not.
 | --- | --- | --- | --- | --- |
 | S1 | The document | M01 | 546 | Every reader and writer of the pipeline: the canvas, the pane, the plan, the graph, the window, `bare.py`, `__main__.py`. Nothing writes a node but through `Document` or a node's fields. It has no history of its changes: the player holds no undo, and the one in the tree is the geometry utility's (M52). |
 | S2 | The registry of tools | M11, M12 | 250 | Discovery (`main.py`, `__main__.py`, `bare.py`) and the menu's facts (`window.py:PlayerWindow.__init__`). The facets it declares are read round it: `registry:probe` has no caller outside its package (A2). |
-| S3 | The plan and the keys | M02 | 248 | `graph.py:Graph.sync` and `__main__.py:show_plan`; every key the memo, the held file and the ledger hold is `plan.py:_key`'s. Nothing goes round it. |
+| S3 | The plan and the keys | M02 | 248 | `graph.py:Graph.sync` and `__main__.py:show_plan`; every key the memo, the held file and the ledger hold is `plan.py:_key`'s. Nothing goes round it for a node's result; what a kept file is good under is answered in five places more (A19). |
 | S4 | The runtime | M03, M04 | 822 | The worker, the walk, `bare.py`, the simulations and `bench.py` compute through `Graph`; the display reads `Graph.peek`. The memo is its own. |
 | S5 | The decoder | M05 | 586 | The graph alone reads rows of it. The window opens it, corrects its count and tells it where the store is (H6). |
 | S6 | The walk and its thread | M06, M07, M08 | 714 | One `_Walk` under three drivers: the worker's window lane, its clip lane, and `bare.py`'s process. |
@@ -164,7 +177,7 @@ where it does not.
 | M05 | `decoder.py` | 586 | Rows on two cursors (`Decoder`, `_Cursor`). The frame cache (`Decoder._put`, `Decoder._trim`). The table of frame times and its file in the store (`frame_times`, `_keep_times`, `_kept_times`, `read_frame_times_ahead`, `STORE`). Which footage a file is (`footage_print`, `footage_print_by_stamp`). Where the stream ends (`EndOfStream`, `Decoder.ends_at`). |
 | M06 | `walk.py` | 384 | A walk of a range (`_Walk`). What a stack may hold (`_stack_for`, `_fits`, `STACK_BYTES`). Stepping (`_Stepped`, `_Walk.step`). The chain run whole (`run_chain`). The densities (`_Walk.fold`). |
 | M07 | `worker.py` | 236 | The thread and its ladder (`Worker._serve`, `Worker._turn`). The scrub (`_Scrub`). The asks the GUI side sets (`Worker.set_window`, `request_row`, `walk_clip`, `give_clip`). |
-| M08 | `bare.py` | 94 | The clip walked in a process of its own (`main`, `job`, `_Told`). |
+| M08 | `bare.py` | 94 | The clip walked in a process of its own (`main`, `job`, `_Told`). By Kendrick's word it is his measure of how fast a chain can go, against how fast the player walks it, and a way to results; he leans on it often. |
 | M09 | `held.py` | 337 | The runs and which serves a range (`Run`, `Runs`, `Chain`). The file (`File`). What a file is good under (`stamp`, `tools_print`). Bytes as text (`in_units`, `per_row`). |
 | M10 | `store.py` | 87 | Which folder (`folder`, `chosen`, `choose`, `probe`). What it holds (`held`, `disk`). |
 | M11 | `registry/__init__.py` | 169 | Discovery (`discover`, `Entry`, `is_tool`). The facets a tool and a widget may have (`FACETS`, `WIDGET_FACETS`, `hint`, `probe`). The menu's facts (`category`, `description`, `signature`). Who produces and expects a type (`types`). |
@@ -277,10 +290,14 @@ another owner's, which is 42% of the 1,316 that are code. The ledger's `Landed i
 Each cites its line above and the ledger class that came of its lying there, where one was traced.
 A class is named only where a quoted commit is of that job; "none traced" is not "none".
 
+None of these is put forward to be moved for lying where it does. Kendrick, of F01: such a thing
+is usually no problem until it is, and what makes one hellish to undo is its being built upon. So
+each is one to watch, and what turns it is a second thing built on top of it.
+
 - H1. W12: the frame is the one painted surface with no module. None traced.
 - H2. W14: `held.py`'s opening says "the window says when a run is held and written", and the
-  window's eleven names are that rule. F05, which the ledger has landing in `window.py` seven times
-  and `held.py` four; `391bddd9`.
+  window's eleven names are that rule. F08, the rule a result is kept or let go by (`b390c121`,
+  `988d2530`).
 - H3. W13: the loaders' memory (`_taken`, `_driven`) and a file watcher live on the window. F01:
   "the document named the second video and the player had the first open" (`8a08c367`).
 - H4. W15: `bare.py`'s opening lists the lines its process says, and their one reader is
@@ -290,7 +307,9 @@ A class is named only where a quoted commit is of that job; "none traced" is not
   where the store is from a module global, `decoder.py:STORE`, which only
   `window.py:PlayerWindow._open_video` assigns. `bare.py`, `smoke.py` and `bench.py` never do, so a
   `Decoder` there keeps no table and reads none kept. F07 is the table's class (`023c46ce`); that
-  the bare walk pays for it is this session's reading of the code and was not measured.
+  the bare walk pays for it is this session's reading of the code and was not measured. The bare
+  walk being what he measures the player against (M08), a decoder there that is not the player's
+  in this weighs more than its place in this list says.
 - H7. M03 for M06, M09 and M24: `inband`, `banded` and `gated`, what a band keeps, and `nbytes`,
   imported by `walk.py` and `window.py` and handed to `held.Runs` by the window. F06: "the memo
   counted a table at its pointers" (`e9142899`).
@@ -415,6 +434,14 @@ search found four places of A1 and one of A6 that the list had not, and they are
 - A12. A bound typed as text, blank for none. `d113c8bb` (F10) made `filter.py`'s and
   `tracks_filter.py`'s identical `bound()` one, `_table.py:bound`. A third stands,
   `transitions.py:_value`, which answers None where `bound` answers a default.
+- A19. What a kept thing is good under. Six places answer it: `plan.py:_key` for a node's
+  result; `tools/_cutfile.py:key` for a cut clip; `tools/_csvfile.py:key_line` for a csv;
+  `held.py:stamp` for the held file; `decoder.py`, for a table of frame times, by two prints of a
+  file, `footage_print` and `footage_print_by_stamp`; and `window.py`'s memory of what a path
+  loader last read, by path and mtime. One difference was met: the csv's line names its footage
+  by the file's name where the others name it by its print. The six were found by a search while
+  the ledger's classes were read with Kendrick and were not read whole, and what else differs
+  among them was not looked for. F05 is the class, the one he feels most.
 
 ### Copies left alone
 

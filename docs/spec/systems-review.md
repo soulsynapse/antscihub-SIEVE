@@ -122,13 +122,13 @@ for.
   fixes landed in.
   Check: three hashes drawn from three classes, read with `git show`, tell of the class they are
   filed under; no class's sentence names a system.
-- [ ] Each class's commits are told apart as settling or as coming back, and the ledger gives the
+- [x] Each class's commits are told apart as settling or as coming back, and the ledger gives the
   share of all commits that each is.
   Check: both counts are on every class and the shares are at the top.
-- [ ] Each class says what its commits cost where the log shows it: the span from first to last,
+- [x] Each class says what its commits cost where the log shows it: the span from first to last,
   and the largest single change.
   Check: every class has the line or says the log does not show it.
-- [ ] The ledger says what it could not see: work that left no commit, and friction Kendrick has
+- [x] The ledger says what it could not see: work that left no commit, and friction Kendrick has
   named in conversation that the log does not show, each entered as his and with his words.
   Check: the section is there and is not empty.
 - [ ] Kendrick: the classes are read, the ones not felt as friction are struck, and the ones felt

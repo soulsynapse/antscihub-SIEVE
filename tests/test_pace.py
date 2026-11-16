@@ -33,6 +33,21 @@ def test_the_rate_is_the_rows_after_a_walks_first_signal_over_the_clock_and_a_lo
     assert (f.done, f.held, f.multiple, f.what, f.seconds) == (3, 3, pytest.approx(2 / 30), "", None)
 
 
+def test_a_figure_s_rows_done_are_never_more_than_its_range():
+    """A walk of held rows passes the last walk's count before its first signal, so the count alone
+    does not say a walk began."""
+    p = Pace(clock=itertools.count().__next__)
+    p.row("window", 5, 10, 5)
+    p.row("window", 30, 40, 0)
+    f = p.figure(30.0, 300)
+    assert (f.done, f.total, f.multiple) == (30, 40, None)
+    p.row("window", 32, 36, 0)
+    assert p.figure(30.0, 300).total == 36
+    p.row("window", 32, 32, 0)
+    f = p.figure(30.0, 300)
+    assert (f.done, f.total, f.over) == (32, 36, True)
+
+
 def test_the_worker_s_signals_give_the_figure_with_no_consumer_on_the_probe_and_a_clip_time_from_a_cold_walk_alone():
     """The window walk's turns are taken on this thread, the worker's never started, so no scrub
     reaches a row before the walk does."""

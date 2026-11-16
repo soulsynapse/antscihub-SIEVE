@@ -58,7 +58,9 @@ class Pace:
     """Fed each progress signal of either lane as it lands; `figure` is the lane that signalled last,
     walking or finished. A lane's count at or below its last opens a new walk, the worker starting
     one over with no signal of its own, so a walk's first row is not in its rate: the signal that
-    opens it is that row's end. The clock is the reader's, so the rate holds the turns the ladder
+    opens it is that row's end. A range longer than the last opens one too, a range only ever being
+    cut under its walk; a walk begun over a range no longer, whose first signal is past the last
+    walk's count, is read as that walk going on. The clock is the reader's, so the rate holds the turns the ladder
     gave other work and how late the signal was read."""
 
     def __init__(self, clock=time.perf_counter):
@@ -69,10 +71,12 @@ class Pace:
             return      # a clip walk that was not asked for reports 0 of 0
         t, w = self._clock(), self._walks.get(lane)
         closing = w is not None and done == w.done and total == done    # a halt repeats the count with the range cut to it
-        if w is None or done < w.done or (done == w.done and not closing):
+        if w is None or done < w.done or (done == w.done and not closing) or total > w.total:
             w = self._walks[lane] = _Walk(t, done, total)
         elif self._lane != lane:
             w.since = (t, w.done)
+        if not closing:
+            w.total = total     # a range cut under the walk, the clip found shorter than claimed
         if done > w.done and t > w.since[0]:
             w.rate = (done - w.since[1]) / (t - w.since[0])
         w.t, w.done, w.ran = t, done, ran

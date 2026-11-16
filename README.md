@@ -8,8 +8,10 @@ with a tool, it learns from the attributes the tool declares.
 ```
 py -3.13 -m venv .venv            # not the Anaconda python: its Qt DLLs shadow PySide6's
 .venv\Scripts\python -m pip install -r requirements.txt
-.venv\Scripts\python main.py [video]                     # the example pipeline, every tool under tools/ placeable
-.venv\Scripts\python -m sieve_player doc.json [root ...] # a saved document, against the tools under the roots
+.venv\Scripts\python main.py                             # the document last opened or saved, every tool under tools/ placeable
+.venv\Scripts\python main.py video                       # the example pipeline on a video; also what opens when no document is noted
+.venv\Scripts\python -m sieve_player [doc.json [root ...]] # a saved document, against the tools under the roots; none named: the last
+.venv\Scripts\python -m sieve_player --plan               # the last document's plan, with none named
 .venv\Scripts\python -m sieve_player doc.json --plan      # the plan instead: each node's kind, key, role and standing
 .venv\Scripts\python tools\motion.py [video]             # any tool runs alone
 .venv\Scripts\python smoke.py video                      # offscreen end-to-end check

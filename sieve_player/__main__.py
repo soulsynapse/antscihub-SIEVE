@@ -1,9 +1,10 @@
-"""`python -m sieve_player document.json [root ...]`: open a saved document against the tools the
-registry finds under the roots (default: tools/). With `--plan`, print the plan instead: each node,
-its kind, its key, its role in the walk, whether the walk steps it, and its standing, and exit."""
+"""`python -m sieve_player [document.json [root ...]]`: open a saved document against the tools the
+registry finds under the roots (default: tools/). With no document, the one recent.FILE notes
+newest. With `--plan`, print the plan instead: each node, its kind, its key, its role in the walk,
+whether the walk steps it, and its standing, and exit."""
 import sys
 
-from . import play
+from . import play, recent
 from .registry import discover
 
 
@@ -25,12 +26,12 @@ def show_plan(path, tools):
 
 
 def main(argv):
-    if not argv:
-        print(__doc__)
-        return 2
     show = "--plan" in argv
     argv = [a for a in argv if a != "--plan"]
-    doc, roots = argv[0], argv[1:] or ["tools"]
+    doc, roots = argv[0] if argv else recent.last(recent.FILE), argv[1:] or ["tools"]
+    if doc is None:
+        print(__doc__)
+        return 2
     if show:
         return show_plan(doc, {e.name: e.module for e in discover(*roots) if e.ok})
     return play(doc, tools=discover(*roots))

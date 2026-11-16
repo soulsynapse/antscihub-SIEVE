@@ -37,6 +37,11 @@ def entries(file):
     return [(p, when) for p, when in _noted(file) if os.path.isfile(p)]
 
 
+def last(file):
+    """The newest path noted in `file` that is a file now, or None."""
+    return next((p for p, _ in entries(file)), None)
+
+
 def note(file, path):
     """Puts `path` first of at most KEEP in `file`, noted now; a list that will not write is left
     as it was, whole."""

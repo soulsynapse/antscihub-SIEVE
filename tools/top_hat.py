@@ -15,7 +15,7 @@ SIEVE_TOOL = True
 NAME, KIND, EXPECTS, PRODUCES = "top-hat", "frame", "gray", "gray"
 MODES = ("darker", "brighter")
 OPS = {"darker": cv2.MORPH_BLACKHAT, "brighter": cv2.MORPH_TOPHAT}
-DEFAULTS = {"mode": "darker", "radius": 7, "inner": 1}
+DEFAULTS = {"mode": "darker", "radius": 15, "inner": 2}
 MAX_RADIUS = 100
 MAX_INNER = 15
 

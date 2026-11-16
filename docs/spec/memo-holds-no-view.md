@@ -10,7 +10,8 @@ Read with `sieve_player/graph.py`, whose `_compute` memoizes what a tool's run h
 As `docs/spec/monitor.md`'s How to read this.
 
 Words. An array is *a store's* when a decoder's cache or the memo holds it. A result *is* a store's
-array when it is the very array a read handed the run, whole. A result is *part of* a buffer when it
+array when it is an array a read handed the run, whole: its buffer at its shape, whether or not the
+one object, as `np.ascontiguousarray` of a slice the frame's size is. A result is *part of* a buffer when it
 shares memory with an array larger than itself, a store's or one the run made. A *reference* is what
 the memo holds in place of an array: the key of the node that was read and the row it was read at.
 
@@ -42,7 +43,7 @@ Assumes: nothing.
 Facts to weigh. cv2 refuses a read-only array as the array it writes into, so such a tool raises
 where it wrote. No tool is known to write into its input, by a search and not by an audit.
 
-- [ ] Every array a read hands a run, and every array `peek` hands the window, is read-only, as is
+- [x] Every array a read hands a run, and every array `peek` hands the window, is read-only, as is
   every array the memo holds: a tool that writes into its input raises, and the node says so as it
   does of any raise.
   Check: `tests/test_graph.py`, an invariant: a tool that writes into what `frames(row)` handed it
@@ -60,14 +61,14 @@ row read and not the node's. A cut whose rect moves by the row is part of a buff
 and runs nothing. A static node's result is pinned and outlives every walk, where a cache's frame
 goes when the cache needs the room.
 
-- [ ] A result that is a store's array is held as a reference and no array, and the memo counts no
+- [x] A result that is a store's array is held as a reference and no array, and the memo counts no
   plane for it. A read of the node at that row, and `peek`, answer the array the store holds,
   through as many references as lie between, under the node's own band; where the store has let the
   array go, the read runs the node again and `peek` answers nothing. The tool has run for the
   reference to be made, so what it raises of its input it still raises.
-- [ ] A result that is part of a buffer is held as a copy of its own, so the memo keeps resident no
+- [x] A result that is part of a buffer is held as a copy of its own, so the memo keeps resident no
   byte it does not count.
-- [ ] A result that shares no buffer is held as it was made, uncopied. A pinned result is an array
+- [x] A result that shares no buffer is held as it was made, uncopied. A pinned result is an array
   of the memo's own, never a reference.
   Check: `tests/test_graph.py`, an invariant: a tool that returns its input, one that returns a
   strip of it, one that returns a strip of an array it made and one that returns a new array are
@@ -84,6 +85,9 @@ Assumes: The memo holds no view.
   rescale, the window's need of the memo, the stores listed under MACHINE against SIEVE's memory,
   and how many rows of a window's history the memo keeps.
   Check: a one-off under `docs/findings/experiments/`, the finding beside it.
+  docs/findings/2026-11-15-what-a-memo-of-references-holds.md has the ms a row and the memo's
+  bytes on a plan of its own, by `Graph.compute`; the report's plan and the monitor's readings
+  are not in it.
 
 ## Not here
 

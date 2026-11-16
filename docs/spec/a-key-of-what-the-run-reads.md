@@ -42,7 +42,9 @@ the player's.
 - [ ] region has the facet and answers the plate and the rect it cuts: a shape moved that is not
   the chosen one, a shape renamed, `quality` and `serve clip` leave every key below a region that
   runs as it was, and a chosen shape whose rect moved does not.
-  Check: `tests/test_region.py`, a seam: the keys below a region across each of those changes.
+  Check: `tests/test_region.py`, a seam: the keys below a region across each of those changes,
+  and, for every pair of those params the facet answers alike, `run` handing out equal arrays of
+  one frame, so a param `run` comes to read and the facet does not is found.
 
 ## Not here
 

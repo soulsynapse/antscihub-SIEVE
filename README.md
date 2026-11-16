@@ -45,7 +45,7 @@ setting hidden on either. Chains get longer; tools do not get wider.
 # a frame tool: one row in, one array out
 NAME = "threshold"; KIND = "frame"; EXPECTS = "gray"; PRODUCES = "mask"
 DEFAULTS = {...}                              # JSON-able
-def run(frames, row, params) -> np.ndarray    # frames(r) is the output of the node it reads, at row r
+def run(frames, row, params) -> np.ndarray    # frames(r) is the output of the node it reads, at row r, read-only
 def settings(parent=None) -> ParamWidget
 
 # a series tool: the whole loop window at once

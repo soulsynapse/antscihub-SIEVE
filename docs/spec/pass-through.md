@@ -18,8 +18,8 @@ or a decoder's read, is what computes the result held under it.
 
 ## Why
 
-With the memo holding no view, a node that passes is run and its result held as a copy: a plane a
-row of the memo and a copy's time for a result the store above it already has. A node that passes
+With the memo holding no view, a node that passes is run and its result held as a reference to the
+array the store above it has: a run's call a row and no plane. A node that passes
 has a key of its own, so everything below it is keyed anew when it starts or stops passing, a
 rescale dragged to 1.0 and back, a shape chosen and cleared, though the pixels are the same.
 

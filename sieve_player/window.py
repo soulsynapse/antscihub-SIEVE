@@ -769,10 +769,11 @@ class PlayerWindow(QMainWindow):
         self._restate()
         self.timeline.controls.progress.setText(f"{nid} {self.graph.standing(nid)}" if nid else f"a tool raised at row {row}, see {self.log}")
 
-    def _worker_ended(self, worker):
-        """The worker thread exited other than through `_unload`, so nothing will answer the display
-        again until the video is reopened; the traceback is on stderr."""
-        if worker is self.worker:
+    def _worker_ended(self):
+        """The slot of a worker's `finished`. One that exited other than through `_unload` is still
+        the window's, so nothing will answer the display again until the video is reopened; the
+        traceback is on stderr."""
+        if self.worker is not None and self.sender() is self.worker:
             self.timeline.controls.progress.setText(f"the worker stopped, see {self.log}; reopen the video")
 
     def _shortened(self, count):
@@ -1031,7 +1032,7 @@ class PlayerWindow(QMainWindow):
                              ("clipRefused", self._clip_refused), ("walkRefused", ct.progress.setText),
                              ("shortened", self._shortened)):
             getattr(self.worker, signal).connect(self._timed("slot", signal, slot))
-        self.worker.finished.connect(lambda w=self.worker: self._worker_ended(w))
+        self.worker.finished.connect(self._worker_ended)    # no closure over the worker: one connected to its own signal keeps it, its graph and the memo for good
         self.header.setEnabled(True)
         self.timeline.strip.set_count(self.count, self.fps)
         ct.set_count(self.count, self.fps)
@@ -1084,6 +1085,7 @@ class PlayerWindow(QMainWindow):
             self.dump.close()
         self.dump = self.lateness = self.machine = self.ledger = self.pace = None
         self.header.figure.set_figure(None)
+        self.graph.empty()      # the stores go with the video whoever still holds the graph
         self.graph.close()
         self.decoder.close()
         self.decoder = self.graph = self.stream = self.worker = None

@@ -129,7 +129,11 @@ def test_new_and_close_over_a_changed_document_ask_and_an_unchanged_one_is_left_
     win._new()
     assert win.doc.node("gray") is not None and not win.close() and win.differs()
     asked.append("save")
+    left = win.graph
+    left.memo.put("loose", np.zeros((4, 4)))
+    left.memo.put("pinned", np.zeros(4), owner="gray")
     win._new()
     assert [n.tool for n in win.doc.nodes] == ["video"] and D.load(path).node("gray").pos == (5.0, 7.0)
+    assert left.memo.bytes == left.decoder.cache_bytes == 0             # the stores go with the document left, whoever still holds its graph
     asked.append(None)                                                  # asking from here on is no answer, so no leaving
     assert not win.differs() and win.close()

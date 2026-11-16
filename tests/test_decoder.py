@@ -114,7 +114,8 @@ def test_a_row_by_a_seek_is_the_row_a_walk_reads_where_the_plugin_says_another(v
     says of one to row 0 that it did. Then a file with twenty frames gone and their times kept, where
     a frame's time at the container's rate is another row than its place among the frames: a seek
     is numbered by that place, and the rows are the walk's. With a store set the table is kept
-    there under the file's print, and is the table a process that has read no packet takes."""
+    there under the file's print, and is the table a process that has read no packet takes; a kept
+    table that is not the file's is read anew at the first frame that disagrees with it, and kept."""
     import shutil
     import subprocess
     ffmpeg = shutil.which("ffmpeg") or pytest.skip("no ffmpeg to write a transport stream")
@@ -148,6 +149,11 @@ def test_a_row_by_a_seek_is_the_row_a_walk_reads_where_the_plugin_says_another(v
     np.save(kept, d._times[:7])
     decoder._times.clear()
     assert len(decoder.frame_times(gap)) == 7       # the kept table, and no reading of the packets
+    d.close()
+    d = Decoder(gap, cache_bytes=1)
+    for r in (90, 70, 45, 21, 60, 5):
+        assert np.array_equal(d.read(r), in_order[r]), r
+    assert not d._counts_only and len(d._times) == 120 and len(np.load(kept)) == 120
     decoder._times.clear()
     d.close()
 

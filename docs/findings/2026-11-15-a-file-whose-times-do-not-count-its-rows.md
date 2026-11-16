@@ -116,7 +116,8 @@ The place in the table, a binary search, is not in that figure.
   memo under that row. The Decoder empties its own cache and reaches no other store.
 - A table is kept under the footage print, which reads a file's size and its first and last
   megabyte: of two files as long that differ only between those, the second takes the first's
-  table, its stepped frames' times differ from it, and it falls to stepping from row 0.
+  table, and at the first of its frames whose time differs from it reads its own off its packets
+  and keeps that over the first's, as the first then does at its next launch.
 - A kept table outlives its file and nothing removes it; the store's control counts its bytes with
   the rest.
 - A bare walk's process and a tool run alone set no store and keep no table.

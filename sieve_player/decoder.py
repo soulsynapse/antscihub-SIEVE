@@ -95,8 +95,9 @@ def probe(src):
 
 STORE = None       # the window sets it: a function answering the store's folder, where frame_times keeps each file's; None keeps none
 TIMES_DIR = "frame-times"   # the folder of the store they lie in, each `<footage print>.npy`
-_times = {}        # path -> (the file's size and mtime when read, its frame times)
-_times_lock = threading.Lock()      # one reading at a time: a seek waits on a reading begun ahead of it and starts no second
+_times = {}        # path -> (the file's size and mtime when read, its frame times, whether this process read them off the packets)
+_times_locks = {}  # path -> the lock on its reading: a seek waits on a reading of its own file begun ahead of it, and on no other file's
+_times_guard = threading.Lock()
 
 
 def _times_file(path):
@@ -127,21 +128,28 @@ def _keep_times(file, times):
             os.remove(part)
 
 
-def frame_times(path):
+def frame_times(path, anew=False):
     """The time in ms of every frame of the video stream of `path`, ascending, so the time at r is
     row r's: each packet's CAP_PROP_POS_MSEC, read with no frame decoded, which is what the same
     property says after that frame is read. The whole file is read for it, once: the table is kept
     in the store under the file's footage print where STORE is set, and in this process while the
-    file's size and mtime stand. Empty where the plugin hands out no packets. Any thread; OSError
+    file's size and mtime stand. A kept table is taken on trust, the print telling two files as
+    long apart by their first and last megabyte alone; `anew` is for whoever finds the file's
+    frames disagree with it, and reads the packets unless this process already has, keeping what
+    they give over what was kept. Empty where the plugin hands out no packets. Any thread; OSError
     with no file."""
     path = str(path)
     st = os.stat(path)
     stamp = st.st_size, st.st_mtime_ns
-    with _times_lock:
-        if _times.get(path, (None,))[0] != stamp:
+    with _times_guard:
+        lock = _times_locks.setdefault(path, threading.Lock())
+    with lock:
+        held = _times.get(path, (None, None, False))
+        if held[0] != stamp or (anew and not held[2]):
             file = _times_file(path)
-            times = None if file is None else _kept_times(file)
-            if times is None:
+            times = None if file is None or anew else _kept_times(file)
+            read = times is None
+            if read:
                 raw, out = cv2.VideoCapture(path, cv2.CAP_FFMPEG, [cv2.CAP_PROP_FORMAT, -1]), []
                 try:
                     while raw.grab():
@@ -151,7 +159,9 @@ def frame_times(path):
                 times = np.sort(np.asarray(out, np.float64))
                 if file is not None and len(times):
                     _keep_times(file, times)
-            _times[path] = (stamp, times)
+                elif file is not None and os.path.exists(file):
+                    os.remove(file)
+            _times[path] = (stamp, times, read)
         return _times[path][1]
 
 
@@ -164,6 +174,11 @@ def read_frame_times_ahead(path):
         except OSError:
             pass
     threading.Thread(target=read, name="frame-times", daemon=True).start()
+
+
+class _TableRetaken(Exception):
+    """The frame times a Decoder held were not its file's and it has taken them anew, every cursor
+    reopened: the read under way is begun again."""
 
 
 class _Cursor:
@@ -258,6 +273,7 @@ class Decoder:
         self._near = 0.0                        # how far a frame's time may lie from a packet's and be that packet's, ms
         self._earliest_landing = 0              # the row a seek to row 0 read, once one has read past row 0
         self._counts_only = False               # the packets' times do not give the frames': no seek is numbered on this file
+        self._retaken = False                   # the frame times have been taken anew once; a second disagreement is the file's own
 
     @contextmanager
     def scrub(self):
@@ -358,21 +374,32 @@ class Decoder:
             self.cache_hits += 1
             return f
         with self._cap_lock:
-            cur = self._cursors[self._use]
-            if cur is None:
-                cur = self._cursors[self._use] = _Cursor(self.path, self._luma_read())
-            if cur.luma != self._luma_read():
-                cur.reopen(self._luma_read())   # here, under the lock a read holds, never from the setter
-            if self._counts_only and not cur.counted:
-                cur.pos = None
-            if cur.pos is None or row < cur.pos or (row - cur.pos > self._read_through() and not self._counts_only):
-                t = time.perf_counter()
-                f = self._seek(cur, max(0, row - LOOKBEHIND))
-                self.seeks += 1
-                self.seek_ms = self._mean(self.seek_ms, (time.perf_counter() - t) * 1000, self.seeks)
-            while cur.pos <= row:
-                f = self._step(cur)
+            try:
+                return self._read(row)
+            except _TableRetaken:
+                return self._read(row)
+
+    def _read(self, row):
+        cur = self._cursors[self._use]
+        if cur is None:
+            cur = self._cursors[self._use] = _Cursor(self.path, self._luma_read())
+        if cur.luma != self._luma_read():
+            cur.reopen(self._luma_read())   # here, under the lock a read holds, never from the setter
+        if self._counts_only and not cur.counted:
+            cur.pos = None
+        if cur.pos is None or row < cur.pos or (row - cur.pos > self._read_through() and not self._counts_only):
+            t = time.perf_counter()
+            f = self._seek(cur, max(0, row - LOOKBEHIND))
+            self.seeks += 1
+            self.seek_ms = self._mean(self.seek_ms, (time.perf_counter() - t) * 1000, self.seeks)
+        while cur.pos <= row:
+            f = self._step(cur)
         return f
+
+    def _take_times(self, times):
+        self._times = times
+        steps = np.diff(times)
+        self._near = min(0.5, float(steps.min()) / 2) if len(steps) else 0.5
 
     def _seek(self, cur, target):
         """Reads a row at or before `target` and returns its frame, the cursor left after it; or
@@ -383,9 +410,7 @@ class Decoder:
         it could not get behind it says the row before the one it reads next;
         docs/findings/2026-11-15-why-no-seek-lands-in-the-mts-first-thirty-rows.md."""
         if self._times is None:
-            self._times = frame_times(self.path)
-            steps = np.diff(self._times)
-            self._near = min(0.5, float(steps.min()) / 2) if len(steps) else 0.5
+            self._take_times(frame_times(self.path))
             if not len(self._times):
                 self._unnumbered("the plugin hands out no packet of it")
         back = 0
@@ -418,7 +443,23 @@ class Decoder:
         return r if r < len(self._times) and abs(self._times[r] - ms) <= self._near else None
 
     def _unnumbered(self, why):
-        """From here no seek is numbered on the file; said once, and the cache, which may hold a row a seek misnumbered, emptied."""
+        """From here no seek is numbered on the file; said once, and the cache, which may hold a row
+        a seek misnumbered, emptied. Unless the packets, read anew, give other times than the table
+        held, which was then another file's or a wrong one kept: that table is taken, every cursor
+        reopened, and _TableRetaken raised for `read` to begin again. Once a Decoder."""
+        if not self._retaken:
+            self._retaken = True
+            fresh = frame_times(self.path, anew=True)
+            if not np.array_equal(fresh, self._times):
+                print(f"{os.path.basename(self.path)}: {why}: the frame times held were not this file's, "
+                      "and are read anew off its packets", file=sys.stderr)
+                self._take_times(fresh)
+                self._earliest_landing = 0
+                for cur in self._cursors.values():
+                    if cur is not None:
+                        cur.reopen()
+                self.empty()
+                raise _TableRetaken
         self._counts_only = True
         print(f"{os.path.basename(self.path)}: {why}, so no seek is numbered on it and every row is stepped to from row 0",
               file=sys.stderr)

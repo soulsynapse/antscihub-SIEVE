@@ -145,19 +145,19 @@ Assumes: nothing.
 Every verdict is a fit to an aim and to the pressures on it, so both are written first and from
 the tree.
 
-- [ ] Part 1 says, in a page or less, what SIEVE is for, who uses it and on what footage, what a
+- [x] Part 1 says, in a page or less, what SIEVE is for, who uses it and on what footage, what a
   session of work with it produces, and what it has declined to be, each read off the README, the
   tools as they stand, the findings and the direction of the log.
   Check: each of the four is there, and each cites what it was read off.
-- [ ] It lists the pressures a program of this family can be under, each marked as one SIEVE is
+- [x] It lists the pressures a program of this family can be under, each marked as one SIEVE is
   under, is not, or is headed for, with the evidence: users, authors of tools, saved documents
   that must still open, the length of footage, the count of files in a study, who writes the code.
   Check: one table; each row cites the tree, the log or Kendrick.
-- [ ] It places SIEVE among its neighbours by the three or four choices that most separate them:
+- [x] It places SIEVE among its neighbours by the three or four choices that most separate them:
   pull or push evaluation, interactive or batch first, frames or tables as the thing on a wire, a
   file or a session as the unit of work. One table.
   Check: the table has a row for SIEVE and one for each program named in the rules.
-- [ ] It says where SIEVE is headed that the tree does not yet show, marked as direction and not
+- [x] It says where SIEVE is headed that the tree does not yet show, marked as direction and not
   as fact.
   Check: the paragraph cites the commit, finding or conversation each direction is read from.
 - [ ] Kendrick: part 1 is read and is the premise.

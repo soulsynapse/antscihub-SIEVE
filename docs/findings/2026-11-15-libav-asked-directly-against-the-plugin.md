@@ -5,7 +5,8 @@ is built on avcodec 61.19.100; PyAV 19.0.2, on avcodec 63.1.102, installed outsi
 environment for the runs and no requirement of it. The question: the Decoder's seeks are numbered
 through `cv2.VideoCapture`, which says nothing of a frame but a time in ms and misreports where a
 seek landed; whether asking libav itself, where a frame carries its pts, takes the inexact seek
-away, and what it costs or saves. Nothing of the player was changed for it.
+away, and what it costs or saves. The first four sections are of the player as it was, its Decoder on
+the plugin; the fifth is of the Decoder since moved onto libav.
 
 ## A seek
 
@@ -91,15 +92,66 @@ frame, by a probe not kept, 87% of the values differ, by 1.5 in the mean and 18 
 interpolation libav is asked for. The two convert that file by different rules and which is the
 file's own was not settled.
 
+## Whether a decode through libav holds the interpreter
+
+By `experiments/2026-11-15-whether-a-decode-through-libav-holds-the-gil.py`: the main thread wakes
+every millisecond beside a thread decoding, and says how late it woke.
+
+| beside | `00000.MTS`: late at the median, the 99th, the worst, ms | the hive file |
+| --- | --- | --- |
+| nothing | 0.52, 0.70, 0.78 | 0.55, 1.03, 1.78 |
+| the plugin's BGR | 0.52, 0.87, 1.50 | 0.53, 1.25, 2.44 |
+| libav's frame converted to BGR | 0.54, 0.87, 0.96 | 0.53, 1.62, 3.46 |
+| libav's luma plane copied out | 0.53, 0.78, 0.84 | 0.54, 1.32, 2.14 |
+| a Python loop, which holds it | 14.30, 15.14, 15.15 | 14.43, 15.10, 15.14 |
+
+A decode through libav lets the interpreter go as the plugin's does. The main thread's bare counting
+ran at 0.48 to 0.60 of its rate alone beside either, the decoders' threads taking the cores.
+
+## The Decoder on libav
+
+`sieve_player/decoder.py` now reads through libav. Three things above are answered in it:
+
+- A seek asks the container for the dts of the last keyframe at or before the row, the table of
+  `frame_times` holding each packet's pts, its dts and whether it is a keyframe. A probe not kept
+  asked thirteen rows of the .MTS so, among them 0, 29, 30, 31, 119 and 38000: each landed on its
+  keyframe and none past its row.
+- The frame is converted to BGR as BT.601 whatever the file says of itself, which is what the
+  plugin does: on the GoPro file, tagged BT.709, that is the plugin's values, where libav's own
+  choice was the 18 apart. Which is the file's own is still not settled, and the Decoder hands out
+  what every held result is of.
+- A packet the container says to decode and not show has no row, so the GoPro file's table has a
+  row a frame and its seeks are numbered.
+
+By `experiments/2026-11-15-the-decoder-on-libav-against-the-plugin.py`, the Decoder against
+`cv2.VideoCapture` on the same file: 120 rows, the GoPro file 40 and the hive file 60.
+
+| file | bgr rows other than the plugin's | luma rows other than its plane | rows by a seek another than in order | a row in order, ms: the Decoder, the plugin | a row by a seek, ms |
+| --- | --- | --- | --- | --- | --- |
+| `00000.MTS` | 0 | 0 | 0 | 1.19, 2.44 | 43.2 |
+| `00000_168-178.mp4` | 0 | 0 | 0 | 1.14, 3.04 | 70.8 |
+| `GX010047c2_02_17_26.MP4` | 0 | 0 | 0 | 18.02, 28.73 | 325.4 |
+| the hive file, 4K HEVC | 0 | 0 | 0 | 7.09, 9.26 | 318.0 |
+| `rep3_intermittent_crop.MP4` | 0 | 0 | 0 | 0.28, 0.30 | 6.2 |
+| `gap.mp4` | 0 | 0 | 0 | 0.15, 0.17 | 2.3 |
+| `gaps.mp4` | 0 | 0 | 0 | 0.17, 0.23 | 2.9 |
+
+Each claims the same size, frame rate and count on every file, and every file's seeks stayed
+numbered. The hive file is `C-20261022-171954-1792714794491-7.mp4`, HEVC Main, 3840 by 2160,
+`yuv420p`, kept outside the repository. The Decoder's row has its cache in it and the plugin's has
+none. A row by a seek on the .MTS was 93.2 ms on the Decoder before, in the first table above.
+Three copies of `gap.mp4` written with a display rotation of 90, 180 and 270 came out the size
+and the values the plugin gives, which turns such a file as it reads it.
+
 ## What it does not tell
 
 - Where the time goes. The two are different builds of FFmpeg, two major versions apart, with
   whatever threads each sets; the decode alone is faster through libav, the conversion to BGR more
   so, and neither was taken apart into build, threads and the plugin's own copying.
-- What a Decoder on libav would take. The figures are bare loops; the Decoder's cache, its lock and
-  its two cursors are in neither libav row.
 - Anything of a walk in the player, where the tools' time stands beside the decode's.
 - A file from a cold disk, a phone's or a screen recorder's file, field-coded interlaced video, a
   stream that is not H.264.
-- Whether PyAV's wheel, which carries its own FFmpeg, loads beside cv2's in the player's process
-  as it did in these scripts: it did here, for the length of each run.
+- Whether PyAV's wheel, which carries its own FFmpeg, runs beside cv2's in the player's window as
+  it did in these scripts and under the default suite.
+- A file that is not 8-bit: the Decoder hands out 8 bits of it, as the plugin did, and the two were
+  not compared on one.

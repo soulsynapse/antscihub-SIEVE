@@ -142,8 +142,8 @@ player's Decoder refuses a raw elementary stream for want of an index (docs/spec
 utility reads through OpenCV alone, where a seek in such a stream lands near rather than on the
 asked frame, which costs drawing nothing, since the arena does not move between neighbouring
 frames; inside an .MTS file's first group of pictures the seek misses badly enough that
-mask-and-count decodes forward there instead. The player's Decoder opens through OpenCV's FFmpeg
-backend by name, and a region refuses a frame of any shape but its plate, so a utility whose
+mask-and-count decodes forward there instead. The player's Decoder opens through libav, by PyAV,
+and hands out the frame OpenCV's FFmpeg backend does, turned as it turns it, and a region refuses a frame of any shape but its plate, so a utility whose
 OpenCV picked another backend, or turned a frame the Decoder does not, would write files every
 region refuses; the two may not share code, so a test holds them to one answer.
 

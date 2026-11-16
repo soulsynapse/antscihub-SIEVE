@@ -1,13 +1,12 @@
-"""cv2 BGR decoder with two cursors on one file: the walk's, which only ever steps, and the scrub's,
-which takes the display's jumps so they never land on the walk's. A sequential read steps the cursor
-in use; a short jump ahead reads through, since a seek decodes from the last keyframe anyway and
-costs what the decoder has measured it to cost here; anything else seeks. A seek lands one row
-short and reads through it, because the tools that difference frames ask for row - 1 right after
-row, and that second ask would otherwise be a second seek. A row is a frame's place among the file's
-frames in the order they are shown: the frame a seek reads is numbered by where its own time lies
-among the times of the file's packets, `frame_times`, never by where the plugin says the seek landed
-nor by a frame rate. On a file whose packets do not give its frames' times no seek is numbered and
-every row is stepped to from row 0."""
+"""libav decoder, by PyAV, with two cursors on one file: the walk's, which only ever steps, and the
+scrub's, which takes the display's jumps so they never land on the walk's. A sequential read steps
+the cursor in use; a short jump ahead reads through, since a seek decodes from the last keyframe
+anyway and costs what the decoder has measured it to cost here; anything else seeks. A seek lands
+one row short and reads through it, because the tools that difference frames ask for row - 1 right
+after row, and that second ask would otherwise be a second seek. A row is a frame's place among the
+file's frames in the order they are shown: the frame a seek reads is numbered by where its own pts
+lies among the pts of the file's packets, `frame_times`, never by a frame rate. On a file whose
+packets do not give its frames' pts no seek is numbered and every row is stepped to from row 0."""
 import hashlib
 import os
 import sys
@@ -18,15 +17,19 @@ from collections import OrderedDict
 from contextlib import contextmanager
 from functools import lru_cache
 
+import av
 import cv2
 import numpy as np
+from av.video.reformatter import VideoReformatter
 
 LOOKBEHIND = 1          # rows a seek lands short of its target and reads through
 SEEK_GUESS = 12.0       # steps a seek is taken to cost until one has been measured here
-LUMA_FORMATS = {b"I420"}    # planar 8-bit 4:2:0: unconverted, cv2 hands out the luma plane as rows x cols
-QUIET = False   # play() sets it once C-level stderr goes nowhere; the plugin warns on every unconverted frame otherwise
-_QUIET_LEVELS = {"OFF", "DISABLED", "SILENT", "FATAL", "ERROR", "0", "1", "2"}
+LUMA_FORMATS = {"yuv420p", "yuvj420p"}      # planar 8-bit 4:2:0: the first plane is the luma, rows x cols
 _EXPAND = np.clip(np.round((np.arange(256) - 16) * 255 / 219), 0, 255).astype(np.uint8)   # limited-range luma to full
+# BT.601 whatever the file says of itself, and yuv420p as limited range: the values cv2's FFmpeg plugin handed out,
+# which every held result is of; docs/findings/2026-11-15-libav-asked-directly-against-the-plugin.md
+_TO_BGR = {"format": "bgr24", "src_colorspace": "ITU601", "dst_colorspace": "ITU601", "src_color_range": "MPEG", "dst_color_range": "JPEG"}
+_TURNS = {90: cv2.ROTATE_90_COUNTERCLOCKWISE, 180: cv2.ROTATE_180, 270: cv2.ROTATE_90_CLOCKWISE}     # a frame's rotation, degrees -> the turn that shows it upright
 
 
 class EndOfStream(IndexError):
@@ -34,61 +37,60 @@ class EndOfStream(IndexError):
     only IndexError the worker closes a walk on; a tool's own IndexError is a failure."""
 
 
-def _quiet():
-    return QUIET or os.environ.get("OPENCV_LOG_LEVEL", "").upper() in _QUIET_LEVELS
-
-
-def _luma_range(path):
-    """(usable, limited) for the luma plane of row 0: usable when it is the shape of the converted
-    frame, limited when cv2's own conversion, which knows the stream's range, sits at a slope near
-    219/255 above it. A flat row that cannot tell is taken as limited, the camera norm."""
-    raw, rgb = cv2.VideoCapture(path, cv2.CAP_FFMPEG), cv2.VideoCapture(path, cv2.CAP_FFMPEG)
-    try:
-        raw.set(cv2.CAP_PROP_CONVERT_RGB, 0)
-        ok, y = raw.read()
-        ok2, bgr = rgb.read()
-    finally:
-        raw.release()
-        rgb.release()
-    if not (ok and ok2) or y.ndim != 2 or y.shape != bgr.shape[:2]:
-        return False, False
-    y = y.ravel()[::97].astype(np.float64)
-    g = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY).ravel()[::97].astype(np.float64)
-    var = y.var()
-    if var < 25.0:
-        return True, True
-    slope = ((y - y.mean()) * (g - g.mean())).mean() / var
-    return True, slope > 1.08
-
-
 UNINDEXED = ("{name} has no index: a raw stream cannot be counted or seeked; remux it into a container first, "
              "ffmpeg -framerate FPS -i {name} -c copy {stem}.mp4")
 
 
-def _facts(cap, path):
-    """(width, height, fps, count) of an open capture; IOError when its container claims no rows."""
-    n = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+def _open(path):
+    """(container, its video stream) of the file at `path`; IOError when it will not open or has none."""
+    try:
+        container = av.open(path)
+    except (av.error.FFmpegError, OSError) as exc:
+        raise IOError(f"cannot open {path}") from exc
+    if not container.streams.video:
+        container.close()
+        raise IOError(f"cannot open {path}")
+    stream = container.streams.video[0]
+    stream.thread_type = "AUTO"
+    return container, stream
+
+
+def _first(frames):
+    """(the first frame of `frames`, or None where there is none; the degrees it is to be shown turned by, of 0, 90, 180 and 270)."""
+    try:
+        frame = next(frames, None)
+    except av.error.FFmpegError:
+        frame = None
+    return frame, 0 if frame is None else round(frame.rotation) % 360
+
+
+def _facts(container, stream, path, turn=0):
+    """(width, height, fps, count) of an open file whose frames are shown turned by `turn` degrees;
+    IOError when its container claims no rows. The count is the container's own where it gives
+    one, else its length at its frame rate."""
+    fps = float(stream.average_rate or stream.guessed_rate or 0) or 30.0
+    seconds = container.duration / 1e6 if container.duration else float((stream.duration or 0) * stream.time_base)
+    n = stream.frames or int(seconds * fps + 0.5)
     if n <= 0:
         name = os.path.basename(str(path))
         raise IOError(UNINDEXED.format(name=name, stem=os.path.splitext(name)[0]))
-    return int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)), cap.get(cv2.CAP_PROP_FPS) or 30.0, n
+    w, h = stream.codec_context.width, stream.codec_context.height
+    return (h, w, fps, n) if turn in (90, 270) else (w, h, fps, n)
 
 
 @lru_cache(maxsize=16)
 def _probe(path, mtime):
-    cap = cv2.VideoCapture(path, cv2.CAP_FFMPEG)
+    container, stream = _open(path)
     try:
-        if not cap.isOpened():
-            raise IOError(f"cannot open {path}")
-        return _facts(cap, path)
+        return _facts(container, stream, path, _first(_frames(container, stream))[1])
     finally:
-        cap.release()
+        container.close()
 
 
 def probe(src):
-    """(width, height, fps, count) via cv2, cached per path and mtime. The count is the container's
-    claim, which the decoder corrects down when the stream ends short of it; a file whose container
-    claims none, a raw stream, raises IOError, as the decoder does."""
+    """(width, height, fps, count), cached per path and mtime. The count is the container's claim,
+    which the decoder corrects down when the stream ends short of it; a file whose container claims
+    none, a raw stream, raises IOError, as the decoder does."""
     src = str(src)
     return _probe(src, os.stat(src).st_mtime)
 
@@ -111,7 +113,7 @@ def _kept_times(file):
         out = np.load(file, allow_pickle=False)
     except (OSError, ValueError, EOFError):
         return None
-    return out if out.ndim == 1 and out.dtype == np.float64 and bool(np.all(np.diff(out) >= 0)) else None
+    return out if out.ndim == 2 and out.shape[1] == 3 and out.dtype == np.int64 and bool(np.all(np.diff(out[:, 0]) >= 0)) else None
 
 
 def _keep_times(file, times):
@@ -128,15 +130,34 @@ def _keep_times(file, times):
             os.remove(part)
 
 
+def _packet_times(path):
+    out = []
+    try:
+        container, stream = _open(path)
+    except IOError:
+        return np.zeros((0, 3), np.int64)
+    try:
+        for p in container.demux(stream):
+            at = p.dts if p.pts is None else p.pts
+            if at is not None and p.size and not p.is_discard:
+                out.append((at, at if p.dts is None else p.dts, p.is_keyframe))
+    except av.error.FFmpegError:
+        pass
+    finally:
+        container.close()
+    return np.array(sorted(out), np.int64).reshape(-1, 3)
+
+
 def frame_times(path, anew=False):
-    """The time in ms of every frame of the video stream of `path`, ascending, so the time at r is
-    row r's: each packet's CAP_PROP_POS_MSEC, read with no frame decoded, which is what the same
-    property says after that frame is read. The whole file is read for it, once: the table is kept
-    in the store under the file's footage print where STORE is set, and in this process while the
+    """A row for every frame of the video stream of `path`, in the order they are shown, so row r
+    is row r's: its packet's pts, that packet's dts, and whether it is a keyframe, the first two in
+    the stream's time base. Read off the packets with no frame decoded; a packet the container says
+    to decode and not show has no row. The whole file is read for it, once: the table is kept in
+    the store under the file's footage print where STORE is set, and in this process while the
     file's size and mtime stand. A kept table is taken on trust, the print telling two files as
     long apart by their first and last megabyte alone; `anew` is for whoever finds the file's
     frames disagree with it, and reads the packets unless this process already has, keeping what
-    they give over what was kept. Empty where the plugin hands out no packets. Any thread; OSError
+    they give over what was kept. No rows where the file hands out no packets. Any thread; OSError
     with no file."""
     path = str(path)
     st = os.stat(path)
@@ -150,13 +171,7 @@ def frame_times(path, anew=False):
             times = None if file is None or anew else _kept_times(file)
             read = times is None
             if read:
-                raw, out = cv2.VideoCapture(path, cv2.CAP_FFMPEG, [cv2.CAP_PROP_FORMAT, -1]), []
-                try:
-                    while raw.grab():
-                        out.append(raw.get(cv2.CAP_PROP_POS_MSEC))
-                finally:
-                    raw.release()
-                times = np.sort(np.asarray(out, np.float64))
+                times = _packet_times(path)
                 if file is not None and len(times):
                     _keep_times(file, times)
                 elif file is not None and os.path.exists(file):
@@ -181,26 +196,41 @@ class _TableRetaken(Exception):
     reopened: the read under way is begun again."""
 
 
+def _frames(container, stream):
+    """The stream's frames in the order they are shown, from where the container stands; a packet that will not decode is passed over."""
+    for packet in container.demux(stream):
+        try:
+            yield from packet.decode()
+        except av.error.InvalidDataError:
+            continue
+
+
 class _Cursor:
     # pos: the row the next step reads; None once a step has failed, so the next read seeks.
     # counted: pos is a count of steps from row 0, where after a seek it is the landing's place among the frame times and the steps since
-    __slots__ = ("cap", "pos", "path", "luma", "counted")
+    # ahead: a frame taken off `frames` and not yet handed out, the next the cursor gives
+    __slots__ = ("path", "container", "stream", "frames", "ahead", "to_bgr", "pos", "counted", "at")
 
-    def __init__(self, path, luma):
-        self.path, self.luma, self.cap = path, luma, None
+    def __init__(self, path):
+        self.path, self.container, self.to_bgr = path, None, VideoReformatter()
         self.reopen()
 
-    def reopen(self, luma=None):
-        """A fresh capture at row 0, the luma plane's or BGR's: the only way to change what it decodes
-        to, since the plugin garbles every frame after CAP_PROP_CONVERT_RGB is flipped on a capture
-        that has read one."""
-        if self.cap is not None:
-            self.cap.release()
-        if luma is not None:
-            self.luma = luma
-        self.cap = cv2.VideoCapture(self.path, cv2.CAP_FFMPEG)
-        self.cap.set(cv2.CAP_PROP_CONVERT_RGB, 0 if self.luma else 1)
-        self.pos, self.counted = 0, True
+    def reopen(self):
+        """A fresh container at row 0; IOError when the file will not open."""
+        self.close()
+        self.container, self.stream = _open(self.path)
+        self.frames, self.ahead = _frames(self.container, self.stream), None
+        self.pos, self.counted, self.at = 0, True, 0.0
+
+    def seek(self, dts):
+        self.container.seek(dts, stream=self.stream, backward=True)
+        self.frames, self.ahead = _frames(self.container, self.stream), None
+
+    def close(self):
+        if self.container is not None:
+            self.frames.close()
+            self.container.close()
+            self.container = None
 
 
 SLICE = 1 << 20     # the bytes of a file's head, and of its tail, that footage_print reads
@@ -239,40 +269,39 @@ def footage_print_by_stamp(path):
 class Decoder:
     """Opens an indexed container; a file that will not open, or whose container claims no rows (a
     raw stream, which cannot be seeked), raises IOError saying which. `footage_print` is the
-    file's, by the function of that name, taken as it opens."""
+    file's, by the function of that name, taken as it opens. `luma` is whether the stream's first
+    plane is handed out as it is for the grays, and `limited` whether that plane is limited range."""
 
     def __init__(self, path, cache_bytes=4 << 30):
         self.path = str(path)
         self.footage_print = footage_print(self.path)
-        walk = _Cursor(self.path, luma=False)
-        if not walk.cap.isOpened():
-            raise IOError(f"cannot open {path}")
-        cap = walk.cap
+        walk = _Cursor(self.path)
+        walk.ahead, turn = _first(walk.frames)
+        self._turn = _TURNS.get(turn)           # how every frame is turned as it is handed out, the file's rotation being its first frame's
         try:
-            self.width, self.height, self.fps, self.count = _facts(cap, self.path)
+            self.width, self.height, self.fps, self.count = _facts(walk.container, walk.stream, self.path, turn)
         except IOError:
-            cap.release()
+            walk.close()
             raise
-        fmt = int(cap.get(cv2.CAP_PROP_CODEC_PIXEL_FORMAT)).to_bytes(4, "little", signed=True)
-        self.luma = fmt in LUMA_FORMATS and _quiet()
-        self._limited = None    # measured at the first gray read, two decodes of row 0
+        fmt = walk.stream.codec_context.pix_fmt
+        self.luma = fmt in LUMA_FORMATS
+        self.limited = self.luma and not fmt.startswith("yuvj")
         self._output = "bgr"
         self._cursors = {"walk": walk, "scrub": None}   # the scrub's opens on its first use
         self._use = "walk"
         self._cache = OrderedDict()
         self._cache_bytes, self._cache_limit = 0, cache_bytes
         self._cache_lock = threading.Lock()     # the dict only: a GUI peek never waits on a decode
-        self._cap_lock = threading.Lock()       # the captures and the cursor in use
-        self.decodes = self.seeks = 0
+        self._cap_lock = threading.Lock()       # the containers and the cursor in use
+        self.decodes = self.seeks = 0           # frames handed out, those a seek decodes on its way to its row not among them
         self.reads = self.cache_hits = 0        # read() calls, and those the cache answered
         self.evictions = 0                      # frames the cache dropped for room
         self.step_ms = self.seek_ms = None      # running means of what a step and a seek cost on this file
         self.on_evict = None                    # (row, bytes) for each frame the cache drops, after the lock
-        self._inexact_said = False
-        self._times = None                      # frame_times of the file, taken at the first seek
-        self._near = 0.0                        # how far a frame's time may lie from a packet's and be that packet's, ms
-        self._earliest_landing = 0              # the row a seek to row 0 read, once one has read past row 0
-        self._counts_only = False               # the packets' times do not give the frames': no seek is numbered on this file
+        self._times = None                      # frame_times of the file, taken before the first seek
+        self._keys = None                       # the rows of its keyframes, ascending
+        self._earliest_landing = 0              # the row a seek to the first keyframe read, once one has read past row 0
+        self._counts_only = False               # the packets' pts do not give the frames': no seek is numbered on this file
         self._retaken = False                   # the frame times have been taken anew once; a second disagreement is the file's own
 
     @contextmanager
@@ -288,11 +317,11 @@ class Decoder:
 
     @property
     def output(self):
-        """What read() hands out, before it is cached: "bgr" as decoded; "gray", full range; or
-        "luma", the decoder's own plane in the stream's range, 16 to 235 on most camera files. On an
-        8-bit 4:2:0 stream with QUIET set both grays come from the plane and skip the YUV-to-BGR
-        conversion, gray through a lookup table when the stream is limited range; otherwise both are
-        converted from BGR. Setting it empties the cache."""
+        """What read() hands out, before it is cached: "bgr"; "gray", full range; or "luma", the
+        stream's own plane in the stream's range, 16 to 235 on most camera files. On an 8-bit 4:2:0
+        stream both grays come from the plane with no colour conversion, gray through a lookup
+        table when the stream is limited range; otherwise both are converted from BGR. Setting it
+        empties the cache."""
         return self._output
 
     @output.setter
@@ -305,22 +334,12 @@ class Decoder:
             self._output, self._cache_bytes = value, 0
             self._cache.clear()
 
-    @property
-    def limited(self):
-        """Whether the luma plane is limited range, measured on row 0 the first time it is asked."""
-        if self._limited is None:
-            self.luma, self._limited = _luma_range(self.path) if self.luma else (False, False)
-        return self._limited
-
-    def _luma_read(self):
-        return self.luma and self._output != "bgr"
-
     def _fits(self, f):
         # a frame of the other kind, decoded before a switch and landing after it, is not served
         return (f.ndim == 2) == (self._output != "bgr")
 
     def cached(self, row):
-        """Cache-only read; never touches a capture. Safe from the GUI thread."""
+        """Cache-only read; never touches a container. Safe from the GUI thread."""
         with self._cache_lock:
             f = self._cache.get(row)
             return f if f is None or self._fits(f) else None
@@ -382,12 +401,14 @@ class Decoder:
     def _read(self, row):
         cur = self._cursors[self._use]
         if cur is None:
-            cur = self._cursors[self._use] = _Cursor(self.path, self._luma_read())
-        if cur.luma != self._luma_read():
-            cur.reopen(self._luma_read())   # here, under the lock a read holds, never from the setter
+            cur = self._cursors[self._use] = _Cursor(self.path)
         if self._counts_only and not cur.counted:
             cur.pos = None
         if cur.pos is None or row < cur.pos or (row - cur.pos > self._read_through() and not self._counts_only):
+            if self._times is None:     # before the seek is timed: the reading is once a file, and no part of what a seek costs
+                self._take_times(frame_times(self.path))
+                if not len(self._times):
+                    self._unnumbered("it hands out no packet")
             t = time.perf_counter()
             f = self._seek(cur, max(0, row - LOOKBEHIND))
             self.seeks += 1
@@ -397,69 +418,82 @@ class Decoder:
         return f
 
     def _take_times(self, times):
-        self._times = times
-        steps = np.diff(times)
-        self._near = min(0.5, float(steps.min()) / 2) if len(steps) else 0.5
+        self._times, self._keys = times, np.flatnonzero(times[:, 2])
 
     def _seek(self, cur, target):
-        """Reads a row at or before `target` and returns its frame, the cursor left after it; or
-        returns None with the cursor reopened at row 0, where no seek lands that early, which is
-        learned of a file once, and on a file whose packets do not give its frames' times. A landing
-        past the target is asked again further back. The row is the frame's own time's place among
-        `frame_times`: the plugin does not check where a seek to row 0 or 1 landed, and of a target
-        it could not get behind it says the row before the one it reads next;
-        docs/findings/2026-11-15-why-no-seek-lands-in-the-mts-first-thirty-rows.md."""
-        if self._times is None:
-            self._take_times(frame_times(self.path))
-            if not len(self._times):
-                self._unnumbered("the plugin hands out no packet of it")
-        back = 0
-        while not self._counts_only and target >= self._earliest_landing:
-            ask = max(0, target - back)
-            cur.cap.set(cv2.CAP_PROP_POS_FRAMES, ask)
-            cur.pos = ask       # the row an end of stream at this read is said of
-            f = self._step(cur, landing=True)
-            if cur.pos is None:
-                self._unnumbered(f"the frame a seek to row {ask} read has the time of no packet")
+        """Reads row `target` and returns its frame, the cursor left after it; or returns None with
+        the cursor reopened at row 0, where no seek lands at or before it, which is learned of a
+        file once, and on a file whose packets do not give its frames' pts. The container is asked
+        for the dts of the last keyframe at or before the row, which is where a seek to a time
+        lands on its first keyframe, a transport stream's too, and the frames from there are
+        decoded and not handed out until the row's pts comes; a landing past the row is asked again
+        a keyframe earlier. docs/findings/2026-11-15-libav-asked-directly-against-the-plugin.md."""
+        if not self._counts_only and target >= len(self._times):
+            self._doubt(f"row {target} is past the last of the frame times held")
+            cur.pos = len(self._times)
+            self._ended(cur)
+        k = -1 if self._counts_only else int(np.searchsorted(self._keys, target, side="right")) - 1
+        while k >= 0 and not self._counts_only and target >= self._earliest_landing:
+            key = int(self._keys[k])
+            cur.seek(int(self._times[key, 1]))
+            frame = self._next(cur, ending=False)
+            landed = None if frame is None else self._row_of(frame)
+            if frame is not None and landed is None:
+                self._unnumbered(f"the frame a seek to row {key} read has the pts of no packet")
                 break
+            if frame is None or landed > target:
+                if k == 0 and frame is not None:
+                    self._earliest_landing = landed
+                k -= 1
+                continue
             cur.counted = False
-            landed = cur.pos - 1
-            if landed != ask and not self._inexact_said:
-                self._inexact_said = True
-                print(f"{os.path.basename(self.path)}: a seek to row {ask} read row {landed}; the container seeks "
-                      "inexactly, so rows are stepped through from where each seek lands", file=sys.stderr)
-            if landed <= target:
-                return f
-            if ask == 0:
-                self._earliest_landing = landed
-            back = 2 * (back or landed - target)
+            while landed < target:
+                cur.pos = landed + 1
+                frame = self._next(cur)
+                if self._row_of(frame) != cur.pos:
+                    self._unnumbered(f"the frame after row {landed} has not the pts of row {cur.pos}'s packet")
+                    frame = None
+                    break
+                landed += 1
+            if frame is None:
+                break
+            cur.pos = target
+            return self._hand(cur, frame)
         cur.reopen()
         return None
 
-    def _row_read(self, cur):
-        """The row the cursor's last read handed out, by its time's place among the frame times; None for a time that is no packet's."""
-        ms = cur.cap.get(cv2.CAP_PROP_POS_MSEC)
-        r = int(np.searchsorted(self._times, ms - self._near))
-        return r if r < len(self._times) and abs(self._times[r] - ms) <= self._near else None
+    def _row_of(self, frame):
+        """The row `frame` is, by its pts' place among the frame times; None for a pts that is no packet's."""
+        at = frame.dts if frame.pts is None else frame.pts
+        if at is None:
+            return None
+        r = int(np.searchsorted(self._times[:, 0], at))
+        return r if r < len(self._times) and self._times[r, 0] == at else None
+
+    def _doubt(self, why):
+        """Reads the frame times anew where the ones held were kept and not read off the packets
+        here; where the packets give others, takes those, reopens every cursor, empties the cache,
+        which may hold a row misnumbered, and raises _TableRetaken for `read` to begin again. Once
+        a Decoder."""
+        if self._retaken:
+            return
+        self._retaken = True
+        fresh = frame_times(self.path, anew=True)
+        if np.array_equal(fresh, self._times):
+            return
+        print(f"{os.path.basename(self.path)}: {why}: the frame times held were not this file's, "
+              "and are read anew off its packets", file=sys.stderr)
+        self._take_times(fresh)
+        self._earliest_landing = 0
+        for cur in self._cursors.values():
+            if cur is not None:
+                cur.reopen()
+        self.empty()
+        raise _TableRetaken
 
     def _unnumbered(self, why):
-        """From here no seek is numbered on the file; said once, and the cache, which may hold a row
-        a seek misnumbered, emptied. Unless the packets, read anew, give other times than the table
-        held, which was then another file's or a wrong one kept: that table is taken, every cursor
-        reopened, and _TableRetaken raised for `read` to begin again. Once a Decoder."""
-        if not self._retaken:
-            self._retaken = True
-            fresh = frame_times(self.path, anew=True)
-            if not np.array_equal(fresh, self._times):
-                print(f"{os.path.basename(self.path)}: {why}: the frame times held were not this file's, "
-                      "and are read anew off its packets", file=sys.stderr)
-                self._take_times(fresh)
-                self._earliest_landing = 0
-                for cur in self._cursors.values():
-                    if cur is not None:
-                        cur.reopen()
-                self.empty()
-                raise _TableRetaken
+        """From here no seek is numbered on the file, unless `_doubt` finds the frame times held were not its own; said once, and the cache emptied."""
+        self._doubt(why)
         self._counts_only = True
         print(f"{os.path.basename(self.path)}: {why}, so no seek is numbered on it and every row is stepped to from row 0",
               file=sys.stderr)
@@ -471,33 +505,60 @@ class Decoder:
             return self.seek_ms / self.step_ms
         return SEEK_GUESS
 
-    def _step(self, cur, landing=False):
+    def _next(self, cur, ending=True):
+        """The cursor's next frame, not yet handed out. Where the stream gives none: None when not
+        `ending`; else the stream has ended at the cursor's row, the count comes down to it where it
+        claimed more, and EndOfStream is raised."""
+        frame, cur.ahead = cur.ahead, None
+        if frame is None:
+            try:
+                frame = next(cur.frames, None)
+            except av.error.FFmpegError:
+                frame = None
+        if frame is not None:
+            if frame.time is not None:
+                cur.at = frame.time
+            return frame
+        if not ending:
+            return None
+        self._ended(cur)
+
+    def _ended(self, cur):
+        row, cur.pos = cur.pos, None
+        if 0 <= row < self.count:
+            # the only record of why, since dev/console.py hushes libav's; SIEVE_C_STDERR=1 shows it
+            print(f"{os.path.basename(self.path)}: the stream ended at row {row} of the container's {self.count}, "
+                  f"at {cur.at:.3f} s; the count is now {row}", file=sys.stderr)
+            self.count = row
+        raise EndOfStream(f"row {row} past end of {self.path}")
+
+    def _step(self, cur):
         t = time.perf_counter()
-        ok, f = cur.cap.read()
-        self.decodes += 1
-        if ok and landing:
-            cur.pos = self._row_read(cur)
-            if cur.pos is None:
-                return None
-        elif ok and self._times is not None and not self._counts_only and (timed := self._row_read(cur)) != cur.pos:
-            self._unnumbered(f"the frame stepped to as row {cur.pos} has the time of "
+        frame = self._next(cur)
+        if self._times is not None and not self._counts_only and (timed := self._row_of(frame)) != cur.pos:
+            self._unnumbered(f"the frame stepped to as row {cur.pos} has the pts of "
                              f"{'no packet' if timed is None else f'the packet of row {timed}'}")
             if not cur.counted:
                 cur.reopen()
                 return None
-        if not ok:
-            row, cur.pos = cur.pos, None
-            if 0 <= row < self.count:
-                # the only record of why, since dev/console.py hushes libav's; SIEVE_C_STDERR=1 shows it
-                print(f"{os.path.basename(self.path)}: the stream ended at row {row} of the container's {self.count}, "
-                      f"at {cur.cap.get(cv2.CAP_PROP_POS_MSEC) / 1000:.3f} s; the count is now {row}", file=sys.stderr)
-                self.count = row
-            raise EndOfStream(f"row {row} past end of {self.path}")
+        f = self._hand(cur, frame)
         self.step_ms = self._mean(self.step_ms, (time.perf_counter() - t) * 1000, self.decodes)
-        if self._output != "bgr" and f.ndim == 3:
-            f = cv2.cvtColor(f, cv2.COLOR_BGR2GRAY)
-        elif self._output == "gray" and self.limited:
-            f = cv2.LUT(f, _EXPAND)
+        return f
+
+    def _hand(self, cur, frame):
+        """`frame` as the output in force, cached as the cursor's row, the cursor moved past it."""
+        output = self._output
+        if output != "bgr" and self.luma:
+            p = frame.planes[0]
+            f = np.frombuffer(p, np.uint8).reshape(p.height, p.line_size)[:, :p.width]
+            f = cv2.LUT(f, _EXPAND) if output == "gray" and self.limited else f.copy()
+        else:
+            f = cur.to_bgr.reformat(frame, **_TO_BGR).to_ndarray()
+            if output != "bgr":
+                f = cv2.cvtColor(f, cv2.COLOR_BGR2GRAY)
+        if self._turn is not None:
+            f = cv2.rotate(f, self._turn)
+        self.decodes += 1
         self._put(cur.pos, f)
         cur.pos += 1
         return f
@@ -521,4 +582,4 @@ class Decoder:
     def close(self):
         for cur in self._cursors.values():
             if cur is not None:
-                cur.cap.release()
+                cur.close()

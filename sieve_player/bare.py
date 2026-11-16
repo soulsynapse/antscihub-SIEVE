@@ -43,14 +43,12 @@ def main(path):
         j = json.load(f)
     for root in j["roots"]:
         sys.path.insert(0, os.path.dirname(root))
-    from . import decoder as decmod
     from .decoder import Decoder, EndOfStream
     from .document import Document
     from .graph import Graph
     from .registry import discover
     from .worker import _Walk
 
-    decmod.QUIET = True
     tools = {e.name: e.module for e in discover(*j["roots"]) if e.ok}
     doc = Document.from_dict(j["document"], tools)
     doc.path = j["path"]

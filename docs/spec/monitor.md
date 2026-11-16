@@ -650,8 +650,8 @@ from JSON as it went: no tuple, no key that is not a string, or `save` and `save
 they do a node's runs. A walk's stack is `worker._Walk.bytes` against `STACK_BYTES` and is in no event;
 `Graph.progress` is called from `_Walk.turn` and `_Walk.close`. `tests/test_seams.py` lists what each
 module may import, and a module it does not list is not held to anything. For the fork on the GPU, the
-reading half: the decoder opens `cv2.VideoCapture` on the FFMPEG backend and sets no acceleration
-property, and no tool or player module names CUDA, a UMat or OpenCL; what the capture then reports of its
+reading half: the decoder opens the file through libav, by PyAV, and asks for no hardware
+decoding, and no tool or player module names CUDA, a UMat or OpenCL; what the capture then reports of its
 own acceleration on the purb clip, and the sampling over a walk, were not done. The panels' lines are
 `(name, value, bar, note, past)` with one bar of one filled share, which the machine's SIEVE beside
 everything else does not fit as it stands.

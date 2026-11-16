@@ -169,22 +169,22 @@ Assumes: nothing. Two sessions: the player, then the tools and the utilities.
 The other half of the evidence, read off the code before any reference is opened, so that what is
 found is what is there and not what a comparison went looking for.
 
-- [ ] Part 4 names the systems the tree has, each with the modules that are it, its lines, and
+- [x] Part 4 names the systems the tree has, each with the modules that are it, its lines, and
   what goes through it, and lists for each module what it holds by job.
   Check: every module under `sieve_player/` is in one line or more, and each job cites
   `file:name`.
 - [x] It lists what `sieve_player/window.py` holds by job, each with the lines it takes, and marks
   each job as composition, the window's own, or another owner's.
   Check: the lines sum to the file.
-- [ ] Part 5 lists each thing the tree writes more than twice, with every place by `file:name`,
+- [x] Part 5 lists each thing the tree writes more than twice, with every place by `file:name`,
   and says of each whether its copies have drifted, whether a ledger fix landed in more than one,
   or neither. Only the first two are attrition; the rest are listed as copies left alone.
   Check: two of the listed things, drawn and read in the tree, are in every place cited and in no
   place uncited; every attrition cites the drift or the hashes.
-- [ ] It lists each thing a module holds for another, with the ledger class, if any, that came of
+- [x] It lists each thing a module holds for another, with the ledger class, if any, that came of
   its lying there.
   Check: each line cites its line of part 4.
-- [ ] Over every tool under `tools/`, it counts the lines that build a settings widget against the
+- [x] Over every tool under `tools/`, it counts the lines that build a settings widget against the
   lines that compute.
   Check: the count is in the document with the command that made it.
 

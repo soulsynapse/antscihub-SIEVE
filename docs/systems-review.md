@@ -121,12 +121,14 @@ Direction, none of it in the tree.
 
 ## 4. The systems SIEVE has, and what each module holds
 
-The player's half: every Python file under `sieve_player/`, 13,828 lines. `tools/`, `utilities/`
-and the launchers are the next session's, and the lines they add to this part are not here yet. The
-spans and the imports are from
-`python -X utf8 docs/findings/experiments/2026-11-16-what-a-module-holds.py sieve_player`, with
-`--members sieve_player/window.py` for the window's; what a name does is from reading it. A count
-of sites is from a `grep` over `sieve_player/`, the pattern beside it.
+Every Python file of the tree: 13,828 lines under `sieve_player/`, 3,771 under `tools/`, 2,010
+under `utilities/` and 251 in the three scripts at the root, 19,860. The spans and the imports are
+from `python -X utf8 docs/findings/experiments/2026-11-16-what-a-module-holds.py sieve_player tools
+utilities`, with `--members` for a class's; what a name does is from reading it. Every file under
+`tools/` and the three scripts were read whole; of the utility, `document.py`, `library.py`,
+`look.py`, `video.py`, `table.py` and `window.py` past its `__init__` were, and `editor.py`,
+`view.py` and `shapes.py` are told here by their names and docstrings. A count of sites is from a
+`grep`, the pattern beside it.
 
 ### The systems
 
@@ -135,7 +137,7 @@ where it does not.
 
 | | system | modules | lines | what goes through it, and what goes round it |
 | --- | --- | --- | --- | --- |
-| S1 | The document | M01 | 546 | Every reader and writer of the pipeline: the canvas, the pane, the plan, the graph, the window, `bare.py`, `__main__.py`. Nothing writes a node but through `Document` or a node's fields. It has no history of its changes: the tree holds no undo. |
+| S1 | The document | M01 | 546 | Every reader and writer of the pipeline: the canvas, the pane, the plan, the graph, the window, `bare.py`, `__main__.py`. Nothing writes a node but through `Document` or a node's fields. It has no history of its changes: the player holds no undo, and the one in the tree is the geometry utility's (M52). |
 | S2 | The registry of tools | M11, M12 | 250 | Discovery (`main.py`, `__main__.py`, `bare.py`) and the menu's facts (`window.py:PlayerWindow.__init__`). The facets it declares are read round it: `registry:probe` has no caller outside its package (A2). |
 | S3 | The plan and the keys | M02 | 248 | `graph.py:Graph.sync` and `__main__.py:show_plan`; every key the memo, the held file and the ledger hold is `plan.py:_key`'s. Nothing goes round it. |
 | S4 | The runtime | M03, M04 | 822 | The worker, the walk, `bare.py`, the simulations and `bench.py` compute through `Graph`; the display reads `Graph.peek`. The memo is its own. |
@@ -145,8 +147,11 @@ where it does not.
 | S8 | The store | M10 | 87 | Which folder, and what lies in it for whoever draws it. What a file in it is named is its writer's: a tool's and the decoder's. |
 | S9 | The stream and its readers | M13 to M23 | 4,412 | Every run, read, turn and paint is an `Event` through one `Emitter`; the ledger, the catalogue, the report, the dump, the pace and the monitor's window read it. It is 4,412 lines to the 3,590 of S1 to S8 together. |
 | S10 | The interface | M24 to M33 | 5,081 | Widgets that are told and report: by its module's own word each of the canvas, the pane, the plot and the strip knows nothing of the runtime, and `window.py` is the one place the two sides meet. |
-| S11 | Launch and diagnostics | M34 to M37 | 358 | `play`, the command line, the recent list, where stderr goes. |
+| S11 | Launch and diagnostics | M34 to M37, M61 to M63 | 609 | `play`, the command line, the recent list, where stderr goes; `main.py`, and two scripts that drive the player with no screen, `smoke.py` and `bench.py`. |
 | S12 | The icon reference | M38 | 387 | Nothing of the player reads it. |
+| S13 | The tools | M44 to M50 | 3,099 | The registry finds a tool, and the graph, the walk, the pane and the display call what it declares; nothing else reaches one. A tool reaches the player through `ParamWidget`, `theme` and `play`, and three go past `sieve_player.__all__`: `background.py` (`decoder.EndOfStream`), `region.py` (`held.in_units`) and `bg_subtract.py`'s launcher (`document`). What a tool may import is `tests/test_seams.py`'s to say, by `sieve_player/__init__.py`'s word, and the tests are not read here. |
+| S14 | What tools share | M39 to M43 | 672 | A tool imports of these and of no other tool, by each file's own word. Two of the five were made by fixes the ledger files under F10: the table kind out of `blobs.py` and `blobs_to_mask.py` (`32bbc5a6`), its drawing out of `_table.py` (`d113c8bb`). `_cutfile.py` goes past `__all__` too (`store`, `decoder.footage_print_by_stamp`). |
+| S15 | The geometry utility | M51 to M60 | 2,010 | A program of its own: it imports nothing of `sieve_player` or `tools`, and meets them at one file, the geometry JSON, and one command line (`tools/region.py:utility_command`). It has what the player has not: undo (M52), an ask before unsaved work is left (M57) for a file a hand drew, and a library of kept configurations (M54). |
 
 ### What each module holds
 
@@ -190,6 +195,51 @@ where it does not.
 | M36 | `recent.py` | 57 | The recent list (`note`, `entries`, `last`). The user's folder for SIEVE (`app_folder`). |
 | M37 | `dev/__init__.py`, `dev/console.py`, `dev/qt_trace.py` | 208 | The Dev menu (`install`, `show`). Where stderr goes (`console.py:start`, `_Tee`). Where a Qt warning came from (`qt_trace.py:install`, `watchdog`). |
 | M38 | `dev/reference/` | 387 | The icon sheet (`icons.py:Icons`, `Sheet`, `Marks`) and its download (`build_icons.py:download`). |
+| M39 | `tools/_table.py` | 106 | The table kind on a `blobs` or a `tracks` wire (`DTYPE`, `TRACKS_DTYPE`, `plane_dtype`, `plane`, `is_table`, `is_tables`, `with_column`). How a record meets a plane (`footprint`, `moments`). The ways a record is outlined (`OUTLINES`). A bound typed as text (`bound`). |
+| M40 | `tools/_draw.py` | 62 | A table drawn on the frame (`contour`, `outline`, `draw`, `draw_tracks`). |
+| M41 | `tools/_blocks.py` | 27 | A plane reduced over a grid of cells (`reduce_blocks`, `METHODS`). |
+| M42 | `tools/_csvfile.py` | 177 | The key line of a csv (`key_line`, `parse_key`, `parse_kind`, `written_key`). The file written whole and read back (`replace`, `read`). The Write card (`widget`). |
+| M43 | `tools/_cutfile.py` | 300 | Where a cut file lies in the store and what it is named (`folder_for`, `key`, `rect_key`, `file_for`, `landed`, `sidecar`, `whole`). One ffmpeg run and how its files land (`command`, `Cut`, `take_name`). What of the store nothing uses, and deleting it (`unused`, `delete`). |
+| M44 | `tools/region.py` | 495 | The geometry file read and checked (`load_geometry`, `_shape`, `_number`). A shape's geometry (`contour_of`, `rect`, `inside`, `table`, `crops`, `served`, `origin`). The cut (`run`, `key_params`). The clip served in its place (`clip_of`, `cut_file`, `cut_files`). The click and the outlines (`pick`, `draw`). The utility started (`utility_command`, `launch`). The card: the chooser, Draw, Cut with its bar and its poll, the unused clips counted and deleted (`settings`, 175 lines). |
+| M45 | `tools/file.py` | 114 | The rule that picks a file (`matches`, `select`, `names`, `rule_for`). The card: Browse and the list of matches (`settings`, 44 lines). |
+| M46 | `tools/csv.py` | 121 | The rows handed on (`run`). The file's lines (`kind_of`, `fields`, `columns`, `lines`, `text`, `write`, `default_name`, `count`). Its card is M42's. |
+| M47 | `tools/resolve.py` | 213 | The identity pass (`reads_of`, `contacts`, `resolve`, `signal`, `run`). The labels file read (`load_labels`). The same pass over a csv from a command line (`tables_of`, `rewrite`, `main`). |
+| M48 | `tools/inrange.py` | 95 | The mask (`run`). A colour settings file read (`load_bounds`). The card: six sliders and Load (`settings`, 39 lines). |
+| M49 | the other 33 tools | 1,876 | Each its facets, its computing, a `settings` of `ParamWidget` rows and, in 23, a launcher. A plane out: `gray`, `hsv`, `rescale`, `threshold`, `motion`, `morphology`, `combine`, `mask`, `background`, `bg_subtract`, `box_bandpass`, `top_hat`, `changeenergy`, `flow`, `speed`, `agreement`, `coarsegrain`. A table out: `blobs`, `detect`, `filter`, `attach`, `sample`, `decode`. Tracks out: `track`, `kinematics`, `tracks_filter`. A signal out: `reduce`, `count`, `size`, `spacing`, `travel`, `transitions`, `smooth`. |
+| M50 | `tools/retired/` | 185 | Three tools set aside, which the registry does not list (`blobs_to_mask.py`, `crop.py`, `inside.py`). |
+| M51 | `utilities/geometry/shapes.py` | 254 | The four kinds as values, each edited by returning another (`Circle`, `Rect`, `Polygon`, `form`, `placed`, `next_name`). |
+| M52 | `utilities/geometry/editor.py` | 422 | The drawing's state and the gesture under way (`Editor.press`, `move`, `release`). Stamp groups (`Editor._regrouped`, `set_link`). A shape held within the plate (`Editor._clamp`, `_held`, `_limited`). Undo and redo, a stack of the shapes at each step's end (`Editor._commit`, `undo`, `redo`, `_step`). |
+| M53 | `utilities/geometry/document.py` | 131 | The geometry file written and read (`save`, `load`, `to_json`, `Source`). A shape's kind inferred (`_rect`, `_inferred`, `_as_drawn`). |
+| M54 | `utilities/geometry/library.py` | 73 | The kept configurations (`listed`, `keep`, `rename`, `remove`, `refusal`, `default_folder`). |
+| M55 | `utilities/geometry/view.py` | 228 | The frame, zoomed and panned, with the shapes painted over it (`FrameView`). |
+| M56 | `utilities/geometry/table.py` | 96 | The shapes' table (`ShapeTable`, `row_texts`, `size_text`). |
+| M57 | `utilities/geometry/window.py` | 524 | Building the widgets (`GeometryWindow.__init__`, 184 lines). The file: open, save, what differs, the ask before leaving (`open_file`, `save`, `save_to`, `differs`, `ask_unsaved`, `_leaving`). The library's asks (`ask_keep`, `ask_rename_kept`, `ask_remove_kept`). The video opened and sought (`open_video`, `seek`, `clock`). |
+| M58 | `utilities/geometry/look.py` | 185 | The grays, the sheet and the glyphs (`STYLE`, `styled`, `layer`, `gray`, `glyph`). Widgets (`GlyphButton`, `ElidedLabel`, `Panel`, `label`). |
+| M59 | `utilities/geometry/video.py` | 57 | A video read a frame at a time by index (`Video`). |
+| M60 | `utilities/__init__.py`, `utilities/geometry/__init__.py`, `__main__.py` | 40 | The command line (`__main__.py:main`, `parser`). |
+| M61 | `main.py` | 16 | The player on the newest document noted, or on the example chain. |
+| M62 | `smoke.py` | 159 | The player run with no screen and its state asserted, a graph and then a window (`run_graph`, `run_window`, `check`). |
+| M63 | `bench.py` | 76 | A graph timed with no Qt (`fill`, `fresh`). |
+
+### What a tool spends its lines on
+
+From `python -X utf8 docs/findings/experiments/2026-11-16-what-a-tool-spends-its-lines-on.py`,
+which gives each top-level statement's lines whole to one column: a function named `settings`, or
+`widget` in `_csvfile.py`, is the settings widget, and every other function but `draw` computes.
+
+| | files | lines | docstring | imports | facets and constants | settings | draw | launcher | computing | blank |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| the tools | 38 | 2,914 | 356 | 90 | 177 | 495 | 39 | 193 | 1,101 | 463 |
+| the median tool | | 54.5 | 8 | 2 | 4.5 | 7 | 0 | 7 | 18 | 10.5 |
+| what they share | 5 | 672 | 43 | 20 | 21 | 94 | 14 | 0 | 392 | 88 |
+| retired | 4 | 185 | 30 | 7 | 13 | 20 | 2 | 14 | 66 | 33 |
+
+Over the tools, 495 lines build a settings widget and 1,101 compute; with the Write card in
+`_csvfile.py`, 589 and 1,493. The 495 are not spread evenly. `region.py` has 175, `file.py` 44 and
+`inrange.py` 39, each a card with buttons and a state of its own, and the other 35 have 237, a
+median of 7: an import, a `ParamWidget` and a row a knob. In those a `settings` line holds what
+nothing else in the file does, the knob's range and its kind of row, and reads its default from
+`DEFAULTS`. The launcher is 193 lines in 28 of the 38.
 
 ### What `window.py` holds
 
@@ -254,27 +304,67 @@ A class is named only where a quoted commit is of that job; "none traced" is not
   `tools/region.py`.
 - H12. M20 for M24 and M22: `pace.py:clock`, a duration as text.
 - H13. M25 for M22: `canvas.py:type_color`, imported by `dev/timeview.py`.
+- H14. M43 for S8: how the store is laid out for cut files, which of them nothing uses and how one
+  is deleted are a tool helper's (`_cutfile.py:folder_for`, `landed`, `unused`, `delete`), and
+  every caller is in M44. F18, "the replace over a clip another region had open was
+  refused and the whole encode lost" (`eb973068`); F22 has `_cutfile.py` twice among where it
+  landed.
+- H15. M44 for S8, S15 and no owner: 175 of `region.py`'s 495 lines are a card that shows a long
+  job's progress and cancels it, sweeps the store and starts another program. F10, "file.py and
+  region.py each carried the same forty lines of list set-up" (`50d07ce7`).
+- H16. M44 and M53 for one file: the geometry JSON has two readers that share no code,
+  `region.py:load_geometry`, which the utility's README calls the live statement of what the file
+  may hold, and `utilities/geometry/document.py:load`. They differ: the utility takes a plate of
+  `true`, a bool being an int to its check, and region refuses one. None traced.
+- H17. M39 for S4 and S7: what lies on a `blobs` or a `tracks` wire is defined under `tools/`, and
+  the player knows it by its shape, `graph.py:nbytes` walking a dtype's object columns and
+  `graph.py:gated` and `walk.py` reading `"rows"`. F06, "the memo counted a table at its pointers"
+  (`e9142899`); F17, "a table's rows of differing length read as the graph changing shape, and the
+  walk started over forever" (`cd887844`).
+- H18. M47 for no owner: `resolve.py:main` is a command that runs a tool's pass over a file with
+  no player, the one such in the tree, and it reads the csv back through `_csvfile.py:read` to do
+  it. None traced.
+- H19. M59 for S5: `utilities/geometry/video.py:Video` is a second reader of video with its own
+  answer to where a seek lands (`EXACT_DECODE_BELOW`), and `_cutfile.py:Cut.__init__` a third, for
+  the container's count alone, which F07 found a container to misstate (`925f03fa`) and which
+  here only scales a progress bar. None of F07's sixteen commits touched `video.py`, and of the
+  two that touched `_cutfile.py`, `020ccd0a` wrote it and `27fb7e04` changed what it deletes
+  (`git show --stat` of each). The utility's docstring says a seek "may land near the asked
+  frame", which a shape drawn on a still plate does not mind.
+- H20. M58 for M31: `look.py` copies the player's grays and `GlyphButton` by value, on purpose by
+  its own docstring. The ledger read `c14271d9` back out of F10 as a copy made and not one found.
+- H21. M62 and M63 for `tests/` and S9: `smoke.py` asserts on the window's state and reads
+  `win.worker._gen` and `win.display._over`; `bench.py` reads `dec._cache`, and `stats.py` (M18) is
+  there for it alone. Neither was run in the reading. None traced.
 
 H10 to H13 are a helper living where it was first needed; none has a class.
 
 ## 5. What was built by attrition
 
-The player's half. A place under `tools/` or `utilities/` is cited where a search found it and is
-the next session's to read; the count of settings lines against computing lines over `tools/` is
-that session's too. Attrition, by the spec, is a thing written more than twice whose copies have
-drifted or which a fix in the ledger had to reach in more than one place.
+Over the whole tree, each place read where it lies. Attrition, by the spec, is a thing written more
+than twice whose copies have drifted or which a fix in the ledger had to reach in more than one
+place. A1 and A6 were drawn and searched for over every Python file, the pattern beside each; the
+search found four places of A1 and one of A6 that the list had not, and they are in it now.
 
 ### Attrition
 
-- A1. A file written whole or not at all. With a part file and a replace: `document.py:save`,
+- A1. A file written whole or not at all (`open\([^)]*"(w|wb)"|os\.replace|os\.rename|mkstemp|
+  write_text|json\.dump\(`). With a part file and a replace: `document.py:save`,
   `held.py:File.write`, `recent.py:note`, `decoder.py:_keep_times`, `tools/_csvfile.py:replace`,
-  `tools/_cutfile.py:_land`. Written in place: `store.py:choose`, `ledger.py:save`,
-  `utilities/geometry/document.py:save`. Both tests hold. `929f1614` (F18, F10) took the leftover
+  and `tools/_cutfile.py:Cut._land` for a clip's sidecar, the clip itself taking its name by a
+  rename that refuses a name already taken (`_cutfile.py:take_name`). Written in place:
+  `store.py:choose`, `ledger.py:save`, `trace.py:to_trace`, `bare.py:main` for the walk's results,
+  `window.py:PlayerWindow._start_bare` for its job, `dev/reference/icons.py`, and
+  `utilities/geometry/document.py:save`; `trace.py:Dump` and the log of `dev/console.py` are
+  streams and are neither. Both tests hold. `929f1614` (F18, F10) took the leftover
   part file out of two copies, `document.save` and `_csvfile.replace`. And they have drifted:
-  `recent.py:note` still passes on `OSError` and leaves its `.part`; `_keep_times` makes its part
-  by `mkstemp` and the rest by a suffix; `File.write` clears in a `finally` and the rest in an
-  `except`; and the geometry file, the one of these the user draws by hand, is opened for writing
-  where it lies, so a write that fails leaves it cut short.
+  `recent.py:note` still passes on `OSError` and leaves its `.part`; `_keep_times` and `Cut` make
+  a part by `mkstemp` and the rest by a suffix; `File.write` clears in a `finally` and the rest in
+  an `except`; `document.py:save` passes no `newline` where the recent list, the store's choice, a
+  csv and a geometry file pass `"\n"`, and the eight documents lying directly in `video-tests/`
+  are CRLF at every line and the five geometry files there LF, by a count of each file's bytes;
+  and the geometry file, the one of these the user draws by hand, is opened for writing where it lies,
+  so a write that fails leaves it cut short.
 - A2. Reading what a tool declares. The registry's `probe` is used by the registry alone. The rest:
   `document.py`'s six readers; `plan.py:plan` (`cut_file`, `key_params`, `step`) and
   `plan.py:shared_fold` (`fold`); `walk.py:_Walk.step` and `walk.py:run_chain` (`fold`);
@@ -293,12 +383,38 @@ drifted or which a fix in the ledger had to reach in more than one place.
   3, `window.py` 3, `ledger.py` 2, `worker.py` 1, `file=sys\.stderr`). No function takes a failure
   and decides where it is said. F04 is the class, 27 commits and 13 coming back, landing in
   `window.py` 13 times, `graph.py` 11, `worker.py` 10 and `pane.py` 5: fixed apart, by the ledger's
-  own count. Whether the channels have drifted in what each says was not read.
+  own count. Whether the channels have drifted in what each says was not read. A tool adds two
+  channels more: what its computing raises, which reaches a node's standing, and a readout on a
+  card of its own, of which `region.py` has three (`status`, `launched`, `clip`) and `inrange.py`,
+  `_csvfile.py:widget` and `file.py` one each.
 - A4. A store bounded by bytes: `graph.py:Memo`, the decoder's cache (`decoder.py:Decoder._put`,
   `_trim`), `held.py:Runs.hold`, and a walk's stack (`walk.py:_fits`). What each lets go first
   differs on purpose and is no drift. What was fixed apart is the counting: F06's four commits
   coming back are the decoder's (`75212615`), the memo's (`e9142899`, `a639e63e`) and the stack's
   (`982ea14d`).
+- A11. What a param is. A tool says it in up to four places: `DEFAULTS`, which the registry and
+  the document read; its row in `settings`, where alone its range and its kind of row are; a check
+  where it is computed; and a fallback where it is read. They have drifted. `outline` is read by
+  nine `draw`s as `params.get("outline", "box")` and is declared and offered by four
+  (`attach.py`, `blobs.py`, `filter.py`, `track.py`); in `decode.py`, `kinematics.py`,
+  `resolve.py`, `sample.py` and `tracks_filter.py` nothing declares it, so no document holds it
+  and those five draw the box whatever the table carries. Of seventeen checks of a choice
+  (`raise ValueError\(f".*no (method|mode|stat|kernel|property|signal|dictionary|precision)`),
+  fourteen name the tool and list the choices, `morphology.py:morph` and `combine.py:combine` do
+  neither, and `_blocks.py:reduce_blocks` lists them and names no tool. A range is a number in a
+  `settings` line that the computing does not hold: `top_hat.py:top_hat` checks its radius and
+  `box_bandpass.py:bandpass` that `outer` exceeds `inner`, three clamp a number
+  (`smooth.py:run`, `_blocks.py:reduce_blocks`, `retired/crop.py:rect`), and the rest take what
+  they are handed. And three tools
+  carry a fallback for a param a saved document may lack, two by restating the default
+  (`box_bandpass.py:run`, `"16 bit"`, from `4685285c`; `track.py:_knobs`, `0.0`, from `06c60b5f`)
+  and `region.py:clip_of` and `cut_file` by reading `DEFAULTS`, which is a job
+  `document.py:Document.resolve` does for every param of every tool by laying a node's over
+  `DEFAULTS`; which was written first was not looked up. Ledger: F17's `64ce8f59`, where a tool's
+  own list of a param's choices, `MODES`, was read as a facet.
+- A12. A bound typed as text, blank for none. `d113c8bb` (F10) made `filter.py`'s and
+  `tracks_filter.py`'s identical `bound()` one, `_table.py:bound`. A third stands,
+  `transitions.py:_value`, which answers None where `bound` answers a default.
 
 ### Copies left alone
 
@@ -309,27 +425,56 @@ drifted or which a fix in the ledger had to reach in more than one place.
   `registry:WIDGET_FACETS`; the sites stand as they were and the names agree.
 - A6. Whether a result is a series result, `isinstance(r, dict) and "signal" in r`: four times in
   `window.py` (`_series_ready`, `_whole`, `_clip_result`, `_show_pinned`), three in `held.py`
-  (`good`, `Runs.hold`, `per_row`), once in `graph.py:gated`. No drift found, no fix traced.
+  (`good`, `Runs.hold`, `per_row`), once in `graph.py:gated`, and over two lines in
+  `tools/csv.py:count` (`"signal" (not )?in`). No drift found, no fix traced.
 - A7. The tools as a mapping of name to module: `document.py:_by_name`,
   `graph.py:Graph.__init__`, `window.py:catalogue`. The same line three times.
 - A8. A line on stderr that opens `SIEVE` and the time, formatted where it is printed:
   `window.py` 3, `ledger.py` 2, `dev/timeview.py` 1. `dev/console.py` owns where stderr goes and
   not what a line of it looks like.
-- A9. Whether two paths are one file: `window.py:_same`, `recent.py:note`,
-  `tools/_cutfile.py` and `tools/file.py`, each by `normcase`.
+- A9. Whether two paths are one file, by `normcase`: `window.py:_same` and
+  `tools/_cutfile.py:_same` over `abspath`, `recent.py:note` over paths it made absolute. The
+  `normcase` in `tools/file.py:select` compares a name with the `choice` and is not this.
 - A10. A thread with its own handoff, six ways: `worker.py:Worker` on a condition,
   `trace.py:Dump` on a list taken each period, the window's writer of the held file as a thread a
   write, `machine.py:Watch` on a period, `decoder.py:read_frame_times_ahead` as a daemon, and the
   ledger's queue drained by whoever reads. These are not copies, and F02 and F03 were not read
-  against them by hash; they are listed so that the candidates' session does.
+  against them by hash; they are listed so that the candidates' session does. A child process is
+  held three ways beside them: the bare walk as a `QProcess` whose lines are read
+  (`window.py:PlayerWindow._start_bare`), ffmpeg as a `Popen` polled by a card's timer and killed
+  at exit (`tools/_cutfile.py:Cut`), and the utility as a `Popen` nothing waits on
+  (`tools/region.py:launch`). F22 has `_cutfile.py` twice among where it landed.
+- A13. A tool's launcher, an `if __name__ == "__main__"` block that plays the tool after the
+  tools that feed it: 28 of the 38, 193 lines. Ten have none (`attach.py`, `combine.py`,
+  `decode.py`, `hsv.py`, `kinematics.py`, `morphology.py`, `sample.py`, `spacing.py`,
+  `tracks_filter.py`, `transitions.py`), and `resolve.py`'s is its csv command and plays nothing.
+  No fix traced.
+- A14. A comma-separated list of columns read from a text knob: `names(text)`, the same line in
+  `attach.py`, `resolve.py` and `retired/inside.py`.
+- A15. `run` as a loop over `step`: `count.py`, `size.py`, `transitions.py` and `travel.py`, the
+  last two the same five lines. The registry's README names `run` the oracle a `step` is held to.
+- A16. A card of its own: four subclasses of `ParamWidget` named `_Widget` (`file.py`,
+  `inrange.py`, `region.py`, `_csvfile.py:widget`), each a button, a readout for what came of the
+  press and, in three, a file dialog. It was attrition: `50d07ce7` (F10) took forty lines of list
+  set-up out of `file.py` and `region.py` into `widgets.py:ChoiceList`. No drift read in what is
+  left.
+- A17. A time as text: `pace.py:clock` (m:ss), `timeline.py:timecode` (mm:ss.fff) and
+  `utilities/geometry/window.py:clock` (m:ss.fff), three formats for three readouts.
+- A18. The player's look, written again by value in `utilities/geometry/look.py` (H20).
 
 Written twice and so not listed: a series as min and max a column (`plot.py:Plot._columns`,
 `timeline.py:envelope`); naming a read as a seek, a decode or a cache's (`graph.py:Graph._compute`,
 for the video and for a served file); a drawer's or a loader's params put through the widget when
 there is one and to `_params_changed` when there is not (`window.py:PlayerWindow._picked`,
-`_pick_paths`).
+`_pick_paths`); the geometry file read (H16); the ask before unsaved work is left
+(`window.py:PlayerWindow`, W10, and `utilities/geometry/window.py:GeometryWindow._leaving`); the
+video files a dialog offers (`pane.py:VIDEO_FILTER` and `utilities/geometry/window.py:VIDEO_FILTER`,
+which differ by `.m2ts`); an id's records in two consecutive tables, by `np.intersect1d`
+(`travel.py:steps`, `transitions.py:changed`); a moment ellipse (`_table.py:moments`, and
+`detect.py:find` over every region at once).
 
-Two things the reading met that are neither. The string under `window.py:Display`'s two signals
+Three things the reading met that are neither. The string under `window.py:Display`'s two signals
 is written as a docstring and is not one, the signals coming first, so `Display.__doc__` is None.
-And `window.py:catalogue` is a function named as the module `catalogue.py` is, which `window.py`
-also imports from.
+`window.py:catalogue` is a function named as the module `catalogue.py` is, which `window.py`
+also imports from. And `README.md` says, beside `tools\motion.py [video]`, "any tool runs alone",
+where ten of the 38 have no launcher (A13).

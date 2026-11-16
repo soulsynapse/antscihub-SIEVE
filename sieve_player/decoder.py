@@ -558,6 +558,7 @@ class Decoder:
                 f = cv2.cvtColor(f, cv2.COLOR_BGR2GRAY)
         if self._turn is not None:
             f = cv2.rotate(f, self._turn)
+        f.setflags(write=False)     # the cache's frame is every reader's
         self.decodes += 1
         self._put(cur.pos, f)
         cur.pos += 1

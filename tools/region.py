@@ -36,7 +36,9 @@ document's results are never the clip's on one machine and the frame's on anothe
 cut at `standard` is H.264's rendering of the cut and not its pixels, so a served node hands out
 other values than the same node run. The node's key is then the one a document opened on the clip
 gives its video node, so everything after it is that document's. With no shape chosen the node
-hands on the whole plate and serves nothing. The clip is of the
+hands on the whole plate and serves nothing. `key_params` is the plate and the rect `run` cuts, so
+a node that runs is keyed by its cut, as a served one is by its file: a shape that is not the chosen
+one, a shape's name, `quality` and `serve clip` move no key below it. The clip is of the
 video file and not of what is wired into `in`, so the two differ where a node that serves no file
 sits between the video and this one, and the player serves no clip there. `cut_files` is every clip
 the node would serve under some choice and quality; the card counts the store's clips of this
@@ -189,6 +191,10 @@ def served(params):
     if not found:
         raise ValueError("no shapes; wire a file selector into geometry" if not params["plate"] else "the geometry file has no shapes")
     return dict(found).get(params["choice"]) or (0, params["plate"][0], 0, params["plate"][1])
+
+
+def key_params(params):
+    return {"plate": params["plate"], "rect": served(params)}
 
 
 def run(frames, row, params):

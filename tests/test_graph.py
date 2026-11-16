@@ -117,6 +117,13 @@ def test_reads_the_video_node():
     g = Graph(fan_out(), Dec(), TOOLS)
     assert g.compute("video", 3).shape == (4, 6, 3)
     assert (g.compute("gray", 3) == 4).all()
+    seen = []
+    add.run, keep = (lambda frames, row, params: seen.append((frames.key, frames.fps, frames.count)) or frames(row)), add.run
+    try:
+        g.compute("add", 3)
+    finally:
+        add.run = keep
+    assert seen == [(g.key("gray"), 30.0, 10)]                         # what a run reads off frames beside its rows
 
 
 def test_fan_out_computes_once():
@@ -223,6 +230,24 @@ def test_key_follows_params_and_wiring():
     doc.connect("video", "add")
     g.sync()
     assert g.key("add") != k_add                                      # rewired
+    doc.connect("gray", "add")
+    gray.key_params = lambda p: p["k"]                                # a tool that says what of its params its run reads
+    try:
+        g.sync()
+        k_add = g.key("add")
+        doc.node("gray").params["note"] = "unread"
+        g.sync()
+        assert g.key("add") == k_add                                  # a param the facet leaves out moves no key below
+        doc.node("gray").params["k"] = 3
+        g.sync()
+        assert g.key("add") != k_add
+        gray.key_params, k_add = (lambda p: p["absent"]), g.key("add")
+        g.sync()
+        doc.node("gray").params["note"] = "read"
+        g.sync()
+        assert g.key("add") not in (k_add, g.key("gray"))             # a facet that raises: keyed by all its params
+    finally:
+        del gray.key_params
 
 
 def test_rewire_during_walk():
@@ -930,3 +955,68 @@ def test_a_scrub_past_the_end_says_the_count_and_leaves_the_walk_standing():
         time.sleep(0.01)
     w.stop()
     assert short == [10, 10] and walked[-1] == (10, 10) and not failed
+
+
+class Kept(Dec):
+    """A fake whose cache holds what it read, as the Decoder's does."""
+
+    def __init__(self):
+        self.held = {}
+
+    def read(self, row):
+        if row not in self.held:
+            self.held[row] = super().read(row)
+        return self.held[row]
+
+    def cached(self, row):
+        return self.held.get(row)
+
+
+def branches(*tools):
+    """video -> each of `tools`, side by side."""
+    doc = D.from_tools([])
+    for i, t in enumerate(tools):
+        doc.add_node(t.NAME, (0, 100 * i))
+        doc.connect("video", t.NAME)
+    return doc, {t.NAME: t for t in tools}
+
+
+def test_a_tool_that_writes_into_its_input_raises_and_the_cache_keeps_its_frame():
+    def scribble(f, p):
+        f[0, 0] = 99
+        return f
+    dec = Kept()
+    doc, tools = branches(tool("scribble", "bgr", "bgr", scribble))
+    g = Graph(doc, dec, tools)
+    with pytest.raises(ValueError):
+        g.compute("scribble", 2)
+    assert (dec.held[2] == 2).all() and g.standing("scribble").startswith("raised at row 2: ValueError")
+
+
+def test_the_memo_holds_no_view_and_names_another_stores_array_by_reference():
+    whole, strip = tool("whole", "bgr", "bgr", lambda f, p: f[0:4, 0:6]), tool("strip", "bgr", "bgr", lambda f, p: f[1:3])
+    own_strip, new = tool("own_strip", "bgr", "bgr", lambda f, p: (f + 1)[1:3]), tool("new", "bgr", "bgr", lambda f, p: f + 1)
+    fixed = tool("fixed", "bgr", "bgr")
+    fixed.STATIC = True
+    doc, tools = branches(whole, strip, own_strip, new, fixed)
+    again = tool("again", "bgr", "bgr")
+    doc.add_node("again", (300, 0))
+    doc.connect("whole", "again")
+    dec = Kept()
+    g = Graph(doc, dec, {**tools, "again": again})
+    out = {n: g.compute(n, 2) for n in ("whole", "again", "strip", "own_strip", "new", "fixed")}
+    frame = dec.held[2]
+    held = [v for d in (g.memo._big, g.memo._small, {k: v for k, (_, v) in g.memo._pinned.items()}) for v in d.values() if isinstance(v, np.ndarray)]
+    assert len(held) == 4 and not any(np.shares_memory(v, frame) for v in held)
+    assert all(v.base is None or v.base.nbytes == v.nbytes for v in held) and not any(v.flags.writeable for v in [*held, frame])
+    assert g.memo.bytes == 2 * 64 + 2 * 36 + 2 * 72                              # two references, two strips, the new plane and the pinned one
+    assert out["whole"] is frame and out["again"] is frame and g.peek(2, "whole") is frame and g.peek(2, "again") is frame
+    assert (out["strip"] == 2).all() and (out["own_strip"] == 3).all() and (out["fixed"] == 2).all() and out["fixed"] is not frame
+    runs, decodes, hits, misses = whole.runs, dec.decodes, g.memo.hits, g.memo.misses
+    assert g.compute("again", 2) is frame and whole.runs == runs                # held by the cache: nothing runs
+    assert (g.memo.hits, g.memo.misses) == (hits + 1, misses)                   # one read answered is one hit, through two references
+    dec.held.clear()                                                            # the cache lets the frame go
+    assert g.peek(2, "whole") is None and (g.compute("again", 2) == 2).all()
+    assert (g.memo.hits, g.memo.misses) == (hits + 1, misses + 3)               # a reference to an array let go is a miss: the peek, again, whole
+    assert whole.runs == runs + 1 and dec.decodes == decodes + 1 and g.memo.bytes == 2 * 64 + 2 * 36 + 2 * 72
+    assert g.peek(0, "fixed") is not None                                       # the pinned plane is the memo's own and stays

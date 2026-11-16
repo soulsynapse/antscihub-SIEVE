@@ -1,7 +1,7 @@
 """The registry's derived category: the ordered list over shaped entries, and csv over tools/."""
 from types import SimpleNamespace as Tool
 
-from sieve_player.registry import category, description, discover, signature
+from sieve_player.registry import FACETS, category, description, discover, hint, signature
 
 
 def test_the_first_rule_that_fits_decides_the_category():
@@ -20,3 +20,5 @@ def test_over_the_catalogue_csv_is_a_transform():
     assert description(by_name["gray"]) == "BGR to gray by luma (cv2's Rec. 601 weights)"
     assert description(Tool()) == ""
     assert signature(by_name["blobs"]) == "mask, gray → blobs" and signature(by_name["file"]) == "→ path"
+    assert "key_params" in FACETS and hint("key_params").startswith("def key_params(params)")
+    assert "key_params" not in {f for e in discover("tools") if e.name == "region" for f in e.missing}

@@ -13,6 +13,7 @@ This is kendrick's running list of todos.
 - Since nodes carry all their stuff, we can add visual toggles for stuff
   - Color coding?
   - in/out icons?
+  - storage info?
 
 
 ## Maybe some day

@@ -100,7 +100,8 @@ def plan(doc, tools, base, cut_file=None):
     nor is anything that reads it, and the str is its standing, so what a document computes is
     never one thing with a file in the store and another without. A raw key names what a tool computes from, so the memo holds under it; the key adds the
     band, which is applied on read, so what downstream sees is keyed by it and the node's own run
-    is not. A node that serves its file reads nothing, and its key is the one a document opened on
+    is not. Of a node's params the raw key holds what its tool's `key_params` answers, the whole of
+    them for a tool without one or one that raises. A node that serves its file reads nothing, and its key is the one a document opened on
     that file gives its video node, so everything below it is keyed as that document's is. A node reads one piece of the plate: one
     whose inputs are of two, the plate among them, is not fed, nor is anything that reads it, and
     its standing says which. A chain node is stepped when its tool steps and everything it reads on
@@ -143,6 +144,15 @@ def plan(doc, tools, base, cut_file=None):
         srcs = sources(nid).values()
         return bool(srcs) and all(s is not None and static_of(s, (*stack, nid)) for s in srcs)
 
+    def keyed(node):
+        facet = getattr(tools.get(node.tool), "key_params", None)
+        if facet is not None:
+            try:
+                return facet(node.params)
+            except Exception:       # a tool's rule is user code: one that fails keys the node by all it has
+                pass
+        return node.params
+
     def up_key(nid, stack=()):
         ups = [key_of(src, stack) if src is not None and src not in stack else "none" for src in sources(nid).values()]
         return ups[0] if len(ups) == 1 else _key(*ups)
@@ -154,7 +164,7 @@ def plan(doc, tools, base, cut_file=None):
                 keys[nid] = raw_keys[nid] = base
                 return base
             raw = (base_key(file_of(nid)[1], video_output(doc)) if file_of(nid)
-                   else _key(up_key(nid, (*stack, nid)), node.tool, json.dumps(node.params, sort_keys=True)))
+                   else _key(up_key(nid, (*stack, nid)), node.tool, json.dumps(keyed(node), sort_keys=True)))
             raw_keys[nid] = raw
             keys[nid] = raw if node.band is None else _key(raw, node.band)
         return keys[nid]

@@ -9,6 +9,7 @@ when nothing reaches it: no wire, an unresolved tool, or a wire whose types do n
 import threading
 from collections import OrderedDict
 from contextlib import ExitStack, contextmanager
+from typing import NamedTuple
 
 import numpy as np
 
@@ -27,10 +28,12 @@ def inband(v, band):
 
 def banded(v, band):
     """`v` with every value outside `band` set to zero, inside it when lo is above hi. Only a plane
-    of values is banded; a mask, a field or None passes through."""
+    of values is banded; a mask, a field or None passes through. The plane handed back is read-only."""
     if not isinstance(v, np.ndarray) or v.ndim != 2 or v.dtype == bool:
         return v
-    return np.where(inband(v, band), v, np.zeros((), v.dtype))
+    out = np.where(inband(v, band), v, np.zeros((), v.dtype))
+    out.setflags(write=False)
+    return out
 
 
 def gated(result, band):
@@ -76,6 +79,39 @@ def nbytes(v):
     return v.nbytes + sum(nbytes(x) for x in held)
 
 
+class Ref(NamedTuple):
+    """What the memo holds for a result that is another store's array: the key that store holds it
+    under and its row there, None for a static node's."""
+    key: str
+    row: int | None
+
+
+def _same(v, a):
+    """Whether `v` is the array `a`, whole: one buffer read one way, whether or not one object."""
+    return v is a or (v.shape == a.shape and v.strides == a.strides and v.dtype == a.dtype
+                      and v.__array_interface__["data"][0] == a.__array_interface__["data"][0])
+
+
+def to_hold(v, handed, pinned):
+    """What the memo holds for a run's result `v`, `handed` being [(array, Ref)] of the stores'
+    arrays the run read: the Ref where `v` is one of them, whole, and is not to be pinned; a copy
+    where it is one to be pinned, shares memory with one, or is part of a larger array; else `v`.
+    An array is handed back read-only."""
+    if not isinstance(v, np.ndarray):
+        return v
+    ref = next((r for a, r in handed if _same(v, a)), None)
+    if ref is not None and not pinned:
+        return ref
+    owner = v
+    while isinstance(owner, np.ndarray) and owner.base is not None:
+        owner = owner.base
+    if (ref is not None or not isinstance(owner, np.ndarray) or owner.nbytes != v.nbytes
+            or any(np.may_share_memory(v, a) for a, _ in handed)):
+        v = v.copy()
+    v.setflags(write=False)
+    return v
+
+
 class Memo:
     """LRU bounded by bytes, as `nbytes` counts them. Image-shaped entries (ndim >= 2) are evicted
     before small ones. An entry put with an owner is pinned: never evicted, counted toward the
@@ -93,19 +129,28 @@ class Memo:
 
     _size = staticmethod(nbytes)
 
-    def get(self, k):
+    def get(self, k, count=True):
+        """The entry under `k`, or None; a hit or a miss is counted unless `count` is False, for a
+        caller that says by `counted` whether the read was answered."""
         with self._lock:
             if k in self._pinned:
-                self.hits += 1
+                self.hits += count
                 return self._pinned[k][1]
             for d in (self._big, self._small):
                 v = d.get(k)
                 if v is not None:
                     d.move_to_end(k)
-                    self.hits += 1
+                    self.hits += count
                     return v
-            self.misses += 1
+            self.misses += count
             return None
+
+    def counted(self, hit):
+        with self._lock:
+            if hit:
+                self.hits += 1
+            else:
+                self.misses += 1
 
     def empty(self):
         """Drops every entry, pinned ones with the rest, and tells `on_evict` of none: what is
@@ -163,7 +208,7 @@ class Cancelled(Exception):
 
 class Frames:
     """What a frame tool's run() gets: frames(r) is the output of the node its first input reads,
-    at row r, and frames(r, name) that of another of its INPUTS; frames.type(name) is what the node
+    at row r, read-only, and frames(r, name) that of another of its INPUTS; frames.type(name) is what the node
     wired into that input produces, for a tool whose EXPECTS admits types its run() must tell
     apart. `key` changes whenever anything upstream of any input does. It reads through the plan the computation began in, so one run()
     sees one graph even if the document is synced under it; but a read made once the node's raw key
@@ -175,6 +220,11 @@ class Frames:
         self._graph, self._plan, self._nid, self._sources = graph, plan, nid, sources
         self._raw_key, self._types = plan[nid].raw_key, types or {}
         self.key, self.fps, self.count = key, graph.fps, graph.count
+        self.handed = []        # [(array, Ref)]: each array a read handed the run that a store holds, and where
+
+    def named(self, ref, default=None):
+        """The array handed under `ref`, or `default` where the run read none there."""
+        return next((a for a, r in self.handed if r == ref), default)
 
     def type(self, input=INPUT):
         return self._types.get(input)
@@ -184,12 +234,19 @@ class Frames:
         now = g._plan.get(self._nid)
         if g.halt or now is None or now.raw_key != self._raw_key:
             raise Cancelled(f"{self._nid} at row {row}: the graph moved on")
+        src = self._sources[input]
         try:
-            return g._compute(self._plan, self._sources[input], row, reader=self._nid)
+            v = g._compute(self._plan, src, row, raw=True, reader=self._nid)
         except Exception as exc:
             if not hasattr(exc, "sieve_node"):
-                exc.sieve_node = self._sources[input]     # a read that fails is the read node's, never the reader's
+                exc.sieve_node = src     # a read that fails is the read node's, never the reader's
             raise
+        e = self._plan.get(src)
+        out = v if e is None or e.band is None else banded(v, e.band)
+        if out is v and isinstance(v, np.ndarray):
+            memoized = e.kind == "frame" and e.file is None
+            self.handed.append((v, Ref(e.raw_key, None if memoized and e.static else row)))
+        return out
 
 
 class Series:
@@ -352,6 +409,7 @@ class Graph:
             d.output = output
         with self._lock:
             self._plan, self._whole, self._failed = p.entries, p, self._failing
+            self._files = {e.raw_key: e.file[0] for e in p.entries.values() if e.file is not None}
             self.shown, self.over = p.shown, p.over
             self.series = p.chain[0] if p.chain else None
             self.heads, self.chain, self.unrun_series = p.heads, p.chain, p.unrun
@@ -604,6 +662,28 @@ class Graph:
         """Emitter.probe on this graph's stream, a body raising Cancelled being its "cancel"."""
         return self.stream.probe(nid, row, key, reader, cancel=Cancelled)
 
+    def _held(self, v):
+        """`v`, or the array the store a Ref names holds, through as many Refs as lie between;
+        None where that store has let it go. Never computes. GUI-safe."""
+        with self._lock:
+            files = self._files
+        while isinstance(v, Ref):
+            if v.key == self._base:
+                return self.decoder.cached(v.row)
+            if v.key in files:
+                d = self.readers.held(files[v.key])
+                return None if d is None else d.cached(v.row)
+            v = self.memo.get((v.key, v.row), count=False)
+        return v
+
+    def _memoized(self, mk):
+        """(the memo's entry under `mk`, the array it stands for): one hit where there is an array,
+        one miss where there is none, a reference whose store let the array go among them."""
+        got = self.memo.get(mk, count=False)
+        v = self._held(got)
+        self.memo.counted(v is not None)
+        return got, v
+
     def _compute(self, plan, nid, row, raw=False, reader=None):
         e = plan.get(nid)
         if e is None or e.kind in ("series", "selector") or not e.fed:
@@ -615,6 +695,7 @@ class Graph:
                 v = d.read(row)
                 ev[0] = "seek" if d.seeks != seeks else "decode" if d.decodes != decodes else "cache"
                 ev[1], ev[2] = v.nbytes, v.shape
+            v.setflags(write=False)
             return v
         if e.file is not None:
             d = self._reader(nid, e)
@@ -628,13 +709,15 @@ class Graph:
                     raise
                 ev[0] = "seek" if d.seeks != seeks else "decode" if d.decodes != decodes else "cache"
                 ev[1], ev[2] = v.nbytes, v.shape
+            v.setflags(write=False)
             return v if raw or e.band is None else banded(v, e.band)
         mk = (e.raw_key, None if e.static else row)
-        v = self.memo.get(mk)
+        got, v = self._memoized(mk)
         if v is None:
+            frames = Frames(self, plan, nid, e.srcs, e.src_key, e.types)
             with self.probe(nid, row, e.raw_key, reader) as ev:
                 try:
-                    v = e.tool.run(Frames(self, plan, nid, e.srcs, e.src_key, e.types), row, e.params)
+                    v = e.tool.run(frames, row, e.params)
                 except Cancelled:
                     raise
                 except Exception as exc:
@@ -642,9 +725,15 @@ class Graph:
                         exc.sieve_node = nid
                         self.note(nid, f"raised at row {row}: {type(exc).__name__}: {exc}")
                     raise
-                size = ev[1] = Memo._size(v)
                 ev[2] = getattr(v, "shape", None)
-            self.memo.put(mk, v, owner=e.raw_key if e.static else None, size=size)
+                if isinstance(got, Ref):    # its store let the array go: the memo holds the reference still, and nothing more
+                    ev[1], v = 0, frames.named(got, v)
+                else:
+                    held = to_hold(v, frames.handed, e.static)
+                    size = ev[1] = Memo._size(held)
+                    v = frames.named(held) if isinstance(held, Ref) else held
+            if not isinstance(got, Ref):
+                self.memo.put(mk, held, owner=e.raw_key if e.static else None, size=size)
         elif self.stream.on_event is not None:
             self._hit(nid, 0)
         return v if raw or e.band is None else banded(v, e.band)
@@ -684,7 +773,7 @@ class Graph:
             d = self.readers.held(e.file[0])
             v = None if d is None else d.cached(row)
             return v if v is None or e.band is None else banded(v, e.band)
-        v = self.memo.get((e.raw_key, None if e.static else row))
+        v = self._memoized((e.raw_key, None if e.static else row))[1]
         return v if v is None or e.band is None else banded(v, e.band)
 
 

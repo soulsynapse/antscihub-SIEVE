@@ -11,7 +11,8 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from sieve_player import document as D  # noqa: E402
 from sieve_player.graph import Graph  # noqa: E402
 from tests.test_graph import Dec, tool  # noqa: E402
-from tools import crop, gray, threshold  # noqa: E402
+from tools import gray, threshold  # noqa: E402
+from tools.retired import crop  # noqa: E402
 
 
 def roi_tool(at):

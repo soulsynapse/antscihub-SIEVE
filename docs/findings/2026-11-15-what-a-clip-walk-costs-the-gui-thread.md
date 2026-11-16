@@ -5,8 +5,9 @@ served region of 256x258 walked through threshold, detect, track, size, count, t
 csv, on the player at e22531a0 with the monitor open. The walk began at 1581 rows a second and was
 at 738 five minutes on, its unprobed ms a row rising with it. The figures are from the monitor's
 history of that run, `sieve-history-20261115-182655.json`, cut into 40 s; the history is in no
-repo. Experiment for the strip:
-`docs/findings/experiments/2026-11-15-what-a-strip-paint-costs-as-a-clip-walk-grows.py`.
+repo. Experiments: for the strip,
+`docs/findings/experiments/2026-11-15-what-a-strip-paint-costs-as-a-clip-walk-grows.py`; for the
+ledger, `docs/findings/experiments/2026-11-15-what-a-discard-costs-the-ledger.py`.
 
 ## The stores did not slow it
 
@@ -37,9 +38,38 @@ The share against the unprobed ms a row correlates at 0.58, against the wall ms 
 of a row no span covers is the worker's own Python between its tools' calls, which waits on the
 interpreter the GUI thread holds.
 
-Two of the GUI thread's spans grow with the walk. The monitor's slot and paint, about 390 ms of
-every second by the end, are the monitor's own and go when it is closed. The strip's paint is the
-player's.
+Two of the GUI thread's spans grow with the walk: the monitor's slot, which is the ledger's fold of
+what the walk emitted since the last poll, and the strip's paint. The monitor's paint is 7 ms a
+call throughout, 24 a second.
+
+## The ledger's fold of a discard
+
+The monitor's slot, ms a call, each 20 s of the clip walk: 16.5, 21.0, 23.3, 22.0, 23.0, 27.1, 38.8,
+50.9, 53.4, 49.8, 23.5, 30.4, 38.8, 45.3, 47.7, 49.7. It climbs, falls back at 480 s and climbs
+again.
+
+The ledger remembers the last 131072 (key, row) a store discarded, to tell a recomputation, and
+past that many forgot the oldest by `del d[next(iter(d))]`. A dict whose first key is deleted keeps
+the emptied slot until it next resizes, and the next search for its first key passes every slot
+emptied before it: each discard folded takes longer than the last, until the dict resizes and it
+begins again. By the experiment, 700000 discards folded a thousand at a time:
+
+| | us a discard, mean | worst thousand |
+| --- | --- | --- |
+| before the ledger remembers its limit | 0.5 | 1.6 |
+| past it, as it was | 38.5 | 145.5 |
+| past it, the discards an OrderedDict and the oldest popped | 0.7 | 6.4 |
+
+As it was, each 50000th thousand: 0.4, 0.4, 0.6, 4.8, 7.3, 19.6, 44.5, 90.1, 4.4, 24.5, 51.7, 89.8,
+93.8, 20.8. With the stores full every row discards: 2.2 a row on this plan headless, the memo's
+alone. The fold is on the GUI thread where a view is polled and on the worker's where none is, at
+each 4096 events, so the cost is there with the monitor closed.
+
+Apart from that a fold is 6 to 8.5 us an event and a row of this plan 6.8 to 9.0 events, 0.04 to
+0.06 ms a row, by a headless walk of the file under a ledger; the same walk under no consumer ran
+0.66 to 0.90 ms a row over four runs and under a ledger 0.76 to 0.84 over eight, so the ledger is
+not told from none by the walk's rate there. The monitor's poll over the saved history, offscreen,
+the fold apart, is 1.3 ms at 300 buckets and 3.8 at 2400, and its paint 8.4 at any.
 
 ## The strip
 
@@ -71,6 +101,7 @@ pixmap where they were drawn on the field.
 
 ## Not measured
 
-The player on screen with the strip as it now is, so the walk's rate with it; the paint now at a
-scale of 1.5; a signal that is not noise, which the polygon was cheaper on; what in the monitor's
-slot grows.
+The player on screen with the strip and the ledger as they now are, so the walk's rate with them
+and how much of its fall each was; the paint now at a scale of 1.5; a signal that is not noise,
+which the polygon was cheaper on; the discards a row of the run itself, its region's cache
+discarding beside the memo.

@@ -11,7 +11,7 @@ import sys
 import threading
 import time
 import traceback
-from collections import deque
+from collections import OrderedDict, deque
 from contextlib import nullcontext
 from dataclasses import dataclass, field, fields, replace
 from typing import NamedTuple
@@ -227,7 +227,7 @@ class Ledger:
         self._plan = self._keys = self._selected = None
         self._nest = {}                 # thread -> [(start, end)] of the spans whose opening run has not emitted yet
         self._spent = {}                # thread -> ms accounted for: every span's, and the unprobed time given out
-        self._gone = {}                 # (key, row) a store discarded -> the store
+        self._gone = OrderedDict()      # (key, row) a store discarded -> the store, oldest first; ordered, so forgetting the oldest searches past none forgotten before it
 
     def event(self, ev):
         self._queue(ev)
@@ -354,7 +354,7 @@ class Ledger:
             elif item.kind in (EVICT, UNCACHE):
                 self._gone[(item.key, item.row)] = "memo" if item.kind == EVICT else item.key
                 if len(self._gone) > self._discards:
-                    del self._gone[next(iter(self._gone))]
+                    self._gone.popitem(last=False)
             elif item.kind in TURNS:
                 name = f"{item.kind} {item.node}"
                 for i, (bucket, share) in enumerate(self._over(item.t, item.t + item.ms / 1000)):

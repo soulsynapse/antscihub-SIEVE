@@ -441,6 +441,7 @@ def test_stats_counts_everything_over_a_short_walk(tmp_path):
     g.compute("add", 7)                       # a memo hit: the last row walked is still held
     n = len(events)
     g.compute("video", 7)                     # a cache hit: the small cache still holds the last rows
+    g.decoder.seek_ms = g.decoder.step_ms     # a seek held as cheap as a step, so a jump ahead is one whatever this machine measured
     g.compute("video", 20)                    # a seek
     assert [ev.kind for ev in events[n:] if ev.kind != "uncache"] == ["cache", "seek"]
     held = sum(ev.bytes for ev in events if ev.kind == "run") - sum(ev.bytes for ev in events if ev.kind == "evict")

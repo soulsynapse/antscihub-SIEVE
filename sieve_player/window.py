@@ -22,6 +22,7 @@ from PySide6.QtGui import QImage, QKeySequence, QPainter, QPen, QPixmap, QShortc
 from PySide6.QtWidgets import QFileDialog, QHBoxLayout, QMainWindow, QMenu, QMessageBox, QProgressBar, QPushButton, QSizePolicy, QVBoxLayout, QWidget
 
 from . import bare, dev, document, filemenu, held, recent, store, theme
+from . import decoder as decoder_module
 from .canvas import Canvas
 from .catalogue import Log
 from .decoder import Decoder
@@ -1001,6 +1002,8 @@ class PlayerWindow(QMainWindow):
             return False
         self._unload()
         self.decoder = decoder
+        decoder_module.STORE = store.folder
+        decoder_module.read_frame_times_ahead(path)     # the first seek would wait on it: docs/findings/2026-11-15-a-file-whose-times-do-not-count-its-rows.md
         self.stream = Emitter()
         self.graph = Graph(self.doc, decoder, self.tools, stream=self.stream, **({"memo_bytes": m} if (m := _gb(MEMO_ENV)) else {}))
         # the one line a report of this video's run needs beside the log's tracebacks

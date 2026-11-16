@@ -43,3 +43,7 @@
   default on Windows writes CRLF, and git then warns on every touch.
 - A Python script fed to the Bash tool by heredoc has its `\n` escapes turned into real newlines;
   write or edit files with the Write and Edit tools instead.
+
+## Wrapping up
+- If it is clear you should commit and push, do so.
+- Do not delete branches for me.

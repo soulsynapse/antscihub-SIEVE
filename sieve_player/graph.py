@@ -300,13 +300,17 @@ class Graph:
 
     def cut_file(self, nid, up):
         """(path, footage print) of the file `nid`'s tool says holds its cut of the footage it
-        reads, asked now: `up` is that footage as (path, print), None for the open video. None for
-        a tool that raises or answers with none, and a file that cannot be read."""
+        reads, asked now: `up` is that footage as (path, print), None for the open video. A str,
+        what was said, where the tool raises FileNotFoundError or the file it names is gone: the
+        node is to serve a file and has none, and `plan` does not run it. None for a tool that
+        raises anything else or answers with none, and a file that cannot be read."""
         node = self.doc.node(nid)
         tool, of = self.tools[node.tool], up or (self.decoder.path, self.decoder.footage_print)
         try:
             path = tool.cut_file(*of, node.params)
             return None if path is None else (str(path), footage_print_by_stamp(path))
+        except FileNotFoundError as exc:
+            return str(exc)
         except Exception as exc:       # a tool's rule is user code; one that fails serves nothing, and the node's standing says so
             self._failing[nid] = f"cut_file raised: {type(exc).__name__}: {exc}"
             return None
@@ -414,8 +418,8 @@ class Graph:
     def standing(self, nid):
         """One line on why `nid` does not run, else what its tool raised when the last sync asked
         it for its cut files, else what its run said under its current key, else "". The plan's
-        reasons: an input unwired, mismatched or waiting on an unfed node, a series node off the
-        chain, a cycle. The notes: a tool raising, a chain node fed no signal."""
+        reasons: an input unwired, mismatched or waiting on an unfed node, a file it is to serve
+        and has not, a series node off the chain, a cycle. The notes: a tool raising, a chain node fed no signal."""
         with self._lock:
             e = self._plan.get(nid)
             note = self._notes.get(nid)
@@ -465,23 +469,26 @@ class Graph:
             out = self._compute(p.entries, nid, row)
         return out if fold is None or out is None else fold(out)
 
-    def drawing(self):
+    def drawing(self, p=None):
         """The fed frame nodes whose tool has a draw(), in document order: what the display reads
-        at its row beside the shown node, on the walked path or off it."""
-        with self._lock:
-            return [nid for nid, e in self._plan.items() if e.kind == "frame" and e.fed and hasattr(e.tool, "draw")]
+        at its row beside the shown node, on the walked path or off it; under the Plan `p`, the
+        current one with none."""
+        entries = (p or self.snapshot()).entries
+        return [nid for nid, e in entries.items() if e.kind == "frame" and e.fed and hasattr(e.tool, "draw")]
 
     def watch(self, nodes):
         """`nodes` are what the plot shows, the selection and the pinned; any thread."""
         with self._lock:
             self._watched = tuple(nodes)
 
-    def folded(self):
+    def folded(self, p=None):
         """The fed frame nodes among those watch() was told of, in its order: what the window walk
-        folds a density for, a branch the walk does not reach among them. Whether a node's output
-        is a plane is density()'s to say, at a row."""
+        folds a density for, a branch the walk does not reach among them; under the Plan `p`, the
+        current one with none. Whether a node's output is a plane is density()'s to say, at a row."""
+        entries = (p or self.snapshot()).entries
         with self._lock:
-            return [nid for nid in self._watched if (e := self._plan.get(nid)) is not None and e.kind == "frame" and e.fed]
+            watched = self._watched
+        return [nid for nid in watched if (e := entries.get(nid)) is not None and e.kind == "frame" and e.fed]
 
     @property
     def series_tool(self):
@@ -521,14 +528,13 @@ class Graph:
             e = self._plan.get(nid)
         return e is not None and e.fed
 
-    def compute(self, nid, row, raw=False, demand="display"):
+    def compute(self, nid, row, raw=False, demand="display", p=None):
         """Output of `nid` at `row`, memoized; None for a node nothing reaches. Worker threads only.
-        The whole recursion runs in the plan current at the call, so what lands in the memo under a
-        key was computed from the graph that key describes. `raw` is the plane before the node's band,
-        what its density counts, so the axis holds while a handle moves. `demand` is what the caller
-        answers, the display unless it says otherwise."""
-        with self._lock:
-            plan = self._plan
+        The whole recursion runs in the Plan `p`, the one current at the call with none, so what
+        lands in the memo under a key was computed from the graph that key describes. `raw` is the
+        plane before the node's band, what its density counts, so the axis holds while a handle
+        moves. `demand` is what the caller answers, the display unless it says otherwise."""
+        plan = (p or self.snapshot()).entries
         with self.demand(demand, nid):
             return self._compute(plan, nid, row, raw)
 
@@ -643,11 +649,11 @@ class Graph:
             self._hit(nid, 0)
         return v if raw or e.band is None else banded(v, e.band)
 
-    def density(self, nid, row):
+    def density(self, nid, row, p=None):
         """`nid`'s plane at `row` folded to (BINS,) counts, memoized under its own key and probed on
-        the node as a "fold"; None when the output is not a plane. Worker threads only."""
-        with self._lock:
-            plan = self._plan
+        the node as a "fold"; None when the output is not a plane; under the Plan `p`, the current
+        one with none. Worker threads only."""
+        plan = (p or self.snapshot()).entries
         e = plan.get(nid)
         if e is None or e.kind != "frame" or not e.fed:
             return None

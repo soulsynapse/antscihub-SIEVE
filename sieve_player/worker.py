@@ -48,11 +48,11 @@ class _Scrub:
         self.row = row
         g, p = self.graph, self.plan
         with g.scrubbing():       # the display's jump lands on its own cursor, not the walk's
-            g.compute(p.shown, row)
+            g.compute(p.shown, row, p=p)
             if p.over is not None:
-                g.compute(p.over, row)
-            for nid in g.drawing():
-                g.compute(nid, row)
+                g.compute(p.over, row, p=p)
+            for nid in g.drawing(p):
+                g.compute(nid, row, p=p)
         self.rowReady.emit(row)
 
     def cancelled(self):
@@ -175,7 +175,7 @@ class _Walk:
     def folding(self):
         """The nodes whose densities this range folds: what the graph was told the plot shows, on
         the window, and none on the clip or where nothing is walked."""
-        return [] if self.densities is None or self.plan.walk is None else self.graph.folded()
+        return [] if self.densities is None or self.plan.walk is None else self.graph.folded(self.plan)
 
     def behind(self):
         """Whether a node the plot shows has a row of the range unfolded."""
@@ -189,7 +189,7 @@ class _Walk:
             r = self.at.get(nid, 0)
             if r >= self.length:
                 continue
-            v = self.graph.density(nid, self.start + r)
+            v = self.graph.density(nid, self.start + r, self.plan)
             if v is None:
                 self.at[nid] = self.length
                 continue

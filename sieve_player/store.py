@@ -1,7 +1,8 @@
 """The store: the one folder the files tools write of a video's footage land in, wherever the video
 lies. This module resolves which folder it is, `folder()`, chosen else SIEVE_STORE else the default,
 `choose()`s on the user's behalf, and reads what a folder holds for whoever draws it. What a file in
-it is named, and what is in one, is the tool's that wrote it (tools/_cutfile.py). Imports no Qt.
+it is named, and what is in one, is its writer's: a tool's (tools/_cutfile.py), and the decoder's,
+whose tables of frame times lie in one folder of it (decoder.TIMES_DIR). Imports no Qt.
 """
 import os
 import shutil

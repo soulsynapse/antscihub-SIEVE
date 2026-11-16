@@ -116,7 +116,7 @@ Assumes: nothing. Two sessions if the log asks for them.
 What came back is the evidence, and it is gathered before any system has a name to be gathered
 for.
 
-- [ ] `docs/findings/` holds a finding, the ledger, that files each commit of every branch whose
+- [x] `docs/findings/` holds a finding, the ledger, that files each commit of every branch whose
   message tells of a fix, a rework or a second attempt under a class, each class with an id, a
   sentence in the words of the problem and of no remedy, its commits by hash, and the modules its
   fixes landed in.

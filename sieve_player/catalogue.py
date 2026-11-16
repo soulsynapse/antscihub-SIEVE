@@ -19,21 +19,21 @@ COSTS = (RUN, STEP, FOLD, DECODE, SEEK)      # the kinds a walk is compared with
 SLOWER = 1.5        # what the nodes of a walk cost, against the same runs at its baseline's ms a run
 
 SOURCES = {
-    "unread": "worker._Walk.fold folds Graph.folded(), what Graph.watch was told the plot shows: a node told there "
+    "unread": "walk._Walk.fold folds Graph.folded(), what Graph.watch was told the plot shows: a node told there "
               "that the stream was not told is selected or pinned; docs/findings/2026-11-12-served-bake-upstream-walk.md",
     "thrash": "graph.Memo.put and Decoder._put, an LRU under a scanning walk; "
               "docs/findings/2026-10-31-window-fit-and-lru-thrash.md, docs/findings/2026-11-08-bake-window-fit.md",
-    "grows": "worker.run_chain, a chain node the plan does not step run whole at every emit; "
+    "grows": "walk.run_chain, a chain node the plan does not step run whole at every emit; "
              "docs/findings/2026-11-08-bake-window-fit.md, its second half",
     "seeks": "decoder.Decoder.read, a row behind the cursor or past what it reads through; a tool reading far from its row",
     "slower": "no one place; the evidence names the nodes whose cost moved",
     "waits": "window.PlayerWindow's slots and paints, Python on the GUI thread holding the interpreter a tool on the "
              "worker's then waits for; the subject names the slot or the part",
-    "signals": "worker._Walk.report, a progress signal at every row under a Worker made with no tell_every, and the window's slots on it; "
+    "signals": "walk._Walk.report, a progress signal at every row under a Worker made with no tell_every, and the window's slots on it; "
                "docs/findings/2026-11-13-a-signal-a-row.md",
     "late": "window.Lateness, the GUI thread's timer firing late: a slot or a paint of window.PlayerWindow's, a tool's one call "
             "holding the interpreter, or what the GUI thread does under no span; the subject says which",
-    "restarts": "worker._Walk.turn, a range begun again where what it was given went stale or the nodes or the shape changed "
+    "restarts": "walk._Walk.turn, a range begun again where what it was given went stale or the nodes or the shape changed "
                 "under it, and Worker.set_window or walk_clip asked by no hand and no edit; the evidence says which",
     "stalls": "no one place: a tool's call, a read or the worker's own code between two rows that does not return; "
               "the stream says which lane, and the node where its thread was sampled in one's span",

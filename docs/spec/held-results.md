@@ -6,7 +6,7 @@ moved about among them, beside the document, and open between sessions; a result
 of it has made stale is not served, and nothing more is owed it; and the strip says where a jump costs
 nothing. Read with `sieve_player/held.py`, the file and what a run is; with `sieve_player/window.py`,
 whose `runs` are what is held and whose `_run_over` is what serves a window from them; with
-`sieve_player/worker.py`, whose `_Walk.spared` is a window walked with no chain run; and with
+`sieve_player/walk.py`, whose `_Walk.spared` is a window walked with no chain run; and with
 `docs/findings/2026-11-12-what-a-walk-holds.md` for what a series result weighs.
 
 ## How to read this
@@ -22,7 +22,7 @@ Assumes: nothing.
 
 Facts to weigh. A window moved ten rows drops its whole result, and a clip walk's rows are read by the
 strip alone (the 2026-11-12 spec's Why). A result carries the key its node had as the chain ran
-(`worker.run_chain`); a key is the node's tool, its params, its band and the keys upstream, the footage's
+(`walk.run_chain`); a key is the node's tool, its params, its band and the keys upstream, the footage's
 print (`decoder.footage_print`; the video's path until 2026-11-14) and the decoder's output at the root (`plan.key_of`, `plan.base_key`). A stepped node's value at a
 row can depend on the row its walk began at, `track`'s ids and its first rows among them
 (`docs/findings/2026-11-13-a-windows-tracks-against-the-clips.md`), so rows of two walks are not stitched.

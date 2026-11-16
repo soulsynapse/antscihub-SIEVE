@@ -5,12 +5,70 @@ and the pinned in dimmed ink, each as the plot does over the window: a column co
 one row is their min and max, so nothing is hidden and nothing is added, and the rows the
 selection's gate keeps are washed. A bar along its bottom edge is over the rows held."""
 import numpy as np
-from PySide6.QtCore import QPoint, QPointF, QRectF, QSize, Qt, Signal
+from PySide6.QtCore import QPoint, QPointF, QRect, QRectF, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QIcon, QPainter, QPen, QPixmap, QPolygonF
 from PySide6.QtWidgets import QDoubleSpinBox, QHBoxLayout, QLabel, QPushButton, QSizePolicy, QWidget
 
+from typing import NamedTuple
+
 from . import theme
 from .theme import GAP, GLYPH, INK, INK_ALPHA, ROW_H, Layer, desc_label, glyph, gray, mono_font, qgray, readout
+
+
+class Envelope(NamedTuple):
+    """One stretch of a series as the strip draws it: the pixel columns its rows fall in and, a
+    column each, the min and max of its rows and whether its gate keeps any of them, None with no
+    gate; `top` is the value drawn at full height and `selected` whether it is drawn in colour."""
+    selected: bool
+    top: float
+    cols: np.ndarray
+    lo: np.ndarray
+    hi: np.ndarray
+    kept: np.ndarray | None
+
+
+def envelope(values, start, gate, width, count, selected, top):
+    """The Envelope of `values`, rows from `start` of a clip of `count`, over `width` pixel
+    columns: row r is in column r * width // count."""
+    n = len(values)
+    c = np.arange(start * width // count, (start + n - 1) * width // count + 2, dtype=np.int64)
+    first = -(-(c * count) // width)       # the first row of each column, and of the one past the last
+    a, b = np.maximum(first[:-1], start), np.minimum(first[1:], start + n)
+    has = b > a
+    starts = (a - start)[has]
+    kept = None if gate is None else np.maximum.reduceat(gate[:n].astype(np.uint8), starts) > 0
+    return Envelope(selected, top, c[:-1][has], np.minimum.reduceat(values, starts), np.maximum.reduceat(values, starts), kept)
+
+
+def _differ(a, b):
+    return ~((a == b) | ((a != a) & (b != b)))
+
+
+BACK = 3        # columns of an Envelope before its first altered one that are drawn anew: a line's end drawn on as a join antialiases two columns back
+BEYOND = 4      # columns either side of the span drawn that are handed to the painter, so the ends it makes up lie that far outside it
+
+
+def changed(old, new, width):
+    """The pixel columns, (first, one past the last), over which Envelopes `new` draw other than
+    `old` did, None where they draw the same: a stretch grown by rows changes from BACK columns
+    before its first new or altered one, and a stretch added, gone or drawn another way changes
+    the whole."""
+    if len(old) != len(new) or any(o.selected != n.selected or (o.kept is None) != (n.kept is None) for o, n in zip(old, new)):
+        return (0, width) if old or new else None
+    spans = []
+    for o, n in zip(old, new):
+        m = min(len(o.cols), len(n.cols))
+        if o.top != n.top:
+            i = 0
+        else:
+            d = (o.cols[:m] != n.cols[:m]) | _differ(o.lo[:m], n.lo[:m]) | _differ(o.hi[:m], n.hi[:m])
+            if o.kept is not None:
+                d |= o.kept[:m] != n.kept[:m]
+            i = int(np.argmax(d)) if d.any() else m if len(o.cols) != len(n.cols) else None
+        if i is not None:
+            j = max(i - BACK, 0)
+            spans.append((int(min(o.cols[j], n.cols[j])) - 1, int(max(o.cols[-1], n.cols[-1])) + 2))
+    return (max(0, min(a for a, _ in spans)), min(width, max(b for _, b in spans))) if spans else None
 
 
 def timecode(row, fps, places=3):
@@ -40,7 +98,8 @@ class Strip(QWidget):
         self._mode = None        # "head" | "body" | "place"
         self._draft = None       # (start, length) while a window drag is live
         self._grab = 0           # row offset of the grab point inside the body
-        self._still = None       # (what it was painted for, the pixmap of all but the hover and the playhead), or None once what it shows changed
+        self._still = None       # (the size it was painted for, the pixmap of the series alone, the Envelopes drawn on it), or None before a paint
+        self._asked = True       # the series or the clip's count changed since the pixmap was drawn
         self.setFixedHeight(self.H)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.setMouseTracking(True)
@@ -60,7 +119,7 @@ class Strip(QWidget):
 
     def set_window(self, start, length):
         self.window = (start, length)
-        self._redraw()
+        self.update()
 
     def set_hover(self, row):
         self.hover = row
@@ -82,11 +141,11 @@ class Strip(QWidget):
         """The stretches of the clip, (start, rows) each, a window placed wholly inside one of which
         costs the series chain nothing; drawn as a bar along the bottom edge."""
         self.held = [(int(s), int(n)) for s, n in spans]
-        self._redraw()
+        self.update()
 
     def _redraw(self):
-        """What is drawn under the hover and the playhead changed: the next paint draws it anew."""
-        self._still = None
+        """The series or the axis they are drawn on changed: the next paint draws what of them is other than it drew."""
+        self._asked = True
         self.update()
 
     def _x(self, row):
@@ -106,26 +165,20 @@ class Strip(QWidget):
         return "body" if y <= self.GRAB else "head"
 
     def paintEvent(self, _):
-        # a playhead or a hover that moves must draw no row of any series: only their lines go over the pixmap
+        # a playhead, a hover or a window that moves must draw no row of any series: the series are a pixmap of their own
         key = (self.size(), self.devicePixelRatioF())
         if self._still is None or self._still[0] != key:
             still = QPixmap(self.size() * key[1])
             still.setDevicePixelRatio(key[1])
             still.fill(Qt.transparent)
-            self._paint_still(still)
-            self._still = (key, still)
+            self._still, self._asked = (key, still, []), True
+        if self._asked:
+            _, still, drawn = self._still
+            now = self._envelopes()
+            if (span := changed(drawn, now, self.width())) is not None:
+                self._paint_series(still, now, span)
+            self._still, self._asked = (key, still, now), False
         p = QPainter(self)
-        p.drawPixmap(0, 0, self._still[1])
-        if self.hover >= 0:
-            p.setPen(QPen(qgray(theme.INK_2), 1))
-            x = int(self._x(self.hover))
-            p.drawLine(x, 1, x, self.height() - 2)
-        p.setPen(QPen(qgray(theme.HEAD), 1.5))
-        x = int(self._x(self.playhead))
-        p.drawLine(x, 1, x, self.height() - 2)
-
-    def _paint_still(self, onto):
-        p = QPainter(onto)
         p.setRenderHint(QPainter.Antialiasing, True)
         box = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
         p.setPen(QPen(qgray(theme.layer(2) + theme.LINE_LIFT), 1))
@@ -138,54 +191,67 @@ class Strip(QWidget):
             a = theme.ACCENT
             p.fillRect(QRectF(x0, 1, x1 - x0, self.height() - 2), QColor(a.red(), a.green(), a.blue(), 40))
             p.fillRect(QRectF(x0, 1, x1 - x0, self.GRAB), a)
-        self._paint_series(p)
+        p.drawPixmap(0, 0, self._still[1])
         for s, n in self.held:
             x0 = self._x(s)
             p.fillRect(QRectF(x0, self.height() - 1 - self.HELD, max(1.0, self._x(s + n) - x0), self.HELD), qgray(theme.INK_2))
-        p.end()
+        if self.hover >= 0:
+            p.setPen(QPen(qgray(theme.INK_2), 1))
+            x = int(self._x(self.hover))
+            p.drawLine(x, 1, x, self.height() - 2)
+        p.setPen(QPen(qgray(theme.HEAD), 1.5))
+        x = int(self._x(self.playhead))
+        p.drawLine(x, 1, x, self.height() - 2)
 
-    def _paint_series(self, p):
-        """The pinned in ink first, the selection over them in its colour with its gate's wash."""
-        p.setRenderHint(QPainter.Antialiasing, True)
+    def _envelopes(self):
+        """Every stretch drawn, in the order drawn: the pinned in ink first, the selection over
+        them in its colour with its gate's wash; a node's stretches share its largest value."""
+        out, w = [], max(1, self.width())
         for nid in [n for n in self.series if n != self.selection] + [n for n in self.series if n == self.selection]:
             segs = [self.series[nid], *self.more.get(nid, [])]
             top = max((float(values.max()) for values, _, _ in segs if len(values)), default=0.0)
-            for values, start, gate in segs:
-                if nid == self.selection:
-                    self._paint_one(p, values, start, gate, theme.GATE if gate is not None else theme.SERIES, top)
-                else:
-                    self._paint_one(p, values, start, None, qgray(theme.INK, INK_ALPHA), top)
-        p.setRenderHint(QPainter.Antialiasing, False)
+            out += [envelope(values, start, gate if nid == self.selection else None, w, self.count, nid == self.selection, top)
+                    for values, start, gate in segs if len(values)]
+        return out
 
-    def _paint_one(self, p, values, start, gate, line, top):
-        """Each pixel column the values cover: the min and max of its rows, as one polygon scaled
-        to `top`; the columns whose gate keeps any row, washed first. A row that stands alone in
-        its column is a point of the line."""
-        if not len(values):
-            return
+    def _paint_series(self, onto, envelopes, span):
+        """Draws `envelopes` on `onto` over the pixel columns of `span` alone, cleared first."""
+        p = QPainter(onto)
+        clip = QRect(span[0], 0, span[1] - span[0], self.height())
+        p.setClipRect(clip)
+        p.setCompositionMode(QPainter.CompositionMode_Source)
+        p.fillRect(clip, Qt.transparent)
+        p.setCompositionMode(QPainter.CompositionMode_SourceOver)
+        p.setRenderHint(QPainter.Antialiasing, True)
+        for e in envelopes:
+            self._paint_one(p, e, span)
+        p.end()
+
+    def _paint_one(self, p, e, span):
+        """The columns of `e` that reach `span`, and BEYOND more either side so what is drawn
+        inside is what the whole would draw there: the min and max of each as one polygon scaled to
+        its top, the columns its gate keeps washed first. A column that stands alone is a line."""
+        a = max(int(np.searchsorted(e.cols, span[0])) - BEYOND, 0)
+        b = min(int(np.searchsorted(e.cols, span[1], "right")) + BEYOND, len(e.cols))
         inner = QRectF(1, self.GRAB + 2, self.width() - 2, self.height() - self.GRAB - 4)
-        n, w = len(values), max(1, self.width())
-        col = (start + np.arange(n)) * w // self.count
-        starts = np.flatnonzero(np.diff(col, prepend=-1))
-        xs = col[starts] + 0.5
-        top = max(top, 1e-6)
-        y = lambda v: inner.bottom() - inner.height() * min(float(v) / top, 1.0)
+        xs = e.cols[a:b] + 0.5
+        y = lambda v: inner.bottom() - inner.height() * np.minimum(v[a:b].astype(np.float64) / max(e.top, 1e-6), 1.0)
+        lo, hi = y(e.lo), y(e.hi)
+        line = qgray(theme.INK, INK_ALPHA) if not e.selected else theme.GATE if e.kept is not None else theme.SERIES
         p.setPen(Qt.NoPen)
-        if gate is not None:
-            kept = np.maximum.reduceat(gate[:n].astype(np.uint8), starts) > 0
-            edges = np.flatnonzero(np.diff(np.concatenate(([0], kept.astype(np.int8), [0]))))
+        if e.kept is not None:
+            edges = np.flatnonzero(np.diff(np.concatenate(([0], e.kept[a:b].astype(np.int8), [0]))))
             p.setBrush(theme.GATED)
-            for a, b in zip(edges[0::2], edges[1::2] - 1):
-                p.drawRect(QRectF(xs[a] - 0.5, inner.top(), xs[b] - xs[a] + 1, inner.height()))
-        lo, hi = np.minimum.reduceat(values, starts), np.maximum.reduceat(values, starts)
+            for i, j in zip(edges[0::2], edges[1::2] - 1):
+                p.drawRect(QRectF(xs[i] - 0.5, inner.top(), xs[j] - xs[i] + 1, inner.height()))
         p.setPen(QPen(line, 1))
         p.setBrush(line)
         if len(xs) == 1:   # one column: a polygon of one x has no area and no length, so its span is a line
-            p.drawLine(QPointF(xs[0], y(hi[0])), QPointF(xs[0], max(y(lo[0]), y(hi[0]) + 1)))
+            p.drawLine(QPointF(xs[0], hi[0]), QPointF(xs[0], max(lo[0], hi[0] + 1)))
         else:   # the fill has no outline, which would add a pixel to every column's span; the line along the maxima is what shows where a column's span is nothing
-            upper = [QPointF(x, y(v)) for x, v in zip(xs, hi)]
+            upper = [QPointF(x, v) for x, v in zip(xs.tolist(), hi.tolist())]
             p.setPen(Qt.NoPen)
-            p.drawPolygon(QPolygonF(upper + [QPointF(x, y(v)) for x, v in zip(xs[::-1], lo[::-1])]))
+            p.drawPolygon(QPolygonF(upper + [QPointF(x, v) for x, v in zip(xs[::-1].tolist(), lo[::-1].tolist())]))
             p.setPen(QPen(line, 1))
             p.setBrush(Qt.NoBrush)
             p.drawPolyline(QPolygonF(upper))
@@ -203,7 +269,7 @@ class Strip(QWidget):
         else:  # the window's front jumps to the click and the press goes on as a drag
             n = self.window[1]
             self._draft, self._grab = (max(0, min(self.count - n, row)), n), 0
-            self._redraw()
+            self.update()
         self._show_bubble(e)
 
     def mouseMoveEvent(self, e):
@@ -221,7 +287,7 @@ class Strip(QWidget):
         else:
             n = self.window[1]
             self._draft = (max(0, min(self.count - n, row - self._grab)), n)
-            self._redraw()
+            self.update()
         self._show_bubble(e)
 
     def mouseReleaseEvent(self, e):
@@ -234,7 +300,7 @@ class Strip(QWidget):
             (self.windowPlaced if self._mode == "place" else self.windowChanged).emit(*self._draft)
         self._mode, self._draft = None, None
         self._bubble.hide()
-        self._redraw()
+        self.update()
 
     def leaveEvent(self, _):
         if self._mode is None:

@@ -647,7 +647,7 @@ and not the second, and a dump written before it no longer reads. `ledger.sample
 drops every other name. A saved history is compared equal with the view it was written from, in
 `tests/test_ledger.py` and the monitor's experiment, so whatever a bucket or a node gains must come back
 from JSON as it went: no tuple, no key that is not a string, or `save` and `saved` carry it across as
-they do a node's runs. A walk's stack is `worker._Walk.bytes` against `STACK_BYTES` and is in no event;
+they do a node's runs. A walk's stack is `walk._Walk.bytes` against `STACK_BYTES` and is in no event;
 `Graph.progress` is called from `_Walk.turn` and `_Walk.close`. `tests/test_seams.py` lists what each
 module may import, and a module it does not list is not held to anything. For the fork on the GPU, the
 reading half: the decoder opens the file through libav, by PyAV, and asks for no hardware
@@ -879,7 +879,7 @@ only for a walk whose beginning the buckets still reach, and a tool that holds t
 and not waiting, so `waits` does not see it. `thrash` fires on a recomputation of what a store discarded,
 which one forward pass over a range never makes: what that walk cannot keep is paid by the next walk of
 the range. `catalogue.needs` stands from a walk's first rows, and `StoresPanel` draws it past the limit,
-of the window lane's last walk alone. `worker._Walk.turn` begins its range again when what it was given
+of the window lane's last walk alone. `walk._Walk.turn` begins its range again when what it was given
 goes stale or the nodes or the shape change under it, and anything that restarts the range sets its
 `asked`; whether the stream says which of these began a walk, or that the user's hand did, is not known.
 A problem's cost is ms a row of the walk it was found in, by `catalogue._problem`, and the log's

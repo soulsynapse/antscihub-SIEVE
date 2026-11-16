@@ -314,7 +314,7 @@ the monitor's `Log` having one ledger for its life.
 
 Assumes: nothing.
 
-Facts to weigh. Three classes hold a walk. `worker._Walk` begins one and says so to the stream;
+Facts to weigh. Three classes hold a walk. `walk._Walk` begins one and says so to the stream;
 `ledger.Walk` opens at that "begin"; `pace._Walk` opens when a lane's count does not rise, the worker's
 signals carrying no beginning. What a walk's rows were is counted twice: by `_Walk.turn` from
 `Graph.tally` taken before and after the row, which its docstring says counts another thread's miss, for

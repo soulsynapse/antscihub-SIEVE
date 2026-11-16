@@ -52,19 +52,6 @@ def gated(result, band):
     return {**result, "gate": gate}, np.where(gate, signal, np.zeros((), signal.dtype))
 
 
-def fed_row(share, band):
-    """What a series node downstream is stepped with from one row's `share` of a stepping node's
-    result: the row `gated` would feed at that index, the table emptied or the signal zeroed when
-    the signal is outside `band`; None for a share without a signal."""
-    if not isinstance(share, dict) or "signal" not in share:
-        return None
-    signal = np.asarray(share["signal"])
-    kept = band is None or bool(inband(signal, band))
-    if "rows" in share:
-        return share["rows"] if kept else share["rows"][:0]
-    return share["signal"] if kept else signal.dtype.type(0)
-
-
 def nbytes(v):
     """The bytes `v` holds: an array's own and, through an object field or an object array, every
     array behind it, since `ndarray.nbytes` counts a contour as its eight-byte pointer; 64 for

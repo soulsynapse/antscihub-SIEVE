@@ -141,7 +141,8 @@ def test_the_walk_steps_the_prefix_once_a_row_runs_the_suffix_per_emit_and_match
     steps each row once again and runs nothing of the prefix; the stepped state is dropped with the
     walk, nothing lands in the memo under the stepped node's key, and the results' bytes count
     toward the walk's with the stack's. A change on the prefix's head steps it and the node under
-    it again from the window's first row; a change after the prefix reruns the suffix alone."""
+    it again from the window's first row; a change after the prefix reruns the suffix alone; a band
+    moved on the head steps it no row and re-gates it, and the node it feeds steps again."""
     from tests.test_graph import Dec, TOOLS as FRAME, gray as fgray
     table = frame_tool("table", "gray", "blobs", blobs_at)
     tools = {**FRAME, "table": table, "track": track, "kinematics": kinematics, "tracks-filter": tracks_filter}
@@ -188,6 +189,15 @@ def test_the_walk_steps_the_prefix_once_a_row_runs_the_suffix_per_emit_and_match
     wait_for(lambda: got)
     steps, runs = steps_and_runs(events, g.chain)
     assert steps == [] and runs == [("tracks-filter", 6)] and equal(got[-1], run_chain(w.graph, w._win.stack, 0, 7, {}))
+    events.clear()
+    got.clear()
+    doc.node("track").band = (2.0, 3.0)
+    g.sync()
+    w.rerun_series()
+    wait_for(lambda: got)
+    steps, runs = steps_and_runs(events, g.chain)
+    assert [r for n, r in steps if n == "track"] == [] and [r for n, r in steps if n == "kinematics"] == list(range(7))
+    assert equal(got[-1], run_chain(w.graph, w._win.stack, 0, 7, {}))
     w.stop()
 
 

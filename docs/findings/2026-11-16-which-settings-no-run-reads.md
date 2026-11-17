@@ -46,11 +46,25 @@ document holds.
 
 ## What this bears on
 
-Part 6 of the review says what would make E1 the wrong first: "that the count finds few settings
-no `run` reads and the six places, read whole, agree in all but the csv's name". The count finds
-three, one name. The six were read at their definitions; they agree but for the csv's name and the
-breadth of the held file's stamp.
+The count sizes one thing, what a mark on a setting, E1's fourth step, would take out of a node's
+key as the tools stand: three settings. It does not size what one key that every kept thing and
+every job answers to is worth, and it is no test of E1.
 
-Not known: how often a held file is lost to an edit under `tools/`, and whether that, a toggled
-`outline`, or something neither of these is what Kendrick feels as a result made again. The log
-does not show it and nothing here measures it.
+What Kendrick said he feels, reading the ledger's classes on 2026-11-16, is that whether a change
+empties something upstream is "seemingly random" and that the tree has "leaned towards just
+invalidating as the default". A setting no `run` reads is one way that comes about. The tree holds
+others, each a rule of its own beside the plan's key, and it is their being several that reads as
+random:
+
+- the held file, let go whole by an edit to any file under the tools' folder (above);
+- a bare walk, ended by changes that do not concern it, by his word (the review's C9 and H4; the
+  code that ends it was not read here);
+- a csv, which names its footage by a file's name and says nothing of the tools it was written
+  under (above; whether its card then calls a stale one current was not read).
+
+Each is a place that answers "is this still good" by something other than the key, which is what
+E1 is for. So the count being small argues for the form of the fourth step, `key_params` on three
+tools serving as well as a mark, and against nothing else in the entry.
+
+Not known: how often each of these is met in a day's work. The log does not show it and nothing
+here measures it.

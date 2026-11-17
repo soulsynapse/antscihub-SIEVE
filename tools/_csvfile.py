@@ -18,7 +18,7 @@ import re
 
 from sieve_player.decoder import footage_print
 
-DEFAULTS = {"beside footage": True}
+PARAMS = {"beside footage": {"default": True, "kind": "bool"}}
 FILTER = "CSV (*.csv);;All (*)"
 _KEY = re.compile(r"# sieve key=(\S*) rows=(\d+)-(\d+)")
 _KIND = re.compile(r" kind=(\S+)")
@@ -99,7 +99,7 @@ def widget(parent, export):
     class _Widget(ParamWidget):
         def __init__(self, parent=None):
             super().__init__(parent)
-            self.add_bool("beside footage", DEFAULTS["beside footage"])
+            self.add_declared("beside footage", PARAMS["beside footage"])
             self.target, self.disk = measured(wide=True), readout()
             self.button, self.status = QPushButton("Write"), readout()
             self.form.add_row("target", self.target)

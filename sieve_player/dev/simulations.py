@@ -86,7 +86,7 @@ def _clip(path, rows, shift=0):
 def _tools(rows):
     """The graph's tools, made anew so a fault set on one is no other simulation's."""
     def frame(name, expects, fn):
-        t = Tool(NAME=name, KIND="frame", EXPECTS=expects, PRODUCES="gray", DEFAULTS={"k": 0}, ms=0.0, far=0, hold=0.0, block=None, grind=None)
+        t = Tool(NAME=name, KIND="frame", EXPECTS=expects, PRODUCES="gray", PARAMS={"k": {"default": 0}}, ms=0.0, far=0, hold=0.0, block=None, grind=None)
 
         def run(frames, row, params):
             f = frames(row)
@@ -103,11 +103,11 @@ def _tools(rows):
         t.run = run
         return t
 
-    mean = Tool(NAME="mean", KIND="series", EXPECTS="gray", PRODUCES="signal", DEFAULTS={},
+    mean = Tool(NAME="mean", KIND="series", EXPECTS="gray", PRODUCES="signal",
                 fold=lambda f: np.array([f.mean()], np.float64),
                 run=lambda s, p: {"signal": np.asarray(s.data, np.float32).reshape(len(s.data))},
                 step=lambda state, row, i, p: (None, {"signal": np.float32(row[0])}))
-    pile = Tool(NAME="pile", KIND="series", EXPECTS="signal", PRODUCES="signal", DEFAULTS={}, ms=0.0, long=None)
+    pile = Tool(NAME="pile", KIND="series", EXPECTS="signal", PRODUCES="signal", ms=0.0, long=None)
 
     def whole(s, p):
         _spin(pile.ms * len(s.data))
@@ -124,7 +124,7 @@ def _tools(rows):
 
 def _cut(path):
     """A node that passes its frame through, whose cut file is the clip at `path`."""
-    return Tool(NAME="cut", KIND="frame", EXPECTS="bgr", PRODUCES="bgr", DEFAULTS={}, run=lambda frames, row, params: frames(row),
+    return Tool(NAME="cut", KIND="frame", EXPECTS="bgr", PRODUCES="bgr", run=lambda frames, row, params: frames(row),
                 cut_file=lambda video, footage, params: path)
 
 

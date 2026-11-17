@@ -62,7 +62,13 @@ from tools._table import moments, plane_dtype, with_column
 
 SIEVE_TOOL = True
 NAME, KIND, EXPECTS, PRODUCES = "region", "frame", ("bgr", "gray", "mask", "hsv", "flow"), "same"
-DEFAULTS = {"plate": [], "shapes": [], "choice": "", "quality": "standard", "serve clip": True}
+PARAMS = {
+    "plate": {"default": []},
+    "shapes": {"default": []},
+    "choice": {"default": ""},
+    "quality": {"default": "standard", "kind": "choice", "choices": QUALITIES},
+    "serve clip": {"default": True, "kind": "bool"},
+}
 PATHS = {"geometry": lambda path: load_geometry(path)}
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))   # where `utilities` is found
 MIN_ARC_POINTS = 16     # a circle's contour has at least this many vertices, and one per pixel of circumference past it
@@ -282,7 +288,7 @@ def launch(argv, cwd):
 def clip_of(video, footage, params):
     """(the clip of `video`, whose print is `footage`, at the chosen shape's rect and the params'
     quality, "") or (None, why there is none)."""
-    choice, quality = params.get("choice"), params.get("quality", DEFAULTS["quality"])
+    choice, quality = params.get("choice"), params["quality"]
     rect = dict(crops(params)).get(choice) if choice else None
     if not video or rect is None:
         return None, "a clip is one shape's; choose one"
@@ -297,7 +303,7 @@ def clip_of(video, footage, params):
 def cut_file(video, footage, params):
     """`clip_of`'s clip while `serve clip` is on; None with it off, and with no shape chosen;
     FileNotFoundError saying why where it is on, a shape is chosen and no whole clip of it is there."""
-    if not params.get("serve clip", DEFAULTS["serve clip"]):
+    if not params["serve clip"]:
         return None
     path, why = clip_of(video, footage, params)
     if path is None and video and params.get("choice") in dict(crops(params)):
@@ -324,7 +330,7 @@ def settings(parent=None):
 
         def __init__(self, parent=None):
             super().__init__(parent)
-            self.plate, self.shapes = list(DEFAULTS["plate"]), list(DEFAULTS["shapes"])
+            self.plate, self.shapes = list(PARAMS["plate"]["default"]), list(PARAMS["shapes"]["default"])
             self._get["plate"], self._set["plate"] = lambda: self.plate, lambda v: self._set_geometry(v, self.shapes)
             self._get["shapes"], self._set["shapes"] = lambda: self.shapes, lambda v: self._set_geometry(self.plate, v)
             self.video = self.file = self.cut = None
@@ -332,15 +338,15 @@ def settings(parent=None):
             running = self._running = []    # the Cut under way, reached by the slot below once this widget's own attributes are gone
             self.destroyed.connect(lambda: [cut.cancel() for cut in running])
             self.serving, self.clip = readout(), readout()
-            self.chooser = self.add_list("choice", DEFAULTS["choice"])
+            self.chooser = self.add_list("choice", PARAMS["choice"]["default"])
             self.chooser.changed.connect(self._show)
             self.form.add_line(self.serving)
             self.draw, self.launched = QPushButton("Draw…"), readout()
             self.form.add_row("geometry", self.draw)
             self.form.add_line(self.launched)
             self.draw.clicked.connect(self._open_utility)
-            self.add_choice("quality", QUALITIES, DEFAULTS["quality"])
-            self.add_bool("serve clip", DEFAULTS["serve clip"])
+            self.add_declared("quality", PARAMS["quality"])
+            self.add_declared("serve clip", PARAMS["serve clip"])
             self.button, self.status = QPushButton("Cut"), readout()
             self.bar = QProgressBar()
             self.bar.setTextVisible(False)

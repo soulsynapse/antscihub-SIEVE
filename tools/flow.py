@@ -11,8 +11,8 @@ import numpy as np
 
 SIEVE_TOOL = True
 NAME, KIND, EXPECTS, PRODUCES = "flow", "frame", ("gray", "mask"), "flow"
-DEFAULTS = {"sigma": 2.0}
 DET_EPS = 1e-6   # v1's cutoff: below it the spatial tensor is rank-deficient and the flow is zero
+PARAMS = {"sigma": {"default": 2.0, "kind": "float", "range": (0.5, 8.0), "decimals": 1}}
 
 
 def lk(prev, gray, sigma):
@@ -34,14 +34,6 @@ def run(frames, row, params):
     if row == 0:
         return np.zeros(g.shape + (2,), np.float32)
     return lk(np.asarray(frames(row - 1), np.float32), g, params["sigma"])
-
-
-def settings(parent=None):
-    from sieve_player import ParamWidget  # only the GUI needs the player
-
-    w = ParamWidget(parent)
-    w.add_float("sigma", 0.5, 8.0, DEFAULTS["sigma"], decimals=1)
-    return w
 
 
 if __name__ == "__main__":

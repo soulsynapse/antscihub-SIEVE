@@ -15,9 +15,13 @@ SIEVE_TOOL = True
 NAME, KIND, EXPECTS, PRODUCES = "top-hat", "frame", ("gray", "mask"), "gray"
 MODES = ("darker", "brighter")
 OPS = {"darker": cv2.MORPH_BLACKHAT, "brighter": cv2.MORPH_TOPHAT}
-DEFAULTS = {"mode": "darker", "radius": 15, "inner": 2}
 MAX_RADIUS = 100
 MAX_INNER = 15
+PARAMS = {
+    "mode": {"default": "darker", "kind": "choice", "choices": MODES},
+    "radius": {"default": 15, "kind": "int", "range": (1, MAX_RADIUS)},
+    "inner": {"default": 2, "kind": "int", "range": (0, MAX_INNER)},
+}
 
 
 def top_hat(frame, mode, radius, inner=0):
@@ -34,16 +38,6 @@ def top_hat(frame, mode, radius, inner=0):
 
 def run(frames, row, params):
     return top_hat(frames(row), params["mode"], params["radius"], params["inner"])
-
-
-def settings(parent=None):
-    from sieve_player import ParamWidget  # only the GUI needs the player
-
-    w = ParamWidget(parent)
-    w.add_choice("mode", MODES, DEFAULTS["mode"])
-    w.add_int("radius", 1, MAX_RADIUS, DEFAULTS["radius"])
-    w.add_int("inner", 0, MAX_INNER, DEFAULTS["inner"])
-    return w
 
 
 if __name__ == "__main__":

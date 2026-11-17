@@ -19,8 +19,8 @@ from tools._table import with_column
 SIEVE_TOOL = True
 NAME, KIND, EXPECTS, PRODUCES = "kinematics", "series", "tracks", "tracks"
 COLUMNS = ("dx", "dy", "speed", "heading")
-DEFAULTS = {"span": 1}
 MAX_SPAN = 300
+PARAMS = {"span": {"default": 1, "kind": "int", "range": (1, MAX_SPAN)}}
 
 
 def _row(seen, t, r, span):
@@ -65,12 +65,4 @@ def step(state, row, i, params):
 
 
 def draw(painter, row, result, start, params):
-    draw_tracks(painter, row, result, start, params.get("outline", "box"))
-
-
-def settings(parent=None):
-    from sieve_player import ParamWidget  # only the GUI needs the player
-
-    w = ParamWidget(parent)
-    w.add_int("span", 1, MAX_SPAN, DEFAULTS["span"])
-    return w
+    draw_tracks(painter, row, result, start)

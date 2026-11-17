@@ -15,6 +15,7 @@ from sieve_player.ledger import Ledger
 from sieve_player.stats import Stats
 from sieve_player.stream import NODE_FACTS, PLAN_FACTS, Event
 from sieve_player.plan import base_key, plan
+from sieve_player.registry import defaults
 
 
 class Dec:
@@ -37,7 +38,7 @@ class Dec:
 
 
 def tool(name, expects="gray", produces="gray", fn=None, kind="frame"):
-    t = Tool(NAME=name, KIND=kind, EXPECTS=expects, PRODUCES=produces, DEFAULTS={"k": 1}, runs=0)
+    t = Tool(NAME=name, KIND=kind, EXPECTS=expects, PRODUCES=produces, PARAMS={"k": {"default": 1}}, runs=0)
 
     def run(frames, row, params):
         t.runs += 1
@@ -849,7 +850,7 @@ def test_two_heads_with_different_folds_each_run_on_their_own_folding():
     QApplication.instance() or QApplication([])
     table = tool("table", produces="blobs", fn=lambda f, p: np.array([(a,) for a in range(1, int(f.flat[0]) + 1 + p["k"])], dtype=[("area", "<i4")]))
     doc = D.from_tools([gray, table, count])
-    doc.add_node("size", (0, 400), size.DEFAULTS); doc.connect("table", "size")
+    doc.add_node("size", (0, 400), defaults(size)); doc.connect("table", "size")
     g = Graph(doc, Dec(), {**TOOLS, "table": table, "count": count, "size": size})
     assert g.chain == ["count", "size"] and g.fold is None
     w = Worker(g)

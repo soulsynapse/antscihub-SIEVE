@@ -7,13 +7,14 @@ import pytest
 from sieve_player.decoder import footage_print
 from sieve_player.graph import Series
 from sieve_player.registry import discover
+from sieve_player.registry import defaults
 from tests.test_track import table
 from tools import _csvfile, _table, csv, track
 
 
 def test_signal_passes_through_and_the_file_reads_back(tmp_path):
     sig = np.array([0.5, 0.0, 2.0], np.float32)
-    assert csv.run(Series(sig, "k", 7, 30.0), csv.DEFAULTS)["signal"].tolist() == sig.tolist()
+    assert csv.run(Series(sig, "k", 7, 30.0), defaults(csv))["signal"].tolist() == sig.tolist()
     result = {"signal": sig, "gate": np.array([True, False, True]), "key": "abc123"}
     p = tmp_path / csv.default_name(tmp_path / "ants.mp4", 7, 3, result)
     assert p.name == "ants_7-9.csv"
@@ -31,9 +32,9 @@ def test_signal_passes_through_and_the_file_reads_back(tmp_path):
 
 def test_tables_pass_through_with_their_count_and_write_one_line_per_record(tmp_path):
     blobs = [_table.with_column(t, "name", np.array(["nest"] * len(t), "<U8")) for t in (table([(10, 20), (50, 60)]), table([]), table([(12, 22)]))]
-    tracks = track.run(Series(blobs, "k", 0, 30.0), {**track.DEFAULTS, "max_step": 5.0, "min_rows": 1})["rows"]
+    tracks = track.run(Series(blobs, "k", 0, 30.0), {**defaults(track), "max_step": 5.0, "min_rows": 1})["rows"]
     for rows, kind, id, col in ((blobs, "blobs", "", ""), (tracks, "tracks", "0,", "id,")):
-        out = csv.run(Series(rows, "k", 7, 30.0), csv.DEFAULTS)
+        out = csv.run(Series(rows, "k", 7, 30.0), defaults(csv))
         assert out["signal"].tolist() == [2, 0, 1] and all(np.array_equal(a, b) for a, b in zip(out["rows"], rows))
         result = {**out, "gate": np.array([True, True, False]), "key": "abc123"}
         p = tmp_path / csv.default_name(tmp_path / "ants.mp4", 7, 3, result)

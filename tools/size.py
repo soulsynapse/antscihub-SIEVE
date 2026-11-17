@@ -11,7 +11,10 @@ SIEVE_TOOL = True
 NAME, KIND, EXPECTS, PRODUCES = "size", "series", ("blobs", "tracks"), "signal"
 FIELDS = ("area", "major", "minor", "w", "h")
 METHODS = ("mean", "median", "min", "max", "sum", "std")
-DEFAULTS = {"field": "area", "method": "mean"}
+PARAMS = {
+    "field": {"default": "area", "kind": "choice", "choices": FIELDS, "unlisted": True},
+    "method": {"default": "mean", "kind": "choice", "choices": METHODS},
+}
 
 
 def run(series, params):
@@ -29,15 +32,6 @@ def step(state, row, i, params):
     if field not in row.dtype.names or row.dtype[field] == object:
         raise ValueError(f"size: no numeric field {field!r}; one of {tuple(n for n in row.dtype.names if row.dtype[n] != object)}")
     return None, {"signal": np.float32(getattr(np, m)(np.asarray(row[field], np.float64)) if len(row) else 0.0)}
-
-
-def settings(parent=None):
-    from sieve_player import ParamWidget  # only the GUI needs the player
-
-    w = ParamWidget(parent)
-    w.add_choice("field", FIELDS, DEFAULTS["field"], editable=True)
-    w.add_choice("method", METHODS, DEFAULTS["method"])
-    return w
 
 
 if __name__ == "__main__":

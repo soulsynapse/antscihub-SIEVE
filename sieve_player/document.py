@@ -132,7 +132,7 @@ class Document:
     def resolve(self, known):
         """Marks each node whose tool name `known` does not contain; the video node is always known.
         Given the tools themselves, a mapping of name to module, a resolved node's params are laid
-        over its tool's DEFAULTS, so a param the file lacks, one the tool gained since it was
+        over its tool's defaults, so a param the file lacks, one the tool gained since it was
         saved, has its value."""
         for n in self.nodes:
             n.unresolved = n.tool != VIDEO_TOOL and n.tool not in known

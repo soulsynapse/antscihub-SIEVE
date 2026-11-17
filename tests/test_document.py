@@ -10,10 +10,10 @@ import pytest
 
 from sieve_player import document as D
 
-gray = Tool(NAME="gray", KIND="frame", EXPECTS="bgr", PRODUCES="gray", DEFAULTS={})
-rescale = Tool(NAME="rescale", KIND="frame", EXPECTS=("bgr", "gray"), PRODUCES="same", DEFAULTS={"scale": 0.5})
-threshold = Tool(NAME="threshold", KIND="frame", EXPECTS="gray", PRODUCES="gray", DEFAULTS={"thresh": 128})
-motion = Tool(NAME="motion", KIND="series", EXPECTS="gray", DEFAULTS={"gate": 2.0})
+gray = Tool(NAME="gray", KIND="frame", EXPECTS="bgr", PRODUCES="gray")
+rescale = Tool(NAME="rescale", KIND="frame", EXPECTS=("bgr", "gray"), PRODUCES="same", PARAMS={"scale": {"default": 0.5}})
+threshold = Tool(NAME="threshold", KIND="frame", EXPECTS="gray", PRODUCES="gray", PARAMS={"thresh": {"default": 128}})
+motion = Tool(NAME="motion", KIND="series", EXPECTS="gray", PARAMS={"gate": {"default": 2.0}})
 TOOLS = [gray, rescale, threshold, motion]
 
 

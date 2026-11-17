@@ -12,7 +12,7 @@ NAME, KIND, EXPECTS, PRODUCES = "combine", "frame", "mask", "mask"
 INPUTS = {"with": "mask"}
 OPTIONAL = ("with",)
 METHODS = ("and", "or", "difference", "not")
-DEFAULTS = {"method": "and"}
+PARAMS = {"method": {"default": "and", "kind": "choice", "choices": METHODS}}
 
 
 def combine(a, b, method):
@@ -34,11 +34,3 @@ def combine(a, b, method):
 def run(frames, row, params):
     method = params["method"]
     return combine(frames(row), None if method == "not" else frames(row, "with"), method)
-
-
-def settings(parent=None):
-    from sieve_player import ParamWidget  # only the GUI needs the player
-
-    w = ParamWidget(parent)
-    w.add_choice("method", METHODS, DEFAULTS["method"])
-    return w

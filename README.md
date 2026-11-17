@@ -46,9 +46,9 @@ setting hidden on either. Chains get longer; tools do not get wider.
 ```python
 # a frame tool: one row in, one array out
 NAME = "threshold"; KIND = "frame"; EXPECTS = "gray"; PRODUCES = "mask"
-DEFAULTS = {...}                              # JSON-able
+PARAMS = {"thresh": {"default": 128, "kind": "int", "range": (0, 255)}}   # every param, once, JSON-able: the player
+                                              # makes a node's first params and its card of it
 def run(frames, row, params) -> np.ndarray    # frames(r) is the output of the node it reads, at row r, read-only
-def settings(parent=None) -> ParamWidget
 
 # a series tool: the whole loop window at once
 NAME = "reduce"; KIND = "series"; EXPECTS = ("gray", "mask"); PRODUCES = "signal"
@@ -57,7 +57,8 @@ def fold(frame) -> np.ndarray                 # optional: what the walk stacks p
 def run(series, params) -> dict               # series.data is (T, ...), the read node stacked, each row
                                               # through fold() if there is one; the dict carries "signal",
                                               # a (T,) array; the gate is the player's, never the tool's
-def settings(parent=None) -> ParamWidget      # optionally show_result(result, start, fps), set_playhead(row),
+def settings(parent=None) -> ParamWidget      # optional, a card of the tool's own in place of the one made of PARAMS,
+                                              # which may have show_result(result, start, fps), set_playhead(row),
                                               # set_source(path, fps): the footage the node's inputs are frames of, the video or
                                               # the file a cutting node above it serves, for a tool that writes a file (csv),
                                               # set_paths({input: path}): the file each wired path input picked,

@@ -16,11 +16,11 @@ _HINTS = {
     "KIND": 'KIND = "frame"  # or "series", or "same": the kind of the node wired into its first input',
     "EXPECTS": 'EXPECTS = "gray"  # or a tuple; the report lists the types in use',
     "PRODUCES": 'PRODUCES = "gray"  # or "same": out as in',
-    "DEFAULTS": "DEFAULTS = {}",
+    "PARAMS": 'PARAMS = {"radius": {"default": 3, "kind": "int", "range": (1, 15)}}  # every param, once, in the order of its rows: its default, the kind of its value among KINDS, and "range" for an int or a float, "decimals" for a float, "choices" for a choice with "unlisted": True where a value outside them is taken; one of a default alone has no row',
     "run": "def run(frames, row, params): ...",
     "fold": "def fold(frame): ...  # a series tool: what the walk stacks per row in place of the frame",
     "step": "def step(state, row, i, params): ...  # a series tool that steps: (the next state, {field: this row's share of run's result}); state is None at the first row",
-    "settings": "def settings(parent=None): ...",
+    "settings": "def settings(parent=None): ...  # a card of the tool's own; unsaid, the player makes the widget of PARAMS",
     "draw": "def draw(painter, row, result, start, params): ...",
     "pick": "def pick(point, shape, row, result, params): ...  # a drawer answers a left click at point, (x, y) in the displayed frame's pixels, on a frame of shape (height, width): the params to merge, or None for a click it does not claim",
     "INPUTS": 'INPUTS = {"bg": "gray"}  # frame inputs after the first: name -> the types it expects; run reads one as frames(row, name)',
@@ -92,9 +92,51 @@ def produces(tool):
     return probe(tool, "PRODUCES")
 
 
+KINDS = ("int", "float", "bool", "text", "choice")   # the kinds of value a declared param may say
+_SAID = {None: (), "int": ("range",), "float": ("range", "decimals"), "bool": (), "text": (), "choice": ("choices", "unlisted")}
+
+
+def _number(v):
+    return isinstance(v, (int, float)) and not isinstance(v, bool)
+
+
+def params(tool):
+    """The tool's PARAMS, name to what it says of the param, a dict of the caller's own in the
+    tool's order and empty for a tool that said none. ValueError, naming the param, for a
+    declaration that cannot be read."""
+    declared = probe(tool, "PARAMS")
+    if declared is None:
+        return {}
+    if not isinstance(declared, dict):
+        raise ValueError(f"PARAMS is a {type(declared).__name__}, not a dict")
+    for n, said in declared.items():
+        if not isinstance(n, str) or not isinstance(said, dict) or "default" not in said:
+            raise ValueError(f"PARAMS[{n!r}] is not a dict with a default")
+        kind = said.get("kind")
+        if kind not in _SAID:
+            raise ValueError(f"PARAMS[{n!r}] has no kind {kind!r}; one of {KINDS}")
+        extra = set(said) - {"default", "kind", *_SAID[kind]}
+        if extra:
+            raise ValueError(f"PARAMS[{n!r}] says {sorted(extra)}, which {'a ' + kind if kind else 'a param of no kind'} does not have")
+        if kind in ("int", "float"):
+            r = said.get("range")
+            if not (isinstance(r, (tuple, list)) and len(r) == 2 and all(map(_number, r)) and r[0] <= r[1]):
+                raise ValueError(f"PARAMS[{n!r}] has no range (lo, hi)")
+        if kind == "choice":
+            c = said.get("choices")
+            if not (isinstance(c, (tuple, list)) and c and all(isinstance(o, str) for o in c)):
+                raise ValueError(f"PARAMS[{n!r}] has no choices, a tuple of strings")
+    return {n: dict(said) for n, said in declared.items()}
+
+
 def defaults(tool):
     """The tool's params as a node of it begins, a dict of its own."""
-    return dict(probe(tool, "DEFAULTS") or {})
+    return {n: said["default"] for n, said in params(tool).items()}
+
+
+def settings_of(tool):
+    """The tool's settings, the maker of a card of its own, or None."""
+    return probe(tool, "settings")
 
 
 def inputs(tool):
@@ -162,7 +204,7 @@ def matches_of(tool):
 # package, beside a call of the facet itself. A facet with neither is one nothing reads.
 READERS = {
     "NAME": ("name", "by_name"), "KIND": ("kind",), "EXPECTS": ("expects", "is_selector"),
-    "PRODUCES": ("produces", "is_selector"), "DEFAULTS": ("defaults",), "INPUTS": ("inputs",),
+    "PRODUCES": ("produces", "is_selector"), "PARAMS": ("params", "defaults"), "settings": ("settings_of",), "INPUTS": ("inputs",),
     "OPTIONAL": ("optional",), "STATIC": ("static",), "PATHS": ("paths",), "cut_file": ("cuts",),
     "cut_files": ("names_cut_files",), "step": ("steps",), "draw": ("draws",), "fold": ("fold_of",),
     "key_params": ("key_params_of",), "pick": ("pick_of",), "matches": ("matches_of",),
@@ -212,6 +254,11 @@ def discover(*roots):
                 out.append(Entry(stem, None, path, f"{type(e).__name__}: {e} ({where})"))
                 continue
             if is_tool(mod):
+                try:
+                    params(mod)
+                except ValueError as e:
+                    out.append(Entry(probe(mod, "NAME"), None, path, str(e)))
+                    continue
                 out.append(Entry(probe(mod, "NAME"), mod, path))
     return out
 
@@ -269,6 +316,6 @@ def signature(tool):
     return f"{', '.join(expects(tool) or ())} → {produces(tool)}".strip()
 
 
-__all__ = ["MARKER", "FACETS", "WIDGET_FACETS", "READERS", "Entry", "is_tool", "probe", "hint", "discover", "types", "CATEGORIES", "category",
-           "description", "signature", "name", "by_name", "kind", "expects", "produces", "defaults", "inputs", "optional", "static", "paths",
+__all__ = ["MARKER", "FACETS", "WIDGET_FACETS", "READERS", "KINDS", "Entry", "is_tool", "probe", "hint", "discover", "types", "CATEGORIES", "category",
+           "description", "signature", "name", "by_name", "kind", "expects", "produces", "params", "defaults", "settings_of", "inputs", "optional", "static", "paths",
            "is_selector", "cuts", "names_cut_files", "steps", "draws", "fold_of", "key_params_of", "pick_of", "matches_of"]

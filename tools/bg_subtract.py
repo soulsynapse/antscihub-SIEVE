@@ -14,7 +14,10 @@ SIEVE_TOOL = True
 NAME, KIND, EXPECTS, PRODUCES = "bg-subtract", "frame", ("gray", "bgr"), "gray"
 INPUTS = {"bg": ("gray", "bgr")}
 MODES = ("absolute", "darker", "brighter")
-DEFAULTS = {"mode": "absolute", "match_light": False}
+PARAMS = {
+    "mode": {"default": "absolute", "kind": "choice", "choices": MODES},
+    "match_light": {"default": False, "kind": "bool"},
+}
 
 
 def _as_gray(a):
@@ -47,15 +50,6 @@ def difference(frame, bg, mode, match_light=False):
 
 def run(frames, row, params):
     return difference(frames(row), frames(row, "bg"), params["mode"], params["match_light"])
-
-
-def settings(parent=None):
-    from sieve_player import ParamWidget  # only the GUI needs the player
-
-    w = ParamWidget(parent)
-    w.add_choice("mode", MODES, DEFAULTS["mode"])
-    w.add_bool("match_light", DEFAULTS["match_light"])
-    return w
 
 
 if __name__ == "__main__":

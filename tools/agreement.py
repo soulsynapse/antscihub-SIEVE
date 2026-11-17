@@ -14,7 +14,7 @@ from tools._blocks import reduce_blocks
 
 SIEVE_TOOL = True
 NAME, KIND, EXPECTS, PRODUCES = "agreement", "frame", "flow", "gray"
-DEFAULTS = {"block": 32}
+PARAMS = {"block": {"default": 32, "kind": "int", "range": (1, 256)}}
 
 
 def run(frames, row, params):
@@ -27,14 +27,6 @@ def run(frames, row, params):
     ok = share > 0.0
     resultant = np.hypot(mean[..., 0], mean[..., 1]) / np.where(ok, share, 1.0)
     return np.where(ok, np.minimum(resultant, 1.0), 0.0).astype(np.float32)
-
-
-def settings(parent=None):
-    from sieve_player import ParamWidget  # only the GUI needs the player
-
-    w = ParamWidget(parent)
-    w.add_int("block", 1, 256, DEFAULTS["block"])
-    return w
 
 
 if __name__ == "__main__":

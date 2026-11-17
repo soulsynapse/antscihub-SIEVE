@@ -10,7 +10,7 @@ from tools._table import OUTLINES, footprint, plane
 
 SIEVE_TOOL = True
 NAME, KIND, EXPECTS, PRODUCES = "blobs-to-mask", "frame", "blobs", "mask"
-DEFAULTS = {"outline": "contour"}
+PARAMS = {"outline": {"default": "contour", "kind": "choice", "choices": OUTLINES}}
 
 
 def mask(table, outline="contour"):
@@ -26,11 +26,3 @@ def mask(table, outline="contour"):
 
 def run(frames, row, params):
     return mask(frames(row), params["outline"])
-
-
-def settings(parent=None):
-    from sieve_player import ParamWidget  # only the GUI needs the player
-
-    w = ParamWidget(parent)
-    w.add_choice("outline", OUTLINES, DEFAULTS["outline"])
-    return w

@@ -103,25 +103,25 @@ Open: the form of a declaration. Recommended, and a session may build on it: pla
 language, as `DEFAULTS` is, that a tool writes with no import, so a tool's module still loads and
 computes with no player.
 
-- [ ] A tool declares each param in one place: its name, its default, the kind of its value, and
+- [x] A tool declares each param in one place: its name, its default, the kind of its value, and
   its range or its choices. A tool with a card of its own declares its params as any other does,
   one that is no row of a plain widget by its name and default alone. The registry's table lists
   the facet with its hint.
   Check: `tests/test_registry.py`, the facet read from the table.
-- [ ] A declaration the registry cannot read is its tool's entry's error, as a module that does
+- [x] A declaration the registry cannot read is its tool's entry's error, as a module that does
   not import is.
   Check: `tests/test_registry.py`.
-- [ ] A tool's defaults and its plain settings widget are made of that declaration by the player;
+- [x] A tool's defaults and its plain settings widget are made of that declaration by the player;
   no tool has a `DEFAULTS` of its own, and none with a plain widget a `settings`. A tool with a
   card of its own keeps its `settings`.
   Check: a one-off that builds every tool's widget offscreen at the commit before and at this one
   and compares, a tool at a time, the names in order, each row's kind, range and choices, and
   `params()`.
-- [ ] No tool restates a default where it reads a param.
+- [x] No tool restates a default where it reads a param.
   Check: a grep for the fallbacks A11 names.
-- [ ] Every document's plan prints what it printed, and loads to the params it loaded to.
+- [x] Every document's plan prints what it printed, and loads to the params it loaded to.
   Check: the baseline, compared; a one-off over the documents for the params.
-- [ ] What a tool raises for a param it refuses, and where, is as it was.
+- [x] What a tool raises for a param it refuses, and where, is as it was.
   Check: a one-off: every tool that refuses a choice, handed one it does not offer, raises the
   text it raised.
 

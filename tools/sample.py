@@ -15,7 +15,10 @@ SIEVE_TOOL = True
 NAME, KIND, EXPECTS, PRODUCES = "sample", "frame", "blobs", "blobs"
 INPUTS = {"plane": ("gray", "mask")}
 METHODS = ("mean", "max", "count")
-DEFAULTS = {"column": "sample", "method": "mean"}
+PARAMS = {
+    "column": {"default": "sample", "kind": "text"},
+    "method": {"default": "mean", "kind": "choice", "choices": METHODS},
+}
 
 
 def sample(table, plane, column, method="mean"):
@@ -43,13 +46,4 @@ def run(frames, row, params):
 
 
 def draw(painter, row, result, start, params):
-    draw_table(painter, result, params.get("outline", "box"), color=(120, 180, 240))
-
-
-def settings(parent=None):
-    from sieve_player import ParamWidget  # only the GUI needs the player
-
-    w = ParamWidget(parent)
-    w.add_text("column", DEFAULTS["column"])
-    w.add_choice("method", METHODS, DEFAULTS["method"])
-    return w
+    draw_table(painter, result, color=(120, 180, 240))

@@ -17,9 +17,13 @@ from tools._table import DTYPE as BLOBS, plane_dtype
 
 SIEVE_TOOL = True
 NAME, KIND, EXPECTS, PRODUCES = "detect", "frame", ("mask", "gray"), "blobs"
-DEFAULTS = {"dark": False, "min_area": 20, "max_area": 0}
 MAX_AREA = 100000
 DTYPE = np.dtype([(n, BLOBS[n]) for n in ("x", "y", "w", "h", "area", "cx", "cy", "angle", "major", "minor")])
+PARAMS = {
+    "dark": {"default": False, "kind": "bool"},
+    "min_area": {"default": 20, "kind": "int", "range": (0, MAX_AREA)},
+    "max_area": {"default": 0, "kind": "int", "range": (0, MAX_AREA)},
+}
 
 
 def find(mask, min_area, max_area=0, dark=False):
@@ -66,16 +70,6 @@ def run(frames, row, params):
 
 def draw(painter, row, result, start, params):
     draw_table(painter, result)
-
-
-def settings(parent=None):
-    from sieve_player import ParamWidget  # only the GUI needs the player
-
-    w = ParamWidget(parent)
-    w.add_bool("dark", DEFAULTS["dark"])
-    w.add_int("min_area", 0, MAX_AREA, DEFAULTS["min_area"])
-    w.add_int("max_area", 0, MAX_AREA, DEFAULTS["max_area"])
-    return w
 
 
 if __name__ == "__main__":

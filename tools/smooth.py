@@ -15,8 +15,11 @@ import numpy as np
 SIEVE_TOOL = True
 NAME, KIND, EXPECTS, PRODUCES = "smooth", "series", "signal", "signal"
 KERNELS = ("mean", "median")
-DEFAULTS = {"kernel": "mean", "reach": 2}
 MAX_REACH = 60
+PARAMS = {
+    "kernel": {"default": "mean", "kind": "choice", "choices": KERNELS},
+    "reach": {"default": 2, "kind": "int", "range": (0, MAX_REACH)},
+}
 
 
 def run(series, params):
@@ -31,15 +34,6 @@ def run(series, params):
     windows = np.lib.stride_tricks.sliding_window_view(padded, w)                   # one per row of x
     s = np.nanmean(windows, axis=1) if k == "mean" else np.nanmedian(windows, axis=1)
     return {"signal": s.astype(np.float32)}
-
-
-def settings(parent=None):
-    from sieve_player import ParamWidget  # only the GUI needs the player
-
-    w = ParamWidget(parent)
-    w.add_choice("kernel", KERNELS, DEFAULTS["kernel"])
-    w.add_int("reach", 0, MAX_REACH, DEFAULTS["reach"])
-    return w
 
 
 if __name__ == "__main__":

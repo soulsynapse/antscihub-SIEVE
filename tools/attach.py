@@ -17,7 +17,11 @@ SIEVE_TOOL = True
 NAME, KIND, EXPECTS, PRODUCES = "attach", "frame", "blobs", "blobs"
 INPUTS = {"marks": "blobs"}
 ALWAYS = ("cx", "cy", "area")
-DEFAULTS = {"prefix": "mark", "columns": "", "outline": "contour"}
+PARAMS = {
+    "prefix": {"default": "mark", "kind": "text"},
+    "columns": {"default": "", "kind": "text"},
+    "outline": {"default": "contour", "kind": "choice", "choices": OUTLINES},
+}
 
 
 def names(text):
@@ -65,14 +69,4 @@ def run(frames, row, params):
 
 
 def draw(painter, row, result, start, params):
-    draw_table(painter, result, params.get("outline", "box"), color=(240, 120, 200))
-
-
-def settings(parent=None):
-    from sieve_player import ParamWidget  # only the GUI needs the player
-
-    w = ParamWidget(parent)
-    w.add_text("prefix", DEFAULTS["prefix"])
-    w.add_text("columns", DEFAULTS["columns"])
-    w.add_choice("outline", OUTLINES, DEFAULTS["outline"])
-    return w
+    draw_table(painter, result, params["outline"], color=(240, 120, 200))

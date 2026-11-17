@@ -4,6 +4,7 @@ as membership."""
 import numpy as np
 import pytest
 
+from sieve_player.registry import defaults
 from tests.test_blobs import fed
 from tools import blobs, filter, sample
 from tools.retired import blobs_to_mask
@@ -13,7 +14,7 @@ M = np.zeros((8, 8), np.uint8)
 M[1:7, 1:3] = 255
 M[5:7, 1:6] = 255                        # an L, 18 px
 M[1:3, 5:7] = 255                        # a square away from it, 4 px
-FOUND = blobs.run(fed(M), 0, {**blobs.DEFAULTS, "min_area": 2})
+FOUND = blobs.run(fed(M), 0, {**defaults(blobs), "min_area": 2})
 ELL, SQUARE = list(FOUND["area"]).index(18), list(FOUND["area"]).index(4)
 
 
@@ -50,11 +51,11 @@ def test_a_plane_of_another_shape_is_read_in_its_coordinates():
 
 
 def test_a_painted_region_samples_as_membership():
-    wide = blobs.run(fed(patch(M.shape, (0, 0), (8, 6), 255)), 0, {**blobs.DEFAULTS, "min_area": 2})
+    wide = blobs.run(fed(patch(M.shape, (0, 0), (8, 6), 255)), 0, {**defaults(blobs), "min_area": 2})
     members = sample.sample(FOUND, blobs_to_mask.mask(wide), "nest", "mean")
     assert members["nest"][ELL] == 255.0 and members["nest"][SQUARE] == 127.5
     assert sample.sample(FOUND, blobs_to_mask.mask(wide), "nest", "count")["nest"].tolist()[SQUARE] == 2
-    narrow = blobs.run(fed(patch(M.shape, (0, 0), (8, 3), 255)), 0, {**blobs.DEFAULTS, "min_area": 2})
+    narrow = blobs.run(fed(patch(M.shape, (0, 0), (8, 3), 255)), 0, {**defaults(blobs), "min_area": 2})
     part = sample.sample(FOUND, blobs_to_mask.mask(narrow), "nest", "count")
     assert part["nest"][ELL] == 12 and part["nest"][SQUARE] == 0
     assert sample.sample(FOUND, blobs_to_mask.mask(narrow), "nest", "mean")["nest"][SQUARE] == 0.0

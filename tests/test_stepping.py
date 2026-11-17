@@ -84,7 +84,7 @@ def blobs_at(f, p):
 
 
 def frame_tool(name, expects, produces, fn):
-    t = SimpleNamespace(NAME=name, KIND="frame", EXPECTS=expects, PRODUCES=produces, DEFAULTS={})
+    t = SimpleNamespace(NAME=name, KIND="frame", EXPECTS=expects, PRODUCES=produces)
     t.run = lambda frames, row, params: fn(frames(row), params)
     return t
 

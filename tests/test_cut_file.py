@@ -14,14 +14,15 @@ from sieve_player import document as D
 from sieve_player.decoder import Decoder, EndOfStream, footage_print
 from sieve_player.graph import Graph
 from sieve_player.plan import base_key, plan
+from sieve_player.registry import defaults
 from tests.test_crop import clip
 from tests.test_graph import add, gray, same
 from tools import _cutfile as C
 from tools import region
 
-cut = Tool(NAME="cut", KIND="frame", EXPECTS="bgr", PRODUCES="bgr", DEFAULTS={}, run=lambda frames, row, params: frames(row),
+cut = Tool(NAME="cut", KIND="frame", EXPECTS="bgr", PRODUCES="bgr", run=lambda frames, row, params: frames(row),
            cut_file=lambda video, footage, params: None)
-both = Tool(NAME="both", KIND="frame", EXPECTS="gray", PRODUCES="gray", INPUTS={"other": "gray"}, DEFAULTS={},
+both = Tool(NAME="both", KIND="frame", EXPECTS="gray", PRODUCES="gray", INPUTS={"other": "gray"},
             run=lambda frames, row, params: frames(row))
 TOOLS = {t.NAME: t for t in (cut, gray, add, same, both)}
 FILE = {"cut": ("piece.mp4", "print")}
@@ -36,7 +37,7 @@ def asker(files):
 
 
 def params(choice="nest", shapes=SHAPES, **more):
-    return {**region.DEFAULTS, "plate": [48, 64], "shapes": shapes, "choice": choice, **more}
+    return {**defaults(region), "plate": [48, 64], "shapes": shapes, "choice": choice, **more}
 
 
 def encoder(monkeypatch, code=WRITES):

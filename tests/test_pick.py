@@ -27,7 +27,7 @@ def drawer(name, pick):
         w = ParamWidget(parent)
         w.add_text("choice", "")
         return w
-    return Tool(NAME=name, KIND="frame", EXPECTS="gray", PRODUCES="gray", DEFAULTS={"choice": ""},
+    return Tool(NAME=name, KIND="frame", EXPECTS="gray", PRODUCES="gray", PARAMS={"choice": {"default": ""}},
                 run=lambda f, r, p: f(r), draw=lambda *a: None, pick=pick, settings=settings)
 
 

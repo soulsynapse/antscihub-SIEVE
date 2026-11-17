@@ -12,8 +12,9 @@ from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtWidgets import QComboBox, QFileDialog, QFrame, QPushButton, QScrollArea, QVBoxLayout, QWidget
 
 from .document import VIDEO_OUTPUT, VIDEO_OUTPUTS, VIDEO_TOOL, video_output
-from .registry import is_selector, paths
+from .registry import is_selector, params, paths, settings_of
 from .theme import CONTROL_W, GAP, HELD, PAD, WIDE_W, Badge, CloseMark, Form, Layer, readout
+from .widgets import ParamWidget
 
 VIDEO_FILTER = "Video (*.mp4 *.MP4 *.avi *.mov *.mkv *.mts *.MTS);;All (*)"
 
@@ -184,7 +185,8 @@ class Pane(QWidget):
                 card.add(readout(f"{k} = {v!r}", mono=True))
         else:
             tool = self.tools[node.tool]
-            w = tool.settings()
+            make = settings_of(tool)
+            w = make() if make is not None else ParamWidget.declared(params(tool))
             if not all(hasattr(w, a) for a in ("changed", "params", "set_params")):
                 # the document is the store and the widget a view over it; one that cannot be told
                 # the stored values would show its own, so it is not shown at all

@@ -12,8 +12,12 @@ SIEVE_TOOL = True
 NAME, KIND, EXPECTS, PRODUCES = "morphology", "frame", "mask", "mask"
 METHODS = ("open", "close")
 OPS = {"open": cv2.MORPH_OPEN, "close": cv2.MORPH_CLOSE}
-DEFAULTS = {"method": "open", "radius": 1, "iterations": 1}
 MAX_RADIUS = 15
+PARAMS = {
+    "method": {"default": "open", "kind": "choice", "choices": METHODS},
+    "radius": {"default": 1, "kind": "int", "range": (1, MAX_RADIUS)},
+    "iterations": {"default": 1, "kind": "int", "range": (1, 10)},
+}
 
 
 def morph(mask, method, radius, iterations):
@@ -26,13 +30,3 @@ def morph(mask, method, radius, iterations):
 
 def run(frames, row, params):
     return morph(frames(row), params["method"], params["radius"], params["iterations"])
-
-
-def settings(parent=None):
-    from sieve_player import ParamWidget  # only the GUI needs the player
-
-    w = ParamWidget(parent)
-    w.add_choice("method", METHODS, DEFAULTS["method"])
-    w.add_int("radius", 1, MAX_RADIUS, DEFAULTS["radius"])
-    w.add_int("iterations", 1, 10, DEFAULTS["iterations"])
-    return w

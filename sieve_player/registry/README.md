@@ -18,7 +18,12 @@ result, so the shares accumulated over a series equal `run` over it; `run` stays
 the oracle, tests/stepping.py holds a tool to it, and the registry only reports that `step` is
 offered. A module that fails
 to import is still an `Entry`, with the exception in `error`, so a broken tool shows up instead
-of vanishing.
+of vanishing, and so is a tool whose `PARAMS` cannot be read, under its own name.
+
+A tool says each param once, in `PARAMS`: its default, the kind of its value, and its range or its
+choices. The player makes a node's first params and a plain settings widget of it, a row a param
+that says a kind, in the tool's order; a tool with a card of its own says `settings` and builds
+its rows of the same declaration.
 
 The types are whatever the tools say: `types(entries)` maps each to who produces and who expects it,
 and the report prints that first. `--check` fails if this list and `__all__` differ, if a facet is
@@ -52,7 +57,10 @@ category beside each tool.
 - `kind(tool)` -- `KIND`, "frame" unsaid
 - `expects(tool)` -- `EXPECTS` as a tuple, the one place it is made one; None for a tool that expects nothing
 - `produces(tool)` -- `PRODUCES` as written, "same" among what it may be
-- `defaults(tool)` -- `DEFAULTS`, a dict of the caller's own
+- `KINDS` -- the kinds of value a declared param may say
+- `params(tool)` -- `PARAMS`, name -> what it says, read or a ValueError naming the param
+- `defaults(tool)` -- name -> default, of `PARAMS`
+- `settings_of(tool)` -- its `settings`, or None
 - `inputs(tool)` -- `INPUTS`, name -> a tuple of types
 - `optional(tool)`
 - `static(tool)`

@@ -8,6 +8,7 @@ import pytest
 
 from sieve_player import document as D
 from sieve_player.graph import Series
+from sieve_player.registry import defaults
 from tests.test_selector import open_window, tree
 from tools import blobs, csv, resolve, track
 from tools import _table
@@ -25,7 +26,7 @@ def table(records):
 
 
 def run(rows, start=0, **params):
-    return resolve.run(Series(rows, "k", start, 30.0), {**resolve.DEFAULTS, "columns": "tag", **params})
+    return resolve.run(Series(rows, "k", start, 30.0), {**defaults(resolve), "columns": "tag", **params})
 
 
 def column(rows, name):
@@ -86,7 +87,7 @@ def test_a_labels_file_is_reads_and_comes_through_a_path_input(tmp_path):
     tree(tmp_path)
     tools = [file, gray, threshold, blobs, track, resolve]
     doc = D.from_tools(tools[1:])
-    doc.add_node("file", params={**file.DEFAULTS, "pattern": "labels.csv"})
+    doc.add_node("file", params={**defaults(file), "pattern": "labels.csv"})
     doc.connect("file", "resolve", "labels")
     D.save(doc, tmp_path / "doc.json")
     win = open_window(tmp_path, tools)

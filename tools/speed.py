@@ -7,18 +7,11 @@ import numpy as np
 
 SIEVE_TOOL = True
 NAME, KIND, EXPECTS, PRODUCES = "speed", "frame", "flow", "gray"
-DEFAULTS = {}
 
 
 def run(frames, row, params):
     f = frames(row)
     return (np.hypot(f[..., 0], f[..., 1]) * frames.fps).astype(np.float32)
-
-
-def settings(parent=None):
-    from sieve_player import ParamWidget  # only the GUI needs the player
-
-    return ParamWidget(parent)   # no knobs
 
 
 if __name__ == "__main__":

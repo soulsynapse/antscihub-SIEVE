@@ -11,7 +11,6 @@ from tools._table import is_table
 
 SIEVE_TOOL = True
 NAME, KIND, EXPECTS, PRODUCES = "count", "series", ("blobs", "tracks"), "signal"
-DEFAULTS = {}
 
 
 def fold(frame):
@@ -29,12 +28,6 @@ def run(series, params):
 def step(state, row, i, params):
     """No state: a row's signal is its table's length or its fold's one number."""
     return None, {"signal": np.float32(len(row) if is_table(row) else np.asarray(row, np.float64).reshape(-1)[0])}
-
-
-def settings(parent=None):
-    from sieve_player import ParamWidget  # only the GUI needs the player
-
-    return ParamWidget(parent)   # no knobs
 
 
 if __name__ == "__main__":

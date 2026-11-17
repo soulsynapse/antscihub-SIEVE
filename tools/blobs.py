@@ -19,10 +19,16 @@ SIEVE_TOOL = True
 NAME, KIND, EXPECTS, PRODUCES = "blobs", "frame", ("mask", "gray"), "blobs"
 INPUTS = {"diff": "gray"}
 OPTIONAL = ("diff",)
-DEFAULTS = {"min_area": 50, "max_area": 0, "core_threshold": 0, "split": False, "outline": "box"}
 MAX_AREA = 100000
 SPLIT_STEP = 4            # levels between thresholds tried when splitting
 SPLIT_KEEP = 0.2          # a split whose pieces hold less of the region than this is not one
+PARAMS = {
+    "min_area": {"default": 50, "kind": "int", "range": (0, MAX_AREA)},
+    "max_area": {"default": 0, "kind": "int", "range": (0, MAX_AREA)},
+    "core_threshold": {"default": 0, "kind": "int", "range": (0, 255)},
+    "split": {"default": False, "kind": "bool"},
+    "outline": {"default": "box", "kind": "choice", "choices": OUTLINES},
+}
 
 
 def _records(labels, ids, stats, diff, core_threshold, offset=(0, 0), dtype=DTYPE):
@@ -92,19 +98,7 @@ def run(frames, row, params):
 
 
 def draw(painter, row, result, start, params):
-    draw_table(painter, result, params.get("outline", "box"))
-
-
-def settings(parent=None):
-    from sieve_player import ParamWidget  # only the GUI needs the player
-
-    w = ParamWidget(parent)
-    w.add_int("min_area", 0, MAX_AREA, DEFAULTS["min_area"])
-    w.add_int("max_area", 0, MAX_AREA, DEFAULTS["max_area"])
-    w.add_int("core_threshold", 0, 255, DEFAULTS["core_threshold"])
-    w.add_bool("split", DEFAULTS["split"])
-    w.add_choice("outline", OUTLINES, DEFAULTS["outline"])
-    return w
+    draw_table(painter, result, params["outline"])
 
 
 if __name__ == "__main__":

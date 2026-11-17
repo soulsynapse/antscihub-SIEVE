@@ -11,7 +11,10 @@ from tools._blocks import METHODS, reduce_blocks
 
 SIEVE_TOOL = True
 NAME, KIND, EXPECTS, PRODUCES = "coarsegrain", "frame", ("gray", "mask", "flow"), "same"
-DEFAULTS = {"block": 32, "method": "mean"}
+PARAMS = {
+    "block": {"default": 32, "kind": "int", "range": (1, 256)},
+    "method": {"default": "mean", "kind": "choice", "choices": METHODS},
+}
 
 
 def grid(h, w, block):
@@ -25,15 +28,6 @@ def run(frames, row, params):
     if f.ndim == 3 and m in ("max", "fraction"):
         raise ValueError(f"coarsegrain: {m!r} has no reading over a flow field; mean or sum")
     return reduce_blocks(f, params["block"], m)
-
-
-def settings(parent=None):
-    from sieve_player import ParamWidget  # only the GUI needs the player
-
-    w = ParamWidget(parent)
-    w.add_int("block", 1, 256, DEFAULTS["block"])
-    w.add_choice("method", METHODS, DEFAULTS["method"])
-    return w
 
 
 if __name__ == "__main__":

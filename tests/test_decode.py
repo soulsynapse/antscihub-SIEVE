@@ -4,6 +4,7 @@ import cv2
 import numpy as np
 import pytest
 
+from sieve_player.registry import defaults
 from tests.test_blobs import fed
 from tools import blobs, decode
 from tools import _table
@@ -25,7 +26,7 @@ def scene(turns=0, side=24):
 
 
 PLANE, MASK = scene()
-FOUND = blobs.run(fed(MASK), 0, {**blobs.DEFAULTS, "min_area": 2})
+FOUND = blobs.run(fed(MASK), 0, {**defaults(blobs), "min_area": 2})
 TAG, BLANK = list(FOUND["x"]).index(30), list(FOUND["x"]).index(90)
 
 
@@ -35,7 +36,7 @@ def turned(h, by):
 
 def test_a_marker_reads_its_id_and_heading_and_a_blank_record_reads_none():
     for plane in (PLANE, cv2.cvtColor(PLANE, cv2.COLOR_GRAY2BGR)):
-        out = decode.run(fed(FOUND, plane), 0, decode.DEFAULTS)
+        out = decode.run(fed(FOUND, plane), 0, defaults(decode))
         assert out.dtype.names[-2:] == ("tag_code", "tag_heading") and _table.plane(out) == PLANE.shape
         assert out["tag_code"][TAG] == 7 and turned(out["tag_heading"][TAG], -90) < 1
         assert np.isnan(out["tag_code"][BLANK]) and np.isnan(out["tag_heading"][BLANK])

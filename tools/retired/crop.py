@@ -15,8 +15,8 @@ import numpy as np
 SIEVE_TOOL = True
 NAME, KIND, EXPECTS, PRODUCES = "crop", "frame", ("bgr", "gray", "mask", "hsv", "flow"), "same"
 INPUTS = {"roi": "mask"}
-DEFAULTS = {"border": 0}
 MAX_BORDER = 500
+PARAMS = {"border": {"default": 0, "kind": "int", "range": (0, MAX_BORDER)}}
 
 
 def rect(roi, border=0):
@@ -40,14 +40,6 @@ def run(frames, row, params):
     if f.shape[:2] != roi.shape[:2]:
         raise ValueError(f"the frame is {f.shape[1]}x{f.shape[0]} and the roi {roi.shape[1]}x{roi.shape[0]}")
     return np.ascontiguousarray(f[y0:y1, x0:x1])
-
-
-def settings(parent=None):
-    from sieve_player import ParamWidget  # only the GUI needs the player
-
-    w = ParamWidget(parent)
-    w.add_int("border", 0, MAX_BORDER, DEFAULTS["border"])
-    return w
 
 
 if __name__ == "__main__":

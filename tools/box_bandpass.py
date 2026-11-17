@@ -20,9 +20,14 @@ SIEVE_TOOL = True
 NAME, KIND, EXPECTS, PRODUCES = "box-bandpass", "frame", ("gray", "mask"), "gray"
 MODES = ("darker", "brighter", "absolute")
 PRECISIONS = ("8 bit", "16 bit", "32 bit")
-DEFAULTS = {"mode": "darker", "inner": 1, "outer": 15, "precision": "16 bit"}
 MAX_RADIUS = 100
 _WIDEN = np.arange(256, dtype=np.uint16) << 8
+PARAMS = {
+    "mode": {"default": "darker", "kind": "choice", "choices": MODES},
+    "inner": {"default": 1, "kind": "int", "range": (0, MAX_RADIUS)},
+    "outer": {"default": 15, "kind": "int", "range": (1, MAX_RADIUS)},
+    "precision": {"default": "16 bit", "kind": "choice", "choices": PRECISIONS},
+}
 
 
 def _means(frame, inner, outer, precision):
@@ -56,18 +61,7 @@ def bandpass(frame, inner, outer, mode, precision="16 bit"):
 
 
 def run(frames, row, params):
-    return bandpass(frames(row), params["inner"], params["outer"], params["mode"], params.get("precision", "16 bit"))
-
-
-def settings(parent=None):
-    from sieve_player import ParamWidget  # only the GUI needs the player
-
-    w = ParamWidget(parent)
-    w.add_choice("mode", MODES, DEFAULTS["mode"])
-    w.add_int("inner", 0, MAX_RADIUS, DEFAULTS["inner"])
-    w.add_int("outer", 1, MAX_RADIUS, DEFAULTS["outer"])
-    w.add_choice("precision", PRECISIONS, DEFAULTS["precision"])
-    return w
+    return bandpass(frames(row), params["inner"], params["outer"], params["mode"], params["precision"])
 
 
 if __name__ == "__main__":

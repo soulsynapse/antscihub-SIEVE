@@ -2,6 +2,7 @@
 import numpy as np
 import pytest
 
+from sieve_player.registry import defaults
 from tests.test_blobs import fed, m
 from tests.test_track import table
 from tools import blobs
@@ -13,12 +14,12 @@ L[5:7, 1:6] = 255
 
 
 def test_painting_a_known_table_gives_back_the_mask_blobs_ran_on():
-    found = blobs.run(fed(m), 0, {**blobs.DEFAULTS, "min_area": 2})
+    found = blobs.run(fed(m), 0, {**defaults(blobs), "min_area": 2})
     kept = m.copy()
     kept[0, 11] = 0                                       # the speck under min_area
     assert np.array_equal(blobs_to_mask.mask(found, "contour"), kept) and np.array_equal(blobs_to_mask.mask(found, "box"), kept)
-    assert blobs_to_mask.run(fed(found), 0, blobs_to_mask.DEFAULTS).dtype == np.uint8
-    one = blobs.run(fed(L), 0, {**blobs.DEFAULTS, "min_area": 2})
+    assert blobs_to_mask.run(fed(found), 0, defaults(blobs_to_mask)).dtype == np.uint8
+    one = blobs.run(fed(L), 0, {**defaults(blobs), "min_area": 2})
     assert np.array_equal(blobs_to_mask.mask(one, "contour"), L)
     box = np.zeros_like(L)
     box[1:7, 1:6] = 255

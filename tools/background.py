@@ -20,8 +20,11 @@ SIEVE_TOOL = True
 NAME, KIND, EXPECTS, PRODUCES = "background", "frame", ("gray", "bgr", "mask"), "same"
 STATIC = True
 STATS = ("mean", "median", "max", "min")
-DEFAULTS = {"stat": "median", "samples": 50}
 MAX_SAMPLES = 200
+PARAMS = {
+    "stat": {"default": "median", "kind": "choice", "choices": STATS},
+    "samples": {"default": 50, "kind": "int", "range": (1, MAX_SAMPLES)},
+}
 
 
 def sample_rows(count, samples):
@@ -64,15 +67,6 @@ def composite(frames, params):
 
 def run(frames, row, params):
     return composite(frames, params)
-
-
-def settings(parent=None):
-    from sieve_player import ParamWidget  # only the GUI needs the player
-
-    w = ParamWidget(parent)
-    w.add_choice("stat", STATS, DEFAULTS["stat"])
-    w.add_int("samples", 1, MAX_SAMPLES, DEFAULTS["samples"])
-    return w
 
 
 if __name__ == "__main__":

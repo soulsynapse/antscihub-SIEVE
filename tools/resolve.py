@@ -21,9 +21,14 @@ SIEVE_TOOL = True
 NAME, KIND, EXPECTS, PRODUCES = "resolve", "series", "tracks", "tracks"
 SIGNALS = ("identities", "conflicts")
 IDENTITY, CONFLICT = "identity", "conflict"
-DEFAULTS = {"columns": "tag_code", "min_reads": 2, "signal": "identities", "labels": []}
 PATHS = {"labels": lambda path: {"labels": load_labels(path)}}
 MAX_READS = 1000
+PARAMS = {
+    "columns": {"default": "tag_code", "kind": "text"},
+    "min_reads": {"default": 2, "kind": "int", "range": (1, MAX_READS)},
+    "signal": {"default": "identities", "kind": "choice", "choices": SIGNALS},
+    "labels": {"default": []},
+}
 
 
 def names(text):
@@ -146,17 +151,7 @@ def run(series, params):
 
 
 def draw(painter, row, result, start, params):
-    draw_tracks(painter, row, result, start, params.get("outline", "box"))
-
-
-def settings(parent=None):
-    from sieve_player import ParamWidget  # only the GUI needs the player
-
-    w = ParamWidget(parent)
-    w.add_text("columns", DEFAULTS["columns"])
-    w.add_int("min_reads", 1, MAX_READS, DEFAULTS["min_reads"])
-    w.add_choice("signal", SIGNALS, DEFAULTS["signal"])
-    return w
+    draw_tracks(painter, row, result, start)
 
 
 def tables_of(header, lines, start, n):
@@ -198,8 +193,8 @@ def main(argv=None):
     ap = argparse.ArgumentParser(prog="python -m tools.resolve",
                                  description="the identity pass over a tracks csv, written back with identity and conflict columns")
     ap.add_argument("tracks", help="a csv the csv node wrote from a tracks series")
-    ap.add_argument("--columns", default=DEFAULTS["columns"], help="observation columns, comma separated")
-    ap.add_argument("--min-reads", type=int, default=DEFAULTS["min_reads"])
+    ap.add_argument("--columns", default=PARAMS["columns"]["default"], help="observation columns, comma separated")
+    ap.add_argument("--min-reads", type=int, default=PARAMS["min_reads"]["default"])
     ap.add_argument("--labels", help="a csv of first row, last row, id, identity")
     ap.add_argument("--out", help="write here instead of over the input")
     a = ap.parse_args(argv)

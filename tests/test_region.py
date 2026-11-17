@@ -11,6 +11,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from sieve_player import document as D  # noqa: E402
 from sieve_player.graph import Graph  # noqa: E402
+from sieve_player.registry import defaults  # noqa: E402
 from tests.test_graph import Dec, tool  # noqa: E402
 from tests.test_blobs import fed  # noqa: E402
 from tests.test_track import table as points  # noqa: E402
@@ -155,7 +156,7 @@ def test_a_region_is_keyed_by_the_rect_it_cuts_and_run_reads_no_more_of_its_para
     apart = [{**params("dish"), "shapes": moved}, params("dish"), params()]
     seen = []
     for p in (*alike, *apart):
-        node.params = {**region.DEFAULTS, **p}
+        node.params = {**defaults(region), **p}
         g.sync()
         seen.append((g.key("below"), region.key_params(node.params), region.run(lambda row: g.compute("bgr", 0), 0, node.params)))
     assert len({k for k, _, _ in seen[:4]}) == 1 and len({k for k, _, _ in seen}) == 4
@@ -200,7 +201,7 @@ def test_a_rewritten_wired_file_moves_the_regions_params(tmp_path):
     (tmp_path / "clip.mp4").write_bytes(b"")
     write(tmp_path, GEOMETRY)
     doc = D.from_tools([region])
-    doc.add_node("file", params={**file.DEFAULTS, "pattern": "geometry.json"})
+    doc.add_node("file", params={**defaults(file), "pattern": "geometry.json"})
     doc.connect("file", "region", "geometry")
     D.save(doc, tmp_path / "doc.json")
     win = PlayerWindow(str(tmp_path / "doc.json"), "t", [file, region])

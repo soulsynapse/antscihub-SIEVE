@@ -14,7 +14,12 @@ from tools._table import bound
 SIEVE_TOOL = True
 NAME, KIND, EXPECTS, PRODUCES = "tracks-filter", "series", "tracks", "tracks"
 PROPERTIES = ("rows", "displacement", "path", "mean")
-DEFAULTS = {"property": "rows", "column": "area", "lo": "", "hi": ""}
+PARAMS = {
+    "property": {"default": "rows", "kind": "choice", "choices": PROPERTIES},
+    "column": {"default": "area", "kind": "text"},
+    "lo": {"default": "", "kind": "text"},
+    "hi": {"default": "", "kind": "text"},
+}
 
 
 def properties(rows, property, column="area"):
@@ -55,15 +60,4 @@ def run(series, params):
 
 
 def draw(painter, row, result, start, params):
-    draw_tracks(painter, row, result, start, params.get("outline", "box"))
-
-
-def settings(parent=None):
-    from sieve_player import ParamWidget  # only the GUI needs the player
-
-    w = ParamWidget(parent)
-    w.add_choice("property", PROPERTIES, DEFAULTS["property"])
-    w.add_text("column", DEFAULTS["column"])
-    w.add_text("lo", DEFAULTS["lo"])
-    w.add_text("hi", DEFAULTS["hi"])
-    return w
+    draw_tracks(painter, row, result, start)

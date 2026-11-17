@@ -13,7 +13,7 @@ import numpy as np
 SIEVE_TOOL = True
 NAME, KIND, EXPECTS, PRODUCES = "reduce", "series", ("gray", "mask"), "signal"
 METHODS = ("mean", "sum", "max", "count", "fraction")
-DEFAULTS = {"method": "mean"}
+PARAMS = {"method": {"default": "mean", "kind": "choice", "choices": METHODS}}
 
 
 def fold(frame):
@@ -48,14 +48,6 @@ def run(series, params):
 def step(state, row, i, params):
     """No state: a row's signal is its own fold's."""
     return None, {"signal": np.float32(reduced(np.asarray(row, np.float64).reshape(1, 4), params["method"])[0])}
-
-
-def settings(parent=None):
-    from sieve_player import ParamWidget  # only the GUI needs the player
-
-    w = ParamWidget(parent)
-    w.add_choice("method", METHODS, DEFAULTS["method"])
-    return w
 
 
 if __name__ == "__main__":

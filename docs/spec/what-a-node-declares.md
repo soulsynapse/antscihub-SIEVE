@@ -70,18 +70,18 @@ a settings widget may have, the registry's `WIDGET_FACETS`, is looked for on the
 this deliverable's. The registry hands out `probe(tool, facet)`, which no module but the registry
 calls, and a module that called it would find out for itself as one calling `getattr` does.
 
-- [ ] No module under `sieve_player/` but the registry finds out what a tool declares, whether it
+- [x] No module under `sieve_player/` but the registry finds out what a tool declares, whether it
   has a facet or what a facet that is data holds; each asks the registry, by a name that says what
   is asked.
   Check: `tests/test_seams.py`, a seam: outside the registry no `getattr` or `hasattr` names a
   facet of `FACETS`, no facet that is data is read as an attribute of a tool, and nothing calls
   the registry's `probe`.
-- [ ] `document` and the modules that read a tool may import the registry, and
+- [x] `document` and the modules that read a tool may import the registry, and
   `tests/test_seams.py` says so; the registry still imports nothing of the player.
   Check: the suite.
-- [ ] What a tool expects is made a tuple in one place.
+- [x] What a tool expects is made a tuple in one place.
   Check: a grep.
-- [ ] Every document's plan prints what it printed, and its keys in the player are what they were.
+- [x] Every document's plan prints what it printed, and its keys in the player are what they were.
   Check: the baseline, both tables compared.
 
 ## A param is declared once

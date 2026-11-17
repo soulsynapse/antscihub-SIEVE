@@ -33,6 +33,7 @@ from .pace import Pace, clock
 from .pacecontrol import PaceControl
 from .storecontrol import StoreControl
 from .pane import Pane
+from . import registry
 from .registry import CATEGORIES, Entry, category, description, signature
 from .stream import ASKED, EDIT, HAND, Emitter
 from .theme import GAP, PAD, ROW_H, readout
@@ -283,7 +284,7 @@ class Display(QWidget):
             return
         shape = (self._pix.height(), self._pix.width())
         for nid, tool, node in reversed(self.drawers):
-            pick, result = getattr(tool, "pick", None), self.frame_results.get(nid, self.results.get(nid))
+            pick, result = registry.pick_of(tool), self.frame_results.get(nid, self.results.get(nid))
             if pick is None or result is None:
                 continue
             try:
@@ -311,7 +312,7 @@ def catalogue(items):
                 broken[t.name] = t.error
         else:
             modules.append(t)
-    return modules, {t.NAME: t for t in modules}, broken
+    return modules, registry.by_name(modules), broken
 
 
 class Header(QWidget):
@@ -698,7 +699,7 @@ class PlayerWindow(QMainWindow):
         self._show_plot()
         self._pick_video()
         self.display.drawers = [(n.id, self.tools[n.tool], n) for n in self.doc.nodes
-                                if n.tool in self.tools and hasattr(self.tools[n.tool], "draw")
+                                if n.tool in self.tools and registry.draws(self.tools[n.tool])
                                 and id(self.tools[n.tool]) not in self.display.dropped]
         self.canvas.update()
         if self.graph is None:
@@ -791,7 +792,7 @@ class PlayerWindow(QMainWindow):
 
     def _params_changed(self, nid):
         self.canvas.update()   # a band moved recolours its node's dot
-        if document.is_selector(self.tools.get(self.doc.node(nid).tool)):
+        if registry.is_selector(self.tools.get(self.doc.node(nid).tool)):
             self._pick_video()
             return
         if self.graph is not None:
@@ -871,7 +872,7 @@ class PlayerWindow(QMainWindow):
         asked = set()
         for n in self.doc.nodes:
             tool = self.tools.get(n.tool)
-            loaders = document.paths(tool)
+            loaders = registry.paths(tool)
             if not loaders:
                 continue
             notes, errors, picked = [], [], {}
@@ -938,9 +939,9 @@ class PlayerWindow(QMainWindow):
         folder = self.doc.folder()
         for n in self.doc.nodes:
             tool = self.tools.get(n.tool)
-            if not document.is_selector(tool):
+            if not registry.is_selector(tool):
                 continue
-            matches = getattr(tool, "matches", None)
+            matches = registry.matches_of(tool)
             try:
                 picked = tool.select(folder, dict(n.params))
                 found = matches(folder, dict(n.params)) if matches else None

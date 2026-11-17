@@ -2,10 +2,13 @@
 
 The catalogue of tools. A module is a tool if it has `SIEVE_TOOL = True` and a string `NAME`;
 nothing else is required, and the registry never rejects one. Everything else is a facet, read
-with `probe(tool, facet)`, which is `getattr(tool, facet, None)` and never calls the tool. None
-means the tool did not say; consumers degrade and may show `hint(facet)`, the line that would
-supply it. No facet has a meaningful None (pass-through is `PRODUCES = "same"`). A facet is in
-`FACETS` only if something in `sieve_player` outside this package reads it. A selector, a tool
+here and nowhere else in the player: a module asks by a name that says what is asked, `expects(tool)`,
+`cuts(tool)`, `fold_of(tool)`, and calls a facet the registry answered for; `tests/test_seams.py`
+holds the player to it. `probe(tool, facet)` is `getattr(tool, facet, None)`, never calls the
+tool, and is this package's and the report's. None means the tool did not say; consumers degrade
+and may show `hint(facet)`, the line that would supply it. No facet has a meaningful None
+(pass-through is `PRODUCES = "same"`). A facet is in `FACETS` only if something in `sieve_player`
+outside this package calls it or one of its `READERS`. The package imports nothing of the player. A selector, a tool
 whose `PRODUCES` is `"path"` with no `EXPECTS`, says `select` instead of `run`, and `matches` if
 it can count what its rule covers. A tool with `PATHS` has a path input per key, which a selector
 feeds; the value is called with the picked file and answers the params to merge. A series tool
@@ -43,6 +46,26 @@ category beside each tool.
 - `category(tool)` -- the group a tool's facets put it in
 - `description(tool)` -- the first sentence of its docstring, unlabelled
 - `signature(tool)` -- what it reads and hands out, as "gray, mask → blobs"
+- `READERS` -- facet -> the readers below that answer of it
+- `name(tool)`
+- `by_name(tools)` -- name -> module, of a mapping or the modules
+- `kind(tool)` -- `KIND`, "frame" unsaid
+- `expects(tool)` -- `EXPECTS` as a tuple, the one place it is made one; None for a tool that expects nothing
+- `produces(tool)` -- `PRODUCES` as written, "same" among what it may be
+- `defaults(tool)` -- `DEFAULTS`, a dict of the caller's own
+- `inputs(tool)` -- `INPUTS`, name -> a tuple of types
+- `optional(tool)`
+- `static(tool)`
+- `paths(tool)` -- `PATHS`, name -> loader
+- `is_selector(tool)`
+- `cuts(tool)` -- whether it has `cut_file`
+- `names_cut_files(tool)` -- whether it has `cut_files`
+- `steps(tool)`
+- `draws(tool)`
+- `fold_of(tool)` -- its `fold`, or None
+- `key_params_of(tool)`
+- `pick_of(tool)`
+- `matches_of(tool)`
 
 ```
 python -m sieve_player.registry [root ...]   # report; default root is tools/

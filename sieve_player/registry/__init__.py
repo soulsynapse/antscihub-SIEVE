@@ -63,6 +63,112 @@ def is_tool(obj):
     return bool(probe(obj, MARKER)) and isinstance(probe(obj, "NAME"), str) and bool(probe(obj, "NAME"))     # a node's id is its tool's name, so a name is not empty
 
 
+def _tuple(types):
+    return tuple(types) if isinstance(types, (tuple, list, set)) else (types,)
+
+
+def name(tool):
+    return probe(tool, "NAME")
+
+
+def by_name(tools):
+    """`tools` as a mapping of name to module, whether given as one or as the modules."""
+    return tools if hasattr(tools, "get") else {name(t): t for t in tools}
+
+
+def kind(tool):
+    """The tool's KIND, "frame" for one that did not say."""
+    return probe(tool, "KIND") or "frame"
+
+
+def expects(tool):
+    """The types the tool's first input expects, a tuple; None for a tool that expects nothing."""
+    e = probe(tool, "EXPECTS")
+    return None if e is None else _tuple(e)
+
+
+def produces(tool):
+    """PRODUCES as the tool wrote it, "same" among what it may be; None for one that hands out nothing."""
+    return probe(tool, "PRODUCES")
+
+
+def defaults(tool):
+    """The tool's params as a node of it begins, a dict of its own."""
+    return dict(probe(tool, "DEFAULTS") or {})
+
+
+def inputs(tool):
+    """The tool's frame inputs after the first, in order: name to the types each expects."""
+    return {n: _tuple(t) for n, t in (probe(tool, "INPUTS") or {}).items()}
+
+
+def optional(tool):
+    """The frame inputs after the first that may be unwired."""
+    return tuple(probe(tool, "OPTIONAL") or ())
+
+
+def static(tool):
+    """Whether the tool's output is the same at every row."""
+    return bool(probe(tool, "STATIC"))
+
+
+def paths(tool):
+    """The tool's path inputs: name to the loader that turns the file into params."""
+    return dict(probe(tool, "PATHS") or {})
+
+
+def is_selector(tool):
+    return produces(tool) == "path" and expects(tool) is None
+
+
+def cuts(tool):
+    """Whether the tool cuts the footage into files, by its cut_file."""
+    return probe(tool, "cut_file") is not None
+
+
+def names_cut_files(tool):
+    return probe(tool, "cut_files") is not None
+
+
+def steps(tool):
+    return probe(tool, "step") is not None
+
+
+def draws(tool):
+    return probe(tool, "draw") is not None
+
+
+def fold_of(tool):
+    """The tool's fold, or None."""
+    return probe(tool, "fold")
+
+
+def key_params_of(tool):
+    """The tool's key_params, or None."""
+    return probe(tool, "key_params")
+
+
+def pick_of(tool):
+    """The tool's pick, or None."""
+    return probe(tool, "pick")
+
+
+def matches_of(tool):
+    """The tool's matches, or None."""
+    return probe(tool, "matches")
+
+
+# facet -> the readers here that answer of it: what `--check` looks for a call of outside this
+# package, beside a call of the facet itself. A facet with neither is one nothing reads.
+READERS = {
+    "NAME": ("name", "by_name"), "KIND": ("kind",), "EXPECTS": ("expects", "is_selector"),
+    "PRODUCES": ("produces", "is_selector"), "DEFAULTS": ("defaults",), "INPUTS": ("inputs",),
+    "OPTIONAL": ("optional",), "STATIC": ("static",), "PATHS": ("paths",), "cut_file": ("cuts",),
+    "cut_files": ("names_cut_files",), "step": ("steps",), "draw": ("draws",), "fold": ("fold_of",),
+    "key_params": ("key_params_of",), "pick": ("pick_of",), "matches": ("matches_of",),
+}
+
+
 @dataclass
 class Entry:
     name: str
@@ -114,12 +220,12 @@ def types(entries, extra=()):
     """{type: (producers, expecters)} over the tools that imported, plus `extra` (name, produces,
     expects) rows for nodes that are not tools. "same" is not a type; a PATHS key expects "path"."""
     out = {}
-    rows = [(e.name, e.get("PRODUCES"), e.get("EXPECTS"), e.get("PATHS")) for e in entries if e.ok]
-    for name, p, ex, paths in rows + [(*r, None) for r in extra]:
+    rows = [(e.name, produces(e.module), expects(e.module), paths(e.module)) for e in entries if e.ok]
+    for tool, p, ex, loaders in rows + [(n, p, None if ex is None else _tuple(ex), None) for n, p, ex in extra]:
         if isinstance(p, str) and p != "same":
-            out.setdefault(p, (set(), set()))[0].add(name)
-        for t in ((ex,) if isinstance(ex, str) else ex or ()) + (("path",) if paths else ()):
-            out.setdefault(t, (set(), set()))[1].add(name)
+            out.setdefault(p, (set(), set()))[0].add(tool)
+        for t in (ex or ()) + (("path",) if loaders else ()):
+            out.setdefault(t, (set(), set()))[1].add(tool)
     return out
 
 
@@ -131,14 +237,13 @@ def category(tool):
     `EXPECTS`; a measure produces signal and does not expect it; a relate has `INPUTS` and produces
     `same` or a type it expects; a convert produces a type it does not expect; the rest transform.
     Measure sits before convert because it is one by shape."""
-    ex = probe(tool, "EXPECTS")
+    ex = expects(tool)
     if ex is None:
         return "source"
-    ex = {ex} if isinstance(ex, str) else set(ex)
-    p = probe(tool, "PRODUCES")
+    p = produces(tool)
     if p == "signal" and "signal" not in ex:
         return "measure"
-    if probe(tool, "INPUTS") and (p == "same" or p in ex):
+    if inputs(tool) and (p == "same" or p in ex):
         return "relate"
     if p != "same" and p not in ex:
         return "convert"
@@ -161,9 +266,9 @@ def description(tool):
 def signature(tool):
     """What `tool` reads and hands out, as "gray, mask → blobs": a source reads nothing and a
     pass-through hands out "same"."""
-    ex = probe(tool, "EXPECTS")
-    ins = [ex] if isinstance(ex, str) else list(ex or ())
-    return f"{', '.join(ins)} → {probe(tool, 'PRODUCES')}".strip()
+    return f"{', '.join(expects(tool) or ())} → {produces(tool)}".strip()
 
 
-__all__ = ["MARKER", "FACETS", "WIDGET_FACETS", "Entry", "is_tool", "probe", "hint", "discover", "types", "CATEGORIES", "category", "description", "signature"]
+__all__ = ["MARKER", "FACETS", "WIDGET_FACETS", "READERS", "Entry", "is_tool", "probe", "hint", "discover", "types", "CATEGORIES", "category",
+           "description", "signature", "name", "by_name", "kind", "expects", "produces", "defaults", "inputs", "optional", "static", "paths",
+           "is_selector", "cuts", "names_cut_files", "steps", "draws", "fold_of", "key_params_of", "pick_of", "matches_of"]

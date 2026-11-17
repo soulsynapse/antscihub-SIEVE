@@ -16,6 +16,7 @@ import numpy as np
 from . import density
 from .decoder import Decoder, EndOfStream, footage_print_by_stamp
 from .document import INPUT, VIDEO_TOOL, video_output
+from .registry import by_name, draws, names_cut_files
 from .plan import _key, base_key, facts, plan
 from .stream import Emitter
 
@@ -309,7 +310,7 @@ class Graph:
     def __init__(self, doc, decoder, tools, memo_bytes=4 << 30, stream=None):
         """`stream` is the Emitter it emits through, one of its own when none is handed."""
         self.doc, self.decoder = doc, decoder
-        self.tools = tools if hasattr(tools, "get") else {t.NAME: t for t in tools}
+        self.tools = by_name(tools)
         self.readers = Readers()
         self._lately = []                   # the served files' Decoders in the order they were last read, latest first
         self._in_use = set()                # the files the cutting nodes' tools named at the last sync, see cut_files_named
@@ -364,7 +365,7 @@ class Graph:
         it reads, whether or not the plan would serve one there; a tool that raises names none."""
         out = set()
         for nid, e in entries.items():
-            if hasattr(e.tool, "cut_files"):
+            if names_cut_files(e.tool):
                 try:
                     out |= {str(p) for p in e.tool.cut_files(*self._footage(entries, nid), e.params)}
                 except Exception as exc:
@@ -519,7 +520,7 @@ class Graph:
         at its row beside the shown node, on the walked path or off it; under the Plan `p`, the
         current one with none."""
         entries = (p or self.snapshot()).entries
-        return [nid for nid, e in entries.items() if e.kind == "frame" and e.fed and hasattr(e.tool, "draw")]
+        return [nid for nid, e in entries.items() if e.kind == "frame" and e.fed and draws(e.tool)]
 
     def watch(self, nodes):
         """`nodes` are what the plot shows, the selection and the pinned; any thread."""

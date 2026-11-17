@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from . import density
+from .registry import fold_of
 from .graph import Memo, Series, gated, inband, nbytes
 from .stream import ASKED, GIVEN, HAND, SHAPE
 
@@ -244,7 +245,7 @@ class _Walk:
                 if held is not None:
                     self.bytes -= held.bytes
                 held = self.stepped[nid] = _Stepped(e.raw_key)
-            fold = None if shared or nid not in heads else getattr(e.tool, "fold", None)
+            fold = None if shared or nid not in heads else fold_of(e.tool)
             for r in range(held.rows, rows):
                 if nid in heads:
                     row = self.stack[r] if fold is None else fold(self.stack[r])
@@ -358,7 +359,7 @@ def run_chain(graph, stack, start, done, folds, stepped=None, p=None):
         if nid in heads and stack is None:
             continue        # a head with nothing walked for it: its standing says why
         elif nid in heads:
-            fold = None if folded else getattr(tool, "fold", None)
+            fold = None if folded else fold_of(tool)
             if fold is not None:
                 held = folds.get(id(fold))
                 if held is None or held[0] is not buffer or held[1] != len(stack):

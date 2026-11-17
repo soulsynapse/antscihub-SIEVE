@@ -11,7 +11,8 @@ import os
 from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtWidgets import QComboBox, QFileDialog, QFrame, QPushButton, QScrollArea, QVBoxLayout, QWidget
 
-from .document import VIDEO_OUTPUT, VIDEO_OUTPUTS, VIDEO_TOOL, is_selector, paths, video_output
+from .document import VIDEO_OUTPUT, VIDEO_OUTPUTS, VIDEO_TOOL, video_output
+from .registry import is_selector, paths
 from .theme import CONTROL_W, GAP, HELD, PAD, WIDE_W, Badge, CloseMark, Form, Layer, readout
 
 VIDEO_FILTER = "Video (*.mp4 *.MP4 *.avi *.mov *.mkv *.mts *.MTS);;All (*)"

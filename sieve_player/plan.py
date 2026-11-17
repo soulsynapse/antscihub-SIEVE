@@ -8,8 +8,9 @@ import hashlib
 import json
 from dataclasses import dataclass, field
 
-from .document import (INPUT, OVERLAYABLE, VIDEO_TOOL, fed, fits, frame_inputs, is_selector, kind_of, optional, produces,
-                       static, video_output, wants)
+from .document import INPUT, OVERLAYABLE, VIDEO_TOOL, fed, fits, frame_inputs, kind_of, produces, video_output, wants
+from .registry import cuts as tool_cuts
+from .registry import fold_of, is_selector, key_params_of, optional, static, steps
 
 
 def _key(*parts):
@@ -74,7 +75,7 @@ def walked(entries, chain, shown):
 def shared_fold(entries, heads):
     """The heads' fold() when every one of them has the same, else None: the stack then holds the
     rows as they are and each head folds them at run."""
-    folds = {id(f): f for f in (getattr(entries[s].tool, "fold", None) for s in heads)}
+    folds = {id(f): f for f in (fold_of(entries[s].tool) for s in heads)}
     return next(iter(folds.values())) if len(folds) == 1 else None
 
 
@@ -110,7 +111,7 @@ def plan(doc, tools, base, cut_file=None):
     keys, raw_keys, pieces, files, refused = {}, {}, {}, {}, {}
 
     def cuts(nid):
-        return getattr(tools.get(doc.node(nid).tool), "cut_file", None) is not None
+        return tool_cuts(tools.get(doc.node(nid).tool))
 
     def file_of(nid, stack=()):
         if nid in stack:
@@ -145,7 +146,7 @@ def plan(doc, tools, base, cut_file=None):
         return bool(srcs) and all(s is not None and static_of(s, (*stack, nid)) for s in srcs)
 
     def keyed(node):
-        facet = getattr(tools.get(node.tool), "key_params", None)
+        facet = key_params_of(tools.get(node.tool))
         if facet is not None:
             try:
                 return facet(node.params)
@@ -218,7 +219,7 @@ def plan(doc, tools, base, cut_file=None):
     enders = {}
     for nid in chain:
         e = entries[nid]
-        own = getattr(e.tool, "step", None) is None
+        own = not steps(e.tool)
         enders[nid] = nid if own else enders.get(e.src)
         e.steps, e.whole_by = enders[nid] is None, None if own else enders[nid]
     for nid, e in entries.items():

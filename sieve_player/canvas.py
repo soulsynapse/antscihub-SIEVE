@@ -17,8 +17,9 @@ from PySide6.QtGui import QColor, QCursor, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import QAbstractSpinBox, QApplication, QLineEdit, QPlainTextEdit, QSizePolicy, QTextEdit, QToolTip, QWidget
 
 from . import theme
-from .document import (INPUT, OPEN, OVERLAYABLE, PATH, VIDEO_PRODUCES, VIDEO_TOOL, expects, fed, fits,
-                       inputs_of, is_selector, kind_of, paths, produces)
+from . import registry
+from .document import INPUT, OPEN, OVERLAYABLE, PATH, VIDEO_PRODUCES, VIDEO_TOOL, fed, fits, inputs_of, kind_of, produces
+from .registry import expects, is_selector, paths
 from .menu import MENU_W, UNLOADED, TabMenu
 from .theme import GAP, PAD, qgray
 
@@ -167,7 +168,7 @@ class Canvas(QWidget):
         """Whether the node hands anything out: one without PRODUCES does not; an unresolved node might."""
         if node.tool == VIDEO_TOOL or node.unresolved:
             return True
-        return getattr(self.tools.get(node.tool), "PRODUCES", None) is not None
+        return registry.produces(self.tools.get(node.tool)) is not None
 
     def output_type(self, node):
         if node.tool == VIDEO_TOOL:
@@ -368,7 +369,7 @@ class Canvas(QWidget):
         if not ins or not self.has_output(node):
             return None
         want, box = ins[0][1], self.box(node)
-        passthru = getattr(self.tools.get(node.tool), "PRODUCES", None) == "same"
+        passthru = registry.produces(self.tools.get(node.tool)) == "same"
         for w in self.doc.wires:
             if node.id in (w.src, w.dst) or not self.touches(self.path_of(w), box):
                 continue
@@ -482,7 +483,7 @@ class Canvas(QWidget):
         if name == VIDEO_TOOL:
             p = VIDEO_PRODUCES
         else:
-            p = getattr(self.tools[name], "PRODUCES", None)
+            p = registry.produces(self.tools[name])
             p = got if p == "same" else p
         return p is not None and self.compatible(p, dict(self.inputs(self.doc.node(w.dst)))[w.input])
 
@@ -497,7 +498,7 @@ class Canvas(QWidget):
         tool = self.tools[name]
         if end == "out":
             return self._landing(name, self.output_type(node)) is not None
-        p, want = getattr(tool, "PRODUCES", None), dict(self.inputs(node))[iname]
+        p, want = registry.produces(tool), dict(self.inputs(node))[iname]
         if p == "same":   # hands out what it is fed, so only what it expects can ever reach the input
             e = expects(tool)
             return want is None or e is None or any(self.compatible(t, want) for t in e)
@@ -511,7 +512,7 @@ class Canvas(QWidget):
         tool = self.tools[name]
         if is_selector(tool):
             return None
-        for iname, want in [(INPUT, expects(tool))] + [(k, (PATH,)) for k in getattr(tool, "PATHS", None) or {}]:
+        for iname, want in [(INPUT, expects(tool))] + [(k, (PATH,)) for k in paths(tool)]:
             if self.compatible(got, want):
                 return iname
         return None
@@ -554,7 +555,7 @@ class Canvas(QWidget):
         x, y = pos.x() - NODE_W / 2, pos.y() - NODE_H / 2
         if pending is not None:
             y = pos.y() if pending[0] == "out" else pos.y() - NODE_H
-        node = self.doc.add_node(name, (x, y), getattr(tool, "DEFAULTS", {}))
+        node = self.doc.add_node(name, (x, y), registry.defaults(tool))
         if pending is not None:
             end, nid, iname = pending
             if end == "out":

@@ -28,6 +28,7 @@ from ..graph import Graph
 from ..ledger import SETTLES_BY, Ledger
 from ..machine import Watch
 from ..pace import Pace
+from ..registry import by_name
 from ..report import line
 from ..stream import HAND, Emitter
 from ..worker import Worker
@@ -118,7 +119,7 @@ def _tools(rows):
     gray = frame("gray", "bgr", lambda f, p: f[..., 1] + np.uint8(p["k"]))
     work, edge = frame("work", "gray", lambda f, p: f), frame("edge", "gray", lambda f, p: f + np.uint8(p["k"]))
     work.ms = edge.ms = MS
-    return {t.NAME: t for t in (gray, work, edge, mean, pile)}
+    return by_name((gray, work, edge, mean, pile))
 
 
 def _cut(path):

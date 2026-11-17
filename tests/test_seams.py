@@ -13,20 +13,20 @@ TOOLS = PKG.parent / "tools"
 UTILITIES = PKG.parent / "utilities"
 HEADER_LINES = 10   # a module docstring states the module and its seams; past this it is a changelog, see CLAUDE.md
 MAY_IMPORT = {
-    "document": set(),
-    "plan": {"document"},
+    "document": {"registry"},                     # what a tool declares is the registry's to read, and the registry imports nothing of the player
+    "plan": {"document", "registry"},
     "stream": set(),                              # the Event, the kinds and the Emitter; a reader of a dump loads nothing else
     "stats": {"stream"},                          # a reader of the stream; the Graph it is made on is handed to it
-    "graph": {"decoder", "document", "density", "plan", "stream"},     # Graph.density folds planes; sync holds a plan; it emits through an Emitter; a served file is read by a Decoder
-    "canvas": {"document", "menu", "theme"},
+    "graph": {"decoder", "document", "density", "plan", "registry", "stream"},     # Graph.density folds planes; sync holds a plan; it emits through an Emitter; a served file is read by a Decoder
+    "canvas": {"document", "menu", "registry", "theme"},
     "menu": {"theme"},
-    "pane": {"document", "theme", "widgets"},
+    "pane": {"document", "registry", "theme", "widgets"},
     "widgets": {"theme"},
     "plot": {"density", "document", "theme"},       # document.shown is the one statement of what is drawn
     "timeline": {"theme"},
     "decoder": set(),
     "held": set(),                                # a pickle and a stamp; the window writes and reads it
-    "walk": {"density", "graph", "stream"},         # of the stream, the words a begin says what began it by; no Qt, see below
+    "walk": {"density", "graph", "registry", "stream"},         # of the stream, the words a begin says what began it by; no Qt, see below
     "worker": {"decoder", "graph", "stream", "walk"},
     "bare": {"decoder", "document", "graph", "registry", "walk"},      # the clip walk's own process: no window, no stream's reader, no Qt
     "density": set(),
@@ -70,6 +70,36 @@ def test_imports_run_one_way():
         assert imports_of(name) <= allowed, f"{name} imports {imports_of(name) - allowed}"
     unsaid = {p.stem for p in PKG.glob("*.py")} - set(MAY_IMPORT) - ROOTS
     assert not unsaid, f"neither in MAY_IMPORT nor a root: {sorted(unsaid)}"
+
+
+def test_the_registry_alone_reads_what_a_tool_declares():
+    """Outside the registry no module of the player finds out what a tool declares: none names a
+    facet to getattr or hasattr, reads a facet that is data as an attribute, or calls the
+    registry's probe. Each asks the registry by a name that says what is asked; calling a facet the
+    registry answered for is no reading. The registry itself imports nothing of the player."""
+    from sieve_player.registry import FACETS
+
+    data = {f for f in FACETS if f.isupper()}
+    bad = []
+    for path in PKG.rglob("*.py"):
+        where = str(path.relative_to(PKG))
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        if path.parent.name == "registry":
+            took = [n for n in ast.walk(tree) if isinstance(n, (ast.Import, ast.ImportFrom))
+                    and ("sieve_player" in ast.unparse(n) or (isinstance(n, ast.ImportFrom) and n.level > 1))]
+            bad += [(where, ast.unparse(n)) for n in took]
+            continue
+        for n in ast.walk(tree):
+            if isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id in ("getattr", "hasattr") and len(n.args) > 1 \
+                    and isinstance(n.args[1], ast.Constant) and n.args[1].value in FACETS:
+                bad.append((where, ast.unparse(n)))
+            elif isinstance(n, ast.Attribute) and n.attr in data and ast.unparse(n.value) != "self":
+                bad.append((where, ast.unparse(n)))
+            elif isinstance(n, ast.Attribute) and n.attr == "probe" and "registry" in ast.unparse(n.value):
+                bad.append((where, ast.unparse(n)))
+            elif isinstance(n, ast.ImportFrom) and (n.module or "").endswith("registry") and any(a.name == "probe" for a in n.names):
+                bad.append((where, ast.unparse(n)))
+    assert not bad, bad
 
 
 def test_nothing_under_dev_imports_the_window():

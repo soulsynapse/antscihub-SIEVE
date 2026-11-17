@@ -48,10 +48,10 @@ What every later deliverable is compared with.
 Facts to weigh. `__main__.py:show_plan` hands `plan.py:plan` no `cut_file`, so under `--plan` no
 node serves a file and the key of one that does in the player is not printed.
 
-- [ ] `docs/findings/` holds what `python -m sieve_player <document> --plan` prints for each
+- [x] `docs/findings/` holds what `python -m sieve_player <document> --plan` prints for each
   document under `video-tests/`, with the commit it was printed at.
   Check: the file is there, a table a document.
-- [ ] Beside it, for each of those documents a node of which serves a file in the player, every
+- [x] Beside it, for each of those documents a node of which serves a file in the player, every
   node's key as the player's graph plans it under the store as it stands, and beside each served
   node the file it serves, so a key a clip cut or deleted since has moved is told from one a
   deliverable moved.

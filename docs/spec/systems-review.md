@@ -229,12 +229,12 @@ Assumes: the entries.
 
 Written to learn from, after the candidates are settled, so that it adds none.
 
-- [ ] Part 2 lists what a user arriving from each neighbouring program would reach for in their
+- [x] Part 2 lists what a user arriving from each neighbouring program would reach for in their
   first week, one line a feature: the program it is expected from, the system that delivers it
   there in a clause, and where SIEVE stands, one of has it, an entry of part 3, not yet, out of
   scope.
   Check: every program named in the rules has a line or more; no line carries a score.
-- [ ] A not yet says what would be seen in SIEVE's use that makes it a candidate; an out of scope
+- [x] A not yet says what would be seen in SIEVE's use that makes it a candidate; an out of scope
   cites part 1.
   Check: none is bare.
 
@@ -242,10 +242,10 @@ Written to learn from, after the candidates are settled, so that it adds none.
 
 Assumes: What a seasoned user expects.
 
-- [ ] Part 6 opens with the systems SIEVE has, a line each: what it is, how sound, whether it was
+- [x] Part 6 opens with the systems SIEVE has, a line each: what it is, how sound, whether it was
   built as a system or arrived at, and its verdict.
   Check: every system of part 4 has its line.
-- [ ] One table lists the entries whose verdict is build or shrink, ten rows at most, sorted, with:
+- [x] One table lists the entries whose verdict is build or shrink, ten rows at most, sorted, with:
   importance to Kendrick's work out of 10, where 10 is a result he cannot get or work lost and 1
   is unnoticed; importance to the speed and reliability of development out of 10, where 10 is paid
   by every new tool or feature and 1 is cosmetic; the commits it would have prevented and the
@@ -253,10 +253,10 @@ Assumes: What a seasoned user expects.
   against a part of the tree of like size; and what its cost grows with while it waits, the tools
   written, the documents saved, the wires' types, or nothing.
   Check: every count cites its hashes through part 3, and each score has a clause of why.
-- [ ] Under it, the watches and the leaves, a line each with the reason, and for a watch what
+- [x] Under it, the watches and the leaves, a line each with the reason, and for a watch what
   turns it.
   Check: every entry of part 3 is in the table or in this list.
-- [ ] It closes with an order: what to do first and what to leave, argued from the table in a
+- [x] It closes with an order: what to do first and what to leave, argued from the table in a
   paragraph, with what would have to be true for the first to be the wrong one.
   Check: the paragraph names a first, a leave, and the evidence that would reverse the first.
 - [ ] Kendrick: the document is read.

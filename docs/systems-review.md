@@ -137,6 +137,40 @@ The monitor is not headed for less. What `46899a83` records as largely not neede
 of it that has since gone, as the ledger's finding says under What this could not see; Kendrick
 calls the monitor extremely helpful and finds a hang by it.
 
+## 2. What a seasoned user of the neighbouring programs expects to find
+
+A list to learn from, written after the candidates were settled. It scores nothing and makes
+nothing a candidate. What another program has is from memory throughout and was not fetched,
+but where a number in brackets follows, which is part 1's or part 3's. Where SIEVE stands is
+from a search of `sieve_player/` for the thing's names and from part 4.
+
+| a user reaches for | expected from | delivered there by | SIEVE |
+| --- | --- | --- | --- |
+| A node placed by typing its name | Houdini, Nuke | a Tab menu over the registered node types | Has it: `menu.py:TabMenu`. |
+| A flag that says which node is shown | Houdini | the display flag, which is what asks for a cook [1] | Has it: the display and the overlay flags of a document, and the pins. |
+| A look at any node while it runs | Bonsai | a visualizer opened on an operator | Has it: the flag for a frame, a pin for a signal. |
+| The distribution of what is shown | Nuke, ImageJ | the Viewer's scopes; a histogram of the image | Has it, over time: `density.py:fold`, drawn by `plot.py`. |
+| A band dragged on a view, and a table of what fell in it | Raven | a selection drawn on a spectrogram, kept as a row of a selection table [5] | Has it in its own form: a node's band, and a csv of the rows inside. |
+| A result kept on disk and served in place of computing | Nuke, Houdini | a DiskCache node keyed by the hash [11]; a File Cache node | Has it: a region's cut clip, and the held series. E1 for what each is good under. |
+| Many kinds of video opened | ImageJ, VapourSynth | Bio-Formats; source plugins | Has it: one decoder over libav, `decoder.py`. |
+| Undo of an edit to the network | Houdini, Blender, Nuke | one stack every edit goes through | Not yet. The geometry utility has one (M52) and the player none. It becomes a candidate when a band or a node's settings are lost to a slip and could not be set again from memory. |
+| The last session back after a crash | Blender, Houdini, Nuke | a copy saved on a timer, offered at the next launch | Not yet. The player has died once in use, by `docs/findings/2026-11-16-the-player-died-on-a-click.md`, which does not say what was lost; it becomes a candidate when something was. E4 has the mark of such a launch as a fix. |
+| A node switched off without unwiring it | Houdini, Nuke | a bypass flag; a disable knob | Not yet. It would be seen as a document saved twice, with a node and without, to compare the two. |
+| Nodes copied, and pasted into another file | Houdini, Nuke | the clipboard holding nodes as the file's own text | Not yet. It would be seen as a chain built again by hand in a second document. |
+| A chain folded into one node and used again | Houdini, Nuke, Bonsai | a digital asset; a Group or Gizmo; a nested workflow [14] | Not yet. It would be seen as one run of nodes copied into a third document. E2's pieces are not this: they run one chain over many, where this names one chain. |
+| A setting that varies over the clip | Houdini, Blender, Nuke | a channel or an expression on any parameter | Not yet, but a setting a wire drives (`registry:WIDGET_FACETS`, `set_driven`). It would be seen as a threshold that must differ between two stretches, which E2's pieces in time may answer first. |
+| A row of the table clicked, and the view goes there | Raven | the selection table and the views being one selection [5] | Not yet. It would be seen as a csv opened in another program to find a row to look at in the player. |
+| Marks made by hand and kept with the footage | Raven, SLEAP | annotation columns of a selection table; labelled frames in the `.slp` [7] | Not yet as truth to judge by, and it has been seen once: a day of linker variants dropped for want of ground truth (`4d8f513e`). Out of scope as labels to train on: part 1, a learner. |
+| Identities mended by hand after tracking | SLEAP | proofreading in `sleap-label` [7] | Out of scope: part 1, a tracker that holds identity through a pile. |
+| The same work over a folder, with no window | ImageJ, SLEAP, Raven, Houdini | a macro over a folder [8]; `sleap-track` [7]; a batch detector; TOPs [13] | E2. |
+| The program driven from a script | ImageJ, Houdini, Blender, VapourSynth | a macro recorder [8]; a Python module that is the whole interface | E2 in part, its command being the first. A document is JSON and a tool a module that runs alone. |
+| What is shown written out as video | VapourSynth, Nuke | the script piped to an encoder; a Write node | Not yet: a region's cut is the one video the player writes. It would be seen as a clip of an overlay wanted to show someone. |
+| Frames from a camera, live | Bonsai | sources that are devices [6] | Out of scope: part 1's aim, a video, and its footage, files. |
+| Tools installed from elsewhere | ImageJ, Houdini, VapourSynth | update sites; packages; a plugin folder | Out of scope: part 1's first row. `registry:discover` takes any folder. |
+
+Two of the lines marked not yet say they have been seen. Neither is made a candidate by it,
+the list being cut; they are where this part bears on the next reading of the list.
+
 ## 3. The candidates
 
 The list, before any is read against a reference; an entry is written for each that Kendrick
@@ -910,3 +944,72 @@ is written as a docstring and is not one, the signals coming first, so `Display.
 `window.py:catalogue` is a function named as the module `catalogue.py` is, which `window.py`
 also imports from. And `README.md` says, beside `tools\motion.py [video]`, "any tool runs alone",
 where ten of the 38 have no launcher (A13).
+
+## 6. The assessment
+
+### The systems SIEVE has
+
+How sound is this session's reading of part 4 and of where the ledger's fixes landed. Built or
+arrived at is read from the same and from the commits part 4 cites, and not from each module's
+history, which was not read.
+
+| | system | how sound | built or arrived at | verdict |
+| --- | --- | --- | --- | --- |
+| S1 | The document | Sound: one owner, nothing writes round it. It holds six readers of a tool's facets for the registry (H9), and no history of its changes. | Built. | Keep. |
+| S2 | The registry of tools | Sound in what it finds; read round by six modules (A2). | Built, its README being its spec. | Build, E1: the one reader. |
+| S3 | The plan and the keys | The soundest: pure, printed as a table, nothing round it for a node's result. Five places more answer what a kept thing is good under (A19). | Built. | Build, E1: it is what E1 builds on. |
+| S4 | The runtime | Sound for a result; holds the band, the count of bytes and the stream's pass-throughs for others (H7, H8). What the overlay reads is taken and not said. | Arrived at, in part. | Keep; build E3's first part. |
+| S5 | The decoder | Sound since `023c46ce`; learns where the store is from a global the window alone sets (H6). | Built, and built again. | Keep. |
+| S6 | The walk and its thread | One walk under three drivers, after `59ce234f` made two copies one. F02, F03 and F21 are its classes. | Arrived at. | Keep; E2 adds a driver, and E3's second part is watched. |
+| S7 | The held results | Split: the runs and the file in `held.py`, the rule of when in `window.py` (H2). | Arrived at. | Keep, and H2 is watched. |
+| S8 | The store | Small and sound; what a file in it is named is its writers' (H14). | Built. | Keep. |
+| S9 | The stream and its readers | Sound and large; Kendrick finds a hang by it. Four of its names have no caller found (C12). | Built, most of it in a day (F20). | Keep. The parts with no caller are a deletion that waits on a search of `tests/`. |
+| S10 | The interface | The widgets sound, each knowing nothing of the runtime. `window.py` holds 553 lines of other owners' jobs. | Arrived at. | Keep; E4 watched. |
+| S11 | Launch and diagnostics | Sound. A launch that did not end cleanly leaves no mark. | Arrived at. | Keep. |
+| S12 | The icon reference | Read by nothing of the player. | Built. | Kendrick's: a deletion, cut from the entries. |
+| S13 | The tools | Sound one by one; a setting is said in up to four places (A11). | Arrived at, tool by tool, by design. | Build, E1: a setting declared once. |
+| S14 | What tools share | Sound; two of the five were made by fixes (F10). The table kind lies here and the player knows it by shape (H17). | Arrived at. | Build, E1: the wire kinds. |
+| S15 | The geometry utility | Sound, and a program of its own. Its file has two readers that differ (H16), and is written where it lies (A1). | Built. | Keep; the write is a fix. |
+
+### What to build
+
+Sorted by the order argued below. A score is this session's, with its reason, and is the first
+thing here to disagree with. Counts are of the candidates' commits in part 3, told apart by how
+the ledger files each.
+
+| | what | to Kendrick's work | to development | prevented | made cheaper | what it takes | its cost grows with |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| E1 | What a tool declares, and the key made of it | 7: a wrong result served is the worst a key can do and a result made again is felt daily, but no result is out of reach | 9: paid by every new tool, in the four places a setting is said, and by every new store | 3: `cce7cb8e` came back; `cd887844` and `64ce8f59`, in part, settling | 11: seven came back (`d30bd9f0`, `7f0a645d`, `4079a72d`, `391bddd9`, `be59a820`, `e9142899`, `ba71e6f5`), four settling (`eb973068`, `00fd8c19`, `2216f272`, `997700a3`) | Every tool touched and the readers of three modules moved: of the order of S14 and S2 together, by this session's guess and no count | The tools written; and, for the step that changes keys, the held files and documents saved |
+| E2 | A pipeline run over pieces of footage | 9: results he now gets one piece at a time by hand; not 10, a hand's loop being possible | 3: it adds a way to run and removes no cost of writing a tool | none, by its nature | none | Not sized. At the least what the bare walk is, M08 and W15, 160 lines, again, and a tool; the half in time reaches the plan and the walk | The count of files in a study |
+| E3, its first part | The overlay's ask said as the plot's is | 3: a draw he wants and cannot easily make wanted | 2 | none of its own; C6 whole has `98e65cac`, came back, and `3bd2d8d1`, which touched no earlier line | none of its own; C6 whole has three that came back (`5c095255`, `e9142899`, `fbf4fab7`) | A method and its caller | Nothing |
+
+No entry's verdict is shrink, the three candidates for it having been cut to deletions.
+
+### Watched
+
+- E3's second part, an ask as a value in a set the ladder reads. Watched because the ladder has
+  four rungs and its fixes are in. E2 turns it: a walk with no window is a reader with no rung.
+- E4, one place a failure is said. Watched at Kendrick's word, an ideal worked towards and no
+  priority. The next commit the ledger would file under F04 turns it, or E2, a run with no
+  window having nowhere but stderr to say a failure.
+
+No entry's verdict is leave. What was left is in part 3 under The cut and Traced to none.
+
+### The order
+
+First, E1's three steps that change no key: the registry as the one reader, a setting declared
+once, the wire kinds in one table. They come first because everything else in the table reads
+what they make, because development pays for their absence at every tool, and because they are
+the one build here that can be shown right exactly, `--plan` printing the same table over the
+nine documents before and after. Then the count of settings no `run` reads, and A19's six read
+whole, which say whether E1's fourth step, the marks, is worth a change of keys. Then the
+question that is Kendrick's, whether a bout walked alone is to equal the same rows cut from a
+walk of the whole clip, and E2 after it, with E3's first part whenever a hand is near it. Left:
+E4, and E3's second part, until E2 asks for them.
+
+What would make E1 the wrong first. That the count finds few settings no `run` reads and the six
+places, read whole, agree in all but the csv's name: E1's worth to his work then falls to little,
+its worth to development stands, and E2, which scores highest for his work, goes first on the
+keys as they are. That the experiment's data is wanted sooner than E1 can be shown right, which
+is his to say and nothing here measures. Or that a step said to change no key cannot be made
+without changing one, which the first run of `--plan` would show.

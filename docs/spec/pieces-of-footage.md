@@ -27,12 +27,14 @@ network.
 Assumes: nothing.
 
 Facts to weigh. `tools/region.py:origin` is the step in space. `plan.py:Entry.piece` says which
-cutting node a node's inputs are of.
+cutting node a node's inputs are of. `region.py:run` refuses a frame that is not its file's
+plate, so no document holds a rectangle within a rectangle; a region reading a piece is not
+here.
 
 - [ ] A piece carries the steps that cut it, each a range of rows or a rectangle relative to the
   piece above, and their sum on the footage.
-  Check: a seam: a rectangle within a range within a rectangle sums to the footage's own pixels
-  and rows.
+  Check: a seam: a rectangle within a range, and a range within a rectangle, each sum to the
+  footage's own pixels and rows.
 
 ## A table written is in the footage's own pixels and rows
 
@@ -42,38 +44,65 @@ table. Changes what a csv below a region holds.
 Facts to weigh. A csv written below a region is in the cut clip's pixels, so two regions' tables
 cannot be laid side by side or drawn over the footage. A piece's record holds cuts and no scale:
 `rescale` and `coarsegrain` hand out a plane of another size than the piece's, and a table's
-dtype carries the plane it was found in, `tools/_table.py:plane`. Which columns of a table are in
-that plane's pixels is the wire table's to say.
+dtype carries the plane it was found in, `tools/_table.py:plane`. What a column is in is said
+where it is minted and carried on the dtype, in the units the wire table has; one minted with
+none is in no plane's pixels. `csv.py:default_name` is the footage's stem and the rows, and the
+footage of a node below a region that serves no clip is the plate, so two such regions of one
+video name one file.
 
-- [ ] A csv's rows are the footage's by its piece's record, and each column the wire table has as
-  in the plane's pixels is in the footage's, scaled by the table's plane against the piece's size
-  and, a position, moved by the record; whoever writes it. Its key line says the piece.
+- [ ] A csv's rows are the footage's by its piece's record, and each column that says a unit is
+  in the footage's pixels, scaled along its axis by the plane it is of against the piece's size
+  and, a position, moved by the record; a column that says none is written as it is; whoever
+  writes it. Its key line and its name say the piece.
   Check: a one-off: a csv written below a region, and one below a region and a `rescale`, their
-  positions read back against the plate.
+  positions read back against the plate; one below an `attach`, its mark's area against the
+  mark's plane; and of two regions of one video that serve no clip, two files.
 
 Worth a look: a csv of the purb document before and after, since what reads one downstream reads
 other numbers.
 
+## A document's path inputs are loaded with no window
+
+Assumes: nothing. Changes no key.
+
+Facts to weigh. `window.py:PlayerWindow._pick_paths` is the one place a tool's `PATHS` loader is
+run and its params laid on the node. `bare.py` is handed the document as the window holds it,
+the loaders' params already in it, so it walks under the video the window has open and no other.
+
+- [ ] What picks each path input's file and lays its loader's params on the node imports no Qt,
+  and the window's is that and no second copy.
+  Check: a one-off: the purb document loaded with no window holds the params the player's does;
+  `tests/test_seams.py`, a seam, that `window.py` calls no loader of `PATHS` itself.
+
 ## A document walked with no window, under a named choice
 
-Assumes: A table written is in the footage's own pixels and rows;
-`docs/spec/what-a-node-declares.md`'s The registry is the one reader of what a tool declares.
+Assumes: A table written is in the footage's own pixels and rows; A document's path inputs are
+loaded with no window; `docs/spec/what-a-node-declares.md`'s The registry is the one reader of
+what a tool declares.
 
 Facts to weigh. `bare.py` walks the clip under the choice the document holds, started by the
 window, and drives its walk itself with no worker. Part 4's H6: its decoder is told where the
 store is by a global the window alone sets. What a `csv` node writes is `csv.py`'s `write` under
-its `default_name`, called by `tools/_csvfile.py:widget` and no facet; what a region offers is
-`region.py:crops`, no facet either.
+its `default_name`, called by `tools/_csvfile.py:widget` and no facet; where it writes is that
+widget's `_path`, which with `beside footage` off is a dialog's answer. What a region offers is
+`region.py:crops`, no facet either. `plan.py` takes a cutting node to be one whose tool has
+`cut_file`, and a tool that cuts in time serves no file.
 
 Open: whether the command is `bare.py` handed a choice or a second walker beside it.
 Recommended, and a session may build on it: one, which the window starts as it starts `bare.py`.
+
+Open: where a `csv` node with `beside footage` off writes with no window. Recommended, and a
+session may build on it: under a folder the command is given, and with none the command refuses
+the document, saying the node, before a row is walked.
 
 - [ ] A command walks a document under a choice named for each cutting node, with no window, and
   writes what its `csv` nodes write.
   Check: a one-off: its csv equals the one the player writes of the same document and choice.
 - [ ] What the command calls of a tool, to write and to learn what a cutting node offers, is a
-  facet the registry's table lists.
-  Check: the seam of the registry as the one reader, which stands.
+  facet the registry's table lists, and a cutting node is a node whose tool has the one that
+  says what it offers: `plan.py`'s `Entry.piece` and the command take it by that.
+  Check: the seam of the registry as the one reader, which stands; the baseline of
+  `docs/spec/what-a-node-declares.md`, compared.
 - [ ] The command's decoder keeps and reads a file's frame times in the store as the player's
   does.
   Check: the same one-off over a transport stream, `00000.MTS`.
@@ -102,18 +131,25 @@ Assumes: nothing.
 
 A stepped node's result at a row depends on where its walk began, so a tracker's identities in a
 bout walked alone are not those of the same rows cut from a walk of the whole clip.
-`held.py:Runs.over` answers today by cutting a range from the run that began earliest. TOPs and
-Bonsai both answer alone.
+`held.py:Runs.over` answers today by cutting a range from the run that began earliest, and
+`held.py:Runs.from_first_row` takes the run from row 0 over any other, both leaning to the
+second answer. TOPs and Bonsai both answer alone. The player's window is served by `Runs.over` too,
+called in `window.py` with the window's rows, so whichever rule a piece is held to, the window is held to it
+unless it is said to be no piece: under alone a window moved within a held walk of the clip
+walks its stepped nodes again, and under the other only a run from the piece's first row serves
+it.
 
 - [ ] Kendrick: a piece's result is the piece walked alone, or the same rows cut from a walk of
   what it was cut from; this line says which.
+- [ ] Kendrick: the player's window is a piece and held to that answer, or is a view of the
+  clip's rows that any held run may serve; this line says which.
 
 ## A held run serves what a piece's result is
 
 Assumes: A bout walked alone.
 
-- [ ] A stepped node's held rows are served for a range only where they are what the answer above
-  says that range's result is.
+- [ ] A stepped node's held rows are served for a piece's range only where they are what the
+  first answer above says that range's result is, and for the window's as the second says.
   Check: a seam: `Runs.over` across a range held from its own first row and the same range cut
   from a longer run.
 

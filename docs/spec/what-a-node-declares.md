@@ -52,7 +52,9 @@ node serves a file and the key of one that does in the player is not printed.
   document under `video-tests/`, with the commit it was printed at.
   Check: the file is there, a table a document.
 - [ ] Beside it, for each of those documents a node of which serves a file in the player, every
-  node's key as the player's graph plans it under the store as it stands.
+  node's key as the player's graph plans it under the store as it stands, and beside each served
+  node the file it serves, so a key a clip cut or deleted since has moved is told from one a
+  deliverable moved.
   Check: the file is there, and a served node's key in it is not the one `--plan` printed.
 
 ## The registry is the one reader of what a tool declares
@@ -90,17 +92,23 @@ computed and a fallback where it is read. `ParamWidget.add_int`, `add_float`, `a
 `add_text`, `add_choice` and `add_list` are the kinds of row there are. `region.py`, `file.py` and
 `inrange.py` have a card of their own. `Document.resolve` lays a node's params over `DEFAULTS`, so
 a fallback where a param is read restates what the node already holds. A tool imports the player
-inside `settings` alone, and its computing runs with no player.
+inside `settings` alone, and its computing runs with no player. A declaration is read where no
+widget is, a walk with no window checking a choice it is handed, so what it says of a param is
+the kind of its value, and the row is the player's to make of that. `registry.discover` makes a
+module that does not import an entry with its error and no crash.
 
 Open: the form of a declaration. Recommended, and a session may build on it: plain values of the
 language, as `DEFAULTS` is, that a tool writes with no import, so a tool's module still loads and
 computes with no player.
 
-- [ ] A tool declares each param in one place: its name, its default, its kind of row, and its
-  range or its choices. A tool with a card of its own declares its params as any other does, one
-  that is no row of a plain widget by its name and default alone. The registry's table lists the
-  facet with its hint.
+- [ ] A tool declares each param in one place: its name, its default, the kind of its value, and
+  its range or its choices. A tool with a card of its own declares its params as any other does,
+  one that is no row of a plain widget by its name and default alone. The registry's table lists
+  the facet with its hint.
   Check: `tests/test_registry.py`, the facet read from the table.
+- [ ] A declaration the registry cannot read is its tool's entry's error, as a module that does
+  not import is.
+  Check: `tests/test_registry.py`.
 - [ ] A tool's defaults and its plain settings widget are made of that declaration by the player;
   no tool has a `DEFAULTS` of its own, and none with a plain widget a `settings`. A tool with a
   card of its own keeps its `settings`.
@@ -127,15 +135,31 @@ and the player knows it by its shape in `graph.py:nbytes`, `graph.py:gated` and 
 `tests/test_seams.py`'s `TOOLS_MAY_IMPORT` and `TOOLS_MAY_TAKE`, which are not
 `sieve_player.__all__`. A table's dtype carries the plane it was found in, `_table.py:plane`, and
 `csv.py:fields` writes every numeric column, nothing saying which of them are in that plane's
-pixels.
+pixels. A column's name is a tool's to mint and some are made of a param: `attach.py` adds
+`<prefix>_<column>`, `sample.py` the column its param names, `kinematics.py` `dx`, `dy` and
+`speed`, which scale with a plane and are no position in it; `attach.py`'s area is in the mark's
+plane's pixels and not the table's. `_table.py`'s header has what a column means as the tool's
+that computes it. So no table of the player's can list the columns, and what one is in is said
+where it is minted. `registry.types` takes the set of types from what the tools name, so a type
+is a tool's to coin today.
 
 - [ ] One table under `sieve_player/`, importing no Qt and among what `tests/test_seams.py` lets a
   tool import, says of each type a wire carries its name, whether it is a table a row, how its
-  bytes are counted, whether it can be overlaid and, of a table, which columns are in its plane's
-  pixels, each as a position, a length or an area. The player reads these of the table and of no
-  result's shape; `tools/_table.py` reads the same table.
-  Check: a grep for the shape tests H17 names; `tests/test_seams.py`, a seam, that a tool's
-  `PRODUCES` and `EXPECTS` name types of the table.
+  bytes are counted and whether it can be overlaid, and says the units a column of a table may be
+  in: a position along x or along y, a length along x, along y or along neither, an area, each of
+  a plane's pixels. It names no column. The player reads these of the table and of no result's
+  shape; `tools/_table.py` reads the same table.
+  Check: a grep for the shape tests H17 names.
+- [ ] A type a tool produces or expects is a type of the table, so a new one is added there
+  first, where a tool coined it.
+  Check: `tests/test_seams.py`, a seam, that a tool's `PRODUCES` and `EXPECTS` name types of the
+  table.
+- [ ] A column's unit is said where the column is minted and carried on the table's dtype as its
+  plane is, with the plane it is of where that is not the table's; a column minted with none is
+  in no plane's pixels.
+  Check: `tests/test_seams.py`, a seam: no column is added under `tools/` with its unit left
+  unsaid, none being a thing said; a one-off: the unit of every column of a table below `blobs`,
+  `track`, `kinematics`, `attach` and `sample`, read back off its dtype.
 - [ ] Every document's plan prints what it printed.
   Check: the baseline, compared.
 
@@ -181,11 +205,18 @@ results where the document is not, whole, the one the walk began under.
 Assumes: nothing. Changes a csv's key line.
 
 Facts to weigh. `tools/_csvfile.py:key_line` names footage by a file's name, where the memo, the
-held runs, a cut clip and a table of frame times name it by `decoder.footage_print`.
+held runs, a cut clip and a table of frame times name it by `decoder.footage_print`. The line's
+key already holds that print, `plan.py:base_key` being made of it and a served node's key of its
+file's; `_csvfile.py:written_key` says whether a file is stale by the key alone; and nothing
+under `tools/` or `sieve_player/` reads `footage=` back. The name is the one part of the line a
+person reads.
+
+Open: whether the name stays on the line beside the print. Recommended, and a session may build
+on it: it stays, as a field of its own that nothing compares.
 
 - [ ] A csv's key line names its footage by `decoder.footage_print`.
   Check: a one-off: a csv written of a clip and of a copy of it under another name carry one
-  line.
+  key and one print.
 
 ## Held results and an edited tool
 
@@ -238,15 +269,20 @@ mark on a param cannot, `region.py`'s rect, or a param read only under some valu
 `plan.py:keyed` keys a node by what it answers in place of the node's params, where append adds
 to the hash. What a node hands out is its tool's `run`, `step` and `fold`, and for a node that
 serves or picks a file its `cut_file` or `select`. A param in no key moves no key when it is
-changed, so nothing is computed again for it.
+changed, so nothing is computed again for it. A tool with a `key_params` and a marked param says
+one thing twice, and `plan.py:keyed` keys a node whose `key_params` raises by the whole of its
+params, the marked among them.
 
 - [ ] A param's declaration says whether it changes what the tool's computing hands out, by any
   of those, and one left unsaid does.
   Check: `tests/test_registry.py`.
 - [ ] A node's raw key holds what `key_params` answers, in place of its params, for a tool that
   has one, and for any other its params that change the result; a param declared to change
-  nothing is in no key.
+  nothing is in no key, that of a node whose `key_params` raises among them.
   Check: `tests/test_graph.py`, the seam of keys extended.
+- [ ] A tool's `key_params` answers the same under two values of a param declared to change
+  nothing.
+  Check: the seam below, over the same params.
 - [ ] For every param declared to change nothing, its tool's computing hands out equal results of
   one input under two values of it.
   Check: a seam over every such param of every tool, so one the computing comes to read is found.

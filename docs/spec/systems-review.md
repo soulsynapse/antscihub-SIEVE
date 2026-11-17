@@ -131,7 +131,7 @@ for.
 - [x] The ledger says what it could not see: work that left no commit, and friction Kendrick has
   named in conversation that the log does not show, each entered as his and with his words.
   Check: the section is there and is not empty.
-- [ ] Kendrick: the classes are read, the ones not felt as friction are struck, and the ones felt
+- [x] Kendrick: the classes are read, the ones not felt as friction are struck, and the ones felt
   and missing are added.
 
 Open: Raven is read as Raven Pro, the Cornell bioacoustics program, whose selection tables and
@@ -160,7 +160,7 @@ the tree.
 - [x] It says where SIEVE is headed that the tree does not yet show, marked as direction and not
   as fact.
   Check: the paragraph cites the commit, finding or conversation each direction is read from.
-- [ ] Kendrick: part 1 is read and is the premise.
+- [x] Kendrick: part 1 is read and is the premise.
 
 ## What the tree holds
 

@@ -103,7 +103,7 @@ def test_the_same_pass_rewrites_a_tracks_csv_under_its_key_line(tmp_path):
     before = p.read_text(encoding="utf-8").splitlines()
     assert resolve.main([str(p), "--columns", "tag"]) == 0
     lines = p.read_text(encoding="utf-8").splitlines()
-    assert lines[0] == before[0] == "# sieve key=k1 rows=20-29 footage=ants.mp4 kind=tracks"
+    assert lines[0] == before[0] and before[0].startswith("# sieve key=k1 rows=20-29 footage=") and before[0].endswith(" kind=tracks name=ants.mp4")
     assert lines[1] == before[1].replace(",gate", ",identity,conflict,gate") and len(lines) == len(before)
     assert lines[2].startswith("20,0.666667,1,") and lines[2].endswith(",5,0,1") and lines[3].endswith(",nan,0,1")
     (tmp_path / "l.csv").write_text("20,29,2,3\n", encoding="utf-8")

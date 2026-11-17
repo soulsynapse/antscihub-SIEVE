@@ -222,7 +222,7 @@ person reads.
 Open: whether the name stays on the line beside the print. Recommended, and a session may build
 on it: it stays, as a field of its own that nothing compares.
 
-- [ ] A csv's key line names its footage by `decoder.footage_print`.
+- [x] A csv's key line names its footage by `decoder.footage_print`.
   Check: a one-off: a csv written of a clip and of a copy of it under another name carry one
   key and one print.
 

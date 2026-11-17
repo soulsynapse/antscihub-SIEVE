@@ -1008,7 +1008,7 @@ walk of the whole clip, and E2 after it, with E3's first part whenever a hand is
 E4, and E3's second part, until E2 asks for them.
 
 What would make E1 the wrong first. Not the count of settings no `run` reads: it sizes the marks
-and nothing else of E1, and is three
+and nothing else of E1, and is three by its one-off and four with `csv.py`'s
 (`docs/findings/2026-11-16-which-settings-no-run-reads.md`). E1's worth to his work is that one
 key answers what is still good for every kept thing and every job, where the held file, a bare
 walk and a csv each answer by a rule of their own, and a result let go for no reason he can see

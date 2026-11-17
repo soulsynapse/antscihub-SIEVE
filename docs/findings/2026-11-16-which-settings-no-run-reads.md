@@ -22,7 +22,10 @@ computing reaches, so one read only under some value of another, `top_hat.py`'s 
 bound typed blank, is counted as read; a mark on a setting could not say such a case either, and
 `key_params`, being a function of the params, can. A param no `DEFAULTS` declares is not counted:
 the five `draw`s of part 5's A11 that read an `outline` nothing sets are in no document and in no
-key.
+key. Nor is a `DEFAULTS` a tool imports: `csv.py` takes its from `tools/_csvfile.py`, the one-off
+counts it as none, and its one setting, `beside footage`, is read by the Write widget alone, by a
+reading of both files on 2026-11-17. `csv.py` has no `key_params`, so that setting is in its
+key. By the one-off and that reading together, 4 of 87.
 
 ## What a kept thing is good under, the six of A19
 
@@ -47,7 +50,7 @@ document holds.
 ## What this bears on
 
 The count sizes one thing, what a mark on a setting, E1's fourth step, would take out of a node's
-key as the tools stand: three settings. It does not size what one key that every kept thing and
+key as the tools stand: three settings by the one-off, and `csv.py`'s fourth. It does not size what one key that every kept thing and
 every job answers to is worth, and it is no test of E1.
 
 What Kendrick said he feels, reading the ledger's classes on 2026-11-16, is that whether a change

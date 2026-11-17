@@ -337,6 +337,91 @@ memory).
 [12] sidefx.com/docs/hdk/_h_d_k__op_basics__overview__dependencies.html. Fetched on 2026-11-16
 through a summarising fetch, so a quotation is as that reader gave it.
 
+### E2. A pipeline run over pieces of footage (C11)
+
+The job: the chain tuned on one piece of the footage, a region of the plate or a stretch of its
+rows, is run over every such piece, and what each run found comes back in the footage's own
+pixels and rows.
+
+The evidence is Kendrick's word and no commit: the largest thing missing (2026-11-14), and, on
+reading this list, that it "is going to have to exist" and is "definitely what it is reaching for
+right now". In the tree the half in space has begun and stops at one piece: a `region` serves the
+clip it cut, `plan.py:Entry.piece` says which piece a node's inputs are of, and a node that reads
+across two is refused. No tool cuts in time, nothing runs a document over each choice of a
+piece, `tools/file.py` picks one video where the experiment's folder holds four, and
+`bare.py` walks one clip, started by the window.
+
+The reference is Houdini's TOPs. It is the best fit because its unit is no file but a work item,
+which "contains attributes" that "are passed down to work items created from 'parent' work
+items" [13], so a piece cut from a piece carries how it was cut, and because it has both halves:
+a node "can generate multiple new work items based on previous work items ('fan-out')", a wedge
+making "the number of wedges, multiplied by the number of incoming work items", and a partition
+"doesn't continue processing until all the work items in the group are done", Wait for All
+grouping "all incoming work items into a single partition" [13]. The structure is the work item
+and its attributes, the owner is the TOP network beside the network that computes, and every run
+of a piece goes through it. A changed parameter dirties the node that made the items, and "any
+work item whose attributes have changed since the last cook are considered dirty" [2].
+
+The pressure it answers: thousands of items on a farm of machines, and work that outlives the
+session that asked for it. SIEVE is under neither by part 1's last row; it is under the count of
+files in a study, which part 1 has as headed for and Kendrick now has as where it is.
+
+| program | what a piece is | who makes the pieces | state across pieces | how results come back | where it runs |
+| --- | --- | --- | --- | --- | --- |
+| Houdini TOPs | a work item with attributes [13] | a node, from parameters or from the items above it [13] | none: an item is a job of its own [13] | a partition holds "the merged information of the grouped work items" [13] | a scheduler, the machine or a farm [2] |
+| Bonsai | a sequence within a sequence: `CreateObservable` "creates a new observable sequence controlled by the operators inside the group" [14] | an operator on the canvas | none carried, each being a new sequence, by this session's reading of [14] | an operator "collecting all the items from each sequence", `Concat` "one at a time" [14] | live, in the one workflow |
+| ImageJ | a file of a folder [8] | the folder | whatever the macro leaves set (m) | a results table, or a file a piece in the output folder [8] | the one process |
+| SLEAP | a video given to `sleap-track` [7] | the command line | none (m) | a `.slp` a video [7] | a second program [7] |
+| VapourSynth | whatever the script's own loop says, the script being Python [10] | the user's code | the user's | the user's | the script |
+| SIEVE | a region's shape, one chosen in a node's params; no piece in time | the geometry file, drawn by hand | does not arise, one piece being walked | a csv named by its rows, in the cut clip's own pixels (`tools/csv.py`) | the player, or `bare.py` for the piece chosen |
+
+Both programs that have pieces within a file run each as a thing of its own, with no state of a
+walk carried in. The ledger leaves that open for SIEVE as Kendrick's: whether a bout walked
+alone is to equal the same rows cut from a walk of the whole clip (F05). The references answer
+alone, and a tracker's identities then begin anew in each bout.
+
+The smallest thing that answers his word is four, and the for-each is a wedge:
+
+- A piece's record: the steps that cut it, rows or a rectangle, each relative to the piece
+  above, and their sum on the footage. `tools/region.py:origin` is the step in space.
+- A tool that cuts in time as `region` cuts in space, the one he calls period.
+- A command that walks a document with no window under a named choice of each cutting node, and
+  writes what its `csv` nodes write. `bare.py` is this for the choice the document holds.
+- The command run once a choice, each a process, the choices being the product of what each
+  cutting node offers. A piece's results are keyed apart by the params that chose it, which is
+  why E1's key comes first.
+
+Lifting back is then arithmetic on a table by the record's sum, done where the table is written.
+
+What of TOPs it leaves out: the scheduler and the farm; items generated while the work runs,
+SIEVE's pieces being known from the document before a walk; attributes as a general store, the
+record being the one thing a piece carries; partitions other than all; and a second network,
+the cutting nodes lying in the one document.
+
+What it takes is not sized here: the half in time needs a node that is no served file to set
+the rows a document is walked over, which the tree has for a served clip alone, and how far
+that reaches into `plan.py` and `walk.py` was not read. It replaces a hand's loop of choose,
+walk, write. SIEVE gives up nothing it has; what it takes on is a second way a document is run
+that must give what the window gives, which the bare walk already is and which H6 says differs
+today in its decoder.
+
+The case for leaving it alone: the loop by hand is short at four regions and four videos; part 1
+has Kendrick's own word that a direction is weak ground; and built before the keys are right it
+multiplies every stale result by the count of pieces.
+
+Verdict: build, after E1's steps and after the question of a bout walked alone is answered.
+
+A senior developer of TOPs, reading SIEVE: you have the item already, a node's params that
+choose a piece, and you have the job, the bare walk; what is missing is the thing that makes
+one from the other and waits. What they would not build again at this size: the scheduler, and
+dynamic generation, which is most of what makes a TOP network hard to reason about (the last
+clause is this session's and no developer's).
+
+(m) is from memory and was not fetched. [2], [7], [8] and [10] are part 1's.
+[13] sidefx.com/docs/houdini/tops/intro.html [14] bonsai-rx.org/docs/articles/higher-order.html.
+Fetched on 2026-11-16 through a summarising fetch, so a quotation is as that reader gave it.
+Bonsai's windows by time were looked for on [14] and are not on that page.
+
 ## 4. The systems SIEVE has, and what each module holds
 
 Every Python file of the tree: 13,828 lines under `sieve_player/`, 3,771 under `tools/`, 2,010

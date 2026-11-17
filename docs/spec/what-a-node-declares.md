@@ -67,13 +67,15 @@ importing nothing, and `document.py`'s readers of a tool are there for that. `EX
 or a tuple and is made a tuple in more than one place. The player calls a tool's `run`, `step`,
 `fold`, `draw` and `pick`; a call of a facet the registry answered is no reading of the tool. What
 a settings widget may have, the registry's `WIDGET_FACETS`, is looked for on the widget and is not
-this deliverable's.
+this deliverable's. The registry hands out `probe(tool, facet)`, which no module but the registry
+calls, and a module that called it would find out for itself as one calling `getattr` does.
 
 - [ ] No module under `sieve_player/` but the registry finds out what a tool declares, whether it
   has a facet or what a facet that is data holds; each asks the registry, by a name that says what
   is asked.
   Check: `tests/test_seams.py`, a seam: outside the registry no `getattr` or `hasattr` names a
-  facet of `FACETS`, and no facet that is data is read as an attribute of a tool.
+  facet of `FACETS`, no facet that is data is read as an attribute of a tool, and nothing calls
+  the registry's `probe`.
 - [ ] `document` and the modules that read a tool may import the registry, and
   `tests/test_seams.py` says so; the registry still imports nothing of the player.
   Check: the suite.
@@ -141,7 +143,11 @@ pixels. A column's name is a tool's to mint and some are made of a param: `attac
 plane's pixels and not the table's. `_table.py`'s header has what a column means as the tool's
 that computes it. So no table of the player's can list the columns, and what one is in is said
 where it is minted. `registry.types` takes the set of types from what the tools name, so a type
-is a tool's to coin today.
+is a tool's to coin today. A dtype's metadata is lost with no error by a concatenate of two that
+differ, by several fields taken and by a dtype made again of its `descr`, and
+`_table.py:_plane_dtype` makes one of `descr` and the plane alone
+(`docs/findings/2026-11-17-what-keeps-a-dtypes-metadata.md`); so a column whose dtype says
+nothing of it may be one whose unit was lost.
 
 - [ ] One table under `sieve_player/`, importing no Qt and among what `tests/test_seams.py` lets a
   tool import, says of each type a wire carries its name, whether it is a table a row, how its
@@ -156,10 +162,12 @@ is a tool's to coin today.
   table.
 - [ ] A column's unit is said where the column is minted and carried on the table's dtype as its
   plane is, with the plane it is of where that is not the table's; a column minted with none is
-  in no plane's pixels.
+  in no plane's pixels, and none is on the dtype as a unit is, so a column the dtype says nothing
+  of is told from one minted with none.
   Check: `tests/test_seams.py`, a seam: no column is added under `tools/` with its unit left
   unsaid, none being a thing said; a one-off: the unit of every column of a table below `blobs`,
-  `track`, `kinematics`, `attach` and `sample`, read back off its dtype.
+  `track`, `kinematics`, `attach` and `sample`, read back off its dtype, none among them and no
+  column unsaid.
 - [ ] Every document's plan prints what it printed.
   Check: the baseline, compared.
 

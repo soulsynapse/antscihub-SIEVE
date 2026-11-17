@@ -46,17 +46,25 @@ cannot be laid side by side or drawn over the footage. A piece's record holds cu
 `rescale` and `coarsegrain` hand out a plane of another size than the piece's, and a table's
 dtype carries the plane it was found in, `tools/_table.py:plane`. What a column is in is said
 where it is minted and carried on the dtype, in the units the wire table has; one minted with
-none is in no plane's pixels. `csv.py:default_name` is the footage's stem and the rows, and the
+none is in no plane's pixels, and one the dtype says nothing of may have lost its unit
+(`docs/findings/2026-11-17-what-keeps-a-dtypes-metadata.md`). A csv on disk written before this
+has no word of a piece on its key line. `csv.py:default_name` is the footage's stem and the rows, and the
 footage of a node below a region that serves no clip is the plate, so two such regions of one
 video name one file.
 
 - [ ] A csv's rows are the footage's by its piece's record, and each column that says a unit is
   in the footage's pixels, scaled along its axis by the plane it is of against the piece's size
   and, a position, moved by the record; a column that says none is written as it is; whoever
-  writes it. Its key line and its name say the piece.
+  writes it. Its name says the piece, and its key line says it always, the plate where the table
+  is of no cut, so a line with no word of a piece is a file written before this.
   Check: a one-off: a csv written below a region, and one below a region and a `rescale`, their
   positions read back against the plate; one below an `attach`, its mark's area against the
-  mark's plane; and of two regions of one video that serve no clip, two files.
+  mark's plane; of two regions of one video that serve no clip, two files; and one of the plate,
+  its key line saying so.
+- [ ] A table with a numeric column its dtype says nothing of is not written: the write raises,
+  naming the column.
+  Check: `tests/test_csv.py`, a seam: a table one column of which has no entry, handed to the
+  write.
 
 Worth a look: a csv of the purb document before and after, since what reads one downstream reads
 other numbers.
@@ -113,15 +121,32 @@ Assumes: A document walked with no window, under a named choice.
 
 Facts to weigh. A geometry file is a video's, so what a region offers is known under a video and
 not before it. A process a piece decodes the plate once a piece wherever its region serves no
-clip.
+clip. A document may hold cutting nodes side by side, none below another, each above a `csv` of
+its own: the product over those walks every `csv` once for each choice of a node it is not below,
+and `tools/_csvfile.py:replace` writes through `<path>.part`, so two processes writing one file
+meet there. `region.py`'s `serve clip` is on by default, and with it on, a shape chosen and no
+clip of it in the store, `region.py:cut_file` raises and the node does not run; the region's card
+alone cuts, every shape of the node in one ffmpeg pass, through `tools/_cutfile.py:Cut`, which
+imports no Qt and is polled.
 
 Open: how many pieces are walked at once. Recommended, and a session may build on it: a count the
 command is given, one where none is.
 
+Open: which cutting nodes the command ranges over. Recommended, and a session may build on it:
+those it is told, each other keeping the choice the document holds; told two of which neither is
+below the other, it refuses before a row is walked, saying both.
+
+Open: what the command does of a clip a choice is to serve and the store lacks. Recommended, and
+a session may build on it: it cuts them, a pass a video, before a piece of that video is walked.
+
 - [ ] One command runs that one for every choice: for each video its selector matches, the
-  product of what each cutting node offers under that video; each a process, and it ends when all
-  have.
-  Check: a one-off over the purb document: a csv a piece, each equal to the one made by hand.
+  product of what each cutting node it ranges over offers under that video, those nodes lying
+  one below another; each a process, no two writing one file, and it ends when all have.
+  Check: a one-off over the purb document: a csv a piece, each equal to the one made by hand;
+  and over a document of two regions side by side, as many walks as the one ranged over offers.
+- [ ] No piece is refused for a clip that is not cut: under each video, what the choices are to
+  serve and the store lacks is there before a piece of it is walked.
+  Check: the same one-off with the store holding no clip of the video.
 - [ ] A piece that fails is said with its choice, and the others finish.
   Check: the same one-off with one piece's geometry made to refuse.
 

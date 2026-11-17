@@ -214,13 +214,13 @@ before a session is spent on any of it.
 Assumes: the candidates, with its gate. One session takes one to three candidates; as many
 sessions as the cut list asks for.
 
-- [ ] Each candidate left on the list has an entry in part 3, in the form above.
+- [x] Each candidate left on the list has an entry in part 3, in the form above.
   Check: each entry has every element of the form; each reference's mechanism cites a source
   fetched; each pressure cites its row of part 1.
-- [ ] No entry's smallest thing is the reference's system by another name: each says what of the
+- [x] No entry's smallest thing is the reference's system by another name: each says what of the
   reference it leaves out and why SIEVE does not need it.
   Check: the sentence is in every entry with a verdict of build or watch.
-- [ ] Part 4's line for each system an entry touches says the verdict.
+- [x] Part 4's line for each system an entry touches says the verdict.
   Check: the two agree.
 
 ## What a seasoned user expects

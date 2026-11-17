@@ -422,6 +422,121 @@ clause is this session's and no developer's).
 Fetched on 2026-11-16 through a summarising fetch, so a quotation is as that reader gave it.
 Bonsai's windows by time were looked for on [14] and are not on that page.
 
+### E3. What is asked for, said by what asks (C6)
+
+The job: each thing that shows or writes a result says which node it reads, over which rows and
+what of it, and the worker computes what is said and nothing else.
+
+The evidence. F08's first clause, with Kendrick's word that pull is "one of the most important
+things to build out" and that "sometimes I want a draw on the video that is hard to surface as
+something needing it". The tree has both ways side by side: what the plot reads is said, by
+`graph.py:Graph.watch`, and what the frame's overlay reads is taken, by `graph.py:Graph.drawing`,
+to be every fed frame node whose tool has a `draw`. The display itself asks nothing: it reads
+`Graph.peek`, which never computes, and what is there to be read is what the worker's ladder
+chose to make (`worker.py:Worker._turn`). Work done for nothing that asked: `98e65cac`, the
+window walk folding a density for every fed frame node, shown or not, and `3bd2d8d1`; done
+oftener than anything read it, `e9142899` and `5c095255`; not done for something that asked,
+`fbf4fab7`.
+
+The reference is Houdini's interest. It is the best fit because SIEVE's readers are what
+Houdini's are, a few elements of the interface with a standing wish and no single call to wait
+on, where Nuke's and VapourSynth's reader is a render that asks for a frame and blocks or is
+called back. The asker is "some UI element (such as the viewport) that observes the nodes whose
+display flag are enabled", and "nodes are never cooked unless they are asked for their data" [1];
+a UI element expresses an "interest on the nodes" and is told to recook when they are dirtied
+[12]. The structure is the interest, the owner is the node graph, and a cook begins only at one.
+
+The pressure it answers: networks of thousands of nodes of which a few are looked at. SIEVE is
+under it by another measure, part 1's row of the length and size of footage: a chain is short
+and a row of it is dear.
+
+| program | who asks | what an ask names | work with no asker |
+| --- | --- | --- | --- |
+| Houdini | a UI element with an interest [12] | a node's data | none: "never cooked unless they are asked" [1] |
+| Nuke | the Viewer or a write, and each node of the one above it | "the region and channels of interest" [4] | none, by the pull [4] |
+| VapourSynth | the script's output, and each filter in `arInitial` [9] | frames by number [9] | none (m) |
+| Blender | what is seen | nothing is named: a change is pushed, and "it is important to avoid updates of invisible objects" [3] | what a visibility flag does not stop |
+| Bonsai | a subscriber: "the downstream operator ... subscribes" [6] | the whole sequence | none, a sequence with no subscriber not running, by [14]'s "no data actually flows" |
+| SIEVE | the plot, by `Graph.watch`; for the frame and the walks, the worker's ladder | the plot's nodes; the window; the row under the playhead | the overlay's nodes whether drawn or not (`Graph.drawing`); the monitor names such work after it is done (`catalogue.py:unread`) |
+
+The smallest thing that answers the evidence is the overlay's ask said as the plot's is: the
+display tells the graph which drawers it draws. Beyond it, and wanted when E2 needs a walk with
+no window to ask for a csv over a whole clip: an ask as a value, who, which node, which rows and
+whether its result, its fold or its drawing, held as a set the ladder reads in place of
+`Plan.walk`, `Graph.drawing` and `Graph.watch`.
+
+What of Houdini it leaves out: dirtying, SIEVE knowing by a key what is good and needing no
+flag; kinds of interest; and a cook on the asker's thread, the GUI thread here never computing.
+Of Nuke, the region within a frame: a cut clip is SIEVE's region.
+
+What it takes: the first is a method and its caller. The second is the ladder of
+`worker.py:Worker._turn` and the three methods of `graph.py`, and was not sized. It replaces a
+rule the worker holds of what is worth making. SIEVE gives up a ladder whose whole order is read
+in one function, and an ask then needs a rank where a rung has a place.
+
+The case for leaving it alone: every commit cited is fixed, the ladder has four rungs, and the
+monitor already names work nothing read.
+
+Verdict: build the first; watch the second, which E2 turns, a command that walks with no window
+being a reader the ladder has no rung for.
+
+A senior developer of Houdini, reading SIEVE: your viewport does not ask, it looks in a cache
+and hopes, and a thread elsewhere guesses what it will look for. What they would not build
+again at this size: interests of more than one kind.
+
+### E4. One place a failure is said (C8)
+
+The job: a failure is made a value where it is met, and one function decides where it is shown.
+
+The evidence. F04, 27 commits and 13 coming back, over 35 days, fixed apart in `window.py`,
+`graph.py`, `worker.py` and `pane.py`; A3, seven channels and a site choosing its own; and a
+process that ends saying nothing, by `docs/findings/2026-11-16-the-player-died-on-a-click.md`.
+None is claimed as prevented. Kendrick, on the list: an ideal to be worked towards, sites moved
+into one thing as problems come up, the one thing needing a structure, and no priority.
+
+The reference is Python's `logging`. It is the best fit because it is the structure he asks for
+and nothing more, a record parted from where it goes, and is in the standard library, so its
+price at SIEVE's size is known. "Log event information is passed between loggers, handlers,
+filters and formatters in a LogRecord instance", "handlers send the log records ... to the
+appropriate destination", and "the level set in each handler determines which messages that
+handler will send on" [15]. The structure is the record, the owner is the application, which
+alone configures handlers [15], and every message goes through a logger.
+
+The pressure it answers: code of many authors writing to destinations none of them chose. SIEVE
+is under it by part 1's row of who writes the code, a session choosing a channel at each site.
+
+| program | a failure is | who decides where it shows | where |
+| --- | --- | --- | --- |
+| Python `logging` | a `LogRecord` [15] | the application's handlers [15] | wherever a handler sends |
+| Houdini | an error or a warning added to the node that cooked (m) | the node graph | a badge on the node and its info (m) |
+| A language server | a diagnostic: range, severity, source, message (m) | the editor | the line, a list, the status bar (m) |
+| ImageJ | an exception in a window of its own, or a line in the Log (m) | the site | as written |
+| SIEVE | a string, set where it was met | the site | one of seven channels (A3) |
+
+The smallest thing is the record and a function of a dozen lines: what failed, a node or the
+player; who is charged, the tool, the footage or the player; and the text. A node's goes to its
+standing and its card, the player's to the header, each to stderr. No site moves until a fix
+touches it. Whether the record is `logging`'s own is open.
+
+What of `logging` it leaves out: the tree of loggers, formatters, configuration from a file,
+and levels beyond what the record's two fields say.
+
+What it takes: the function, and then nothing until a site is touched. It replaces nothing at
+first. SIEVE gives up nothing. The mark of a launch that did not end cleanly is a fix apart, a
+file written at launch and removed at a clean close.
+
+The case for leaving it alone is Kendrick's and is the verdict.
+
+Verdict: watch. What turns it: the next commit the ledger would file under F04, whose fix then
+lands in the one place and brings its site with it; or E2, a walk with no window having no
+header and no card to say a failure on.
+
+A senior developer of `logging`, reading SIEVE: seven print statements with seven audiences.
+What they would not build again at this size: the hierarchy of loggers and its configuration.
+
+(m) is from memory and was not fetched. [1], [3], [4], [6], [9], [12] and [14] are above.
+[15] docs.python.org/3/howto/logging.html, fetched on 2026-11-16 through a summarising fetch.
+
 ## 4. The systems SIEVE has, and what each module holds
 
 Every Python file of the tree: 13,828 lines under `sieve_player/`, 3,771 under `tools/`, 2,010
@@ -443,16 +558,16 @@ where it does not.
 | S1 | The document | M01 | 546 | Every reader and writer of the pipeline: the canvas, the pane, the plan, the graph, the window, `bare.py`, `__main__.py`. Nothing writes a node but through `Document` or a node's fields. It has no history of its changes: the player holds no undo, and the one in the tree is the geometry utility's (M52). |
 | S2 | The registry of tools | M11, M12 | 250 | Discovery (`main.py`, `__main__.py`, `bare.py`) and the menu's facts (`window.py:PlayerWindow.__init__`). The facets it declares are read round it: `registry:probe` has no caller outside its package (A2). E1: build. |
 | S3 | The plan and the keys | M02 | 248 | `graph.py:Graph.sync` and `__main__.py:show_plan`; every key the memo, the held file and the ledger hold is `plan.py:_key`'s. Nothing goes round it for a node's result; what a kept file is good under is answered in five places more (A19). E1: build. |
-| S4 | The runtime | M03, M04 | 822 | The worker, the walk, `bare.py`, the simulations and `bench.py` compute through `Graph`; the display reads `Graph.peek`. The memo is its own. |
+| S4 | The runtime | M03, M04 | 822 | The worker, the walk, `bare.py`, the simulations and `bench.py` compute through `Graph`; the display reads `Graph.peek`. The memo is its own. E3: build its first part, watch its second. |
 | S5 | The decoder | M05 | 586 | The graph alone reads rows of it. The window opens it, corrects its count and tells it where the store is (H6). |
-| S6 | The walk and its thread | M06, M07, M08 | 714 | One `_Walk` under three drivers: the worker's window lane, its clip lane, and `bare.py`'s process. |
+| S6 | The walk and its thread | M06, M07, M08 | 714 | One `_Walk` under three drivers: the worker's window lane, its clip lane, and `bare.py`'s process. E2: build; E3: watch. |
 | S7 | The held results | M09, and W14 of M24 | 337, and 103 counted in S10 | `held.py` holds the runs and the file; when a run is held, served or written is `window.py`'s (H2). |
 | S8 | The store | M10 | 87 | Which folder, and what lies in it for whoever draws it. What a file in it is named is its writer's: a tool's and the decoder's. |
 | S9 | The stream and its readers | M13 to M23 | 4,412 | Every run, read, turn and paint is an `Event` through one `Emitter`; the ledger, the catalogue, the report, the dump, the pace and the monitor's window read it. It is 4,412 lines to the 3,590 of S1 to S8 together. |
-| S10 | The interface | M24 to M33 | 5,081 | Widgets that are told and report: by its module's own word each of the canvas, the pane, the plot and the strip knows nothing of the runtime, and `window.py` is the one place the two sides meet. |
+| S10 | The interface | M24 to M33 | 5,081 | Widgets that are told and report: by its module's own word each of the canvas, the pane, the plot and the strip knows nothing of the runtime, and `window.py` is the one place the two sides meet. E4: watch. |
 | S11 | Launch and diagnostics | M34 to M37, M61 to M63 | 609 | `play`, the command line, the recent list, where stderr goes; `main.py`, and two scripts that drive the player with no screen, `smoke.py` and `bench.py`. |
 | S12 | The icon reference | M38 | 387 | Nothing of the player reads it. |
-| S13 | The tools | M44 to M50 | 3,099 | The registry finds a tool, and the graph, the walk, the pane and the display call what it declares; nothing else reaches one. A tool reaches the player through `ParamWidget`, `theme` and `play`, and three go past `sieve_player.__all__`: `background.py` (`decoder.EndOfStream`), `region.py` (`held.in_units`) and `bg_subtract.py`'s launcher (`document`). What a tool may import is `tests/test_seams.py`'s to say, by `sieve_player/__init__.py`'s word, and the tests are not read here. |
+| S13 | The tools | M44 to M50 | 3,099 | The registry finds a tool, and the graph, the walk, the pane and the display call what it declares; nothing else reaches one. A tool reaches the player through `ParamWidget`, `theme` and `play`, and three go past `sieve_player.__all__`: `background.py` (`decoder.EndOfStream`), `region.py` (`held.in_units`) and `bg_subtract.py`'s launcher (`document`). What a tool may import is `tests/test_seams.py`'s to say, by `sieve_player/__init__.py`'s word, and the tests are not read here. E1 and E2: build. |
 | S14 | What tools share | M39 to M43 | 672 | A tool imports of these and of no other tool, by each file's own word. Two of the five were made by fixes the ledger files under F10: the table kind out of `blobs.py` and `blobs_to_mask.py` (`32bbc5a6`), its drawing out of `_table.py` (`d113c8bb`). `_cutfile.py` goes past `__all__` too (`store`, `decoder.footage_print_by_stamp`). |
 | S15 | The geometry utility | M51 to M60 | 2,010 | A program of its own: it imports nothing of `sieve_player` or `tools`, and meets them at one file, the geometry JSON, and one command line (`tools/region.py:utility_command`). It has what the player has not: undo (M52), an ask before unsaved work is left (M57) for a file a hand drew, and a library of kept configurations (M54). |
 

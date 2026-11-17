@@ -207,7 +207,7 @@ before a session is spent on any of it.
   Check: the figures are there with the commands that made them.
 - [x] Classes and attritions that trace to no system are listed apart as traced to none.
   Check: every class of the ledger and every attrition of part 5 is in one list or the other.
-- [ ] Kendrick: the list is cut to the candidates worth an entry.
+- [x] Kendrick: the list is cut to the candidates worth an entry.
 
 ## The entries
 

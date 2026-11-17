@@ -230,6 +230,113 @@ Fixes and no system, from part 5 and the ledger: five tools draw by an `outline`
 declares; `recent.py:note` leaves its part file; the geometry file is written where it lies; a
 document is written CRLF.
 
+### The cut
+
+Kendrick's, on reading the list. Seven are written up, in four entries: C1, C2, C4 and C5 as one,
+E1, at his word that they are one shape and the most valuable of the list; C6, which he holds as
+important as those and which reads what E1 declares; C8, very important by his word and needing
+talk before it is written; C11 last. Not written up: C3, a check and no system, which E1 takes as
+the check its key marks are held to; C7 and C10, each a fix; C9, whose rule the tree has and
+whose remainder is E1's; C12 to C14, deletions that wait on a search of `tests/`.
+
+### E1. What a tool declares, and the key the player makes of it (C1, C2, C4, C5)
+
+The job: a tool says once what its settings are, what it reads and what it hands out, and the
+player makes of that alone the key of each result, whether a kept result is still good, and what
+may be wired to what.
+
+The evidence. A setting that changes no result empties a cache: `outline` is read by nine `draw`s
+and by no `run` (A11), lies in a node's params, and `plan.py:plan` keys a node by the whole of
+them unless its tool has `key_params`, which `tools/region.py` alone has; Kendrick feels it all
+the time, and how many settings are so is not counted. Six places answer what a kept thing is
+good under (A19; `391bddd9`, `eb973068`, `00fd8c19`, `be59a820`). What lies on a `blobs` wire is
+defined under `tools/` and known to the player by its shape (H17; `cd887844`, `cce7cb8e`,
+`e9142899`, `2216f272`). A tool's facets are read by `getattr` in six modules beside the registry
+(A2, H9; `64ce8f59`, `997700a3`, `ba71e6f5`), and a setting is said in up to four places (A11):
+in `tools/top_hat.py` the default in `DEFAULTS`, the range in `settings` and in a constant, the
+check in `top_hat`. F05's work done again: `d30bd9f0`, `7f0a645d`, `4079a72d`.
+
+The reference is Nuke's Op. It is the best fit because it is a pull by the row over image planes,
+as SIEVE's frame nodes are, and because it holds the four jobs as one contract in a fixed order,
+where Houdini spreads them over parms, data ids and interests. A node declares its knobs; its
+hash is by default "the hashes of all its inputs" and "the hashes of all the knob values at that
+frame/view" [11]; a knob flagged `NO_RERENDER` "doesn't contribute towards the hash" [11]; the
+Viewer and the DiskCache node "use the Op hash as a key directly" [11]; `_validate` sets what the
+node will hand out, its format, channels and frame range, before any pixel; `_request` tells it
+"the region and channels of interest"; then `engine` computes [4]. The structure is the Op and
+its knobs, the owner is Nuke, and every cache goes through the hash.
+
+The pressure it answers: plugin authors who have not read Nuke, and a disk cache that outlives
+the session and is shared by a studio. SIEVE is under the first by part 1's second row, and under
+the second on one machine only, by its third and fourth: a held file, a csv and a cut clip
+outlive a session, and a recompute is long because the footage is.
+
+| program | a setting is declared | what keys a result | who records a dependency | what a node says of its output | the key reaches |
+| --- | --- | --- | --- | --- | --- |
+| Nuke | once, as a knob | inputs' hashes and every knob but those flagged out [11] | the node, by a flag or `append` | `_validate`, before computing [4] | memory, Viewer and disk caches alike [11] |
+| VapourSynth | as arguments of the script's call (m) | nothing: a cache holds frames by number for a node that lives as long as the script (m) | the filter, at creation: "An array of nodes the filter requests frames from and the access pattern" [9] | "The output format of the filter", at creation [9] | no store past the process (m) |
+| Houdini | once, as a parm template (m) | no key: a node is dirty or not, and its own parms are "marked as used for cooking by default" [12] | the node, calling `addExtraInput` "upon every cook" for what it read of another [12] | geometry with its attributes, known by cooking (m) | file caches are a node the user places (m) |
+| Blender | as RNA properties (m) | no key: a change tags what depends on it [3] | the relations builder, "at a dependency graph construction time" [3] | a datablock's type | evaluated copies in memory [3] |
+| Shake, a build system | in the rule | what the rule read, recorded as it ran and checked on the next run (m) | the system, by watching | a file | a store shared between machines (m) |
+| SIEVE | in up to four places (A11) | the upstream key, the tool's name and all its params, or `key_params` (`plan.py:plan`) | the tool, by `key_params`, in one of thirty-eight | `PRODUCES`, a name; what the name holds is the tools' (H17) | the memo and the held file by `plan.py:_key`; five places more by their own (A19) |
+
+None of the three programs of SIEVE's family records what a run read: each keys or dirties by
+every setting and lets the declaration take one out. Recording is Shake's, and its price is that
+a key is not known until the rule has run once, where `plan.py` makes every key before anything
+runs and is pure for it. C1 was put as recording; the references argue for the mark.
+
+The smallest thing that answers the evidence is three, sharing a place:
+
+- A setting declared once: its default, its kind of row, its range or choices, and whether it
+  changes the result. `DEFAULTS`, the rows of a plain `settings`, a check of a choice and the key
+  are read off it. The three cards with a state of their own keep their `settings`.
+- The kinds a wire carries in one table that `sieve_player` holds and a tool imports: the name,
+  whether it is rows, how its bytes are counted, whether it can be overlaid. Today those are
+  `tools/_table.py`, `graph.py:nbytes` and `gated`, and `document.py:OVERLAYABLE`.
+- The registry as the one reader of a facet, with `EXPECTS` made a tuple once.
+
+And one rule beside them: a store of a node's result is named by the plan's key and the
+footage's print and by nothing of its own. Which of A19's six that is true of is not known, the
+six not having been read whole, and reading them is the first step of building.
+
+What of Nuke it leaves out: the frame, view and proxy in a hash, SIEVE keying by row beside the
+key; Ops unified by hash; `_request`, which is C6's; a class a tool inherits, a tool staying a
+module of attributes; and a surface held still across versions, part 1 arguing for one that is
+checked and not for one that is kept.
+
+What it takes: every tool is touched, the 237 lines of plain `settings` in 35 tools become
+declarations, and `document.py`'s six readers, `plan.py`'s and `canvas.py`'s go through the
+registry. It replaces `key_params` as a function where a mark says as much, the fallbacks of A11
+and the four makings of a tuple. SIEVE gives up a `settings` that is a tool's own code in the
+plain case, and a held file made under a key that a mark then changes is found by nothing, as
+`391bddd9` records of the last such change.
+
+How it is shown right, the change being large. Three of its four steps change no key: the
+registry as the one reader, the settings declared once, and the wire kinds moved. For each,
+`python -m sieve_player <document> --plan` over the nine documents prints the same table before
+and after, the plan being pure. The fourth, the marks, changes keys on purpose and is held to
+two checks: a one-off that runs each tool under two values of each setting marked as changing
+nothing and compares what `run` hands out, and C3, a clip walked bare compared with what the
+player holds under the same keys.
+
+The case for leaving it alone: every bug cited is fixed; `key_params` exists and could be
+written for the tools whose settings are worst; the saving of the marks is unknown until the
+settings no `run` reads are counted; and a tool is one file on purpose, which a declaration read
+by the player makes less so.
+
+Verdict: build, the three steps that change no key first, and the marks after the count.
+
+A senior developer of Nuke, reading SIEVE: the hash is right and already yours, but a knob is
+not a thing here, so nothing can hang on one, and five of your caches do not use the hash you
+have. What they would not build again at this size: the knob flags, some dozens of them, where
+SIEVE needs one, and the hash's context of frame, view and proxy (the count of flags is from
+memory).
+
+(m) is from memory and was not fetched. [3], [4] and [9] are part 1's.
+[11] learn.foundry.com/nuke/developers/80/ndkdevguide/advanced/hashing.html
+[12] sidefx.com/docs/hdk/_h_d_k__op_basics__overview__dependencies.html. Fetched on 2026-11-16
+through a summarising fetch, so a quotation is as that reader gave it.
+
 ## 4. The systems SIEVE has, and what each module holds
 
 Every Python file of the tree: 13,828 lines under `sieve_player/`, 3,771 under `tools/`, 2,010
@@ -249,8 +356,8 @@ where it does not.
 | | system | modules | lines | what goes through it, and what goes round it |
 | --- | --- | --- | --- | --- |
 | S1 | The document | M01 | 546 | Every reader and writer of the pipeline: the canvas, the pane, the plan, the graph, the window, `bare.py`, `__main__.py`. Nothing writes a node but through `Document` or a node's fields. It has no history of its changes: the player holds no undo, and the one in the tree is the geometry utility's (M52). |
-| S2 | The registry of tools | M11, M12 | 250 | Discovery (`main.py`, `__main__.py`, `bare.py`) and the menu's facts (`window.py:PlayerWindow.__init__`). The facets it declares are read round it: `registry:probe` has no caller outside its package (A2). |
-| S3 | The plan and the keys | M02 | 248 | `graph.py:Graph.sync` and `__main__.py:show_plan`; every key the memo, the held file and the ledger hold is `plan.py:_key`'s. Nothing goes round it for a node's result; what a kept file is good under is answered in five places more (A19). |
+| S2 | The registry of tools | M11, M12 | 250 | Discovery (`main.py`, `__main__.py`, `bare.py`) and the menu's facts (`window.py:PlayerWindow.__init__`). The facets it declares are read round it: `registry:probe` has no caller outside its package (A2). E1: build. |
+| S3 | The plan and the keys | M02 | 248 | `graph.py:Graph.sync` and `__main__.py:show_plan`; every key the memo, the held file and the ledger hold is `plan.py:_key`'s. Nothing goes round it for a node's result; what a kept file is good under is answered in five places more (A19). E1: build. |
 | S4 | The runtime | M03, M04 | 822 | The worker, the walk, `bare.py`, the simulations and `bench.py` compute through `Graph`; the display reads `Graph.peek`. The memo is its own. |
 | S5 | The decoder | M05 | 586 | The graph alone reads rows of it. The window opens it, corrects its count and tells it where the store is (H6). |
 | S6 | The walk and its thread | M06, M07, M08 | 714 | One `_Walk` under three drivers: the worker's window lane, its clip lane, and `bare.py`'s process. |

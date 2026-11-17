@@ -196,16 +196,16 @@ holds.
 The list of what is read against a reference is fixed here, from the evidence, and cut by Kendrick
 before a session is spent on any of it.
 
-- [ ] Part 3 opens with the candidates, a line each: the job, the classes and attritions that
+- [x] Part 3 opens with the candidates, a line each: the job, the classes and attritions that
   trace to it, and their commits as prevented or made cheaper had it been there, by hash.
   Check: no candidate is without evidence; three hashes drawn are filed as the line says.
-- [ ] What Kendrick has named as a gap is a candidate on his word, cited as his: running a
+- [x] What Kendrick has named as a gap is a candidate on his word, cited as his: running a
   pipeline over pieces of footage is one.
   Check: the line is there.
-- [ ] A system the tree holds is a candidate for shrinking where its lines are large beside the
+- [x] A system the tree holds is a candidate for shrinking where its lines are large beside the
   classes it found or the callers it has; each such line gives both figures.
   Check: the figures are there with the commands that made them.
-- [ ] Classes and attritions that trace to no system are listed apart as traced to none.
+- [x] Classes and attritions that trace to no system are listed apart as traced to none.
   Check: every class of the ledger and every attrition of part 5 is in one list or the other.
 - [ ] Kendrick: the list is cut to the candidates worth an entry.
 

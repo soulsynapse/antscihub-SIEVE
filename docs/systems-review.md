@@ -39,6 +39,11 @@ tune a chain on a window of rows until the band keeps what is wanted, walk it ov
 a table. The worker's ladder is that order, a scrub, the window walk, the clip walk
 (`sieve_player/worker.py`).
 
+It is made for speed. Kendrick, reading this part: "It is a race with trex. SIEVE is made for
+speed." `v5-runs`, which measured SIEVE against a port of TRex and added a decoder that reads
+ahead, is parked two commits off v5 and unmerged (`c0b417f4`); that is where the measuring lies
+and no sign the race was left.
+
 What it has declined to be, each by a decision the tree or the log records:
 
 - A tool with a window of its own, or a wide one. "Chains get longer; tools do not get wider"
@@ -54,8 +59,6 @@ What it has declined to be, each by a decision the tree or the log records:
   ground truth to judge them by (`4d8f513e`), and a session's note of 2026-11-01 has Kendrick wanting
   the loose ants where they cross and not the ids inside the cluster. That is his word at second
   hand.
-- A race with TRex. `v5-runs`, which measured SIEVE against a port of it and added a decoder that
-  reads ahead, is parked two commits off v5 and unmerged (`c0b417f4`).
 
 ### The pressures
 
@@ -110,16 +113,18 @@ over many files, and SIEVE has none.
 
 ### Where it is headed
 
-Direction, none of it in the tree.
+Direction, none of it in the tree. Kendrick, reading this part: a direction is no strong ground
+for what SIEVE needs later, and the main things are what it needs now. So no candidate of part 3
+rests on a line of this list but the one that is his own word, the first.
 
 - A pipeline run over pieces of footage, replicates cut in space and bouts cut in time, and the
   results brought back to the footage: Kendrick, 2026-11-14, "Periods to bouts follows regions to
   crop", as the ledger and a session's note record it. The spatial half has begun: a region serves
   the clip it cut (`README.md`, `cut_file`; `07dd9830`).
-- From one file to the files of an experiment. No commit says it; it is read from the four videos
-  beside one document, and is this session's inference.
+- From one file to an experiment's data. It was read from the four videos beside one document,
+  and Kendrick, reading this part, has it right and says data where this said files.
 - Identity over finished tracks: `tools/resolve.py` is in the tree since `57b02e09` and in none of
-  the nine documents.
+  the nine documents. Kendrick, reading this part: correct.
 - Names. A pass over the tools' and the regions' names is his to make after a conversation
   (2026-11-09, as the ledger records it; `09094ef1` cancelled two renames).
 - More of pull. Kendrick, reading the ledger's classes: "pull is probably one of the most
@@ -131,6 +136,99 @@ Direction, none of it in the tree.
 The monitor is not headed for less. What `46899a83` records as largely not needed is one reader
 of it that has since gone, as the ledger's finding says under What this could not see; Kendrick
 calls the monitor extremely helpful and finds a hang by it.
+
+## 3. The candidates
+
+The list, before any is read against a reference; an entry is written for each that Kendrick
+leaves on it. A candidate's commits are told as prevented, where the problem would not have been
+written had the system been there, or as made cheaper, where it would still have come and been
+found or settled in one place. Both are what might have been, judged by the session that puts the
+system forward and from each message's opening lines; a hash is filed in the ledger under the
+class its line names, and that much can be checked.
+
+### Systems the evidence argues for
+
+- C1. What a run read, recorded, and its key made of that. F05's work done again, A11, and F22 by
+  way of it. Prevented: none claimed. Made cheaper: `d30bd9f0`, `7f0a645d`, `4079a72d`. Most of
+  its evidence is in no commit: Kendrick, that a setting which changes no result empties a cache
+  and that he feels it all the time; and `key_params`, which one tool of thirty-eight has. What
+  it would save is unknown until a one-off runs each tool and lists the params no `run` read.
+- C2. One answer to what a kept thing is good under. A19, and F05's stale result served.
+  Prevented: none claimed. Made cheaper: `391bddd9`, `eb973068`, `00fd8c19`, `be59a820`.
+- C3. A clip walked bare, compared with what the player holds for the same keys and rows. It
+  finds and prevents nothing. F02's silent kind, F05 and the half of F07 that is a tool's result.
+  Made cheaper to find: `54ad1445`, `88a413f1`. Kendrick's case under F07, an identity made anew
+  by a walk begun part way, is in no commit.
+- C4. The kind on a wire, said in one place the player and the tools both read. F17's first part,
+  H17. Prevented: `cd887844`, `cce7cb8e`. Made cheaper: `e9142899` (also F06), `2216f272`.
+- C5. One reader of what a tool declares. F17's second part, A2, H9, and A11 where a param is
+  read with a fallback. Prevented: `64ce8f59`, in the part of it that read a tool's own constant
+  as a facet. Made cheaper: `997700a3`, `ba71e6f5`.
+- C6. What is asked for, said by what asks. F08's first clause. Prevented: `98e65cac`,
+  `3bd2d8d1`. Made cheaper: `5c095255`, `e9142899`, `fbf4fab7`. Kendrick, of a draw on the video
+  that is hard to make known as needed, is in no commit.
+- C7. One function that writes a file whole or not at all. F18, A1. Prevented: `929f1614`. Made
+  cheaper: `e4c08b3a`, `2060fbfe`. It does not reach the larger half of F18, a file replaced or
+  deleted while a reader held it (`a603747b`, `eb973068`, `07dd9830`).
+- C8. One place a failure is said, and a mark of a launch that did not end cleanly. F04, A3.
+  Prevented: none claimed. Made cheaper: `c6de1d12`, `59ec9351`, `b588358c`, `81854fd6`,
+  `3216eb59`. The mark's evidence is `docs/findings/2026-11-16-the-player-died-on-a-click.md`.
+- C9. A job stopped when its own key moves and by nothing else, with a way to tell a long call
+  and a child process. F22, and the three ways a child is held under A10. The rule is in the
+  tree for a read, a walk and a cut (`18c2010a`, `36e3565e`, `a603747b`), and those are what it
+  settled. What is left has `020ccd0a`, made cheaper, and Kendrick's word that a bare walk is
+  dropped by changes that do not concern it (H4).
+- C10. The walk named on each signal of its progress. F21's one case that stands. Prevented:
+  `b5c5e8f5`. Made cheaper: `5ceb287a`.
+
+### Named by Kendrick
+
+- C11. A pipeline run over pieces of footage, replicates cut in space and bouts cut in time, the
+  results brought back to the footage. His, 2026-11-14, as the largest thing missing; the ledger
+  has it under what it could not see. No commit, by its nature. C1 and C2 are what it leans on,
+  by his word of the tool named period.
+
+### Held by the tree, for shrinking
+
+Lines are part 4's or `wc -l`. Callers are from `grep -rlE` over `sieve_player`, `tools`,
+`utilities` and the three scripts for an import of the module or a call of the name; `tests/` is
+not read, so a caller there is not counted.
+
+- C12. The stream and its readers, S9: 4,412 lines to the 3,590 of S1 to S8. Of what it found,
+  four commits of v5 say in their opening lines that a report or a figure of it named the
+  problem (`aaca3f7e`, `98e65cac`, `5c095255`, `687f37b0`), of nine whose message matches
+  `git log v5 --no-merges -i -E --grep="monitor (report|found|named|read)|reports? of
+  2026|the monitor found"`; F20 is 29 commits spent on the monitor itself. Kendrick finds a hang
+  by it and calls it extremely helpful, so the candidate is its parts with few readers and not
+  the whole: `catalogue.py:cold` and `Projection`, 52 lines and no caller found;
+  `ledger.py:saved`, no caller found, and `replay`, called by `report.py`'s command line alone;
+  `trace.py:to_trace`, 27 lines, called by its own command line alone; `stats.py`, 71 lines, read
+  by `bench.py` alone.
+- C13. The icon reference, S12: 387 lines, one caller, the Dev menu (`dev/__init__.py`).
+- C14. `tools/retired/`, M50: 185 lines, no importer found; the registry does not list them.
+
+### Traced to none
+
+Classes. F01: no system; part 4's list of what a module holds for another is to watch. F03 and
+F06: handled, by Kendrick's word, or the monitor's to find. F08's second clause, the rule a store
+keeps or lets go by: each store's own, and H2 is where it is watched. F07's footage: the decoder is the
+system and its fixes are in. F10 and F11: by design. F12: a document lifted on load is fine by
+him. F13, F14, F24, F25: how the tree is written, and no friction of his. F15, F16: fine as they
+stand. F19: fact, with trust in the suite mattering and one test still failing some runs
+(`023c46ce`). F17's third part, the names of the stream's records: settled by `d5381dad`. F20: the
+monitor being set, and C12 is where its size is asked of. F23: the monitor shows a slow tool.
+
+Attritions. A4, a store bounded by bytes: its class is F06. A12, a bound typed as text: a third
+copy stands and is a fix. A10's threads, which part 5 left for this reading: of the openings of
+F02's and F03's commits, the threads met over the plan (`54ad1445`, `6bf747b6`, `b33be8d5`), the
+document (`e2a0191d`), the dump's file (`84d53ce1`, `efd1fe10`), the decoder's locks
+(`75212615`, `ce9e6b0b`), the worker's wait (`119391c9`, `ccb805a4`) and an object's life
+(`687f37b0`), and none tells of one handoff fixed in two of the six; the rest were not read past
+their filing.
+
+Fixes and no system, from part 5 and the ledger: five tools draw by an `outline` param nothing
+declares; `recent.py:note` leaves its part file; the geometry file is written where it lies; a
+document is written CRLF.
 
 ## 4. The systems SIEVE has, and what each module holds
 

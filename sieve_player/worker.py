@@ -130,7 +130,7 @@ class Worker(QThread):
             self._cv.notify()
 
     def stop_clip(self):
-        """Halt the clip walk where it is; the rows it has stand."""
+        """Halt the clip walk where it is; the rows it has stand, and the chain's result over them goes out."""
         with self._cv:
             self._clip_on = False
             self._cv.notify()
@@ -232,5 +232,5 @@ class Worker(QThread):
         if clip.i < clip.length:
             if self._clip_on and fed:
                 return "walk", [(clip, clip.turn)]
-            return "walk", [(clip, clip.halt)]
+            return "walk", [(clip, clip.halt), (clip, clip.emit)]   # the chain over the rows it stopped at: the cadence's last result is short of them
         return None

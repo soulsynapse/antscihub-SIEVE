@@ -413,6 +413,7 @@ class PlayerWindow(QMainWindow):
         self.runs = held.Runs(HELD_BYTES, self._result_bytes) # the held runs, the file's and this session's walks'
         self._spared = False                      # the window's results are a held run's, and the worker runs no chain over it
         self._clip_ended = False                  # the clip walk told of its last row and its results have not yet come
+        self._clip_rests = False                  # the clip walk last told of every row of its range done: the clip's last, or the one it was stopped at
         self._given = False                       # the window walk was given held results for some of the chain and steps the rest
         self._unwritten = False                   # a run was held since the file was written
         self._file = None                         # the held.File the runs were read from or last written to; the writer's thread's while that lives
@@ -1410,7 +1411,7 @@ class PlayerWindow(QMainWindow):
 
     def _clip_walked(self, done, total, ran):
         self._paced("clip", done, total, ran)
-        self._clip_ended = done >= total > 0        # the results that follow are a walk's own, held at once
+        self._clip_ended = self._clip_rests = done >= total > 0     # the results that follow are a walk's own, held at once
         if self._clip_asked:
             self.header.clear_note()
             if done >= total:
@@ -1419,26 +1420,33 @@ class PlayerWindow(QMainWindow):
 
     def _clip_ready(self, results, start, fps):
         self.clip_results = results
-        if self._whole() and self._clip_ended:
+        stands, rows = self._stands()
+        if stands and self._clip_ended:
             self._clip_ended = False
-            self._hold_run(0, self.count, self._whole())
-        elif self._whole():
+            self._hold_run(0, rows, stands)
+        elif stands:
             self._hold.start()      # a rerun of the chain over a walk long ended: held once the knob is at rest
         self._show_pinned()
 
-    def _whole(self):
-        """The clip walk's results that reach the clip's last row."""
-        return {nid: r for nid, r in self.clip_results.items()
-                if isinstance(r, dict) and "signal" in r and len(r["signal"]) == self.count}
+    def _stands(self):
+        """The clip's results that are a run from row 0, and its rows: those that reach furthest,
+        where they reach the clip's last row or the clip walk rests, stopped short of it or
+        refused; ({}, 0) while it walks and with none."""
+        has = {nid: r for nid, r in self.clip_results.items() if isinstance(r, dict) and "signal" in r}
+        rows = max((len(r["signal"]) for r in has.values()), default=0)
+        if not rows or not (self._clip_rests or rows == self.count):
+            return {}, 0
+        return {nid: r for nid, r in has.items() if len(r["signal"]) == rows}, rows
 
     def _write_held(self, wait=False):
-        """A whole clip walk's results are held as a run, and the runs held since the file was
+        """A clip walk's results that stand are held as a run, and the runs held since the file was
         written go beside the document when it has been saved, on a thread of their own, which
         pickles only the runs the file has not had; `wait` returns once the file has landed. A
         write that did not land is made again with the next, the one at the video's close included."""
         if self.graph is None:
             return
-        self._hold_run(0, self.count, self._whole())
+        stands, rows = self._stands()
+        self._hold_run(0, rows, stands)
         self._hold.stop()
         path = held.path_for(self.doc.path)
         busy = self._writer is not None and self._writer.is_alive()

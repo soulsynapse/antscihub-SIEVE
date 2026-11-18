@@ -737,12 +737,15 @@ def test_the_window_and_the_clip_are_one_walk_over_two_ranges():
 
     w, led = Worker(g, every=3), Ledger()      # its turns taken here: a range closed short says so, and its record is closed
     g.on_event = led.event
+    stopped = []
+    w.clipReady.connect(lambda r, s, fps: stopped.append(r))
     w.set_window(2, 6)
     w.walk_clip()
-    for _ in range(1 + 6 + 1 + 3):
+    for _ in range(1 + 6 + 1 + 4):
         turn(w)
     w.stop_clip()
     turn(w)
+    assert len(stopped[-1]["head"]["signal"]) == 4      # a row past the cadence's last: the stop sends the chain over the rows it rests at
     w.set_window(4, 6)
     turn(w)
     turn(w)
@@ -750,7 +753,7 @@ def test_the_window_and_the_clip_are_one_walk_over_two_ranges():
     g.sync()
     w.invalidate()
     turn(w)
-    assert [(x.lane, x.done, x.length) for x in led.view().walks] == [("window", 6, 6), ("clip", 3, 3), ("window", 1, 1)]
+    assert [(x.lane, x.done, x.length) for x in led.view().walks] == [("window", 6, 6), ("clip", 4, 4), ("window", 1, 1)]
 
 
 def test_a_scrub_computes_the_draws_the_display_names_and_no_other():

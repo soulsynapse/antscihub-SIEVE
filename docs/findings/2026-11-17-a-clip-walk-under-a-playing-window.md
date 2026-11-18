@@ -64,6 +64,28 @@ fresh copy of the document, whose held file did not spare the window, was the sa
 and every node in it was slower from its first bucket, track at 1.1 against 0.45, which the stores
 do not explain and which was not looked into.
 
+## A walk's own rows
+
+Kendrick's report of a clip walk at `19132b6a`, the window moved four times before it and the
+player paused, had the video's cache decoding again 193 rows over 1,213 and the memo running 142
+again. Its saved history has both stores making again the walk's first 142 rows, which the display
+had made at the first window and the stores let go of as the window moved, and after them the
+cache alone, a row in about thirteen wherever the walk decoded, none over the rows of the two
+windows it had walked before, whose detect the memo held.
+
+A frame is 25 MB, so the window asks the cache for 5.8 GB and the held rows fill it. A walk
+elsewhere then kept none of its own: over a 400-row clip made for it, a cache of 20 frames and 30
+rows held, a walk of 200 rows outside them left the cache holding 18 frames, all of the rows held.
+A tool that reads the row before its own would decode it again at every row. The trickle was not
+reproduced in a player, the same window moved and the walk paused making nothing again in 1,044
+rows, so that it was the walk's newest frame let go as it landed is read off the history's spacing,
+one to a clearing of a sixteenth, and not seen.
+
+Rows within `graph.NEAR` of a lane's walk now go last of all, before the rows held. The same clip:
+9 frames of the rows held and 9 beside the walk. On the screen, 14 s each: playing, 250 to 253
+decodes to 250 rows and no `rowReady` past the window; paused with the window moved to 5126, 243 to
+259 decodes to 250 rows; neither walk made anything again.
+
 ## Not measured
 
 - What taking the ranking costs a row: a sort of the store's image entries under its lock, once

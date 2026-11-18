@@ -21,6 +21,9 @@ from .plan import _key, base_key, facts, plan
 from .stream import Emitter
 from .wire import ROWS, is_table, nbytes, own_bytes
 
+NEAR = 8    # rows about a walk's own row that the stores let go of last of all: what a tool reading beside its row reads
+
+
 def inband(v, band):
     """Where `v` lies between the band's lo and hi; outside them once lo is above hi, the band
     inside out, as the handles are read in both domains."""
@@ -454,27 +457,33 @@ class Graph:
         self._at = {**self._at, "display": row}
 
     def _row_order(self):
-        """A store's order of its rows, as Memo.order: a row outside holds() goes before one
-        inside, and of two on a side the one further from every row something is at, the
-        display's and each lane's walk's."""
-        (start, rows), at = self._held_rows, tuple(self._at.values())
-        end = start + rows
-        return lambda row: (not start <= row < end, min([abs(row - a) for a in at], default=0))
+        """A store's order of its rows, as Memo.order, each row as (where, how far): where is 0
+        within NEAR rows of a lane's walk, 1 inside holds() and 2 outside, the higher going first,
+        and of two alike the one further from every row something is at, the display's and each
+        lane's walk's."""
+        (start, rows), at = self._held_rows, self._at
+        end, every = start + rows, tuple(at.values())
+        walks = tuple(row for who, row in at.items() if who != "display")
+
+        def order(row):
+            far = min([abs(row - a) for a in every], default=0)
+            near = any(abs(row - a) <= NEAR for a in walks)
+            return (0 if near else 1 if start <= row < end else 2, far)
+        return order
 
     def _memo_order(self):
         """`_row_order` of a memo key's row, with an entry under a key no node of the plan has going
         before every other, and inside holds() a node the display does not read going before one
-        it does: the shown node, the overlay's and those whose draw() it paints. Outside it a
-        walk's own rows go by how far behind it they are, whatever node they are of."""
+        it does: the shown node, the overlay's and those whose draw() it paints."""
         rows, plan = self._row_order(), self._plan
         live = {e.raw_key for e in plan.values()}
         read = {plan[nid].raw_key for nid in (self.shown, self.over, *self._painted) if nid in plan}
 
         def order(k):
             if k[0] not in live:
-                return (2, False, 0)
-            outside, far = (False, 0) if k[1] is None else rows(k[1])
-            return (outside, not outside and k[0] not in read, far)
+                return (3, False, 0)
+            where, far = (1, 0) if k[1] is None else rows(k[1])
+            return (where, where == 1 and k[0] not in read, far)
         return order
 
     def footage(self, nid):

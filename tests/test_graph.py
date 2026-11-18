@@ -196,10 +196,12 @@ def test_a_read_after_the_node_moved_on_or_a_halt_is_cancelled():
 
 def test_the_memo_lets_go_of_the_rows_held_last_whatever_was_read_since():
     doc = D.from_tools([gray, add])
-    g = Graph(doc, Dec(), TOOLS, memo_bytes=300)       # a row is gray and add, 24 bytes each: the four held and two more
+    dec = Dec()
+    dec.count = 30
+    g = Graph(doc, dec, TOOLS, memo_bytes=700)         # a row is gray and add, 24 bytes each: the four held and the rows NEAR the walk
     g.holds(0, 4)
     g.looks_at(0)
-    for row in range(10):
+    for row in range(30):
         g.walk_row(row)
     assert g.memo.evictions and all(g.peek(row, nid) is not None for row in range(4) for nid in ("gray", "add"))
     doc.node("add").params["k"] = 2
@@ -207,11 +209,16 @@ def test_the_memo_lets_go_of_the_rows_held_last_whatever_was_read_since():
     for row in range(6):                                # what is under the key add has left goes before a row held
         g.walk_row(row)
     assert all(g.peek(row, nid) is not None for row in range(4) for nid in ("gray", "add"))
-    g = Graph(doc, Dec(), TOOLS, memo_bytes=150)       # the four rows held do not fit: the shown node's stay
+    g = Graph(doc, dec, TOOLS, memo_bytes=580)         # the four rows held do not fit beside the walk's: the shown node's stay
     g.holds(0, 4)
-    for row in range(10):
+    for row in range(30):
         g.walk_row(row)
-    assert all(g.peek(row, "add") is not None for row in range(4))
+    assert all(g.peek(row, "add") is not None for row in range(4)) and g.peek(28, "gray") is not None
+    g = Graph(doc, dec, TOOLS, memo_bytes=100)         # nor do the walk's own: the row before the walk's outlives a row held
+    g.holds(0, 4)
+    for row in range(30):
+        g.walk_row(row)
+    assert g.peek(28, "add") is not None and g.peek(0, "add") is None
 
 
 def test_a_static_node_is_computed_once_held_once_and_peeked_at_any_row():

@@ -3,7 +3,7 @@ clip walk in a PlayerWindow on the screen, ms a row by node in buckets of the wa
 GUI thread's turns took beside them, the events counted a bucket, and who asked the worker for a
 display row.
 
-    .venv/Scripts/python.exe docs/findings/experiments/2026-11-17-a-clip-walk-under-a-playing-window.py <document.json> <seconds> <rows a bucket> [paused] [hidden]
+    .venv/Scripts/python.exe docs/findings/experiments/2026-11-17-a-clip-walk-under-a-playing-window.py <document.json> <seconds> <rows a bucket> [paused] [hidden] [window=<row>]
 
 The document, the files beside it that begin with its name and its held file are copied to a
 temporary folder and opened there. QT_QPA_PLATFORM=offscreen runs it with no window shown."""
@@ -76,8 +76,17 @@ if "paused" in sys.argv and win.playing:
 tick = QTimer()
 tick.timeout.connect(table)
 tick.start(6000)
-QTimer.singleShot(2500, win._toggle_clip)
-QTimer.singleShot(int(2500 + SECONDS * 1000), app.quit)
+def ended():
+    for w in win.ledger.view().walks:
+        print(f"{w.lane} from {w.start}: {w.done} rows, made again {dict(w.recomputed)}")
+    app.quit()
+
+
+MOVED = next((int(a.split("=")[1]) for a in sys.argv if a.startswith("window=")), None)     # the window moved there before the clip walk
+if MOVED is not None:
+    QTimer.singleShot(1500, lambda: win.set_window(MOVED, win.window_[1]))
+QTimer.singleShot(2500 if MOVED is None else 7000, win._toggle_clip)
+QTimer.singleShot(int((2500 if MOVED is None else 7000) + SECONDS * 1000), ended)
 app.exec()
 t0 = seen[0][0]
 done = seen[-1][1]

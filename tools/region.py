@@ -56,6 +56,7 @@ import sys
 import cv2
 import numpy as np
 
+from sieve_player.wire import NONE
 from tools._cutfile import QUALITIES, Cut, delete, folder_for, footage_of, landed, rect_key, rect_piece, unused, whole
 from tools._draw import contour as draw_contour
 from tools._table import moments, plane_dtype, with_column
@@ -165,7 +166,7 @@ def table(plate, shapes, choice=""):
         r["x"], r["y"], r["w"], r["h"], r["area"] = x, y, bw, bh, int(np.count_nonzero(inside))
         r["cx"], r["cy"], r["angle"], r["major"], r["minor"] = x + cx, y + cy, angle, major, minor
         r["mean"], r["peak"], r["core"], r["contour"] = np.nan, np.nan, -1, contour
-    out = with_column(out, "name", np.array([s["name"] for s in shapes], dtype=str))
+    out = with_column(out, "name", np.array([s["name"] for s in shapes], dtype=str), NONE)
     return out[out["name"] == choice] if choice and choice in out["name"] else out
 
 

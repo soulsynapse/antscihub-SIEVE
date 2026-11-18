@@ -21,12 +21,12 @@ from PySide6.QtCore import QFileSystemWatcher, QProcess, QProcessEnvironment, QR
 from PySide6.QtGui import QImage, QKeySequence, QPainter, QPen, QPixmap, QShortcut
 from PySide6.QtWidgets import QFileDialog, QHBoxLayout, QMainWindow, QMenu, QMessageBox, QProgressBar, QPushButton, QSizePolicy, QVBoxLayout, QWidget
 
-from . import bare, dev, document, filemenu, held, recent, store, theme
+from . import bare, dev, document, filemenu, held, recent, store, theme, wire
 from . import decoder as decoder_module
 from .canvas import Canvas
 from .catalogue import Log
 from .decoder import Decoder
-from .graph import Graph, nbytes
+from .graph import Graph
 from .ledger import Ledger, row_cost
 from .machine import Watch
 from .pace import Pace, clock
@@ -43,7 +43,7 @@ from .plot import Plot, Stage
 from .worker import Worker
 
 HOLD_MS = 2000              # how long the held runs rest, nothing new held, before they are written beside the document
-HELD_BYTES = 512 << 20      # what the held runs may take together, as graph.nbytes counts them, before the oldest go
+HELD_BYTES = 512 << 20      # what the held runs may take together, as wire.result_bytes counts them, before the oldest go
 TELL = 0.1                  # s between the worker's tellings of a walk's rows; docs/findings/2026-11-13-a-signal-a-row.md
 DUMP_ENV = "SIEVE_DUMP"  # names the file every video opened in this process dumps its stream to
 MEMO_ENV, CACHE_ENV = "SIEVE_MEMO_GB", "SIEVE_CACHE_GB"   # the memo's and the decoder cache's limits; unset, each class's default
@@ -409,7 +409,7 @@ class PlayerWindow(QMainWindow):
         self.results, self.result_start = {}, 0   # node id -> the series chain's results, and the row they start at
         self.clip_results = {}                    # the same over the clip walk's rows, from row 0; {} when there are none
         self._clip_asked = False                  # a clip walk was asked for and has not finished or been stopped
-        self.runs = held.Runs(HELD_BYTES, nbytes) # the held runs, the file's and this session's walks'
+        self.runs = held.Runs(HELD_BYTES, self._result_bytes) # the held runs, the file's and this session's walks'
         self._spared = False                      # the window's results are a held run's, and the worker runs no chain over it
         self._clip_ended = False                  # the clip walk told of its last row and its results have not yet come
         self._given = False                       # the window walk was given held results for some of the chain and steps the rest
@@ -1412,6 +1412,10 @@ class PlayerWindow(QMainWindow):
             r = None        # of a key the node has left, where the walk it came from had no rows to run the chain over again
         best = self.runs.from_first_row(nid, key)
         return r if best is None or (isinstance(r, dict) and "signal" in r and len(r["signal"]) >= best.rows) else best.results[nid]
+
+    def _result_bytes(self, nid, result):
+        e = None if self.graph is None else self.graph.entry(nid)
+        return wire.result_bytes(None if e is None else e.produces, result)
 
     def _show_size(self):
         """The selected node's card says about what its result over the clip would add to the held

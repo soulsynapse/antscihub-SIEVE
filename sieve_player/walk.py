@@ -13,21 +13,23 @@ import numpy as np
 
 from . import density
 from .registry import fold_of
-from .graph import Memo, Series, gated, inband, nbytes
+from .graph import Series, gated, inband
 from .stream import ASKED, GIVEN, HAND, SHAPE
+from .wire import ROWS, is_table, nbytes, own_bytes, share_bytes
 
 STACK_BYTES = 512 << 20   # the most a walk's stack and stepped results, the window's or the clip's, may take, as nbytes counts them
 
 
-def _stack_for(n, out):
-    return np.empty(n, object) if out.dtype.fields is not None else np.empty((n,) + out.shape, out.dtype)
+def _stack_for(n, out, table):
+    return np.empty(n, object) if table else np.empty((n,) + out.shape, out.dtype)
 
 
-def _fits(stack, out):
-    """Whether `out` is a row of `stack`: a table into an object stack, an image by shape and dtype."""
+def _fits(stack, out, table):
+    """Whether `out` is a row of `stack`, `table` saying whether the walked node hands out one: a
+    table into an object stack, an image by shape and dtype."""
     if stack.dtype == object:
-        return out.dtype.fields is not None
-    return stack.shape[1:] == out.shape and stack.dtype == out.dtype
+        return table
+    return not table and stack.shape[1:] == out.shape and stack.dtype == out.dtype
 
 
 @dataclass
@@ -35,8 +37,9 @@ class _Stepped:
     """A stepping node's progress over a range: the key it is stepped under, the state its tool
     returned last, its result accumulated over `rows` rows, and the bytes the result holds; beside
     it what graph.gated makes of that result, `gate` and `fed` over the first `gated` rows under
-    `band`, None for a result with no signal."""
+    `band`, None for a result with no signal. `table` is whether the node's type is a table."""
     key: str
+    table: bool = False
     state: object = None
     fields: dict = field(default_factory=dict)
     rows: int = 0
@@ -45,7 +48,7 @@ class _Stepped:
     gated: int = 0
     gate: object = None
     fed: object = None
-    empty: object = None    # the one emptied table every gated-out row of a "rows" result feeds
+    empty: object = None    # the one emptied table every gated-out row of a table type's result feeds
 
     def regate(self, band):
         """Brings `gate` and `fed` up to `rows` under `band`: from the row they reached under the
@@ -58,7 +61,7 @@ class _Stepped:
         lo, hi = self.gated, self.rows
         if lo >= hi:
             return
-        tables = self.fields.get("rows")
+        tables = self.fields[ROWS] if self.table else None
         if self.gate is None:
             self.gate = np.ones(len(signal), bool)
             self.fed = np.empty(len(signal), object) if tables is not None else np.zeros(len(signal), signal.dtype)
@@ -146,19 +149,20 @@ class _Walk:
         out = np.asarray(g.walk_row(row, p)) if read else None
         ran = g.tally() != before
         stacked = bool(p.chain) and read     # without a chain to run nothing reads the stack, and the rows are not held
-        if self.i and ((self.stack is not None) != stacked or (stacked and not _fits(self.stack, out))):
+        of = None if p.fold is not None or p.walk not in p.entries else p.entries[p.walk].produces    # a folded row is of no type
+        if self.i and ((self.stack is not None) != stacked or (stacked and not _fits(self.stack, out, is_table(of)))):
             self.drop()      # the nodes or the shape changed under the walk; start over
             g.began(self.start, self.length, SHAPE)
             return
         if not self.i:
-            if stacked and self.length * nbytes(out) > STACK_BYTES:
-                self.refuse(f"the {self.name}'s stack would be {self.length * nbytes(out) / 2**30:.1f} GB; "
+            if stacked and self.length * nbytes(of, out) > STACK_BYTES:
+                self.refuse(f"the {self.name}'s stack would be {self.length * nbytes(of, out) / 2**30:.1f} GB; "
                             f"{', '.join(p.heads)} do not share a fold()")
                 return
-            self.stack = _stack_for(self.length, out) if stacked else None
+            self.stack = _stack_for(self.length, out, is_table(of)) if stacked else None
         if stacked:
             self.stack[self.i] = out
-            self.bytes += nbytes(out)
+            self.bytes += nbytes(of, out)
         if not self.spared:
             self.step(self.i + 1)
         self.i += 1
@@ -236,7 +240,7 @@ class _Walk:
         stepping = [(nid, p.entries[nid], params, src) for nid, _, params, _, src in chain if p.entries[nid].steps]
         for nid, (key, fields) in self.given.items():
             if nid not in self.stepped:
-                self.stepped[nid] = _Stepped(key, fields=fields, rows=self.length)
+                self.stepped[nid] = _Stepped(key, is_table(p.entries[nid].produces), fields=fields, rows=self.length)
         for nid in [n for n in self.stepped if n not in {s[0] for s in stepping}]:
             self.bytes -= self.stepped.pop(nid).bytes
         for nid, e, params, src in stepping:
@@ -244,7 +248,7 @@ class _Walk:
             if held is None or held.key != e.raw_key:
                 if held is not None:
                     self.bytes -= held.bytes
-                held = self.stepped[nid] = _Stepped(e.raw_key)
+                held = self.stepped[nid] = _Stepped(e.raw_key, is_table(e.produces))
             fold = None if shared or nid not in heads else fold_of(e.tool)
             for r in range(held.rows, rows):
                 if nid in heads:
@@ -259,7 +263,7 @@ class _Walk:
                         exc.sieve_node = nid
                         g.note(nid, f"raised stepping row {self.start + r}: {type(exc).__name__}: {exc}")
                         raise
-                    ev[0], ev[1] = "step", sum(nbytes(v) for v in share.values())
+                    ev[0], ev[1] = "step", share_bytes(e.produces, share)
                 for f, v in share.items():
                     a = held.fields.get(f)
                     if a is None:
@@ -373,12 +377,12 @@ def run_chain(graph, stack, start, done, folds, stepped=None, p=None):
             continue
         with graph.demand("walk", nid), graph.probe(nid, start + done - 1, key[nid]) as ev:
             try:
-                results[nid], feeds[nid] = gated(tool.run(series, params), band)
+                results[nid], feeds[nid] = gated(tool.run(series, params), band, p.entries[nid].produces)
             except Exception as exc:
                 exc.sieve_node = nid
                 graph.note(nid, f"raised over {done} rows from {start}: {type(exc).__name__}: {exc}")
                 raise
-            ev[1] = Memo._size(results[nid])
+            ev[1] = own_bytes(results[nid])
         graph.note(nid, "")
         if isinstance(results[nid], dict):
             results[nid] = {**results[nid], "key": key[nid]}   # beside its gate: what a tool that writes a file records

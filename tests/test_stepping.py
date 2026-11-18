@@ -14,7 +14,8 @@ import pytest
 
 from sieve_player import document as D
 from sieve_player import registry
-from sieve_player.graph import Graph, nbytes
+from sieve_player.graph import Graph
+from sieve_player.wire import nbytes
 from sieve_player.plan import base_key, plan
 from sieve_player.walk import run_chain
 from sieve_player.registry.__main__ import check, report
@@ -161,7 +162,7 @@ def test_the_walk_steps_the_prefix_once_a_row_runs_the_suffix_per_emit_and_match
         assert equal(r, run_chain(w.graph, w._win.stack[:n], 0, n, {}))
     raw = g.entry("track").raw_key
     assert not [k for d in (g.memo._big, g.memo._small, g.memo._pinned) for k in d if k[0] == raw]
-    stack_bytes = sum(nbytes(row) for row in w._win.stack)
+    stack_bytes = sum(nbytes("blobs", row) for row in w._win.stack)
     assert w._win.bytes == stack_bytes + sum(ev.bytes for ev in events if ev.kind == "step") and w._win.bytes > stack_bytes
     held = {n: w._win.stepped[n] for n in ("track", "kinematics")}      # the objects, since a freed one's id comes back
     events.clear()

@@ -13,12 +13,12 @@ import cv2
 import numpy as np
 
 from tools._draw import draw as draw_table
-from tools._table import DTYPE as BLOBS, plane_dtype
+from tools._table import DTYPE as BLOBS, columns_of, dtype_of, plane_dtype
 
 SIEVE_TOOL = True
 NAME, KIND, EXPECTS, PRODUCES = "detect", "frame", ("mask", "gray"), "blobs"
 MAX_AREA = 100000
-DTYPE = np.dtype([(n, BLOBS[n]) for n in ("x", "y", "w", "h", "area", "cx", "cy", "angle", "major", "minor")])
+DTYPE = dtype_of(columns_of(BLOBS, ("x", "y", "w", "h", "area", "cx", "cy", "angle", "major", "minor")))
 PARAMS = {
     "dark": {"default": False, "kind": "bool"},
     "min_area": {"default": 20, "kind": "int", "range": (0, MAX_AREA)},

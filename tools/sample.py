@@ -8,6 +8,7 @@ empty reads NaN, or 0 for count. The table must carry a plane and must not alrea
 """
 import numpy as np
 
+from sieve_player.wire import AREA, NONE
 from tools._draw import draw as draw_table
 from tools._table import footprint, plane as plane_of, with_column
 
@@ -38,7 +39,8 @@ def sample(table, plane, column, method="mean"):
             out[k] = np.nan
         else:
             out[k] = v.mean() if method == "mean" else v.max()
-    return with_column(table, column, out)
+    unit, of = (AREA, plane.shape[:2]) if method == "count" else (NONE, None)
+    return with_column(table, column, out, unit, of)
 
 
 def run(frames, row, params):

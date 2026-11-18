@@ -19,6 +19,7 @@ from .document import INPUT, VIDEO_TOOL, video_output
 from .registry import by_name, draws, names_cut_files
 from .plan import _key, base_key, facts, plan
 from .stream import Emitter
+from .wire import ROWS, is_table, nbytes, own_bytes
 
 def inband(v, band):
     """Where `v` lies between the band's lo and hi; outside them once lo is above hi, the band
@@ -37,34 +38,21 @@ def banded(v, band):
     return out
 
 
-def gated(result, band):
-    """A series node's result as the player hands it out: the tool's dict with "gate", the rows its
-    signal keeps under the node's band, and `fed`, what a series node downstream reads: the result's
-    "rows", one table a row, with each gated-out row emptied, when it has them, else the signal with
-    the rest zeroed. A result without a signal passes through ungated, and feeds nothing."""
+def gated(result, band, type):
+    """A series node's result as the player hands it out, the node producing `type`: the tool's dict
+    with "gate", the rows its signal keeps under the node's band, and `fed`, what a series node
+    downstream reads: where the type is a table, the result's tables, one a row, with each
+    gated-out row emptied, else the signal with the rest zeroed. A result without a signal passes
+    through ungated, and feeds nothing."""
     if not isinstance(result, dict) or "signal" not in result:
         return result, None
     signal = np.asarray(result["signal"])
     gate = np.ones(len(signal), bool) if band is None else inband(signal, band)
-    if "rows" in result:
-        fed = np.empty(len(result["rows"]), object)
-        fed[:] = [r if g else r[:0] for r, g in zip(result["rows"], gate)]
+    if is_table(type):
+        fed = np.empty(len(result[ROWS]), object)
+        fed[:] = [r if g else r[:0] for r, g in zip(result[ROWS], gate)]
         return {**result, "gate": gate}, fed
     return {**result, "gate": gate}, np.where(gate, signal, np.zeros((), signal.dtype))
-
-
-def nbytes(v):
-    """The bytes `v` holds: an array's own and, through an object field or an object array, every
-    array behind it, since `ndarray.nbytes` counts a contour as its eight-byte pointer; 64 for
-    anything else that is not None."""
-    if v is None:
-        return 0
-    if not isinstance(v, np.ndarray):
-        return 64
-    if not v.dtype.hasobject:
-        return v.nbytes
-    held = [x for n in v.dtype.names if v.dtype[n] == object for x in v[n].ravel()] if v.dtype.names else v.ravel()
-    return v.nbytes + sum(nbytes(x) for x in held)
 
 
 class Ref(NamedTuple):
@@ -101,9 +89,9 @@ def to_hold(v, handed, pinned):
 
 
 class Memo:
-    """LRU bounded by bytes, as `nbytes` counts them. Image-shaped entries (ndim >= 2) are evicted
-    before small ones. An entry put with an owner is pinned: never evicted, counted toward the
-    limit, and gone only through `unpin`, which drops every pinned entry whose owner is not in
+    """LRU bounded by bytes, each entry's as it was put with. Image-shaped entries (ndim >= 2) are
+    evicted before small ones. An entry put with an owner is pinned: never evicted, counted toward
+    the limit, and gone only through `unpin`, which drops every pinned entry whose owner is not in
     `keep`, so whatever a STATIC node has memoized under any key outlives any walk and goes with
     its plan. Each eviction goes to `on_evict(key, bytes)` when set, after the lock is dropped."""
 
@@ -111,11 +99,10 @@ class Memo:
         self.limit = limit_bytes
         self.bytes = 0
         self._big, self._small, self._pinned = OrderedDict(), OrderedDict(), {}     # pinned: key -> (owner, value)
+        self._sizes = {}        # key -> the bytes its entry was put with
         self._lock = threading.Lock()
         self.hits = self.misses = self.evictions = 0
         self.on_evict = None
-
-    _size = staticmethod(nbytes)
 
     def get(self, k, count=True):
         """The entry under `k`, or None; a hit or a miss is counted unless `count` is False, for a
@@ -147,22 +134,24 @@ class Memo:
             self._big.clear()
             self._small.clear()
             self._pinned.clear()
+            self._sizes.clear()
             self.bytes = 0
 
     def unpin(self, keep):
         gone = []
         with self._lock:
             for k in [k for k, (owner, _) in self._pinned.items() if owner not in keep]:
-                _, old = self._pinned.pop(k)
-                self.bytes -= self._size(old)
-                gone.append((k, self._size(old)))
+                del self._pinned[k]
+                n = self._sizes.pop(k)
+                self.bytes -= n
+                gone.append((k, n))
         if self.on_evict is not None:
             for ok, n in gone:
                 self.on_evict(ok, n)
 
     def put(self, k, v, owner=None, size=None):
         """`v` under `k`, pinned to `owner` when one is given; a key already held is left as it is.
-        `size` is `nbytes(v)` when the caller has already counted it."""
+        `size` is the bytes `v` holds as wire.nbytes counts a row of its type, its own with none."""
         gone = []
         with self._lock:
             if k in self._big or k in self._small or k in self._pinned:
@@ -173,15 +162,17 @@ class Memo:
                 self._big[k] = v
             else:
                 self._small[k] = v
-            self.bytes += self._size(v) if size is None else size
+            self._sizes[k] = own_bytes(v) if size is None else size
+            self.bytes += self._sizes[k]
             while self.bytes > self.limit:
                 src = self._big or self._small
                 if not src:
                     break
-                ok, old = src.popitem(last=False)
-                self.bytes -= self._size(old)
+                ok, _ = src.popitem(last=False)
+                n = self._sizes.pop(ok)
+                self.bytes -= n
                 self.evictions += 1
-                gone.append((ok, self._size(old)))
+                gone.append((ok, n))
         if self.on_evict is not None:
             for ok, n in gone:
                 self.on_evict(ok, n)
@@ -718,7 +709,7 @@ class Graph:
                     ev[1], v = 0, frames.named(got, v)
                 else:
                     held = to_hold(v, frames.handed, e.static)
-                    size = ev[1] = Memo._size(held)
+                    size = ev[1] = nbytes(e.produces, held)
                     v = frames.named(held) if isinstance(held, Ref) else held
             if not isinstance(got, Ref):
                 self.memo.put(mk, held, owner=e.raw_key if e.static else None, size=size)

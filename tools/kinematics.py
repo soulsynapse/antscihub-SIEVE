@@ -13,12 +13,14 @@ from collections import deque
 
 import numpy as np
 
+from sieve_player.wire import LENGTH, LENGTH_X, LENGTH_Y, NONE
 from tools._draw import draw_tracks
 from tools._table import with_column
 
 SIEVE_TOOL = True
 NAME, KIND, EXPECTS, PRODUCES = "kinematics", "series", "tracks", "tracks"
 COLUMNS = ("dx", "dy", "speed", "heading")
+UNITS = {"dx": LENGTH_X, "dy": LENGTH_Y, "speed": LENGTH, "heading": NONE}      # the three lengths are px a row
 MAX_SPAN = 300
 PARAMS = {"span": {"default": 1, "kind": "int", "range": (1, MAX_SPAN)}}
 
@@ -38,7 +40,7 @@ def _row(seen, t, r, span):
         cols = {"dx": v[:, 0], "dy": v[:, 1], "speed": np.hypot(v[:, 0], v[:, 1]),
                 "heading": np.degrees(np.arctan2(v[:, 1], v[:, 0]))}
     for name in COLUMNS:
-        t = with_column(t, name, cols[name].astype(np.float32))
+        t = with_column(t, name, cols[name].astype(np.float32), UNITS[name])
     return t
 
 

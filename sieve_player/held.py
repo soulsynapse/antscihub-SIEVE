@@ -188,7 +188,7 @@ def good(result, key):
 
 class Runs:
     """The runs held, oldest first, and which of them a range is served from. `limit` is the bytes
-    they may take together, each value's counted by `size_of`. Iterates as its runs. A result
+    they may take together, each node's result counted by `size_of(node, result)`. Iterates as its runs. A result
     handed out is cut from a run's and shares its arrays."""
 
     def __init__(self, limit, size_of):
@@ -239,7 +239,7 @@ class Runs:
         was = self.all
         self.all = [run for run in self.all
                     if not (start <= run.start and run.start + run.rows <= start + rows and under(run.results) <= keys)]
-        self.all.append(Run(start, rows, kept, sum(self.size_of(v) for r in kept.values() for v in r.values())))
+        self.all.append(Run(start, rows, kept, sum(self.size_of(nid, r) for nid, r in kept.items())))
         while len(self.all) > 1 and sum(run.size for run in self.all) > self.limit:
             has = {run: len(self._has(run.results, chain)) * run.rows for run in self.all}
             most = max(reversed(self.all), key=lambda run: (has[run], run.rows))

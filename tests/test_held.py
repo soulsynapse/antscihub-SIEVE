@@ -66,7 +66,7 @@ def test_bytes_are_said_in_the_first_unit_that_holds_them_under_1024_and_a_badge
 
 def test_a_range_is_served_from_the_run_that_covers_it_under_the_chains_keys_and_the_limit_lets_go_of_left_keys_first():
     now, moved = held.Chain({"a": "ka", "b": "kb"}, frozenset({"a"})), held.Chain({"a": "ka", "b": "kb2"}, frozenset({"a"}))
-    runs = held.Runs(18, lambda v: 1)       # a run of two nodes of three values counts six
+    runs = held.Runs(18, lambda nid, r: len(r))       # a run of two nodes of three values counts six
     of = lambda start, rows, chain: {nid: {"signal": np.arange(start, start + rows, dtype=np.float32), "key": k, "gate": None}
                                      for nid, k in chain.keys.items()}
     hold = lambda start, rows, chain: runs.hold(start, rows, of(start, rows, chain), chain)
@@ -84,15 +84,15 @@ def test_a_range_is_served_from_the_run_that_covers_it_under_the_chains_keys_and
     gone = held.Chain({"a": "ka2", "b": "kb3"}, frozenset({"a"}))
     assert hold(60, 4, gone) and [run[0] for run in runs] == [40, 50, 60]       # no node of 0 is under a key the chain has: it goes first, however long
     assert not runs.hold(70, 4, {nid: {**r, "key": None} for nid, r in of(70, 4, gone).items()}, gone)      # under no key, good to no reader
-    twice = held.Runs(18, lambda v: 1)
+    twice = held.Runs(18, lambda nid, r: len(r))
     again = lambda start, chain: twice.hold(start, 4, of(start, 4, chain), chain)
     assert again(10, now) and again(10, gone) and again(30, now) and again(50, now)     # two runs over the same rows: the later goes as itself, its arrays never compared
     assert [(run.start, run.results["b"]["key"]) for run in twice] == [(10, "kb"), (30, "kb"), (50, "kb")]
-    full = held.Runs(6, lambda v: 1)        # room for one run
+    full = held.Runs(6, lambda nid, r: len(r))        # room for one run
     assert full.hold(0, 4, of(0, 4, now), now) and full.hold(0, 4, of(0, 4, moved), moved)     # as long as the run of keys left, which goes
     assert not full.hold(0, 4, of(0, 4, now), moved) and [run.results["b"]["key"] for run in full] == ["kb2"]      # let go at once: nothing held changed
     assert full.hold(10, 4, of(10, 4, moved), moved)
     assert [run.start for run in full] == [10]      # of two the chain has as much of, as long, the one held last stays
-    touching = held.Runs(100, lambda v: 1)
+    touching = held.Runs(100, lambda nid, r: len(r))
     assert touching.hold(0, 4, of(0, 4, now), now) and touching.hold(4, 4, of(4, 4, now), now)
     assert touching.spans(now) == [(0, 8)] and touching.over(2, 4, now) is None       # held across two runs, served from neither

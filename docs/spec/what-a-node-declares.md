@@ -149,18 +149,18 @@ differ, by several fields taken and by a dtype made again of its `descr`, and
 (`docs/findings/2026-11-17-what-keeps-a-dtypes-metadata.md`); so a column whose dtype says
 nothing of it may be one whose unit was lost.
 
-- [ ] One table under `sieve_player/`, importing no Qt and among what `tests/test_seams.py` lets a
+- [x] One table under `sieve_player/`, importing no Qt and among what `tests/test_seams.py` lets a
   tool import, says of each type a wire carries its name, whether it is a table a row, how its
   bytes are counted and whether it can be overlaid, and says the units a column of a table may be
   in: a position along x or along y, a length along x, along y or along neither, an area, each of
   a plane's pixels. It names no column. The player reads these of the table and of no result's
   shape; `tools/_table.py` reads the same table.
   Check: a grep for the shape tests H17 names.
-- [ ] A type a tool produces or expects is a type of the table, so a new one is added there
+- [x] A type a tool produces or expects is a type of the table, so a new one is added there
   first, where a tool coined it.
   Check: `tests/test_seams.py`, a seam, that a tool's `PRODUCES` and `EXPECTS` name types of the
   table.
-- [ ] A column's unit is said where the column is minted and carried on the table's dtype as its
+- [x] A column's unit is said where the column is minted and carried on the table's dtype as its
   plane is, with the plane it is of where that is not the table's; a column minted with none is
   in no plane's pixels, and none is on the dtype as a unit is, so a column the dtype says nothing
   of is told from one minted with none.
@@ -168,8 +168,12 @@ nothing of it may be one whose unit was lost.
   unsaid, none being a thing said; a one-off: the unit of every column of a table below `blobs`,
   `track`, `kinematics`, `attach` and `sample`, read back off its dtype, none among them and no
   column unsaid.
-- [ ] Every document's plan prints what it printed.
+- [x] Every document's plan prints what it printed.
   Check: the baseline, compared.
+- [x] The table has a unit for a column of points, (N, 2) x, y each of a plane's pixels. Observed
+  building the box of units: `contour` is such a column, in the plane's pixels and in none of the
+  six units, and minted with none it would read as in no plane's pixels.
+  Check: the one-off of the units, `contour` among them.
 
 ## A draw named as wanted
 

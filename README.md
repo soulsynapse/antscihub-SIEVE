@@ -85,8 +85,10 @@ def select(folder, params) -> str | None      # folder is the document's
 
 How the player treats a tool, as `sieve_player/graph.py`, `pane.py` and `window.py` do:
 
-- Types are strings the player compares for equality; it attaches no meaning to them beyond the
-  video node producing `"bgr"`, or `"gray"` when its `output` param says so. That one param is the
+- Types are strings the player compares for equality, each a row of `sieve_player/wire.py`'s
+  table, which says whether a row of it is a table, how its bytes are counted and whether it can
+  be overlaid; a new type is added there first, which `tests/test_seams.py` checks. The video node
+  produces `"bgr"`, or `"gray"` when its `output` param says so. That one param is the
   decoder's, applied before its cache, so a chain that wants gray frames never holds the colour
   ones and no gray node is needed for that; a smaller frame is tools/rescale's, and a
   document saved with a scale on the video node loads with a rescale node inserted for it. An
@@ -141,13 +143,14 @@ Facets the player reads when a tool has them:
 
 `tools/` holds a working example of each. A module there whose name begins with `_` is not a tool
 but what tools share, the table kind in `_table.py` and its drawing in `_draw.py`; a tool imports
-from those and from no other tool, which `tests/test_seams.py` checks.
+from those and from no other tool, which `tests/test_seams.py` checks. A column a tool adds to a
+table goes through `_table.py:with_column` with its unit, one of `wire.py`'s or `wire.NONE`.
 
 ## The player
 
 The frame is on the left, the node canvas over the selected node's parameters on the right, and
 the timeline across the bottom. The node with the display flag is what the frame shows; the node
-with the overlay flag, a second disc offered only on a node producing one plane (`document.OVERLAYABLE`),
+with the overlay flag, a second disc offered only on a node producing one plane (`wire.TYPES`),
 is heated over it, cold-to-hot in v2's ramp, and a click on the flag it carries turns it off; selection
 only chooses whose card the pane shows and whose series the plot and the strip draw in colour. A worker thread computes and the GUI thread
 reads: every node's output is memoized under a key built from its params and its

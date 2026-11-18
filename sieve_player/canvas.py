@@ -18,9 +18,10 @@ from PySide6.QtWidgets import QAbstractSpinBox, QApplication, QLineEdit, QPlainT
 
 from . import theme
 from . import registry
-from .document import INPUT, OPEN, OVERLAYABLE, PATH, VIDEO_PRODUCES, VIDEO_TOOL, fed, fits, inputs_of, kind_of, produces
+from .document import INPUT, OPEN, PATH, VIDEO_PRODUCES, VIDEO_TOOL, fed, fits, inputs_of, kind_of, produces
 from .registry import expects, is_selector, paths
 from .menu import MENU_W, UNLOADED, TabMenu
+from .wire import overlaid
 from .theme import GAP, PAD, qgray
 
 NODE_W, NODE_H = 140, 28   # a node's box, canvas px
@@ -183,8 +184,8 @@ class Canvas(QWidget):
             or kind_of(self.doc, self.tools, node.id) == "frame"
 
     def can_overlay(self, node):
-        """Whether the overlay flag is offered: a resolved node producing one plane (an OVERLAYABLE type)."""
-        return self.output_type(node) in OVERLAYABLE
+        """Whether the overlay flag is offered: a resolved node producing a type wire.py says can be overlaid."""
+        return overlaid(self.output_type(node))
 
     def has_band(self, node):
         """Whether the node has a band, the handles on its pane's density or trace: a resolved frame

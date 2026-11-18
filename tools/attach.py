@@ -10,8 +10,9 @@ that the second table lacks, a non-numeric one, or a name the first already has,
 """
 import numpy as np
 
+from sieve_player.wire import NONE, X, Y
 from tools._draw import draw as draw_table
-from tools._table import OUTLINES, footprint, plane as plane_of, with_column
+from tools._table import OUTLINES, footprint, plane as plane_of, unit_of, with_column
 
 SIEVE_TOOL = True
 NAME, KIND, EXPECTS, PRODUCES = "attach", "frame", "blobs", "blobs"
@@ -60,8 +61,9 @@ def attach(table, marks, prefix="mark", columns=(), outline="contour"):
             v[has] = mx[pick[has]]
         elif c == "cy":
             v[has] = my[pick[has]]
-        out = with_column(out, f"{prefix}_{c}", v)
-    return with_column(out, f"{prefix}_n", count)
+        unit, of = (X, shape) if c == "cx" else (Y, shape) if c == "cy" else unit_of(marks, c) or (None, None)
+        out = with_column(out, f"{prefix}_{c}", v, unit, of)
+    return with_column(out, f"{prefix}_n", count, NONE)
 
 
 def run(frames, row, params):

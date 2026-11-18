@@ -14,11 +14,12 @@ UTILITIES = PKG.parent / "utilities"
 HEADER_LINES = 10   # a module docstring states the module and its seams; past this it is a changelog, see CLAUDE.md
 MAY_IMPORT = {
     "document": {"registry"},                     # what a tool declares is the registry's to read, and the registry imports nothing of the player
-    "plan": {"document", "registry"},
+    "wire": set(),                                # what a wire carries; a tool reads it too, see TOOLS_MAY_IMPORT
+    "plan": {"document", "registry", "wire"},
     "stream": set(),                              # the Event, the kinds and the Emitter; a reader of a dump loads nothing else
     "stats": {"stream"},                          # a reader of the stream; the Graph it is made on is handed to it
-    "graph": {"decoder", "document", "density", "plan", "registry", "stream"},     # Graph.density folds planes; sync holds a plan; it emits through an Emitter; a served file is read by a Decoder
-    "canvas": {"document", "menu", "registry", "theme"},
+    "graph": {"decoder", "document", "density", "plan", "registry", "stream", "wire"},     # Graph.density folds planes; sync holds a plan; it emits through an Emitter; a served file is read by a Decoder
+    "canvas": {"document", "menu", "registry", "theme", "wire"},
     "menu": {"theme"},
     "pane": {"document", "registry", "theme", "widgets"},
     "widgets": {"theme"},
@@ -26,7 +27,7 @@ MAY_IMPORT = {
     "timeline": {"theme"},
     "decoder": set(),
     "held": set(),                                # a pickle and a stamp; the window writes and reads it
-    "walk": {"density", "graph", "registry", "stream"},         # of the stream, the words a begin says what began it by; no Qt, see below
+    "walk": {"density", "graph", "registry", "stream", "wire"},         # of the stream, the words a begin says what began it by; no Qt, see below
     "worker": {"decoder", "graph", "stream", "walk"},
     "bare": {"decoder", "document", "graph", "registry", "walk"},      # the clip walk's own process: no window, no stream's reader, no Qt
     "density": set(),
@@ -207,7 +208,7 @@ def test_a_tool_imports_what_tools_share_and_never_another_tool():
     assert not bad, bad
 
 
-TOOLS_MAY_IMPORT = {"decoder", "held", "store", "theme"}    # the player's modules a tool may name, beside what the package hands out
+TOOLS_MAY_IMPORT = {"decoder", "held", "store", "theme", "wire"}    # the player's modules a tool may name, beside what the package hands out
 TOOLS_MAY_TAKE = {"ParamWidget", "play", "document"}        # and the names a tool may take of the package itself
 
 
@@ -227,6 +228,58 @@ def test_a_tool_reaches_the_player_through_the_modules_named_here():
             if took:
                 bad.setdefault(str(path.relative_to(TOOLS)), set()).update(took)
     assert not bad, bad
+
+
+def test_a_tool_names_types_of_the_wire_table():
+    """What a tool produces or expects, on its first input or one of its INPUTS, and what the video
+    node hands out and reads, is a type of wire.TYPES, so a new type is added there first; and
+    wire.py, which a tool imports, loads no Qt."""
+    from sieve_player import document, registry, wire
+
+    tools = [e.module for e in registry.discover(str(TOOLS)) if e.ok]
+    tools += [importlib.import_module(f"tools.retired.{p.stem}") for p in (TOOLS / "retired").glob("*.py") if not p.stem.startswith("_")]
+    bad = {}
+    for t in tools:
+        named = {registry.produces(t), *(registry.expects(t) or ()), *(x for types in registry.inputs(t).values() for x in types)}
+        if named - {None, "same", *wire.TYPES}:
+            bad[registry.name(t)] = sorted(named - {None, "same", *wire.TYPES})
+    assert tools and not bad, bad
+    assert {document.PATH, *("gray" if out == "luma" else out for out in document.VIDEO_OUTPUTS)} <= set(wire.TYPES)
+    assert "PySide6" not in (PKG / "wire.py").read_text(encoding="utf-8")
+
+
+UNIT_UNSAID = {"resolve.py": {"tables_of"}}     # where a dtype is made outside _table.py: of a csv read back, which says no column's unit
+
+
+def test_no_column_is_added_under_tools_with_its_unit_unsaid():
+    """A table's dtype is made in tools/_table.py, which takes a unit for every column, and a
+    column is added by with_column handed one, wire.NONE being a unit said: under tools/ nothing
+    else makes a dtype but what UNIT_UNSAID names, no with_column is short of a unit or handed
+    None written out, and _table.py refuses a unit the wire table does not have."""
+    import numpy as np
+    import pytest
+
+    from tools import _table
+
+    bad = []
+    for path in TOOLS.rglob("*.py"):
+        where = path.relative_to(TOOLS).as_posix()
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        let = {id(n) for f in ast.walk(tree) if isinstance(f, ast.FunctionDef) and f.name in UNIT_UNSAID.get(where, ()) for n in ast.walk(f)}
+        for n in (n for n in ast.walk(tree) if isinstance(n, ast.Call)):
+            made = (isinstance(n.func, ast.Attribute) and n.func.attr == "dtype" and ast.unparse(n.func.value) in ("np", "numpy")) \
+                or any(k.arg == "dtype" and isinstance(k.value, ast.List) for k in n.keywords)
+            if made and where != "_table.py" and id(n) not in let:
+                bad.append((where, ast.unparse(n)))
+            if ast.unparse(n.func).split(".")[-1] == "with_column":
+                unit = n.args[3] if len(n.args) > 3 else next((k.value for k in n.keywords if k.arg == "unit"), None)
+                if unit is None or (isinstance(unit, ast.Constant) and unit.value is None):
+                    bad.append((where, ast.unparse(n)))
+    assert not bad, bad
+    with pytest.raises(ValueError):
+        _table.dtype_of([("x", np.int32, "metres")])
+    with pytest.raises(ValueError):
+        _table.dtype_of([("x", np.int32, None)])
 
 
 def test_a_settings_widget_is_told_and_says_by_the_registrys_names_alone():

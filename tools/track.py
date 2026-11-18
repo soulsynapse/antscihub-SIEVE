@@ -12,6 +12,7 @@ new ids and a tracklet never spans a contact. At 0 area is not read.
 import numpy as np
 
 from tools._draw import draw_tracks
+from sieve_player.wire import NONE
 from tools._table import OUTLINES, TRACKS_DTYPE as DTYPE, with_column
 
 SIEVE_TOOL = True
@@ -55,7 +56,7 @@ def _link_row(live, next_id, t, r, max_step, lost_rows, min_rows, min_p, merge_r
     """Row `r`'s table linked onto `live`: the tracks still live after it, the next free id, the table
     with its ids and the count of tracks seen in it with at least `min_rows` hits."""
     t = np.asarray(t)
-    rec = with_column(t, "id", np.full(len(t), -1, np.int32))
+    rec = with_column(t, "id", np.full(len(t), -1, np.int32), NONE)
     live = [k for k in live if r - k.seen <= lost_rows]
     pos = np.stack([t["cx"], t["cy"]], axis=1).astype(np.float64) if len(t) else np.zeros((0, 2))
     area = t["area"].astype(np.float64) if len(t) else np.zeros(0)

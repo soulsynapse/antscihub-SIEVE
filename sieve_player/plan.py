@@ -8,9 +8,10 @@ import hashlib
 import json
 from dataclasses import dataclass, field
 
-from .document import INPUT, OVERLAYABLE, VIDEO_TOOL, fed, fits, frame_inputs, kind_of, produces, video_output, wants
+from .document import INPUT, VIDEO_TOOL, fed, fits, frame_inputs, kind_of, produces, video_output, wants
 from .registry import cuts as tool_cuts
 from .registry import fold_of, is_selector, key_params_of, optional, static, steps
+from .wire import overlaid
 
 
 def _key(*parts):
@@ -43,6 +44,7 @@ class Entry:
     piece: str | None = None                    # the nearest node upstream whose tool cuts, by its cut_file: the node's inputs are of that node's piece of the plate; None for the plate
     steps: bool = False                         # a chain node the walk steps a row at a time; a chain node without it runs whole
     whole_by: str | None = None                 # a stepping tool run whole: the chain node that ended the prefix; None on every other node
+    produces: str | None = None                 # the type the node hands out, of wire.TYPES; None for one unresolved or that nothing feeds
 
 
 @dataclass
@@ -208,7 +210,7 @@ def plan(doc, tools, base, cut_file=None):
         entries[n.id] = Entry(tool, kind, dict(n.params), n.band, src, key_of(n.id), raw_keys[n.id],
                               up_key(n.id) if src else None, fed(doc, n.id, tools) and n.id not in blocked, srcs, static_of(n.id),
                               types={name: produces(doc, tools, s) if s else None for name, s in srcs.items()},
-                              file=file_of(n.id), piece=next(iter(pieces_of(n.id).values()), None))
+                              file=file_of(n.id), piece=next(iter(pieces_of(n.id).values()), None), produces=produces(doc, tools, n.id))
         if kind == "series":
             series.append(n.id)
     roots = [s for s in series if entries[s].src is None or entries[entries[s].src].kind != "series"]
@@ -224,7 +226,7 @@ def plan(doc, tools, base, cut_file=None):
         e.steps, e.whole_by = enders[nid] is None, None if own else enders[nid]
     for nid, e in entries.items():
         e.standing = crossings.get(nid) or refused.get(nid) or _standing(doc, tools, entries, heads, chain, nid)
-    over = doc.overlay if doc.overlay in entries and produces(doc, tools, doc.overlay) in OVERLAYABLE else None
+    over = doc.overlay if doc.overlay in entries and overlaid(produces(doc, tools, doc.overlay)) else None
     return Plan(entries, heads, chain, [s for s in series if s not in chain], doc.display if doc.display in entries else None, over)
 
 

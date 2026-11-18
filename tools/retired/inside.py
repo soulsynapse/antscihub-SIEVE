@@ -10,8 +10,9 @@ a text one. A column the regions lack, or a name the first table already has, ra
 """
 import numpy as np
 
+from sieve_player.wire import NONE
 from tools._draw import draw as draw_table
-from tools._table import OUTLINES, footprint, plane as plane_of, with_column
+from tools._table import OUTLINES, footprint, plane as plane_of, unit_of, with_column
 
 SIEVE_TOOL = True
 NAME, KIND, EXPECTS, PRODUCES = "inside", "frame", "blobs", "blobs"
@@ -60,8 +61,9 @@ def inside(table, regions, prefix="region", columns=(), outline="contour"):
         else:
             v = np.full(len(table), np.nan)
             v[has] = regions[c][at[has]].astype(np.float64)
-        out = with_column(out, f"{prefix}_{c}", v)
-    return with_column(out, f"{prefix}_n", np.where(on_plane, count[py, px], 0))
+        unit, of = unit_of(regions, c) or (None, None)
+        out = with_column(out, f"{prefix}_{c}", v, unit, of)
+    return with_column(out, f"{prefix}_n", np.where(on_plane, count[py, px], 0), NONE)
 
 
 def run(frames, row, params):

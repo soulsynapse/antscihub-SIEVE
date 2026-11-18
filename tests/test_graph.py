@@ -10,7 +10,8 @@ import pytest
 
 from sieve_player import document as D
 from sieve_player.decoder import EndOfStream
-from sieve_player.graph import Graph, gated, nbytes
+from sieve_player.graph import Graph, gated
+from sieve_player.wire import nbytes, result_bytes
 from sieve_player.ledger import Ledger
 from sieve_player.stats import Stats
 from sieve_player.stream import NODE_FACTS, PLAN_FACTS, Event
@@ -316,16 +317,16 @@ def test_a_series_band_gates_the_signal_and_zeroes_what_the_next_reads():
     the gate; the feed downstream is zeroed outside the band, inside it once lo is above hi; no
     band keeps every row; a result without a signal feeds nothing."""
     sig = np.array([0.0, 2.0, 5.0, 9.0, 20.0], np.float32)
-    r, feed = gated({"signal": sig}, (1.0, 10.0))
+    r, feed = gated({"signal": sig}, (1.0, 10.0), "signal")
     assert r["gate"].tolist() == [False, True, True, True, False] and r["signal"] is sig
     assert feed.tolist() == [0.0, 2.0, 5.0, 9.0, 0.0]
-    r, feed = gated({"signal": sig}, (10.0, 1.0))
+    r, feed = gated({"signal": sig}, (10.0, 1.0), "signal")
     assert r["gate"].tolist() == [True, False, False, False, True] and feed.tolist() == [0.0, 0.0, 0.0, 0.0, 20.0]
-    r, feed = gated({"signal": sig}, None)
+    r, feed = gated({"signal": sig}, None, "signal")
     assert r["gate"].all() and feed.tolist() == sig.tolist()
-    r, feed = gated({"signal": np.array([-3.0, 0.0, 4.0])}, None)         # no band gates nothing, a negative row included
+    r, feed = gated({"signal": np.array([-3.0, 0.0, 4.0])}, None, "signal")         # no band gates nothing, a negative row included
     assert r["gate"].all() and feed.tolist() == [-3.0, 0.0, 4.0]
-    assert gated({"other": 1}, (0.0, 1.0)) == ({"other": 1}, None)
+    assert gated({"other": 1}, (0.0, 1.0), "signal") == ({"other": 1}, None)
 
 
 def test_one_compute_sees_one_plan():
@@ -742,7 +743,8 @@ def test_a_tool_raising_indexerror_fails_the_walk_and_only_the_stream_end_closes
 
 
 def test_a_clip_stack_of_tables_is_counted_through_its_object_columns():
-    """nbytes reads the arrays behind an object field; the clip walk stops where the running total
+    """A row of a table type is counted with the arrays behind its object columns, and at its
+    pointers under a type that is no table; the clip walk stops where the running total
     passes STACK_BYTES, the rows it has standing, where the first row's forecast let it start."""
     from PySide6.QtWidgets import QApplication
     from sieve_player import walk as W
@@ -752,7 +754,8 @@ def test_a_clip_stack_of_tables_is_counted_through_its_object_columns():
     t["contour"] = [np.zeros((100, 2), np.int32), None]
     stack = np.empty(2, object)
     stack[:] = [t, t]
-    assert t.nbytes == 24 and nbytes(t) == 24 + 800 and nbytes(stack) == 16 + 2 * 824 and nbytes({}) == 64
+    assert t.nbytes == 24 and nbytes("blobs", t) == 24 + 800 and nbytes("gray", t) == 24 and nbytes(None, {}) == 64
+    assert result_bytes("tracks", {"rows": stack}) == 16 + 2 * 824 and result_bytes("signal", {"rows": stack}) == 16
     table = tool("table", produces="blobs", fn=lambda f, p: np.array([(0, np.zeros((50 * int(f.flat[0]), 2), np.int32))], dtype=t.dtype))
     head = tool("head", kind="series", expects="blobs", produces="signal")
     head.run = lambda series, params: {"signal": np.array([len(r) for r in series.data], np.float32)}

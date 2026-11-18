@@ -16,7 +16,7 @@ import numpy as np
 from . import density
 from .decoder import Decoder, EndOfStream, footage_print_by_stamp
 from .document import INPUT, VIDEO_TOOL, video_output
-from .registry import by_name, draws, names_cut_files
+from .registry import by_name, names_cut_files
 from .plan import _key, base_key, facts, plan
 from .stream import Emitter
 from .wire import ROWS, is_table, nbytes, own_bytes
@@ -321,6 +321,7 @@ class Graph:
         self.shown = self.over = self.series = None
         self.chain, self.heads, self.unrun_series = [], [], []
         self._watched = ()                  # what the plot shows, by watch()
+        self._painted = ()                  # the nodes whose draw() the display paints, by paints()
         self.sync()
 
     @property
@@ -507,11 +508,18 @@ class Graph:
         return out if fold is None or out is None else fold(out)
 
     def drawing(self, p=None):
-        """The fed frame nodes whose tool has a draw(), in document order: what the display reads
-        at its row beside the shown node, on the walked path or off it; under the Plan `p`, the
-        current one with none."""
+        """The fed frame nodes among those paints() was told of, in its order: what the display
+        reads at its row beside the shown node, on the walked path or off it; under the Plan `p`,
+        the current one with none."""
         entries = (p or self.snapshot()).entries
-        return [nid for nid, e in entries.items() if e.kind == "frame" and e.fed and draws(e.tool)]
+        with self._lock:
+            painted = self._painted
+        return [nid for nid in painted if (e := entries.get(nid)) is not None and e.kind == "frame" and e.fed]
+
+    def paints(self, nodes):
+        """`nodes` are those whose draw() the display paints; any thread."""
+        with self._lock:
+            self._painted = tuple(nodes)
 
     def watch(self, nodes):
         """`nodes` are what the plot shows, the selection and the pinned; any thread."""

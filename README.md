@@ -151,7 +151,9 @@ table goes through `_table.py:with_column` with its unit, one of `wire.py`'s or 
 The frame is on the left, the node canvas over the selected node's parameters on the right, and
 the timeline across the bottom. The node with the display flag is what the frame shows; the node
 with the overlay flag, a second disc offered only on a node producing one plane (`wire.TYPES`),
-is heated over it, cold-to-hot in v2's ramp, and a click on the flag it carries turns it off; selection
+is heated over it, cold-to-hot in v2's ramp, and a click on the flag it carries turns it off; a
+third disc, on a node whose tool has a `draw()`, puts that node on the document's `drawn` list and
+takes it off, and the frame paints the `draw()` of the nodes on it and computes for no other; selection
 only chooses whose card the pane shows and whose series the plot and the strip draw in colour. A worker thread computes and the GUI thread
 reads: every node's output is memoized under a key built from its params and its
 upstream, and the display shows what the memo holds.

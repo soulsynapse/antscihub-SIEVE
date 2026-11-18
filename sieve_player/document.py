@@ -1,4 +1,4 @@
-"""The saved form of a pipeline: nodes, wires, the display, overlay and pinned flags, the video path
+"""The saved form of a pipeline: nodes, wires, the display and overlay flags, the pinned and drawn lists, the video path
 as written, and nothing of the canvas's view or the runtime's memo.
 
 Imports neither Qt nor cv2, and of the player the registry alone. The document stores tool names
@@ -65,6 +65,7 @@ class Document:
     display: str | None = None
     overlay: str | None = None                                      # heated over the displayed frame; None is off
     pinned: list = field(default_factory=list)                      # the nodes the plot and the strip draw beside the selection, in pin order
+    drawn: list | None = field(default_factory=list)                # the nodes whose tool's draw() is wanted over the frame; None, a file that held no list, until resolve() is handed the tools
     video: str | None = None                                      # as written
     extra: dict = field(default_factory=dict, repr=False)
     path: str | None = field(default=None, compare=False)           # where it was loaded from or saved to
@@ -105,6 +106,8 @@ class Document:
         if self.overlay == nid:
             self.overlay = None
         self.pinned = [p for p in self.pinned if p != nid]
+        if self.drawn is not None:
+            self.drawn = [p for p in self.drawn if p != nid]
 
     def pin(self, nid, tools):
         """Adds `nid` to the end of the pinned set, once; a frame node, by kind_of under `tools`,
@@ -120,6 +123,10 @@ class Document:
     def unpin(self, nid):
         self.pinned = [p for p in self.pinned if p != nid]
 
+    def set_drawn(self, nid, on):
+        """Puts `nid` on the drawn list, once, or takes it off; of a document resolve() has made the list of."""
+        self.drawn = [p for p in self.drawn if p != nid] + [nid] * bool(on)
+
     def connect(self, src, dst, input=INPUT):
         """Wires `src` into `dst`'s input, replacing whatever fed it."""
         self.disconnect(dst, input)
@@ -132,7 +139,10 @@ class Document:
         """Marks each node whose tool name `known` does not contain; the video node is always known.
         Given the tools themselves, a mapping of name to module, a resolved node's params are laid
         over its tool's defaults, so a param the file lacks, one the tool gained since it was
-        saved, has its value."""
+        saved, has its value, and a document whose file held no drawn list has on it every node
+        whose tool has a draw(), which is what was painted before there was one."""
+        if self.drawn is None and hasattr(known, "get"):
+            self.drawn = [n.id for n in self.nodes if registry.draws(known.get(n.tool))]
         for n in self.nodes:
             n.unresolved = n.tool != VIDEO_TOOL and n.tool not in known
             tool = known.get(n.tool) if hasattr(known, "get") else None
@@ -166,6 +176,7 @@ class Document:
             "display": self.display,
             "overlay": self.overlay,
             **({"pinned": list(self.pinned)} if self.pinned else {}),
+            **({"drawn": list(self.drawn)} if self.drawn is not None else {}),     # an empty list is written: no list is every draw()
             "nodes": [{"id": n.id, "tool": n.tool, "params": n.params, "pos": list(n.pos),
                        **({"band": list(n.band)} if n.band is not None else {}), **n.extra} for n in self.nodes],
             "wires": [{"from": w.src, "to": w.dst, "input": w.input} for w in self.wires],
@@ -177,11 +188,12 @@ class Document:
         v = d.get("version")
         if not isinstance(v, int) or v > VERSION:
             raise FormatError(f"document is format version {v!r}; this module reads up to {VERSION}")
-        top = {"version", "video", "display", "overlay", "pinned", "nodes", "wires"}
+        top = {"version", "video", "display", "overlay", "pinned", "drawn", "nodes", "wires"}
         node_keys = {"id", "tool", "params", "pos", "band", "mode", "baked"}    # the last two were a bake node's, and are dropped
-        pinned = d.get("pinned")
+        pinned, drawn = d.get("pinned"), d.get("drawn")
         doc = cls(video=d.get("video"), display=d.get("display"), overlay=d.get("overlay"),
                   pinned=[] if pinned is None else [str(pinned)] if isinstance(pinned, str) else [str(p) for p in pinned],
+                  drawn=None if drawn is None else [str(p) for p in drawn],
                   extra={k: v for k, v in d.items() if k not in top})
         for nd in d.get("nodes", []):
             if not isinstance(nd["id"], str) or not nd["id"]:
@@ -201,6 +213,10 @@ class Document:
             if nid not in ids:
                 raise FormatError(f"pinned {nid!r} names a node the document lacks")
         doc.pinned = list(dict.fromkeys(doc.pinned))
+        for nid in doc.drawn or ():
+            if nid not in ids:
+                raise FormatError(f"drawn {nid!r} names a node the document lacks")
+        doc.drawn = None if doc.drawn is None else list(dict.fromkeys(doc.drawn))
         doc._lift_scale()
         doc._lift_bakes()
         doc._lift_cuts()
@@ -414,7 +430,8 @@ def video_output(doc):
 def from_tools(tools, video=None):
     """The document `play([gray, threshold])` means: the video node first, each tool wired to the
     nearest earlier node producing what it EXPECTS (unwired if none does), laid out top to bottom,
-    the flag on the last frame tool the video reaches, else on the video."""
+    the flag on the last frame tool the video reaches, else on the video, and every node whose tool
+    has a draw() on the drawn list."""
     doc = Document(video=video)
     doc.add_node(VIDEO_TOOL)
     for i, t in enumerate(tools, 1):
@@ -428,6 +445,7 @@ def from_tools(tools, video=None):
                 doc.connect(earlier.id, n.id)
                 break
     doc.display = doc.nodes[0].id
+    doc.drawn = [n.id for n in doc.nodes[1:] if registry.draws(by_name(tools)[n.tool])]
     for n in doc.nodes[1:]:
         t = by_name(tools)[n.tool]
         if kind_of(doc, tools, n.id) == "frame" and fed(doc, n.id):

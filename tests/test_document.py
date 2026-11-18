@@ -59,6 +59,22 @@ def test_pinned_is_an_ordered_list_and_a_format_2_id_loads_as_one():
         D.Document.from_dict({**old, "version": 3, "pinned": ["ghost"]})
 
 
+def test_drawn_is_a_saved_list_and_a_file_with_none_loads_with_every_draw():
+    marks = Tool(NAME="marks", KIND="frame", EXPECTS="gray", PRODUCES="gray", draw=lambda *a: None)
+    tools = {t.NAME: t for t in (*TOOLS, marks)}
+    doc = D.from_tools([gray, marks, marks])
+    assert doc.drawn == ["marks", "marks_2"]
+    doc.set_drawn("marks", False)
+    doc.set_drawn("marks_2", True)
+    assert D.Document.from_dict(json.loads(json.dumps(doc.to_dict())), tools).drawn == ["marks_2"]
+    doc.remove_node("marks_2")
+    assert doc.to_dict()["drawn"] == [] and D.Document.from_dict(doc.to_dict(), tools).drawn == []   # none wanted is not none said
+    old = {k: v for k, v in D.from_tools([gray, marks]).to_dict().items() if k != "drawn"}
+    assert D.Document.from_dict(old).drawn is None and D.Document.from_dict(old, tools).drawn == ["marks"]
+    with pytest.raises(D.FormatError, match="ghost"):
+        D.Document.from_dict({**old, "drawn": ["ghost"]})
+
+
 def test_pinning_a_second_frame_node_unpins_the_first_and_a_series_rides_beside():
     doc = two_nodes()
     doc.add_node("threshold", (0.0, 240.0))

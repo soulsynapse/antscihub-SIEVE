@@ -699,9 +699,7 @@ class PlayerWindow(QMainWindow):
         self.pane.sync()
         self._show_plot()
         self._pick_video()
-        self.display.drawers = [(n.id, self.tools[n.tool], n) for n in self.doc.nodes
-                                if n.tool in self.tools and registry.draws(self.tools[n.tool])
-                                and id(self.tools[n.tool]) not in self.display.dropped]
+        self._set_drawers()
         self.canvas.update()
         if self.graph is None:
             return
@@ -713,12 +711,25 @@ class PlayerWindow(QMainWindow):
     def reflag(self):
         """A flag moved: the runtime's plan follows and the frame shows the new node at the same row.
         The memo and the walk stand; nothing a flag names is computed differently."""
+        self._set_drawers()
         self.canvas.update()
         if self.graph is None:
             return
         self.graph.sync()
         self._restate()
         self.goto(self.row, commit=True)
+
+    def _set_drawers(self):
+        """The display paints the draw() of each node on the document's drawn list whose tool has
+        one that has not raised, in node order, and the graph is told which."""
+        self.display.drawers = [(n.id, self.tools[n.tool], n) for n in self.doc.nodes
+                                if n.id in self.doc.drawn and n.tool in self.tools and registry.draws(self.tools[n.tool])
+                                and id(self.tools[n.tool]) not in self.display.dropped]
+        self._tell_painted()
+
+    def _tell_painted(self):
+        if self.graph is not None:
+            self.graph.paints([nid for nid, *_ in self.display.drawers])
 
     def _picked(self, nid, params):
         """A drawer answered a click: its params land in the document as a card's change does, through
@@ -774,6 +785,7 @@ class PlayerWindow(QMainWindow):
             self.goto(count - 1, commit=True)
 
     def _draw_failed(self, nid, line):
+        self._tell_painted()
         if self.graph is not None:
             self.graph.note(nid, line)
             self._restate()

@@ -707,6 +707,24 @@ def test_the_window_and_the_clip_are_one_walk_over_two_ranges():
     assert [(x.lane, x.done, x.length) for x in led.view().walks] == [("window", 6, 6), ("clip", 3, 3), ("window", 1, 1)]
 
 
+def test_a_scrub_computes_the_draws_the_display_names_and_no_other():
+    from sieve_player.worker import _Scrub
+    named, unnamed = tool("named"), tool("unnamed")
+    named.draw = unnamed.draw = lambda *a: None
+    doc = D.from_tools([gray, named])
+    doc.add_node("unnamed", (0, 300))
+    doc.connect("gray", "unnamed")
+    doc.display = "gray"
+    g = Graph(doc, Dec(), {**TOOLS, "named": named, "unnamed": unnamed})
+    assert g.drawing() == []
+    g.paints(["named", "nowhere"])
+    assert g.drawing() == ["named"]
+    scrub = _Scrub(g, Tool(emit=lambda row: None), None)
+    scrub.plan = g.snapshot()
+    scrub.turn(3)
+    assert (named.runs, unnamed.runs) == (1, 0) and g.peek(3, "named") is not None and g.peek(3, "unnamed") is None
+
+
 def test_a_tool_raising_indexerror_fails_the_walk_and_only_the_stream_end_closes_it():
     """A tool's own IndexError is a failure said on the node, never a shorter clip with a clean
     trace: the walk closes at the rows it has, as a refused one does, and only EndOfStream closes

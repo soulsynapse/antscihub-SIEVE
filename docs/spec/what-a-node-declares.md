@@ -195,16 +195,22 @@ no key.
 Facts to weigh. `Graph.watch` is told what the plot shows, and the worker folds for those and no
 other.
 
-- [ ] The document holds the nodes whose `draw` is wanted in a list saved as `pinned` is, and a
+- [x] The document holds the nodes whose `draw` is wanted in a list saved as `pinned` is, and a
   node's header puts its node on the list and takes it off; a node removed is off it.
   Check: `tests/test_document.py`, beside the seam of `pinned`.
-- [ ] A document saved with no such list loads with every node whose tool has a `draw` on it, and
+- [x] A document saved with no such list loads with every node whose tool has a `draw` on it, and
   paints as it did.
   Check: `tests/test_document.py`, the same seam.
-- [ ] The display tells the graph the nodes of the list whose `draw` it paints, as the plot tells
+- [x] The display tells the graph the nodes of the list whose `draw` it paints, as the plot tells
   it what it shows, and the worker computes at the row for those and no other.
   Check: a seam beside the test of `Graph.watch`: a fed frame node with a `draw` that the display
   does not name is not computed for the frame.
+- [x] A node placed on the canvas whose tool has a `draw` is on the list, and a list of no
+  nodes is saved as one, where `pinned` of none is left out of the file. Observed building the
+  boxes above: a file with no list is every `draw`, so none wanted has to be told from none
+  said; and a placed node painted its `draw` before there was a list.
+  Check: a one-off: a flag put out in the player, the file saved, opened again, and opened with
+  its list cut out.
 
 ## A job goes by the keys it computes under
 

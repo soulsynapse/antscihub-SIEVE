@@ -4,7 +4,7 @@ from types import SimpleNamespace as Tool
 
 import pytest
 
-from sieve_player.registry import FACETS, category, code_print, defaults, description, discover, hint, imported_print, params, signature
+from sieve_player.registry import FACETS, category, changes_nothing, code_print, defaults, description, discover, hint, imported_print, params, signature
 
 
 def test_the_first_rule_that_fits_decides_the_category():
@@ -32,7 +32,9 @@ def test_a_param_is_declared_once_and_a_declaration_that_cannot_be_read_is_its_e
     said = Tool(PARAMS={"radius": {"default": 3, "kind": "int", "range": (1, 15)}, "held": {"default": []}})
     assert defaults(said) == {"radius": 3, "held": []} and params(said)["radius"]["range"] == (1, 15)
     assert params(Tool()) == {} and list(defaults(discover("tools")[0].module)) == list(params(discover("tools")[0].module))
-    for bad in ({"r": {"kind": "int", "range": (0, 1)}}, {"r": {"default": 3, "kind": "int"}}, {"r": {"default": 3, "kind": "slider"}},
+    drawn = Tool(PARAMS={"radius": {"default": 3}, "outline": {"default": "box", "changes result": False}, "fill": {"default": 1, "changes result": True}})
+    assert changes_nothing(drawn) == {"outline"} and changes_nothing(Tool()) == set() and "changes result" in hint("PARAMS")
+    for bad in ({"r": {"kind": "int", "range": (0, 1)}}, {"r": {"default": 3, "kind": "int"}}, {"r": {"default": 3, "kind": "slider"}}, {"r": {"default": 3, "changes result": "no"}},
                 {"r": {"default": "a", "kind": "choice", "choices": ()}}, {"r": {"default": 1, "range": (0, 1)}}, ["r"]):
         with pytest.raises(ValueError):
             params(Tool(PARAMS=bad))

@@ -16,7 +16,7 @@ PARAMS = {
     "field": {"default": "area", "kind": "choice", "choices": FIELDS, "unlisted": True},
     "lo": {"default": "", "kind": "text"},
     "hi": {"default": "", "kind": "text"},
-    "outline": {"default": "box", "kind": "choice", "choices": OUTLINES},
+    "outline": {"default": "box", "kind": "choice", "choices": OUTLINES, "changes result": False},
 }
 
 

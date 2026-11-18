@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 
 from .document import INPUT, VIDEO_TOOL, fed, fits, frame_inputs, kind_of, produces, video_output, wants
 from .registry import cuts as tool_cuts
-from .registry import fold_of, is_selector, key_params_of, optional, static, steps
+from .registry import computed, fold_of, is_selector, key_params_of, optional, static, steps
 from .wire import overlaid
 
 
@@ -45,6 +45,7 @@ class Entry:
     steps: bool = False                         # a chain node the walk steps a row at a time; a chain node without it runs whole
     whole_by: str | None = None                 # a stepping tool run whole: the chain node that ended the prefix; None on every other node
     produces: str | None = None                 # the type the node hands out, of wire.TYPES; None for one unresolved or that nothing feeds
+    computed: dict = field(default_factory=dict)   # of params, those the tool's computing is handed and the key holds
 
 
 @dataclass
@@ -116,8 +117,9 @@ def plan(doc, tools, base, cut_file=None):
     nor is anything that reads it, and the str is its standing, so what a document computes is
     never one thing with a file in the store and another without. A raw key names what a tool computes from, so the memo holds under it; the key adds the
     band, which is applied on read, so what downstream sees is keyed by it and the node's own run
-    is not. Of a node's params the raw key holds what its tool's `key_params` answers, the whole of
-    them for a tool without one or one that raises. A node that serves its file reads nothing, and its key is the one a document opened on
+    is not. Of a node's params the raw key holds those its tool's computing is handed, the
+    registry's `computed`, or what its tool's `key_params` answers of them where it has one that
+    does not raise. A node that serves its file reads nothing, and its key is the one a document opened on
     that file gives its video node, so everything below it is keyed as that document's is. A node reads one piece of the plate: one
     whose inputs are of two, the plate among them, is not fed, nor is anything that reads it, and
     its standing says which. A chain node is stepped when its tool steps and everything it reads on
@@ -161,13 +163,14 @@ def plan(doc, tools, base, cut_file=None):
         return bool(srcs) and all(s is not None and static_of(s, (*stack, nid)) for s in srcs)
 
     def keyed(node):
-        facet = key_params_of(tools.get(node.tool))
+        tool = tools.get(node.tool)
+        given, facet = computed(tool, node.params), key_params_of(tool)
         if facet is not None:
             try:
-                return facet(node.params)
-            except Exception:       # a tool's rule is user code: one that fails keys the node by all it has
+                return facet(given)
+            except Exception:       # a tool's rule is user code: one that fails keys the node as a tool without one
                 pass
-        return node.params
+        return given
 
     def up_key(nid, stack=()):
         ups = [key_of(src, stack) if src is not None and src not in stack else "none" for src in sources(nid).values()]
@@ -223,7 +226,8 @@ def plan(doc, tools, base, cut_file=None):
         entries[n.id] = Entry(tool, kind, dict(n.params), n.band, src, key_of(n.id), raw_keys[n.id],
                               up_key(n.id) if src else None, fed(doc, n.id, tools) and n.id not in blocked, srcs, static_of(n.id),
                               types={name: produces(doc, tools, s) if s else None for name, s in srcs.items()},
-                              file=file_of(n.id), piece=next(iter(pieces_of(n.id).values()), None), produces=produces(doc, tools, n.id))
+                              file=file_of(n.id), piece=next(iter(pieces_of(n.id).values()), None), produces=produces(doc, tools, n.id),
+                              computed=computed(tool, n.params))
         if kind == "series":
             series.append(n.id)
     roots = [s for s in series if entries[s].src is None or entries[entries[s].src].kind != "series"]

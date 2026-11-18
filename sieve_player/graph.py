@@ -16,7 +16,7 @@ import numpy as np
 from . import density
 from .decoder import Decoder, EndOfStream, footage_print_by_stamp
 from .document import INPUT, VIDEO_TOOL, video_output
-from .registry import by_name, names_cut_files
+from .registry import by_name, computed, names_cut_files
 from .plan import _key, base_key, facts, plan
 from .stream import Emitter
 from .wire import ROWS, is_table, nbytes, own_bytes
@@ -344,7 +344,7 @@ class Graph:
         node = self.doc.node(nid)
         tool, of = self.tools[node.tool], up or (self.decoder.path, self.decoder.footage_print)
         try:
-            path = tool.cut_file(*of, node.params)
+            path = tool.cut_file(*of, computed(tool, node.params))
             return None if path is None else (str(path), footage_print_by_stamp(path))
         except FileNotFoundError as exc:
             return str(exc)
@@ -359,7 +359,7 @@ class Graph:
         for nid, e in entries.items():
             if names_cut_files(e.tool):
                 try:
-                    out |= {str(p) for p in e.tool.cut_files(*self._footage(entries, nid), e.params)}
+                    out |= {str(p) for p in e.tool.cut_files(*self._footage(entries, nid), e.computed)}
                 except Exception as exc:
                     self._failing.setdefault(nid, f"cut_files raised: {type(exc).__name__}: {exc}")
         return out
@@ -545,11 +545,11 @@ class Graph:
             return dict(self._plan[self.series].params) if self.series else {}
 
     def series_chain(self):
-        """[(node, tool, params, band, the node it reads)] in run order: the heads first, then each
+        """[(node, tool, the params its computing is handed, band, the node it reads)] in run order: the heads first, then each
         series node on from a chain node. The worker feeds each head the stack and the rest what
         `gated` fed from the upstream result under its band, its signal or its rows."""
         with self._lock:
-            return [(nid, self._plan[nid].tool, dict(self._plan[nid].params), self._plan[nid].band, self._plan[nid].src)
+            return [(nid, self._plan[nid].tool, dict(self._plan[nid].computed), self._plan[nid].band, self._plan[nid].src)
                     for nid in self.chain]
 
     def key(self, nid):
@@ -704,7 +704,7 @@ class Graph:
             frames = Frames(self, plan, nid, e.srcs, e.src_key, e.types)
             with self.probe(nid, row, e.raw_key, reader) as ev:
                 try:
-                    v = e.tool.run(frames, row, e.params)
+                    v = e.tool.run(frames, row, e.computed)
                 except Cancelled:
                     raise
                 except Exception as exc:

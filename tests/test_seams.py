@@ -282,6 +282,56 @@ def test_no_column_is_added_under_tools_with_its_unit_unsaid():
         _table.dtype_of([("x", np.int32, None)])
 
 
+def test_a_tools_computing_is_never_handed_a_param_declared_to_change_nothing():
+    """A param declared to change nothing is withheld from the computing, so no result can follow
+    it: nowhere in the player is a computing facet called with a node's or an entry's whole params,
+    and every tool under tools/ that declares one computes, by run and by step, of the params
+    without it. A marked param of a tool that cuts or selects, or that expects a type no row below
+    is made of, is red until this seam is extended for it."""
+    import numpy as np
+
+    from sieve_player import registry, wire
+    from sieve_player.graph import Series
+    from tools import blobs, track
+
+    facets = {"run", "step", "key_params", "cut_file", "cut_files", "select", "matches"}
+    whole = [(path.name, ast.unparse(n)) for path in PKG.glob("*.py") for n in ast.walk(ast.parse(path.read_text(encoding="utf-8")))
+             if isinstance(n, ast.Call) and isinstance(n.func, (ast.Attribute, ast.Name)) and ast.unparse(n.func).split(".")[-1] in facets | {"facet"}
+             and any(re.search(r"\.params\b", ast.unparse(a)) and "computed(" not in ast.unparse(a) for a in n.args)]
+    assert not whole, whole
+    chains = [f for name in ("graph", "walk") for f in ast.walk(ast.parse((PKG / f"{name}.py").read_text(encoding="utf-8")))
+              if isinstance(f, ast.FunctionDef) and f.name in ("series_chain", "chain_of")]
+    assert len(chains) == 2 and not [f.name for f in chains if ".params" in ast.unparse(f)]     # what the walk runs and steps a chain node with
+
+    plane = np.zeros((40, 60), np.uint8)
+    plane[5:15, 5:20], plane[22:34, 30:50] = 200, 255
+    table = blobs.find(plane, 1)
+    row_of = {"mask": plane, "gray": plane, "bgr": np.dstack([plane] * 3), "blobs": table, "signal": np.float32(2.0)}
+    row_of["tracks"] = track.run(Series([table] * 3, "k", 0, 30.0), registry.computed(track, registry.defaults(track)))["rows"][0]
+    for tool in (e.module for e in registry.discover(str(TOOLS)) if e.ok and registry.changes_nothing(e.module)):
+        where = registry.name(tool)
+        first = next((t for t in registry.expects(tool) or () if t in row_of), None)
+        assert first is not None and registry.kind(tool) in ("frame", "series"), where
+        assert not registry.cuts(tool) and not registry.is_selector(tool), where
+        params = registry.computed(tool, registry.defaults(tool))
+        if registry.kind(tool) == "frame":
+            tool.run(lambda row, name=None: row_of[first] if name is None
+                     else next((row_of[t] for t in registry.inputs(tool)[name] if t in row_of), None), 0, params)
+            continue
+        fold = registry.fold_of(tool)
+        rows = [row_of[first] if fold is None else fold(row_of[first])] * 3
+        if wire.is_table(first) and fold is None:
+            data = np.empty(3, object)
+            for i, r in enumerate(rows):
+                data[i] = r
+        else:
+            data = np.stack(rows)
+        tool.run(Series(data, "k", 0, 30.0), params)
+        state = None
+        for i, r in enumerate(data if registry.steps(tool) else ()):
+            state, _ = tool.step(state, r, i, params)
+
+
 def test_a_settings_widget_is_told_and_says_by_the_registrys_names_alone():
     """The pane and the window find what a settings widget has by name, so a name one side spells
     its own way is never called: every name they look for, and every `set_`, `show_` or signal a

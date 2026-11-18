@@ -233,7 +233,7 @@ def test_key_follows_params_and_wiring():
     g.sync()
     assert g.key("add") != k_add                                      # rewired
     doc.connect("gray", "add")
-    gray.key_params = lambda p: p["k"]                                # a tool that says what of its params its run reads
+    gray.key_params, was = (lambda p: p["k"]), gray.run               # a tool that says what of its params its run reads
     try:
         g.sync()
         k_add = g.key("add")
@@ -247,9 +247,28 @@ def test_key_follows_params_and_wiring():
         g.sync()
         doc.node("gray").params["note"] = "read"
         g.sync()
-        assert g.key("add") not in (k_add, g.key("gray"))             # a facet that raises: keyed by all its params
+        assert g.key("add") not in (k_add, g.key("gray"))             # a facet that raises: keyed as a tool without one
+        gray.PARAMS = {"k": {"default": 1}, "shade": {"default": "a", "changes result": False}}
+        g.sync()
+        k_add = g.key("add")
+        doc.node("gray").params["shade"] = "b"
+        g.sync()
+        assert g.key("add") == k_add                                  # a param declared to change nothing is in no key, under a facet that raises
+        gray.key_params = None
+        g.sync()
+        doc.node("gray").params["shade"] = "c"
+        g.sync()
+        assert g.key("add") == k_add                                  # nor under no facet
+        seen, gray.run = [], lambda frames, row, params: seen.append(set(params)) or frames(row)[..., 0]
+        g.compute("add", 0)
+        assert seen == [{"k", "note"}] and "shade" in g.entry("gray").params   # and its run is not handed it; a draw is
+        gray.run = was
+        doc.node("gray").params["k"] = 4
+        g.sync()
+        assert g.key("add") != k_add
     finally:
         del gray.key_params
+        gray.PARAMS, gray.run = {"k": {"default": 1}}, was
 
 
 def test_a_job_stands_by_the_keys_it_began_under_and_by_no_other_change():

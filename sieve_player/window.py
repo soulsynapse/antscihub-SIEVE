@@ -957,8 +957,8 @@ class PlayerWindow(QMainWindow):
                 continue
             matches = registry.matches_of(tool)
             try:
-                picked = tool.select(folder, dict(n.params))
-                found = matches(folder, dict(n.params)) if matches else None
+                picked = tool.select(folder, registry.computed(tool, n.params))
+                found = matches(folder, registry.computed(tool, n.params)) if matches else None
             except Exception as e:
                 self.pane.note(n.id, f"{type(e).__name__}: {e}")
                 continue

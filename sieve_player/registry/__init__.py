@@ -17,7 +17,7 @@ _HINTS = {
     "KIND": 'KIND = "frame"  # or "series", or "same": the kind of the node wired into its first input',
     "EXPECTS": 'EXPECTS = "gray"  # or a tuple; the report lists the types in use',
     "PRODUCES": 'PRODUCES = "gray"  # or "same": out as in',
-    "PARAMS": 'PARAMS = {"radius": {"default": 3, "kind": "int", "range": (1, 15)}}  # every param, once, in the order of its rows: its default, the kind of its value among KINDS, and "range" for an int or a float, "decimals" for a float, "choices" for a choice with "unlisted": True where a value outside them is taken; one of a default alone has no row',
+    "PARAMS": 'PARAMS = {"radius": {"default": 3, "kind": "int", "range": (1, 15)}}  # every param, once, in the order of its rows: its default, the kind of its value among KINDS, and "range" for an int or a float, "decimals" for a float, "choices" for a choice with "unlisted": True where a value outside them is taken; one of a default alone has no row; "changes result": False for one a draw or a card alone reads: it is in no key, and run, step, key_params, cut_file, cut_files, select and matches are handed the params without it',
     "run": "def run(frames, row, params): ...",
     "fold": "def fold(frame): ...  # a series tool: what the walk stacks per row in place of the frame",
     "step": "def step(state, row, i, params): ...  # a series tool that steps: (the next state, {field: this row's share of run's result}); state is None at the first row",
@@ -95,6 +95,7 @@ def produces(tool):
 
 KINDS = ("int", "float", "bool", "text", "choice")   # the kinds of value a declared param may say
 _SAID = {None: (), "int": ("range",), "float": ("range", "decimals"), "bool": (), "text": (), "choice": ("choices", "unlisted")}
+CHANGES_RESULT = "changes result"   # what a param of any kind may say beside its kind's own; unsaid, it does
 
 
 def _number(v):
@@ -116,9 +117,11 @@ def params(tool):
         kind = said.get("kind")
         if kind not in _SAID:
             raise ValueError(f"PARAMS[{n!r}] has no kind {kind!r}; one of {KINDS}")
-        extra = set(said) - {"default", "kind", *_SAID[kind]}
+        extra = set(said) - {"default", "kind", CHANGES_RESULT, *_SAID[kind]}
         if extra:
             raise ValueError(f"PARAMS[{n!r}] says {sorted(extra)}, which {'a ' + kind if kind else 'a param of no kind'} does not have")
+        if not isinstance(said.get(CHANGES_RESULT, True), bool):
+            raise ValueError(f"PARAMS[{n!r}] says {CHANGES_RESULT!r} as {said[CHANGES_RESULT]!r}, not True or False")
         if kind in ("int", "float"):
             r = said.get("range")
             if not (isinstance(r, (tuple, list)) and len(r) == 2 and all(map(_number, r)) and r[0] <= r[1]):
@@ -133,6 +136,20 @@ def params(tool):
 def defaults(tool):
     """The tool's params as a node of it begins, a dict of its own."""
     return {n: said["default"] for n, said in params(tool).items()}
+
+
+def changes_nothing(tool):
+    """The names of the tool's params declared to change nothing its computing hands out: a draw's
+    or a card's alone. One left unsaid is not among them."""
+    return frozenset(n for n, said in params(tool).items() if not said.get(CHANGES_RESULT, True))
+
+
+def computed(tool, given):
+    """`given`, a node's params, as the tool's computing is handed them and as its key holds them:
+    a dict of the caller's own without those the tool declares to change nothing, so no result
+    can follow one."""
+    idle = changes_nothing(tool)
+    return {k: v for k, v in given.items() if k not in idle}
 
 
 def settings_of(tool):
@@ -205,7 +222,7 @@ def matches_of(tool):
 # package, beside a call of the facet itself. A facet with neither is one nothing reads.
 READERS = {
     "NAME": ("name", "by_name"), "KIND": ("kind",), "EXPECTS": ("expects", "is_selector"),
-    "PRODUCES": ("produces", "is_selector"), "PARAMS": ("params", "defaults"), "settings": ("settings_of",), "INPUTS": ("inputs",),
+    "PRODUCES": ("produces", "is_selector"), "PARAMS": ("params", "defaults", "changes_nothing", "computed"), "settings": ("settings_of",), "INPUTS": ("inputs",),
     "OPTIONAL": ("optional",), "STATIC": ("static",), "PATHS": ("paths",), "cut_file": ("cuts",),
     "cut_files": ("names_cut_files",), "step": ("steps",), "draw": ("draws",), "fold": ("fold_of",),
     "key_params": ("key_params_of",), "pick": ("pick_of",), "matches": ("matches_of",),
@@ -354,5 +371,5 @@ def signature(tool):
 
 
 __all__ = ["MARKER", "FACETS", "WIDGET_FACETS", "READERS", "KINDS", "Entry", "is_tool", "probe", "hint", "discover", "code_print", "imported_print", "types", "CATEGORIES", "category",
-           "description", "signature", "name", "by_name", "kind", "expects", "produces", "params", "defaults", "settings_of", "inputs", "optional", "static", "paths",
+           "description", "signature", "name", "by_name", "kind", "expects", "produces", "params", "defaults", "changes_nothing", "computed", "settings_of", "inputs", "optional", "static", "paths",
            "is_selector", "cuts", "names_cut_files", "steps", "draws", "fold_of", "key_params_of", "pick_of", "matches_of"]

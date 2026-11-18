@@ -358,7 +358,7 @@ def pick_path(doc, tools, nid, input=INPUT):
     if tool is None or not is_selector(tool):
         return None, f"{sel.id} is not a selector"
     try:
-        path = tool.select(doc.folder(), dict(sel.params))
+        path = tool.select(doc.folder(), registry.computed(tool, sel.params))
     except Exception as e:  # a tool's rule is user code; its failure is a report, not a crash
         return None, f"{sel.id} raised {type(e).__name__}: {e}"
     if path is None:

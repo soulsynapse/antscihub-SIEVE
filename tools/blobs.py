@@ -27,7 +27,7 @@ PARAMS = {
     "max_area": {"default": 0, "kind": "int", "range": (0, MAX_AREA)},
     "core_threshold": {"default": 0, "kind": "int", "range": (0, 255)},
     "split": {"default": False, "kind": "bool"},
-    "outline": {"default": "box", "kind": "choice", "choices": OUTLINES},
+    "outline": {"default": "box", "kind": "choice", "choices": OUTLINES, "changes result": False},
 }
 
 

@@ -23,7 +23,13 @@ of vanishing, and so is a tool whose `PARAMS` cannot be read, under its own name
 A tool says each param once, in `PARAMS`: its default, the kind of its value, and its range or its
 choices. The player makes a node's first params and a plain settings widget of it, a row a param
 that says a kind, in the tool's order; a tool with a card of its own says `settings` and builds
-its rows of the same declaration.
+its rows of the same declaration. A param a `draw` or a card alone reads says
+`"changes result": False`: it is in no key, so a change to it computes nothing again, and the
+player hands `run`, `step`, `key_params`, `cut_file`, `cut_files`, `select` and `matches` the
+params without it, so a tool that reads one there raises and no result follows it. One left
+unsaid is in the key and handed over. A tool whose rule a mark cannot say, a param read only
+under some value of another, says `key_params`, which answers in place of the params and is
+trusted.
 
 The types are whatever the tools say: `types(entries)` maps each to who produces and who expects it,
 and the report prints that first. `--check` fails if this list and `__all__` differ, if a facet is
@@ -62,6 +68,8 @@ category beside each tool.
 - `KINDS` -- the kinds of value a declared param may say
 - `params(tool)` -- `PARAMS`, name -> what it says, read or a ValueError naming the param
 - `defaults(tool)` -- name -> default, of `PARAMS`
+- `changes_nothing(tool)` -- the params that say `"changes result": False`
+- `computed(tool, given)` -- a node's params without those: what its key holds and its computing is handed
 - `settings_of(tool)` -- its `settings`, or None
 - `inputs(tool)` -- `INPUTS`, name -> a tuple of types
 - `optional(tool)`

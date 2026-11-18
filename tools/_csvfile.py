@@ -18,7 +18,7 @@ import re
 
 from sieve_player.decoder import footage_print
 
-PARAMS = {"beside footage": {"default": True, "kind": "bool"}}
+PARAMS = {"beside footage": {"default": True, "kind": "bool", "changes result": False}}
 FILTER = "CSV (*.csv);;All (*)"
 _KEY = re.compile(r"# sieve key=(\S*) rows=(\d+)-(\d+)")
 _KIND = re.compile(r" kind=(\S+)")

@@ -342,7 +342,7 @@ class _Walk:
 
 def chain_of(p):
     """The Plan `p`'s chain as Graph.series_chain gives the current one's."""
-    return [(nid, e.tool, dict(e.params), e.band, e.src) for nid in p.chain for e in [p.entries[nid]]]
+    return [(nid, e.tool, dict(e.computed), e.band, e.src) for nid in p.chain for e in [p.entries[nid]]]
 
 
 

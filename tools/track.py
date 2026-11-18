@@ -25,7 +25,7 @@ PARAMS = {
     "min_rows": {"default": 3, "kind": "int", "range": (1, 60)},
     "min_p": {"default": 0.1, "kind": "float", "range": (0.0, 1.0)},
     "merge_ratio": {"default": 0.0, "kind": "float", "range": (0.0, MAX_RATIO), "decimals": 1},
-    "outline": {"default": "box", "kind": "choice", "choices": OUTLINES},
+    "outline": {"default": "box", "kind": "choice", "choices": OUTLINES, "changes result": False},
 }
 
 

@@ -318,22 +318,31 @@ changed, so nothing is computed again for it. A tool with a `key_params` and a m
 one thing twice, and `plan.py:keyed` keys a node whose `key_params` raises by the whole of its
 params, the marked among them.
 
-- [ ] A param's declaration says whether it changes what the tool's computing hands out, by any
+- [x] A param's declaration says whether it changes what the tool's computing hands out, by any
   of those, and one left unsaid does.
   Check: `tests/test_registry.py`.
-- [ ] A node's raw key holds what `key_params` answers, in place of its params, for a tool that
+- [x] A node's raw key holds what `key_params` answers, in place of its params, for a tool that
   has one, and for any other its params that change the result; a param declared to change
   nothing is in no key, that of a node whose `key_params` raises among them.
   Check: `tests/test_graph.py`, the seam of keys extended.
-- [ ] A tool's `key_params` answers the same under two values of a param declared to change
-  nothing.
-  Check: the seam below, over the same params.
-- [ ] For every param declared to change nothing, its tool's computing hands out equal results of
-  one input under two values of it.
-  Check: a seam over every such param of every tool, so one the computing comes to read is found.
-- [ ] A change to a param in no key is drawn at the row shown.
+- [x] Kendrick, at the build: a declaration alone is trusted, and a param a tool comes to read
+  after declaring it to change nothing serves results of the value before. A param declared to
+  change nothing is not in the params the player hands a tool's `run`, `step`, `key_params`,
+  `cut_file`, `cut_files`, `select` or `matches`; `draw`, `pick` and the card are handed every
+  param. So no result follows such a param, a tool that reads one where it computes raises, and
+  `key_params` answers the same under any two values of one. This stands where two boxes stood,
+  that `key_params` answers the same and that the computing hands out equal results under two
+  values of such a param, each a check of one input.
+  Check: `tests/test_seams.py`, a seam: no call of a computing facet in the player is handed a
+  node's whole params, and every tool that declares such a param computes of the params without
+  it; `tests/test_graph.py`, a run handed none.
+- [x] A change to a param in no key is drawn at the row shown.
   Check: a one-off: `outline` changed on a track node, the frame painted with the other outline
   and no row computed.
+- [x] `outline` of `blobs`, `filter` and `track`, and `csv`'s `beside footage`, are declared to
+  change nothing; `attach`'s `outline`, which its `run` reads, is not.
+  Check: the baseline's one-off against the finding: the keys that differ are those of a node of
+  these four tools and of every node below one.
 
 ## Not here
 

@@ -252,6 +252,36 @@ def test_key_follows_params_and_wiring():
         del gray.key_params
 
 
+def test_a_job_stands_by_the_keys_it_began_under_and_by_no_other_change():
+    """plan.stands answers of the chain's keys alone: a moved card, a node added off the chain and
+    a param its tool's key_params leaves out leave a job standing; a key moved, or a chain node
+    gone, does not."""
+    from sieve_player.plan import stands, walked_keys
+    head = tool("head", kind="series", expects="gray", produces="signal")
+    doc = D.from_tools([gray, add, head])
+    g = Graph(doc, Dec(), {**TOOLS, "head": head})
+    began = walked_keys(g.snapshot())
+    assert set(began) == {"head"}
+    gray.key_params = lambda p: p["k"]
+    try:
+        g.sync()
+        began = walked_keys(g.snapshot())
+        doc.node("add").pos = (40.0, 40.0)
+        doc.add_node("same", (0.0, 300.0))
+        doc.node("gray").params["note"] = "unread"
+        g.sync()
+        assert stands(began, g.snapshot())
+        doc.node("gray").params["k"] = 5
+        g.sync()
+        assert not stands(began, g.snapshot())
+        began = walked_keys(g.snapshot())
+        doc.remove_node("head")
+        g.sync()
+        assert began and not stands(began, g.snapshot())
+    finally:
+        del gray.key_params
+
+
 def test_rewire_during_walk():
     slow = tool("slow", fn=lambda f, p: time.sleep(0.001) or f + 100)
     doc = fan_out()

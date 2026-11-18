@@ -81,6 +81,19 @@ def shared_fold(entries, heads):
     return next(iter(folds.values())) if len(folds) == 1 else None
 
 
+def walked_keys(p):
+    """What a walk of the Plan `p` computes under: each chain node's key."""
+    return {nid: p.entries[nid].key for nid in p.chain}
+
+
+def stands(began, p):
+    """Whether a job begun under `began`, node to key as walked_keys gave them, stands under the
+    Plan `p`: every node of it is on `p`'s chain under the key it began under, whatever else of the
+    document has changed."""
+    now = walked_keys(p)
+    return all(now.get(nid) == key for nid, key in began.items())
+
+
 def facts(p, pinned):
     """The Plan `p` as a sync event carries it, in plain values a dump can write: per node its kind,
     whether it is fed, static and served, whether the walk steps it and the chain node that made a

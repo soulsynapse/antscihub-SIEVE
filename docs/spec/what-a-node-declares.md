@@ -206,7 +206,7 @@ Facts to weigh. A read, a walk and a cut are each ended when their own key moves
 (`18c2010a`, `36e3565e`, `a603747b`). `window.py:PlayerWindow._bare_said` drops a bare walk's
 results where the document is not, whole, the one the walk began under.
 
-- [ ] A bare walk is ended, and its results dropped, when the key of a node it walks has moved and
+- [x] A bare walk is ended, and its results dropped, when the key of a node it walks has moved and
   by no other change to the document.
   Check: a seam: a function of the keys the walk began under and the plan now answers whether it
   stands, and stands across a moved card, a node added off the chain and a param that is in no

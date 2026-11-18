@@ -33,6 +33,7 @@ from .pace import Pace, clock
 from .pacecontrol import PaceControl
 from .storecontrol import StoreControl
 from .pane import Pane
+from .plan import stands, walked_keys
 from . import registry
 from .registry import CATEGORIES, Entry, category, description, signature
 from .stream import ASKED, EDIT, HAND, Emitter
@@ -743,6 +744,7 @@ class PlayerWindow(QMainWindow):
                 self.canvas.standings[n.id] = text
             else:
                 self.canvas.standings.pop(n.id, None)
+        self._bare_stands()
 
     def _failed(self, row, nid):
         self._restate()
@@ -1286,7 +1288,7 @@ class PlayerWindow(QMainWindow):
         p.setProcessEnvironment(env)
         p.readyReadStandardOutput.connect(self._bare_said)
         p.finished.connect(lambda code, _: self._bare is p and self._end_bare(f"bare: its process ended with {code} and no results"))
-        self._bare, self._bare_doc, self._bare_t = p, job["document"], time.perf_counter()
+        self._bare, self._bare_keys, self._bare_t = p, walked_keys(self.graph.snapshot()), time.perf_counter()
         self.header.bar.setRange(0, 0)
         self.header.bar.show()
         self.header.note.setText("bare: starting")
@@ -1312,8 +1314,7 @@ class PlayerWindow(QMainWindow):
                 self._shortened(self.decoder.count)
             elif "results" in said:
                 took = time.perf_counter() - self._bare_t
-                if self.doc.to_dict() != self._bare_doc:
-                    self._end_bare("bare: the document changed under the walk, and its results were dropped")
+                if not self._bare_stands():
                     return
                 with open(said["results"], "rb") as f:
                     results, start, fps = pickle.load(f)
@@ -1326,6 +1327,13 @@ class PlayerWindow(QMainWindow):
             elif "failed" in said:
                 row, nid, text = said["failed"]
                 self._end_bare(f"bare: {nid or 'a tool'} raised at row {row}: {text}")
+
+    def _bare_stands(self):
+        """Whether the bare walk under way stands, by the keys it began under; one that does not is ended, its results dropped."""
+        if self._bare is None or stands(self._bare_keys, self.graph.snapshot()):
+            return True
+        self._end_bare("bare: the key of a node it walks moved, and its results were dropped")
+        return False
 
     def _end_bare(self, note=""):
         p, self._bare = self._bare, None

@@ -270,22 +270,28 @@ still read.
 
 Assumes: Held results and an edited tool. Changes what is served after a tool is edited.
 
-- [ ] A held file written before this, under the stamp with the tools' digest, serves its runs.
+- [x] A held file written before this, under the stamp with the tools' digest, serves its runs.
   Check: a one-off: a held file of `video-tests/` as it lies, its runs read back.
-- [ ] The player lets go of a document's held results at a word from the user.
+- [x] The player lets go of a document's held results at a word from the user.
   Check: a seam: after it, `File.load` answers no runs.
-- [ ] What a held file is good under holds nothing of the tools' code: an edited tool leaves a
+- [x] What a held file is good under holds nothing of the tools' code: an edited tool leaves a
   document's held runs serving.
   Check: a seam: a held file written, a tool's file touched, the runs read back.
-- [ ] A held run carries a digest of the code it was made under, its tool's file and the files
+- [x] A held run carries a digest of the code it was made under, its tool's file and the files
   of that folder whose name begins with an underscore, taken in the process that walked it. No
   run is served or refused by it.
   Check: a seam: a run held and its tool's file touched, the digest it carries is not the tool's
   now; another tool's file touched, it is.
-- [ ] A node whose held runs carry another digest than its tool's now, or none, and every node
+- [x] A node whose held runs carry another digest than its tool's now, or none, and every node
   below one on the chain, has the `!` in its header; a node with nothing held has none.
   Check: a seam: a function of the digests held and the plan answers the nodes marked, a node
   below a marked one among them and a node of another tool not.
+- [x] A held result says the code of every node above it whose tool ran to feed it, a frame
+  node's among them, and such a node whose tool's code is another now has the `!` and every
+  node below it. Observed building the boxes above: a frame node holds no runs, so by its own
+  runs an edit to `blobs.py` marks nothing while every result held below it is stale. Nothing
+  is said of a node that serves a file, nor above one: its tool did not run.
+  Check: the seam of the nodes marked, a node above the chain among them.
 
 ## Keys that move once
 

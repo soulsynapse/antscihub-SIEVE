@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from . import density
-from .registry import fold_of
+from .registry import fold_of, imported_print
 from .graph import Series, gated, inband
 from .stream import ASKED, GIVEN, HAND, SHAPE
 from .wire import ROWS, is_table, nbytes, own_bytes, share_bytes
@@ -37,9 +37,13 @@ class _Stepped:
     """A stepping node's progress over a range: the key it is stepped under, the state its tool
     returned last, its result accumulated over `rows` rows, and the bytes the result holds; beside
     it what graph.gated makes of that result, `gate` and `fed` over the first `gated` rows under
-    `band`, None for a result with no signal. `table` is whether the node's type is a table."""
+    `band`, None for a result with no signal. `table` is whether the node's type is a table.
+    `given` is whether the result was held elsewhere and handed in, `code` then what it was made
+    under as that result said it, None for one that said nothing."""
     key: str
     table: bool = False
+    given: bool = False
+    code: object = None
     state: object = None
     fields: dict = field(default_factory=dict)
     rows: int = 0
@@ -80,6 +84,8 @@ class _Stepped:
     def upto(self, rows):
         """The result over its first `rows` rows as graph.gated hands it out, and what it feeds."""
         result = {f: a[:rows] for f, a in self.fields.items()}
+        if self.given:
+            result["code"] = self.code
         if self.gate is None:
             return result, None
         return {**result, "gate": self.gate[:rows]}, self.fed[:rows]
@@ -105,7 +111,7 @@ class _Walk:
     sent: float = 0.0   # when the range began or show() last ran, on perf_counter
     ask: tuple = (0, 0, False, {})  # (start, length, spared, given) the range was asked over; the clip's is the clip
     spared: bool = False        # the chain's results over the range are held elsewhere: nothing is stacked or stepped and no result goes out
-    given: dict = field(default_factory=dict)     # node -> (raw key, its result's fields over the range), held elsewhere: stepped nodes the walk does not step
+    given: dict = field(default_factory=dict)     # node -> (raw key, its result's fields over the range, the code it was made under or None), held elsewhere: stepped nodes the walk does not step
     start: int = 0
     length: int = 0
     i: int = 0
@@ -238,9 +244,9 @@ class _Walk:
         heads, shared = set(p.heads), p.fold is not None
         bands = {nid: band for nid, _, _, band, _ in chain}
         stepping = [(nid, p.entries[nid], params, src) for nid, _, params, _, src in chain if p.entries[nid].steps]
-        for nid, (key, fields) in self.given.items():
+        for nid, (key, fields, code) in self.given.items():
             if nid not in self.stepped:
-                self.stepped[nid] = _Stepped(key, is_table(p.entries[nid].produces), fields=fields, rows=self.length)
+                self.stepped[nid] = _Stepped(key, is_table(p.entries[nid].produces), given=True, code=code, fields=fields, rows=self.length)
         for nid in [n for n in self.stepped if n not in {s[0] for s in stepping}]:
             self.bytes -= self.stepped.pop(nid).bytes
         for nid, e, params, src in stepping:
@@ -292,7 +298,7 @@ class _Walk:
 
     def stale_given(self):
         """Whether a node the walk was given a result for is no longer stepped under that result's key."""
-        return any((e := self.plan.entries.get(nid)) is None or not e.steps or e.raw_key != key for nid, (key, _) in self.given.items())
+        return any((e := self.plan.entries.get(nid)) is None or not e.steps or e.raw_key != key for nid, (key, *_) in self.given.items())
 
     def halt(self):
         """Stopped: the rows it has stand, and the count says so, to the window and to the probe."""
@@ -339,12 +345,34 @@ def chain_of(p):
     return [(nid, e.tool, dict(e.params), e.band, e.src) for nid in p.chain for e in [p.entries[nid]]]
 
 
+
+def ran_above(p, nid):
+    """Node to imported_print over `nid` and every node above it in the Plan `p` whose tool ran to
+    feed it: none above a node that serves a file, nor that node, and none whose tool discover
+    did not import."""
+    out, todo, seen = {}, [nid], set()
+    while todo:
+        n = todo.pop()
+        e = p.entries.get(n)
+        if e is None or n in seen or e.file is not None:
+            continue
+        seen.add(n)
+        if (d := imported_print(e.tool)) is not None:
+            out[n] = d
+        todo += [s for s in e.srcs.values() if s is not None]
+    return out
+
+
 def run_chain(graph, stack, start, done, folds, stepped=None, p=None):
     """The series chain of the Plan `p`, the graph's current one with none, over `stack`, the
     walked node's rows from `start`, `done` of them so far, with `folds` the stack's own cache of
     each head's folding and `stepped`, for each node the walk stepped, which runs nothing here,
     its result over those rows gated and what it feeds, as graph.gated would make them:
-    {node: result}, each gated and keyed; None when there is no chain."""
+    {node: result}, each gated and keyed; None when there is no chain. A result that is a dict
+    says under "code" what it was made under, node to imported_print over the node and every node
+    above it whose tool ran: a head's by ran_above, any other's what its source's result says and
+    its own, and a result handed in what it said where it was held; None where that or a source's
+    said nothing."""
     p = p or graph.snapshot()
     chain = chain_of(p)
     if not chain:
@@ -353,12 +381,22 @@ def run_chain(graph, stack, start, done, folds, stepped=None, p=None):
     heads, folded = set(p.heads), p.fold is not None
     key = {nid: e.key for nid, e in p.entries.items()}
     buffer = None if stack is None else stack.base if stack.base is not None else stack
+
+    def made(nid, src, handed_in=False):
+        if handed_in:
+            return results[nid]["code"]
+        if nid in heads:
+            return ran_above(p, nid)
+        up = results[src].get("code") if isinstance(results.get(src), dict) else None
+        own = imported_print(p.entries[nid].tool)
+        return None if up is None else {**up, **({} if own is None else {nid: own})}
+
     for nid, tool, params, band, src in chain:
         if stepped is not None and nid in stepped:
             results[nid], feeds[nid] = stepped[nid]
             graph.note(nid, "")
             if isinstance(results[nid], dict):
-                results[nid] = {**results[nid], "key": key[nid]}
+                results[nid] = {**results[nid], "key": key[nid], "code": made(nid, src, "code" in results[nid])}   # _Stepped.upto says it of a result handed in alone
             continue
         if nid in heads and stack is None:
             continue        # a head with nothing walked for it: its standing says why
@@ -385,5 +423,5 @@ def run_chain(graph, stack, start, done, folds, stepped=None, p=None):
             ev[1] = own_bytes(results[nid])
         graph.note(nid, "")
         if isinstance(results[nid], dict):
-            results[nid] = {**results[nid], "key": key[nid]}   # beside its gate: what a tool that writes a file records
+            results[nid] = {**results[nid], "key": key[nid], "code": made(nid, src)}   # the key beside its gate: what a tool that writes a file records
     return results

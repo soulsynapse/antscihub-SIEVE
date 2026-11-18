@@ -1,4 +1,5 @@
 """The catalogue of tools. README.md beside this file is the spec; `__all__` is what it names."""
+import hashlib
 import importlib
 import os
 import re
@@ -230,6 +231,41 @@ class Entry:
         return [f for f in FACETS if self.get(f) is None]
 
 
+_FILES = {}     # path -> ((size, mtime), the digest of its bytes then)
+_IMPORTED = {}  # id of a module -> (the module, its code_print when discover first imported it); by id since a tool may be any object, hashable or not
+
+
+def _file_print(path):
+    st = os.stat(path)
+    stamp = st.st_size, st.st_mtime_ns
+    if _FILES.get(path, (None,))[0] != stamp:
+        with open(path, "rb") as f:
+            _FILES[path] = (stamp, hashlib.sha1(f.read()).hexdigest())
+    return _FILES[path][1]
+
+
+def code_print(tool):
+    """A digest of the code `tool` is made of as it lies on disk now: its own file and every file
+    of its folder whose name begins with an underscore, what the tools there share. None for a
+    module of no file, or one whose file is gone."""
+    path = getattr(tool, "__file__", None)
+    if not path:
+        return None
+    root, own = os.path.split(os.path.abspath(path))
+    try:
+        shared = sorted(n for n in os.listdir(root) if n.startswith("_") and n.endswith(".py"))
+        return hashlib.sha1("|".join(f"{n}:{_file_print(os.path.join(root, n))}" for n in [own, *shared]).encode()).hexdigest()[:16]
+    except OSError:
+        return None
+
+
+def imported_print(tool):
+    """`tool`'s code_print as discover found it when it first imported the module: the code this
+    process runs, whatever the file has become since. None for a module discover did not import."""
+    had = _IMPORTED.get(id(tool))
+    return had[1] if had is not None and had[0] is tool else None
+
+
 def _import(root, stem):
     parent, pkg = os.path.split(os.path.abspath(root))
     if parent not in sys.path:
@@ -254,6 +290,7 @@ def discover(*roots):
                 out.append(Entry(stem, None, path, f"{type(e).__name__}: {e} ({where})"))
                 continue
             if is_tool(mod):
+                _IMPORTED.setdefault(id(mod), (mod, code_print(mod)))
                 try:
                     params(mod)
                 except ValueError as e:
@@ -316,6 +353,6 @@ def signature(tool):
     return f"{', '.join(expects(tool) or ())} → {produces(tool)}".strip()
 
 
-__all__ = ["MARKER", "FACETS", "WIDGET_FACETS", "READERS", "KINDS", "Entry", "is_tool", "probe", "hint", "discover", "types", "CATEGORIES", "category",
+__all__ = ["MARKER", "FACETS", "WIDGET_FACETS", "READERS", "KINDS", "Entry", "is_tool", "probe", "hint", "discover", "code_print", "imported_print", "types", "CATEGORIES", "category",
            "description", "signature", "name", "by_name", "kind", "expects", "produces", "params", "defaults", "settings_of", "inputs", "optional", "static", "paths",
            "is_selector", "cuts", "names_cut_files", "steps", "draws", "fold_of", "key_params_of", "pick_of", "matches_of"]

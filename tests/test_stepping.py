@@ -228,8 +228,12 @@ def test_a_walk_given_a_stepped_heads_result_stacks_nothing_and_walks_again_when
             turn()
         return got[-1]
     whole = walk({})
-    given = {"track": (g.entry("track").raw_key, {f: v for f, v in whole["track"].items() if f not in ("gate", "key")})}
+    fields = {f: v for f, v in whole["track"].items() if f not in ("gate", "key", "code")}
+    given = {"track": (g.entry("track").raw_key, fields, whole["track"]["code"])}
     assert equal(walk(given), whole) and win.stack is None
+    elsewhere = walk({"track": (g.entry("track").raw_key, fields, {"track": "another"})})     # what it was made under is the held result's to say, and what reads it says the same of it
+    assert elsewhere["track"]["code"] == {"track": "another"} and elsewhere["kinematics"]["code"]["track"] == "another"
+    assert walk({"track": (g.entry("track").raw_key, fields, None)})["kinematics"]["code"] is None
     win.given = dict(given)
     win.begin(0, 7)
     turn()

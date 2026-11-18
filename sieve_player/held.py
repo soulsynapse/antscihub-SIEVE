@@ -1,10 +1,10 @@
-"""A document's held series: the runs its walks made, in one file beside the document, and what the
-file is good under beside its keys. A run is a Run, (start, rows, {node: result}, bytes), a walk's
+"""A document's held series: the runs its walks made, in one file beside the document, good under
+its keys alone. A run is a Run, (start, rows, {node: result}, bytes), a walk's
 results over `rows` rows from `start` and what they hold. The file is the stamp and then a record a run, and
 File pickles a run once however often it writes. Runs is the runs held and which of them a range is
-served from, told the chain as a Chain. Imports nothing of sieve_player; the window says when a run
+served from, told the chain as a Chain; `marked` is the nodes whose held results were made under
+other code than lies on disk. Imports nothing of sieve_player; the window says when a run
 is held and written, and what the chain now is."""
-import hashlib
 import os
 import pickle
 from typing import NamedTuple
@@ -22,22 +22,14 @@ def path_for(document):
     return f"{document}{EXT}" if document else None
 
 
-def tools_print(tools):
-    """A digest of every .py file in the folders `tools`, name to module, were loaded from: a key
-    names a tool and its params and never its code, so this is what sees a tool edited."""
-    h = hashlib.sha1()
-    for root in sorted({os.path.dirname(os.path.abspath(t.__file__)) for t in tools.values() if getattr(t, "__file__", None)}):
-        for name in sorted(n for n in os.listdir(root) if n.endswith(".py")):
-            h.update(name.encode())
-            with open(os.path.join(root, name), "rb") as f:
-                h.update(f.read())
-    return h.hexdigest()
+STAMP = (VERSION,)      # what a file begins with: the form of its records, and nothing of the tools' code or the footage, which a run's keys name
 
 
-def stamp(tools_digest):
-    """What a held file is good under: `tools_digest`, taken when the tools were loaded. Which
-    footage a run is of is in its keys, by decoder.footage_print, and no part of this."""
-    return (VERSION, tools_digest)
+def _stamped(said):
+    """Whether `said`, what a file begins with, is a stamp of this form: STAMP, or the tuple a
+    file written before it began with, VERSION and a digest of the tools' folder behind it that
+    nothing reads."""
+    return isinstance(said, tuple) and said[:1] == STAMP
 
 
 class Run(NamedTuple):
@@ -103,23 +95,23 @@ def _dump(f, runs):
 
 
 class File:
-    """The held file at `path` and what it is good under, `stamp`. It knows where the record of
+    """The held file at `path`. It knows where the record of
     each run it has read or written lies, by the run's identity, so the interpreter's time in a
     write is the runs the file has not had and never those it has: a run is pickled once. One
     thread at a time may call it."""
 
-    def __init__(self, path, stamp):
-        self.path, self.stamp = path, stamp
+    def __init__(self, path):
+        self.path = path
         self._had = None        # [(run, offset, length)], the records at path in their order; None when what is there is not known to be good
         self._end = 0           # where the last good record ends: what lies past it is a write cut short
 
     def load(self):
-        """The runs at the path under the stamp, up to the first record that does not read; [] for
-        a file that is absent, does not read or was written under another."""
+        """The runs at the path, up to the first record that does not read; [] for a file that is
+        absent, does not read or begins with no stamp of this form."""
         self._had, had = None, []
         try:
             with open(self.path, "rb") as f:
-                if pickle.load(f) != self.stamp:
+                if not _stamped(pickle.load(f)):
                     return []
                 self._had, self._end = had, f.tell()
                 while True:
@@ -134,7 +126,8 @@ class File:
     def write(self, runs):
         """Leaves `runs` at the path in their order, those the file has first: the new are added
         behind the file's when it has no other, and else the file is made again, whole or not at
-        all, the records of the runs kept copied as bytes. Returns the runs that did not pickle:
+        all, the records of the runs kept copied as bytes; of no runs it leaves a file that loads
+        as none. Returns the runs that did not pickle:
         each is left out of the file and counted as had, so it is tried once and costs the others
         nothing. OSError when the file cannot be written and MemoryError when a run cannot be
         pickled for want of room, the file then taken as unknown and the next write made of every
@@ -152,7 +145,7 @@ class File:
             part, kept_at = f"{self.path}.part", []
             try:
                 with open(part, "wb") as f:
-                    pickle.dump(self.stamp, f, protocol=pickle.HIGHEST_PROTOCOL)
+                    pickle.dump(STAMP, f, protocol=pickle.HIGHEST_PROTOCOL)
                     if kept:
                         with open(self.path, "rb") as old:
                             for _, was, n in kept:
@@ -301,6 +294,32 @@ class Runs:
                 at = max(at, b)
             drawn.append((s, s + n))
         return out
+
+
+def marked(runs, chain, now, above):
+    """The nodes whose results held in `runs` under the keys of `chain` are to be said stale.
+    `now` is node to the digest of its tool's code as it lies, of every node whose tool runs and
+    has one; `above`, node to the nodes it reads. A run's result for a chain node says under
+    "code" what it was made under, node to digest over the node and those above it: a node of
+    `now`, at or above a chain node whose result is good under its key, is marked where that
+    result says another digest of it or none, and with it every node below one marked. A result
+    under a key the chain has left marks nothing."""
+    out = set()
+    for _, _, results, _ in runs:
+        for nid in Runs._has(results, chain):
+            made = results[nid].get("code") or {}
+            todo, seen = [nid], set()
+            while todo:
+                n = todo.pop()
+                if n in seen:
+                    continue
+                seen.add(n)
+                if n in now and made.get(n) != now[n]:
+                    out.add(n)
+                todo += above.get(n, ())
+    while more := {n for n, ups in above.items() if n not in out and any(u in out for u in ups)}:
+        out |= more
+    return out
 
 
 def _a_row(v, rows):

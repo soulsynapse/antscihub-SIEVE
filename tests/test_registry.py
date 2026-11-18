@@ -4,7 +4,7 @@ from types import SimpleNamespace as Tool
 
 import pytest
 
-from sieve_player.registry import FACETS, category, defaults, description, discover, hint, params, signature
+from sieve_player.registry import FACETS, category, code_print, defaults, description, discover, hint, imported_print, params, signature
 
 
 def test_the_first_rule_that_fits_decides_the_category():
@@ -41,3 +41,21 @@ def test_a_param_is_declared_once_and_a_declaration_that_cannot_be_read_is_its_e
     (folder / "bad.py").write_text('SIEVE_TOOL = True; NAME = "bad"; PARAMS = {"r": {"default": 3, "kind": "slider"}}', encoding="utf-8")
     (entry,) = discover(str(folder))
     assert not entry.ok and entry.name == "bad" and "slider" in entry.error
+
+
+def test_a_tools_code_print_is_its_own_file_and_the_shared_ones_and_the_imported_one_is_as_discover_found_it(tmp_path):
+    folder = tmp_path / "printed_tools"
+    folder.mkdir()
+    write = lambda name, text: (folder / name).write_text(text, encoding="utf-8", newline="\n")
+    for name in ("a", "b"):
+        write(f"{name}.py", f'SIEVE_TOOL = True; NAME = "{name}"\n')
+    write("_shared.py", "X = 1\n")
+    a, b = (e.module for e in discover(str(folder)))
+    was = imported_print(a), imported_print(b)
+    assert was == (code_print(a), code_print(b)) and None not in was and was[0] != was[1]
+    write("a.py", 'SIEVE_TOOL = True; NAME = "a"  # edited\n')       # another length, so the file's stamp moves whatever the clock's grain
+    assert code_print(a) != was[0] and code_print(b) == was[1]
+    write("_shared.py", "X = 1  # edited\n")
+    assert code_print(b) != was[1]
+    discover(str(folder))
+    assert (imported_print(a), imported_print(b)) == was and imported_print(Tool()) is None and code_print(Tool()) is None

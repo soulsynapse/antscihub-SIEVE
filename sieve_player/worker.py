@@ -83,7 +83,7 @@ class Worker(QThread):
 
     def set_window(self, start, length, spared=False, given=None, by=ASKED):
         """Walk the window from `start`. `spared`, the caller holds the chain's results over it and
-        the chain is not run; `given`, node to (raw key, fields over the window), it holds those
+        the chain is not run; `given`, node to (raw key, fields over the window, the code they were made under or None), it holds those
         stepped nodes' and the walk steps the rest from them. The densities of what the plot shows,
         by watch(), are folded either way. `by`, one of stream.BEGUN_BY, is what the walk's begin
         says began it: the caller says where a hand or an edit did."""

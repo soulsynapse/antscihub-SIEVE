@@ -418,8 +418,6 @@ class PlayerWindow(QMainWindow):
         self._file = None                         # the held.File the runs were read from or last written to; the writer's thread's while that lives
         self._writer = None                       # the thread writing the held file, or the last that did
         self._write_failed = threading.Event()    # the last writer's file did not land: the next write carries its runs
-        self._stamp = None                        # what the open video's held file is good under, see held.stamp
-        self._tools_digest = held.tools_print(self.tools)   # taken beside the import: a file edited after it is not the code that runs
         self._taken = {}      # (node id, path input) -> (the file last handed to its loader, its mtime)
         self._watch = QFileSystemWatcher(self)
         self._watch.fileChanged.connect(self._path_changed)
@@ -497,6 +495,8 @@ class PlayerWindow(QMainWindow):
         menu.addSeparator()
         menu.addAction("Save", QKeySequence.Save, self.save_document)
         menu.addAction("Save As…", QKeySequence.SaveAs, self._save_as)
+        menu.addSeparator()
+        menu.addAction("Let Go of Held Results…", self._ask_let_go)
         dev.install(self)
         for m in self.menuBar().findChildren(QMenu):
             theme.round_menu(m)
@@ -1033,8 +1033,7 @@ class PlayerWindow(QMainWindow):
         self.timeline.setEnabled(True)
         self.worker.start()
         self.sync()
-        self._stamp = held.stamp(self._tools_digest)
-        self._file = held.File(held.path_for(self.doc.path), self._stamp) if self.doc.path else None
+        self._file = held.File(held.path_for(self.doc.path)) if self.doc.path else None
         self.runs.take(self._file.load() if self._file is not None else [])
         self.set_window(0, min(self.count, round(10 * self.fps)), by=HAND)
         self.goto(0, commit=True)
@@ -1219,8 +1218,8 @@ class PlayerWindow(QMainWindow):
 
     def _as_given(self, part):
         """`part`, node to held result, as the worker takes it: node to (raw key, the result's fields
-        as the tool made them, without what the player put beside them)."""
-        return {nid: (self.graph.entry(nid).raw_key, {f: v for f, v in r.items() if f not in ("gate", "key")})
+        as the tool made them, without what the player put beside them, what it says it was made under)."""
+        return {nid: (self.graph.entry(nid).raw_key, {f: v for f, v in r.items() if f not in ("gate", "key", "code")}, r.get("code"))
                 for nid, r in part.items()}
 
     def _show_held(self):
@@ -1230,7 +1229,51 @@ class PlayerWindow(QMainWindow):
         self.timeline.strip.set_held(self.runs.spans(chain))
         if self.worker is not None:
             self.worker.give_clip(self.count, self._as_given(self.runs.part(0, self.count, chain)))
+        self._show_stale(chain)
         self._show_pinned()
+
+    def _show_stale(self, chain):
+        """Each card says whether its node is of held.marked, by the tools' files as they lie."""
+        entries = {} if self.graph is None else {n.id: e for n in self.doc.nodes if (e := self.graph.entry(n.id)) is not None}
+        ran = {nid: e for nid, e in entries.items() if e.file is None}
+        now = {nid: d for nid, e in ran.items() if (d := registry.code_print(e.tool)) is not None}
+        above = {nid: [s for s in e.srcs.values() if s is not None] if nid in ran else [] for nid, e in entries.items()}
+        stale = held.marked(self.runs, chain, now, above)
+        for n in self.doc.nodes:
+            self.pane.set_stale(n.id, "its held results were made under other code than its tool's, or a tool's above it, as the files lie now; "
+                                      "File, Let Go of Held Results walks them again" if n.id in stale else "")
+
+    def _ask_let_go(self):
+        if self.graph is None or not len(self.runs):
+            return
+        box = QMessageBox(self)
+        box.setWindowTitle("Let go of held results")
+        box.setText(f"Every result held for {os.path.basename(self.doc.path) if self.doc.path else 'the document'} is let go, and walked again when it is next wanted.")
+        buttons = QMessageBox.StandardButton
+        box.setStandardButtons(buttons.Discard | buttons.Cancel)
+        box.setDefaultButton(buttons.Cancel)
+        box.exec()
+        if box.standardButton(box.clickedButton()) == buttons.Discard:
+            self.let_go()
+
+    def let_go(self):
+        """Lets go of every run held, the file's with them, and of the clip walk's results; the
+        window is walked again."""
+        if self.graph is None:
+            return
+        self._hold.stop()
+        if self._writer is not None:
+            self._writer.join()
+        self.runs.take([])
+        self.clip_results = {}
+        self._unwritten = False
+        self._write_failed.clear()
+        if self._file is not None and os.path.exists(self._file.path):
+            try:
+                self._file.write([])
+            except OSError as e:
+                self.timeline.controls.progress.setText(f"could not write {os.path.basename(self._file.path)}: {e}")
+        self._ask_window(by=HAND)
 
     def _chain(self):
         """The series chain as held.Runs is told it; one of no nodes with no video open."""
@@ -1407,7 +1450,7 @@ class PlayerWindow(QMainWindow):
         if path and self._unwritten:
             self._unwritten = False
             if self._file is None or self._file.path != path:
-                self._file = held.File(path, self._stamp)       # the document saved under another name: nothing there is known to be this one's
+                self._file = held.File(path)       # the document saved under another name: nothing there is known to be this one's
             self._writer = threading.Thread(target=_save_held, args=(self._file, list(self.runs), self._write_failed), name="held")
             self._writer.start()
             if wait:

@@ -1239,7 +1239,8 @@ class PlayerWindow(QMainWindow):
         """Each card says whether its node is of held.marked, by the tools' files as they lie."""
         entries = {} if self.graph is None else {n.id: e for n in self.doc.nodes if (e := self.graph.entry(n.id)) is not None}
         ran = {nid: e for nid, e in entries.items() if e.file is None}
-        now = {nid: d for nid, e in ran.items() if (d := registry.code_print(e.tool)) is not None}
+        seen = {}
+        now = {nid: d for nid, e in ran.items() if (d := registry.code_print(e.tool, seen)) is not None}
         above = {nid: [s for s in e.srcs.values() if s is not None] if nid in ran else [] for nid, e in entries.items()}
         stale = held.marked(self.runs, chain, now, above)
         for n in self.doc.nodes:

@@ -10,7 +10,7 @@ import pytest
 
 from sieve_player import document as D
 from sieve_player.decoder import EndOfStream
-from sieve_player.graph import Graph, gated
+from sieve_player.graph import Graph, Memo, gated
 from sieve_player.wire import nbytes, result_bytes
 from sieve_player.ledger import Ledger
 from sieve_player.stats import Stats
@@ -219,6 +219,11 @@ def test_the_memo_lets_go_of_the_rows_held_last_whatever_was_read_since():
     for row in range(30):
         g.walk_row(row)
     assert g.peek(28, "add") is not None and g.peek(0, "add") is None
+    memo, asked = Memo(40 * 24), []                    # its order is asked of what it lets go and once of each entry kept back, however many it holds
+    memo.order = lambda: lambda k: (asked.append(k), (0,) if k < 4 else None)[1]
+    for k in range(60):
+        memo.put(k, np.zeros((2, 12), np.uint8))
+    assert memo.evictions == 20 and len(asked) == 24 and all(memo.get(k) is not None for k in range(4))
 
 
 def test_a_static_node_is_computed_once_held_once_and_peeked_at_any_row():

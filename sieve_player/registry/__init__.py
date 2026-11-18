@@ -252,26 +252,36 @@ _FILES = {}     # path -> ((size, mtime), the digest of its bytes then)
 _IMPORTED = {}  # id of a module -> (the module, its code_print when discover first imported it); by id since a tool may be any object, hashable or not
 
 
-def _file_print(path):
+def _file_print(path, seen=None):
+    if seen is not None and path in seen:
+        return seen[path]
     st = os.stat(path)
     stamp = st.st_size, st.st_mtime_ns
     if _FILES.get(path, (None,))[0] != stamp:
         with open(path, "rb") as f:
             _FILES[path] = (stamp, hashlib.sha1(f.read()).hexdigest())
+    if seen is not None:
+        seen[path] = _FILES[path][1]
     return _FILES[path][1]
 
 
-def code_print(tool):
+def code_print(tool, seen=None):
     """A digest of the code `tool` is made of as it lies on disk now: its own file and every file
     of its folder whose name begins with an underscore, what the tools there share. None for a
-    module of no file, or one whose file is gone."""
+    module of no file, or one whose file is gone. `seen` is a dict of the caller's, empty at
+    first, handed to each call that is to read the disk as one moment: a folder is listed and a
+    file looked at once among them."""
     path = getattr(tool, "__file__", None)
     if not path:
         return None
     root, own = os.path.split(os.path.abspath(path))
     try:
-        shared = sorted(n for n in os.listdir(root) if n.startswith("_") and n.endswith(".py"))
-        return hashlib.sha1("|".join(f"{n}:{_file_print(os.path.join(root, n))}" for n in [own, *shared]).encode()).hexdigest()[:16]
+        shared = None if seen is None else seen.get((root,))
+        if shared is None:
+            shared = sorted(n for n in os.listdir(root) if n.startswith("_") and n.endswith(".py"))
+            if seen is not None:
+                seen[(root,)] = shared
+        return hashlib.sha1("|".join(f"{n}:{_file_print(os.path.join(root, n), seen)}" for n in [own, *shared]).encode()).hexdigest()[:16]
     except OSError:
         return None
 

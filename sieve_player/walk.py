@@ -133,6 +133,7 @@ class _Walk:
             self.graph.progress(self.i, self.i, (self.bytes, STACK_BYTES))
         self.start, self.length = start, length
         self.sent = time.perf_counter()
+        self.graph.rests()
         self.drop()
         if length:
             self.graph.began(start, length, by)
@@ -172,6 +173,8 @@ class _Walk:
         if not self.spared:
             self.step(self.i + 1)
         self.i += 1
+        if self.i == self.length:
+            g.rests()
         self.fold()
         self.ran += ran
         if self.bytes > STACK_BYTES:
@@ -303,6 +306,7 @@ class _Walk:
     def halt(self):
         """Stopped: the rows it has stand, and the count says so, to the window and to the probe."""
         self.length = self.i
+        self.graph.rests()
         self.report()
         self.graph.progress(self.i, self.length, (self.bytes, STACK_BYTES))
 

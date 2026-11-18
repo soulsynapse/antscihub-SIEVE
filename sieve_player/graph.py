@@ -14,14 +14,14 @@ from typing import NamedTuple
 import numpy as np
 
 from . import density
-from .decoder import CLEAR, Decoder, EndOfStream, footage_print_by_stamp
+from .decoder import CLEAR, Decoder, EndOfStream, footage_print_by_stamp, letting_go
 from .document import INPUT, VIDEO_TOOL, video_output
 from .registry import by_name, computed, names_cut_files
 from .plan import _key, base_key, facts, plan
 from .stream import Emitter
 from .wire import ROWS, is_table, nbytes, own_bytes
 
-NEAR = 8    # rows about a walk's own row that the stores let go of last of all: what a tool reading beside its row reads
+NEAR = 8    # rows about the row a walk under way is at that the stores let go of last of all: what a tool reading beside its row reads
 
 
 def inband(v, band):
@@ -97,10 +97,10 @@ class Memo:
     the limit, and gone only through `unpin`, which drops every pinned entry whose owner is not in
     `keep`, so whatever a STATIC node has memoized under any key outlives any walk and goes with
     its plan. Each eviction goes to `on_evict(key, bytes)` when set, after the lock is dropped.
-    With `order` set the image-shaped entries go by it and not by how lately they were read:
-    `order()` is asked once the memo is past its limit, under the memo's lock, for a function of a
-    key, and the entries it puts highest go first, the least lately read first of two it puts
-    alike, until CLEAR of the limit is clear."""
+    With `order` set it keeps some image-shaped entries back: `order()` is asked once the memo is
+    past its limit, under the memo's lock, for a function of a key, None for an entry that goes as
+    any does and a rank for one kept back, and they go as decoder.letting_go says, those kept back
+    only when no other is left and then until CLEAR of the limit is clear."""
 
     def __init__(self, limit_bytes):
         self.limit = limit_bytes
@@ -173,9 +173,8 @@ class Memo:
             self._sizes[k] = own_bytes(v) if size is None else size
             self.bytes += self._sizes[k]
             if self.bytes > self.limit and self.order is not None:
-                for ok in sorted(self._big, key=self.order(), reverse=True):
-                    if self.bytes <= self.limit - self.limit // CLEAR:
-                        break
+                for ok in letting_go(self._big, self.order(), lambda: self.bytes > self.limit,
+                                     lambda: self.bytes > self.limit - self.limit // CLEAR):
                     del self._big[ok]
                     n = self._sizes.pop(ok)
                     self.bytes -= n
@@ -334,7 +333,8 @@ class Graph:
         self.memo.on_evict = lambda k, n: self.stream.emit("evict", None, k[1], k[0], n)
         decoder.on_evict = lambda row, n: self.stream.emit("uncache", None, row, self._base, n)
         self._held_rows = (0, 0)            # (start, rows) the stores let go of last, by holds()
-        self._at = {}                       # who is at a row -> the row: the display by looks_at(), a lane by walk_row(); replaced whole, never changed
+        self._shown_at = None               # the row the display is at, by looks_at()
+        self._walks_at = {}                 # lane -> the row its walk is at, by walk_row() until rests(); the worker's thread's, replaced whole and never changed
         self.memo.order = self._memo_order
         decoder.order = self._row_order
         self._plan = {}
@@ -454,36 +454,43 @@ class Graph:
 
     def looks_at(self, row):
         """The display is at `row`. Any thread."""
-        self._at = {**self._at, "display": row}
+        self._shown_at = row
+
+    def rests(self):
+        """This thread's lane's walk is at no row: it finished, was stopped, or begins again.
+        Worker threads only."""
+        self._walks_at = {lane: row for lane, row in self._walks_at.items() if lane != self.stream.lane}
 
     def _row_order(self):
-        """A store's order of its rows, as Memo.order, each row as (where, how far): where is 0
-        within NEAR rows of a lane's walk, 1 inside holds() and 2 outside, the higher going first,
-        and of two alike the one further from every row something is at, the display's and each
-        lane's walk's."""
-        (start, rows), at = self._held_rows, self._at
-        end, every = start + rows, tuple(at.values())
-        walks = tuple(row for who, row in at.items() if who != "display")
+        """A store's order of its rows, as Memo.order: None for a row outside holds() and more than
+        NEAR rows from every lane's walk, and for one kept back (where, how far), where 0 within
+        NEAR rows of a walk and 1 inside holds(), the higher going first, and of two alike the one
+        further from every row something is at, the display's and each walk's."""
+        (start, rows), shown, walks = self._held_rows, self._shown_at, tuple(self._walks_at.values())
+        end, every = start + rows, walks if shown is None else (*walks, shown)
 
         def order(row):
-            far = min([abs(row - a) for a in every], default=0)
             near = any(abs(row - a) <= NEAR for a in walks)
-            return (0 if near else 1 if start <= row < end else 2, far)
+            if not near and not start <= row < end:
+                return None
+            return (0 if near else 1, min([abs(row - a) for a in every], default=0))
         return order
 
     def _memo_order(self):
-        """`_row_order` of a memo key's row, with an entry under a key no node of the plan has going
-        before every other, and inside holds() a node the display does not read going before one
-        it does: the shown node, the overlay's and those whose draw() it paints."""
+        """`_row_order` of a memo key's row, None too for an entry under a key no node of the plan
+        has, and inside holds() a node the display does not read going before one it does: the
+        shown node, the overlay's and those whose draw() it paints."""
         rows, plan = self._row_order(), self._plan
         live = {e.raw_key for e in plan.values()}
         read = {plan[nid].raw_key for nid in (self.shown, self.over, *self._painted) if nid in plan}
 
         def order(k):
             if k[0] not in live:
-                return (3, False, 0)
-            where, far = (1, 0) if k[1] is None else rows(k[1])
-            return (where, where == 1 and k[0] not in read, far)
+                return None
+            if k[1] is None:
+                return (1, k[0] not in read, 0)
+            where = rows(k[1])
+            return where and (where[0], where[0] == 1 and k[0] not in read, where[1])
         return order
 
     def footage(self, nid):
@@ -563,7 +570,7 @@ class Graph:
         frame; under the Plan `p`, the current one with none. Worker threads only."""
         p = p or self.snapshot()
         nid, fold = p.walk, p.fold
-        self._at = {**self._at, self.stream.lane: row}
+        self._walks_at = {**self._walks_at, self.stream.lane: row}
         with self.demand("walk", nid):
             out = self._compute(p.entries, nid, row)
         return out if fold is None or out is None else fold(out)

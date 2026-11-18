@@ -24,13 +24,42 @@ from av.video.reformatter import VideoReformatter
 
 LOOKBEHIND = 1          # rows a seek lands short of its target and reads through
 SEEK_GUESS = 12.0       # steps a seek is taken to cost until one has been measured here
-CLEAR = 16              # a store that lets go by an order clears a CLEARth of its limit, so the order is taken once for many discards
+CLEAR = 16              # a store with nothing left but what its order keeps back clears a CLEARth of its limit, so the ranking is taken once for many discards
 LUMA_FORMATS = {"yuv420p", "yuvj420p"}      # planar 8-bit 4:2:0: the first plane is the luma, rows x cols
 _EXPAND = np.clip(np.round((np.arange(256) - 16) * 255 / 219), 0, 255).astype(np.uint8)   # limited-range luma to full
 # BT.601 whatever the file says of itself, and yuv420p as limited range: the values cv2's FFmpeg plugin handed out,
 # which every held result is of; docs/findings/2026-11-15-libav-asked-directly-against-the-plugin.md
 _TO_BGR = {"format": "bgr24", "src_colorspace": "ITU601", "dst_colorspace": "ITU601", "src_color_range": "MPEG", "dst_color_range": "JPEG"}
 _TURNS = {90: cv2.ROTATE_90_COUNTERCLOCKWISE, 180: cv2.ROTATE_180, 270: cv2.ROTATE_90_CLOCKWISE}     # a frame's rotation, degrees -> the turn that shows it upright
+
+
+def letting_go(held, rank, over, clear, least=0):
+    """The keys of `held`, an OrderedDict least lately read first, that a store past its limit lets
+    go of, each to be taken out of `held` by the caller before the next is asked for. `rank`
+    answers None for a key that goes as any does and a rank for one kept back. While `over()`,
+    those of None go, the least lately read first, each one kept back moved to the new end as it
+    is met so that it is not met again until the store has turned over; with none of those left
+    and the store still over, those kept back go, the highest rank first and the least lately read
+    first of two alike, while `clear()`. `least` entries stay whatever. `rank` is asked of a key
+    once at most, so nothing is ranked while a key of None is left."""
+    kept = []
+    for _ in range(len(held)):
+        if not over() or len(held) <= least:
+            return
+        k = next(iter(held))
+        r = rank(k)
+        if r is None:
+            yield k
+        else:
+            held.move_to_end(k)
+            kept.append((r, k))
+    if not over():
+        return
+    kept.sort(key=lambda rk: rk[0], reverse=True)
+    for _, k in kept:
+        if not clear() or len(held) <= least:
+            return
+        yield k
 
 
 class EndOfStream(IndexError):
@@ -299,7 +328,7 @@ class Decoder:
         self.evictions = 0                      # frames the cache dropped for room
         self.step_ms = self.seek_ms = None      # running means of what a step and a seek cost on this file
         self.on_evict = None                    # (row, bytes) for each frame the cache drops, after the lock
-        self.order = None                       # as Memo.order, of a row: unset, the frames least lately read go first
+        self.order = None                       # as Memo.order, of a row: unset, every frame goes the least lately read first
         self._times = None                      # frame_times of the file, taken before the first seek
         self._keys = None                       # the rows of its keyframes, ascending
         self._earliest_landing = 0              # the row a seek to the first keyframe read, once one has read past row 0
@@ -362,9 +391,9 @@ class Decoder:
 
     @cache_limit.setter
     def cache_limit(self, n):
-        """Takes hold at once: frames go, by `order` or the least lately read first, until the
-        cache is within it, one frame staying whatever the limit, and `on_evict` is told of each.
-        Any thread."""
+        """Takes hold at once: frames go, the least lately read first and those `order` keeps back
+        last, until the cache is within it, one frame staying whatever the limit, and `on_evict`
+        is told of each. Any thread."""
         with self._cache_lock:
             self._cache_limit = n
             gone = self._trim()
@@ -373,9 +402,8 @@ class Decoder:
     def _trim(self):
         gone = []
         if self._cache_bytes > self._cache_limit and self.order is not None:
-            for r in sorted(self._cache, key=self.order(), reverse=True):
-                if self._cache_bytes <= self._cache_limit - self._cache_limit // CLEAR or len(self._cache) <= 1:
-                    break
+            for r in letting_go(self._cache, self.order(), lambda: self._cache_bytes > self._cache_limit,
+                                lambda: self._cache_bytes > self._cache_limit - self._cache_limit // CLEAR, least=1):
                 old = self._cache.pop(r)
                 self._cache_bytes -= old.nbytes
                 gone.append((r, old.nbytes))

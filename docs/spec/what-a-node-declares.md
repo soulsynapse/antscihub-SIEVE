@@ -183,7 +183,9 @@ Assumes: nothing.
 document has a display flag and an overlay flag; the pins are the plot's and name signals.
 Kendrick: "sometimes I want a draw on the video that is hard to surface as something needing it".
 
-- [ ] Kendrick: which draw was hard to surface, and how a draw is named as wanted; this line says.
+- [x] Kendrick: a draw is named as wanted by a list in the document, as a signal is by `pinned`.
+  Neither flag names it: each is one node, and the overlay flag's is a plane heated over the
+  frame and no tool's `draw`.
 
 ## The display says which draws it paints
 
@@ -193,8 +195,14 @@ no key.
 Facts to weigh. `Graph.watch` is told what the plot shows, and the worker folds for those and no
 other.
 
-- [ ] The display tells the graph the nodes whose `draw` it paints, as the plot tells it what it
-  shows, and the worker computes at the row for those and no other.
+- [ ] The document holds the nodes whose `draw` is wanted in a list saved as `pinned` is, and a
+  node's header puts its node on the list and takes it off; a node removed is off it.
+  Check: `tests/test_document.py`, beside the seam of `pinned`.
+- [ ] A document saved with no such list loads with every node whose tool has a `draw` on it, and
+  paints as it did.
+  Check: `tests/test_document.py`, the same seam.
+- [ ] The display tells the graph the nodes of the list whose `draw` it paints, as the plot tells
+  it what it shows, and the worker computes at the row for those and no other.
   Check: a seam beside the test of `Graph.watch`: a fed frame node with a `draw` that the display
   does not name is not computed for the frame.
 
@@ -246,7 +254,11 @@ did not make them. `held.py:File.load` answers no runs of a file whose stamp is 
 handed, so a stamp of another form lets go of every held file once unless the form it had is
 still read.
 
-- [ ] Kendrick: held results outlive an edit to a tool and are let go by hand, and that is wanted.
+- [x] Kendrick: held results outlive an edit to a tool, are served, and are let go by hand; the
+  node says they are stale and the user decides. A `!` stands in the node's header beside the
+  tool's name, where a series' size tag stands, on a node whose held runs were made under other
+  code of its tool than lies there now and on every node below one. The code is a tool's own and
+  not the folder's, so an edit to one tool marks no node of another.
 
 ## A held file goes by the key alone
 
@@ -259,6 +271,15 @@ Assumes: Held results and an edited tool. Changes what is served after a tool is
 - [ ] What a held file is good under holds nothing of the tools' code: an edited tool leaves a
   document's held runs serving.
   Check: a seam: a held file written, a tool's file touched, the runs read back.
+- [ ] A held run carries a digest of the code it was made under, its tool's file and the files
+  of that folder whose name begins with an underscore, taken in the process that walked it. No
+  run is served or refused by it.
+  Check: a seam: a run held and its tool's file touched, the digest it carries is not the tool's
+  now; another tool's file touched, it is.
+- [ ] A node whose held runs carry another digest than its tool's now, or none, and every node
+  below one on the chain, has the `!` in its header; a node with nothing held has none.
+  Check: a seam: a function of the digests held and the plan answers the nodes marked, a node
+  below a marked one among them and a node of another tool not.
 
 ## Keys that move once
 
@@ -269,8 +290,8 @@ held file's runs under the old keys are found by nothing and walked again.
 `docs/findings/2026-11-16-which-settings-no-run-reads.md` has which params those are as the tools
 stand.
 
-- [ ] Kendrick: said before it lands, and the held files of the documents in use may be walked
-  again.
+- [x] Kendrick: yes. It is said before it lands, and the held files of the documents in use are
+  walked again.
 
 ## A param that changes no result is in no key
 

@@ -1107,6 +1107,7 @@ class PlayerWindow(QMainWindow):
         offset = self.row - self.window_[0] if playhead is None else int(playhead) - start
         offset = max(0, min(length - 1, offset))
         self.window_ = (start, length)
+        self.graph.holds(start, length)
         self.plot.set_window(start, length, self.fps)
         self.timeline.strip.set_window(start, length)
         self.timeline.controls.set_window(start, length)
@@ -1120,6 +1121,7 @@ class PlayerWindow(QMainWindow):
         if self.graph is None:
             return
         self.row = row = max(0, min(self.count - 1, int(row)))
+        self.graph.looks_at(row)
         shown = self.graph.shown
         if shown is None:
             self.display.clear()

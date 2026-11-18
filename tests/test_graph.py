@@ -194,6 +194,26 @@ def test_a_read_after_the_node_moved_on_or_a_halt_is_cancelled():
         add.run, g.halt = keep, False
 
 
+def test_the_memo_lets_go_of_the_rows_held_last_whatever_was_read_since():
+    doc = D.from_tools([gray, add])
+    g = Graph(doc, Dec(), TOOLS, memo_bytes=300)       # a row is gray and add, 24 bytes each: the four held and two more
+    g.holds(0, 4)
+    g.looks_at(0)
+    for row in range(10):
+        g.walk_row(row)
+    assert g.memo.evictions and all(g.peek(row, nid) is not None for row in range(4) for nid in ("gray", "add"))
+    doc.node("add").params["k"] = 2
+    g.sync()
+    for row in range(6):                                # what is under the key add has left goes before a row held
+        g.walk_row(row)
+    assert all(g.peek(row, nid) is not None for row in range(4) for nid in ("gray", "add"))
+    g = Graph(doc, Dec(), TOOLS, memo_bytes=150)       # the four rows held do not fit: the shown node's stay
+    g.holds(0, 4)
+    for row in range(10):
+        g.walk_row(row)
+    assert all(g.peek(row, "add") is not None for row in range(4))
+
+
 def test_a_static_node_is_computed_once_held_once_and_peeked_at_any_row():
     const = tool("const", fn=lambda f, p: np.full_like(f, p["k"]))
     const.STATIC = True

@@ -21,7 +21,7 @@ SLOWER = 1.5        # what the nodes of a walk cost, against the same runs at it
 SOURCES = {
     "unread": "walk._Walk.fold folds Graph.folded(), what Graph.watch was told the plot shows: a node told there "
               "that the stream was not told is selected or pinned; docs/findings/2026-11-12-served-bake-upstream-walk.md",
-    "thrash": "graph.Memo.put and Decoder._put, an LRU under a scanning walk; "
+    "thrash": "graph.Memo.put and Decoder._put, which let go by Graph._memo_order and Graph._row_order, an LRU with neither; "
               "docs/findings/2026-10-31-window-fit-and-lru-thrash.md, docs/findings/2026-11-08-bake-window-fit.md",
     "grows": "walk.run_chain, a chain node the plan does not step run whole at every emit; "
              "docs/findings/2026-11-08-bake-window-fit.md, its second half",

@@ -24,6 +24,7 @@ from av.video.reformatter import VideoReformatter
 
 LOOKBEHIND = 1          # rows a seek lands short of its target and reads through
 SEEK_GUESS = 12.0       # steps a seek is taken to cost until one has been measured here
+CLEAR = 16              # a store that lets go by an order clears a CLEARth of its limit, so the order is taken once for many discards
 LUMA_FORMATS = {"yuv420p", "yuvj420p"}      # planar 8-bit 4:2:0: the first plane is the luma, rows x cols
 _EXPAND = np.clip(np.round((np.arange(256) - 16) * 255 / 219), 0, 255).astype(np.uint8)   # limited-range luma to full
 # BT.601 whatever the file says of itself, and yuv420p as limited range: the values cv2's FFmpeg plugin handed out,
@@ -298,6 +299,7 @@ class Decoder:
         self.evictions = 0                      # frames the cache dropped for room
         self.step_ms = self.seek_ms = None      # running means of what a step and a seek cost on this file
         self.on_evict = None                    # (row, bytes) for each frame the cache drops, after the lock
+        self.order = None                       # as Memo.order, of a row: unset, the frames least lately read go first
         self._times = None                      # frame_times of the file, taken before the first seek
         self._keys = None                       # the rows of its keyframes, ascending
         self._earliest_landing = 0              # the row a seek to the first keyframe read, once one has read past row 0
@@ -360,8 +362,9 @@ class Decoder:
 
     @cache_limit.setter
     def cache_limit(self, n):
-        """Takes hold at once: the frames least lately read go until the cache is within it, one
-        frame staying whatever the limit, and `on_evict` is told of each. Any thread."""
+        """Takes hold at once: frames go, by `order` or the least lately read first, until the
+        cache is within it, one frame staying whatever the limit, and `on_evict` is told of each.
+        Any thread."""
         with self._cache_lock:
             self._cache_limit = n
             gone = self._trim()
@@ -369,6 +372,13 @@ class Decoder:
 
     def _trim(self):
         gone = []
+        if self._cache_bytes > self._cache_limit and self.order is not None:
+            for r in sorted(self._cache, key=self.order(), reverse=True):
+                if self._cache_bytes <= self._cache_limit - self._cache_limit // CLEAR or len(self._cache) <= 1:
+                    break
+                old = self._cache.pop(r)
+                self._cache_bytes -= old.nbytes
+                gone.append((r, old.nbytes))
         while self._cache_bytes > self._cache_limit and len(self._cache) > 1:
             r, old = self._cache.popitem(last=False)
             self._cache_bytes -= old.nbytes

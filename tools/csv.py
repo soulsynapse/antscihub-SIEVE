@@ -23,7 +23,7 @@ import sys
 
 import numpy as np
 
-from tools._csvfile import DEFAULTS, FILTER, key_line, replace  # noqa: F401  DEFAULTS and FILTER are this tool's facets
+from tools._csvfile import FILTER, PARAMS, key_line, replace  # noqa: F401  PARAMS and FILTER are this tool's facets
 from tools._table import is_tables
 
 SIEVE_TOOL = True

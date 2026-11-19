@@ -6,7 +6,10 @@ import numpy as np
 SIEVE_TOOL = True
 NAME, KIND, EXPECTS, PRODUCES = "travel", "series", "tracks", "signal"
 METHODS = ("mean", "sum", "max", "count")
-DEFAULTS = {"method": "mean", "moving": 1.0}
+PARAMS = {
+    "method": {"default": "mean", "kind": "choice", "choices": METHODS},
+    "moving": {"default": 1.0, "kind": "float", "range": (0.0, 50.0), "decimals": 1},
+}
 
 
 def steps(prev, cur):
@@ -32,15 +35,6 @@ def step(state, row, i, params):
     s = np.zeros(0) if state is None else steps(state, row)
     v = 0.0 if len(s) == 0 else {"mean": s.mean, "sum": s.sum, "max": s.max, "count": lambda: (s > moving).sum()}[m]()
     return row, {"signal": np.float32(v)}
-
-
-def settings(parent=None):
-    from sieve_player import ParamWidget  # only the GUI needs the player
-
-    w = ParamWidget(parent)
-    w.add_choice("method", METHODS, DEFAULTS["method"])
-    w.add_float("moving", 0.0, 50.0, DEFAULTS["moving"], decimals=1)
-    return w
 
 
 if __name__ == "__main__":

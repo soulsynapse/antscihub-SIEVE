@@ -1,6 +1,7 @@
 """track's merge_ratio: two animals merging into one blob and parting are five ids, none shared across
 the contact; with the ratio off the merged blob carries one of them on."""
 from sieve_player.graph import Series
+from sieve_player.registry import defaults
 from tools import track
 from tests.test_track import table
 
@@ -22,7 +23,7 @@ def ids(rows, lo, hi):
 
 
 def test_a_merge_and_a_split_each_start_new_ids_under_the_ratio_and_not_without_it():
-    params = {**track.DEFAULTS, "max_step": 5.0, "lost_rows": 5, "min_rows": 1}
+    params = {**defaults(track), "max_step": 5.0, "lost_rows": 5, "min_rows": 1}
     rows = track.run(Series(meeting(), "k", 0, 30.0), {**params, "merge_ratio": 1.5})["rows"]
     before, during, after = ids(rows, 0, 10), ids(rows, 10, 13), ids(rows, 13, 21)
     assert len(before) == 2 and len(during) == 1 and len(after) == 2

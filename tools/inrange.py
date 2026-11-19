@@ -15,7 +15,8 @@ import numpy as np
 SIEVE_TOOL = True
 NAME, KIND, EXPECTS, PRODUCES = "inrange", "frame", ("bgr", "hsv"), "mask"
 H_MAX, SV_MAX = 179, 255
-DEFAULTS = {"h_lo": 0, "h_hi": H_MAX, "s_lo": 0, "s_hi": SV_MAX, "v_lo": 0, "v_hi": SV_MAX}
+PARAMS = {f"{c}_{end}": {"default": top if end == "hi" else 0, "kind": "int", "range": (0, top)}
+          for c, top in (("h", H_MAX), ("s", SV_MAX), ("v", SV_MAX)) for end in ("lo", "hi")}
 PATHS = {"settings": lambda path: load_bounds(path)}
 
 
@@ -57,8 +58,7 @@ def settings(parent=None):
     class _Widget(ParamWidget):
         def __init__(self, parent=None):
             super().__init__(parent)
-            self.sliders = {name: self.add_int(name, 0, H_MAX if name[0] == "h" else SV_MAX, DEFAULTS[name])
-                            for name in DEFAULTS}
+            self.sliders = {name: self.add_declared(name, said) for name, said in PARAMS.items()}
             self.button, self.status = QPushButton("Load…"), readout()
             self.form.add_row("settings", self.button)
             self.form.add_line(self.status)

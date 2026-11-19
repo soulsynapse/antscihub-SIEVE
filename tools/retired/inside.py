@@ -10,14 +10,19 @@ a text one. A column the regions lack, or a name the first table already has, ra
 """
 import numpy as np
 
+from sieve_player.wire import NONE
 from tools._draw import draw as draw_table
-from tools._table import OUTLINES, footprint, plane as plane_of, with_column
+from tools._table import OUTLINES, footprint, plane as plane_of, unit_of, with_column
 
 SIEVE_TOOL = True
 NAME, KIND, EXPECTS, PRODUCES = "inside", "frame", "blobs", "blobs"
 INPUTS = {"regions": "blobs"}
 LABEL = "name"
-DEFAULTS = {"prefix": "region", "columns": "", "outline": "contour"}
+PARAMS = {
+    "prefix": {"default": "region", "kind": "text"},
+    "columns": {"default": "", "kind": "text"},
+    "outline": {"default": "contour", "kind": "choice", "choices": OUTLINES},
+}
 
 
 def names(text):
@@ -56,8 +61,9 @@ def inside(table, regions, prefix="region", columns=(), outline="contour"):
         else:
             v = np.full(len(table), np.nan)
             v[has] = regions[c][at[has]].astype(np.float64)
-        out = with_column(out, f"{prefix}_{c}", v)
-    return with_column(out, f"{prefix}_n", np.where(on_plane, count[py, px], 0))
+        unit, of = unit_of(regions, c) or (None, None)
+        out = with_column(out, f"{prefix}_{c}", v, unit, of)
+    return with_column(out, f"{prefix}_n", np.where(on_plane, count[py, px], 0), NONE)
 
 
 def run(frames, row, params):
@@ -65,17 +71,7 @@ def run(frames, row, params):
 
 
 def draw(painter, row, result, start, params):
-    draw_table(painter, result, params.get("outline", "box"), color=(120, 200, 240))
-
-
-def settings(parent=None):
-    from sieve_player import ParamWidget  # only the GUI needs the player
-
-    w = ParamWidget(parent)
-    w.add_text("prefix", DEFAULTS["prefix"])
-    w.add_text("columns", DEFAULTS["columns"])
-    w.add_choice("outline", OUTLINES, DEFAULTS["outline"])
-    return w
+    draw_table(painter, result, params["outline"], color=(120, 200, 240))
 
 
 if __name__ == "__main__":

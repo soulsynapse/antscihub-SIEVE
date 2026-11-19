@@ -8,6 +8,7 @@ empty reads NaN, or 0 for count. The table must carry a plane and must not alrea
 """
 import numpy as np
 
+from sieve_player.wire import AREA, NONE
 from tools._draw import draw as draw_table
 from tools._table import footprint, plane as plane_of, with_column
 
@@ -15,7 +16,10 @@ SIEVE_TOOL = True
 NAME, KIND, EXPECTS, PRODUCES = "sample", "frame", "blobs", "blobs"
 INPUTS = {"plane": ("gray", "mask")}
 METHODS = ("mean", "max", "count")
-DEFAULTS = {"column": "sample", "method": "mean"}
+PARAMS = {
+    "column": {"default": "sample", "kind": "text"},
+    "method": {"default": "mean", "kind": "choice", "choices": METHODS},
+}
 
 
 def sample(table, plane, column, method="mean"):
@@ -35,7 +39,8 @@ def sample(table, plane, column, method="mean"):
             out[k] = np.nan
         else:
             out[k] = v.mean() if method == "mean" else v.max()
-    return with_column(table, column, out)
+    unit, of = (AREA, plane.shape[:2]) if method == "count" else (NONE, None)
+    return with_column(table, column, out, unit, of)
 
 
 def run(frames, row, params):
@@ -43,13 +48,4 @@ def run(frames, row, params):
 
 
 def draw(painter, row, result, start, params):
-    draw_table(painter, result, params.get("outline", "box"), color=(120, 180, 240))
-
-
-def settings(parent=None):
-    from sieve_player import ParamWidget  # only the GUI needs the player
-
-    w = ParamWidget(parent)
-    w.add_text("column", DEFAULTS["column"])
-    w.add_choice("method", METHODS, DEFAULTS["method"])
-    return w
+    draw_table(painter, result, color=(120, 180, 240))

@@ -12,7 +12,12 @@ SIEVE_TOOL = True
 NAME, KIND, EXPECTS, PRODUCES = "filter", "frame", "blobs", "blobs"
 RATIOS = ("core_ratio", "aspect")
 FIELDS = (*DTYPE.names, *RATIOS)
-DEFAULTS = {"field": "area", "lo": "", "hi": "", "outline": "box"}
+PARAMS = {
+    "field": {"default": "area", "kind": "choice", "choices": FIELDS, "unlisted": True},
+    "lo": {"default": "", "kind": "text"},
+    "hi": {"default": "", "kind": "text"},
+    "outline": {"default": "box", "kind": "choice", "choices": OUTLINES, "changes result": False},
+}
 
 
 def column(table, field):
@@ -36,18 +41,7 @@ def run(frames, row, params):
 
 
 def draw(painter, row, result, start, params):
-    draw_table(painter, result, params.get("outline", "box"), color=(240, 200, 60))
-
-
-def settings(parent=None):
-    from sieve_player import ParamWidget  # only the GUI needs the player
-
-    w = ParamWidget(parent)
-    w.add_choice("field", FIELDS, DEFAULTS["field"], editable=True)
-    w.add_text("lo", DEFAULTS["lo"])
-    w.add_text("hi", DEFAULTS["hi"])
-    w.add_choice("outline", OUTLINES, DEFAULTS["outline"])
-    return w
+    draw_table(painter, result, params["outline"], color=(240, 200, 60))
 
 
 if __name__ == "__main__":

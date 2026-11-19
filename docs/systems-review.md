@@ -1007,9 +1007,11 @@ question that is Kendrick's, whether a bout walked alone is to equal the same ro
 walk of the whole clip, and E2 after it, with E3's first part whenever a hand is near it. Left:
 E4, and E3's second part, until E2 asks for them.
 
-What would make E1 the wrong first. That the count finds few settings no `run` reads and the six
-places, read whole, agree in all but the csv's name: E1's worth to his work then falls to little,
-its worth to development stands, and E2, which scores highest for his work, goes first on the
-keys as they are. That the experiment's data is wanted sooner than E1 can be shown right, which
+What would make E1 the wrong first. Not the count of settings no `run` reads: it sizes the marks
+and nothing else of E1, and is three by its one-off and four with `csv.py`'s
+(`docs/findings/2026-11-16-which-settings-no-run-reads.md`). E1's worth to his work is that one
+key answers what is still good for every kept thing and every job, where the held file, a bare
+walk and a csv each answer by a rule of their own, and a result let go for no reason he can see
+is what he feels. That the experiment's data is wanted sooner than E1 can be shown right, which
 is his to say and nothing here measures. Or that a step said to change no key cannot be made
 without changing one, which the first run of `--plan` would show.

@@ -21,18 +21,20 @@ from PySide6.QtCore import QFileSystemWatcher, QProcess, QProcessEnvironment, QR
 from PySide6.QtGui import QImage, QKeySequence, QPainter, QPen, QPixmap, QShortcut
 from PySide6.QtWidgets import QFileDialog, QHBoxLayout, QMainWindow, QMenu, QMessageBox, QProgressBar, QPushButton, QSizePolicy, QVBoxLayout, QWidget
 
-from . import bare, dev, document, filemenu, held, recent, store, theme
+from . import bare, dev, document, filemenu, held, recent, store, theme, wire
 from . import decoder as decoder_module
 from .canvas import Canvas
 from .catalogue import Log
 from .decoder import Decoder
-from .graph import Graph, nbytes
+from .graph import Graph
 from .ledger import Ledger, row_cost
 from .machine import Watch
 from .pace import Pace, clock
 from .pacecontrol import PaceControl
 from .storecontrol import StoreControl
 from .pane import Pane
+from .plan import stands, walked_keys
+from . import registry
 from .registry import CATEGORIES, Entry, category, description, signature
 from .stream import ASKED, EDIT, HAND, Emitter
 from .theme import GAP, PAD, ROW_H, readout
@@ -42,7 +44,7 @@ from .plot import Plot, Stage
 from .worker import Worker
 
 HOLD_MS = 2000              # how long the held runs rest, nothing new held, before they are written beside the document
-HELD_BYTES = 512 << 20      # what the held runs may take together, as graph.nbytes counts them, before the oldest go
+HELD_BYTES = 512 << 20      # what the held runs may take together, as wire.result_bytes counts them, before the oldest go
 TELL = 0.1                  # s between the worker's tellings of a walk's rows; docs/findings/2026-11-13-a-signal-a-row.md
 DUMP_ENV = "SIEVE_DUMP"  # names the file every video opened in this process dumps its stream to
 MEMO_ENV, CACHE_ENV = "SIEVE_MEMO_GB", "SIEVE_CACHE_GB"   # the memo's and the decoder cache's limits; unset, each class's default
@@ -283,7 +285,7 @@ class Display(QWidget):
             return
         shape = (self._pix.height(), self._pix.width())
         for nid, tool, node in reversed(self.drawers):
-            pick, result = getattr(tool, "pick", None), self.frame_results.get(nid, self.results.get(nid))
+            pick, result = registry.pick_of(tool), self.frame_results.get(nid, self.results.get(nid))
             if pick is None or result is None:
                 continue
             try:
@@ -311,7 +313,7 @@ def catalogue(items):
                 broken[t.name] = t.error
         else:
             modules.append(t)
-    return modules, {t.NAME: t for t in modules}, broken
+    return modules, registry.by_name(modules), broken
 
 
 class Header(QWidget):
@@ -408,16 +410,15 @@ class PlayerWindow(QMainWindow):
         self.results, self.result_start = {}, 0   # node id -> the series chain's results, and the row they start at
         self.clip_results = {}                    # the same over the clip walk's rows, from row 0; {} when there are none
         self._clip_asked = False                  # a clip walk was asked for and has not finished or been stopped
-        self.runs = held.Runs(HELD_BYTES, nbytes) # the held runs, the file's and this session's walks'
+        self.runs = held.Runs(HELD_BYTES, self._result_bytes) # the held runs, the file's and this session's walks'
         self._spared = False                      # the window's results are a held run's, and the worker runs no chain over it
         self._clip_ended = False                  # the clip walk told of its last row and its results have not yet come
+        self._clip_rests = False                  # the clip walk last told of every row of its range done: the clip's last, or the one it was stopped at
         self._given = False                       # the window walk was given held results for some of the chain and steps the rest
         self._unwritten = False                   # a run was held since the file was written
         self._file = None                         # the held.File the runs were read from or last written to; the writer's thread's while that lives
         self._writer = None                       # the thread writing the held file, or the last that did
         self._write_failed = threading.Event()    # the last writer's file did not land: the next write carries its runs
-        self._stamp = None                        # what the open video's held file is good under, see held.stamp
-        self._tools_digest = held.tools_print(self.tools)   # taken beside the import: a file edited after it is not the code that runs
         self._taken = {}      # (node id, path input) -> (the file last handed to its loader, its mtime)
         self._watch = QFileSystemWatcher(self)
         self._watch.fileChanged.connect(self._path_changed)
@@ -495,6 +496,8 @@ class PlayerWindow(QMainWindow):
         menu.addSeparator()
         menu.addAction("Save", QKeySequence.Save, self.save_document)
         menu.addAction("Save As…", QKeySequence.SaveAs, self._save_as)
+        menu.addSeparator()
+        menu.addAction("Let Go of Held Results…", self._ask_let_go)
         dev.install(self)
         for m in self.menuBar().findChildren(QMenu):
             theme.round_menu(m)
@@ -697,9 +700,7 @@ class PlayerWindow(QMainWindow):
         self.pane.sync()
         self._show_plot()
         self._pick_video()
-        self.display.drawers = [(n.id, self.tools[n.tool], n) for n in self.doc.nodes
-                                if n.tool in self.tools and hasattr(self.tools[n.tool], "draw")
-                                and id(self.tools[n.tool]) not in self.display.dropped]
+        self._set_drawers()
         self.canvas.update()
         if self.graph is None:
             return
@@ -711,12 +712,25 @@ class PlayerWindow(QMainWindow):
     def reflag(self):
         """A flag moved: the runtime's plan follows and the frame shows the new node at the same row.
         The memo and the walk stand; nothing a flag names is computed differently."""
+        self._set_drawers()
         self.canvas.update()
         if self.graph is None:
             return
         self.graph.sync()
         self._restate()
         self.goto(self.row, commit=True)
+
+    def _set_drawers(self):
+        """The display paints the draw() of each node on the document's drawn list whose tool has
+        one that has not raised, in node order, and the graph is told which."""
+        self.display.drawers = [(n.id, self.tools[n.tool], n) for n in self.doc.nodes
+                                if n.id in self.doc.drawn and n.tool in self.tools and registry.draws(self.tools[n.tool])
+                                and id(self.tools[n.tool]) not in self.display.dropped]
+        self._tell_painted()
+
+    def _tell_painted(self):
+        if self.graph is not None:
+            self.graph.paints([nid for nid, *_ in self.display.drawers])
 
     def _picked(self, nid, params):
         """A drawer answered a click: its params land in the document as a card's change does, through
@@ -742,6 +756,7 @@ class PlayerWindow(QMainWindow):
                 self.canvas.standings[n.id] = text
             else:
                 self.canvas.standings.pop(n.id, None)
+        self._bare_stands()
 
     def _failed(self, row, nid):
         self._restate()
@@ -771,6 +786,7 @@ class PlayerWindow(QMainWindow):
             self.goto(count - 1, commit=True)
 
     def _draw_failed(self, nid, line):
+        self._tell_painted()
         if self.graph is not None:
             self.graph.note(nid, line)
             self._restate()
@@ -791,7 +807,7 @@ class PlayerWindow(QMainWindow):
 
     def _params_changed(self, nid):
         self.canvas.update()   # a band moved recolours its node's dot
-        if document.is_selector(self.tools.get(self.doc.node(nid).tool)):
+        if registry.is_selector(self.tools.get(self.doc.node(nid).tool)):
             self._pick_video()
             return
         if self.graph is not None:
@@ -871,7 +887,7 @@ class PlayerWindow(QMainWindow):
         asked = set()
         for n in self.doc.nodes:
             tool = self.tools.get(n.tool)
-            loaders = document.paths(tool)
+            loaders = registry.paths(tool)
             if not loaders:
                 continue
             notes, errors, picked = [], [], {}
@@ -938,12 +954,12 @@ class PlayerWindow(QMainWindow):
         folder = self.doc.folder()
         for n in self.doc.nodes:
             tool = self.tools.get(n.tool)
-            if not document.is_selector(tool):
+            if not registry.is_selector(tool):
                 continue
-            matches = getattr(tool, "matches", None)
+            matches = registry.matches_of(tool)
             try:
-                picked = tool.select(folder, dict(n.params))
-                found = matches(folder, dict(n.params)) if matches else None
+                picked = tool.select(folder, registry.computed(tool, n.params))
+                found = matches(folder, registry.computed(tool, n.params)) if matches else None
             except Exception as e:
                 self.pane.note(n.id, f"{type(e).__name__}: {e}")
                 continue
@@ -1018,8 +1034,7 @@ class PlayerWindow(QMainWindow):
         self.timeline.setEnabled(True)
         self.worker.start()
         self.sync()
-        self._stamp = held.stamp(self._tools_digest)
-        self._file = held.File(held.path_for(self.doc.path), self._stamp) if self.doc.path else None
+        self._file = held.File(held.path_for(self.doc.path)) if self.doc.path else None
         self.runs.take(self._file.load() if self._file is not None else [])
         self.set_window(0, min(self.count, round(10 * self.fps)), by=HAND)
         self.goto(0, commit=True)
@@ -1093,6 +1108,7 @@ class PlayerWindow(QMainWindow):
         offset = self.row - self.window_[0] if playhead is None else int(playhead) - start
         offset = max(0, min(length - 1, offset))
         self.window_ = (start, length)
+        self.graph.holds(start, length)
         self.plot.set_window(start, length, self.fps)
         self.timeline.strip.set_window(start, length)
         self.timeline.controls.set_window(start, length)
@@ -1106,6 +1122,7 @@ class PlayerWindow(QMainWindow):
         if self.graph is None:
             return
         self.row = row = max(0, min(self.count - 1, int(row)))
+        self.graph.looks_at(row)
         shown = self.graph.shown
         if shown is None:
             self.display.clear()
@@ -1204,8 +1221,8 @@ class PlayerWindow(QMainWindow):
 
     def _as_given(self, part):
         """`part`, node to held result, as the worker takes it: node to (raw key, the result's fields
-        as the tool made them, without what the player put beside them)."""
-        return {nid: (self.graph.entry(nid).raw_key, {f: v for f, v in r.items() if f not in ("gate", "key")})
+        as the tool made them, without what the player put beside them, what it says it was made under)."""
+        return {nid: (self.graph.entry(nid).raw_key, {f: v for f, v in r.items() if f not in ("gate", "key", "code")}, r.get("code"))
                 for nid, r in part.items()}
 
     def _show_held(self):
@@ -1215,7 +1232,52 @@ class PlayerWindow(QMainWindow):
         self.timeline.strip.set_held(self.runs.spans(chain))
         if self.worker is not None:
             self.worker.give_clip(self.count, self._as_given(self.runs.part(0, self.count, chain)))
+        self._show_stale(chain)
         self._show_pinned()
+
+    def _show_stale(self, chain):
+        """Each card says whether its node is of held.marked, by the tools' files as they lie."""
+        entries = {} if self.graph is None else {n.id: e for n in self.doc.nodes if (e := self.graph.entry(n.id)) is not None}
+        ran = {nid: e for nid, e in entries.items() if e.file is None}
+        seen = {}
+        now = {nid: d for nid, e in ran.items() if (d := registry.code_print(e.tool, seen)) is not None}
+        above = {nid: [s for s in e.srcs.values() if s is not None] if nid in ran else [] for nid, e in entries.items()}
+        stale = held.marked(self.runs, chain, now, above)
+        for n in self.doc.nodes:
+            self.pane.set_stale(n.id, "its held results were made under other code than its tool's, or a tool's above it, as the files lie now; "
+                                      "File, Let Go of Held Results walks them again" if n.id in stale else "")
+
+    def _ask_let_go(self):
+        if self.graph is None or not len(self.runs):
+            return
+        box = QMessageBox(self)
+        box.setWindowTitle("Let go of held results")
+        box.setText(f"Every result held for {os.path.basename(self.doc.path) if self.doc.path else 'the document'} is let go, and walked again when it is next wanted.")
+        buttons = QMessageBox.StandardButton
+        box.setStandardButtons(buttons.Discard | buttons.Cancel)
+        box.setDefaultButton(buttons.Cancel)
+        box.exec()
+        if box.standardButton(box.clickedButton()) == buttons.Discard:
+            self.let_go()
+
+    def let_go(self):
+        """Lets go of every run held, the file's with them, and of the clip walk's results; the
+        window is walked again."""
+        if self.graph is None:
+            return
+        self._hold.stop()
+        if self._writer is not None:
+            self._writer.join()
+        self.runs.take([])
+        self.clip_results = {}
+        self._unwritten = False
+        self._write_failed.clear()
+        if self._file is not None and os.path.exists(self._file.path):
+            try:
+                self._file.write([])
+            except OSError as e:
+                self.timeline.controls.progress.setText(f"could not write {os.path.basename(self._file.path)}: {e}")
+        self._ask_window(by=HAND)
 
     def _chain(self):
         """The series chain as held.Runs is told it; one of no nodes with no video open."""
@@ -1285,7 +1347,7 @@ class PlayerWindow(QMainWindow):
         p.setProcessEnvironment(env)
         p.readyReadStandardOutput.connect(self._bare_said)
         p.finished.connect(lambda code, _: self._bare is p and self._end_bare(f"bare: its process ended with {code} and no results"))
-        self._bare, self._bare_doc, self._bare_t = p, job["document"], time.perf_counter()
+        self._bare, self._bare_keys, self._bare_t = p, walked_keys(self.graph.snapshot()), time.perf_counter()
         self.header.bar.setRange(0, 0)
         self.header.bar.show()
         self.header.note.setText("bare: starting")
@@ -1311,8 +1373,7 @@ class PlayerWindow(QMainWindow):
                 self._shortened(self.decoder.count)
             elif "results" in said:
                 took = time.perf_counter() - self._bare_t
-                if self.doc.to_dict() != self._bare_doc:
-                    self._end_bare("bare: the document changed under the walk, and its results were dropped")
+                if not self._bare_stands():
                     return
                 with open(said["results"], "rb") as f:
                     results, start, fps = pickle.load(f)
@@ -1325,6 +1386,13 @@ class PlayerWindow(QMainWindow):
             elif "failed" in said:
                 row, nid, text = said["failed"]
                 self._end_bare(f"bare: {nid or 'a tool'} raised at row {row}: {text}")
+
+    def _bare_stands(self):
+        """Whether the bare walk under way stands, by the keys it began under; one that does not is ended, its results dropped."""
+        if self._bare is None or stands(self._bare_keys, self.graph.snapshot()):
+            return True
+        self._end_bare("bare: the key of a node it walks moved, and its results were dropped")
+        return False
 
     def _end_bare(self, note=""):
         p, self._bare = self._bare, None
@@ -1344,7 +1412,7 @@ class PlayerWindow(QMainWindow):
 
     def _clip_walked(self, done, total, ran):
         self._paced("clip", done, total, ran)
-        self._clip_ended = done >= total > 0        # the results that follow are a walk's own, held at once
+        self._clip_ended = self._clip_rests = done >= total > 0     # the results that follow are a walk's own, held at once
         if self._clip_asked:
             self.header.clear_note()
             if done >= total:
@@ -1353,26 +1421,33 @@ class PlayerWindow(QMainWindow):
 
     def _clip_ready(self, results, start, fps):
         self.clip_results = results
-        if self._whole() and self._clip_ended:
+        stands, rows = self._stands()
+        if stands and self._clip_ended:
             self._clip_ended = False
-            self._hold_run(0, self.count, self._whole())
-        elif self._whole():
+            self._hold_run(0, rows, stands)
+        elif stands:
             self._hold.start()      # a rerun of the chain over a walk long ended: held once the knob is at rest
         self._show_pinned()
 
-    def _whole(self):
-        """The clip walk's results that reach the clip's last row."""
-        return {nid: r for nid, r in self.clip_results.items()
-                if isinstance(r, dict) and "signal" in r and len(r["signal"]) == self.count}
+    def _stands(self):
+        """The clip's results that are a run from row 0, and its rows: those that reach furthest,
+        where they reach the clip's last row or the clip walk rests, stopped short of it or
+        refused; ({}, 0) while it walks and with none."""
+        has = {nid: r for nid, r in self.clip_results.items() if isinstance(r, dict) and "signal" in r}
+        rows = max((len(r["signal"]) for r in has.values()), default=0)
+        if not rows or not (self._clip_rests or rows == self.count):
+            return {}, 0
+        return {nid: r for nid, r in has.items() if len(r["signal"]) == rows}, rows
 
     def _write_held(self, wait=False):
-        """A whole clip walk's results are held as a run, and the runs held since the file was
+        """A clip walk's results that stand are held as a run, and the runs held since the file was
         written go beside the document when it has been saved, on a thread of their own, which
         pickles only the runs the file has not had; `wait` returns once the file has landed. A
         write that did not land is made again with the next, the one at the video's close included."""
         if self.graph is None:
             return
-        self._hold_run(0, self.count, self._whole())
+        stands, rows = self._stands()
+        self._hold_run(0, rows, stands)
         self._hold.stop()
         path = held.path_for(self.doc.path)
         busy = self._writer is not None and self._writer.is_alive()
@@ -1386,7 +1461,7 @@ class PlayerWindow(QMainWindow):
         if path and self._unwritten:
             self._unwritten = False
             if self._file is None or self._file.path != path:
-                self._file = held.File(path, self._stamp)       # the document saved under another name: nothing there is known to be this one's
+                self._file = held.File(path)       # the document saved under another name: nothing there is known to be this one's
             self._writer = threading.Thread(target=_save_held, args=(self._file, list(self.runs), self._write_failed), name="held")
             self._writer.start()
             if wait:
@@ -1411,6 +1486,10 @@ class PlayerWindow(QMainWindow):
             r = None        # of a key the node has left, where the walk it came from had no rows to run the chain over again
         best = self.runs.from_first_row(nid, key)
         return r if best is None or (isinstance(r, dict) and "signal" in r and len(r["signal"]) >= best.rows) else best.results[nid]
+
+    def _result_bytes(self, nid, result):
+        e = None if self.graph is None else self.graph.entry(nid)
+        return wire.result_bytes(None if e is None else e.produces, result)
 
     def _show_size(self):
         """The selected node's card says about what its result over the clip would add to the held

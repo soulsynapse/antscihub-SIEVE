@@ -12,13 +12,21 @@ new ids and a tracklet never spans a contact. At 0 area is not read.
 import numpy as np
 
 from tools._draw import draw_tracks
+from sieve_player.wire import NONE
 from tools._table import OUTLINES, TRACKS_DTYPE as DTYPE, with_column
 
 SIEVE_TOOL = True
 NAME, KIND, EXPECTS, PRODUCES = "track", "series", "blobs", "tracks"
-DEFAULTS = {"max_step": 4.0, "lost_rows": 30, "min_rows": 3, "min_p": 0.1, "merge_ratio": 0.0, "outline": "box"}
 MAX_RATIO = 10.0
 STEPS = 5           # recent steps averaged into the prediction
+PARAMS = {
+    "max_step": {"default": 4.0, "kind": "float", "range": (0.5, 200.0), "decimals": 1},
+    "lost_rows": {"default": 30, "kind": "int", "range": (0, 600)},
+    "min_rows": {"default": 3, "kind": "int", "range": (1, 60)},
+    "min_p": {"default": 0.1, "kind": "float", "range": (0.0, 1.0)},
+    "merge_ratio": {"default": 0.0, "kind": "float", "range": (0.0, MAX_RATIO), "decimals": 1},
+    "outline": {"default": "box", "kind": "choice", "choices": OUTLINES, "changes result": False},
+}
 
 
 class _Track:
@@ -48,7 +56,7 @@ def _link_row(live, next_id, t, r, max_step, lost_rows, min_rows, min_p, merge_r
     """Row `r`'s table linked onto `live`: the tracks still live after it, the next free id, the table
     with its ids and the count of tracks seen in it with at least `min_rows` hits."""
     t = np.asarray(t)
-    rec = with_column(t, "id", np.full(len(t), -1, np.int32))
+    rec = with_column(t, "id", np.full(len(t), -1, np.int32), NONE)
     live = [k for k in live if r - k.seen <= lost_rows]
     pos = np.stack([t["cx"], t["cy"]], axis=1).astype(np.float64) if len(t) else np.zeros((0, 2))
     area = t["area"].astype(np.float64) if len(t) else np.zeros(0)
@@ -93,7 +101,7 @@ def link(tables, max_step, lost_rows, min_rows, min_p, merge_ratio=0.0):
 
 def _knobs(params):
     return (float(params["max_step"]), int(params["lost_rows"]), int(params["min_rows"]), float(params["min_p"]),
-            float(params.get("merge_ratio", 0.0)))
+            float(params["merge_ratio"]))
 
 
 def run(series, params):
@@ -108,20 +116,7 @@ def step(state, row, i, params):
 
 
 def draw(painter, row, result, start, params):
-    draw_tracks(painter, row, result, start, params.get("outline", "box"))
-
-
-def settings(parent=None):
-    from sieve_player import ParamWidget  # only the GUI needs the player
-
-    w = ParamWidget(parent)
-    w.add_float("max_step", 0.5, 200.0, DEFAULTS["max_step"], decimals=1)
-    w.add_int("lost_rows", 0, 600, DEFAULTS["lost_rows"])
-    w.add_int("min_rows", 1, 60, DEFAULTS["min_rows"])
-    w.add_float("min_p", 0.0, 1.0, DEFAULTS["min_p"])
-    w.add_float("merge_ratio", 0.0, MAX_RATIO, DEFAULTS["merge_ratio"], decimals=1)
-    w.add_choice("outline", OUTLINES, DEFAULTS["outline"])
-    return w
+    draw_tracks(painter, row, result, start, params["outline"])
 
 
 if __name__ == "__main__":

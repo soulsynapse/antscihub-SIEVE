@@ -14,7 +14,8 @@ import pytest
 
 from sieve_player import document as D
 from sieve_player import registry
-from sieve_player.graph import Graph, nbytes
+from sieve_player.graph import Graph
+from sieve_player.wire import nbytes
 from sieve_player.plan import base_key, plan
 from sieve_player.walk import run_chain
 from sieve_player.registry.__main__ import check, report
@@ -84,7 +85,7 @@ def blobs_at(f, p):
 
 
 def frame_tool(name, expects, produces, fn):
-    t = SimpleNamespace(NAME=name, KIND="frame", EXPECTS=expects, PRODUCES=produces, DEFAULTS={})
+    t = SimpleNamespace(NAME=name, KIND="frame", EXPECTS=expects, PRODUCES=produces)
     t.run = lambda frames, row, params: fn(frames(row), params)
     return t
 
@@ -161,7 +162,7 @@ def test_the_walk_steps_the_prefix_once_a_row_runs_the_suffix_per_emit_and_match
         assert equal(r, run_chain(w.graph, w._win.stack[:n], 0, n, {}))
     raw = g.entry("track").raw_key
     assert not [k for d in (g.memo._big, g.memo._small, g.memo._pinned) for k in d if k[0] == raw]
-    stack_bytes = sum(nbytes(row) for row in w._win.stack)
+    stack_bytes = sum(nbytes("blobs", row) for row in w._win.stack)
     assert w._win.bytes == stack_bytes + sum(ev.bytes for ev in events if ev.kind == "step") and w._win.bytes > stack_bytes
     held = {n: w._win.stepped[n] for n in ("track", "kinematics")}      # the objects, since a freed one's id comes back
     events.clear()
@@ -227,8 +228,12 @@ def test_a_walk_given_a_stepped_heads_result_stacks_nothing_and_walks_again_when
             turn()
         return got[-1]
     whole = walk({})
-    given = {"track": (g.entry("track").raw_key, {f: v for f, v in whole["track"].items() if f not in ("gate", "key")})}
+    fields = {f: v for f, v in whole["track"].items() if f not in ("gate", "key", "code")}
+    given = {"track": (g.entry("track").raw_key, fields, whole["track"]["code"])}
     assert equal(walk(given), whole) and win.stack is None
+    elsewhere = walk({"track": (g.entry("track").raw_key, fields, {"track": "another"})})     # what it was made under is the held result's to say, and what reads it says the same of it
+    assert elsewhere["track"]["code"] == {"track": "another"} and elsewhere["kinematics"]["code"]["track"] == "another"
+    assert walk({"track": (g.entry("track").raw_key, fields, None)})["kinematics"]["code"] is None
     win.given = dict(given)
     win.begin(0, 7)
     turn()

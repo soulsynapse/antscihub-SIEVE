@@ -9,6 +9,11 @@ plane it was found in as metadata, `plane(table)`, so a tool relating it to a pl
 another shape can scale. `blobs` promises the position columns and the plane; any other column may
 be NaN or absent where its producer did not make it. `contour` is an object column, (N, 2) x, y,
 so the table is never a flat array.
+
+A column's unit, one of sieve_player/wire.py's, is said where the column is minted, here or by
+`with_column`, and rides the dtype as the plane does, `unit_of(table, column)`. A dtype made any
+other way says nothing of its columns, and numpy drops the metadata with no error where it drops
+it, so a reader takes a column unsaid as one that may have lost its unit, never as one in none.
 """
 import math
 from functools import lru_cache
@@ -16,27 +21,66 @@ from functools import lru_cache
 import cv2
 import numpy as np
 
-DTYPE = np.dtype([("x", np.int32), ("y", np.int32), ("w", np.int32), ("h", np.int32), ("area", np.int32),
-                  ("cx", np.float32), ("cy", np.float32), ("angle", np.float32),
-                  ("major", np.float32), ("minor", np.float32),
-                  ("mean", np.float32), ("peak", np.float32), ("core", np.int32), ("contour", object)])
-TRACKS_DTYPE = np.dtype(DTYPE.descr + [("id", np.int32)])      # a tracks table of blobs' own columns
+from sieve_player.wire import AREA, LENGTH, LENGTH_X, LENGTH_Y, NONE, POINTS, UNITS, X, Y
+
+
+def _said(unit, name):
+    if unit not in UNITS and unit != NONE:
+        raise ValueError(f"the column {name!r} has no unit {unit!r}; one of {(*UNITS, NONE)}")
+    return unit
+
+
+def dtype_of(columns):
+    """A table's dtype of `columns`, each (name, type, unit) with the unit one of wire.UNITS or
+    wire.NONE; ValueError, naming the column, for any other. It carries no plane."""
+    return np.dtype([(n, t) for n, t, _ in columns], metadata={"units": {n: _said(u, n) for n, _, u in columns}})
+
+
+def columns_of(dtype, names=None):
+    """`dtype`'s columns as dtype_of takes them, those of `names` when given, in the dtype's order."""
+    units = (dtype.metadata or {}).get("units", {})
+    return [(n, dtype[n], units.get(n)) for n in dtype.names if names is None or n in names]
+
+
+DTYPE = dtype_of([("x", np.int32, X), ("y", np.int32, Y), ("w", np.int32, LENGTH_X), ("h", np.int32, LENGTH_Y),
+                  ("area", np.int32, AREA), ("cx", np.float32, X), ("cy", np.float32, Y), ("angle", np.float32, NONE),
+                  ("major", np.float32, LENGTH), ("minor", np.float32, LENGTH),
+                  ("mean", np.float32, NONE), ("peak", np.float32, NONE), ("core", np.int32, AREA), ("contour", object, POINTS)])
+TRACKS_DTYPE = dtype_of(columns_of(DTYPE) + [("id", np.int32, NONE)])      # a tracks table of blobs' own columns
 OUTLINES = ("box", "contour")
 
 
+def _frozen(metadata):
+    """What of a dtype's metadata its equality leaves out, hashable: two dtypes of the same fields
+    are equal and hash alike whatever each says of them."""
+    m = metadata or {}
+    return tuple(sorted(m.get("units", {}).items())), tuple(sorted(m.get("planes", {}).items()))
+
+
 @lru_cache(maxsize=64)      # a tool asks at every row, and building a dtype of this many fields costs more than a threshold
-def _plane_dtype(height, width, dtype):
-    return np.dtype(dtype.descr, metadata={"plane": (height, width)})
+def _plane_dtype(height, width, dtype, said):
+    return np.dtype(dtype.descr, metadata={**(dtype.metadata or {}), "plane": (height, width)})
 
 
 def plane_dtype(shape, dtype=DTYPE):
-    """`dtype` with the plane's (height, width) on it."""
-    return _plane_dtype(int(shape[0]), int(shape[1]), dtype)
+    """`dtype` with the plane's (height, width) on it, what it says of its columns kept."""
+    return _plane_dtype(int(shape[0]), int(shape[1]), dtype, _frozen(dtype.metadata))
 
 
 def plane(table):
     """The (height, width) the table was found in, or None when it has none."""
     return (table.dtype.metadata or {}).get("plane")
+
+
+def unit_of(table, column):
+    """What the table's dtype says of `column`: (its unit, the plane it is of), the plane being the
+    table's unless the column was minted of another, and None for a unit that is none; or None
+    where the dtype says nothing of the column."""
+    m = table.dtype.metadata or {}
+    unit = m.get("units", {}).get(column)
+    if unit is None:
+        return None
+    return unit, None if unit == NONE else m.get("planes", {}).get(column, m.get("plane"))
 
 
 def is_table(row):
@@ -50,13 +94,21 @@ def is_tables(data):
     return len(data) > 0 and is_table(data[0])
 
 
-def with_column(table, name, values):
-    """The table with `values` as a column named `name`, the plane kept; a name the table already
-    has raises ValueError, since overwriting a producer's column would silently change its meaning."""
+def with_column(table, name, values, unit, of=None):
+    """The table with `values` as a column named `name`, the plane and what is said of the other
+    columns kept. `unit` is the column's, one of wire.UNITS or wire.NONE, and `of` the plane it is
+    of where that is not the table's; a `unit` of None is a column copied from a table that said
+    nothing of it, and nothing is said of it here. A name the table already has raises ValueError,
+    since overwriting a producer's column would silently change its meaning."""
     if name in table.dtype.names:
         raise ValueError(f"the table already has a column {name!r}")
     values = np.asarray(values)
-    dtype = np.dtype(table.dtype.descr + [(name, values.dtype)], metadata=dict(table.dtype.metadata or {}))
+    m = dict(table.dtype.metadata or {})
+    if unit is not None:
+        m["units"] = {**m.get("units", {}), name: _said(unit, name)}
+        if unit != NONE and of is not None and tuple(of) != m.get("plane"):
+            m["planes"] = {**m.get("planes", {}), name: (int(of[0]), int(of[1]))}
+    dtype = np.dtype(table.dtype.descr + [(name, values.dtype)], metadata=m)
     out = np.empty(len(table), dtype)
     for n in table.dtype.names:
         out[n] = table[n]

@@ -8,6 +8,7 @@ import pytest
 
 from sieve_player import document as D
 from sieve_player.graph import Series
+from sieve_player.registry import defaults
 from tests.test_selector import open_window, tree
 from tools import blobs, csv, resolve, track
 from tools import _table
@@ -25,7 +26,7 @@ def table(records):
 
 
 def run(rows, start=0, **params):
-    return resolve.run(Series(rows, "k", start, 30.0), {**resolve.DEFAULTS, "columns": "tag", **params})
+    return resolve.run(Series(rows, "k", start, 30.0), {**defaults(resolve), "columns": "tag", **params})
 
 
 def column(rows, name):
@@ -86,7 +87,7 @@ def test_a_labels_file_is_reads_and_comes_through_a_path_input(tmp_path):
     tree(tmp_path)
     tools = [file, gray, threshold, blobs, track, resolve]
     doc = D.from_tools(tools[1:])
-    doc.add_node("file", params={**file.DEFAULTS, "pattern": "labels.csv"})
+    doc.add_node("file", params={**defaults(file), "pattern": "labels.csv"})
     doc.connect("file", "resolve", "labels")
     D.save(doc, tmp_path / "doc.json")
     win = open_window(tmp_path, tools)
@@ -103,7 +104,7 @@ def test_the_same_pass_rewrites_a_tracks_csv_under_its_key_line(tmp_path):
     before = p.read_text(encoding="utf-8").splitlines()
     assert resolve.main([str(p), "--columns", "tag"]) == 0
     lines = p.read_text(encoding="utf-8").splitlines()
-    assert lines[0] == before[0] == "# sieve key=k1 rows=20-29 footage=ants.mp4 kind=tracks"
+    assert lines[0] == before[0] and before[0].startswith("# sieve key=k1 rows=20-29 footage=") and before[0].endswith(" kind=tracks name=ants.mp4")
     assert lines[1] == before[1].replace(",gate", ",identity,conflict,gate") and len(lines) == len(before)
     assert lines[2].startswith("20,0.666667,1,") and lines[2].endswith(",5,0,1") and lines[3].endswith(",nan,0,1")
     (tmp_path / "l.csv").write_text("20,29,2,3\n", encoding="utf-8")

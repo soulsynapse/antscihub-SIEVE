@@ -10,7 +10,11 @@ import numpy as np
 
 SIEVE_TOOL = True
 NAME, KIND, EXPECTS, PRODUCES = "transitions", "series", "tracks", "signal"
-DEFAULTS = {"column": "nest", "from": "", "to": ""}
+PARAMS = {
+    "column": {"default": "nest", "kind": "text"},
+    "from": {"default": "", "kind": "text"},
+    "to": {"default": "", "kind": "text"},
+}
 
 
 def _value(text):
@@ -47,13 +51,3 @@ def step(state, row, i, params):
     """The state is the row before, None at the first, which counts nothing."""
     n = 0 if state is None else changed(state, row, params["column"], _value(params["from"]), _value(params["to"]))
     return row, {"signal": np.float32(n)}
-
-
-def settings(parent=None):
-    from sieve_player import ParamWidget  # only the GUI needs the player
-
-    w = ParamWidget(parent)
-    w.add_text("column", DEFAULTS["column"])
-    w.add_text("from", DEFAULTS["from"])
-    w.add_text("to", DEFAULTS["to"])
-    return w

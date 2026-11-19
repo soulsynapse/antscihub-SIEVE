@@ -14,6 +14,7 @@ import math
 import cv2
 import numpy as np
 
+from sieve_player.wire import NONE
 from tools._draw import draw as draw_table
 from tools._table import plane as plane_of, with_column
 
@@ -24,8 +25,12 @@ DICTIONARIES = {name: getattr(cv2.aruco, f"DICT_{name.upper()}") for name in (
     "4x4_50", "4x4_100", "4x4_250", "4x4_1000", "5x5_50", "5x5_100", "5x5_250", "5x5_1000",
     "6x6_50", "6x6_100", "6x6_250", "6x6_1000", "7x7_50", "7x7_100", "7x7_250", "7x7_1000",
     "aruco_original", "apriltag_16h5", "apriltag_25h9", "apriltag_36h10", "apriltag_36h11")}
-DEFAULTS = {"prefix": "tag", "dictionary": "4x4_50", "margin": 0.5}
 MAX_MARGIN = 2.0
+PARAMS = {
+    "prefix": {"default": "tag", "kind": "text"},
+    "dictionary": {"default": "4x4_50", "kind": "choice", "choices": tuple(DICTIONARIES)},
+    "margin": {"default": 0.5, "kind": "float", "range": (0.0, MAX_MARGIN)},
+}
 
 
 def detector(dictionary):
@@ -58,7 +63,7 @@ def decode(table, plane, prefix="tag", dictionary="4x4_50", margin=0.5):
         j = min(range(len(quads)), key=lambda i: np.sum((quads[i].mean(axis=0) - centre) ** 2))
         up = ((quads[j][0] + quads[j][1]) - (quads[j][2] + quads[j][3])) / 2 / (sx, sy)
         code[k], heading[k] = int(np.ravel(ids)[j]), math.degrees(math.atan2(up[1], up[0]))
-    return with_column(with_column(table, f"{prefix}_code", code), f"{prefix}_heading", heading)
+    return with_column(with_column(table, f"{prefix}_code", code, NONE), f"{prefix}_heading", heading, NONE)
 
 
 def run(frames, row, params):
@@ -66,14 +71,4 @@ def run(frames, row, params):
 
 
 def draw(painter, row, result, start, params):
-    draw_table(painter, result, params.get("outline", "box"), color=(240, 200, 80))
-
-
-def settings(parent=None):
-    from sieve_player import ParamWidget  # only the GUI needs the player
-
-    w = ParamWidget(parent)
-    w.add_text("prefix", DEFAULTS["prefix"])
-    w.add_choice("dictionary", tuple(DICTIONARIES), DEFAULTS["dictionary"])
-    w.add_float("margin", 0.0, MAX_MARGIN, DEFAULTS["margin"])
-    return w
+    draw_table(painter, result, color=(240, 200, 80))

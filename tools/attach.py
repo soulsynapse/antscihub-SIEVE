@@ -10,14 +10,19 @@ that the second table lacks, a non-numeric one, or a name the first already has,
 """
 import numpy as np
 
+from sieve_player.wire import NONE, X, Y
 from tools._draw import draw as draw_table
-from tools._table import OUTLINES, footprint, plane as plane_of, with_column
+from tools._table import OUTLINES, footprint, plane as plane_of, unit_of, with_column
 
 SIEVE_TOOL = True
 NAME, KIND, EXPECTS, PRODUCES = "attach", "frame", "blobs", "blobs"
 INPUTS = {"marks": "blobs"}
 ALWAYS = ("cx", "cy", "area")
-DEFAULTS = {"prefix": "mark", "columns": "", "outline": "contour"}
+PARAMS = {
+    "prefix": {"default": "mark", "kind": "text"},
+    "columns": {"default": "", "kind": "text"},
+    "outline": {"default": "contour", "kind": "choice", "choices": OUTLINES},
+}
 
 
 def names(text):
@@ -56,8 +61,9 @@ def attach(table, marks, prefix="mark", columns=(), outline="contour"):
             v[has] = mx[pick[has]]
         elif c == "cy":
             v[has] = my[pick[has]]
-        out = with_column(out, f"{prefix}_{c}", v)
-    return with_column(out, f"{prefix}_n", count)
+        unit, of = (X, shape) if c == "cx" else (Y, shape) if c == "cy" else unit_of(marks, c) or (None, None)
+        out = with_column(out, f"{prefix}_{c}", v, unit, of)
+    return with_column(out, f"{prefix}_n", count, NONE)
 
 
 def run(frames, row, params):
@@ -65,14 +71,4 @@ def run(frames, row, params):
 
 
 def draw(painter, row, result, start, params):
-    draw_table(painter, result, params.get("outline", "box"), color=(240, 120, 200))
-
-
-def settings(parent=None):
-    from sieve_player import ParamWidget  # only the GUI needs the player
-
-    w = ParamWidget(parent)
-    w.add_text("prefix", DEFAULTS["prefix"])
-    w.add_text("columns", DEFAULTS["columns"])
-    w.add_choice("outline", OUTLINES, DEFAULTS["outline"])
-    return w
+    draw_table(painter, result, params["outline"], color=(240, 120, 200))

@@ -11,8 +11,10 @@ import os
 from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtWidgets import QComboBox, QFileDialog, QFrame, QPushButton, QScrollArea, QVBoxLayout, QWidget
 
-from .document import VIDEO_OUTPUT, VIDEO_OUTPUTS, VIDEO_TOOL, is_selector, paths, video_output
-from .theme import CONTROL_W, GAP, HELD, PAD, WIDE_W, Badge, CloseMark, Form, Layer, readout
+from .document import VIDEO_OUTPUT, VIDEO_OUTPUTS, VIDEO_TOOL, video_output
+from .registry import is_selector, params, paths, settings_of
+from .theme import CONTROL_W, GAP, HELD, PAD, RED, WIDE_W, Badge, CloseMark, Form, Layer, readout
+from .widgets import ParamWidget
 
 VIDEO_FILTER = "Video (*.mp4 *.MP4 *.avi *.mov *.mkv *.mts *.MTS);;All (*)"
 
@@ -109,7 +111,8 @@ class Pane(QWidget):
         self.doc = None
         self.cards, self.widgets, self.notes = {}, {}, {}
         self.standings = {}   # tool node -> the line under its settings, see set_standing
-        self.sizes = {}       # node -> the badge after its name that says what its result would take on disk, see set_size
+        self.stale = {}       # node -> the badge after its name that says its held results are stale, see set_stale
+        self.sizes = {}       # node -> the badge after that one that says what its result would take on disk, see set_size
         self.takes = {}       # node -> the badge after that one that says how long its work would take, see set_takes
         self.video = None
         self.current = None
@@ -154,6 +157,7 @@ class Pane(QWidget):
         self.widgets.pop(nid, None)
         self.notes.pop(nid, None)
         self.standings.pop(nid, None)
+        self.stale.pop(nid, None)
         self.sizes.pop(nid, None)
         self.takes.pop(nid, None)
         if self.video is not None and self.video.parent() is card:
@@ -165,7 +169,8 @@ class Pane(QWidget):
 
     def _build(self, node):
         card = Layer(1, node.id)
-        self.sizes[node.id], self.takes[node.id] = Badge(), Badge()
+        self.stale[node.id], self.sizes[node.id], self.takes[node.id] = Badge(), Badge(), Badge()
+        card.add_badge(self.stale[node.id])
         card.add_badge(self.sizes[node.id])
         card.add_badge(self.takes[node.id])
         close = CloseMark("Close these settings; the node stays")
@@ -183,7 +188,8 @@ class Pane(QWidget):
                 card.add(readout(f"{k} = {v!r}", mono=True))
         else:
             tool = self.tools[node.tool]
-            w = tool.settings()
+            make = settings_of(tool)
+            w = make() if make is not None else ParamWidget.declared(params(tool))
             if not all(hasattr(w, a) for a in ("changed", "params", "set_params")):
                 # the document is the store and the widget a view over it; one that cannot be told
                 # the stored values would show its own, so it is not shown at all
@@ -273,8 +279,15 @@ class Pane(QWidget):
             lab.setText(text)
             lab.setVisible(bool(text))
 
+    def set_stale(self, nid, tip):
+        """The `!` after `nid`'s name, from the window: shown with `tip`, the sentence under the
+        pointer that says what its held results were made under; a `tip` of "" hides it."""
+        badge = self.stale.get(nid)
+        if badge is not None:
+            badge.say("!" if tip else "", RED, tip)
+
     def set_size(self, nid, text, unit="", tip=""):
-        """The badge after `nid`'s name that says what its result would take on disk, from the
+        """The badge after `nid`'s name and its `!` that says what its result would take on disk, from the
         window: `text` in the colour theme.HELD has for `unit`, one of held.UNITS, and `tip` the
         sentence under the pointer; a `text` of "" hides it."""
         badge = self.sizes.get(nid)

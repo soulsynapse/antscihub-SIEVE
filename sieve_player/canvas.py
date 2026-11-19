@@ -17,13 +17,15 @@ from PySide6.QtGui import QColor, QCursor, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import QAbstractSpinBox, QApplication, QLineEdit, QPlainTextEdit, QSizePolicy, QTextEdit, QToolTip, QWidget
 
 from . import theme
-from .document import (INPUT, OPEN, OVERLAYABLE, PATH, VIDEO_PRODUCES, VIDEO_TOOL, expects, fed, fits,
-                       inputs_of, is_selector, kind_of, paths, produces)
+from . import registry
+from .document import INPUT, OPEN, PATH, VIDEO_PRODUCES, VIDEO_TOOL, fed, fits, inputs_of, kind_of, produces
+from .registry import expects, is_selector, paths
 from .menu import MENU_W, UNLOADED, TabMenu
+from .wire import overlaid
 from .theme import GAP, PAD, qgray
 
 NODE_W, NODE_H = 140, 28   # a node's box, canvas px
-FLAG_R = 5                 # the display flag: a disc at the node's right end; the overlay flag sits left of it
+FLAG_R = 5                 # the display flag: a disc at the node's right end; the overlay flag sits left of it, the draw flag left of that
 PIN_R = 4                  # a connector: a disc on the node's top or bottom edge
 BAND_STUB = 10             # the band dot: a disc this far out from the node's left edge, on a stub, as a
                            # trace's handle runs past the plot to its dot; where a band will be wired in
@@ -144,6 +146,15 @@ class Canvas(QWidget):
         self.update()
         self.flagged.emit()
 
+    def set_drawn(self, nid):
+        """Toggles the draw flag: `nid` onto the document's drawn list, or off it. Only a node the
+        flag is offered on (see can_draw) takes it."""
+        if self.doc is None or not self.can_draw(self.doc.node(nid)):
+            return
+        self.doc.set_drawn(nid, nid not in self.doc.drawn)
+        self.update()
+        self.flagged.emit()
+
     def delete_selected(self):
         """Removes the selected nodes and every wire into or out of them; the flag goes with its node."""
         if not self.selected:
@@ -167,7 +178,7 @@ class Canvas(QWidget):
         """Whether the node hands anything out: one without PRODUCES does not; an unresolved node might."""
         if node.tool == VIDEO_TOOL or node.unresolved:
             return True
-        return getattr(self.tools.get(node.tool), "PRODUCES", None) is not None
+        return registry.produces(self.tools.get(node.tool)) is not None
 
     def output_type(self, node):
         if node.tool == VIDEO_TOOL:
@@ -182,8 +193,13 @@ class Canvas(QWidget):
             or kind_of(self.doc, self.tools, node.id) == "frame"
 
     def can_overlay(self, node):
-        """Whether the overlay flag is offered: a resolved node producing one plane (an OVERLAYABLE type)."""
-        return self.output_type(node) in OVERLAYABLE
+        """Whether the overlay flag is offered: a resolved node producing a type wire.py says can be overlaid."""
+        return overlaid(self.output_type(node))
+
+    def can_draw(self, node):
+        """Whether the draw flag is offered: a resolved node whose tool has a draw()."""
+        tool = self.tools.get(node.tool)
+        return tool is not None and registry.draws(tool)
 
     def has_band(self, node):
         """Whether the node has a band, the handles on its pane's density or trace: a resolved frame
@@ -243,6 +259,9 @@ class Canvas(QWidget):
 
     def overlay_flag(self, node):
         return self.flag(node).translated(-(PAD + 2 * FLAG_R), 0)
+
+    def draw_flag(self, node):
+        return self.overlay_flag(node).translated(-(PAD + 2 * FLAG_R), 0)
 
     def pin_in(self, node, name=INPUT):
         """The input's disc on the top edge: one input is centred; several share the edge evenly."""
@@ -368,7 +387,7 @@ class Canvas(QWidget):
         if not ins or not self.has_output(node):
             return None
         want, box = ins[0][1], self.box(node)
-        passthru = getattr(self.tools.get(node.tool), "PRODUCES", None) == "same"
+        passthru = registry.produces(self.tools.get(node.tool)) == "same"
         for w in self.doc.wires:
             if node.id in (w.src, w.dst) or not self.touches(self.path_of(w), box):
                 continue
@@ -482,7 +501,7 @@ class Canvas(QWidget):
         if name == VIDEO_TOOL:
             p = VIDEO_PRODUCES
         else:
-            p = getattr(self.tools[name], "PRODUCES", None)
+            p = registry.produces(self.tools[name])
             p = got if p == "same" else p
         return p is not None and self.compatible(p, dict(self.inputs(self.doc.node(w.dst)))[w.input])
 
@@ -497,7 +516,7 @@ class Canvas(QWidget):
         tool = self.tools[name]
         if end == "out":
             return self._landing(name, self.output_type(node)) is not None
-        p, want = getattr(tool, "PRODUCES", None), dict(self.inputs(node))[iname]
+        p, want = registry.produces(tool), dict(self.inputs(node))[iname]
         if p == "same":   # hands out what it is fed, so only what it expects can ever reach the input
             e = expects(tool)
             return want is None or e is None or any(self.compatible(t, want) for t in e)
@@ -511,7 +530,7 @@ class Canvas(QWidget):
         tool = self.tools[name]
         if is_selector(tool):
             return None
-        for iname, want in [(INPUT, expects(tool))] + [(k, (PATH,)) for k in getattr(tool, "PATHS", None) or {}]:
+        for iname, want in [(INPUT, expects(tool))] + [(k, (PATH,)) for k in paths(tool)]:
             if self.compatible(got, want):
                 return iname
         return None
@@ -554,7 +573,9 @@ class Canvas(QWidget):
         x, y = pos.x() - NODE_W / 2, pos.y() - NODE_H / 2
         if pending is not None:
             y = pos.y() if pending[0] == "out" else pos.y() - NODE_H
-        node = self.doc.add_node(name, (x, y), getattr(tool, "DEFAULTS", {}))
+        node = self.doc.add_node(name, (x, y), registry.defaults(tool))
+        if self.can_draw(node):
+            self.doc.set_drawn(node.id, True)       # a new node's draw() is painted until its flag is put out
         if pending is not None:
             end, nid, iname = pending
             if end == "out":
@@ -683,7 +704,8 @@ class Canvas(QWidget):
         p.setBrush(qgray(fill))
         p.drawRoundedRect(box, theme.RADIUS, theme.RADIUS)
         p.setPen(theme.RED if n.unresolved or n.id in self.errors else qgray(theme.INK))
-        text = box.adjusted(PAD, 0, -(4 * PAD + 4 * FLAG_R), 0)
+        slots = 3 if self.can_draw(n) else 2
+        text = box.adjusted(PAD, 0, -((slots + 2) * PAD + 2 * slots * FLAG_R), 0)
         p.drawText(text, Qt.AlignLeft | Qt.AlignVCenter, f"{n.id} ?" if n.unresolved else n.id)
         if n.id in self.served:
             p.setPen(qgray(theme.INK_2))
@@ -691,6 +713,8 @@ class Canvas(QWidget):
         flags = [(self.flag(n), n.id == self.doc.display, theme.ACCENT)] if self.can_display(n) else []
         if self.can_overlay(n):
             flags.append((self.overlay_flag(n), n.id == self.doc.overlay, theme.OVERLAY))
+        if self.can_draw(n):
+            flags.append((self.draw_flag(n), n.id in self.doc.drawn, theme.DRAWN))
         for rect, on, color in flags:
             if on:
                 p.setPen(Qt.NoPen)
@@ -783,6 +807,9 @@ class Canvas(QWidget):
         if self.can_overlay(node) and self.overlay_flag(node).adjusted(-HIT, -HIT, HIT, HIT).contains(pos):
             self.set_overlay(node.id)
             return
+        if self.can_draw(node) and self.draw_flag(node).adjusted(-HIT, -HIT, HIT, HIT).contains(pos):
+            self.set_drawn(node.id)
+            return
         if shift:
             self.select([i for i in self.selected if i != node.id] if node.id in self.selected else [*self.selected, node.id])
         elif node.id not in self.selected:
@@ -808,7 +835,8 @@ class Canvas(QWidget):
         node = self.node_at(pos) if self.pin_at(pos) is None else None
         if node is None:
             return None
-        flags = [self.flag(node)] * self.can_display(node) + [self.overlay_flag(node)] * self.can_overlay(node)
+        flags = [self.flag(node)] * self.can_display(node) + [self.overlay_flag(node)] * self.can_overlay(node) \
+            + [self.draw_flag(node)] * self.can_draw(node)
         return None if any(f.adjusted(-HIT, -HIT, HIT, HIT).contains(pos) for f in flags) else node
 
     def mouseMoveEvent(self, e):

@@ -9,7 +9,7 @@ import numpy as np
 
 SIEVE_TOOL = True
 NAME, KIND, EXPECTS, PRODUCES = "changeenergy", "frame", ("gray", "mask"), "gray"
-DEFAULTS = {"sigma": 2.0}
+PARAMS = {"sigma": {"default": 2.0, "kind": "float", "range": (0.5, 8.0), "decimals": 1}}
 
 
 def run(frames, row, params):
@@ -18,14 +18,6 @@ def run(frames, row, params):
         return np.zeros_like(f)
     it = f - np.asarray(frames(row - 1), np.float32)
     return cv2.GaussianBlur(it * it, (0, 0), params["sigma"])
-
-
-def settings(parent=None):
-    from sieve_player import ParamWidget  # only the GUI needs the player
-
-    w = ParamWidget(parent)
-    w.add_float("sigma", 0.5, 8.0, DEFAULTS["sigma"], decimals=1)
-    return w
 
 
 if __name__ == "__main__":

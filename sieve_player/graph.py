@@ -14,10 +14,15 @@ from typing import NamedTuple
 import numpy as np
 
 from . import density
-from .decoder import Decoder, EndOfStream, footage_print_by_stamp
+from .decoder import CLEAR, Decoder, EndOfStream, footage_print_by_stamp, letting_go
 from .document import INPUT, VIDEO_TOOL, video_output
+from .registry import by_name, computed, names_cut_files
 from .plan import _key, base_key, facts, plan
 from .stream import Emitter
+from .wire import ROWS, is_table, nbytes, own_bytes
+
+NEAR = 8    # rows about the row a walk under way is at that the stores let go of last of all: what a tool reading beside its row reads
+
 
 def inband(v, band):
     """Where `v` lies between the band's lo and hi; outside them once lo is above hi, the band
@@ -36,34 +41,21 @@ def banded(v, band):
     return out
 
 
-def gated(result, band):
-    """A series node's result as the player hands it out: the tool's dict with "gate", the rows its
-    signal keeps under the node's band, and `fed`, what a series node downstream reads: the result's
-    "rows", one table a row, with each gated-out row emptied, when it has them, else the signal with
-    the rest zeroed. A result without a signal passes through ungated, and feeds nothing."""
+def gated(result, band, type):
+    """A series node's result as the player hands it out, the node producing `type`: the tool's dict
+    with "gate", the rows its signal keeps under the node's band, and `fed`, what a series node
+    downstream reads: where the type is a table, the result's tables, one a row, with each
+    gated-out row emptied, else the signal with the rest zeroed. A result without a signal passes
+    through ungated, and feeds nothing."""
     if not isinstance(result, dict) or "signal" not in result:
         return result, None
     signal = np.asarray(result["signal"])
     gate = np.ones(len(signal), bool) if band is None else inband(signal, band)
-    if "rows" in result:
-        fed = np.empty(len(result["rows"]), object)
-        fed[:] = [r if g else r[:0] for r, g in zip(result["rows"], gate)]
+    if is_table(type):
+        fed = np.empty(len(result[ROWS]), object)
+        fed[:] = [r if g else r[:0] for r, g in zip(result[ROWS], gate)]
         return {**result, "gate": gate}, fed
     return {**result, "gate": gate}, np.where(gate, signal, np.zeros((), signal.dtype))
-
-
-def nbytes(v):
-    """The bytes `v` holds: an array's own and, through an object field or an object array, every
-    array behind it, since `ndarray.nbytes` counts a contour as its eight-byte pointer; 64 for
-    anything else that is not None."""
-    if v is None:
-        return 0
-    if not isinstance(v, np.ndarray):
-        return 64
-    if not v.dtype.hasobject:
-        return v.nbytes
-    held = [x for n in v.dtype.names if v.dtype[n] == object for x in v[n].ravel()] if v.dtype.names else v.ravel()
-    return v.nbytes + sum(nbytes(x) for x in held)
 
 
 class Ref(NamedTuple):
@@ -100,21 +92,25 @@ def to_hold(v, handed, pinned):
 
 
 class Memo:
-    """LRU bounded by bytes, as `nbytes` counts them. Image-shaped entries (ndim >= 2) are evicted
-    before small ones. An entry put with an owner is pinned: never evicted, counted toward the
-    limit, and gone only through `unpin`, which drops every pinned entry whose owner is not in
+    """LRU bounded by bytes, each entry's as it was put with. Image-shaped entries (ndim >= 2) are
+    evicted before small ones. An entry put with an owner is pinned: never evicted, counted toward
+    the limit, and gone only through `unpin`, which drops every pinned entry whose owner is not in
     `keep`, so whatever a STATIC node has memoized under any key outlives any walk and goes with
-    its plan. Each eviction goes to `on_evict(key, bytes)` when set, after the lock is dropped."""
+    its plan. Each eviction goes to `on_evict(key, bytes)` when set, after the lock is dropped.
+    With `order` set it keeps some image-shaped entries back: `order()` is asked once the memo is
+    past its limit, under the memo's lock, for a function of a key, None for an entry that goes as
+    any does and a rank for one kept back, and they go as decoder.letting_go says, those kept back
+    only when no other is left and then until CLEAR of the limit is clear."""
 
     def __init__(self, limit_bytes):
         self.limit = limit_bytes
+        self.order = None
         self.bytes = 0
         self._big, self._small, self._pinned = OrderedDict(), OrderedDict(), {}     # pinned: key -> (owner, value)
+        self._sizes = {}        # key -> the bytes its entry was put with
         self._lock = threading.Lock()
         self.hits = self.misses = self.evictions = 0
         self.on_evict = None
-
-    _size = staticmethod(nbytes)
 
     def get(self, k, count=True):
         """The entry under `k`, or None; a hit or a miss is counted unless `count` is False, for a
@@ -146,22 +142,24 @@ class Memo:
             self._big.clear()
             self._small.clear()
             self._pinned.clear()
+            self._sizes.clear()
             self.bytes = 0
 
     def unpin(self, keep):
         gone = []
         with self._lock:
             for k in [k for k, (owner, _) in self._pinned.items() if owner not in keep]:
-                _, old = self._pinned.pop(k)
-                self.bytes -= self._size(old)
-                gone.append((k, self._size(old)))
+                del self._pinned[k]
+                n = self._sizes.pop(k)
+                self.bytes -= n
+                gone.append((k, n))
         if self.on_evict is not None:
             for ok, n in gone:
                 self.on_evict(ok, n)
 
     def put(self, k, v, owner=None, size=None):
         """`v` under `k`, pinned to `owner` when one is given; a key already held is left as it is.
-        `size` is `nbytes(v)` when the caller has already counted it."""
+        `size` is the bytes `v` holds as wire.nbytes counts a row of its type, its own with none."""
         gone = []
         with self._lock:
             if k in self._big or k in self._small or k in self._pinned:
@@ -172,15 +170,25 @@ class Memo:
                 self._big[k] = v
             else:
                 self._small[k] = v
-            self.bytes += self._size(v) if size is None else size
+            self._sizes[k] = own_bytes(v) if size is None else size
+            self.bytes += self._sizes[k]
+            if self.bytes > self.limit and self.order is not None:
+                for ok in letting_go(self._big, self.order(), lambda: self.bytes > self.limit,
+                                     lambda: self.bytes > self.limit - self.limit // CLEAR):
+                    del self._big[ok]
+                    n = self._sizes.pop(ok)
+                    self.bytes -= n
+                    self.evictions += 1
+                    gone.append((ok, n))
             while self.bytes > self.limit:
                 src = self._big or self._small
                 if not src:
                     break
-                ok, old = src.popitem(last=False)
-                self.bytes -= self._size(old)
+                ok, _ = src.popitem(last=False)
+                n = self._sizes.pop(ok)
+                self.bytes -= n
                 self.evictions += 1
-                gone.append((ok, self._size(old)))
+                gone.append((ok, n))
         if self.on_evict is not None:
             for ok, n in gone:
                 self.on_evict(ok, n)
@@ -309,7 +317,7 @@ class Graph:
     def __init__(self, doc, decoder, tools, memo_bytes=4 << 30, stream=None):
         """`stream` is the Emitter it emits through, one of its own when none is handed."""
         self.doc, self.decoder = doc, decoder
-        self.tools = tools if hasattr(tools, "get") else {t.NAME: t for t in tools}
+        self.tools = by_name(tools)
         self.readers = Readers()
         self._lately = []                   # the served files' Decoders in the order they were last read, latest first
         self._in_use = set()                # the files the cutting nodes' tools named at the last sync, see cut_files_named
@@ -324,11 +332,17 @@ class Graph:
         # the decoder cache's frame by its row under the video's key, a served reader's under the served node's.
         self.memo.on_evict = lambda k, n: self.stream.emit("evict", None, k[1], k[0], n)
         decoder.on_evict = lambda row, n: self.stream.emit("uncache", None, row, self._base, n)
+        self._held_rows = (0, 0)            # (start, rows) the stores let go of last, by holds()
+        self._shown_at = None               # the row the display is at, by looks_at()
+        self._walks_at = {}                 # lane -> the row its walk is at, by walk_row() until rests(); the worker's thread's, replaced whole and never changed
+        self.memo.order = self._memo_order
+        decoder.order = self._row_order
         self._plan = {}
         self._notes = {}                    # node -> (its key, what the run said): a tool raising, a chain node fed no signal
         self.shown = self.over = self.series = None
         self.chain, self.heads, self.unrun_series = [], [], []
         self._watched = ()                  # what the plot shows, by watch()
+        self._painted = ()                  # the nodes whose draw() the display paints, by paints()
         self.sync()
 
     @property
@@ -351,7 +365,7 @@ class Graph:
         node = self.doc.node(nid)
         tool, of = self.tools[node.tool], up or (self.decoder.path, self.decoder.footage_print)
         try:
-            path = tool.cut_file(*of, node.params)
+            path = tool.cut_file(*of, computed(tool, node.params))
             return None if path is None else (str(path), footage_print_by_stamp(path))
         except FileNotFoundError as exc:
             return str(exc)
@@ -364,9 +378,9 @@ class Graph:
         it reads, whether or not the plan would serve one there; a tool that raises names none."""
         out = set()
         for nid, e in entries.items():
-            if hasattr(e.tool, "cut_files"):
+            if names_cut_files(e.tool):
                 try:
-                    out |= {str(p) for p in e.tool.cut_files(*self._footage(entries, nid), e.params)}
+                    out |= {str(p) for p in e.tool.cut_files(*self._footage(entries, nid), e.computed)}
                 except Exception as exc:
                     self._failing.setdefault(nid, f"cut_files raised: {type(exc).__name__}: {exc}")
         return out
@@ -431,7 +445,53 @@ class Graph:
         if d.on_evict is None:
             key = e.raw_key
             d.on_evict = lambda row, n: self.stream.emit("uncache", None, row, key, n)
+            d.order = self._row_order
         return d
+
+    def holds(self, start, rows):
+        """The `rows` rows from `start` are what the stores let go of last: the window's. Any thread."""
+        self._held_rows = (start, rows)
+
+    def looks_at(self, row):
+        """The display is at `row`. Any thread."""
+        self._shown_at = row
+
+    def rests(self):
+        """This thread's lane's walk is at no row: it finished, was stopped, or begins again.
+        Worker threads only."""
+        self._walks_at = {lane: row for lane, row in self._walks_at.items() if lane != self.stream.lane}
+
+    def _row_order(self):
+        """A store's order of its rows, as Memo.order: None for a row outside holds() and more than
+        NEAR rows from every lane's walk, and for one kept back (where, how far), where 0 within
+        NEAR rows of a walk and 1 inside holds(), the higher going first, and of two alike the one
+        further from every row something is at, the display's and each walk's."""
+        (start, rows), shown, walks = self._held_rows, self._shown_at, tuple(self._walks_at.values())
+        end, every = start + rows, walks if shown is None else (*walks, shown)
+
+        def order(row):
+            near = any(abs(row - a) <= NEAR for a in walks)
+            if not near and not start <= row < end:
+                return None
+            return (0 if near else 1, min([abs(row - a) for a in every], default=0))
+        return order
+
+    def _memo_order(self):
+        """`_row_order` of a memo key's row, None too for an entry under a key no node of the plan
+        has, and inside holds() a node the display does not read going before one it does: the
+        shown node, the overlay's and those whose draw() it paints."""
+        rows, plan = self._row_order(), self._plan
+        live = {e.raw_key for e in plan.values()}
+        read = {plan[nid].raw_key for nid in (self.shown, self.over, *self._painted) if nid in plan}
+
+        def order(k):
+            if k[0] not in live:
+                return None
+            if k[1] is None:
+                return (1, k[0] not in read, 0)
+            where = rows(k[1])
+            return where and (where[0], where[0] == 1 and k[0] not in read, where[1])
+        return order
 
     def footage(self, nid):
         """The file `nid`'s inputs are frames of: the one the nearest cutting node above it serves,
@@ -510,16 +570,24 @@ class Graph:
         frame; under the Plan `p`, the current one with none. Worker threads only."""
         p = p or self.snapshot()
         nid, fold = p.walk, p.fold
+        self._walks_at = {**self._walks_at, self.stream.lane: row}
         with self.demand("walk", nid):
             out = self._compute(p.entries, nid, row)
         return out if fold is None or out is None else fold(out)
 
     def drawing(self, p=None):
-        """The fed frame nodes whose tool has a draw(), in document order: what the display reads
-        at its row beside the shown node, on the walked path or off it; under the Plan `p`, the
-        current one with none."""
+        """The fed frame nodes among those paints() was told of, in its order: what the display
+        reads at its row beside the shown node, on the walked path or off it; under the Plan `p`,
+        the current one with none."""
         entries = (p or self.snapshot()).entries
-        return [nid for nid, e in entries.items() if e.kind == "frame" and e.fed and hasattr(e.tool, "draw")]
+        with self._lock:
+            painted = self._painted
+        return [nid for nid in painted if (e := entries.get(nid)) is not None and e.kind == "frame" and e.fed]
+
+    def paints(self, nodes):
+        """`nodes` are those whose draw() the display paints; any thread."""
+        with self._lock:
+            self._painted = tuple(nodes)
 
     def watch(self, nodes):
         """`nodes` are what the plot shows, the selection and the pinned; any thread."""
@@ -545,11 +613,11 @@ class Graph:
             return dict(self._plan[self.series].params) if self.series else {}
 
     def series_chain(self):
-        """[(node, tool, params, band, the node it reads)] in run order: the heads first, then each
+        """[(node, tool, the params its computing is handed, band, the node it reads)] in run order: the heads first, then each
         series node on from a chain node. The worker feeds each head the stack and the rest what
         `gated` fed from the upstream result under its band, its signal or its rows."""
         with self._lock:
-            return [(nid, self._plan[nid].tool, dict(self._plan[nid].params), self._plan[nid].band, self._plan[nid].src)
+            return [(nid, self._plan[nid].tool, dict(self._plan[nid].computed), self._plan[nid].band, self._plan[nid].src)
                     for nid in self.chain]
 
     def key(self, nid):
@@ -704,7 +772,7 @@ class Graph:
             frames = Frames(self, plan, nid, e.srcs, e.src_key, e.types)
             with self.probe(nid, row, e.raw_key, reader) as ev:
                 try:
-                    v = e.tool.run(frames, row, e.params)
+                    v = e.tool.run(frames, row, e.computed)
                 except Cancelled:
                     raise
                 except Exception as exc:
@@ -717,7 +785,7 @@ class Graph:
                     ev[1], v = 0, frames.named(got, v)
                 else:
                     held = to_hold(v, frames.handed, e.static)
-                    size = ev[1] = Memo._size(held)
+                    size = ev[1] = nbytes(e.produces, held)
                     v = frames.named(held) if isinstance(held, Ref) else held
             if not isinstance(got, Ref):
                 self.memo.put(mk, held, owner=e.raw_key if e.static else None, size=size)

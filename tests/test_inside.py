@@ -4,6 +4,7 @@ shape are placed in the records' coordinates."""
 import numpy as np
 import pytest
 
+from sieve_player.registry import defaults
 from tests.test_blobs import fed
 from tests.test_track import table as points
 from tools import region
@@ -23,7 +24,7 @@ def ants(pts, shape=(H, W)):
 
 
 def test_each_record_reads_the_smallest_region_holding_it_and_none_reads_nothing():
-    out = inside.run(fed(ants([IN_NEST, OUTSIDE]), REGIONS), 0, inside.DEFAULTS)
+    out = inside.run(fed(ants([IN_NEST, OUTSIDE]), REGIONS), 0, defaults(inside))
     assert out.dtype.names[-2:] == ("region_name", "region_n") and plane(out) == (H, W) and len(out) == 2
     assert out["region_name"].tolist() == ["nest", None] and out["region_n"].tolist() == [2, 0]
     full = inside.inside(ants([IN_NEST, IN_DISH, IN_YARD, OUTSIDE]), REGIONS, "r", ["area"])

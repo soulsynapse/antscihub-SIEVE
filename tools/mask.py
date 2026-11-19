@@ -7,7 +7,6 @@ import numpy as np
 SIEVE_TOOL = True
 NAME, KIND, EXPECTS, PRODUCES = "mask", "frame", ("bgr", "gray", "mask", "hsv", "flow"), "same"
 INPUTS = {"mask": "mask"}
-DEFAULTS = {}
 
 
 def masked(frame, mask):
@@ -19,12 +18,6 @@ def masked(frame, mask):
 
 def run(frames, row, params):
     return masked(frames(row), frames(row, "mask"))
-
-
-def settings(parent=None):
-    from sieve_player import ParamWidget  # only the GUI needs the player
-
-    return ParamWidget(parent)
 
 
 if __name__ == "__main__":

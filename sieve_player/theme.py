@@ -66,6 +66,7 @@ ACCENT = QColor(88, 146, 255)   # what is viewed: the loop window, a wire, a che
 SERIES = QColor(100, 232, 204)  # a trace's series: v2's plot accent
 GATE = QColor(104, 240, 130)    # the gate, and a detector trace's series: v2's detection green
 OVERLAY = QColor(254, 163, 49)  # the overlay flag: a stop near the hot end of HEAT, which the overlay is drawn in
+DRAWN = QColor(80, 220, 120)    # the draw flag: the green tools/_draw.py draws in unless told another
 HEAT = ((48, 18, 59), (69, 91, 205), (62, 155, 254), (24, 214, 203), (72, 248, 130), (164, 252, 60),
         (226, 220, 56), (254, 163, 49), (239, 89, 17), (194, 36, 3), (122, 4, 3))  # v2's cold-to-hot ramp, RGB
 HEAT_ALPHA = 0.6                # v2's overlay opacity, at full heat; a cold pixel is clear

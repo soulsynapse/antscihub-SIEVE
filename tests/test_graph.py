@@ -10,11 +10,13 @@ import pytest
 
 from sieve_player import document as D
 from sieve_player.decoder import EndOfStream
-from sieve_player.graph import Graph, gated, nbytes
+from sieve_player.graph import Graph, Memo, gated
+from sieve_player.wire import nbytes, result_bytes
 from sieve_player.ledger import Ledger
 from sieve_player.stats import Stats
 from sieve_player.stream import NODE_FACTS, PLAN_FACTS, Event
 from sieve_player.plan import base_key, plan
+from sieve_player.registry import defaults
 
 
 class Dec:
@@ -37,7 +39,7 @@ class Dec:
 
 
 def tool(name, expects="gray", produces="gray", fn=None, kind="frame"):
-    t = Tool(NAME=name, KIND=kind, EXPECTS=expects, PRODUCES=produces, DEFAULTS={"k": 1}, runs=0)
+    t = Tool(NAME=name, KIND=kind, EXPECTS=expects, PRODUCES=produces, PARAMS={"k": {"default": 1}}, runs=0)
 
     def run(frames, row, params):
         t.runs += 1
@@ -192,6 +194,38 @@ def test_a_read_after_the_node_moved_on_or_a_halt_is_cancelled():
         add.run, g.halt = keep, False
 
 
+def test_the_memo_lets_go_of_the_rows_held_last_whatever_was_read_since():
+    doc = D.from_tools([gray, add])
+    dec = Dec()
+    dec.count = 30
+    g = Graph(doc, dec, TOOLS, memo_bytes=700)         # a row is gray and add, 24 bytes each: the four held and the rows NEAR the walk
+    g.holds(0, 4)
+    g.looks_at(0)
+    for row in range(30):
+        g.walk_row(row)
+    assert g.memo.evictions and all(g.peek(row, nid) is not None for row in range(4) for nid in ("gray", "add"))
+    doc.node("add").params["k"] = 2
+    g.sync()
+    for row in range(6):                                # what is under the key add has left goes before a row held
+        g.walk_row(row)
+    assert all(g.peek(row, nid) is not None for row in range(4) for nid in ("gray", "add"))
+    g = Graph(doc, dec, TOOLS, memo_bytes=580)         # the four rows held do not fit beside the walk's: the shown node's stay
+    g.holds(0, 4)
+    for row in range(30):
+        g.walk_row(row)
+    assert all(g.peek(row, "add") is not None for row in range(4)) and g.peek(28, "gray") is not None
+    g = Graph(doc, dec, TOOLS, memo_bytes=100)         # nor do the walk's own: the row before the walk's outlives a row held
+    g.holds(0, 4)
+    for row in range(30):
+        g.walk_row(row)
+    assert g.peek(28, "add") is not None and g.peek(0, "add") is None
+    memo, asked = Memo(40 * 24), []                    # its order is asked of what it lets go and once of each entry kept back, however many it holds
+    memo.order = lambda: lambda k: (asked.append(k), (0,) if k < 4 else None)[1]
+    for k in range(60):
+        memo.put(k, np.zeros((2, 12), np.uint8))
+    assert memo.evictions == 20 and len(asked) == 24 and all(memo.get(k) is not None for k in range(4))
+
+
 def test_a_static_node_is_computed_once_held_once_and_peeked_at_any_row():
     const = tool("const", fn=lambda f, p: np.full_like(f, p["k"]))
     const.STATIC = True
@@ -231,7 +265,7 @@ def test_key_follows_params_and_wiring():
     g.sync()
     assert g.key("add") != k_add                                      # rewired
     doc.connect("gray", "add")
-    gray.key_params = lambda p: p["k"]                                # a tool that says what of its params its run reads
+    gray.key_params, was = (lambda p: p["k"]), gray.run               # a tool that says what of its params its run reads
     try:
         g.sync()
         k_add = g.key("add")
@@ -245,7 +279,56 @@ def test_key_follows_params_and_wiring():
         g.sync()
         doc.node("gray").params["note"] = "read"
         g.sync()
-        assert g.key("add") not in (k_add, g.key("gray"))             # a facet that raises: keyed by all its params
+        assert g.key("add") not in (k_add, g.key("gray"))             # a facet that raises: keyed as a tool without one
+        gray.PARAMS = {"k": {"default": 1}, "shade": {"default": "a", "changes result": False}}
+        g.sync()
+        k_add = g.key("add")
+        doc.node("gray").params["shade"] = "b"
+        g.sync()
+        assert g.key("add") == k_add                                  # a param declared to change nothing is in no key, under a facet that raises
+        gray.key_params = None
+        g.sync()
+        doc.node("gray").params["shade"] = "c"
+        g.sync()
+        assert g.key("add") == k_add                                  # nor under no facet
+        seen, gray.run = [], lambda frames, row, params: seen.append(set(params)) or frames(row)[..., 0]
+        g.compute("add", 0)
+        assert seen == [{"k", "note"}] and "shade" in g.entry("gray").params   # and its run is not handed it; a draw is
+        gray.run = was
+        doc.node("gray").params["k"] = 4
+        g.sync()
+        assert g.key("add") != k_add
+    finally:
+        del gray.key_params
+        gray.PARAMS, gray.run = {"k": {"default": 1}}, was
+
+
+def test_a_job_stands_by_the_keys_it_began_under_and_by_no_other_change():
+    """plan.stands answers of the chain's keys alone: a moved card, a node added off the chain and
+    a param its tool's key_params leaves out leave a job standing; a key moved, or a chain node
+    gone, does not."""
+    from sieve_player.plan import stands, walked_keys
+    head = tool("head", kind="series", expects="gray", produces="signal")
+    doc = D.from_tools([gray, add, head])
+    g = Graph(doc, Dec(), {**TOOLS, "head": head})
+    began = walked_keys(g.snapshot())
+    assert set(began) == {"head"}
+    gray.key_params = lambda p: p["k"]
+    try:
+        g.sync()
+        began = walked_keys(g.snapshot())
+        doc.node("add").pos = (40.0, 40.0)
+        doc.add_node("same", (0.0, 300.0))
+        doc.node("gray").params["note"] = "unread"
+        g.sync()
+        assert stands(began, g.snapshot())
+        doc.node("gray").params["k"] = 5
+        g.sync()
+        assert not stands(began, g.snapshot())
+        began = walked_keys(g.snapshot())
+        doc.remove_node("head")
+        g.sync()
+        assert began and not stands(began, g.snapshot())
     finally:
         del gray.key_params
 
@@ -315,16 +398,16 @@ def test_a_series_band_gates_the_signal_and_zeroes_what_the_next_reads():
     the gate; the feed downstream is zeroed outside the band, inside it once lo is above hi; no
     band keeps every row; a result without a signal feeds nothing."""
     sig = np.array([0.0, 2.0, 5.0, 9.0, 20.0], np.float32)
-    r, feed = gated({"signal": sig}, (1.0, 10.0))
+    r, feed = gated({"signal": sig}, (1.0, 10.0), "signal")
     assert r["gate"].tolist() == [False, True, True, True, False] and r["signal"] is sig
     assert feed.tolist() == [0.0, 2.0, 5.0, 9.0, 0.0]
-    r, feed = gated({"signal": sig}, (10.0, 1.0))
+    r, feed = gated({"signal": sig}, (10.0, 1.0), "signal")
     assert r["gate"].tolist() == [True, False, False, False, True] and feed.tolist() == [0.0, 0.0, 0.0, 0.0, 20.0]
-    r, feed = gated({"signal": sig}, None)
+    r, feed = gated({"signal": sig}, None, "signal")
     assert r["gate"].all() and feed.tolist() == sig.tolist()
-    r, feed = gated({"signal": np.array([-3.0, 0.0, 4.0])}, None)         # no band gates nothing, a negative row included
+    r, feed = gated({"signal": np.array([-3.0, 0.0, 4.0])}, None, "signal")         # no band gates nothing, a negative row included
     assert r["gate"].all() and feed.tolist() == [-3.0, 0.0, 4.0]
-    assert gated({"other": 1}, (0.0, 1.0)) == ({"other": 1}, None)
+    assert gated({"other": 1}, (0.0, 1.0), "signal") == ({"other": 1}, None)
 
 
 def test_one_compute_sees_one_plan():
@@ -659,12 +742,15 @@ def test_the_window_and_the_clip_are_one_walk_over_two_ranges():
 
     w, led = Worker(g, every=3), Ledger()      # its turns taken here: a range closed short says so, and its record is closed
     g.on_event = led.event
+    stopped = []
+    w.clipReady.connect(lambda r, s, fps: stopped.append(r))
     w.set_window(2, 6)
     w.walk_clip()
-    for _ in range(1 + 6 + 1 + 3):
+    for _ in range(1 + 6 + 1 + 4):
         turn(w)
     w.stop_clip()
     turn(w)
+    assert len(stopped[-1]["head"]["signal"]) == 4      # a row past the cadence's last: the stop sends the chain over the rows it rests at
     w.set_window(4, 6)
     turn(w)
     turn(w)
@@ -672,7 +758,25 @@ def test_the_window_and_the_clip_are_one_walk_over_two_ranges():
     g.sync()
     w.invalidate()
     turn(w)
-    assert [(x.lane, x.done, x.length) for x in led.view().walks] == [("window", 6, 6), ("clip", 3, 3), ("window", 1, 1)]
+    assert [(x.lane, x.done, x.length) for x in led.view().walks] == [("window", 6, 6), ("clip", 4, 4), ("window", 1, 1)]
+
+
+def test_a_scrub_computes_the_draws_the_display_names_and_no_other():
+    from sieve_player.worker import _Scrub
+    named, unnamed = tool("named"), tool("unnamed")
+    named.draw = unnamed.draw = lambda *a: None
+    doc = D.from_tools([gray, named])
+    doc.add_node("unnamed", (0, 300))
+    doc.connect("gray", "unnamed")
+    doc.display = "gray"
+    g = Graph(doc, Dec(), {**TOOLS, "named": named, "unnamed": unnamed})
+    assert g.drawing() == []
+    g.paints(["named", "nowhere"])
+    assert g.drawing() == ["named"]
+    scrub = _Scrub(g, Tool(emit=lambda row: None), None)
+    scrub.plan = g.snapshot()
+    scrub.turn(3)
+    assert (named.runs, unnamed.runs) == (1, 0) and g.peek(3, "named") is not None and g.peek(3, "unnamed") is None
 
 
 def test_a_tool_raising_indexerror_fails_the_walk_and_only_the_stream_end_closes_it():
@@ -741,7 +845,8 @@ def test_a_tool_raising_indexerror_fails_the_walk_and_only_the_stream_end_closes
 
 
 def test_a_clip_stack_of_tables_is_counted_through_its_object_columns():
-    """nbytes reads the arrays behind an object field; the clip walk stops where the running total
+    """A row of a table type is counted with the arrays behind its object columns, and at its
+    pointers under a type that is no table; the clip walk stops where the running total
     passes STACK_BYTES, the rows it has standing, where the first row's forecast let it start."""
     from PySide6.QtWidgets import QApplication
     from sieve_player import walk as W
@@ -751,7 +856,8 @@ def test_a_clip_stack_of_tables_is_counted_through_its_object_columns():
     t["contour"] = [np.zeros((100, 2), np.int32), None]
     stack = np.empty(2, object)
     stack[:] = [t, t]
-    assert t.nbytes == 24 and nbytes(t) == 24 + 800 and nbytes(stack) == 16 + 2 * 824 and nbytes({}) == 64
+    assert t.nbytes == 24 and nbytes("blobs", t) == 24 + 800 and nbytes("gray", t) == 24 and nbytes(None, {}) == 64
+    assert result_bytes("tracks", {"rows": stack}) == 16 + 2 * 824 and result_bytes("signal", {"rows": stack}) == 16
     table = tool("table", produces="blobs", fn=lambda f, p: np.array([(0, np.zeros((50 * int(f.flat[0]), 2), np.int32))], dtype=t.dtype))
     head = tool("head", kind="series", expects="blobs", produces="signal")
     head.run = lambda series, params: {"signal": np.array([len(r) for r in series.data], np.float32)}
@@ -849,7 +955,7 @@ def test_two_heads_with_different_folds_each_run_on_their_own_folding():
     QApplication.instance() or QApplication([])
     table = tool("table", produces="blobs", fn=lambda f, p: np.array([(a,) for a in range(1, int(f.flat[0]) + 1 + p["k"])], dtype=[("area", "<i4")]))
     doc = D.from_tools([gray, table, count])
-    doc.add_node("size", (0, 400), size.DEFAULTS); doc.connect("table", "size")
+    doc.add_node("size", (0, 400), defaults(size)); doc.connect("table", "size")
     g = Graph(doc, Dec(), {**TOOLS, "table": table, "count": count, "size": size})
     assert g.chain == ["count", "size"] and g.fold is None
     w = Worker(g)

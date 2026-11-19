@@ -46,9 +46,11 @@ setting hidden on either. Chains get longer; tools do not get wider.
 ```python
 # a frame tool: one row in, one array out
 NAME = "threshold"; KIND = "frame"; EXPECTS = "gray"; PRODUCES = "mask"
-DEFAULTS = {...}                              # JSON-able
+PARAMS = {"thresh": {"default": 128, "kind": "int", "range": (0, 255)}}   # every param, once, JSON-able: the player
+                                              # makes a node's first params and its card of it; one that draw()
+                                              # or the card alone reads says "changes result": False, is in no
+                                              # key, and is not in the params run, step or a cut_file is handed
 def run(frames, row, params) -> np.ndarray    # frames(r) is the output of the node it reads, at row r, read-only
-def settings(parent=None) -> ParamWidget
 
 # a series tool: the whole loop window at once
 NAME = "reduce"; KIND = "series"; EXPECTS = ("gray", "mask"); PRODUCES = "signal"
@@ -57,7 +59,8 @@ def fold(frame) -> np.ndarray                 # optional: what the walk stacks p
 def run(series, params) -> dict               # series.data is (T, ...), the read node stacked, each row
                                               # through fold() if there is one; the dict carries "signal",
                                               # a (T,) array; the gate is the player's, never the tool's
-def settings(parent=None) -> ParamWidget      # optionally show_result(result, start, fps), set_playhead(row),
+def settings(parent=None) -> ParamWidget      # optional, a card of the tool's own in place of the one made of PARAMS,
+                                              # which may have show_result(result, start, fps), set_playhead(row),
                                               # set_source(path, fps): the footage the node's inputs are frames of, the video or
                                               # the file a cutting node above it serves, for a tool that writes a file (csv),
                                               # set_paths({input: path}): the file each wired path input picked,
@@ -84,8 +87,10 @@ def select(folder, params) -> str | None      # folder is the document's
 
 How the player treats a tool, as `sieve_player/graph.py`, `pane.py` and `window.py` do:
 
-- Types are strings the player compares for equality; it attaches no meaning to them beyond the
-  video node producing `"bgr"`, or `"gray"` when its `output` param says so. That one param is the
+- Types are strings the player compares for equality, each a row of `sieve_player/wire.py`'s
+  table, which says whether a row of it is a table, how its bytes are counted and whether it can
+  be overlaid; a new type is added there first, which `tests/test_seams.py` checks. The video node
+  produces `"bgr"`, or `"gray"` when its `output` param says so. That one param is the
   decoder's, applied before its cache, so a chain that wants gray frames never holds the colour
   ones and no gray node is needed for that; a smaller frame is tools/rescale's, and a
   document saved with a scale on the video node loads with a rescale node inserted for it. An
@@ -133,21 +138,24 @@ Facets the player reads when a tool has them:
 | `INPUTS = {input: types}` | a frame input after the first, with the types it expects; `run` reads it as `frames(row, input)`, and the node's key and `frames.key` follow it |
 | `PATHS = {input: loader}` | a path input a selector feeds; the loader turns the file into params |
 | `def cut_file(video, footage, params) -> path or None` | the node cuts the video into files: at every sync the player asks which file the tool wrote of what `run` hands out of `video`, whose `decoder.footage_print` is `footage`, under the node's params; the file may be a lossy encoding of it, and what is served is the file. While the node reads the video node, or a node that serves a file, in which case `video` is that file, the player serves the file in place of the run: nothing upstream is run or decoded for it, its key is the one a document opened on the file gives its video node, so everything after it is keyed as that document is, and its face on the canvas says `cut`. With None for an answer, or a node that serves none between the video and it, it runs. A tool whose params say to serve a file that is not there raises FileNotFoundError saying why: the node and everything that reads it then do not run, and what it said is the node's standing, so a document's results never depend on what the store holds. A file a node serves is open in the player, and in a bare walk's process, and cannot be replaced or removed while it is, so a tool never writes over a file it has answered with: a cut of another part, or another encoding, is a file of another name in the store, the folder the header's store control shows and a press on it chooses (`tools/_cutfile.py`, `sieve_player/store.py`), and a settings widget that has written or removed one says so by a `storeChanged` signal, its params as they were, for the player to read the store and ask again. A tool whose `cut_file` or `cut_files` raises serves and names nothing, and its node's standing says what was raised. The served files' decoders share one cache limit, the video decoder's: the file read latest may fill the whole of it, and the others keep what is left, the one read longest ago giving way first. A node reads one piece of the plate: one whose inputs are of two cutting nodes, or of one and of the plate, does not run, nor does what reads it, and its standing says which. A widget's `set_source` below a served node is handed the served file (region) |
-| `def key_params(params) -> a JSON value` | what of its params `run` reads: the same value for any two params under which `run` hands out the same result of the same input. The node is keyed by it in place of its whole params, so a param `run` does not read, a shape of a geometry file that is not the one chosen, moves no key below the node and nothing is computed again for it. A tool without it, or one whose `key_params` raises, is keyed by all its params. One that leaves out a param `run` reads serves results of the params before |
+| `def key_params(params) -> a JSON value` | what of its params `run` reads: the same value for any two params under which `run` hands out the same result of the same input. The node is keyed by it in place of its whole params, so a param `run` does not read, a shape of a geometry file that is not the one chosen, moves no key below the node and nothing is computed again for it. A tool without it, or one whose `key_params` raises, is keyed by the params its computing is handed: all but those `PARAMS` says `"changes result": False` of, which `key_params` is not handed either. One that leaves out a param `run` reads serves results of the params before |
 | `def cut_files(video, footage, params) -> paths` | beside `cut_file`: every file the node would serve under some choice of its params, asked of the footage the node reads wherever it sits, served there or not. The player hands their union over the document's cutting nodes to each settings widget with a `set_cut_files_in_use(paths)`, so a card can list the files of its footage that no node of the document uses (region) |
 | `STATIC = True` | the output is the same at every row: the memo holds it once under the key and never evicts it while the node stands under that key, and the monitor counts its run per change rather than per row |
 | a plane as output | the node's density, v2's plot: its pixels per row counted on a fixed log axis, drawn as a field under the lines in the plot while the node is selected or pinned, for every fed frame node; a mask or a field has none. Its two handles are the node's band, saved with the node: the player zeroes every pixel outside it (inside it when lo is above hi) before anything downstream reads the node |
 
 `tools/` holds a working example of each. A module there whose name begins with `_` is not a tool
 but what tools share, the table kind in `_table.py` and its drawing in `_draw.py`; a tool imports
-from those and from no other tool, which `tests/test_seams.py` checks.
+from those and from no other tool, which `tests/test_seams.py` checks. A column a tool adds to a
+table goes through `_table.py:with_column` with its unit, one of `wire.py`'s or `wire.NONE`.
 
 ## The player
 
 The frame is on the left, the node canvas over the selected node's parameters on the right, and
 the timeline across the bottom. The node with the display flag is what the frame shows; the node
-with the overlay flag, a second disc offered only on a node producing one plane (`document.OVERLAYABLE`),
-is heated over it, cold-to-hot in v2's ramp, and a click on the flag it carries turns it off; selection
+with the overlay flag, a second disc offered only on a node producing one plane (`wire.TYPES`),
+is heated over it, cold-to-hot in v2's ramp, and a click on the flag it carries turns it off; a
+third disc, on a node whose tool has a `draw()`, puts that node on the document's `drawn` list and
+takes it off, and the frame paints the `draw()` of the nodes on it and computes for no other; selection
 only chooses whose card the pane shows and whose series the plot and the strip draw in colour. A worker thread computes and the GUI thread
 reads: every node's output is memoized under a key built from its params and its
 upstream, and the display shows what the memo holds.

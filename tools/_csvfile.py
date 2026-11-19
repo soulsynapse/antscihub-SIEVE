@@ -1,10 +1,12 @@
 """The file csv writes and resolve reads back: the key line, the atomic write, and the Write widget.
 Not a tool; a tool imports it and no other tool (tests/test_seams.py).
 
-The first line is a comment, `# sieve key=... rows=a-b footage=... [kind=type]`, the node's key
-as the player computed it (see `sieve_player.graph`): it hashes the band and everything upstream, so
-a tool reads it back and says whether the file on disk is this graph's or stale; `kind` is the type
-the rows were written from, absent on a file written before it was carried. Readers skip the line
+The first line is a comment, `# sieve key=... rows=a-b footage=... [kind=type] name=...`, the
+node's key as the player computed it (see `sieve_player.graph`): it hashes the band and everything
+upstream, so a tool reads it back and says whether the file on disk is this graph's or stale;
+`footage` is the footage's print, `decoder.footage_print`, and `name` its file's name, last on the
+line since a name may hold a space, and compared by nothing; `kind` is the type the rows were
+written from. A file written before each was carried has `footage` as the name, and no `kind`. Readers skip the line
 with `comment="#"` (pandas) or `comment.char = "#"` (R). The second line names the columns, and
 every line after is one row, or one record of a row, comma separated.
 
@@ -14,7 +16,9 @@ result)`, `write(path, result, start, fps, footage)` and `FILTER`. Qt is importe
 import os
 import re
 
-DEFAULTS = {"beside footage": True}
+from sieve_player.decoder import footage_print
+
+PARAMS = {"beside footage": {"default": True, "kind": "bool", "changes result": False}}
 FILTER = "CSV (*.csv);;All (*)"
 _KEY = re.compile(r"# sieve key=(\S*) rows=(\d+)-(\d+)")
 _KIND = re.compile(r" kind=(\S+)")
@@ -22,8 +26,8 @@ _KIND = re.compile(r" kind=(\S+)")
 
 def key_line(key, start, n, footage, kind=None):
     """`kind` is the type the rows were written from."""
-    line = f"# sieve key={key} rows={start}-{start + n - 1} footage={os.path.basename(str(footage))}"
-    return line if kind is None else f"{line} kind={kind}"
+    line = f"# sieve key={key} rows={start}-{start + n - 1} footage={footage_print(footage)}"
+    return f"{line if kind is None else f'{line} kind={kind}'} name={os.path.basename(str(footage))}"
 
 
 def parse_key(line):
@@ -95,7 +99,7 @@ def widget(parent, export):
     class _Widget(ParamWidget):
         def __init__(self, parent=None):
             super().__init__(parent)
-            self.add_bool("beside footage", DEFAULTS["beside footage"])
+            self.add_declared("beside footage", PARAMS["beside footage"])
             self.target, self.disk = measured(wide=True), readout()
             self.button, self.status = QPushButton("Write"), readout()
             self.form.add_row("target", self.target)

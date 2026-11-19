@@ -10,7 +10,10 @@ import numpy as np
 SIEVE_TOOL = True
 NAME, KIND, EXPECTS, PRODUCES = "spacing", "series", "blobs", "signal"
 METHODS = ("mean", "median", "min", "pairs")
-DEFAULTS = {"method": "mean", "r": 20.0}
+PARAMS = {
+    "method": {"default": "mean", "kind": "choice", "choices": METHODS},
+    "r": {"default": 20.0, "kind": "float", "range": (0.0, 500.0), "decimals": 1},
+}
 
 
 def spacing(table, method, r=0.0):
@@ -34,12 +37,3 @@ def run(series, params):
 def step(state, row, i, params):
     """No state: a row's signal is its own table's."""
     return None, {"signal": np.float32(spacing(row, params["method"], float(params["r"])))}
-
-
-def settings(parent=None):
-    from sieve_player import ParamWidget  # only the GUI needs the player
-
-    w = ParamWidget(parent)
-    w.add_choice("method", METHODS, DEFAULTS["method"])
-    w.add_float("r", 0.0, 500.0, DEFAULTS["r"], decimals=1)
-    return w

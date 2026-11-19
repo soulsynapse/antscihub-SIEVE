@@ -4,6 +4,7 @@ coordinates."""
 import numpy as np
 import pytest
 
+from sieve_player.registry import defaults
 from tests.test_blobs import fed
 from tools import attach, blobs
 from tools import _table
@@ -13,7 +14,7 @@ M[1:7, 1:3] = 255
 M[5:7, 1:6] = 255                        # an L, 18 px
 M[1:3, 5:7] = 255                        # a square, 4 px
 M[5:7, 7:8] = 255                        # a bar below it, 2 px, under no dot
-ANIMALS = blobs.run(fed(M), 0, {**blobs.DEFAULTS, "min_area": 2})
+ANIMALS = blobs.run(fed(M), 0, {**defaults(blobs), "min_area": 2})
 ELL, SQUARE, BAR = (list(ANIMALS["area"]).index(a) for a in (18, 4, 2))
 
 

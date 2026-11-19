@@ -3,7 +3,7 @@
 and under its handle it draws every series the plot shows at its rows, the selection in its colour
 and the pinned in dimmed ink, each as the plot does over the window: a column covering more than
 one row is their min and max, so nothing is hidden and nothing is added, and the rows the
-selection's gate keeps are washed. A bar along its bottom edge is over the rows held."""
+selection's gate keeps are washed. A bar along its top edge is over the rows held."""
 import numpy as np
 from PySide6.QtCore import QPoint, QPointF, QRect, QRectF, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QIcon, QPainter, QPen, QPixmap, QPolygonF
@@ -85,7 +85,7 @@ class Strip(QWidget):
     windowPlaced = Signal(int, int)   # start, length (rows): a click in the black put it here
     hovered = Signal(int)             # the row under the cursor, -1 on leave
     H, GRAB = 60, 10  # GRAB: height of the handle along the window's top edge
-    HELD = 3          # height of the bar along the bottom edge over the rows held
+    HELD = 3          # height of the bar along the top edge over the rows held, drawn over the handle where they meet
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -94,7 +94,7 @@ class Strip(QWidget):
         self.hover = -1
         self.series, self.selection = {}, None   # node -> (values, start, gate) drawn; the selection's in colour, the rest in ink
         self.more = {}           # node -> its further stretches, see set_series
-        self.held = []           # (start, rows) spans drawn along the bottom edge, see set_held
+        self.held = []           # (start, rows) spans drawn along the top edge, see set_held
         self._mode = None        # "head" | "body" | "place"
         self._draft = None       # (start, length) while a window drag is live
         self._grab = 0           # row offset of the grab point inside the body
@@ -139,7 +139,7 @@ class Strip(QWidget):
 
     def set_held(self, spans):
         """The stretches of the clip, (start, rows) each, a window placed wholly inside one of which
-        costs the series chain nothing; drawn as a bar along the bottom edge."""
+        costs the series chain nothing; drawn as a bar along the top edge."""
         self.held = [(int(s), int(n)) for s, n in spans]
         self.update()
 
@@ -194,7 +194,7 @@ class Strip(QWidget):
         p.drawPixmap(0, 0, self._still[1])
         for s, n in self.held:
             x0 = self._x(s)
-            p.fillRect(QRectF(x0, self.height() - 1 - self.HELD, max(1.0, self._x(s + n) - x0), self.HELD), qgray(theme.INK_2))
+            p.fillRect(QRectF(x0, 1, max(1.0, self._x(s + n) - x0), self.HELD), qgray(theme.INK_2))
         if self.hover >= 0:
             p.setPen(QPen(qgray(theme.INK_2), 1))
             x = int(self._x(self.hover))

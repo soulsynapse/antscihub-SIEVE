@@ -4,7 +4,7 @@ import os
 import re
 import sys
 
-from . import FACETS, MARKER, __all__, category, discover, hint, is_tool, types
+from . import FACETS, MARKER, READERS, __all__, category, discover, hint, is_tool, types
 
 VIDEO = ("video", "bgr", "path")   # the one node that is not a tool: what it produces and expects
 
@@ -47,7 +47,7 @@ def report(roots):
 
 
 def check():
-    """README's Exports == __all__; every facet is read by some sieve_player module outside here."""
+    """README's Exports == __all__; every facet is called, or asked of by one of its READERS, in some sieve_player module outside here."""
     failures = []
     with open(os.path.join(HERE, "README.md"), encoding="utf-8") as f:
         readme = f.read()
@@ -64,7 +64,7 @@ def check():
     for facet in FACETS:
         if facet == MARKER:
             continue  # read here, by discovery; nothing else needs to
-        if not re.search(rf"""[.\"']{facet}\b""", sources):
+        if not re.search(rf"\.{facet}\(|\b({'|'.join(READERS.get(facet, ('$^',)))})\(", sources):
             failures.append(f"facet {facet!r} is probed but nothing in sieve_player reads it")
     for t, p, ex in orphans(["tools"]):
         failures.append(f"type {t!r} is {'produced' if p else 'expected'} by {', '.join(sorted(p or ex))} and {'expected' if p else 'produced'} by nothing")

@@ -10,6 +10,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from sieve_player import document as D  # noqa: E402
 from sieve_player.graph import Graph  # noqa: E402
+from sieve_player.registry import defaults  # noqa: E402
 from tests.test_graph import Dec, tool  # noqa: E402
 from tools import gray, threshold  # noqa: E402
 from tools.retired import crop  # noqa: E402
@@ -46,7 +47,7 @@ def test_the_cut_is_the_roi_box_at_row_0_grown_clipped_and_held_a_mask_cuts_itse
     assert g.compute("crop", 3).shape == (4, 6, 3)                     # grown past the frame's edge: the whole frame
     assert crop.rect(g.compute("roi", 0), 1) == (0, 4, 1, 5)
     doc.node("crop").params["border"] = 0
-    doc.add_node("crop", (0, 600), crop.DEFAULTS, id="crop_2")
+    doc.add_node("crop", (0, 600), defaults(crop), id="crop_2")
     doc.connect("roi", "crop_2")
     doc.connect("roi", "crop_2", "roi")
     g.sync()

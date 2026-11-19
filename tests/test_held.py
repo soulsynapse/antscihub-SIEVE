@@ -1,38 +1,46 @@
-"""The held file's side of staleness, what a later session reads back and what it refuses, that
-a write's cost is the runs the file has not had, and which run a range is served from and which
-goes at the limit."""
+"""What a later session reads back of the held file and what it refuses, that a write's cost is
+the runs the file has not had, which run a range is served from and which goes at the limit, and
+which nodes are said stale by the code their held results were made under."""
 import os
+import pickle
 
 import numpy as np
 
 from sieve_player import held, theme
 
 
-def test_a_held_file_reads_back_under_its_stamp_and_as_nothing_under_any_other(tmp_path):
-    tool = tmp_path / "tools" / "t.py"
-    tool.parent.mkdir()
-    tool.write_text("A = 1\n", encoding="utf-8", newline="\n")
-    tools = {"t": type("M", (), {"__file__": str(tool)})}
-    stamp = held.stamp(held.tools_print(tools))
+def test_a_held_file_reads_back_by_the_form_of_its_records_alone_and_is_let_go_by_a_write_of_no_runs(tmp_path):
     path = held.path_for(str(tmp_path / "doc.json"))
-    read = lambda: held.File(path, held.stamp(held.tools_print(tools))).load()
-    result = {"signal": np.arange(4, dtype=np.float32), "key": "k", "said": (0, 1, 2, 3)}      # a tuple as long as the run is no row of it
-    held.File(path, stamp).write([(10, 4, {"count": result}, 16)])
+    read = lambda: held.File(path).load()
+    result = {"signal": np.arange(4, dtype=np.float32), "key": "k", "said": (0, 1, 2, 3), "code": {"count": "d"}}      # a tuple as long as the run is no row of it
+    held.File(path).write([(10, 4, {"count": result}, 16)])
     (start, rows, results, _), = read()
     assert (start, rows) == (10, 4) and held.rows_of(results["count"], rows, 1, 2)["signal"].tolist() == [1.0, 2.0]
     assert held.rows_of(results["count"], rows, 1, 2)["key"] == "k"
     assert held.rows_of(results["count"], rows, 1, 2)["said"] == (0, 1, 2, 3)
-    tool.write_text("A = 2\n", encoding="utf-8", newline="\n")
+    assert held.rows_of(results["count"], rows, 1, 2)["code"] == {"count": "d"}
+    with open(path, "rb") as f:
+        assert pickle.load(f) == (held.VERSION,)        # nothing of the tools' code: an edited tool leaves the runs serving
+        records = f.read()
+
+    def begun_with(stamp):
+        with open(path, "wb") as f:
+            pickle.dump(stamp, f)
+            f.write(records)
+        return read()
+    assert len(begun_with((held.VERSION, "a digest of the tools' folder"))) == 1       # as a file written before the stamp lost it
+    assert begun_with((held.VERSION + 1,)) == [] and begun_with(held.VERSION) == []
+    file = held.File(path)
+    file.write(begun_with((held.VERSION,)))
+    file.write([])
     assert read() == []
-    tool.write_text("A = 1\n", encoding="utf-8", newline="\n")
-    assert read() != []
     with open(path, "wb") as f:
         f.write(b"not a pickle")
-    assert held.File(path, stamp).load() == [] and held.File(str(tmp_path / "absent"), stamp).load() == []
+    assert read() == [] and held.File(str(tmp_path / "absent")).load() == []
 
 
 def test_a_run_is_pickled_once_however_the_file_is_written_after(tmp_path):
-    file = held.File(str(tmp_path / "doc.json.series"), ("stamp",))
+    file = held.File(str(tmp_path / "doc.json.series"))
     tables = np.empty(3, object)
     tables[:] = [np.zeros(n, [("id", "<i4")]) for n in (2, 0, 1)]
     run = lambda start, **more: (start, 3, {"track": {"signal": np.full(3, start, np.float32), **more}}, 0)
@@ -46,7 +54,7 @@ def test_a_run_is_pickled_once_however_the_file_is_written_after(tmp_path):
     file.write([a, c, d])                                   # b let go: the file made again
     never = run(40, fn=lambda: None)
     assert file.write([a, c, d, never]) == [never] and file.write([a, c, d, never]) == []     # left out once, the others' records standing
-    back = held.File(file.path, ("stamp",))
+    back = held.File(file.path)
     kept = back.load()
     assert [(s, r["track"]["signal"].tolist()) for s, _, r, _ in kept] == [(0, [0.0] * 3), (20, [20.0] * 3), (30, [30.0] * 3)]
     first = kept[0][2]["track"]["rows"]
@@ -56,7 +64,7 @@ def test_a_run_is_pickled_once_however_the_file_is_written_after(tmp_path):
         f.truncate(os.path.getsize(file.path) - 4)          # a write cut short in its last record
     kept = back.load()
     back.write([*kept, d])
-    assert [s for s, *_ in held.File(file.path, ("stamp",)).load()] == [0, 20, 30]
+    assert [s for s, *_ in held.File(file.path).load()] == [0, 20, 30]
 
 
 def test_bytes_are_said_in_the_first_unit_that_holds_them_under_1024_and_a_badge_has_a_colour_for_no_other():
@@ -66,7 +74,7 @@ def test_bytes_are_said_in_the_first_unit_that_holds_them_under_1024_and_a_badge
 
 def test_a_range_is_served_from_the_run_that_covers_it_under_the_chains_keys_and_the_limit_lets_go_of_left_keys_first():
     now, moved = held.Chain({"a": "ka", "b": "kb"}, frozenset({"a"})), held.Chain({"a": "ka", "b": "kb2"}, frozenset({"a"}))
-    runs = held.Runs(18, lambda v: 1)       # a run of two nodes of three values counts six
+    runs = held.Runs(18, lambda nid, r: len(r))       # a run of two nodes of three values counts six
     of = lambda start, rows, chain: {nid: {"signal": np.arange(start, start + rows, dtype=np.float32), "key": k, "gate": None}
                                      for nid, k in chain.keys.items()}
     hold = lambda start, rows, chain: runs.hold(start, rows, of(start, rows, chain), chain)
@@ -84,15 +92,30 @@ def test_a_range_is_served_from_the_run_that_covers_it_under_the_chains_keys_and
     gone = held.Chain({"a": "ka2", "b": "kb3"}, frozenset({"a"}))
     assert hold(60, 4, gone) and [run[0] for run in runs] == [40, 50, 60]       # no node of 0 is under a key the chain has: it goes first, however long
     assert not runs.hold(70, 4, {nid: {**r, "key": None} for nid, r in of(70, 4, gone).items()}, gone)      # under no key, good to no reader
-    twice = held.Runs(18, lambda v: 1)
+    twice = held.Runs(18, lambda nid, r: len(r))
     again = lambda start, chain: twice.hold(start, 4, of(start, 4, chain), chain)
     assert again(10, now) and again(10, gone) and again(30, now) and again(50, now)     # two runs over the same rows: the later goes as itself, its arrays never compared
     assert [(run.start, run.results["b"]["key"]) for run in twice] == [(10, "kb"), (30, "kb"), (50, "kb")]
-    full = held.Runs(6, lambda v: 1)        # room for one run
+    full = held.Runs(6, lambda nid, r: len(r))        # room for one run
     assert full.hold(0, 4, of(0, 4, now), now) and full.hold(0, 4, of(0, 4, moved), moved)     # as long as the run of keys left, which goes
     assert not full.hold(0, 4, of(0, 4, now), moved) and [run.results["b"]["key"] for run in full] == ["kb2"]      # let go at once: nothing held changed
     assert full.hold(10, 4, of(10, 4, moved), moved)
     assert [run.start for run in full] == [10]      # of two the chain has as much of, as long, the one held last stays
-    touching = held.Runs(100, lambda v: 1)
+    touching = held.Runs(100, lambda nid, r: len(r))
     assert touching.hold(0, 4, of(0, 4, now), now) and touching.hold(4, 4, of(4, 4, now), now)
     assert touching.spans(now) == [(0, 8)] and touching.over(2, 4, now) is None       # held across two runs, served from neither
+
+
+def test_a_node_is_marked_by_the_code_its_held_result_was_made_under_and_so_is_every_node_below_it():
+    chain = held.Chain({"track": "kt", "count": "kc"}, frozenset({"track"}))
+    above = {"video": [], "blobs": ["video"], "track": ["blobs"], "count": ["track"], "drawn": ["blobs"], "other": ["video"]}
+    now = {"blobs": "b", "track": "t", "count": "c", "drawn": "d", "other": "o"}
+    run = lambda code, keys=chain.keys: [(0, 2, {nid: {"signal": np.zeros(2), "key": k, **code} for nid, k in keys.items()}, 0)]
+    marked = lambda code, now=now, **more: held.marked(run(code, **more), chain, now, above)
+    made = {"blobs": "b", "track": "t", "count": "c"}
+    assert marked({"code": made}) == set() and held.marked([], chain, now, above) == set()
+    assert marked({"code": made}, {**now, "track": "t2"}) == {"track", "count"}        # blobs above it and other, of another tool, are not
+    assert marked({"code": made}, {**now, "blobs": "b2"}) == {"blobs", "track", "count", "drawn"}
+    assert marked({"code": made}, {**now, "other": "o2", "drawn": "d2"}) == set()      # neither is above a held result
+    assert marked({}) == marked({"code": None}) == {"blobs", "track", "count", "drawn"}     # a result that says nothing of its code
+    assert marked({}, keys={"track": "left", "count": "left"}) == set()                 # held under keys the chain has left

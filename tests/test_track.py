@@ -20,7 +20,7 @@ def test_ids_follow_the_animals_and_a_long_absence_ends_a_track():
     tables = [table([a[r], b[r]]) if r % 2 else table([b[r], a[r]]) for r in range(12)]   # order swaps each row
     tables[5] = table([b[5]])                                     # a misses a row
     tables[8:11] = [table([b[r]]) for r in range(8, 11)]          # then three in a row, past lost_rows
-    params = {"max_step": 5.0, "lost_rows": 2, "min_rows": 3, "min_p": 0.1}
+    params = {"max_step": 5.0, "lost_rows": 2, "min_rows": 3, "min_p": 0.1, "merge_ratio": 0.0}
     out = hold(track, tables, params)
     rows, signal = out["rows"], out["signal"]
     ids = lambda r, x: int(rows[r][rows[r]["cx"] == x]["id"][0])  # noqa: E731
@@ -33,9 +33,9 @@ def test_ids_follow_the_animals_and_a_long_absence_ends_a_track():
 
 def test_travel_reads_the_steps_under_the_gate():
     rows = track.run(Series([table([(0, 0), (50, 50)]), table([(3, 4), (50, 50)]), table([(6, 8)])], "k", 0, 30.0),
-                     {"max_step": 10.0, "lost_rows": 5, "min_rows": 1, "min_p": 0.1})["rows"]
+                     {"max_step": 10.0, "lost_rows": 5, "min_rows": 1, "min_p": 0.1, "merge_ratio": 0.0})["rows"]
     assert hold(travel, rows, {"method": "mean", "moving": 1.0})["signal"].tolist() == [0, 2.5, 5]
     assert hold(travel, rows, {"method": "count", "moving": 1.0})["signal"].tolist() == [0, 1, 1]
-    _, fed = gated({"rows": rows, "signal": np.array([2.0, 2.0, 1.0])}, (2.0, 2.0))
+    _, fed = gated({"rows": rows, "signal": np.array([2.0, 2.0, 1.0])}, (2.0, 2.0), "tracks")
     assert [len(t) for t in fed] == [2, 2, 0]                     # a gated-out row feeds an empty table
     assert hold(travel, fed, {"method": "sum", "moving": 1.0})["signal"].tolist() == [0, 5, 0]

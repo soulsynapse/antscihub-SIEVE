@@ -88,6 +88,7 @@ def test_a_walk_says_how_cold_it_was_and_what_a_store_made_it_compute_again():
     g = Graph(D.from_tools([gray, add]), Dec(), TOOLS, memo_bytes=3 * 48)      # a row is gray's plane and add's, 24 bytes each
     led = Ledger()
     g.on_event = led.event
+    g.memo.order = None     # the memo as an LRU, which the count below is of
     walk(g, range(6))
     discarded = 12 - len(g.memo._big)
     walk(g, range(6))

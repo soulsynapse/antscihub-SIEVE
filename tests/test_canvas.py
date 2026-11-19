@@ -19,12 +19,12 @@ from sieve_player import canvas as canvas_mod  # noqa: E402
 from sieve_player import menu as menu_mod  # noqa: E402
 from sieve_player.canvas import Canvas  # noqa: E402
 
-gray = Tool(NAME="gray", KIND="frame", EXPECTS="bgr", PRODUCES="gray", DEFAULTS={})
-thresh = Tool(NAME="thresh", KIND="frame", EXPECTS="gray", PRODUCES="mask", DEFAULTS={})
-passthru = Tool(NAME="passthru", KIND="frame", EXPECTS=("bgr", "gray"), PRODUCES="same", DEFAULTS={})
-sel = Tool(NAME="sel", KIND="frame", EXPECTS=None, PRODUCES=D.PATH, DEFAULTS={}, select=lambda folder, p: None)
-reader = Tool(NAME="reader", KIND="frame", EXPECTS="bgr", PRODUCES="mask", DEFAULTS={}, PATHS={"settings": lambda p: {}})
-reduce = Tool(NAME="reduce", KIND="series", EXPECTS=("gray", "mask"), PRODUCES="signal", DEFAULTS={})
+gray = Tool(NAME="gray", KIND="frame", EXPECTS="bgr", PRODUCES="gray")
+thresh = Tool(NAME="thresh", KIND="frame", EXPECTS="gray", PRODUCES="mask")
+passthru = Tool(NAME="passthru", KIND="frame", EXPECTS=("bgr", "gray"), PRODUCES="same")
+sel = Tool(NAME="sel", KIND="frame", EXPECTS=None, PRODUCES=D.PATH, select=lambda folder, p: None)
+reader = Tool(NAME="reader", KIND="frame", EXPECTS="bgr", PRODUCES="mask", PATHS={"settings": lambda p: {}})
+reduce = Tool(NAME="reduce", KIND="series", EXPECTS=("gray", "mask"), PRODUCES="signal")
 TOOLS = {t.NAME: t for t in (gray, thresh, passthru, sel, reader, reduce)}
 
 

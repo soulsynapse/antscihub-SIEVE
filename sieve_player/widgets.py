@@ -84,7 +84,8 @@ class ValueField(QLineEdit):
 
 
 class ParamWidget(QWidget):
-    """Has .changed and .params(). Add rows with add_int / add_float / add_bool / add_text /
+    """Has .changed and .params(). `declared` makes one of a tool's declaration, and a card of a
+    tool's own adds rows with add_declared, or with add_int / add_float / add_bool / add_text /
     add_choice / add_list; each is one line of the form, a knob: slider and its mono value together
     fill the one control width. The value is a field: a number typed there and committed moves the
     slider, held to the slider's range and step, and anything else is put back. The int and float
@@ -103,6 +104,30 @@ class ParamWidget(QWidget):
         self._lay.setSpacing(GAP)
         self.form = Form()
         self._lay.addWidget(self.form)
+
+    @classmethod
+    def declared(cls, params, parent=None):
+        """The plain widget of a tool's declaration, the registry's `params(tool)`: a row for each
+        param that says a kind, in its order."""
+        w = cls(parent)
+        for name, said in params.items():
+            w.add_declared(name, said)
+        return w
+
+    def add_declared(self, name, said):
+        """The row of one declared param, by the kind of its value, and what the add_ of that kind
+        returns; None, and no row, for one that says no kind."""
+        kind, value = said.get("kind"), said["default"]
+        if kind == "int":
+            return self.add_int(name, *said["range"], value)
+        if kind == "float":
+            return self.add_float(name, *said["range"], value, decimals=said.get("decimals", 2))
+        if kind == "bool":
+            return self.add_bool(name, value)
+        if kind == "text":
+            return self.add_text(name, value)
+        if kind == "choice":
+            return self.add_choice(name, said["choices"], value, editable=bool(said.get("unlisted")))
 
     def params(self):
         return {k: g() for k, g in self._get.items()}

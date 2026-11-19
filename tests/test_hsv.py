@@ -4,10 +4,11 @@ import numpy as np
 
 from sieve_player import document as D
 from sieve_player.graph import Graph
+from sieve_player.registry import defaults
 from tools import hsv, inrange
 
 TOOLS = [hsv, inrange]
-BOUNDS = {**inrange.DEFAULTS, "h_lo": 100, "h_hi": 130, "s_lo": 100, "v_lo": 100}   # blues
+BOUNDS = {**defaults(inrange), "h_lo": 100, "h_hi": 130, "s_lo": 100, "v_lo": 100}   # blues
 
 
 class Dec:
@@ -49,7 +50,7 @@ def test_inrange_reads_bgr_or_hsv_alike_and_knows_which():
 def test_three_readers_of_one_hsv_cost_one_conversion_a_row():
     doc = D.from_tools(TOOLS)
     for name in ("two", "three"):
-        doc.add_node("inrange", (0, 300), dict(inrange.DEFAULTS), id=name)
+        doc.add_node("inrange", (0, 300), defaults(inrange), id=name)
         doc.connect("hsv", name)
     runs = []
     orig = hsv.run

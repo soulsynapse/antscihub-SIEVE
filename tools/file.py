@@ -11,8 +11,14 @@ import os
 
 SIEVE_TOOL = True
 NAME, KIND, PRODUCES = "file", "selector", "path"
-DEFAULTS = {"folder": ".", "pattern": "*.mp4", "recurse": False, "order": "name", "choice": ""}
 ORDERS = ("name", "newest")
+PARAMS = {
+    "folder": {"default": ".", "kind": "text"},
+    "pattern": {"default": "*.mp4", "kind": "text"},
+    "recurse": {"default": False, "kind": "bool"},
+    "order": {"default": "name", "kind": "choice", "choices": ORDERS},
+    "choice": {"default": ""},
+}
 
 
 def names(folder, params, found):
@@ -67,15 +73,13 @@ def settings(parent=None):
     class _Widget(ParamWidget):
         def __init__(self, parent=None):
             super().__init__(parent)
-            self.add_text("folder", DEFAULTS["folder"])
-            self.add_text("pattern", DEFAULTS["pattern"])
-            self.add_bool("recurse", DEFAULTS["recurse"])
-            self.add_choice("order", ORDERS, DEFAULTS["order"])
+            for name in ("folder", "pattern", "recurse", "order"):
+                self.add_declared(name, PARAMS[name])
             self.base = os.getcwd()         # the document's folder, as the window last reported it
             self.browse = QPushButton("Browse…")
             self.browse.clicked.connect(self._browse)
             self.form.add_row("file", self.browse)
-            self.chooser = self.add_list("choice", DEFAULTS["choice"])
+            self.chooser = self.add_list("choice", PARAMS["choice"]["default"])
 
         def _browse(self):
             start = os.path.join(self.base, self.params()["folder"])

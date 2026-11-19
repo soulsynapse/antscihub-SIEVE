@@ -9,9 +9,10 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from sieve_player import document as D  # noqa: E402
 from sieve_player.graph import Graph  # noqa: E402
+from sieve_player.registry import defaults  # noqa: E402
 from tools import file, inrange  # noqa: E402
 
-gray = Tool(NAME="gray", KIND="frame", EXPECTS="bgr", PRODUCES="gray", DEFAULTS={}, run=lambda f, r, p: f(r)[..., 0])
+gray = Tool(NAME="gray", KIND="frame", EXPECTS="bgr", PRODUCES="gray", run=lambda f, r, p: f(r)[..., 0])
 TOOLS = [file, gray]
 
 
@@ -83,7 +84,7 @@ def test_runtime_selector_is_none_and_video_key_follows_the_file(tmp_path):
     assert g.compute("file", 0) is None and g.compute("file", 1) is None
     before = g.key("video")
     doc.remove_node("file")
-    doc.add_node("file", params={**file.DEFAULTS, "order": "newest"})
+    doc.add_node("file", params={**defaults(file), "order": "newest"})
     doc.connect("file", "video")
     path2, _ = D.pick_video(doc, TOOLS)
     assert path2 != path
@@ -112,10 +113,10 @@ def test_a_rule_matching_nothing_is_reported_on_the_video_node(tmp_path):
 def test_pick_resolves_against_a_tree(tmp_path):
     tree(tmp_path)
     folder = str(tmp_path)
-    assert [os.path.basename(p) for p in file.matches(folder, file.DEFAULTS)] == ["a.mp4", "b.mp4"]
-    assert os.path.basename(file.select(folder, {**file.DEFAULTS, "order": "newest"})) == "b.mp4"
-    assert len(file.matches(folder, {**file.DEFAULTS, "recurse": True})) == 3
-    assert file.select(folder, {**file.DEFAULTS, "folder": "sub", "pattern": "a*"}) is None
+    assert [os.path.basename(p) for p in file.matches(folder, defaults(file))] == ["a.mp4", "b.mp4"]
+    assert os.path.basename(file.select(folder, {**defaults(file), "order": "newest"})) == "b.mp4"
+    assert len(file.matches(folder, {**defaults(file), "recurse": True})) == 3
+    assert file.select(folder, {**defaults(file), "folder": "sub", "pattern": "a*"}) is None
     out = subprocess.check_output([sys.executable, "-m", "sieve_player.registry", "tools"], text=True)
     assert "file " in out
 
@@ -142,7 +143,7 @@ def settings_tree(tmp_path, h=(20, 40)):
     (tmp_path / "colour.json").write_text(json.dumps({"bounds": {"H": list(h), "S": [1, 2], "V": [3, 4]}}), encoding="utf-8")
     from tools import gray as real_gray
     doc = D.from_tools([real_gray, inrange])
-    doc.add_node("file", params={**file.DEFAULTS, "pattern": "*.json"})
+    doc.add_node("file", params={**defaults(file), "pattern": "*.json"})
     doc.connect("file", "inrange", "settings")
     D.save(doc, tmp_path / "doc.json")
     return doc, [file, real_gray, inrange]
@@ -206,7 +207,7 @@ def test_a_file_the_loader_rejects_is_said_on_the_node_and_params_stay(tmp_path)
     err = win.canvas.errors["inrange"]
     assert err.startswith("settings") and win.pane.notes["inrange"].text() == err     # names the input; the pane says the same
     p = win.doc.node("inrange").params
-    assert {k: p[k] for k in inrange.DEFAULTS} == inrange.DEFAULTS
+    assert {k: p[k] for k in defaults(inrange)} == defaults(inrange)
     win.close()
 
 
@@ -273,7 +274,7 @@ def test_clicking_a_match_makes_it_the_choice_a_stale_choice_falls_back_and_brow
     w.choose(str(tmp_path / "sub" / "c.mp4"))                      # c.mp4 is no *.avi: the pattern follows the suffix
     assert win.doc.node("file").params["pattern"] == "*.mp4"
     assert win.doc.node("file").params["folder"] == "sub" and win.doc.video == os.path.join("sub", "c.mp4")
-    assert file.rule_for(str(tmp_path / "a.mp4"), str(tmp_path), file.DEFAULTS)["folder"] == "."
+    assert file.rule_for(str(tmp_path / "a.mp4"), str(tmp_path), defaults(file))["folder"] == "."
     win.close()
 
 

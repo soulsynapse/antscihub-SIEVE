@@ -54,12 +54,14 @@ What each settled, and the box it bears on. A session building a box reads its r
   a standard, the first carried forward along the wires and the last the rows an output row reads.
   A node's extent follows the wires; a frame node reading a neighbouring row.
 - Halide (Ragan-Kelley and others, PLDI 2013): each stage's needed input inferred from the output
-  asked of it, never set by hand. Outside a piece is absent; the Open line on a tool's reach.
+  asked of it, never set by hand. Outside a piece is absent; `what-a-node-declares.md`'s A
+  tool's reach in rows, the pre-roll inferred.
 - The Dataflow Model (Akidau and others, VLDB 2015): event time apart from processing time, and
   the session window, a period bounded by gaps. Rows below a cut are the footage's; The periods
   a `period` chooses among.
 - Fading memory (Boyd and Chua, 1985): when a stateful operator forgets where it began, so a walk
-  begun earlier converges on one walked alone. A series result below a period.
+  begun earlier converges on one walked alone, and only converges, so a fading memory is no
+  bounded reach. A series result below a period.
 - numpy's masked arrays and R's `NA`: absence carried through arithmetic and left out of a
   reduction, against a fill value a reduction counts. Outside a piece is absent.
 - Overlap-save, and ghost cells in domain decomposition: a block computed over more than it keeps,
@@ -130,19 +132,18 @@ Assumes: A node's extent follows the wires.
 
 Facts to weigh. `graph.gated` hands a series node downstream a gated-out row as a zero signal or
 an empty table, so a sum, a mean or a count below it counts a row no one measured as a measured
-zero.
+zero, and an empty table reads as a row where nothing was found. `walk._Walk.step` hands a
+stepping tool `None` where nothing feeds it.
 
 - [ ] A row outside a node's extent is absent to what reads it: no frame node is computed at it,
   no series node is stepped at it, and no table written holds a record of it.
   Check: a one-off over the crossings clip: a csv below a period, its rows against the period's.
-
-Open: whether a gated-out row is absent to a series node downstream, and not zero. Recommended:
-absent, by the model's rule; it changes what every series chain below a band hands out and what
-the held files hold, so Kendrick hears of it before it lands.
-
-Open: how far a node's extent shrinks where it reads past the footage's edge, which is its reach.
-Recommended: not here, the reach being what `docs/systems-review.md`'s E1 declares of a tool;
-until one declares it, a node's extent is its inputs'.
+- [ ] A gated-out row is handed to a stepping tool downstream as absent, apart from a zero and
+  from an empty table, and what a tool's state does across it is the tool's, each stepping tool
+  saying so. Changes keys: it is said before it lands, and the held files of the documents in use
+  are walked again, as `docs/spec/what-a-node-declares.md`'s Keys that move once.
+  Check: a one-off over the crossings clip: `count` below a band, its result over a gated-out run
+  against the same rows read as zero.
 
 ## Rows below a cut are the footage's
 
@@ -180,20 +181,19 @@ values at the same rows, and the window shows whichever was held first.
 - [ ] Kendrick: a series node's result below a `period` is the chosen period walked alone, its
   origin the period's first row, or the same rows cut from a walk of what it was cut from; this
   line says which. Recommended: walked alone, the second being right only for a tool whose reach
-  in rows is bounded and declared, which no tool declares.
+  in rows is bounded and declared, which `docs/spec/what-a-node-declares.md`'s A tool's reach in
+  rows makes the two agree for.
 - [ ] Kendrick: the window is a request over its piece's walk, served by a run of the piece's
   origin alone and what it shows of another origin said to be a preview; or a view of the clip's
   rows that any held run serves, as today; this line says which. Recommended: the request, the
   view leaving one key two values at a row.
-- [ ] A held series result is addressed by its key, its origin and its rows. A run serves a range
-  only at the origin the range is asked at, and a walk handed rows of one origin steps nothing of
-  another from them.
+- [ ] A held series result is addressed by its key, its origin and its rows, and a walk handed rows
+  of one origin steps nothing of another from them, under either answer above. A run serves a
+  range at the origin the answers say it is asked at, and one of another origin only as
+  `docs/spec/what-a-node-declares.md`'s A tool's reach in rows allows.
   Check: a seam: `Runs.over` across a period walked from its own first row and the same rows cut
-  from a longer run, two results under one key, each served at its own origin alone.
-
-Open: whether a series tool may declare its reach in rows, so that a run of another origin serves
-a period. Recommended: not here, the reach being what `docs/systems-review.md`'s E1 declares of a
-tool.
+  from a longer run, two results under one key, each served at its own origin alone; and the
+  window handed `track`'s rows of row 0 and stepping `count` from its own first row, refused.
 
 ## The periods a `period` chooses among
 
@@ -233,10 +233,11 @@ and `walk.py`.
 
 ## Not here
 
-Walking every period, or every piece, with no window; the tables it writes; and folding pieces
-that overlap back up, which the model keeps both of. A tool that makes a shape a row. Periods
+Walking every period, or every piece, with no window, and the tables it writes: the fourth of the
+review's E2 (`docs/systems-review.md`), which has no spec yet; pieces that overlap fold back up by
+the model's address there, both kept. A tool that makes a shape a row. Periods
 handed to a `period` live by a series node above it, which is a frame node reading a series
 result. Periods of two results intersected. A margin grown or cut around a piece, which changes
-its extent; a pre-roll, a walk's origin before its piece's first row with its extent unmoved,
-which the model allows and no tool sets. Region's key, which holds its cut, a served clip's pixels
+its extent; a pre-roll set by hand, the one a bounded reach needs being inferred by
+`docs/spec/what-a-node-declares.md`'s A tool's reach in rows. Region's key, which holds its cut, a served clip's pixels
 being H.264's and not the cut's. Identity across pieces.

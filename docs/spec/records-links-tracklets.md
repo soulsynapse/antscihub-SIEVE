@@ -2,19 +2,26 @@
 
 Read with the registry's type report (`python -m sieve_player.registry`), the live statement of what
 feeds what, with `tools/_table.py`, which holds the table kind, and with docs/spec/identity.md, whose
-identity pass this leaves in place and whose linker this replaces. Every tool and column word below
-is a placeholder: docs/spec/tool-naming.md makes the words Kendrick's.
+identity pass reads what this records. Every tool and column word below is a placeholder:
+docs/spec/tool-naming.md makes the words Kendrick's.
 
 ## Why
 
-A fact a later tool needs is not recorded by the earlier one. A contact between two animals is
+Kendrick: the rework "isn't for the tools per-se, it is for all the future tools so I don't have to
+break stuff". There are to be several ways of tracking side by side, a fast one, an accurate one, one
+that predicts, one that is told a count, and what is held to here is that a new one is a tool wired
+in and no change to the tools around it. Three things he means to do later are the test, and none is
+a deliverable: a costlier pipeline run over crops chosen from the track records, for a focal
+individual; two individuals that merge counted as one, decided after the tracks are made; and two
+detections whose results are joined, a tag matched to the animal under it.
+
+What stands in the way today is that a fact a later tool needs is not recorded by the earlier one,
+so each tool guesses it and the guesses are welded to each other. A contact between two animals is
 detection's fact, and `track`'s `merge_ratio` and `resolve.contacts` each derive it again from
 centroids and boxes. `blobs`' filled contour is not the region's own pixels wherever the region has a
 hole or a concavity (docs/findings/2026-11-12-blobs-contour-against-mask.md on `v5-runs`); `detect`
-has no footprint, and `sample`, `attach` and `filter` read its box without saying so. `track` numbers
-its ids from its walk's first row, and `resolve`'s labels file names a track by that number. None of
-this is a better linker's to mend: docs/spec/blob-tools.md and identity.md both refuse one for want
-of ground truth, and that stands.
+has no footprint, and `sample`, `attach` and `filter` read its box without saying so. Every reader of
+tracks reads the one column `id`, so a second way of grouping records has nowhere to go.
 
 The runtime decides the shape. A tool has one output. A series tool reads its one input and nothing
 else, and its `step` is causal and is told no absolute row. A frame tool reads any row of its inputs
@@ -22,43 +29,37 @@ and any second plane. So a frame tool puts evidence on records and a series tool
 records across rows; whatever needs a plane or a neighbouring row sits before the linker. The wire
 types stay `blobs` and `tracks`, and the contracts are `tools/_table.py`'s.
 
-The tools this is shaped to admit, none of them a deliverable here: a tag detector with no mask, a
-learned detector of boxes or keypoints, a tool that splits touching animals, an animal count per
-record, a link by optical flow, a linker by a motion model under a global assignment, a stitch over
-gaps, corrections from a file, a score against a reference, posture, patches, and records
-interpolated over a gap. The table under What each coming tool asks says where each sits.
-
 ## How to read this
 
 As identity.md's: each `##` below that carries boxes is a deliverable, with an `Assumes:` line, a
 sentence of why, and done-when assertions, each a box with a `Check:` that is a one-off unless it
 holds a seam or an invariant, by the Tests section of CLAUDE.md. A box is ticked by a session once
 its check passes in the tree; a session never unticks or rewrites an assertion. Nothing here says
-how. A deliverable lands with a finding on the crossings clip and the purb document beside the
-baseline's.
+how. No deliverable removes a tool: `blobs`, `detect` and `track` are held to the contracts and stay.
 
 ## The chain as it stands, measured
 
 Assumes: nothing.
 
-Every later deliverable is read against the tools it replaces, on the same rows.
+A tool held to a contract is read against itself before, on the same rows.
 
-- [ ] A finding holds, for `blobs` and `track` as they stand on the crossings clip and the purb
-  document, the records a row, the ids and their lengths, and the linker's own events as
-  docs/findings/2026-11-01-track-diagnostics.md counts them.
+- [ ] A finding holds, for `blobs`, `detect` and `track` as they stand on the crossings clip, the
+  purb document and a thermal-hysteresis crop, the records a row, the ids and their lengths, and
+  the linker's own events as docs/findings/2026-11-01-track-diagnostics.md counts them.
   Check: a one-off under docs/findings/experiments.
 
 ## A record's name
 
 Assumes: nothing.
 
-`step` is told no absolute row, and a filter may sit between the tool that made a record and the
-linker, so neither the row nor a record's place in its table names it.
+`step` is told no absolute row, and a filter may sit between the tool that made a record and what
+associates it, so neither the row nor a record's place in its table names it.
 
 - [ ] Every record carries a `key`, its row and its index in the table it was made in, unique
   within a table and kept by every tool that keeps records.
   Check: a seam: a table through `filter`, `sample` and `attach` has the keys it had.
-- [ ] A tool that makes records gives each a key of its own, so two nodes' keys are never compared.
+- [ ] A tool that makes records gives each a key of its own, so two nodes' keys are never compared;
+  two tables are related by where their records lie, as `attach` relates them.
   Check: a one-off.
 - [ ] A detector whose every input is static does not hand each row the first row's keys.
   Check: a one-off over a detector fed by a static mask.
@@ -70,122 +71,107 @@ Assumes: nothing.
 A record made from a mask has pixels, one made from geometry has an outline, and one made by a
 detector of boxes has neither; a reader is told which, and never given the box unasked.
 
-- [ ] A record made from a mask carries its region as runs, and its footprint is the region's own
-  pixels, holes kept.
+- [ ] A table says what footprint its records have: runs, a polygon, or none.
+  Check: a seam: `blobs`' table says runs, `region.table`'s a polygon, `detect`'s none.
+- [ ] `blobs`' records carry their region as runs where they carried a contour, and a footprint
+  is the region's own pixels, holes kept.
   Check: a seam: a shape with a hole, its footprint against the mask it was found in.
-- [ ] A record made from geometry carries a polygon, as `region.table`'s does, and its footprint is
-  the polygon filled.
-  Check: `tests/test_region.py` as it stands.
-- [ ] A reader asking for a footprint of a record that has none raises, naming the column it
-  lacks, unless it asked for the box.
+- [ ] A reader asking for a footprint of a record that has none raises, naming what it lacks,
+  unless it asked for the box.
   Check: a seam, in the same test.
-- [ ] One tool makes records from a mask, with the position columns, the moment ellipse and the
-  runs, in place of `blobs` and `detect`.
-  Check: its records against `blobs`' on the two documents, a one-off.
 
 ## Links
 
-Assumes: A record's name, A record's footprint.
+Assumes: A record's name.
 
-Which records of the next row a record becomes is the footage's fact, and a contact is where the
-answer is not one. Read off the pixels at this footage's frame rate it needs no model of motion.
+Which records of the next row a record becomes is a fact of the footage, and a contact is where
+the answer is not one. Whatever finds it, by pixels, by flow, by a model, writes it in one place.
 
-- [ ] A frame tool adds to each record the key of the record of the row before it most overlaps
-  and of the row after, and how many of each it overlaps at all, as flat columns; a record that
-  overlaps none reads none.
-  Check: a seam: two regions that merge and part, and the four columns at each row.
-- [ ] A row's links are the same whichever row was asked for first, and the first and the last
-  row read none before and none after.
-  Check: the same seam, asked backwards.
-- [ ] Two records overlapping by less than a knob's worth are not linked.
-  Check: a one-off on the crossings clip, the passes that never merge.
+- [ ] A table may carry links: for each record the keys of the records of the row before and of
+  the row after that it continues, and how many of each. Any tool may write them, one writer to a
+  table, and a tool that reads them reads no other sign of a contact.
+  Check: a seam: a table with links through `filter` keeps them, and a link to a record `filter`
+  dropped reads as none.
+- [ ] One frame tool writes them from the overlap of footprints in the row before and the row
+  after; the same whichever row was asked for first, none before the first row and none after the
+  last.
+  Check: a seam: two regions that merge and part, the links at each row, asked forwards and
+  backwards.
 
-## Tracklets
+## What groups records
 
-Assumes: Links.
+Assumes: nothing.
 
-A tracklet is one animal only if it spans no contact, and an id is a name only if a walk from
-another row gives the same one.
+A tracklet, an individual, a pair counted as one and an identity are each a way of grouping the
+same records, and a reader that knows one column's name can be handed only one of them.
+
+- [ ] A tracks table has one or more grouping columns, `id` the first; a tool that makes another
+  adds a column and leaves those it read.
+  Check: `tests/test_columns.py`, a grouping column added below `track` and read beside `id`.
+- [ ] `kinematics`, `transitions`, `travel`, `tracks-filter`, `csv` and the draw read the grouping
+  column they are told, `id` where they are told none; they hold a group's key as an integer of
+  any width.
+  Check: their tests as they stand, and one of them over a second column; `resolve.tables_of`
+  reads an id past int32.
+- [ ] One reading of a tracks series gives, for a grouping column, each group's rows and first and
+  last records, and from the links where the table has them its parents and children, an edge
+  being a link whose two ends differ in group; `tracks-filter`, `kinematics` and `resolve` read
+  that and loop over no record of their own.
+  Check: their tests as they stand.
+- [ ] `resolve` reads a contact from the edges where the table has links, and as it does now where
+  it has none.
+  Check: `tests/test_resolve.py` as it stands, and its merge and parting over a table with links.
+
+## A linker that reads the links
+
+Assumes: Links, What groups records.
+
+The contracts are shown to hold by one tool that uses each; it stands beside `track` and replaces
+nothing.
 
 - [ ] A series tool gives a record its predecessor's `id` where it has one predecessor and that
-  predecessor one successor, and otherwise an id that is the record's own key; a predecessor the
-  table before does not hold is none. `step` holds to `run`.
+  predecessor one successor, and otherwise an id that is the record's own key. `step` holds to
+  `run`.
   Check: `tests/stepping.py`'s `hold`, and a seam: a merge and a parting make five ids, none
   across the contact, and a gated-out row ends every id.
 - [ ] A walk begun at any row gives every tracklet born inside it the id a walk of the clip gives.
   Check: a seam: the linker stepped from two first rows.
-- [ ] The tracks tables keep every column but the footprint and are flat.
-  Check: `tests/test_columns.py` as it stands, and `held.py`'s `_flat` taking a tracks series whole.
-- [ ] An edge of the graph is a link whose two ends differ in id, and one reading of a tracks
-  series gives each id's rows, first and last records, parents and children; `tracks-filter`,
-  `kinematics` and `resolve` read that and loop over no record of their own.
-  Check: their tests as they stand.
-- [ ] `kinematics`, `transitions`, `travel`, `csv` and the draw take the new ids.
-  Check: their tests as they stand; `resolve.tables_of` reads an id past int32.
-
-## A stitch
-
-Assumes: Tracklets.
-
-Overlap ends a tracklet wherever the detector drops a record, and on this footage that is every
-few rows (docs/findings/2026-11-01-track-diagnostics.md, the reacquisitions outside the cluster).
-What `lost_rows` did inside the linker is a pass over finished tracklets; how short the tracklets
-are without it is not measured.
-
-- [ ] A series tool, tracks in, tracks out, gives a tracklet beginning with no predecessor the id
-  of one that ended with no successor within a reach in rows and in pixels, one to one, and never
-  across a contact.
-  Check: a seam: a record dropped for three rows is one id, and a record dropped beside a merge
-  is two.
-- [ ] The loose ants' tracklets on the purb document are no shorter than the baseline's.
-  Check: the deliverable's finding.
-
-## Identity over the edges
-
-Assumes: Tracklets.
-
-`resolve`'s elimination guesses a contact from where ids end and begin; the edges say it.
-
-- [ ] `resolve` reads a contact from the edges, labels through one whose entering and leaving ids
-  are as many, and flags and does not label through one the links counted as many to many.
-  Check: `tests/test_resolve.py`'s merge and parting as it stands, and a seam for the refusal.
+- [ ] Its tables carry no footprint and are flat.
+  Check: `held.py`'s `_flat` takes its series whole.
 
 ## Under a piece
 
-Assumes: A record's name, Links, Tracklets; docs/spec/pieces-of-footage.md's A piece's record and
-its A table written is in the footage's own pixels and rows.
+Assumes: A record's name, Links; docs/spec/pieces-of-footage.md's A piece's record and its A table
+written is in the footage's own pixels and rows.
 
-Facts to weigh. A key, a link and an id each hold a row, the first columns of a table that do, and
-`sieve_player/wire.py`'s units are all of a plane's pixels: pieces-of-footage.md writes a column
-that says none as it is, so under a cut in time a csv's `row` would be the footage's and the row
-inside its `id` the piece's. A key is unique within a table and an id within a walk, so two
-regions' tracklets of one video hold the same ids. The link tool reads the row before and the row
-after, and a node below a `period` reads the rows of its stretch. A table's dtype carries the size
-of the plane it was found in and not where that plane lies, so `attach` and `sample` between a
-table found in a region and a plane of the plate scale and do not move; that is so of `blobs`
-today. A record cut by a region's edge has the footprint and the area of the part inside.
+Facts to weigh. A key, a link and a group's key may each hold a row, the first columns of a table
+that do, and `sieve_player/wire.py`'s units are all of a plane's pixels: pieces-of-footage.md
+writes a column that says none as it is. A key is unique within a table and an id within a walk,
+so two regions' tracklets of one video hold the same ids. A tool reading the row before and after
+meets a stretch's edge below a `period`. A table's dtype carries the size of the plane it was found
+in and not where that plane lies, so `attach` and `sample` between a table found in a region and a
+plane of the plate scale and do not move, and `plan.py` refuses a node that reads across a cut.
+A record cut by a region's edge has the footprint and the area of the part inside.
 
-- [ ] The row a key, a link and an id hold is said on the dtype as a row is, and a csv writes it
-  as the footage's by the piece's record, as it writes a position.
+- [ ] The row a key, a link and a group's key hold is the footage's wherever a csv writes it.
   Check: a one-off: a tracks csv written below a cut in time, its ids' rows against its `row`
   column.
-- [ ] A tracklet born inside a stretch has, in that stretch walked alone and in the same rows cut
-  from a walk of the clip, the same id as the csv writes it.
-  Check: a seam: the linker over a stretch and over the clip, the ids lifted by the record.
 - [ ] A link at a piece's first row reads none before and at its last none after, whatever rows
   the footage has outside the piece.
   Check: the Links seam, below a cut in time.
-- [ ] A csv's key line naming the piece is what tells two pieces' equal ids apart, and nothing
-  here makes an id unique across pieces.
+- [ ] A csv's key line naming the piece is what tells two pieces' equal ids apart.
   Check: pieces-of-footage.md's one-off of two regions, the two files' ids.
 
-## The tools set aside
+## What the three ask
 
-Assumes: every deliverable above.
+Each is walked through what is above. What holds is a contract here; what stands in the way is
+said with where it lives, and none of it is built by this spec.
 
-- [ ] `blobs`, `detect` and `track` are not offered in the player, and identity.md, blob-tools.md
-  and the README say what the tree has.
-  Check: `python -m sieve_player.registry --check`.
+| | What it reads of this spec | What stands in the way, and whose it is |
+|---|---|---|
+| A costlier pipeline over crops chosen from tracks | `tracks-filter` picks the groups; a group's rows and boxes are one reading | A piece's record holds a rectangle and a range of rows, and a crop that follows an animal is a rectangle a row: pieces-of-footage.md's. What the crop's chain finds is joined to the tracks by where it lies, which wants a table to say where its plane lies and `plan.py` to let a node read across a cut: pieces-of-footage.md's and the runtime's |
+| Two that merge counted as one, later | a tool over the edges adds a grouping column; every reader is told which column | a contact of many to many, if links keep only the largest overlap: Open, below |
+| Two detections joined, a tag to its animal | by the row, `attach` lays one table's columns on the other's records before any linker, and identity.md's `resolve` reads them | joined as tracks, nothing: `plan.py` walks one frame node, so a second detection's linker does not run, and a series tool reads one input. The runtime's |
 
 ## What each coming tool asks
 
@@ -194,49 +180,41 @@ Assumes: every deliverable above.
 | A tag detector | a record with a polygon, a code and a heading | nothing |
 | A learned detector of boxes | a record with no footprint | nothing |
 | Keypoints, an embedding | columns of a record | `with_column` keeps no sub-array shape; an object column, or that mended |
-| A background model | before the detector, mask out | nothing |
 | A split of touching animals | a frame tool, records and a plane in, keys its own | it cannot read its own row before |
 | An animal count | a frame tool by the row, or tracks to tracks by the run | nothing |
-| A link by flow | a second frame tool writing the links' columns | nothing |
-| A linker by a motion model | a second series tool writing `id` | nothing: an edge is a link across two ids |
-| A linker by tag code | identity's, not a linker | nothing |
+| A link by flow | a second frame tool writing the links | nothing |
+| A linker that predicts and assigns, a linker told a count | series tools writing `id`, as `track` is | nothing: an edge is a link across two groups |
+| A stitch over dropped records | tracks to tracks, a grouping column of its own or `id` rewritten | nothing |
+| Individuals over tracklets, pairs as one | tracks to tracks, a grouping column | many-to-many edges, as above |
 | Corrections from a file | identity's | see Open |
 | A score against a reference | tracks and a path in, matched by position | a one-off first |
 | Posture, patches | frame tools before the linker | patches are an object column |
 | Records interpolated over a gap | tracks to tracks | a record said not to be observed |
-| A cut in space or in time, nested | a chain walked a piece at a time | Under a piece: a row in a column has no unit, and a table says no origin |
 | An animal followed across pieces | not here, as pieces-of-footage.md's Not here | an id names no piece |
-
-## Not settled by this
-
-- A tracklet alive at a walk's first row has another id than the clip's until it ends, and a
-  stitch adds its reach. The two boxes under A bout walked alone in pieces-of-footage.md are as
-  open as they were, over fewer rows.
-- The pile is one region that takes a new id at each contact with an ant at its edge, unless an
-  area bound drops it before the links.
-- A contact of many to many keeps its counts and loses the edges that are not the largest overlap.
 
 ## Non-goals
 
-- A better linker. Gates, a calibrated step and a global assignment are identity.md's non-goals
-  and stay so; this changes what a linker is told, not how well it guesses.
-- Any tool in the table above.
+- Any tool in the two tables above, and any of the three.
+- Removing or renaming `blobs`, `detect` or `track`, or a param of one; a saved document loads as
+  it did.
+- Saying which way of tracking is right. identity.md's refusal of a linker tuned without ground
+  truth is about `track`'s knobs and is untouched; a second linker is a second tool.
 - A change to `sieve_player`, beyond what A record's name's third box and Under a piece's first
   may ask.
 
 ## Open
 
 - Every tool and column word here.
-- Whether `mean`, `peak`, `core` and `split` go with `blobs`, `sample` reading the first three and
-  a later tool doing the fourth; identity.md's Open asks the first half already.
+- Whether links keep every overlapping neighbour, an object column and a table that is not flat,
+  or the largest before and after with counts, flat, a contact of many to many then keeping its
+  counts and losing an edge. The second is cheaper to hold; the first is what counting a merged
+  group as one reads.
+- Whether a key is one column holding a row and an index, or the two apart; whether a row is a
+  unit in `sieve_player/wire.py`; or whether what is below a `period` is handed the footage's row
+  numbers, so a key is the footage's as it is minted and nothing lifts it.
+- Whether `blobs` keeps `contour` beside runs for a document that draws by it.
 - Whether a labels row names a row and a point, read against the footprint there, where it now
   names a track id that every upstream knob moves.
-- Whether a saved document naming `blobs`, `detect` or `track` loads unresolved, as
-  `tools/retired/` leaves it, or is lifted by `sieve_player/document.py` as crop2 was.
 - The least overlap that links two records.
-- Whether a key is one column holding a row and an index, or the two apart, so the row is a column
-  a unit can be said of; and whether a row is a unit in `sieve_player/wire.py`, which Under a
-  piece's first box asks and the non-goal above does not allow for.
-- Whether a table says where its plane lies in the footage, so `attach` and `sample` across a
-  region and the plate move as well as scale; `blobs` has the fault now and this spec neither adds
-  to it nor mends it.
+- What `mean`, `peak`, `core` and `split` are to `blobs`; identity.md's Open asks it already and
+  this neither answers nor needs it.

@@ -18,8 +18,9 @@ around it.
 
 ## The model
 
-A piece is a subset of one footage's pixels and rows, with a reference to the piece it was cut
-from. A region is a shape over every row, a period every pixel over an unbroken run of rows, a region in
+A piece is a subset of one footage's pixels and rows, with a reference to each piece it was cut
+from: one for a cut, two for an intersection, so pieces form a directed acyclic graph and not a
+tree. Its extent is held on the footage, so lifting it back reads no parent. A region is a shape over every row, a period every pixel over an unbroken run of rows, a region in
 a period both, and a track a shape a row over a period. A piece of a piece is the intersection of
 the two. A cut restricts and never renumbers: a row and a place below a cut are the footage's.
 
@@ -88,7 +89,7 @@ Facts to weigh. `tools/region.py:origin` is the step in space. `plan.py:Entry.pi
 of the nearest cutting node upstream, not an extent. `region.py:run` refuses a frame that is not
 its file's plate.
 
-- [ ] A piece's record is one value: the footage it is of, the piece it was cut from, and its
+- [ ] A piece's record is one value: the footage it is of, the pieces it was cut from, and its
   extent on the footage, a period of the footage's rows, a shape in the footage's pixels, or a
   shape a row over a period. Two records intersected are the record of the piece cut from both,
   and a row or a place lifted through one is the footage's. What a node's piece is, and a table's
@@ -178,10 +179,16 @@ row, so a node stepped there reads, from a node handed it, rows walked from an e
 run that walk makes is held under the same keys as a walk of the clip from row 0, with other
 values at the same rows, and the window shows whichever was held first.
 
-- [ ] Kendrick: a series node's result below a `period` is the chosen period walked alone, its
-  origin the period's first row, or the same rows cut from a walk of what it was cut from; this
-  line says which. Recommended: walked alone, the second being right only for a tool whose reach
-  in rows is bounded and declared, which A tool's reach in rows makes the two agree for.
+- [x] Kendrick: a series node's result below a `period` is the chosen period walked alone, its
+  origin the period's first row. It is the caveman way, the period cut to a clip of its own and
+  the pipeline run on it, and so the ground truth; a walk cut from a longer one agrees with it
+  only for a tool whose reach is bounded and declared, by A tool's reach in rows.
+- [ ] A result below a period is the result of the same document run on the period cut to a
+  lossless clip of its own, row for row and equal.
+  Check: a one-off under `docs/findings/experiments/`, the golden master: each period of a
+  periods file over the crossings clip cut by frame index, not timestamp, to a lossless clip, the
+  document run on it, and its tables against those below the period, the rows that differ said.
+  A cut through H.264 adds the encoder's difference and isolates nothing.
 - [ ] Kendrick: the window is a request over its piece's walk, served by a run of the piece's
   origin alone and what it shows of another origin said to be a preview; or a view of the clip's
   rows that any held run serves, as today; this line says which. Recommended: the request, the
@@ -212,7 +219,10 @@ registry is the one reader of what a tool declares (`docs/spec/what-a-node-decla
   is. A run of another origin serves a piece's rows where it began at least the node's reach
   before them, and a piece whose nodes' reach is bounded is walked from that many rows before its
   first row, its extent unmoved.
-  Check: a seam: `travel` below a period served from a walk of the clip, and `track` not.
+  Check: a seam: `travel` below a period served from a walk of the clip, and `track` not; and a
+  one-off, each stepping tool's result over a period walked alone against the same rows cut from
+  the clip's walk, the rows after the period's first at which they differ against its declared
+  reach.
 
 ## The periods a `period` chooses among
 

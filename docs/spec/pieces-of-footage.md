@@ -29,6 +29,32 @@ the footage's rows outside the piece among them. A value that depends on where i
 of the piece walked, and the same rows cut from a longer walk are another result that may equal
 it.
 
+## Referents
+
+What each settled, and the box it bears on. A session building a box reads its referent first.
+
+- Nuke's NDK, `_validate`, `_request` and `engine`: an op's output box apart from the box asked of
+  it, the ask passed upstream and grown by each op that reads past it, the hash not holding the
+  ask. Rows below a cut are the footage's; A tool that cuts in time's keys.
+- OpenFX's `getRegionOfDefinition`, `getRegionsOfInterest` and `getFramesNeeded`: the same split as
+  a standard, and the last the rows an output row reads. A frame node reading a neighbouring row.
+- Halide (Ragan-Kelley and others, PLDI 2013): each stage's needed input inferred from the output
+  asked of it, never set by hand. The Open line on a tool's reach.
+- The Dataflow Model (Akidau and others, VLDB 2015): event time apart from processing time, and
+  the session window, a stretch bounded by gaps. Rows below a cut are the footage's; The stretches
+  a period chooses among.
+- Fading memory (Boyd and Chua, 1985): when a stateful operator forgets where it began, so a walk
+  begun earlier converges on one walked alone. A series result below a period.
+- BED, GFF and bedtools: intervals half-open from 0 against closed from 1, the off-by-one between
+  them, and intersect, merge and complement over stretches. The stretches a period chooses among.
+- rasterio's windows and GDAL's geotransform: a window carrying its transform to the whole, windows
+  of windows composed. A piece's record.
+- Bazel's and Nix's hermeticity: a key holds all an action reads, and what is read and not held is
+  how a cache goes stale. A period's key being its input's.
+- ffmpeg's seeking, and H.264 and MPEG-TS: a seek that snaps to a keyframe under stream copy, a row
+  decoded from the keyframe before it, a transport stream's timestamps that jump. A tool that cuts
+  in time, over `00000.MTS`.
+
 ## A piece's record
 
 Assumes: nothing.
@@ -96,7 +122,8 @@ answer lies in the node's key (`tools/resolve.py`'s `PATHS`). A series result's 
 under its gate (`graph.gated`).
 
 - [ ] A file of stretches is written from a series result's gate: the footage it is of, and each
-  stretch as its first and last footage row.
+  stretch as the footage row it begins at and the row past its last, so stretches that touch do
+  not overlap and an empty one can be said.
   Check: a one-off over the crossings clip: the file's stretches against the gate's rows.
 - [ ] A `period` holds a file's stretches and a choice of one, and a file of another footage is
   refused, saying both.

@@ -11,7 +11,7 @@ As `docs/spec/monitor.md`'s How to read this.
 
 ## Why
 
-A pipeline picks the stretches of the footage worth a closer look, and a heavier one runs inside
+A pipeline picks the periods of the footage worth a closer look, and a heavier one runs inside
 one of them, as a heavier one runs inside a region. Whatever is found there is the footage's: its
 rows and pixels are the footage's, and it lays back over the footage beside what was found
 around it.
@@ -19,8 +19,8 @@ around it.
 ## The model
 
 A piece is a subset of one footage's pixels and rows, with a reference to the piece it was cut
-from. A region is a shape over every row, a period every pixel over a stretch of rows, a region in
-a period both, and a track a shape a row over a stretch. A piece of a piece is the intersection of
+from. A region is a shape over every row, a period every pixel over an unbroken run of rows, a region in
+a period both, and a track a shape a row over a period. A piece of a piece is the intersection of
 the two. A cut restricts and never renumbers: a row and a place below a cut are the footage's.
 
 What a value at a row reads sets whether it is the same below a cut. A value read from rows a
@@ -41,12 +41,12 @@ What each settled, and the box it bears on. A session building a box reads its r
 - Halide (Ragan-Kelley and others, PLDI 2013): each stage's needed input inferred from the output
   asked of it, never set by hand. The Open line on a tool's reach.
 - The Dataflow Model (Akidau and others, VLDB 2015): event time apart from processing time, and
-  the session window, a stretch bounded by gaps. Rows below a cut are the footage's; The stretches
-  a period chooses among.
+  the session window, a period bounded by gaps. Rows below a cut are the footage's; The periods
+  a `period` chooses among.
 - Fading memory (Boyd and Chua, 1985): when a stateful operator forgets where it began, so a walk
   begun earlier converges on one walked alone. A series result below a period.
 - BED, GFF and bedtools: intervals half-open from 0 against closed from 1, the off-by-one between
-  them, and intersect, merge and complement over stretches. The stretches a period chooses among.
+  them, and intersect, merge and complement over periods. The periods a `period` chooses among.
 - rasterio's windows and GDAL's geotransform: a window carrying its transform to the whole, windows
   of windows composed. A piece's record.
 - Bazel's and Nix's hermeticity: a key holds all an action reads, and what is read and not held is
@@ -63,11 +63,11 @@ Facts to weigh. `tools/region.py:origin` is the step in space. `plan.py:Entry.pi
 cutting node a node's inputs are of. `region.py:run` refuses a frame that is not its file's plate.
 
 - [ ] A piece carries the footage it is of, the piece it was cut from, and its extent on the
-  footage: a stretch of the footage's rows, a shape in the footage's pixels, or a shape a row over
-  a stretch. A piece cut from a piece has the intersection of the two extents.
-  Check: a seam: a region within a stretch and a stretch within a region have one extent.
+  footage: a period of the footage's rows, a shape in the footage's pixels, or a shape a row over
+  a period. A piece cut from a piece has the intersection of the two extents.
+  Check: a seam: a region within a period and a period within a region have one extent.
 - [ ] The record holds a shape a row though no tool here makes one.
-  Check: the same seam, a shape a row intersected with a stretch.
+  Check: the same seam, a shape a row intersected with a period.
 
 ## Rows below a cut are the footage's
 
@@ -85,8 +85,8 @@ tool's `step` is handed its row's place in the walk's range and not in the foota
   the key it has above, and computes no row held above.
   Check: a seam: a frame node below a period and one beside it, of one tool and params, one key.
 - [ ] A frame node below a period that reads a neighbouring row reads the footage's, inside the
-  stretch or not.
-  Check: the same seam, a node reading the row before at the stretch's first row.
+  period or not.
+  Check: the same seam, a node reading the row before at the period's first row.
 - [ ] Below a region, a row is the footage's as it is above it.
   Check: a one-off: a node's rows below a served region against the plate's.
 
@@ -99,21 +99,21 @@ Facts to weigh. A stepped node's result at a row depends on where its walk began
 player's window is served by it too, so whichever rule a period is held to, the window is held to
 it unless it is said to be no piece.
 
-- [ ] Kendrick: a series node's result below a period is the stretch walked alone, or the same rows
-  cut from a walk of what the stretch was cut from; this line says which. Recommended: walked
+- [ ] Kendrick: a series node's result below a `period` is the chosen period walked alone, or the same rows
+  cut from a walk of what it was cut from; this line says which. Recommended: walked
   alone, the second being right only for a tool whose reach in rows is bounded and declared, which
   no tool declares.
 - [ ] Kendrick: the player's window is a view of the clip's rows that any held run serves, or a
   piece held to the answer above; this line says which. Recommended: a view.
-- [ ] A series node's held rows serve a stretch only where they are what the first answer says the
-  stretch's result is, and the window's as the second says.
-  Check: a seam: `Runs.over` across a stretch held from its own first row and the same rows cut
+- [ ] A series node's held rows serve a period only where they are what the first answer says the
+  period's result is, and the window's as the second says.
+  Check: a seam: `Runs.over` across a period held from its own first row and the same rows cut
   from a longer run.
 
-Open: whether a series tool may declare its reach in rows, so that a longer run serves a stretch.
+Open: whether a series tool may declare its reach in rows, so that a longer run serves a period.
 Recommended: not here, the reach being what `docs/systems-review.md`'s E1 declares of a tool.
 
-## The stretches a period chooses among
+## The periods a `period` chooses among
 
 Assumes: nothing.
 
@@ -121,25 +121,25 @@ Facts to weigh. What a person made reaches a tool as a file on a path input, who
 answer lies in the node's key (`tools/resolve.py`'s `PATHS`). A series result's band is the rows
 under its gate (`graph.gated`).
 
-- [ ] A file of stretches is written from a series result's gate: the footage it is of, and each
-  stretch as the footage row it begins at and the row past its last, so stretches that touch do
+- [ ] A file of periods is written from a series result's gate: the footage it is of, and each
+  period as the footage row it begins at and the row past its last, so periods that touch do
   not overlap and an empty one can be said.
-  Check: a one-off over the crossings clip: the file's stretches against the gate's rows.
-- [ ] A `period` holds a file's stretches and a choice of one, and a file of another footage is
+  Check: a one-off over the crossings clip: the file's periods against the gate's rows.
+- [ ] A `period` holds a file's periods and a choice of one, and a file of another footage is
   refused, saying both.
   Check: a one-off.
 
 ## A tool that cuts in time
 
-Assumes: A piece's record; A series result below a period; The stretches a period chooses among.
+Assumes: A piece's record; A series result below a period; The periods a `period` chooses among.
 
 Facts to weigh. The tree sets the rows a document is walked over for a served clip alone. Not
 sized: how far a node that serves no file and sets those rows reaches into `plan.py` and
 `walk.py`.
 
-- [ ] What reads a `period` is walked over the chosen stretch's rows.
+- [ ] What reads a `period` is walked over the chosen period's rows.
   Check: a one-off over the crossings clip: the rows a node below a period hands out.
-- [ ] A stretch moved that is not the chosen one moves no key. The chosen one moved moves the key
+- [ ] A period moved that is not the chosen one moves no key. The chosen one moved moves the key
   of a series node below the period under the first answer and of none under the second, and of no
   frame node under either.
   Check: a seam.
@@ -176,8 +176,8 @@ carrying its piece and plane.
 
 ## Not here
 
-Walking every stretch, or every piece, with no window, and the tables it writes. A tool that makes a
-shape a row. Stretches handed to a period live by a series node above it, which is a frame node
-reading a series result. Stretches of two results intersected. A margin grown or cut around a
+Walking every period, or every piece, with no window, and the tables it writes. A tool that makes a
+shape a row. Periods handed to a `period` live by a series node above it, which is a frame node
+reading a series result. Periods of two results intersected. A margin grown or cut around a
 piece. Region's key, which holds its cut, a served clip's pixels being H.264's and not the cut's.
 Identity across pieces.

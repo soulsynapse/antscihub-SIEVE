@@ -54,8 +54,8 @@ What each settled, and the box it bears on. A session building a box reads its r
   a standard, the first carried forward along the wires and the last the rows an output row reads.
   A node's extent follows the wires; a frame node reading a neighbouring row.
 - Halide (Ragan-Kelley and others, PLDI 2013): each stage's needed input inferred from the output
-  asked of it, never set by hand. Outside a piece is absent; `what-a-node-declares.md`'s A
-  tool's reach in rows, the pre-roll inferred.
+  asked of it, never set by hand. Outside a piece is absent; A tool's reach in rows, the
+  pre-roll inferred.
 - The Dataflow Model (Akidau and others, VLDB 2015): event time apart from processing time, and
   the session window, a period bounded by gaps. Rows below a cut are the footage's; The periods
   a `period` chooses among.
@@ -181,8 +181,7 @@ values at the same rows, and the window shows whichever was held first.
 - [ ] Kendrick: a series node's result below a `period` is the chosen period walked alone, its
   origin the period's first row, or the same rows cut from a walk of what it was cut from; this
   line says which. Recommended: walked alone, the second being right only for a tool whose reach
-  in rows is bounded and declared, which `docs/spec/what-a-node-declares.md`'s A tool's reach in
-  rows makes the two agree for.
+  in rows is bounded and declared, which A tool's reach in rows makes the two agree for.
 - [ ] Kendrick: the window is a request over its piece's walk, served by a run of the piece's
   origin alone and what it shows of another origin said to be a preview; or a view of the clip's
   rows that any held run serves, as today; this line says which. Recommended: the request, the
@@ -190,10 +189,30 @@ values at the same rows, and the window shows whichever was held first.
 - [ ] A held series result is addressed by its key, its origin and its rows, and a walk handed rows
   of one origin steps nothing of another from them, under either answer above. A run serves a
   range at the origin the answers say it is asked at, and one of another origin only as
-  `docs/spec/what-a-node-declares.md`'s A tool's reach in rows allows.
+  A tool's reach in rows allows.
   Check: a seam: `Runs.over` across a period walked from its own first row and the same rows cut
   from a longer run, two results under one key, each served at its own origin alone; and the
   window handed `track`'s rows of row 0 and stepping `count` from its own first row, refused.
+
+## A tool's reach in rows
+
+Assumes: A series result below a period.
+
+Facts to weigh. `travel` and `transitions` step a state that is the row before and nothing
+earlier; `track`'s ids are of every row since its walk began. No tool says how far back its result
+at a row reads, so the player can serve a piece from no run of another origin, nor say how many
+rows before a piece's first row a walk begins for its first rows to be a longer walk's. The
+registry is the one reader of what a tool declares (`docs/spec/what-a-node-declares.md`).
+
+- [ ] A stepping tool declares its reach in rows, how far before a row its result there reads, or
+  none, its reach unbounded; one left unsaid is unbounded, as is one whose memory fades and never
+  ends.
+  Check: `tests/test_registry.py`.
+- [ ] A node's reach is its own added to that of the stepped nodes it reads, unbounded where any
+  is. A run of another origin serves a piece's rows where it began at least the node's reach
+  before them, and a piece whose nodes' reach is bounded is walked from that many rows before its
+  first row, its extent unmoved.
+  Check: a seam: `travel` below a period served from a walk of the clip, and `track` not.
 
 ## The periods a `period` chooses among
 
@@ -238,6 +257,6 @@ review's E2 (`docs/systems-review.md`), which has no spec yet; pieces that overl
 the model's address there, both kept. A tool that makes a shape a row. Periods
 handed to a `period` live by a series node above it, which is a frame node reading a series
 result. Periods of two results intersected. A margin grown or cut around a piece, which changes
-its extent; a pre-roll set by hand, the one a bounded reach needs being inferred by
-`docs/spec/what-a-node-declares.md`'s A tool's reach in rows. Region's key, which holds its cut, a served clip's pixels
-being H.264's and not the cut's. Identity across pieces.
+its extent; a pre-roll set by hand, the one a bounded reach needs being inferred by A tool's
+reach in rows. Region's key, which holds its cut, a served clip's pixels being H.264's and not
+the cut's. Identity across pieces.

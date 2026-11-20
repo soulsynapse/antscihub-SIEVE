@@ -344,26 +344,6 @@ params, the marked among them.
   Check: the baseline's one-off against the finding: the keys that differ are those of a node of
   these four tools and of every node below one.
 
-## A tool's reach in rows
-
-Assumes: The registry is the one reader of what a tool declares; `docs/spec/pieces-of-footage.md`'s
-A series result below a period.
-
-Facts to weigh. `travel` and `transitions` step a state that is the row before and nothing
-earlier; `track`'s ids are of every row since its walk began. No tool says how far back its result
-at a row reads, so the player can serve a piece from no run of another origin, nor say how many
-rows before a piece's first row a walk begins for its first rows to be a longer walk's.
-
-- [ ] A stepping tool declares its reach in rows, how far before a row its result there reads, or
-  none, its reach unbounded; one left unsaid is unbounded, as is one whose memory fades and never
-  ends.
-  Check: `tests/test_registry.py`.
-- [ ] A node's reach is its own added to that of the stepped nodes it reads, unbounded where any
-  is. A run of another origin serves a piece's rows where it began at least the node's reach
-  before them, and a piece whose nodes' reach is bounded is walked from that many rows before its
-  first row, its extent unmoved.
-  Check: a seam: `travel` below a period served from a walk of the clip, and `track` not.
-
 ## Not here
 
 A tool's code in a key. A class a tool inherits. A surface held still across versions. A range

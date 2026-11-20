@@ -3,7 +3,7 @@
 Read with `VISION.md`, whose picture this holds the tree to; with `tools/region.py`, the cut in
 space; with `sieve_player/plan.py`, `sieve_player/walk.py` and `sieve_player/held.py`, which
 plan, walk and hold what a cut reads; and with `docs/spec/what-a-node-declares.md`, whose keys
-this assumes.
+this assumes. What a table written below a cut holds is `docs/spec/what-leaves-the-player.md`'s.
 
 ## How to read this
 
@@ -23,11 +23,25 @@ from. A region is a shape over every row, a period every pixel over an unbroken 
 a period both, and a track a shape a row over a period. A piece of a piece is the intersection of
 the two. A cut restricts and never renumbers: a row and a place below a cut are the footage's.
 
-What a value at a row reads sets whether it is the same below a cut. A value read from rows a
-bounded distance away is the same whichever piece it is computed in, once those rows are read,
-the footage's rows outside the piece among them. A value that depends on where its walk began is
-of the piece walked, and the same rows cut from a longer walk are another result that may equal
-it.
+A node's extent follows the wires: it is its inputs' intersection, cut where a cutting node cuts,
+and a node no cutting node feeds is of the whole footage whatever else the document cuts. Outside
+its extent a node has no rows. They are absent to what reads it, never zero, a zero being a
+measurement no row made.
+
+Three things answer for a value at a row, and each is held apart: the recipe, which the key holds;
+the row, the footage's; and, for a value made by a walk, the row the walk began at, its origin. A
+value read from rows a bounded distance away, its reach, is the same at any origin once those rows
+are read, the footage's rows outside the piece among them, and so the same whichever piece it is
+computed in. A value that depends on its origin is of its origin: the same rows walked from two
+origins are two results under one recipe, told apart by origin and never by which was held first.
+A thing named the same whether or not the footage was cut is of the first kind; one of the second
+is named by its piece and origin as well.
+
+A piece owns the rows of its extent and may read more: the rows a reach reads past its edge, and
+the rows a walk begun before its first row walks to arrive there. What it reads is its parent's;
+what it reports is its extent's alone. A row of a result is addressed by its piece and its
+footage row, so two pieces whose extents overlap each report the rows they share, and folding
+them back up keeps both and merges neither.
 
 ## Referents
 
@@ -37,20 +51,29 @@ What each settled, and the box it bears on. A session building a box reads its r
   it, the ask passed upstream and grown by each op that reads past it, the hash not holding the
   ask. Rows below a cut are the footage's; A tool that cuts in time's keys.
 - OpenFX's `getRegionOfDefinition`, `getRegionsOfInterest` and `getFramesNeeded`: the same split as
-  a standard, and the last the rows an output row reads. A frame node reading a neighbouring row.
+  a standard, the first carried forward along the wires and the last the rows an output row reads.
+  A node's extent follows the wires; a frame node reading a neighbouring row.
 - Halide (Ragan-Kelley and others, PLDI 2013): each stage's needed input inferred from the output
-  asked of it, never set by hand. The Open line on a tool's reach.
+  asked of it, never set by hand. Outside a piece is absent; the Open line on a tool's reach.
 - The Dataflow Model (Akidau and others, VLDB 2015): event time apart from processing time, and
   the session window, a period bounded by gaps. Rows below a cut are the footage's; The periods
   a `period` chooses among.
 - Fading memory (Boyd and Chua, 1985): when a stateful operator forgets where it began, so a walk
   begun earlier converges on one walked alone. A series result below a period.
+- numpy's masked arrays and R's `NA`: absence carried through arithmetic and left out of a
+  reduction, against a fill value a reduction counts. Outside a piece is absent.
+- Overlap-save, and ghost cells in domain decomposition: a block computed over more than it keeps,
+  the halo read and discarded, so blocks that overlap in what they read are disjoint in what they
+  report. The model's owned rows; a pre-roll.
 - BED, GFF and bedtools: intervals half-open from 0 against closed from 1, the off-by-one between
-  them, and intersect, merge and complement over periods. The periods a `period` chooses among.
+  them, and intersect, merge and complement over periods, overlapping features each kept. The
+  periods a `period` chooses among.
+- CMX 3600 edit decision lists and conform: a cut's source in and out beside its record in and out,
+  an offline cut relinked to the camera originals by source timecode. A piece's record.
 - rasterio's windows and GDAL's geotransform: a window carrying its transform to the whole, windows
   of windows composed. A piece's record.
 - Bazel's and Nix's hermeticity: a key holds all an action reads, and what is read and not held is
-  how a cache goes stale. A period's key being its input's.
+  how a cache goes stale. A series result below a period.
 - ffmpeg's seeking, and H.264 and MPEG-TS: a seek that snaps to a keyframe under stream copy, a row
   decoded from the keyframe before it, a transport stream's timestamps that jump. A tool that cuts
   in time, over `00000.MTS`.
@@ -59,15 +82,67 @@ What each settled, and the box it bears on. A session building a box reads its r
 
 Assumes: nothing.
 
-Facts to weigh. `tools/region.py:origin` is the step in space. `plan.py:Entry.piece` says which
-cutting node a node's inputs are of. `region.py:run` refuses a frame that is not its file's plate.
+Facts to weigh. `tools/region.py:origin` is the step in space. `plan.py:Entry.piece` is the name
+of the nearest cutting node upstream, not an extent. `region.py:run` refuses a frame that is not
+its file's plate.
 
-- [ ] A piece carries the footage it is of, the piece it was cut from, and its extent on the
-  footage: a period of the footage's rows, a shape in the footage's pixels, or a shape a row over
-  a period. A piece cut from a piece has the intersection of the two extents.
-  Check: a seam: a region within a period and a period within a region have one extent.
+- [ ] A piece's record is one value: the footage it is of, the piece it was cut from, and its
+  extent on the footage, a period of the footage's rows, a shape in the footage's pixels, or a
+  shape a row over a period. Two records intersected are the record of the piece cut from both,
+  and a row or a place lifted through one is the footage's. What a node's piece is, and a table's
+  lift, are that value's, and no module computes its own.
+  Check: a seam: a region within a period and a period within a region have one extent, and a
+  place lifted through either is the footage's.
 - [ ] The record holds a shape a row though no tool here makes one.
   Check: the same seam, a shape a row intersected with a period.
+
+## A node's extent follows the wires
+
+Assumes: A piece's record.
+
+Facts to weigh. A walk is of one range, the window's or the clip's, and steps one chain
+(`walk._Walk`, `chain_of`). A periods file reaches a `period` on a path input and not a wire, so
+a document's range set from it reaches nodes no wire joins to the period, the series node whose
+gate wrote the file among them: the detector's output setting the rows its own input is walked
+over, by an edge no plan or key holds. `plan.plan` refuses a node whose inputs are of two pieces,
+the plate among them; a served clip's pixels are H.264's and not the plate's, and a period's rows
+are the footage's own.
+
+- [ ] A node's extent is its inputs' intersection, cut where a cutting node cuts. A node no
+  `period` feeds is walked over the rows it is walked over with none in the document.
+  Check: a seam: a series node above a `period` and one below it, the one above's key and held
+  rows the same with the period chosen, moved and gone.
+- [ ] The series nodes of one extent are walked together over it, and those of another apart over
+  theirs.
+  Check: a one-off over the crossings clip: `count` above a period and `track` below it, the rows
+  each was stepped over.
+- [ ] A periods file says the document and node whose gate wrote it, and a `period` that reads a
+  file written by a node below it is refused, saying both.
+  Check: a seam.
+- [ ] Kendrick: a node reading two pieces of one footage whose rows and pixels are the footage's
+  own is of their intersection, or refused as today; this line says which. Recommended: the
+  intersection, the read being the fold back up at its simplest, and a served clip's piece
+  refused as today.
+
+## Outside a piece is absent
+
+Assumes: A node's extent follows the wires.
+
+Facts to weigh. `graph.gated` hands a series node downstream a gated-out row as a zero signal or
+an empty table, so a sum, a mean or a count below it counts a row no one measured as a measured
+zero.
+
+- [ ] A row outside a node's extent is absent to what reads it: no frame node is computed at it,
+  no series node is stepped at it, and no table written holds a record of it.
+  Check: a one-off over the crossings clip: a csv below a period, its rows against the period's.
+
+Open: whether a gated-out row is absent to a series node downstream, and not zero. Recommended:
+absent, by the model's rule; it changes what every series chain below a band hands out and what
+the held files hold, so Kendrick hears of it before it lands.
+
+Open: how far a node's extent shrinks where it reads past the footage's edge, which is its reach.
+Recommended: not here, the reach being what `docs/systems-review.md`'s E1 declares of a tool;
+until one declares it, a node's extent is its inputs'.
 
 ## Rows below a cut are the footage's
 
@@ -92,26 +167,33 @@ tool's `step` is handed its row's place in the walk's range and not in the foota
 
 ## A series result below a period
 
-Assumes: Rows below a cut are the footage's.
+Assumes: Rows below a cut are the footage's; A node's extent follows the wires.
 
-Facts to weigh. A stepped node's result at a row depends on where its walk began.
-`held.py:Runs.over` serves a range by cutting it from the run that began earliest, and the
-player's window is served by it too, so whichever rule a period is held to, the window is held to
-it unless it is said to be no piece.
+Facts to weigh. A stepped node's result at a row depends on where its walk began. A held run
+(`held.Run`) holds the row it began at, and `held.py:Runs.over` serves a range by cutting it from
+the run that began earliest whatever that row. `window.py:PlayerWindow._ask_window` hands the
+window what `Runs.part` holds of the stepped nodes and steps the rest from the window's first
+row, so a node stepped there reads, from a node handed it, rows walked from an earlier row; the
+run that walk makes is held under the same keys as a walk of the clip from row 0, with other
+values at the same rows, and the window shows whichever was held first.
 
-- [ ] Kendrick: a series node's result below a `period` is the chosen period walked alone, or the same rows
-  cut from a walk of what it was cut from; this line says which. Recommended: walked
-  alone, the second being right only for a tool whose reach in rows is bounded and declared, which
-  no tool declares.
-- [ ] Kendrick: the player's window is a view of the clip's rows that any held run serves, or a
-  piece held to the answer above; this line says which. Recommended: a view.
-- [ ] A series node's held rows serve a period only where they are what the first answer says the
-  period's result is, and the window's as the second says.
-  Check: a seam: `Runs.over` across a period held from its own first row and the same rows cut
-  from a longer run.
+- [ ] Kendrick: a series node's result below a `period` is the chosen period walked alone, its
+  origin the period's first row, or the same rows cut from a walk of what it was cut from; this
+  line says which. Recommended: walked alone, the second being right only for a tool whose reach
+  in rows is bounded and declared, which no tool declares.
+- [ ] Kendrick: the window is a request over its piece's walk, served by a run of the piece's
+  origin alone and what it shows of another origin said to be a preview; or a view of the clip's
+  rows that any held run serves, as today; this line says which. Recommended: the request, the
+  view leaving one key two values at a row.
+- [ ] A held series result is addressed by its key, its origin and its rows. A run serves a range
+  only at the origin the range is asked at, and a walk handed rows of one origin steps nothing of
+  another from them.
+  Check: a seam: `Runs.over` across a period walked from its own first row and the same rows cut
+  from a longer run, two results under one key, each served at its own origin alone.
 
-Open: whether a series tool may declare its reach in rows, so that a longer run serves a period.
-Recommended: not here, the reach being what `docs/systems-review.md`'s E1 declares of a tool.
+Open: whether a series tool may declare its reach in rows, so that a run of another origin serves
+a period. Recommended: not here, the reach being what `docs/systems-review.md`'s E1 declares of a
+tool.
 
 ## The periods a `period` chooses among
 
@@ -126,58 +208,35 @@ under its gate (`graph.gated`).
   not overlap and an empty one can be said.
   Check: a one-off over the crossings clip: the file's periods against the gate's rows.
 - [ ] A `period` holds a file's periods and a choice of one, and a file of another footage is
-  refused, saying both.
+  refused, saying both. Periods of a file that overlap are each a period, none merged with
+  another.
   Check: a one-off.
 
 ## A tool that cuts in time
 
-Assumes: A piece's record; A series result below a period; The periods a `period` chooses among.
+Assumes: A piece's record; A node's extent follows the wires; A series result below a period; The
+periods a `period` chooses among.
 
 Facts to weigh. The tree sets the rows a document is walked over for a served clip alone. Not
-sized: how far a node that serves no file and sets those rows reaches into `plan.py` and
-`walk.py`.
+sized: how far a node that serves no file and sets the rows of its extent reaches into `plan.py`
+and `walk.py`.
 
 - [ ] What reads a `period` is walked over the chosen period's rows.
   Check: a one-off over the crossings clip: the rows a node below a period hands out.
-- [ ] A period moved that is not the chosen one moves no key. The chosen one moved moves the key
-  of a series node below the period under the first answer and of none under the second, and of no
-  frame node under either.
+- [ ] A period's rows are in no key. A period moved that is not the chosen one moves nothing below
+  it; the chosen one moved moves the extent of every node below it and, under the first answer,
+  the origin of a series node below it.
   Check: a seam.
 - [ ] A period under a region and a region under a period both run, and their pieces have one
   extent.
   Check: a one-off over the crossings clip.
 
-## What leaves the player is in the footage's rows and pixels
-
-Assumes: A piece's record.
-
-Facts to weigh. A csv written below a region is in the cut clip's pixels, so two regions' tables
-cannot be laid side by side or drawn over the footage. `rescale` and `coarsegrain` hand out a plane
-of another size than the piece's, and a table's dtype carries the plane it was found in
-(`tools/_table.py:plane`). `attach`'s area is in the mark's plane. A column's unit is said where it
-is minted and carried on the dtype; one the dtype says nothing of may have lost its unit
-(`docs/findings/2026-11-17-what-keeps-a-dtypes-metadata.md`). `csv.py:default_name` is the
-footage's stem and the rows, so two regions of one video that serve no clip name one file.
-
-Open: whether a table's positions are moved to the footage's pixels where it is written, or are
-minted in them. Recommended, and a session may build on it: where it is written, the table
-carrying its piece and plane.
-
-- [ ] A csv's rows are the footage's, and each column that says a unit is in the footage's pixels,
-  scaled along its axis by its plane against the piece's size and, a position, moved by the record;
-  a column that says none is written as it is. Its name and key line say the piece, the plate where
-  there is no cut.
-  Check: a one-off: a csv below a region and one below a region and a `rescale`, positions read
-  back against the plate; one below an `attach`, its mark's area against the mark's plane; two
-  regions of one video, two files.
-- [ ] A table with a numeric column its dtype says nothing of is not written: the write raises,
-  naming the column.
-  Check: `tests/test_csv.py`, a seam.
-
 ## Not here
 
-Walking every period, or every piece, with no window, and the tables it writes. A tool that makes a
-shape a row. Periods handed to a `period` live by a series node above it, which is a frame node
-reading a series result. Periods of two results intersected. A margin grown or cut around a
-piece. Region's key, which holds its cut, a served clip's pixels being H.264's and not the cut's.
-Identity across pieces.
+Walking every period, or every piece, with no window; the tables it writes; and folding pieces
+that overlap back up, which the model keeps both of. A tool that makes a shape a row. Periods
+handed to a `period` live by a series node above it, which is a frame node reading a series
+result. Periods of two results intersected. A margin grown or cut around a piece, which changes
+its extent; a pre-roll, a walk's origin before its piece's first row with its extent unmoved,
+which the model allows and no tool sets. Region's key, which holds its cut, a served clip's pixels
+being H.264's and not the cut's. Identity across pieces.

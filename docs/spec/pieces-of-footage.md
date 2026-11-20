@@ -189,10 +189,11 @@ values at the same rows, and the window shows whichever was held first.
   periods file over the crossings clip cut by frame index, not timestamp, to a lossless clip, the
   document run on it, and its tables against those below the period, the rows that differ said.
   A cut through H.264 adds the encoder's difference and isolates nothing.
-- [ ] Kendrick: the window is a request over its piece's walk, served by a run of the piece's
-  origin alone and what it shows of another origin said to be a preview; or a view of the clip's
-  rows that any held run serves, as today; this line says which. Recommended: the request, the
-  view leaving one key two values at a row.
+- [x] Kendrick: the window is a walk of its own over its rows, its memory bounded as the window
+  is, and never waits on its piece's walk, which an ancestor spanning most of the clip makes
+  unbounded. A node whose reach is bounded is exact in it, walked from that reach before the
+  window's first row; one whose reach is not is the window's best effort, and the window says so
+  of its rows.
 - [ ] A held series result is addressed by its key, its origin and its rows, and a walk handed rows
   of one origin steps nothing of another from them, under either answer above. A run serves a
   range at the origin the answers say it is asked at, and one of another origin only as

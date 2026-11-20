@@ -150,6 +150,35 @@ Assumes: Tracklets.
   are as many, and flags and does not label through one the links counted as many to many.
   Check: `tests/test_resolve.py`'s merge and parting as it stands, and a seam for the refusal.
 
+## Under a piece
+
+Assumes: A record's name, Links, Tracklets; docs/spec/pieces-of-footage.md's A piece's record and
+its A table written is in the footage's own pixels and rows.
+
+Facts to weigh. A key, a link and an id each hold a row, the first columns of a table that do, and
+`sieve_player/wire.py`'s units are all of a plane's pixels: pieces-of-footage.md writes a column
+that says none as it is, so under a cut in time a csv's `row` would be the footage's and the row
+inside its `id` the piece's. A key is unique within a table and an id within a walk, so two
+regions' tracklets of one video hold the same ids. The link tool reads the row before and the row
+after, and a node below a `period` reads the rows of its stretch. A table's dtype carries the size
+of the plane it was found in and not where that plane lies, so `attach` and `sample` between a
+table found in a region and a plane of the plate scale and do not move; that is so of `blobs`
+today. A record cut by a region's edge has the footprint and the area of the part inside.
+
+- [ ] The row a key, a link and an id hold is said on the dtype as a row is, and a csv writes it
+  as the footage's by the piece's record, as it writes a position.
+  Check: a one-off: a tracks csv written below a cut in time, its ids' rows against its `row`
+  column.
+- [ ] A tracklet born inside a stretch has, in that stretch walked alone and in the same rows cut
+  from a walk of the clip, the same id as the csv writes it.
+  Check: a seam: the linker over a stretch and over the clip, the ids lifted by the record.
+- [ ] A link at a piece's first row reads none before and at its last none after, whatever rows
+  the footage has outside the piece.
+  Check: the Links seam, below a cut in time.
+- [ ] A csv's key line naming the piece is what tells two pieces' equal ids apart, and nothing
+  here makes an id unique across pieces.
+  Check: pieces-of-footage.md's one-off of two regions, the two files' ids.
+
 ## The tools set aside
 
 Assumes: every deliverable above.
@@ -175,7 +204,8 @@ Assumes: every deliverable above.
 | A score against a reference | tracks and a path in, matched by position | a one-off first |
 | Posture, patches | frame tools before the linker | patches are an object column |
 | Records interpolated over a gap | tracks to tracks | a record said not to be observed |
-| Pieces, a second camera | a piece at a time | this names no piece; docs/spec/pieces-of-footage.md's |
+| A cut in space or in time, nested | a chain walked a piece at a time | Under a piece: a row in a column has no unit, and a table says no origin |
+| An animal followed across pieces | not here, as pieces-of-footage.md's Not here | an id names no piece |
 
 ## Not settled by this
 
@@ -191,7 +221,8 @@ Assumes: every deliverable above.
 - A better linker. Gates, a calibrated step and a global assignment are identity.md's non-goals
   and stay so; this changes what a linker is told, not how well it guesses.
 - Any tool in the table above.
-- A change to `sieve_player`, beyond what A record's name's third box may ask.
+- A change to `sieve_player`, beyond what A record's name's third box and Under a piece's first
+  may ask.
 
 ## Open
 
@@ -203,3 +234,9 @@ Assumes: every deliverable above.
 - Whether a saved document naming `blobs`, `detect` or `track` loads unresolved, as
   `tools/retired/` leaves it, or is lifted by `sieve_player/document.py` as crop2 was.
 - The least overlap that links two records.
+- Whether a key is one column holding a row and an index, or the two apart, so the row is a column
+  a unit can be said of; and whether a row is a unit in `sieve_player/wire.py`, which Under a
+  piece's first box asks and the non-goal above does not allow for.
+- Whether a table says where its plane lies in the footage, so `attach` and `sample` across a
+  region and the plate move as well as scale; `blobs` has the fault now and this spec neither adds
+  to it nor mends it.

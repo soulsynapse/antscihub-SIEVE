@@ -402,7 +402,7 @@ def window_legs(p, s, n, count):
         reach = {nid: p.entries[nid].reach for nid in w.chain}
         before, after = (max((r[i] for r in reach.values() if r[i] is not None), default=0) for i in (0, 1))
         for c in w.cuts:
-            first, end = (min(r, count) for r in c.extent.rows)
+            first, end = c.extent.rows_within(count)
             if first >= end or end <= s or first >= s + n:
                 continue
             a, b = max(first, s - before), min(end, s + n + after)

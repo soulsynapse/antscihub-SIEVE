@@ -845,13 +845,16 @@ class Graph:
 
     def density(self, nid, row, p=None):
         """`nid`'s plane at `row` folded to (BINS,) counts, memoized under its own key and probed on
-        the node as a "fold"; None when the output is not a plane; under the Plan `p`, the current
+        the node as a "fold"; None when the output is not a plane or its cut does not hold `row`; under the Plan `p`, the current
         one with none. Worker threads only."""
         plan = (p or self.snapshot()).entries
         e = plan.get(nid)
         if e is None or e.kind != "frame" or not e.fed:
             return None
-        k = (_key(e.raw_key, "fold"), *_address(e, row)[1][1:])
+        c, mk = _address(e, row)
+        if c is None or not c.extent.holds(row):
+            return None
+        k = (_key(e.raw_key, "fold"), *mk[1:])
         v = self.memo.get(k)
         if v is None:
             with self.demand("fold", nid):

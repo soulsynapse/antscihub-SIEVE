@@ -23,6 +23,11 @@ class Extent(NamedTuple):
     def holds(self, row):
         return self.rows is None or self.rows[0] <= row < self.rows[1]
 
+    def rows_within(self, count):
+        """`rows` short of a footage of `count` rows, as the walks walk them and the runs hold them;
+        None for every row."""
+        return None if self.rows is None else tuple(min(r, count) for r in self.rows)
+
 
 def _rows(a, b):
     if a is None or b is None:

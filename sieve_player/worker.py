@@ -321,7 +321,7 @@ class Worker(QThread):
             nid, cut = self._legs.pop(0)
             if (sub := _walking(p, nid, cut)) is None:
                 continue
-            first, end = (min(r, count) for r in cut.extent.rows)
+            first, end = cut.extent.rows_within(count)
             ask = self._held(sub, nid, first, end)
             if ask is not None and ask[1]:
                 continue
@@ -344,5 +344,5 @@ class Worker(QThread):
     def _spared(self, p, nid, cut, count):
         """Whether every chain node's result over `cut`, walked from `nid` under the Plan `p`, is held."""
         sub = _walking(p, nid, cut)
-        ask = None if sub is None else self._held(sub, nid, *(min(r, count) for r in cut.extent.rows))
+        ask = None if sub is None else self._held(sub, nid, *cut.extent.rows_within(count))
         return ask is not None and ask[1]

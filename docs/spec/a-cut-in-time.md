@@ -188,8 +188,8 @@ document that reads it is an edge no plan or key holds; one the user fixed is a 
 a geometry file is. A wire from a series node puts its edge in the plan, where a series node
 below the `period` it feeds is a cycle (`plan.py`'s "in a cycle"). A period's first row depends
 on the gate over rows before any window, so the gate over the window alone does not say where a
-period that began before it begins. Not sized: what of `plan.py` lets a cutting frame node read a
-series node's result on a wire.
+period that began before it begins. What a `period` fed each way reaches into is sized in
+`docs/findings/2026-11-20-held-runs-of-many-periods-and-what-a-period-reaches.md`.
 
 Open: the file's form. Recommended, and a session may build on it: JSON as the geometry file is,
 `{"rows": the footage's count, "periods": [{"name": ..., "first": ..., "end": ...}, ...]}`.
@@ -231,9 +231,9 @@ Facts to weigh. A walk is of one range, the window's or the clip's, and steps on
 (`walk._Walk`, `chain_of`). `plan.plan` refuses a node whose inputs are of two cutting nodes, the
 plate among them; a served clip's pixels are H.264's and not the plate's, and a period's rows are
 the footage's own. `Entry` holds one key and one `piece` a node. The tree sets the rows a document
-is walked over for a served clip alone. Not sized: how far a node that serves no file, sets the
-rows of its extent and is of a cut a period reaches into `plan.py` and `walk.py`. This section's
-boxes are one change to them.
+is walked over for a served clip alone. How far a node that serves no file, sets the rows of its
+extent and is of a cut a period reaches into the player is sized in that finding, by module.
+This section's boxes are one change to them.
 
 - [ ] A node's extent is its inputs' intersection, cut where a cutting node cuts. A node below a
   `period` is of each of its periods, under its one key. A node no `period` feeds is walked over
@@ -322,8 +322,9 @@ Facts to weigh. A stepped node's result at a row depends on where its walk began
 runs whole on where its range ends. The clip walk and the window walk each step their chain from
 their own first row (`walk._Walk`), and the worker has a lane for each. A gate can make hundreds
 of periods over a clip, each a walk of its own. `held.Runs` drops the oldest run past its limit,
-and a walk closes at `walk.STACK_BYTES`. Not measured: the runs of as many periods under that
-limit.
+and a walk closes at `walk.STACK_BYTES`. The runs of as many periods under that limit, and the
+periods a band makes of a signal, are measured in that finding; a walk of many short ranges
+against one of the same rows is not.
 
 - [x] Kendrick: a node's result below a `period` is each period walked alone, from the period's
   first row to its last. It is the caveman way, the period cut to a clip of its own and the

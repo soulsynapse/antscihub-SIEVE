@@ -295,6 +295,18 @@ This section's boxes are one change to them.
   theirs.
   Check: a one-off over the crossings clip: `count` above a period and `track` below it, the rows
   each was stepped over.
+- [ ] Kendrick: every series node of one extent is walked, whatever frame node it reads. A walk
+  of an extent computes each node its chains read at a row once, a frame two of them share read
+  once, and steps every chain reading any of them, so no series node of a fed extent stands unrun
+  for reading a frame node other than the first one the plan found. The whole footage is an
+  extent as a period is, the window's walk among them.
+  Found by the one-off of a period held not walked again: below a `period`, a `reduce` of
+  `motion` and one of `background` stood "unrun: reads motion, which no walk walks" beside
+  `blobs`; with no `period` a `reduce` of `motion` beside `blobs` stands "unrun: reads motion;
+  the walk is blobs", as it has since the plan's own module.
+  Check: a one-off over the crossings clip, turned by hand: `track` on `blobs` and a `reduce` on
+  `motion`, below a `period` and with none, each node's rows stepped once a walk and its result
+  against the same node walked in a document of it alone, and the video's rows read once a row.
 - [x] A period under a region and a region under a period both run, and the two have one extent.
   A `period` under a `period` runs: the gate feeding the lower is read over the upper's periods,
   and each period it makes is a cut of the period it lies in.

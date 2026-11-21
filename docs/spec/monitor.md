@@ -55,8 +55,8 @@ decision this spec does not make.
 
 Each `##` below is a deliverable: an `Assumes:` line naming what it builds on, a sentence of why, facts
 read off the tree, then done-when assertions, each a box with a `Check:`. Since 2026-11-12, on Kendrick's
-word, a check is by default a one-off: a script under `docs/findings/experiments/` or a simulation's
-exit, run when the box is built and again when the question comes up, its output recorded where the box
+word, a check is by default a one-off: a deterministic script under `docs/findings/experiments/`, as
+`CLAUDE.md`'s Tests has it, run when the box is built and again when the question comes up, its output recorded where the box
 says or in the commit that ticks it. It is a test in `tests/` only where what it holds is a seam or an
 invariant, something a later change elsewhere could break without anyone looking: that a dump replays
 to what the live ledger held, that a module imports no Qt, that a detector fires on its fault alone. A

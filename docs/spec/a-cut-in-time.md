@@ -381,15 +381,10 @@ one start, where the strip takes one a node.
   window's first row; one whose reach is not is the window's best effort, and the window says so
   of its rows.
 - [ ] The clip's walk below a `period` is a walk of each of its periods alone, and each is held as
-  that period's. A period whose walk is held under the keys the chain now has is not walked
-  again; one whose last row moved later is walked from where it ended, a node whose reach after
-  is not none from that reach before; one whose first row moved is walked again for the nodes
-  that read it; and a row two periods share is computed once for a node that read neither's
-  edge. A table written below a
-  `period` holds every period's rows, each said to be of its period.
+  that period's. A table written below a `period` holds every period's rows, each said to be of
+  its period.
   Check: a one-off over the crossings clip: the clip walked below a `period`, the rows stepped
-  against the periods'; a period moved and the clip walked again, the rows stepped that period's
-  alone.
+  against the periods', and a tracks csv below it, its rows against the periods'.
 - [ ] A result below a `period` is the result of the nodes below it run on the period cut to a
   lossless clip of its own, row for row and equal. A node above the `period` is of the footage
   and is not in the comparison.
@@ -398,6 +393,12 @@ one start, where the strip takes one a node.
   decoded rows checked byte for byte against the source's first; a document of the nodes below
   the `period`, its video the clip, run on it; its tables, shifted by the period's first row,
   against those below the period, the rows that differ said.
+- [ ] A period whose walk is held under the keys the chain now has is not walked again; one whose
+  last row moved later is walked from where it ended, a node whose reach after is not none from
+  that reach before; one whose first row moved is walked again for the nodes that read it; and a
+  row two periods share is computed once for a node that read neither's edge.
+  Check: a one-off over the crossings clip: a period moved and the clip walked again, the rows
+  stepped that period's alone, and the golden master run again over the moved period, equal.
 - [ ] Over a period whose walk is held the window shows that walk. Over one whose walk is not, it
   walks each period it overlaps alone, from the later of the period's first row and the window's
   first less the node's reach, to the earlier of the period's last and the window's last and the

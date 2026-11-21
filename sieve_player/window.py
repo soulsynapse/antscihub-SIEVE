@@ -21,7 +21,7 @@ from PySide6.QtCore import QFileSystemWatcher, QProcess, QProcessEnvironment, QR
 from PySide6.QtGui import QImage, QKeySequence, QPainter, QPixmap, QShortcut
 from PySide6.QtWidgets import QFileDialog, QHBoxLayout, QMainWindow, QMenu, QMessageBox, QProgressBar, QPushButton, QSizePolicy, QVBoxLayout, QWidget
 
-from . import bare, dev, document, filemenu, held, recent, store, theme, wire
+from . import bare, budget, dev, document, filemenu, held, recent, store, theme, wire
 from . import decoder as decoder_module
 from .canvas import Canvas
 from .catalogue import Log
@@ -46,18 +46,9 @@ from .heldwalks import Shown, as_given, gate_result, held_chain, held_periods, l
 from .worker import Worker
 
 HOLD_MS = 2000              # how long the held runs rest, nothing new held, before they are written beside the document
-HELD_BYTES = 512 << 20      # what the held runs may take together, as wire.result_bytes counts them, before the oldest go
+HELD_BYTES = budget.here()["held"]      # what the held runs may take together, as wire.result_bytes counts them, before the oldest go
 TELL = 0.1                  # s between the worker's tellings of a walk's rows; docs/findings/2026-11-13-a-signal-a-row.md
 DUMP_ENV = "SIEVE_DUMP"  # names the file every video opened in this process dumps its stream to
-MEMO_ENV, CACHE_ENV = "SIEVE_MEMO_GB", "SIEVE_CACHE_GB"   # the memo's and the decoder cache's limits; unset, each class's default
-
-
-def _gb(env):
-    """The limit in bytes the variable names, or None for the default; a value that is not a number reads as unset."""
-    try:
-        return int(float(os.environ[env]) * 2**30)
-    except (KeyError, ValueError):
-        return None
 
 
 class Lateness(QTimer):
@@ -1040,7 +1031,7 @@ class PlayerWindow(QMainWindow):
 
     def _open_video(self, path):
         try:
-            decoder = Decoder(path, **({"cache_bytes": c} if (c := _gb(CACHE_ENV)) else {}))
+            decoder = Decoder(path, cache_bytes=budget.here()["cache"])
         except IOError as e:
             if self.pane.video is not None:
                 self.pane.video.show_error(path, e)
@@ -1050,7 +1041,7 @@ class PlayerWindow(QMainWindow):
         decoder_module.STORE = store.folder
         decoder_module.read_frame_times_ahead(path, lambda rows, path=str(path): self.framesCounted.emit(path, rows))     # the first seek would wait on it: docs/findings/2026-11-15-a-file-whose-times-do-not-count-its-rows.md
         self.stream = Emitter()
-        self.graph = Graph(self.doc, decoder, self.tools, stream=self.stream, cut_result=self._cut_result, **({"memo_bytes": m} if (m := _gb(MEMO_ENV)) else {}))
+        self.graph = Graph(self.doc, decoder, self.tools, stream=self.stream, cut_result=self._cut_result, memo_bytes=budget.here()["memo"])
         # the one line a report of this video's run needs beside the log's tracebacks
         print(f"SIEVE {time.strftime('%H:%M:%S')}: opened {path}: {decoder.width}x{decoder.height} at {decoder.fps:.3f} fps, "
               f"{decoder.count} rows claimed, luma plane {'read' if decoder.luma else 'converted'}; "

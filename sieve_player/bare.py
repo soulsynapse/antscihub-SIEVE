@@ -10,8 +10,10 @@ import pickle
 import sys
 import time
 
+from . import budget
+
 TELL = 0.1      # s between the lines that say how far the walk is
-HOLD = 64 << 20 # what the memo and the plate's cache may each hold: nothing reads a row again but a tool reading near its own
+HOLD = budget.here()["hold"] # what the memo and the plate's cache may each hold: nothing reads a row again but a tool reading near its own
 
 
 def job(doc, video, tools, out):

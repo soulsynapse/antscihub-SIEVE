@@ -12,13 +12,13 @@ from typing import NamedTuple
 
 import numpy as np
 
-from . import density
+from . import budget, density
 from .registry import fold_of, imported_print
 from .graph import Series, absent_dtype, gated, kept
 from .stream import ASKED, GIVEN, HAND, SHAPE
 from .wire import ROWS, is_table, nbytes, own_bytes, share_bytes
 
-STACK_BYTES = 512 << 20   # the most a walk's stack and stepped results, the window's or the clip's, may take, as nbytes counts them
+STACK_BYTES = budget.here()["stack"]   # the most a walk's stack and stepped results, the window's or the clip's, may take, as nbytes counts them
 WALKED = "walk:stack"     # where a walk that keeps its stacks puts them among the chain's results: ((walked node, stacked_key, rows), ...)
 
 

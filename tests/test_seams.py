@@ -28,10 +28,10 @@ MAY_IMPORT = {
     "timeline": {"theme"},
     "decoder": set(),
     "held": {"cut"},                              # a pickle and a stamp, and what a walk read of its cut; the window writes and reads it
-    "walk": {"density", "graph", "registry", "stream", "wire"},         # of the stream, the words a begin says what began it by; no Qt, see below
+    "walk": {"budget", "density", "graph", "registry", "stream", "wire"},         # of the stream, the words a begin says what began it by; no Qt, see below
     "worker": {"decoder", "graph", "stream", "walk"},
     "heldwalks": {"held", "walk", "wire"},       # the held runs as the walks take them; no Qt, so a one-off drives them without a window
-    "bare": {"decoder", "document", "graph", "registry", "walk"},      # the clip walk's own process: no window, no stream's reader, no Qt
+    "bare": {"budget", "decoder", "document", "graph", "registry", "walk"},      # the clip walk's own process: no window, no stream's reader, no Qt
     "density": set(),
     "recent": set(),
     "theme": set(),
@@ -40,6 +40,7 @@ MAY_IMPORT = {
     "ledger": {"stream", "trace"},                # the span kinds and a dump's reader; no graph is held and no Qt reached
     "catalogue": {"ledger", "stream"},            # a detector reads a view, by the stream's names for a kind, and nothing else
     "report": {"catalogue", "ledger"},            # the catalogue's findings as text; the catalogue renders none and never imports it
+    "budget": set(),                              # the machine's total memory and the environment
     "machine": set(),                             # psutil and the system's counters; the player is not imported
     "pace": set(),                                # the worker's signals and a clock; the control and the monitor's header both read it
     "store": {"recent"},                          # where the user's files are kept is where the store's default and its choice are

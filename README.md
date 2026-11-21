@@ -27,8 +27,9 @@ names a file every video opened dumps the probe's stream to (`sieve_player/trace
 Qt's own printing alone; `SIEVE_C_STDERR=1` leaves C-level stderr alone, so libav says
 why a stream ended where it did, which the player's own
 line at the correction cannot. `SIEVE_MEMO_GB` and `SIEVE_CACHE_GB` set the memo's and the
-decoder cache's limits; unset or `0`, each is the default in its class, and the line the player prints on
-opening a video says what both are.
+decoder cache's limits; unset or `0`, each is its share in `sieve_player/budget.py` of half the machine's
+memory, or of `SIEVE_MEMORY_GB` where that is set, and the line the player prints on opening a video says
+what both are.
 
 ## A tool
 

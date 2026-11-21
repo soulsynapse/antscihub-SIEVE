@@ -268,12 +268,21 @@ class _Cursor:
 
 
 SLICE = 1 << 20     # the bytes of a file's head, and of its tail, that footage_print reads
+SAMPLES = 32        # the slices footage_print reads between the head and the tail
+SAMPLE = 32 << 10   # the bytes of each of those
+
+
+def sampled_offsets(size):
+    """Where in a file of `size` bytes footage_print reads its SAMPLES slices of SAMPLE bytes:
+    spread evenly through it and fixed by the size alone."""
+    return [size * i // (SAMPLES + 1) for i in range(1, SAMPLES + 1)]
 
 
 def footage_print(path):
     """Which footage the file at `path` is, the same wherever it lies and however its path is
-    spelled: a digest of its size, its first SLICE bytes and its last, so two files as long that
-    differ only between those are one. Of a `path` that is no file, the digest of the path."""
+    spelled: a digest of its size, its first SLICE bytes and its last, and SAMPLE bytes at each of
+    its sampled_offsets, so two files as long that differ only between those are one. Of a `path`
+    that is no file, the digest of the path."""
     path = str(path)
     if not os.path.isfile(path):
         return hashlib.sha1(path.encode()).hexdigest()[:16]
@@ -284,6 +293,9 @@ def footage_print(path):
         if size > SLICE:
             f.seek(max(SLICE, size - SLICE))
             h.update(f.read(SLICE))
+        for at in sampled_offsets(size):
+            f.seek(at)
+            h.update(f.read(SAMPLE))
     return h.hexdigest()[:16]
 
 

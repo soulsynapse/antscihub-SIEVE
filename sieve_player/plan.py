@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from .cut import Record
 from .document import INPUT, VIDEO_TOOL, fed, fits, frame_inputs, kind_of, produces, video_output, wants
 from .registry import cuts as tool_cuts
-from .registry import computed, cut_by, cut_extents_of, fold_of, is_selector, key_params_of, optional, paths, reach_of, serves_cut_file, static, steps
+from .registry import computed, cut_by, cut_extents_of, fold_of, imported_print, is_selector, key_params_of, optional, paths, reach_of, serves_cut_file, static, steps
 from .wire import overlaid
 
 
@@ -239,6 +239,10 @@ def plan(doc, tools, base, cut_file=None, cut_result=None, footage=None, count=N
                 pass
         return given
 
+    def code_of(node):
+        printed = imported_print(tools.get(node.tool))
+        return () if printed is None else (printed,)
+
     def in_time_alone(nid, stack):
         """Whether `nid` cuts what it reads in its rows and nothing else, so that what it hands
         down is what it reads, row for row."""
@@ -266,7 +270,7 @@ def plan(doc, tools, base, cut_file=None, cut_result=None, footage=None, count=N
                 return base
             fed_by_series = any(s is not None and kind_of(doc, tools, s) == "series" for s in sources(nid).values())
             raw = (base_key(file_of(nid)[1], video_output(doc)) if file_of(nid)
-                   else _key(up_key(nid, (*stack, nid)), node.tool, json.dumps(keyed(node), sort_keys=True), *[FED_ABSENT][:fed_by_series]))
+                   else _key(up_key(nid, (*stack, nid)), node.tool, *code_of(node), json.dumps(keyed(node), sort_keys=True), *[FED_ABSENT][:fed_by_series]))
             raw_keys[nid] = raw
             keys[nid] = raw if node.band is None else _key(raw, node.band)
         return keys[nid]

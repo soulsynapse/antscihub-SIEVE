@@ -38,7 +38,7 @@ class Entry:
     src_key: str | None  # what its run() sees as frames.key: every frame input's key, hashed together when there are several
     fed: bool
     srcs: dict          # frame input name -> the node wired into it, or None
-    static: bool        # the same output at every row, declared or inherited from every input: memoized under the raw key alone, row None
+    static: bool        # the same output at every row, declared or inherited from every input: memoized with row None, one value a cut
     standing: str = ""  # why the node does not run, as the plan sees it; "" when it runs
     types: dict = field(default_factory=dict)   # frame input name -> what the node wired into it produces, or None
     file: tuple | None = None                   # (path, footage print) of the file the node serves in place of its run, or None

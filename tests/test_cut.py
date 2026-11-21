@@ -64,3 +64,44 @@ def test_a_tool_cuts_by_its_declaration_alone_and_a_tool_below_two_cuts_is_told_
     p = plan(doc, tools, "base", cut_file=lambda nid, up: asked.append(nid), cut_result=lambda nid: [(0, 2), (5, 7)], footage="print")
     assert [c.extent.rows for c in p.entries["below"].cuts] == [(0, 2), (5, 7)] and not asked and p.entries["found"].file is None
     assert plan(doc, tools, "base", footage="print").entries["below"].cuts == (Record("print"),)        # a declaration that raises cuts nothing
+
+
+def test_a_value_is_one_in_every_period_holding_its_row_but_where_it_read_an_edge():
+    runs = []
+
+    def reads(name, before, after, at=lambda row: row):
+        def run(frames, row, params):
+            runs.append((name, row, frames.cut.extent.rows))
+            return frames(at(row))
+        return Tool(NAME=name, KIND="frame", EXPECTS="gray", PRODUCES="gray", run=run, reach_in_rows=lambda params: (before, after))
+
+    period = Tool(NAME="period", KIND="frame", EXPECTS="gray", PRODUCES="gray", PARAMS={"rows": {"default": [[2, 8], [5, 10]]}},
+                  run=lambda frames, row, params: frames(row), key_params=lambda params: {}, reach_in_rows=lambda params: (0, 0),
+                  cut_extents=lambda params, result: [{"rows": r} for r in params["rows"]])
+    own, back, walk, ahead = reads("own", 0, 0), reads("back", 1, 0, lambda row: row - 1), reads("walk", None, 0), reads("ahead", 0, 1)
+    gray_own_row = Tool(**{**vars(gray), "reach_in_rows": lambda params: (0, 0)})         # a tool that says nothing reads both edges
+    tools = {t.NAME: t for t in (gray_own_row, period, own, back, walk, ahead)}
+    doc = D.from_tools([gray_own_row, period, own])
+    for t in (back, walk, ahead):
+        n = doc.add_node(t.NAME)
+        doc.connect("own", n.id)
+    g = Graph(doc, Dec(), tools)
+
+    def ran(name, row, period):
+        e = g.snapshot().entries[name]
+        g.compute(name, row, cut=next(c for c in e.cuts if c.extent.rows == period))
+        return [(n, r) for n, r, _ in runs].count((name, row))
+
+    assert ran("own", 6, (2, 8)) == ran("own", 6, (5, 10)) == 1 and ran("own", 5, (5, 10)) == 1
+    assert ran("back", 6, (2, 8)) == ran("back", 6, (5, 10)) == 1
+    assert ran("back", 5, (2, 8)) == 1 and ran("back", 5, (5, 10)) == 2         # one read that the period begins at 5
+    assert ran("walk", 6, (2, 8)) == 1 and ran("walk", 6, (5, 10)) == 2         # of each period's first row at every row
+    assert ran("ahead", 6, (2, 8)) == ran("ahead", 7, (2, 8)) == 1
+    assert ("own", 6, (2, 8)) in runs and ("own", 6, (5, 10)) not in runs        # told the cut it was computed in
+
+    doc.node("period").params["rows"] = [[2, 9], [5, 10]]                     # the first period's last row later: no key moves
+    g.sync()
+    before = len(runs)
+    for name, row in (("own", 6), ("walk", 6), ("ahead", 6), ("ahead", 7)):
+        ran(name, row, (2, 9))
+    assert runs[before:] == [("ahead", 7, (2, 9))]                              # within reach of the old last row, it read it

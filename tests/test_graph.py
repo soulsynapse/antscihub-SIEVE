@@ -186,7 +186,7 @@ def test_a_read_after_the_node_moved_on_or_a_halt_is_cancelled():
         g.on_event = lambda ev: kinds.append(ev.kind) if ev.node == "add" else None
         with pytest.raises(Cancelled):
             g.compute("add", 0)
-        assert seen == [0, 1, 2, 3] and kinds[-1] == "cancel" and g.memo.get((g.key("add"), 0)) is None
+        assert seen == [0, 1, 2, 3] and kinds[-1] == "cancel" and g.memo.get((g.key("add"), 0, (None, None))) is None
         g.halt = True
         with pytest.raises(Cancelled):
             g.compute("same", 1)
@@ -240,7 +240,7 @@ def test_a_static_node_is_computed_once_held_once_and_peeked_at_any_row():
     for row in range(10):                                                 # a walk past the memo's limit evicts every plane but the static one
         g.compute("add", row)
     assert g.memo.evictions and g.peek(9, "const") is not None and g.compute("const", 5) is not None and const.runs == runs + 1
-    old, fold = (g._plan["const"].raw_key, None), g.density("const", 3)
+    old, fold = (g._plan["const"].raw_key, None, (None, None)), g.density("const", 3)
     g.sync()
     assert g.memo.get(old) is not None and g.density("const", 3) is fold   # a sync that leaves the node alone keeps both pins
     doc.node("const").params["k"] = 2

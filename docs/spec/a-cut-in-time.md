@@ -185,10 +185,9 @@ below a `period` read nothing of it.
   (`region.py:key_params`).
 - [ ] A value at a row further from the first and the last row of its node's extent than the
   node's reach before and after read nothing of the cut in time. It is held and served under its
-  key and row alone, in the memo and in a held run: one value above a `period`, below it, and in
-  every period that holds the row, computed once.
-  Check: a seam: `detect` above a `period` and below it, and in two periods that overlap, one
-  value a row and one computing of it.
+  key and row alone, in the memo and in a held run: one value in every period that holds the
+  row, computed once.
+  Check: a seam: `detect` in two periods that overlap, one value a row and one computing of it.
 - [ ] A value within the node's reach of its extent's first row is of that row, and one within
   its reach of the last of that. A node whose reach before is unbounded is of its extent's first
   row at every row, and one that reads its whole extent of both. Under one key and row, two
@@ -308,13 +307,14 @@ reads the rows either side of each and takes the rows that exist at either end.
   footage's.
   Check: a one-off over the crossings clip: a tracks csv below a period, its rows against the
   same node's above it.
-- [ ] A period's rows are in no key: a node below a `period` has the key it has above it, and
-  computes no row held above it that read nothing of the period, by A value is of what it read.
-  A period moved, added or gone moves the values that read the edge that moved, and no key, no
-  other period's and none that read no edge.
-  Check: a seam: a node below a `period` and one beside it, of one tool and params, one key; a
-  period's first row moved, `detect`'s rows it still holds standing, `motion`'s at the old and
-  the new first row not, and the other period's all standing.
+- [ ] Where a cut in time lies enters no recipe key: a node below a `period` has the key it has
+  above it, and a value of it that read nothing of the period is the one above it, held and
+  computed once, by A value is of what it read. A period moved, added or gone moves the values
+  that read the edge that moved, and no key, no other period's and none that read no edge.
+  Check: a seam: a node below a `period` and one beside it, of one tool and params, one key, and
+  `detect`'s value at a row in the middle of a period computed once for the two; a period's first
+  row moved, `detect`'s rows it still holds standing, `motion`'s at the old and the new first row
+  not, and the other period's all standing.
 - [ ] A frame read below a cutting node at a row outside the node's extent is absent, and a tool
   that reads a neighbouring row does at its extent's first and last rows what it does at the
   footage's, `motion`'s zero and `smooth`'s shorter window among them.

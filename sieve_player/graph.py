@@ -14,6 +14,8 @@ from typing import NamedTuple
 import numpy as np
 
 from . import density
+from .cut import computed_in
+from .cut import read as read_of_cut
 from .decoder import CLEAR, Decoder, EndOfStream, footage_print_by_stamp, letting_go
 from .document import INPUT, VIDEO_TOOL, video_output
 from .registry import by_name, computed, names_cut_files, reach_of
@@ -60,9 +62,21 @@ def gated(result, band, type):
 
 class Ref(NamedTuple):
     """What the memo holds for a result that is another store's array: the key that store holds it
-    under and its row there, None for a static node's."""
+    under, its row there, None for a static node's, and, in the memo, what it read of its cut."""
     key: str
     row: int | None
+    read: tuple = (None, None)
+
+
+def _address(e, row, cut=None):
+    """(the cut `e`'s value at `row` is computed in, by cut.computed_in, `cut` its reader's; the
+    memo key the value is held under): its raw key, its row, None for a static node's, and what it
+    read of that cut, by cut.read, a static node reading its whole extent."""
+    c = computed_in(e.cuts, cut, row)
+    rows = None if c is None else c.extent.rows
+    if e.static:
+        return c, (e.raw_key, None, read_of_cut(rows, (None, None), 0))
+    return c, (e.raw_key, row, read_of_cut(rows, e.reach, row))
 
 
 def _same(v, a):
@@ -206,20 +220,22 @@ class Frames:
     at row r, read-only, and frames(r, name) that of another of its INPUTS; frames.type(name) is what the node
     wired into that input produces, for a tool whose EXPECTS admits types its run() must tell
     apart. `key` changes whenever anything upstream of any input does, and `cut` is the record of the cut
-    the node runs in, None for a node whose inputs are of several. It reads through the plan the computation began in, so one run()
+    the node runs in: of its inputs' cuts, the one `cut`, the cut its value is computed in, is or was made
+    from; with none, their one, or None for several. Each read is of the input in that cut. It reads through the plan the computation began in, so one run()
     sees one graph even if the document is synced under it; but a read made once the node's raw key
     under the current plan differs from the one it began under, or once the graph is halted,
     raises Cancelled, so a run of many reads, a composite over the clip, dies at its next read
     rather than finishing work nothing will take. Made with the `row` its run is asked at, a read of
     a row outside what the tool's `reach_in_rows` says raises ValueError."""
 
-    def __init__(self, graph, plan, nid, sources, key, types=None, row=None):
-        self._graph, self._plan, self._nid, self._sources = graph, plan, nid, sources
+    def __init__(self, graph, plan, nid, sources, key, types=None, row=None, cut=None):
+        self._graph, self._plan, self._nid, self._sources, self._in = graph, plan, nid, sources, cut
         before, after = reach_of(plan[nid].tool, plan[nid].computed)
         self._reads = None if row is None else (None if before is None else row - before, None if after is None else row + after)
         self._raw_key, self._types = plan[nid].raw_key, types or {}
         self.key, self.fps, self.count = key, graph.fps, graph.count
-        self.cut = plan[nid].reads[0] if len(plan[nid].reads) == 1 else None
+        reads = plan[nid].reads
+        self.cut = computed_in(reads, cut, row) if cut is not None else reads[0] if len(reads) == 1 else None
         self.handed = []        # [(array, Ref)]: each array a read handed the run that a store holds, and where
 
     def named(self, ref, default=None):
@@ -238,7 +254,7 @@ class Frames:
             raise ValueError(f"read row {row}, outside the rows its tool's reach_in_rows says it reads")
         src = self._sources[input]
         try:
-            v = g._compute(self._plan, src, row, raw=True, reader=self._nid)
+            v = g._compute(self._plan, src, row, raw=True, reader=self._nid, cut=self._in)
         except Exception as exc:
             if not hasattr(exc, "sieve_node"):
                 exc.sieve_node = src     # a read that fails is the read node's, never the reader's
@@ -247,7 +263,7 @@ class Frames:
         out = v if e is None or e.band is None else banded(v, e.band)
         if out is v and isinstance(v, np.ndarray):
             memoized = e.kind == "frame" and e.file is None
-            self.handed.append((v, Ref(e.raw_key, None if memoized and e.static else row)))
+            self.handed.append((v, Ref(*_address(e, row, self._in)[1]) if memoized else Ref(e.raw_key, row)))
         return out
 
 
@@ -646,15 +662,16 @@ class Graph:
             e = self._plan.get(nid)
         return e is not None and e.fed
 
-    def compute(self, nid, row, raw=False, demand="display", p=None):
+    def compute(self, nid, row, raw=False, demand="display", p=None, cut=None):
         """Output of `nid` at `row`, memoized; None for a node nothing reaches. Worker threads only.
         The whole recursion runs in the Plan `p`, the one current at the call with none, so what
         lands in the memo under a key was computed from the graph that key describes. `raw` is the
         plane before the node's band, what its density counts, so the axis holds while a handle
-        moves. `demand` is what the caller answers, the display unless it says otherwise."""
+        moves. `demand` is what the caller answers, the display unless it says otherwise. `cut` is the
+        cut of the node's that the value is computed in, by cut.computed_in, the one holding `row` with none."""
         plan = (p or self.snapshot()).entries
         with self.demand(demand, nid):
-            return self._compute(plan, nid, row, raw)
+            return self._compute(plan, nid, row, raw, cut=cut)
 
     def progress(self, done, length, stack=None):
         """The walk's progress, `done` rows of `length`, as an event; whoever drives the walk, the
@@ -733,7 +750,7 @@ class Graph:
             if v.key in files:
                 d = self.readers.held(files[v.key])
                 return None if d is None else d.cached(v.row)
-            v = self.memo.get((v.key, v.row), count=False)
+            v = self.memo.get((v.key, v.row, v.read), count=False)
         return v
 
     def _memoized(self, mk):
@@ -744,7 +761,7 @@ class Graph:
         self.memo.counted(v is not None)
         return got, v
 
-    def _compute(self, plan, nid, row, raw=False, reader=None):
+    def _compute(self, plan, nid, row, raw=False, reader=None, cut=None):
         e = plan.get(nid)
         if e is None or e.kind in ("series", "selector") or not e.fed:
             return None
@@ -771,10 +788,10 @@ class Graph:
                 ev[1], ev[2] = v.nbytes, v.shape
             v.setflags(write=False)
             return v if raw or e.band is None else banded(v, e.band)
-        mk = (e.raw_key, None if e.static else row)
+        c, mk = _address(e, row, cut)
         got, v = self._memoized(mk)
         if v is None:
-            frames = Frames(self, plan, nid, e.srcs, e.src_key, e.types, row)
+            frames = Frames(self, plan, nid, e.srcs, e.src_key, e.types, row, c)
             with self.probe(nid, row, e.raw_key, reader) as ev:
                 try:
                     v = e.tool.run(frames, row, e.computed)
@@ -806,7 +823,7 @@ class Graph:
         e = plan.get(nid)
         if e is None or e.kind != "frame" or not e.fed:
             return None
-        k = (_key(e.raw_key, "fold"), None if e.static else row)
+        k = (_key(e.raw_key, "fold"), *_address(e, row)[1][1:])
         v = self.memo.get(k)
         if v is None:
             with self.demand("fold", nid):
@@ -833,7 +850,7 @@ class Graph:
             d = self.readers.held(e.file[0])
             v = None if d is None else d.cached(row)
             return v if v is None or e.band is None else banded(v, e.band)
-        v = self._memoized((e.raw_key, None if e.static else row))[1]
+        v = self._memoized(_address(e, row)[1])[1]
         return v if v is None or e.band is None else banded(v, e.band)
 
 

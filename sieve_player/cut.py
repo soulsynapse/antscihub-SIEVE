@@ -96,9 +96,39 @@ class Record:
         return r.file
 
 
+def read(rows, reach, row):
+    """What a value at `row` read of a cut in time: (the first row, the row past the last) of
+    `rows`, the cut's, each None where the value read nothing of that edge. `reach` is (rows
+    before, rows after) the row that the value reads, None a side without bound, which reads its
+    edge at every row. `rows` of None is the whole footage, and so is a first row of 0, the
+    footage's own first row being no cut's. A last row is the cut's whatever it is, the footage's
+    count not always known."""
+    if rows is None:
+        return None, None
+    (first, end), (before, after) = rows, reach
+    return (first if first > 0 and (before is None or row - before < first) else None,
+            end if after is None or row + after >= end else None)
+
+
 def holding(records, row):
     """The first of `records` whose rows hold `row`, or None."""
     return next((r for r in records if r.extent.holds(row)), None)
+
+
+def made_from(record, other):
+    """Whether `record` is `other` or a cut made from it, through any of the cuts between."""
+    return record is other or record == other or any(made_from(r, other) for r in record.made_from)
+
+
+def computed_in(records, cut, row):
+    """Of `records`, a node's cuts, the one its value at `row` is computed in: its one record; or
+    the one `cut`, the cut its reader computes in, is or was made from; or with no `cut` the first
+    holding `row`. None where none is."""
+    if len(records) == 1:
+        return records[0]
+    if cut is not None:
+        return next((r for r in records if made_from(cut, r)), None)
+    return holding(records, row)
 
 
 def place_in(read, shown, row, shape, plate):

@@ -19,7 +19,7 @@ MAY_IMPORT = {
     "plan": {"cut", "document", "registry", "wire"},
     "stream": set(),                              # the Event, the kinds and the Emitter; a reader of a dump loads nothing else
     "stats": {"stream"},                          # a reader of the stream; the Graph it is made on is handed to it
-    "graph": {"decoder", "document", "density", "plan", "registry", "stream", "wire"},     # Graph.density folds planes; sync holds a plan; it emits through an Emitter; a served file is read by a Decoder
+    "graph": {"cut", "decoder", "document", "density", "plan", "registry", "stream", "wire"},     # a value is memoized by what it read of its cut; Graph.density folds planes; sync holds a plan; it emits through an Emitter; a served file is read by a Decoder
     "canvas": {"document", "menu", "registry", "theme", "wire"},
     "menu": {"theme"},
     "pane": {"document", "registry", "theme", "widgets"},

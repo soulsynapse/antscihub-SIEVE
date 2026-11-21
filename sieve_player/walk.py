@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from . import density
+from .cut import holding
 from .registry import fold_of, imported_print
 from .graph import Series, absent_dtype, gated, kept
 from .stream import ASKED, GIVEN, HAND, SHAPE
@@ -219,10 +220,15 @@ class _Walk:
     def fold(self):
         """Folds one row more of each node in folding() that is short of the range, each from where
         its own count stands, so a node the plot comes to show later is folded from the range's
-        first row beside the rest. A node whose output is no plane is computed once and no more."""
+        first row beside the rest. A node whose output is no plane is computed once and no more; a
+        row outside the node's cuts is absent, no counts, and is not computed."""
         for nid in self.folding():
             r = self.at.get(nid, 0)
             if r >= self.length:
+                continue
+            e = self.plan.entries.get(nid)
+            if e is not None and holding(e.cuts, self.start + r) is None:
+                self.at[nid] = r + 1
                 continue
             v = self.graph.density(nid, self.start + r, self.plan)
             if v is None:

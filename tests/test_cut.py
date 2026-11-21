@@ -183,6 +183,19 @@ def test_a_node_below_a_period_is_keyed_as_beside_it_and_neither_computes_at_nor
     assert ran == 1 and not again.any() and at("motion", "below", 4, (3, 6))[1] == 0
     assert [at("motion", "below", row, (5, 9))[1] for row in (5, 6, 7)] == [0, 0, 0]
 
+    from sieve_player.bare import _Told
+    from sieve_player.walk import _Walk
+    g.watch([nodes["detect", "below"]])
+    dens = _Told()
+    w = _Walk(g, name="window", every=1 << 62, progress=_Told(), ready=_Told(), refused=_Told(), failed=_Told(), densities=dens, plan=g.snapshot())
+    w.begin(0, Dec.count)
+    before = len(runs)
+    while w.i < w.length or w.behind():
+        w.turn() if w.i < w.length else w.refold()
+    folded = dens.last[0][nodes["detect", "below"]].sum(axis=1)
+    assert [r for r in range(Dec.count) if folded[r]] == list(range(3, 9))       # a row outside the periods is absent, and the fold goes on past it
+    assert not [row for name, row in runs[before:] if name == "detect" and not 3 <= row < 9]
+
 
 def test_a_node_above_a_period_is_walked_as_with_none_and_one_below_is_walked_over_each_period_alone():
     import numpy as np

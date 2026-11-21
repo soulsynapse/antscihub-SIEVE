@@ -7,6 +7,7 @@ of the key serves a wrong value and O1 sees it. Run: python docs/playground/sim/
 """
 import hashlib
 import random
+import statistics
 import sys
 from dataclasses import dataclass, field, replace
 from pathlib import Path
@@ -15,6 +16,9 @@ sys.path.insert(0, str(Path(__file__).parent))
 from store import Address, Refused, Store  # noqa: E402
 
 MB, GB = 1 << 20, 1 << 30
+sys.setrecursionlimit(100000)
+WITHIN = 3.5      # the most threads or processes inside one clip gain, by figures.md
+PLANE = 64 << 10  # a result of more bytes a row than this is a plane and not a table
 TORN = "torn"
 
 
@@ -31,12 +35,13 @@ class Profile:
     read_bps: float
     write_bps: float
     seek_s: float
+    slow: float = 1.0   # how many times slower a core is than on figures.md's machine
 
 
-PROFILES = {   # placeholders until calibrated against docs/findings; see JOURNAL.md
-    "laptop": Profile("laptop", 2, 2 * GB, 40 * GB, 100 * MB, 80 * MB, 0.010),
-    "desktop": Profile("desktop", 16, 24 * GB, 500 * GB, 2000 * MB, 1500 * MB, 0.0002),
-    "hpc": Profile("hpc", 64, 200 * GB, 5000 * GB, 300 * MB, 300 * MB, 0.005),
+PROFILES = {   # the desktop is figures.md's machine; the disk rates and the other two are guesses no finding measures
+    "laptop": Profile("laptop", 4, 3 * GB, 40 * GB, 150 * MB, 120 * MB, 0.008, 2.5),
+    "desktop": Profile("desktop", 32, 24 * GB, 500 * GB, 2000 * MB, 1500 * MB, 0.0002),
+    "hpc": Profile("hpc", 64, 200 * GB, 5000 * GB, 300 * MB, 300 * MB, 0.005, 1.3),
 }
 
 
@@ -46,7 +51,8 @@ class Scheme:
     code_in_key: bool = True
     strong_print: bool = True
     atomic: bool = True
-    chunk: int = 64
+    chunk_bytes: int = 64 * MB   # a chunk is as many rows as fit this, by the pipeline's widest row
+    worth: bool = True           # the store's policy, see Store
 
 
 class Crash(Exception):
@@ -59,6 +65,7 @@ class Disk:
 
     def __init__(self, profile, clock):
         self.profile, self.clock, self.files, self.crash_in, self.ticks = profile, clock, {}, None, 0
+        self.total = 0
 
     def _step(self):
         if self.crash_in is not None:
@@ -68,6 +75,7 @@ class Disk:
                 raise Crash()
 
     def write(self, name, value, size):
+        self.total += size - (self.size(name) or 0)
         self.files[name] = [TORN, size, self._tick()]
         self._step()
         self.clock[0] += size / self.profile.write_bps
@@ -92,13 +100,19 @@ class Disk:
         return [n for n in self.files if n.startswith(prefix)]
 
     def delete(self, name):
-        self.files.pop(name, None)
+        self.total -= self.files.pop(name, (0, 0))[1]
 
     def touched(self, name):
         return self.files[name][2]
 
+    def write_seconds(self, size):
+        return size / self.profile.write_bps
+
+    def read_seconds(self, size):
+        return self.profile.seek_s + size / self.profile.read_bps
+
     def used(self):
-        return sum(f[1] for f in self.files.values())
+        return self.total
 
     def _tick(self):
         self.ticks += 1
@@ -124,12 +138,18 @@ class Node:
     cut_by: str = None                  # a gate whose result says which chunks this node has
 
 
-def pipeline():
+def pipeline(footage="1080p"):
+    """The tools, the nodes and the seconds a decoder's seek takes, for a document like the ants
+    one. Priced from figures.md at 1080p; at 5.3K by that file where it has a figure and by the
+    count of pixels where it has none."""
+    big = footage == "5.3K"
+    px = 7.6 if big else 1.0
     tools = {t.name: t for t in (
-        Tool("decode", "frame", 3.0, 6 * MB), Tool("gray", "frame", 1.0, 2 * MB),
-        Tool("motion", "frame", 4.0, 2 * MB), Tool("energy", "frame", 0.5, 64),
-        Tool("gate", "whole", 0.01, 16), Tool("detect", "frame", 12.0, 2 * MB),
-        Tool("track", "stepped", 3.0, 512))}
+        Tool("decode", "frame", 31.0 if big else 2.0, int(6.2 * MB * px)),
+        Tool("gray", "frame", 1.5 if big else 0.2, int(2 * MB * px)),
+        Tool("motion", "frame", 0.5 * px, int(2 * MB * px)), Tool("energy", "frame", 0.12 * px, 64),
+        Tool("gate", "whole", 0.002, 16), Tool("detect", "frame", 2.4 * px, 1200),
+        Tool("track", "stepped", 0.75, 1208))}
     nodes = {n.name: n for n in (
         Node("video", "decode"), Node("gray", "gray", ("video",)),
         Node("motion", "motion", ("gray",), {"span": 2}, frozenset({"span"})),
@@ -137,17 +157,18 @@ def pipeline():
         Node("gate", "gate", ("energy",), {"keep": 20}, frozenset({"keep"})),
         Node("detect", "detect", ("gray",), {"level": 40, "outline": 1}, frozenset({"level"}), "gate"),
         Node("track", "track", ("detect",), {"reach": 8}, frozenset({"reach"}), "gate"))}
-    return tools, nodes
+    return tools, nodes, (0.49 if big else 0.1)
 
 
 class World:
     """The document, the tools' code and the footage as they are now."""
 
-    def __init__(self, rows, scheme):
-        self.tools, self.nodes = pipeline()
+    def __init__(self, rows, scheme, footage="1080p"):
+        self.tools, self.nodes, self.seek_s = pipeline(footage)
         self.rows, self.scheme = rows, scheme
         self.footage = ["content-0", "size-0"]   # what the file holds; what its size and ends say
-        self.chunks = -(-rows // scheme.chunk)
+        self.chunk = max(1, scheme.chunk_bytes // max(t.bytes_per_row for t in self.tools.values()))
+        self.chunks = -(-rows // self.chunk)
         self._memo = {}
 
     def changed(self):
@@ -168,8 +189,17 @@ class World:
             return [0]
         if node.cut_by is None:
             return list(range(self.chunks))
-        gate, keep = self.truth(node.cut_by, 0), self.nodes[node.cut_by].params["keep"]
-        return [c for c in range(self.chunks) if int(digest(gate, c), 16) % 100 < keep]
+        if ("chunks", name) not in self._memo:
+            gate, keep = self.truth(node.cut_by, 0), self.nodes[node.cut_by].params["keep"]
+            self._memo["chunks", name] = [c for c in range(self.chunks) if int(digest(gate, c), 16) % 100 < keep]
+        return self._memo["chunks", name]
+
+    def before(self, name, chunk):
+        """The chunk of a node next before `chunk`, or None at its first."""
+        if ("before", name) not in self._memo:
+            kept = self.chunks_of(name)
+            self._memo["before", name] = dict(zip(kept[1:], kept))
+        return self._memo["before", name].get(chunk)
 
     def reads_of(self, name, chunk):
         """The (node, chunk) pairs computing this chunk reads, its own chunk before among them."""
@@ -185,9 +215,8 @@ class World:
         if node.cut_by:
             out.append((node.cut_by, 0))
         if kind == "stepped":
-            before = [c for c in self.chunks_of(name) if c < chunk]
-            if before:
-                out.append((name, before[-1]))
+            if self.before(name, chunk) is not None:
+                out.append((name, self.before(name, chunk)))
         return out
 
     def truth(self, name, chunk):
@@ -214,7 +243,7 @@ class World:
         return self._memo[at]
 
     def size(self, name, chunk):
-        return self.tools[self.nodes[name].tool].bytes_per_row * self.scheme.chunk
+        return self.tools[self.nodes[name].tool].bytes_per_row * self.chunk
 
 
 @dataclass
@@ -229,71 +258,77 @@ class Stats:
 
 class Ask:
     """`demand` of the contract: an address is answered from the store or computed, its inputs
-    demanded first. `speed` is how many independent chunks are being worked at once."""
+    demanded first. In a `walk`, frame tools gain `speed` and a plane passing through is handed
+    on without being held; `keep` sends what is made to disk whatever the policy thinks."""
 
     def __init__(self, world, store, profile, clock, stats):
         self.world, self.store, self.profile, self.clock, self.stats = world, store, profile, clock, stats
-        self.speed = 1
+        self.speed, self.passing, self.keep, self.flight, self.decoded = 1, False, False, {}, None
 
     def demand(self, name, chunk):
-        w = self.world
-        todo, order, seen = [(name, chunk)], [], set()
-        while todo:   # everything not held that this chunk needs, inputs before readers
-            at = todo.pop()
-            if at in seen:
-                continue
-            seen.add(at)
-            if self.store.covered(w.key(at[0]), [at[1]]):
-                continue
-            order.append(at)
-            todo += w.reads_of(*at)
-        for n, c in sorted(order, key=lambda at: (list(w.nodes).index(at[0]), at[1])):
-            self._compute(n, c)
-        return self._served(name, chunk)
-
-    def _served(self, name, chunk):
-        value = self.store.get(Address(self.world.key(name), chunk))
-        if value is None:   # let go between the computing and the reading; made again
-            self._compute(name, chunk)
-            value = self.store.get(Address(self.world.key(name), chunk))
-        if value is not None and value != self.world.truth(name, chunk):
+        self.flight = {}
+        value = self._value(name, chunk)
+        if value != self.world.truth(name, chunk):
             self.stats.broken.append(("O1", name, chunk))
         return value
 
+    def _value(self, name, chunk):
+        if (name, chunk) not in self.flight:
+            value = self.store.get(Address(self.world.key(name), chunk))
+            self.flight[name, chunk] = self._compute(name, chunk) if value is None else value
+        return self.flight[name, chunk]
+
     def _compute(self, name, chunk):
-        w, tool = self.world, self.world.tools[self.world.nodes[name].tool]
+        w, node = self.world, self.world.nodes[name]
+        tool = w.tools[node.tool]
         reads = w.reads_of(name, chunk)
         sizes = [w.size(n, c) for n, c in reads]
         live = w.size(name, chunk) + (max(sizes, default=0) if tool.kind == "whole" else sum(sizes))
         self.store.reserve(live)   # the output and the inputs alive at once, whoever else holds them
         try:
             for n, c in reads:
-                if self.store.get(Address(w.key(n), c)) is None:
-                    self._compute(n, c)
+                self._value(n, c)
             self.stats.peak = max(self.stats.peak, self.store.held_bytes + self.store.reserved)
-            rows = w.scheme.chunk * (len(reads) if tool.kind == "whole" else 1)
-            self.clock[0] += rows * tool.ms_per_row / 1000 / self.speed
+            rows = w.chunk * (len(reads) if tool.kind == "whole" else 1)
+            seconds = rows * tool.ms_per_row / 1000 * self.profile.slow
+            if tool.kind == "frame":
+                seconds /= self.speed
+            if not node.reads:
+                if self.decoded != chunk - 1:
+                    seconds += w.seek_s * self.profile.slow
+                self.decoded = chunk
+            self.clock[0] += seconds
             self.stats.computed += rows
         finally:
             self.store.release(live)
-        self.store.put(Address(w.key(name), chunk), w.truth(name, chunk), w.size(name, chunk))
+        passed = self.passing and self.store.worth and tool.bytes_per_row > PLANE
+        self.store.put(Address(w.key(name), chunk), w.truth(name, chunk), w.size(name, chunk), seconds,
+                       keep=self.keep, hold=not passed)
+        return w.truth(name, chunk)
 
     def walk(self, name):
-        w = self.world
-        upstream, todo = set(), [name]
-        while todo:
-            n = todo.pop()
-            if n not in upstream:
-                upstream.add(n)
-                todo += list(w.nodes[n].reads) + ([w.nodes[n].cut_by] if w.nodes[n].cut_by else [])
-        stepped = any(w.tools[w.nodes[n].tool].kind == "stepped" for n in upstream)
-        self.speed = 1 if stepped else self.profile.cores
+        self.speed, self.passing = min(self.profile.cores, WITHIN), True
         try:
-            for chunk in w.chunks_of(name):
-                self.stats.asked += w.scheme.chunk
+            for chunk in self.world.chunks_of(name):
+                self.stats.asked += self.world.chunk
                 self.demand(name, chunk)
         finally:
-            self.speed = 1
+            self.speed, self.passing = 1, False
+
+    def checkpoint(self, mark, name):
+        """Walk `name` and name its chunks as the checkpoint `mark`; the addresses named."""
+        self.walk(name)
+        addresses = [Address(self.world.key(name), c) for c in self.world.chunks_of(name)]
+        self.keep = True
+        try:
+            for address in addresses:
+                if not self.store.to_disk(address):
+                    self.flight = {}
+                    self._compute(name, address.chunk)
+        finally:
+            self.keep = False
+        self.store.checkpoint(mark, self.world.snapshot(), addresses)
+        return addresses
 
 
 OPS = (("scrub", 30), ("walk", 8), ("edit", 10), ("edit draw", 4), ("code", 3), ("footage", 1),
@@ -312,13 +347,13 @@ def sequence(seed, length, world):
     return out
 
 
-def run(ops, profile, scheme, rows=4096):
+def run(ops, profile, scheme, rows=1024):
     """Run `ops` on a fresh machine and return its Stats, the oracles' findings in `broken`."""
     clock, stats = [0.0], Stats()
     world, disk = World(rows, scheme), Disk(profile, clock)
 
     def opened(writer):
-        store = Store(disk, profile.memory, profile.disk, writer, atomic=scheme.atomic)
+        store = Store(disk, profile.memory, profile.disk, writer, atomic=scheme.atomic, worth=scheme.worth)
         return store, Ask(world, store, profile, clock, stats)
 
     store, ask = opened("a")
@@ -330,7 +365,7 @@ def run(ops, profile, scheme, rows=4096):
                 kept = world.chunks_of(name)
                 if kept:
                     start = clock[0]
-                    stats.asked += scheme.chunk
+                    stats.asked += world.chunk
                     ask.demand(name, kept[chunk % len(kept)])
                     stats.scrubs.append(clock[0] - start)
             elif kind == "walk":
@@ -353,8 +388,7 @@ def run(ops, profile, scheme, rows=4096):
                 names = sorted(disk.files)
                 for victim in names[pick % 7 :: 11]:
                     disk.delete(victim)
-                store.held.clear()
-                store.held_bytes = 0
+                store.forget()
                 for address in store.gone():
                     marks = {m: a for m, a in marks.items() if address not in a}   # said gone, by name
             elif kind == "reopen":
@@ -371,10 +405,7 @@ def run(ops, profile, scheme, rows=4096):
                 other_store, other = opened(f"b{opens}")
                 other.walk(name)
             elif kind == "checkpoint":
-                ask.walk(name)
-                addresses = [Address(world.key(name), c) for c in world.chunks_of(name)]
-                store.checkpoint(f"mark-{i}", world.snapshot(), addresses)
-                marks[f"mark-{i}"] = set(addresses)
+                marks[f"mark-{i}"] = set(ask.checkpoint(f"mark-{i}", name))
             elif kind == "restore" and marks:
                 mark = sorted(marks)[pick % len(marks)]
                 if store.manifest(mark) is None:   # the manifest itself was deleted
@@ -419,7 +450,7 @@ def shrunk(ops, profile, scheme):
 
 
 def torture(scheme, seeds, length=60, profile=PROFILES["laptop"]):
-    world = World(4096, scheme)
+    world = World(1024, scheme)
     for seed in range(seeds):
         ops = sequence(seed, length, world)
         stats = run(ops, profile, scheme)
@@ -429,9 +460,86 @@ def torture(scheme, seeds, length=60, profile=PROFILES["laptop"]):
     return None
 
 
+def price(scheme, profile, footage="1080p", rows=108000):
+    """What named stretches of use cost on `profile`: seconds of simulated time each, the scrubs'
+    median and worst in ms, the most memory taken and the disk held at the end."""
+    clock, stats = [0.0], Stats()
+    world, disk = World(rows, scheme, footage), Disk(profile, clock)
+    rng, out = random.Random(1), {}
+
+    def opened():
+        store = Store(disk, profile.memory, profile.disk, atomic=scheme.atomic, worth=scheme.worth)
+        return store, Ask(world, store, profile, clock, stats)
+
+    def timed(label, act):
+        start = clock[0]
+        try:
+            act()
+            out[label] = clock[0] - start
+        except Refused as refused:
+            out[label] = str(refused)
+
+    def scrubs(name, count, spread):
+        kept, took = world.chunks_of(name), []
+        at = rng.randrange(len(kept))
+        for _ in range(count):
+            at = min(len(kept) - 1, max(0, at + rng.randint(-spread, spread)))
+            start = clock[0]
+            ask.demand(name, kept[at])
+            took.append((clock[0] - start) * 1000)
+        return took
+
+    def build():
+        took = []
+        for round_ in range(20):
+            world.nodes["motion"].params["span"] = round_
+            world.changed()
+            took += scrubs("motion", 5, 3)
+        out["build: a scrub in ms, median / worst"] = (statistics.median(took), max(took))
+
+    def revisit():
+        took = scrubs("detect", 50, 10 ** 6)
+        out["revisit: a scrub in ms, median / worst"] = (statistics.median(took), max(took))
+
+    def nudge():
+        world.nodes["detect"].params["level"] = 41
+        world.changed()
+        ask.walk("track")
+
+    store, ask = opened()
+    timed("build a pipeline: 20 edits, 5 scrubs each", build)
+    timed("first full walk of the tracks", lambda: ask.walk("track"))
+    timed("revisit: 50 scrubs anywhere", revisit)
+    timed("the same walk again", lambda: ask.walk("track"))
+    timed("checkpoint the tracks", lambda: ask.checkpoint("kept", "track"))
+    store, ask = opened()
+    timed("reopened: walk the tracks", lambda: ask.walk("track"))
+    timed("nudge detect, walk again", nudge)
+    out["peak memory GB"], out["disk held GB"] = stats.peak / GB, disk.used() / GB
+    return out
+
+
+def show(cell):
+    if isinstance(cell, tuple):
+        return f"{cell[0]:.0f} / {cell[1]:.0f}"
+    return cell[:40] if isinstance(cell, str) else f"{cell:.1f}"
+
+
+def prices(footage="1080p", only=None):
+    cols = [(p, label, Scheme(worth=worth)) for p in PROFILES.values() if only in (None, p.name)
+            for label, worth in (("worth", True), ("lru", False))]
+    table = [price(scheme, profile, footage) for profile, _, scheme in cols]
+    print(f"{footage}, an hour at 30 rows a second; seconds unless said")
+    print("| | " + " | ".join(f"{p.name} {label}" for p, label, _ in cols) + " |")
+    print("|---|" + "---|" * len(cols))
+    for row in table[0]:
+        print(f"| {row} | " + " | ".join(show(t.get(row, "")) for t in table) + " |")
+
+
 def main(seeds=200):
     schemes = {
         "contract": Scheme(),
+        "contract, plain LRU and everything written": Scheme(worth=False),
         "code left out of the key (today)": Scheme(code_in_key=False),
         "footage print of size and ends (today)": Scheme(strong_print=False),
         "entries written in place": Scheme(atomic=False),
@@ -446,4 +554,7 @@ def main(seeds=200):
 
 
 if __name__ == "__main__":
-    main(int(sys.argv[1]) if len(sys.argv) > 1 else 200)
+    if sys.argv[1:2] == ["prices"]:
+        prices(*sys.argv[2:4])
+    else:
+        main(int(sys.argv[1]) if len(sys.argv) > 1 else 200)

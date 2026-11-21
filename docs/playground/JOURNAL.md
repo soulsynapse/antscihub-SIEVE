@@ -16,16 +16,20 @@ this file where they differ.
   the contract in code: `.venv/Scripts/python.exe docs/playground/sim/sim.py 150` runs the
   torture in about ten seconds and prints a line a scheme. Read "What the simulation has shown"
   before touching either file.
-- Next action, in order: (a) chunks sized by bytes and not by a count of rows, a `Scheme` field,
-  since a chunk of 64 rows of 4K colour passes a 2 GB budget by itself; (a2) the three changes
-  "What the figures say" asks of the simulation; (b) the pricing half:
-  named workloads (building a pipeline by edit and scrub, a full walk then a revisit, a saved
-  file reopened, a gate then a heavy chain on its cuts) run on the three `PROFILES`, printing
-  simulated seconds, scrub latency, share recomputed, peak memory and disk held, with policies
-  compared side by side, priced from `docs/playground/figures.md` (done, run 2; do not reread
-  it whole, its conclusions are below); (c) no finding measures a disk's read and write rate or
-  seek, so those three stay labelled guesses; (d) then stage 4's first slice.
-- Counters: queued runs 2 of 15; cycles 1 of 4 (the contract and its first torture).
+- Next action, in order: (a) the three changes "What the prices say" asks of the store and the
+  ask, each tried in `sim.py` and kept only if the table moves: a scrub computes the row looked
+  at and not its chunk; the disk tier lets go by worth as the memory tier does; a walk holds a
+  plane while memory is free and stops when it is not. (b) A 5.3K table
+  (`sim.py prices 5.3K`, not yet run) and a workload of many pieces walked at once by several
+  stores on one disk, which is the HPC case and the one thing about cores still unpriced.
+  (c) A cheap claims pass, he offered Haiku for it on 2026-11-21: an Agent with `model: haiku`
+  handed one section of this journal or of `contract.md` and told to list each claim about the
+  tree with the file and line that bears it out or does not. Calibrate before trusting: plant
+  one claim known false and one known true and see both come back right. (d) Rewrite
+  `contract.md` to what the simulation settled, then stage 4's first slice.
+- Run the simulation: `.venv/Scripts/python.exe docs/playground/sim/sim.py 150` (torture, a line
+  a scheme) and `... sim.py prices 1080p [profile]` (the table below), a few seconds each.
+- Counters: queued runs 2 of 15; cycles 2 of 4 (the contract and its torture; the prices).
 - Context: `bash ~/.claude/tools/context-used.sh 300` prints what is left before the auto-compact
   window (300k by his `/autocompact` on 2026-11-21). Bring this file up to date before a step
   that reads a lot, and when under about 30k left.
@@ -193,6 +197,27 @@ restore) and checks O1, O3, O5 and O6 after each. `shrunk` cuts a failing sequen
 Three changes this asks of `sim.py`: the speed cap; a cost to a memory put and a policy that may
 decline to hold; the real figures in `pipeline()` and `PROFILES`, with a 5.3K variant.
 
+## What the prices say (`sim.py prices 1080p`; an hour of footage, the ants-like pipeline)
+
+The policies compared: "worth" ranks memory by seconds saved a byte, writes to disk only what
+costs more to make than to write, and lets a plane pass through a walk unheld; "lru" holds by
+recency and writes everything. Disk rates and the laptop and HPC profiles are guesses.
+
+- The first walk of the tracks: 755 s against 11384 on the laptop, 374 against 1048 on the
+  desktop, 395 against 3944 on the HPC profile. Writing planes is the whole difference.
+- Under lru the laptop's 40 GB fills with planes, which push the tables off the disk: the same
+  walk again costs 1988 s where worth costs none, and the checkpoint is refused with 1653 of
+  2132 entries gone. Under worth the hour's results are 0.1 GB. This is the case for goal 4.
+- Reopened, the walk is answered from disk in 0.4 to 17 s under worth.
+- Where worth loses: after a nudge to detect, the walk decodes again what it let pass, 137 s
+  against 52 on the desktop and 276 against 193 on HPC. Memory was free there and worth did not
+  use it. Hence change three above.
+- A scrub while building is 168 ms on the desktop and 317 on the laptop, nearly all of it one
+  seek and a chunk of ten rows computed for one looked at. Hence change one.
+- On the desktop worth still wrote 129 GB: decoded chunks reached by a seek cost more than their
+  write. Right by its own rule, and they are what the disk should let go of first. Change two.
+- The torture still holds for both policies and still breaks for today's three weaknesses.
+
 ## Blind spots I know of, and what covers each
 
 - I have not read the runtime myself; I hold the inventory's reading, spot-checked on five rows.
@@ -228,3 +253,5 @@ decline to hold; the real figures in `pipeline()` and `PROFILES`, with a 5.3K va
 - 2026-11-21. Branch cut, journal written, stage 1 run and read. Hypothesis written above.
 - 2026-11-21. Contract written; store and simulation written here, not queued, being small and
   the design itself. Torture passes for the contract and fails for today's three weaknesses.
+- 2026-11-21. Figures gathered by run 2; chunks by bytes, the worth policy and priced workloads
+  added to the simulation. A first pricing run passed its minute for an uncached cut; memoized.

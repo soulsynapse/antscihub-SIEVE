@@ -7,7 +7,7 @@ from tools import changeenergy
 def test_squared_difference_spread_by_the_blur_and_zero_at_row_zero():
     d = np.zeros((2, 16, 16), np.uint8)
     d[1, 8, 8] = 10                                        # one pixel changes by 10: energy 100, blurred
-    frames = lambda r: d[r]  # noqa: E731
+    frames = lambda r: d[r] if r >= 0 else None  # noqa: E731
     out = changeenergy.run(frames, 1, {"sigma": 1.0})
     assert out.shape == (16, 16) and out.dtype == np.float32
     assert abs(out.sum() - 100.0) < 1e-3 and out[8, 8] == out.max() and 0.0 < out[8, 8] < 100.0

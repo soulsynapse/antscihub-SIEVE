@@ -103,7 +103,11 @@ How the player treats a tool, as `sieve_player/graph.py`, `pane.py` and `window.
   many reads ends at its next one, so a tool never needs to poll for interruption and must not
   swallow that exception. A read past the last row the stream has raises `decoder.EndOfStream`,
   the one IndexError the worker closes a walk on; a tool reading rows the container claims
-  (background) catches it by that name, and any other IndexError is the tool's failure.
+  (background) catches it by that name, and any other IndexError is the tool's failure. A read
+  before row 0, or outside the rows of the cut in time the node runs in, is None, the row absent:
+  a tool reading the row before does there what it does at row 0. `frames.rows` is (first, the
+  row past the last) of those rows, the footage's with no cut in time, and `frames.count` the
+  footage's whatever the cut.
 - The tools under `tools/` import Qt, and the parts of `sieve_player` that import it, inside
   `settings()`, `draw()` and their `__main__` block rather than at module top, which lets a script
   without Qt import them and call `run`; a player module that imports no Qt, `document` or

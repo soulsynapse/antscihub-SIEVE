@@ -309,11 +309,11 @@ a period whose rows are the footage's each reads the row before the period's fir
 `tools/background.py` samples rows over `frames.count` and is held once a key. `tools/smooth.py`
 reads the rows either side of each and takes the rows that exist at either end.
 
-- [ ] Every row a node below a period is handed, computes at, is held at and writes is the
+- [x] Every row a node below a period is handed, computes at, is held at and writes is the
   footage's.
   Check: a one-off over the crossings clip: a tracks csv below a period, its rows against the
   same node's above it.
-- [ ] Where a cut in time lies enters no recipe key: a node below a `period` has the key it has
+- [x] Where a cut in time lies enters no recipe key: a node below a `period` has the key it has
   above it, and a value of it that read nothing of the period is the one above it, held and
   computed once, by A value is of what it read. A period moved, added or gone moves the values
   that read the edge that moved, and no key, no other period's and none that read no edge.
@@ -321,16 +321,16 @@ reads the rows either side of each and takes the rows that exist at either end.
   `detect`'s value at a row in the middle of a period computed once for the two; a period's first
   row moved, `detect`'s rows it still holds standing, `motion`'s at the old and the new first row
   not, and the other period's all standing.
-- [ ] A frame read below a cutting node at a row outside the node's extent is absent, and a tool
+- [x] A frame read below a cutting node at a row outside the node's extent is absent, and a tool
   that reads a neighbouring row does at its extent's first and last rows what it does at the
   footage's, `motion`'s zero and `smooth`'s shorter window among them.
   Check: a seam: `motion` below a period at the period's first row against `motion` at row 0, and
   above the period at that row the difference, the two held apart.
-- [ ] A node that reads its whole extent reads the period's rows and no other: the count of rows
+- [x] A node that reads its whole extent reads the period's rows and no other: the count of rows
   `background` samples over below a period is the period's, and it is held once a period.
   Check: a one-off over the crossings clip: `background` below a `period` of two periods, two
   composites, each against the composite of that period written to a clip.
-- [ ] Below a region, a row is the footage's as it is above it.
+- [x] Below a region, a row is the footage's as it is above it.
   Check: a one-off: a node's rows below a served region against the plate's.
 
 ## Outside a cut is absent

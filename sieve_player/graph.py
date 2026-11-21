@@ -221,7 +221,10 @@ class Frames:
     wired into that input produces, for a tool whose EXPECTS admits types its run() must tell
     apart. `key` changes whenever anything upstream of any input does, and `cut` is the record of the cut
     the node runs in: of its inputs' cuts, the one `cut`, the cut its value is computed in, is or was made
-    from; with none, their one, or None for several. Each read is of the input in that cut. It reads through the plan the computation began in, so one run()
+    from; with none, their one, or None for several. Each read is of the input in that cut, and a read at a row
+    outside the cut's rows or before the footage's first is None, absent as no row is; `rows` is
+    (first, the row past the last) of the cut's rows, (0, count) for the whole footage, and `count`
+    the footage's rows whatever the cut. It reads through the plan the computation began in, so one run()
     sees one graph even if the document is synced under it; but a read made once the node's raw key
     under the current plan differs from the one it began under, or once the graph is halted,
     raises Cancelled, so a run of many reads, a composite over the clip, dies at its next read
@@ -236,6 +239,8 @@ class Frames:
         self.key, self.fps, self.count = key, graph.fps, graph.count
         reads = plan[nid].reads
         self.cut = computed_in(reads, cut, row) if cut is not None else reads[0] if len(reads) == 1 else None
+        self._within = None if self.cut is None else self.cut.extent.rows
+        self.rows = self._within or (0, self.count)
         self.handed = []        # [(array, Ref)]: each array a read handed the run that a store holds, and where
 
     def named(self, ref, default=None):
@@ -252,6 +257,8 @@ class Frames:
             raise Cancelled(f"{self._nid} at row {row}: the graph moved on")
         if self._reads is not None and ((self._reads[0] is not None and row < self._reads[0]) or (self._reads[1] is not None and row > self._reads[1])):
             raise ValueError(f"read row {row}, outside the rows its tool's reach_in_rows says it reads")
+        if row < 0 or (self._within is not None and not self._within[0] <= row < self._within[1]):
+            return None
         src = self._sources[input]
         try:
             v = g._compute(self._plan, src, row, raw=True, reader=self._nid, cut=self._in)

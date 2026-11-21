@@ -1,4 +1,5 @@
-"""Frame tool: v2's Lucas-Kanade optical flow, per pixel. Gray or mask in, a flow field out; row 0 is zero.
+"""Frame tool: v2's Lucas-Kanade optical flow, per pixel. Gray or mask in, a flow field out; zero where the row
+before is absent, at row 0 and at the first row of a cut in time.
 
 The field is (H, W, 2) float32: u along columns and v along rows, in pixels per frame. Each pixel
 solves [[Jxx, Jxy], [Jxy, Jyy]] (u, v) = -(Jxt, Jyt) on the gradient products blurred with `sigma`,
@@ -34,10 +35,10 @@ def reach_in_rows(params):
 
 
 def run(frames, row, params):
-    g = np.asarray(frames(row), np.float32)
-    if row == 0:
+    g, before = np.asarray(frames(row), np.float32), frames(row - 1)
+    if before is None:
         return np.zeros(g.shape + (2,), np.float32)
-    return lk(np.asarray(frames(row - 1), np.float32), g, params["sigma"])
+    return lk(np.asarray(before, np.float32), g, params["sigma"])
 
 
 if __name__ == "__main__":

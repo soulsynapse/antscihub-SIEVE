@@ -7,7 +7,7 @@ from tools import agreement, flow, speed
 yy, xx = np.mgrid[:32, :32]
 blob = lambda cx: 100.0 * np.exp(-((xx - cx) ** 2 + (yy - 16) ** 2) / 18.0)  # noqa: E731
 D = np.stack([blob(14), blob(15)]).astype(np.float32)
-frames = lambda r: D[r]  # noqa: E731
+frames = lambda r: D[r] if r >= 0 else None  # noqa: E731
 
 
 def test_a_blob_moved_one_column_reads_u_one_and_zero_where_nothing_moved():

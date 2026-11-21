@@ -131,6 +131,58 @@ def test_a_value_is_one_in_every_period_holding_its_row_but_where_it_read_an_edg
     assert runs[before:] == [("ahead", 7, (2, 9))]                              # within reach of the old last row, it read it
 
 
+def test_a_node_below_a_period_is_keyed_as_beside_it_and_reads_no_row_outside_the_period():
+    import numpy as np
+
+    from tools import motion
+
+    runs = []
+
+    def counted(name, run, reach):
+        return Tool(NAME=name, KIND="frame", EXPECTS="gray", PRODUCES="gray", reach_in_rows=reach,
+                    run=lambda frames, row, params: runs.append((name, row)) or run(frames, row, params))
+
+    detect = counted("detect", lambda frames, row, params: frames(row), lambda params: (0, 0))
+    moved = counted("motion", motion.run, motion.reach_in_rows)
+    period = Tool(NAME="period", KIND="frame", EXPECTS="gray", PRODUCES="gray", PARAMS={"rows": {"default": [[2, 6], [5, 9]]}},
+                  run=lambda frames, row, params: frames(row), key_params=lambda params: {}, reach_in_rows=lambda params: (0, 0),
+                  cut_extents=lambda params, result: [{"rows": r} for r in params["rows"]])
+    gray_own_row = Tool(**{**vars(gray), "reach_in_rows": lambda params: (0, 0)})
+    tools = {t.NAME: t for t in (gray_own_row, period, detect, moved)}
+    doc = D.from_tools([gray_own_row, period])
+    nodes = {}
+    for where in ("below", "beside"):
+        for t in ("detect", "motion"):
+            nodes[t, where] = n = doc.add_node(t).id
+            doc.connect("period" if where == "below" else "gray", n)
+    g = Graph(doc, Dec(), tools)
+
+    def at(t, where, row, period=None):
+        nid = nodes[t, where]
+        cut = None if period is None else next(c for c in g.snapshot().entries[nid].cuts if c.extent.rows == period)
+        before = len(runs)
+        return g.compute(nid, row, cut=cut), len(runs) - before
+
+    e = g.snapshot().entries
+    assert all(e[nodes[t, "below"]].key == e[nodes[t, "beside"]].key for t in ("detect", "motion"))
+    assert at("detect", "beside", 5)[1] == 1 and at("detect", "below", 5, (2, 6))[1] == at("detect", "below", 5, (5, 9))[1] == 0
+    first, ran = at("motion", "below", 2, (2, 6))
+    assert ran == 1 and not first.any() and at("motion", "beside", 0)[0].tolist() == first.tolist()      # the row before absent, as before row 0
+    beside, ran = at("motion", "beside", 2)
+    assert ran == 1 and (beside == 1).all()                                       # above the period, the difference: held apart
+    for row in (3, 4, 5):
+        at("motion", "below", row, (2, 6)), at("detect", "below", row, (2, 6))
+    for row in (5, 6, 7):
+        at("motion", "below", row, (5, 9))
+
+    doc.node("period").params["rows"] = [[3, 6], [5, 9]]                         # the first period begins a row later
+    g.sync()
+    assert [at("detect", "below", row, (3, 6))[1] for row in (3, 4, 5)] == [0, 0, 0]
+    again, ran = at("motion", "below", 3, (3, 6))
+    assert ran == 1 and not again.any() and at("motion", "below", 4, (3, 6))[1] == 0
+    assert [at("motion", "below", row, (5, 9))[1] for row in (5, 6, 7)] == [0, 0, 0]
+
+
 def test_a_node_above_a_period_is_walked_as_with_none_and_one_below_is_walked_over_each_period_alone():
     import numpy as np
 

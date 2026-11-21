@@ -142,7 +142,8 @@ def plan(doc, tools, base, cut_file=None, cut_result=None, footage=None):
     is not. Of a node's params the raw key holds those its tool's computing is handed, the
     registry's `computed`, or what its tool's `key_params` answers of them where it has one that
     does not raise. A node that serves its file reads nothing, and its key is the one a document opened on
-    that file gives its video node, so everything below it is keyed as that document's is. A node's cuts are its inputs', and a cutting node's are made from them, one for
+    that file gives its video node, so everything below it is keyed as that document's is. A node that cuts
+    in its rows alone enters no key below it: what reads it is keyed by what it reads. A node's cuts are its inputs', and a cutting node's are made from them, one for
     each extent its tool's `cut_extents` answers of its params and of `cut_result` over each cut it
     reads, the rows it answers of a result over a cut in time lifted by that cut's first row. A cutting node
     is refused, saying why, where its CUT_BY input is wired beside a
@@ -205,8 +206,23 @@ def plan(doc, tools, base, cut_file=None, cut_result=None, footage=None):
                 pass
         return given
 
+    def in_time_alone(nid, stack):
+        """Whether `nid` cuts what it reads in its rows and nothing else, so that what it hands
+        down is what it reads, row for row."""
+        if not cuts(nid) or file_of(nid):
+            return False
+        made_here = cuts_of(nid, stack)
+        return made_here != reads_of(nid, stack) and all(
+            len(c.made_from) == 1 and c.extent.rect == c.made_from[0].extent.rect and c.extent.rects == c.made_from[0].extent.rects
+            for c in made_here)
+
+    def read_key(src, stack):
+        while in_time_alone(src, stack) and (above := doc.source(src)) is not None and above.src not in stack:
+            src = above.src
+        return key_of(src, stack)
+
     def up_key(nid, stack=()):
-        ups = [key_of(src, stack) if src is not None and src not in stack else "none" for src in sources(nid).values()]
+        ups = [read_key(src, stack) if src is not None and src not in stack else "none" for src in sources(nid).values()]
         return ups[0] if len(ups) == 1 else _key(*ups)
 
     def key_of(nid, stack=()):

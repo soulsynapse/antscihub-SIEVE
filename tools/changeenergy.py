@@ -1,4 +1,5 @@
-"""Frame tool: v2's change energy, the structure tensor's Jtt. Gray or mask in, a float32 plane out; row 0 is zero.
+"""Frame tool: v2's change energy, the structure tensor's Jtt. Gray or mask in, a float32 plane out; zero where the
+row before is absent, at row 0 and at the first row of a cut in time.
 
 The frame-to-frame difference squared and Gaussian-blurred: the blur is the tensor's spatial window,
 and v1 and v2 held it at sigma 2.0 as a constant. It is a knob here, with that default. The plane is in
@@ -17,10 +18,10 @@ def reach_in_rows(params):
 
 
 def run(frames, row, params):
-    f = np.asarray(frames(row), np.float32)
-    if row == 0:
+    f, before = np.asarray(frames(row), np.float32), frames(row - 1)
+    if before is None:
         return np.zeros_like(f)
-    it = f - np.asarray(frames(row - 1), np.float32)
+    it = f - np.asarray(before, np.float32)
     return cv2.GaussianBlur(it * it, (0, 0), params["sigma"])
 
 

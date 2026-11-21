@@ -856,7 +856,8 @@ def test_a_tool_raising_indexerror_fails_the_walk_and_only_the_stream_end_closes
 def test_a_clip_stack_of_tables_is_counted_through_its_object_columns():
     """A row of a table type is counted with the arrays behind its object columns, and at its
     pointers under a type that is no table; the clip walk stops where the running total
-    passes STACK_BYTES, the rows it has standing, where the first row's forecast let it start."""
+    passes STACK_BYTES, the rows it has standing, where the first row's forecast let it start. The
+    forecast is of every walked node's stack together."""
     from PySide6.QtWidgets import QApplication
     from sieve_player import walk as W
     from sieve_player.worker import Worker
@@ -896,6 +897,24 @@ def test_a_clip_stack_of_tables_is_counted_through_its_object_columns():
     assert len(clips[-1]["head"]["signal"]) == walked[-1][0]
     clip = led.view().walks[-1]
     assert (clip.lane, clip.done, clip.length) == ("clip", walked[-1][0], walked[-1][0])       # refused, its record is closed at the rows it had
+
+    from sieve_player.bare import _Told
+    heads = [tool(f"h{i}", kind="series", produces="signal") for i in (1, 2)]
+    for h in heads:
+        h.run = lambda series, params: {"signal": np.zeros(len(series.data), np.float32)}
+    doc = fan_out()
+    for h, frames in zip(heads, ("add", "same")):
+        doc.connect(frames, doc.add_node(h.NAME).id)
+    g = Graph(doc, Dec(), {**TOOLS, **{h.NAME: h for h in heads}})
+    told = _Told()
+    w = W._Walk(g, name="clip", every=1 << 62, progress=_Told(), ready=_Told(), refused=told, failed=_Told(), plan=g.snapshot())
+    W.STACK_BYTES = Dec.count * nbytes("gray", g.compute("add", 0)) * 3 // 2      # one walked node's stack fits, the two together do not
+    try:
+        w.begin(0, Dec.count)
+        w.turn()
+    finally:
+        W.STACK_BYTES = 512 << 20
+    assert told.last and told.last[0].startswith("the clip's stack would be") and not w.stacks
 
 
 def test_a_shown_table_walks_without_a_series_node():

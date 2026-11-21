@@ -314,13 +314,14 @@ def test_the_hover_reads_each_shown_line_by_name_and_value_and_two_equal_values_
     w = Plot()
     w.resize(640, 154)
     w.set_window(0, 100, 30.0)
-    up = np.arange(100, dtype=np.float64)
-    w.set_lines({"up": [(up, None, 0, False)], "twin": [(up.copy(), None, 0, False)], "short": [(up[:10], None, 0, False)]})
+    up, gone = np.arange(100, dtype=np.float64), np.full(100, np.nan)
+    w.set_lines({"up": [(up, None, 0, False)], "twin": [(up.copy(), None, 0, False)], "short": [(up[:10], None, 0, False)],
+                 "absent": [(gone, None, 0, False)]})
     w.set_selection("up")
-    w.set_pinned(["twin", "short"])
+    w.set_pinned(["twin", "short", "absent"])
     w.set_hover(40)
     outs = w.readouts()
-    assert [o[0] for o in outs] == ["up", "twin"] and all(o[1] == f"{o[0]} 40" for o in outs)
+    assert [o[0] for o in outs] == ["up", "twin"]      # a NaN is a row absent: it reads nothing and all(o[1] == f"{o[0]} 40" for o in outs)
     assert outs[0][2] == outs[1][2] and not outs[0][3].intersects(outs[1][3])
     img = w.grab().toImage()
     assert coloured(img, outs[0][3]) and not coloured(img, outs[1][3])    # the selection's in the series colour, the pinned's in ink

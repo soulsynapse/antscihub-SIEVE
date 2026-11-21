@@ -166,6 +166,8 @@ def test_a_node_below_a_period_is_keyed_as_beside_it_and_neither_computes_at_nor
     e = g.snapshot().entries
     assert all(e[nodes[t, "below"]].key == e[nodes[t, "beside"]].key for t in ("detect", "motion"))
     assert at("detect", "below", 1) == at("detect", "below", 7, (2, 6)) == (None, 0)
+    at("detect", "beside", 1), g.density(nodes["detect", "beside"], 1)
+    assert g.peek(1, nodes["detect", "below"]) is None and g.density(nodes["detect", "below"], 1) is None    # not the one beside's
     assert at("detect", "beside", 5)[1] == 1 and at("detect", "below", 5, (2, 6))[1] == at("detect", "below", 5, (5, 9))[1] == 0
     first, ran = at("motion", "below", 2, (2, 6))
     assert ran == 1 and not first.any() and at("motion", "beside", 0)[0].tolist() == first.tolist()      # the row before absent, as before row 0
@@ -320,4 +322,6 @@ def test_a_period_cut_by_a_gate_is_cut_by_the_gates_held_run_and_holding_its_per
         g.sync()
         assert g.snapshot().entries["period"].cuts == cuts
     assert len(runs) == 4
-    assert period_run(q, walked(q.of(w), cuts[-1], (8, 9)), 8, 9)[4] == (8, 9)      # a count lowered under a period's end
+    start, rows, has, chain, cut, walked_rows = period_run(q, walked(q.of(w), cuts[-1], (8, 9)), 8, 9)     # a count lowered under a period's end
+    assert cut == (8, 9) and runs.hold(start, rows, has, chain, cut, worth=worth, walked=walked_rows)
+    assert [(a, len(v["signal"])) for a, v in runs.listed(below, chain, cuts[-1], 9).parts] == [(8, 1)]

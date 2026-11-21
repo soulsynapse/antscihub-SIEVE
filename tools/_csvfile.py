@@ -11,7 +11,8 @@ with `comment="#"` (pandas) or `comment.char = "#"` (R). The second line names t
 every line after is one row, or one record of a row, comma separated.
 
 A tool using the widget gives it a module with `count(result)`, `default_name(footage, start, n,
-result)`, `write(path, result, start, fps, footage)` and `FILTER`. Qt is imported inside `widget` alone.
+result)`, `write(path, result, start, fps, footage)`, `of_periods(listed)`, the result of a node's
+values in its cuts in time, and `FILTER`. Qt is imported inside `widget` alone.
 """
 import os
 import re
@@ -119,6 +120,10 @@ def widget(parent, export):
 
         def show_result(self, result, start, fps):
             self.result, self.start, self.fps = result, start, fps
+            self._describe()
+
+        def show_listed(self, listed, fps):
+            self.result, self.fps = self.export.of_periods(listed), fps
             self._describe()
 
         def _count(self):

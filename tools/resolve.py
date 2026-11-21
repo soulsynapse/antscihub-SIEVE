@@ -180,10 +180,14 @@ def tables_of(header, lines, start, n):
 def rewrite(path, columns, min_reads=2, labels=(), out=None):
     """The tracks csv at `path` with `identity` and `conflict` written before `gate` on every line,
     replacing a previous pass's, the key line kept; written to `out` or over `path`. A file whose key
-    line names a kind other than tracks raises ValueError; one naming none is read as tracks."""
+    line names a kind other than tracks raises ValueError, as does one of several periods' rows; one
+    naming no kind is read as tracks."""
     key, start, n, header, lines, kind = read(path)
     if kind not in (None, "tracks"):
         raise ValueError(f"{os.path.basename(path)} is a {kind} csv; resolve reads the one csv writes from a tracks series")
+    if "period_first" in header and len({(p[header.index("period_first")], p[header.index("period_end")]) for p in lines}) > 1:
+        raise ValueError(f"{os.path.basename(path)} holds the tracks of several periods, whose ids are each period's own; "
+                         "resolve reads one period's")
     keep = [i for i, c in enumerate(header) if c not in (IDENTITY, CONFLICT)]
     header, lines = [header[i] for i in keep], [[p[i] for i in keep] for p in lines]
     rows = resolve(tables_of(header, lines, start, n), columns, min_reads, labels, start)

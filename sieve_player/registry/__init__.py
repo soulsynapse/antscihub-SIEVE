@@ -46,6 +46,7 @@ WIDGET_FACETS = {
     "set_paths": "def set_paths(self, paths): ...  # {input: the file each wired path input picked}",
     "set_playhead": "def set_playhead(self, row): ...  # a chain node's card: the row shown",
     "show_result": "def show_result(self, result, start, fps): ...  # a chain node's card: its result over the rows from start",
+    "show_listed": "def show_listed(self, listed, fps): ...  # a card of a node below a cut in time, which the window does not walk: its values in each of its cuts, a held.Listed each, as the runs held serve them",
     "set_driven": "def set_driven(self, names, by=None): ...  # the params a wire drives, and the node that drives them",
     "show_matches": "def show_matches(self, folder, found, picked): ...  # a selector's card: every path its rule matches, and the one picked",
     "show_cuts": "def show_cuts(self, cuts, count, by): ...  # a cutting node's card: the cuts it makes, a cut.Record each, the footage's count of rows, and the node whose result on a wire it cuts by, or None",

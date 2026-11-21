@@ -380,7 +380,7 @@ one start, where the strip takes one a node.
   unbounded. A node whose reach is bounded is exact in it, walked from that reach before the
   window's first row; one whose reach is not is the window's best effort, and the window says so
   of its rows.
-- [ ] The clip's walk below a `period` is a walk of each of its periods alone, and each is held as
+- [x] The clip's walk below a `period` is a walk of each of its periods alone, and each is held as
   that period's. A table written below a `period` holds every period's rows, each said to be of
   its period.
   Check: a one-off over the crossings clip: the clip walked below a `period`, the rows stepped

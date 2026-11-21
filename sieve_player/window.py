@@ -1270,6 +1270,19 @@ class PlayerWindow(QMainWindow):
             self.worker.give_clip(self.count, self._as_given(self.runs.part(0, self.count, chain, (0, self.count))))
         self._show_stale(chain)
         self._show_pinned()
+        self._show_listed()
+
+    def _show_listed(self):
+        """Each card of a node below a cut in time is shown its values in every cut it is of, as the
+        runs held under the keys its walk's chain now has serve them."""
+        if self.graph is None:
+            return
+        for walk in self.graph.snapshot().timed:
+            chain = self._chain(walk.chain)
+            for nid in walk.chain:
+                w, e = self.pane.widget(nid), self.graph.entry(nid)
+                if w is not None and e is not None and hasattr(w, "show_listed"):
+                    w.show_listed([self.runs.listed(nid, chain, c, self.count) for c in e.cuts], self.fps)
 
     def _show_stale(self, chain):
         """Each card says whether its node is of held.marked, by the tools' files as they lie."""
@@ -1476,14 +1489,14 @@ class PlayerWindow(QMainWindow):
         p = self.graph.snapshot()
         w = next((w for w in p.timed if set(has) == set(w.chain) and (start, start + rows) in {c.extent.rows for c in w.cuts}), None)
         if w is not None and rows:
-            self._hold_run(start, rows, has, self._chain(w.chain), (start, start + rows))
+            self._hold_run(start, rows, has, self._chain(w.chain), (start, start + rows), of_clip=True)
 
     def _clip_ready(self, results, start, fps):
         self.clip_results = results
         stands, rows = self._stands()
         if stands and self._clip_ended:
             self._clip_ended = False
-            self._hold_run(0, rows, stands)
+            self._hold_run(0, rows, stands, of_clip=True)
         elif stands:
             self._hold.start()      # a rerun of the chain over a walk long ended: held once the knob is at rest
         self._show_pinned()
@@ -1526,15 +1539,15 @@ class PlayerWindow(QMainWindow):
             if wait:
                 self._writer.join()
 
-    def _hold_run(self, start, rows, results, chain=None, cut=None):
+    def _hold_run(self, start, rows, results, chain=None, cut=None, of_clip=False):
         """Holds `results` as a run where held.Runs.hold does, under `chain`, the window's with none,
         inside a cut of rows `cut`, weighed against the others by every walk's chain; and one held is
-        written once nothing more has been for HOLD_MS."""
+        written once nothing more has been for HOLD_MS. A run `of_clip` is a clip walk's."""
         if self.runs.hold(start, rows, results, chain or self._chain(), cut, worth=self._chain(self._walked_nodes())):
             self._unwritten = True
             self._hold.start()
             self._show_held()
-            self._recut()
+            self._recut(resume=of_clip)
 
     def _cut_result(self, nid, key, within):
         """What plan.plan asks of a cutting node `nid` cut by a result on a wire over `within`, a
@@ -1552,9 +1565,10 @@ class PlayerWindow(QMainWindow):
                     and held.good(run.results.get(w.src), key)), None)
         return None if run is None else run.results[w.src]
 
-    def _recut(self):
+    def _recut(self, resume=False):
         """The graph synced where a cutting node is cut by a result on a wire, and where the cuts it
-        then makes are not those it made, the walk begun again over them."""
+        then makes are not those it made, the walk begun again over them, and the clip walk asked
+        again where it was asked or `resume` says a clip walk's run made them."""
         if self.graph is None:
             return
         cutting = lambda: {nid: e.cuts for nid, e in self.graph.snapshot().entries.items() if registry.cut_by(e.tool)}
@@ -1562,10 +1576,14 @@ class PlayerWindow(QMainWindow):
         if not was:
             return
         self.graph.sync()
-        if cutting() != was:
-            self._restate()
-            self._invalidate()
-            self.goto(self.row, commit=True)
+        if cutting() == was:
+            return
+        walking = self._clip_asked
+        self._restate()
+        self._invalidate()
+        self.goto(self.row, commit=True)
+        if walking or resume:
+            self._toggle_clip()
 
     def _clip_result(self, nid):
         """The clip's result for `nid`: the clip walk's, or the held run's from row 0 that reaches

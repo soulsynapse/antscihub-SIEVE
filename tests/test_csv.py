@@ -1,11 +1,13 @@
 """csv: what it reads passes through; the file is the key line with the kind, the columns, one line per
-row of a signal or per record of a table, `id` for tracks alone and no non-numeric column; the key
-reads back; tracks-csv is no longer a tool."""
+row of a signal or per record of a table, `id` for tracks alone and no non-numeric column, below
+a cut in time every period's rows each with its period; the key reads back; tracks-csv is no longer a tool."""
 import numpy as np
 import pytest
 
 from sieve_player.decoder import footage_print
+from sieve_player.cut import Extent, Record
 from sieve_player.graph import Series
+from sieve_player.held import Listed, rows_of
 from sieve_player.registry import discover
 from sieve_player.registry import defaults
 from tests.test_track import table
@@ -28,6 +30,15 @@ def test_signal_passes_through_and_the_file_reads_back(tmp_path):
     (tmp_path / "plain.csv").write_text("a,b\n1,2\n", encoding="utf-8")
     with pytest.raises(ValueError):
         _csvfile.read(tmp_path / "plain.csv")
+    two = csv.of_periods([Listed(Record("v", (), Extent((7, 9))), [(7, rows_of(result, 3, 0, 2))]),
+                          Listed(Record("v", (), Extent((8, 10))), [(8, rows_of(result, 3, 1, 2))])])
+    p = tmp_path / csv.default_name(tmp_path / "ants.mp4", 0, 0, two)
+    assert p.name == "ants_7-9_periods.csv" and csv.count(two) == 4
+    csv.write(p, two, 0, 30.0, "ants.mp4")
+    assert p.read_text(encoding="utf-8").splitlines()[1:] == [
+        "row,time,period_first,period_end,signal,gate", "7,0.233333,7,9,0.5,1", "8,0.266667,7,9,0,0",
+        "8,0.266667,8,10,0,0", "9,0.300000,8,10,2,1"]
+    assert _csvfile.read(p)[1:3] == (7, 3)
 
 
 def test_tables_pass_through_with_their_count_and_write_one_line_per_record(tmp_path):

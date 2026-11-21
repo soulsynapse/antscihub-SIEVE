@@ -61,6 +61,7 @@ def run(series, params) -> dict               # series.data is (T, ...), the rea
                                               # a (T,) array; the gate is the player's, never the tool's
 def settings(parent=None) -> ParamWidget      # optional, a card of the tool's own in place of the one made of PARAMS,
                                               # which may have show_result(result, start, fps), set_playhead(row),
+                                              # show_listed(listed, fps): its values in each cut in time it is below,
                                               # set_source(path, fps): the footage the node's inputs are frames of, the video or
                                               # the file a cutting node above it serves, for a tool that writes a file (csv),
                                               # set_paths({input: path}): the file each wired path input picked,

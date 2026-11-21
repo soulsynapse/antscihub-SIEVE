@@ -338,9 +338,11 @@ class Readers:
 
 
 class Graph:
-    def __init__(self, doc, decoder, tools, memo_bytes=4 << 30, stream=None):
-        """`stream` is the Emitter it emits through, one of its own when none is handed."""
-        self.doc, self.decoder = doc, decoder
+    def __init__(self, doc, decoder, tools, memo_bytes=4 << 30, stream=None, cut_result=None):
+        """`stream` is the Emitter it emits through, one of its own when none is handed;
+        `cut_result` is what `plan` is handed under that name at every sync, asked on the thread
+        that syncs."""
+        self.doc, self.decoder, self.cut_result = doc, decoder, cut_result
         self.tools = by_name(tools)
         self.readers = Readers()
         self._lately = []                   # the served files' Decoders in the order they were last read, latest first
@@ -427,7 +429,7 @@ class Graph:
         self.decoder.output = output        # a change empties its cache; a read in flight under the old plan is cancelled
         self._base = base_key(self.decoder.footage_print, output)
         self._failing = {}
-        p = plan(self.doc, self.tools, self._base, self.cut_file, footage=self.decoder.footage_print)
+        p = plan(self.doc, self.tools, self._base, self.cut_file, self.cut_result, footage=self.decoder.footage_print)
         self._in_use = self._named(p.entries)
         self.readers.keep({e.file[0] for e in p.entries.values() if e.file is not None})
         for d in self.readers.decoders():

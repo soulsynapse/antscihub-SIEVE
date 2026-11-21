@@ -61,9 +61,33 @@ def test_a_tool_cuts_by_its_declaration_alone_and_a_tool_below_two_cuts_is_told_
 
     doc = D.from_tools([gray, found, tools["below"]])
     asked = []
-    p = plan(doc, tools, "base", cut_file=lambda nid, up: asked.append(nid), cut_result=lambda nid: [(0, 2), (5, 7)], footage="print")
+    p = plan(doc, tools, "base", cut_file=lambda nid, up: asked.append(nid), cut_result=lambda nid, key: [(0, 2), (5, 7)], footage="print")
     assert [c.extent.rows for c in p.entries["below"].cuts] == [(0, 2), (5, 7)] and not asked and p.entries["found"].file is None
     assert plan(doc, tools, "base", footage="print").entries["below"].cuts == (Record("print"),)        # a declaration that raises cuts nothing
+
+    sig = Tool(NAME="sig", KIND="series", EXPECTS="gray", PRODUCES="signal", run=lambda series, params: None)
+    pick = Tool(NAME="pick", PRODUCES="path", select=lambda folder, params: None)
+    gated = runs("gated", PATHS={"periods": lambda path: {}}, CUT_BY={"gate": "signal"}, cut_extents=lambda params, result: [{"rows": r} for r in result])
+    tools = {t.NAME: t for t in (gray, sig, pick, gated, tools["below"])}
+    doc = D.from_tools([gray, gated, tools["below"]])
+    doc.add_node("sig")
+    doc.connect("gray", "sig")
+    doc.connect("sig", "gated", "gate")
+    asked = []
+    of = lambda held: plan(doc, tools, "base", cut_result=lambda nid, key: asked.append((nid, key)) or held, footage="print").entries
+    e = of([(0, 2)])
+    assert [c.extent.rows for c in e["below"].cuts] == [(0, 2)] and asked == [("gated", e["sig"].key)]       # asked under the key the node wired there has
+    e = of(None)
+    assert e["gated"].cuts == () and not e["below"].fed and e["gated"].standing == "gate waits on sig's walk"
+    doc.add_node("pick")
+    doc.connect("pick", "gated", "periods")
+    assert of([(0, 2)])["gated"].standing == "fed both: periods by a file and gate by sig; one cuts it"
+    doc.disconnect("gated", "periods")
+    doc.connect("below", "sig")         # the gate's node now reads the node it cuts
+    e = of([(0, 2)])
+    assert e["gated"].standing == "in a cycle: gate is fed by sig, which reads gated" and not e["below"].fed
+    doc.disconnect("gated", "gate")
+    assert of([(0, 2)])["gated"].standing == "neither periods nor gate is wired"
 
 
 def test_a_value_is_one_in_every_period_holding_its_row_but_where_it_read_an_edge():

@@ -28,6 +28,7 @@ _HINTS = {
     "OPTIONAL": 'OPTIONAL = ("bg",)  # the INPUTS the node computes without; run reads an unwired one as None',
     "STATIC": "STATIC = True  # the same output at every row: computed once per key, held once, counted per change",
     "PATHS": 'PATHS = {"settings": load_settings}  # path inputs: name -> params from the file',
+    "CUT_BY": 'CUT_BY = {"gate": ("signal", "tracks")}  # a cutting tool\'s input that is no frame input: name -> the types it expects; the result its wire hands over the whole extent is the result cut_extents is handed, read once and never a row at a time',
     "key_params": "def key_params(params): ...  # what of params run reads, a JSON value, the same for any two params under which run hands out the same result of the same input: the node is keyed by it in place of its params",
     "reach_in_rows": "def reach_in_rows(params): ...  # (rows before, rows after) the row it is asked at that its result there reads, each a count or None for a side without bound; a frame tool that reads a row outside what it says raises; unsaid, neither side has a bound",
     "select": "def select(folder, params): ...  # a selector: the path it picks under folder, or None",
@@ -169,6 +170,13 @@ def optional(tool):
     return tuple(probe(tool, "OPTIONAL") or ())
 
 
+def cut_by(tool):
+    """The tool's input whose wire hands its cut_extents a result, and the types it expects; None
+    for a tool without one."""
+    said = probe(tool, "CUT_BY") or {}
+    return next(((n, _tuple(t)) for n, t in said.items()), None)
+
+
 def static(tool):
     """Whether the tool's output is the same at every row."""
     return bool(probe(tool, "STATIC"))
@@ -250,7 +258,7 @@ def matches_of(tool):
 READERS = {
     "NAME": ("name", "by_name"), "KIND": ("kind",), "EXPECTS": ("expects", "is_selector"),
     "PRODUCES": ("produces", "is_selector"), "PARAMS": ("params", "defaults", "changes_nothing", "computed"), "settings": ("settings_of",), "INPUTS": ("inputs",),
-    "OPTIONAL": ("optional",), "STATIC": ("static",), "PATHS": ("paths",), "cut_extents": ("cuts", "cut_extents_of"), "cut_file": ("serves_cut_file",), "reach_in_rows": ("reach_of",),
+    "OPTIONAL": ("optional",), "STATIC": ("static",), "PATHS": ("paths",), "CUT_BY": ("cut_by",), "cut_extents": ("cuts", "cut_extents_of"), "cut_file": ("serves_cut_file",), "reach_in_rows": ("reach_of",),
     "cut_files": ("names_cut_files",), "step": ("steps",), "draw": ("draws",), "fold": ("fold_of",),
     "key_params": ("key_params_of",), "pick": ("pick_of",), "matches": ("matches_of",),
 }
@@ -356,13 +364,14 @@ def discover(*roots):
 
 def types(entries, extra=()):
     """{type: (producers, expecters)} over the tools that imported, plus `extra` (name, produces,
-    expects) rows for nodes that are not tools. "same" is not a type; a PATHS key expects "path"."""
+    expects) rows for nodes that are not tools. "same" is not a type; a PATHS key expects "path", and
+a CUT_BY input what it says."""
     out = {}
-    rows = [(e.name, produces(e.module), expects(e.module), paths(e.module)) for e in entries if e.ok]
-    for tool, p, ex, loaders in rows + [(n, p, None if ex is None else _tuple(ex), None) for n, p, ex in extra]:
+    rows = [(e.name, produces(e.module), expects(e.module), paths(e.module), cut_by(e.module)) for e in entries if e.ok]
+    for tool, p, ex, loaders, by in rows + [(n, p, None if ex is None else _tuple(ex), None, None) for n, p, ex in extra]:
         if isinstance(p, str) and p != "same":
             out.setdefault(p, (set(), set()))[0].add(tool)
-        for t in (ex or ()) + (("path",) if loaders else ()):
+        for t in (ex or ()) + (("path",) if loaders else ()) + (by[1] if by else ()):
             out.setdefault(t, (set(), set()))[1].add(tool)
     return out
 
@@ -408,5 +417,5 @@ def signature(tool):
 
 
 __all__ = ["MARKER", "FACETS", "WIDGET_FACETS", "READERS", "KINDS", "Entry", "is_tool", "probe", "hint", "discover", "code_print", "imported_print", "types", "CATEGORIES", "category",
-           "description", "signature", "name", "by_name", "kind", "expects", "produces", "params", "defaults", "changes_nothing", "computed", "settings_of", "inputs", "optional", "static", "paths",
+           "description", "signature", "name", "by_name", "kind", "expects", "produces", "params", "defaults", "changes_nothing", "computed", "settings_of", "inputs", "optional", "cut_by", "static", "paths",
            "is_selector", "cuts", "cut_extents_of", "reach_of", "serves_cut_file", "names_cut_files", "steps", "draws", "fold_of", "key_params_of", "pick_of", "matches_of"]

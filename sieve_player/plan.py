@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from .cut import Record
 from .document import INPUT, VIDEO_TOOL, fed, fits, frame_inputs, kind_of, produces, video_output, wants
 from .registry import cuts as tool_cuts
-from .registry import computed, cut_extents_of, fold_of, is_selector, key_params_of, optional, reach_of, serves_cut_file, static, steps
+from .registry import computed, cut_by, cut_extents_of, fold_of, is_selector, key_params_of, optional, paths, reach_of, serves_cut_file, static, steps
 from .wire import overlaid
 
 
@@ -112,8 +112,9 @@ def facts(p, pinned):
 
 def plan(doc, tools, base, cut_file=None, cut_result=None, footage=None):
     """The plan for `doc` under `tools`, name to module, with `base` the video node's key,
-    `footage` what the cuts' records say they are of, `base` with none, `cut_result(nid)` answering
-    the result a cutting node reads on a wire, None where it reads none, and
+    `footage` what the cuts' records say they are of, `base` with none, `cut_result(nid, key)`
+    answering the result a cutting node reads on its CUT_BY wire over the whole extent, `key` that
+    of the node wired there and None with none, the answer None where no such result is held, and
     `cut_file(nid, up)` answering (path, footage print) of the file that holds a cutting node's cut
     of the footage it reads, or None: `up` is that footage as the node above answered, None for the
     video. It is asked only of a node whose tool cuts, has the cut_file facet and that reads the video
@@ -126,8 +127,11 @@ def plan(doc, tools, base, cut_file=None, cut_result=None, footage=None):
     registry's `computed`, or what its tool's `key_params` answers of them where it has one that
     does not raise. A node that serves its file reads nothing, and its key is the one a document opened on
     that file gives its video node, so everything below it is keyed as that document's is. A node's cuts are its inputs', and a cutting node's are made from them, one for
-    each extent its tool's `cut_extents` answers of its params and of `cut_result`; a tool that
-    raises there cuts nothing. A node's reach is its tool's, the registry's `reach_of`, added a side
+    each extent its tool's `cut_extents` answers of its params and of `cut_result`. A cutting node
+    is refused, saying why, where its CUT_BY input is wired beside a
+    path input, and where the node wired into it reads it; one whose CUT_BY wire's result is not held
+    cuts no cut and waits on that node's walk, and one with neither wired is refused. A tool that
+    raises in `cut_extents` otherwise cuts nothing. A node's reach is its tool's, the registry's `reach_of`, added a side
     to the furthest of the nodes it reads, and without bound where either is; the video node and
     a node that serves its file read their own row. A node reads one piece of the plate: one
     whose inputs are of two, the plate among them, is not fed, nor is anything that reads it, and
@@ -220,18 +224,36 @@ def plan(doc, tools, base, cut_file=None, cut_result=None, footage=None):
             reads[nid] = (root,) if src is None else cuts_of(src, (*stack, nid))
         return reads[nid]
 
+    waiting = {}
+
+    def reads_node(nid, other, stack=()):
+        return any(s == other or (s not in stack and reads_node(s, other, (*stack, nid))) for s in wired(nid).values() if s is not None)
+
     def cuts_of(nid, stack=()):
         if nid not in made:
             made[nid] = above = reads_of(nid, stack)
             if cuts(nid):
                 node = doc.node(nid)
                 tool = tools[node.tool]
-                try:
-                    extents = list(cut_extents_of(tool)(computed(tool, node.params), cut_result(nid) if cut_result else None))
-                    file = file_of(nid) if len(above) * len(extents) == 1 else None
-                    made[nid] = tuple(r.cut(**x, file=file) for r in above for x in extents)
-                except Exception:       # a tool's rule is user code: one that fails cuts nothing
-                    pass
+                by = cut_by(tool)
+                gate = w.src if by and (w := doc.source(nid, by[0])) else None
+                filed = [name for name in paths(tool) if doc.source(nid, name)]
+                if by and gate is None and not filed and paths(tool):
+                    refused[nid] = f"neither {' nor '.join(paths(tool))} nor {by[0]} is wired"
+                elif gate is not None and filed:
+                    refused[nid] = f"fed both: {', '.join(filed)} by a file and {by[0]} by {gate}; one cuts it"
+                elif gate is not None and reads_node(gate, nid):
+                    refused[nid] = f"in a cycle: {by[0]} is fed by {gate}, which reads {nid}"
+                elif gate is not None and (result := cut_result and cut_result(nid, key_of(gate, (*stack, nid)))) is None:
+                    waiting[nid], made[nid] = f"{by[0]} waits on {gate}'s walk", ()
+                else:
+                    try:
+                        given = cut_result(nid, None) if gate is None and cut_result else (None if gate is None else result)
+                        extents = list(cut_extents_of(tool)(computed(tool, node.params), given))
+                        file = file_of(nid) if len(above) * len(extents) == 1 else None
+                        made[nid] = tuple(r.cut(**x, file=file) for r in above for x in extents)
+                    except Exception:       # a tool's rule is user code: one that fails cuts nothing
+                        pass
         return made[nid]
 
     reaches = {}
@@ -262,7 +284,8 @@ def plan(doc, tools, base, cut_file=None, cut_result=None, footage=None):
             crossings[n.id] = f"reads across a cut: {a} is of {said(pa)}, {b} of {said(pb)}"
     for n in doc.nodes:
         file_of(n.id)
-    blocked, more = set(), {*crossings, *refused}
+        cuts_of(n.id)
+    blocked, more = set(), {*crossings, *refused, *waiting}
     while more:
         blocked |= more
         more = {n.id for n in doc.nodes if n.id not in blocked and any(s in blocked for s in wired(n.id).values())}
@@ -291,7 +314,7 @@ def plan(doc, tools, base, cut_file=None, cut_result=None, footage=None):
         enders[nid] = nid if own else enders.get(e.src)
         e.steps, e.whole_by = enders[nid] is None, None if own else enders[nid]
     for nid, e in entries.items():
-        e.standing = crossings.get(nid) or refused.get(nid) or _standing(doc, tools, entries, heads, chain, nid)
+        e.standing = crossings.get(nid) or refused.get(nid) or waiting.get(nid) or _standing(doc, tools, entries, heads, chain, nid)
     over = doc.overlay if doc.overlay in entries and overlaid(produces(doc, tools, doc.overlay)) else None
     return Plan(entries, heads, chain, [s for s in series if s not in chain], doc.display if doc.display in entries else None, over)
 

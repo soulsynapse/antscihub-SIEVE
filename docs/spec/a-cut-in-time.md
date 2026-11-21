@@ -247,13 +247,13 @@ Open: the file's form. Recommended, and a session may build on it: JSON as the g
   save of a geometry file reaches a `region`.
   Check: a one-off: a file of touching, overlapping and refused periods, the node's periods and
   what it says against the file.
-- [ ] A `period` fed a series node's result on a wire has the runs of rows that node's gate keeps
+- [x] A `period` fed a series node's result on a wire has the runs of rows that node's gate keeps
   over its whole extent, each the footage row it begins at and the row past its last, so periods
   that touch do not overlap, each named by its first row. While no walk of that node's extent is
   held under the key it now has, the `period` has no periods and says it waits on that node's
   walk.
   Check: a one-off over the crossings clip: the periods against the gate's rows.
-- [ ] A `period` fed both is refused, saying both. A series node whose gate feeds a `period` is
+- [x] A `period` fed both is refused, saying both. A series node whose gate feeds a `period` is
   above it; one below it is a cycle, refused as one, saying both.
   Check: a seam.
 - [ ] The periods a gate gave a `period` are written at the user's ask to a file of the file's

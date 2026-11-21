@@ -1021,7 +1021,7 @@ class PlayerWindow(QMainWindow):
         decoder_module.STORE = store.folder
         decoder_module.read_frame_times_ahead(path)     # the first seek would wait on it: docs/findings/2026-11-15-a-file-whose-times-do-not-count-its-rows.md
         self.stream = Emitter()
-        self.graph = Graph(self.doc, decoder, self.tools, stream=self.stream, **({"memo_bytes": m} if (m := _gb(MEMO_ENV)) else {}))
+        self.graph = Graph(self.doc, decoder, self.tools, stream=self.stream, cut_result=self._cut_result, **({"memo_bytes": m} if (m := _gb(MEMO_ENV)) else {}))
         # the one line a report of this video's run needs beside the log's tracebacks
         print(f"SIEVE {time.strftime('%H:%M:%S')}: opened {path}: {decoder.width}x{decoder.height} at {decoder.fps:.3f} fps, "
               f"{decoder.count} rows claimed, luma plane {'read' if decoder.luma else 'converted'}; "
@@ -1057,6 +1057,7 @@ class PlayerWindow(QMainWindow):
         self.sync()
         self._file = held.File(held.path_for(self.doc.path)) if self.doc.path else None
         self.runs.take(self._file.load() if self._file is not None else [])
+        self._recut()
         self.set_window(0, min(self.count, round(10 * self.fps)), by=HAND)
         self.goto(0, commit=True)
         self.toggle_play()  # _unload left it paused
@@ -1504,6 +1505,31 @@ class PlayerWindow(QMainWindow):
             self._unwritten = True
             self._hold.start()
             self._show_held()
+            self._recut()
+
+    def _cut_result(self, nid, key):
+        """What plan.plan asks of a cutting node `nid` cut by a result on a wire: the result of the
+        node wired there under `key`, as a held run from row 0 to the clip's last row has it; None
+        with none."""
+        by = registry.cut_by(self.tools.get(self.doc.node(nid).tool))
+        w = by and self.doc.source(nid, by[0])
+        run = self.runs.from_first_row(w.src, key) if w else None
+        return run.results[w.src] if run is not None and run.rows >= self.count else None
+
+    def _recut(self):
+        """The graph synced where a cutting node is cut by a result on a wire, and where the cuts it
+        then makes are not those it made, the walk begun again over them."""
+        if self.graph is None:
+            return
+        cutting = lambda: {nid: e.cuts for nid, e in self.graph.snapshot().entries.items() if registry.cut_by(e.tool)}
+        was = cutting()
+        if not was:
+            return
+        self.graph.sync()
+        if cutting() != was:
+            self._restate()
+            self._invalidate()
+            self.goto(self.row, commit=True)
 
     def _clip_result(self, nid):
         """The clip's result for `nid`: the clip walk's, or the held run's from row 0 that reaches

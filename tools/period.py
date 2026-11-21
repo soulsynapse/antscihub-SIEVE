@@ -1,7 +1,11 @@
 """Frame tool: the footage cut into periods of its rows, each a cut of its own that every node below
 runs inside; a frame of any plane kind in, out as in.
 
-The periods are fed by a file a `file` selector finds, wired into `periods`. It is JSON:
+The periods are fed by a file a `file` selector finds, wired into `periods`, or by a series node
+wired into `gate`, and never both. A gate's periods are the runs of rows its gate keeps over the
+whole footage, each [first, end) and named by its first row, so two that touch are one; while no
+walk of the clip is held under the key the node wired there has, there are none, and the plan says
+the `period` waits on it. A file is JSON:
 `{"rows": the footage's count of rows, "periods": [{"name": ..., "first": ..., "end": ...}, ...]}`,
 `first` the footage row a period begins at and `end` the row past its last, so a period is the
 rows [first, end). Periods may touch and may overlap, each its own. A top-level key other than
@@ -9,12 +13,15 @@ rows [first, end). Periods may touch and may overlap, each its own. A top-level 
 name, a period of no rows and one past `rows`, saying which. A save of the file reaches the node
 through the window's watch on it, as a geometry file's reaches a `region`.
 
-`cut_extents` is a cut a period, none chosen over another. The key holds nothing of where the
-periods lie, so a node below is keyed alike in every period and its values are told apart by the
-cut each read (`sieve_player/cut.py:read`). A frame whose footage is not `rows` long raises with
-the two counts, as does a node with no file or a file of no periods.
+`cut_extents` is a cut a period, none chosen over another, of the gate's result where one is
+handed and else of the file's. The key holds nothing of where the periods lie, so a node below is
+keyed alike in every period and its values are told apart by the cut each read
+(`sieve_player/cut.py:read`). A frame whose footage is not `rows` long raises with
+the two counts, as does a file of no periods.
 """
 import json
+
+import numpy as np
 
 SIEVE_TOOL = True
 NAME, KIND, EXPECTS, PRODUCES = "period", "frame", ("bgr", "gray", "mask", "hsv", "flow"), "same"
@@ -62,6 +69,14 @@ def load_periods(path):
 
 
 PATHS = {"periods": load_periods}
+CUT_BY = {"gate": ("signal", "tracks")}
+
+
+def kept(gate):
+    """[(first, end)] of each run of rows `gate`, a bool a row, keeps."""
+    g = np.concatenate([[False], np.asarray(gate, bool), [False]])
+    edges = np.flatnonzero(g[1:] != g[:-1])
+    return [(int(a), int(b)) for a, b in zip(edges[::2], edges[1::2])]
 
 
 def key_params(params):
@@ -69,6 +84,9 @@ def key_params(params):
 
 
 def cut_extents(params, result):
+    if result is not None:
+        gate = result.get("gate")       # a result no band was applied to keeps every row
+        return [{"rows": rows} for rows in kept(np.ones(len(result["signal"]), bool) if gate is None else gate)]
     if not params["periods"]:
         raise ValueError("no periods; wire a file selector into periods" if not params["rows"] else "the file has no periods")
     return [{"rows": (p["first"], p["end"])} for p in params["periods"]]
@@ -79,7 +97,8 @@ def reach_in_rows(params):
 
 
 def run(frames, row, params):
-    cut_extents(params, None)
-    if params["rows"] != frames.count:
+    if params["rows"] and not params["periods"]:
+        raise ValueError("the file has no periods")
+    if params["rows"] and params["rows"] != frames.count:
         raise ValueError(f"the footage is {frames.count} rows and the file's {params['rows']}; a period's rows are its footage's")
     return frames(row)

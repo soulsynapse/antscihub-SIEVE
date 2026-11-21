@@ -60,8 +60,8 @@ What each settled, and the box it bears on. A session building a box reads its r
 - Halide (Ragan-Kelley and others, PLDI 2013): each stage's needed input inferred from the output
   asked of it, never set by hand. A tool's reach in rows, the window's pre-roll inferred.
 - The Dataflow Model (Akidau and others, VLDB 2015): event time apart from processing time, and
-  the session window, a period bounded by gaps. Rows below a cut are the footage's; The periods
-  a `period` chooses among.
+  the session window, a period bounded by gaps. Rows below a cut are the footage's; A tool that
+  cuts in time.
 - Fading memory (Boyd and Chua, 1985): when a stateful operator forgets where it began, so a walk
   begun earlier converges on one walked alone, and only converges, so a fading memory is no
   bounded reach. A tool's reach in rows; A series result below a period.
@@ -71,8 +71,8 @@ What each settled, and the box it bears on. A session building a box reads its r
   the halo read and discarded. What a cut here refuses, a node widening its piece; what the window
   alone does.
 - BED, GFF and bedtools: intervals half-open from 0 against closed from 1, the off-by-one between
-  them, and intersect, merge and complement over periods, overlapping features each kept. The
-  periods a `period` chooses among.
+  them, and intersect, merge and complement over periods, overlapping features each kept. A tool
+  that cuts in time.
 - CMX 3600 edit decision lists and conform: a cut's source in and out beside its record in and out,
   an offline cut relinked to the camera originals by source timecode. A piece's record.
 - rasterio's windows and GDAL's geotransform: a window carrying its transform to the whole, windows
@@ -147,7 +147,7 @@ held first. None of this waits on a period.
   from the clip's walk, two results under one key, each served at its own origin alone; and the
   window handed `track`'s rows of row 0 and stepping `count` from its own first row, refused.
 
-## The periods a `period` chooses among
+## A tool that cuts in time
 
 Assumes: A piece's record.
 
@@ -182,7 +182,7 @@ node read a series node's result on a wire.
 
 ## A node's extent follows the wires
 
-Assumes: A piece's record; The periods a `period` chooses among.
+Assumes: A piece's record; A tool that cuts in time.
 
 Facts to weigh. A walk is of one range, the window's or the clip's, and steps one chain
 (`walk._Walk`, `chain_of`). `plan.plan` refuses a node whose inputs are of two pieces, the plate

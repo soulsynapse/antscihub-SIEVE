@@ -849,7 +849,7 @@ class PlayerWindow(QMainWindow):
         if self._keys() == keys:
             self.goto(self.row, commit=True)    # nothing is computed differently; a drawer may draw the params as they now are
         elif nid in self.graph.chain:
-            if self._spared or self._given or self.runs.over(*self.window_, self._chain()) is not None:
+            if self._spared or self._given or self._held_over(self._chain()) is not None:
                 self._ask_window(EDIT)  # what was held is no longer the chain's, or a run now is: the walk begins again with what is held now
             self.worker.rerun_series()
             self._show_held()
@@ -1226,15 +1226,22 @@ class PlayerWindow(QMainWindow):
         if row == self.row and self.graph is not None:
             self._show(row)
 
+    def _held_over(self, chain):
+        """The chain's results over the window as the runs serve them: those of the clip's walk, or
+        else of the window's own, from its first row to its last; None with neither."""
+        s, n = self.window_
+        got = self.runs.over(s, n, chain, (0, self.count))
+        return got if got is not None else self.runs.over(s, n, chain, (s, s + n))
+
     def _ask_window(self, by=ASKED):
-        """Asks the worker for the window: spared the chain where a held run covers it, whose rows
-        are then the window's results at once; else given what a run holds of the chain's stepped
-        nodes, so only the rest is stepped. The densities the plot shows are folded either way.
-        `by` as set_window's."""
+        """Asks the worker for the window: spared the chain where the runs serve it, by _held_over,
+        whose rows are then the window's results at once; else given what they serve of the chain's
+        stepped nodes to the window's own walk, so only the rest is stepped. The densities the plot
+        shows are folded either way. `by` as set_window's."""
         s, n = self.window_
         chain = self._chain()
-        got = self.runs.over(s, n, chain)
-        part = {} if got is not None else self.runs.part(s, n, chain)
+        got = self._held_over(chain)
+        part = {} if got is not None else self.runs.part(s, n, chain, (s, s + n))
         self._spared, self._given = got is not None, bool(part)
         self.worker.set_window(s, n, self._spared, self._as_given(part), by)
         if got is not None:
@@ -1253,7 +1260,7 @@ class PlayerWindow(QMainWindow):
         chain = self._chain()
         self.timeline.strip.set_held(self.runs.spans(chain))
         if self.worker is not None:
-            self.worker.give_clip(self.count, self._as_given(self.runs.part(0, self.count, chain)))
+            self.worker.give_clip(self.count, self._as_given(self.runs.part(0, self.count, chain, (0, self.count))))
         self._show_stale(chain)
         self._show_pinned()
 
@@ -1305,7 +1312,8 @@ class PlayerWindow(QMainWindow):
         """The series chain as held.Runs is told it; one of no nodes with no video open."""
         g = self.graph
         entries = {} if g is None else {nid: e for nid in g.chain if (e := g.entry(nid)) is not None}
-        return held.Chain({nid: e.key for nid, e in entries.items()}, frozenset(nid for nid, e in entries.items() if e.steps))
+        return held.Chain({nid: e.key for nid, e in entries.items()}, frozenset(nid for nid, e in entries.items() if e.steps),
+                          {nid: e.reach for nid, e in entries.items()})
 
     def _key(self, nid):
         """The key `nid` now has; None for a node the plan does not have."""

@@ -27,7 +27,7 @@ MAY_IMPORT = {
     "plot": {"density", "document", "theme"},       # document.shown is the one statement of what is drawn
     "timeline": {"theme"},
     "decoder": set(),
-    "held": set(),                                # a pickle and a stamp; the window writes and reads it
+    "held": {"cut"},                              # a pickle and a stamp, and what a walk read of its cut; the window writes and reads it
     "walk": {"density", "graph", "registry", "stream", "wire"},         # of the stream, the words a begin says what began it by; no Qt, see below
     "worker": {"decoder", "graph", "stream", "walk"},
     "bare": {"decoder", "document", "graph", "registry", "walk"},      # the clip walk's own process: no window, no stream's reader, no Qt

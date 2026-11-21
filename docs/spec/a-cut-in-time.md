@@ -183,22 +183,22 @@ below a `period` read nothing of it.
   computed in, the three held apart, and by nothing of the cut it did not read. A cut in time
   mirrors `region`, below which everything read the region's rect and is of it
   (`region.py:key_params`).
-- [ ] A value at a row further from the first and the last row of its node's extent than the
+- [x] A value at a row further from the first and the last row of its node's extent than the
   node's reach before and after read nothing of the cut in time. It is held and served under its
   key and row alone, in the memo and in a held run: one value in every period that holds the
   row, computed once.
   Check: a seam: `detect` in two periods that overlap, one value a row and one computing of it.
-- [ ] A value within the node's reach of its extent's first row is of that row, and one within
+- [x] A value within the node's reach of its extent's first row is of that row, and one within
   its reach of the last of that. A node whose reach before is unbounded is of its extent's first
   row at every row, and one that reads its whole extent of both. Under one key and row, two
   values that read two first rows, or two last, are two, and neither is served for the other.
   Changes the held file's form: it is said before it lands, and a held file of the form before it
   reads as none.
-  Check: a seam: `motion` at a period's first row and the same key and row above the period, two
-  values, each served where it was read; `track` over the same rows from two first rows, two; a
-  period's last row moved later, `track`'s rows before it standing and `smooth`'s within its
-  reach of the old last row not.
-- [ ] A run is held with the row its walk began at and, where it reached it, the row its extent
+  Check: a seam: `motion` at one period's first row and the same key and row inside another
+  period, two values, each served where it was read; `track` over the same rows from two first
+  rows, two; a period's last row moved later, `track`'s rows before it standing and `smooth`'s
+  within its reach of the old last row not.
+- [x] A run is held with the row its walk began at and, where it reached it, the row its extent
   ended at, and serves a range a node at a time: a node's rows at any range further from the
   run's first row than the node's reach, and nearer only where the range's extent begins at that
   row. The window's own walk is held as the walk it was, and neither drops nor stands in for a

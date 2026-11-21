@@ -1,5 +1,6 @@
-"""The stderr log: what is printed reaches the file and the stream it had, the previous log is kept, and the env var places or disables it."""
+"""The stderr log: what is printed reaches the file and the stream it had, the previous log is kept, and the env var places or disables it; and the hang watchdog beside it."""
 import io
+import os
 import sys
 
 from sieve_player.dev import console
@@ -38,3 +39,26 @@ def test_a_stream_that_will_not_take_a_write_is_passed_over(tmp_path):
     tee = console._Tee(kept, gone)
     print("still", file=tee)                        # a full disk or a closed log never makes a traceback raise
     assert kept.getvalue() == "still\n"
+
+
+def test_the_watchdog_says_a_stuck_gui_thread_once_a_deadline_and_dumps_under_the_lock():
+    from sieve_player.dev import qt_trace
+    now = [0.0]
+    watch = qt_trace._Watch(5.0, clock=lambda: now[0])
+    now[0] = 4.9
+    assert watch.overdue() is None
+    now[0] = 5.0
+    assert watch.overdue() == 5.0
+    now[0] = 9.0
+    assert watch.overdue() is None                  # said once a deadline, not at every look
+    now[0] = 10.0
+    assert watch.overdue() == 10.0
+    watch.beat()
+    now[0] = 14.0
+    assert watch.overdue() is None
+    out, gone = io.StringIO(), open(os.devnull, "w")
+    gone.close()
+    qt_trace.dump_stacks(out, 5.0)
+    qt_trace.dump_stacks(gone, 5.0)                 # a closed log never makes the watching thread raise
+    assert "test_the_watchdog_says" in out.getvalue()   # the stacks are read by sys._current_frames, this thread's among them
+    assert "dump_traceback_later" not in open(qt_trace.__file__, encoding="utf-8").read()

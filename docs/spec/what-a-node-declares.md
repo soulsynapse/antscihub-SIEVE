@@ -352,7 +352,7 @@ of a path loader's file, which keeps no result.
 
 Which held run serves a range. `held.py:Runs.over` cuts a range from the run that began earliest,
 so a stepped node's rows under one key differ by what is held; that rule is no key's and is
-`docs/spec/pieces-of-footage.md`'s A value is of its cut.
+`docs/spec/a-cut-in-time.md`'s A value is of its cut.
 
 What is asked for as one set the worker reads, the review's second part of E3. `worker.py:Worker._turn`
 is a ladder whose order is read in one function, and the review watches it. What turns it is a

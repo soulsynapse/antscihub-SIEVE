@@ -54,7 +54,9 @@ they share, and folding them back up keeps both and merges neither.
 
 A period's walk, every row of it from the first, is the result. The window is a view and not a
 cut: it shows a period's walk where one is held, and where none is it walks its own rows as a
-check that the pipeline works, which is no result and is held as none.
+check that the pipeline works, which is no result and is held as none. What a node reads a
+bounded count of rows away, its reach, the check walks and so has exactly; what reads back
+without bound it has as best effort, and says so.
 
 ## Referents
 
@@ -72,8 +74,10 @@ What each settled, and the box it bears on. A session building a box reads its r
   session window, a period bounded by gaps, and an aggregate a window. Rows below a cut are the
   footage's; A tool that cuts in time.
 - Fading memory (Boyd and Chua, 1985): when a stateful operator forgets where it began, so a walk
-  begun elsewhere converges on the period's own, and only converges. What the window's own walk
-  is.
+  begun elsewhere converges on the period's own, and only converges, so a fading memory is no
+  bounded reach. A tool's reach in rows; what the window's own walk is.
+- Halide (Ragan-Kelley and others, PLDI 2013): each stage's needed input inferred from the output
+  asked of it, never set by hand. A tool's reach in rows, what the window walks past its rows.
 - numpy's masked arrays and R's `NA`: absence carried through arithmetic and left out of a
   reduction, against a fill value a reduction counts. Outside a cut is absent.
 - Overlap-save, and ghost cells in domain decomposition: a block computed over more than it keeps,
@@ -113,6 +117,29 @@ file's plate. The record replacing both is a contract change across `plan.py`, `
   place lifted through either is the footage's.
 - [ ] The record holds a shape a row though no tool here makes one.
   Check: the same seam, a shape a row intersected with a period.
+
+## A tool's reach in rows
+
+Assumes: nothing.
+
+Facts to weigh. `travel` and `transitions` step a state that is the row before and nothing
+earlier; `track`'s ids are of every row since its walk began. `motion`, `changeenergy` and `flow`
+do not step and read the row before; `smooth` runs whole and reads its `reach` rows either side;
+`background` reads rows over its whole extent. No tool says how far from a row its result there
+reads, so the player can say of no walk how many rows before the window's first it begins for its
+rows to be exact. The registry is the one reader of what a tool declares
+(`docs/spec/what-a-node-declares.md`).
+
+- [ ] A tool that reads a row other than the one it is asked at, one that steps, one that runs
+  whole or one that reads a neighbouring frame, declares its reach in rows, how far before a row
+  and how far after it its result there reads, or none, its reach unbounded; one left unsaid is
+  unbounded, as is one whose memory fades and never ends and one that reads its whole extent.
+  Check: `tests/test_registry.py`.
+- [ ] A node's reach is its own added to that of every node it reads, a frame node among them,
+  unbounded where any is.
+  Check: a seam: `travel` below `motion`, its reach the two added. And a one-off, each such tool
+  walked from two first rows over the crossings clip, the rows past the later at which the two
+  differ against its declared reach.
 
 ## A value is of its cut
 
@@ -288,7 +315,8 @@ one a node.
 
 ## Every period walked
 
-Assumes: Rows below a cut are the footage's; A value is of its cut; Outside a cut is absent.
+Assumes: Rows below a cut are the footage's; A value is of its cut; Outside a cut is absent; A
+tool's reach in rows.
 
 Facts to weigh. A stepped node's result at a row depends on where its walk began, and a node that
 runs whole on where its range ends. The clip walk and the window walk each step their chain from
@@ -300,9 +328,13 @@ limit.
 - [x] Kendrick: a node's result below a `period` is each period walked alone, from the period's
   first row to its last. It is the caveman way, the period cut to a clip of its own and the
   pipeline run on it, and so the ground truth.
-- [x] Kendrick: a period's walk has the results. The window is a check that the pipeline works,
-  a walk of its own over its rows, its memory bounded as the window is, and it never waits on a
-  period's walk.
+- [x] Kendrick: a period's walk has the results, and the window is a check that the pipeline
+  works.
+- [x] Kendrick: the window is a walk of its own over its rows, its memory bounded as the window
+  is, and never waits on a period's walk, which a period spanning most of the clip makes
+  unbounded. A node whose reach is bounded is exact in it, walked from that reach before the
+  window's first row; one whose reach is not is the window's best effort, and the window says so
+  of its rows.
 - [ ] The clip's walk below a `period` is a walk of each of its periods alone, and each is held as
   that period's. A period whose walk is held under the keys the chain now has is not walked
   again, and one moved, added or gone is walked or dropped alone. A table written below a
@@ -319,12 +351,16 @@ limit.
   the `period`, its video the clip, run on it; its tables, shifted by the period's first row,
   against those below the period, the rows that differ said.
 - [ ] Over a period whose walk is held the window shows that walk. Over one whose walk is not, it
-  walks from the later of the period's first row and its own, and no row before the period's
-  first; what it shows of a walk that is not the period's it says is a check, and the rows of a
-  period walked from its first row in the window are that period's walk as far as they reach.
+  walks each period it overlaps alone, from the later of the period's first row and the window's
+  first less the node's reach, to the earlier of the period's last and the window's last and the
+  node's reach past it, and no row outside the period. A node whose reach is bounded is exact
+  there, as is every node over a period that begins inside the window as far as its rows reach;
+  best effort is of a node whose reach is not bounded, over the period the window begins inside
+  alone, and the window says so of those rows. The rows of a period walked from its first row in
+  the window are that period's walk as far as they reach.
   Worth a look: how the window says it, which is Kendrick's to settle and not the building
-  session's. A check is what the user expects of it: that a thing is tracked as the window moves,
-  and not an identity's number, which only the period's walk gives. What the session builds
+  session's. A best-effort row is what the user expects of it: that a thing is tracked as the
+  window moves, and not an identity's number, which only the period's walk gives. What the session builds
   toward it is conservative, reversible, predictable to the user, and quick without buying an
   unbounded walk.
   Check: a one-off over the crossings clip: the window over several periods, `track` below them,
@@ -338,6 +374,6 @@ A walk with no window, over a folder or from a command: the rest of the review's
 intersected by a node; two gates met on one signal above a `period` are that signal's gate. A
 margin grown or taken off around a cut, or a halo read past one, which change what the user cut.
 A tool that says it reads its own row alone, so that its rows above a cutting node stand in below
-it. A tool's reach in rows, so that a walk begun elsewhere stands in for a period's. A cut of a
+it. A walk begun elsewhere held as a period's by its nodes' reach. A cut of a
 series result, a `period` on the chain. Region's key, which holds its rect, a served clip's
 pixels being H.264's and not the plate's. A lift. Identity across periods.

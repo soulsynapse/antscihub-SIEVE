@@ -7,7 +7,7 @@ of the runtime nothing.
 """
 import numpy as np
 from PySide6.QtCore import QPointF, QRect, QRectF, Qt, Signal
-from PySide6.QtGui import QFontMetrics, QImage, QMouseEvent, QPainter, QPainterPath, QPen, QPixmap, QPolygonF, QRegion
+from PySide6.QtGui import QColor, QFontMetrics, QImage, QMouseEvent, QPainter, QPainterPath, QPen, QPixmap, QPolygonF, QRegion
 from PySide6.QtWidgets import QSizePolicy, QVBoxLayout, QWidget
 
 from . import density, theme
@@ -40,11 +40,12 @@ def label(v):
 
 
 class Line:
-    """A series node's signal from row `start`, with its gate when it has one; a NaN is a row absent."""
+    """A series node's signal from row `start`, with its gate when it has one; a NaN is a row absent.
+    `best` is whether its rows are a walk's best effort and not the walk of their cut."""
 
-    def __init__(self, values, start, gate=None):
+    def __init__(self, values, start, gate=None, best=False):
         self.values = np.asarray(values, np.float32)
-        self.start, self.gate = int(start), None if gate is None else np.asarray(gate, bool)
+        self.start, self.gate, self.best = int(start), None if gate is None else np.asarray(gate, bool), bool(best)
 
     @property
     def top(self):
@@ -57,7 +58,7 @@ class Pieces:
     each drawn."""
 
     def __init__(self, pieces):
-        self.pieces = [Line(v, start, g) for v, g, start in pieces]
+        self.pieces = [Line(v, start, g, best) for v, g, start, best in pieces]
 
     @property
     def top(self):
@@ -68,8 +69,8 @@ class Pieces:
         return any(p.gate is not None for p in self.pieces)
 
     def at(self, row):
-        """The values of the pieces holding `row`, in their order."""
-        return [float(p.values[row - p.start]) for p in self.pieces if 0 <= row - p.start < len(p.values)]
+        """(value, best) of each piece holding `row`, in their order."""
+        return [(float(p.values[row - p.start]), p.best) for p in self.pieces if 0 <= row - p.start < len(p.values)]
 
 
 class Field:
@@ -145,7 +146,7 @@ class ChipRow:
 
 class Plot(QWidget):
     """Feed it the window with set_window(start, length, fps), the lines with set_lines({node:
-    [(values, gate, start), ...]}), each piece from the row its walk began at, and the fields with
+    [(values, gate, start, best), ...]}), each piece from the row its walk began at, and the fields with
     set_fields({node: counts}, start), from the row the walk began at; set_selection(node), set_pinned([node, ...]) and set_bands({node: (lo, hi)}) say what
     is shown and how. A node is drawn while it is the selection or pinned and has a line or a
     field. Where there are more rows than pixel columns each column is the min and max of the
@@ -450,8 +451,12 @@ class Plot(QWidget):
         return inner.left() + step * rows, step, None, slice(lo, hi)
 
     def _paint_line(self, p, inner, nid, color, washed):
+        """Each piece of `nid`'s line in `color`, a best-effort piece at half its alpha."""
         for line in self.lines[nid].pieces:
-            self._paint_piece(p, inner, nid, line, color, washed)
+            c = QColor(color)
+            if line.best:
+                c.setAlpha(c.alpha() // 2)
+            self._paint_piece(p, inner, nid, line, c, washed)
 
     def _paint_piece(self, p, inner, nid, line, color, washed):
         placed = self._columns(line)
@@ -582,9 +587,9 @@ class Plot(QWidget):
         fm = QFontMetrics(self.font())
         h, inner = fm.height(), self._inner()
         for nid in self.shown():
-            for v in self.lines[nid].at(self.hover) if nid in self.lines else []:
+            for v, best in self.lines[nid].at(self.hover) if nid in self.lines else []:
                 dot = QPointF(self._x(self.hover), self._y(v, nid))
-                text = f"{nid} {v:.4g}"
+                text = f"{nid} {'~' if best else ''}{v:.4g}"
                 w = fm.horizontalAdvance(text) + 2
                 x = dot.x() + self.DOT + 6
                 if x + w > inner.right():
@@ -634,7 +639,7 @@ class Plot(QWidget):
         if nid in self.lines:
             values = self.lines[nid].at(self.playhead)
             if self.hover < 0 and values:
-                text = "  ".join(f"{v:.4g}" for v in values)
+                text = "  ".join(f"{'~' if best else ''}{v:.4g}" for v, best in values)
         elif nid in self.fields and self._y_hover is not None:
             f = self.fields[nid]
             frac = (inner.bottom() - self._y_hover) / inner.height()

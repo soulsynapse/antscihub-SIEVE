@@ -54,7 +54,7 @@ if __name__ == "__main__":
     plot = Plot()
     plot.resize(1200, 154)
     plot.set_window(s, n, 30.0)
-    pieces = [(10.0 + 5 * k + np.sin(np.arange(b - a) / 7.0), None, a) for k, (a, b) in enumerate(PIECES)]
+    pieces = [(10.0 + 5 * k + np.sin(np.arange(b - a) / 7.0), None, a, False) for k, (a, b) in enumerate(PIECES)]
     plot.set_lines({"track": pieces})
     plot.set_selection("track")
     img, inner = plot.grab().toImage(), plot._inner()

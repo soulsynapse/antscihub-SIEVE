@@ -1526,12 +1526,13 @@ class PlayerWindow(QMainWindow):
 
     def _show_lines(self):
         """The plot is handed each node's line in pieces: the window walk's from its first row, and
-        one a period the window shows, each from the row its results begin at."""
+        one a period the window shows, each from the row its results begin at and said best effort
+        where window_periods says so of its node."""
         lines = {}
-        for start, results in [(self.result_start, self.results), *((v[0], v[1]) for v in self.window_periods.values())]:
+        for start, results, best in [(self.result_start, self.results, ()), *((v[0], v[1], v[2]) for v in self.window_periods.values())]:
             for nid, r in results.items():
                 if isinstance(r, dict) and "signal" in r:
-                    lines.setdefault(nid, []).append((r["signal"], r.get("gate"), start))
+                    lines.setdefault(nid, []).append((r["signal"], r.get("gate"), start, nid in best))
         self.plot.set_lines(lines)
 
     def _clip_ready(self, results, start, fps):

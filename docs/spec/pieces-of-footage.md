@@ -195,6 +195,11 @@ values at the same rows, and the window shows whichever was held first.
   unbounded. A node whose reach is bounded is exact in it, walked from that reach before the
   window's first row; one whose reach is not is the window's best effort, and the window says so
   of its rows.
+  Worth a look: how the window says it, which is Kendrick's to settle and not the building
+  session's. A best-effort row is what the user expects of it: that a thing is tracked as the
+  window moves, and not an identity's number, which only the whole clip walked gives. What the
+  session builds toward it is conservative, reversible, predictable to the user, and quick
+  without buying an unbounded walk.
 - [ ] A held stepped result is addressed by its key, its origin and its rows, and a walk handed rows
   of one origin steps nothing of another from them, under either answer above. A run serves a
   range at the origin the answers say it is asked at, and one of another origin only as

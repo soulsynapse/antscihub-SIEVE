@@ -390,9 +390,8 @@ def period_keys(p):
     return {**{nid: p.entries[nid].raw_key for nid in p.chain}, None: tuple((q.walk, stacked_key(q)) for q in p.parts())}
 
 
-def window_legs(p, s, n, count):
-    """Each cut in time of the Plan `p` that the window of `n` rows from `s` overlaps, over a footage
-    of `count` rows, as the window walks it alone: (the node its timed Walk's first head reads, the
+def window_legs(p, s, n):
+    """Each cut in time of the Plan `p` that the window of `n` rows from `s` overlaps, as the window walks it alone: (the node its timed Walk's first head reads, the
     cut, the walk's first row and the row past its last, the chain nodes best effort there). The
     walk reaches past the window by its chain's largest bounded reach each side, a side with no
     bound reaching none, and never outside the cut; a node is best effort where a side it has no
@@ -402,7 +401,7 @@ def window_legs(p, s, n, count):
         reach = {nid: p.entries[nid].reach for nid in w.chain}
         before, after = (max((r[i] for r in reach.values() if r[i] is not None), default=0) for i in (0, 1))
         for c in w.cuts:
-            first, end = c.extent.rows_within(count)
+            first, end = c.extent.rows
             if first >= end or end <= s or first >= s + n:
                 continue
             a, b = max(first, s - before), min(end, s + n + after)

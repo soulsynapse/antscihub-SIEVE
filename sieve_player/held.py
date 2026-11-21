@@ -338,11 +338,11 @@ class Runs:
         return have, out
 
     def listed(self, nid, chain, record, count):
-        """`nid`'s values in the cut `record`, a cut.Record, as a Listed: its rows short of the
-        footage's `count`, or the `count` rows for a record of every row, each served to a walk of the cut from its
+        """`nid`'s values in the cut `record`, a cut.Record, as a Listed: its rows, or the footage's
+        `count` rows for a record of every row, each served to a walk of the cut from its
         first row to its last from the run that began earliest and serves it, whatever the value
         read of the cut, so a row may be served by a run of another cut."""
-        cut = record.extent.rows_within(count)
+        cut = record.extent.rows
         walk = cut or (0, count)
         before, after = chain.reach.get(nid, (None, None))
         spans = [walk, *((run.start, run.start + run.rows) for run in self.all), *(run.cut for run in self.all if run.cut)]

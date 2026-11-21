@@ -316,12 +316,17 @@ def test_a_period_cut_by_a_gate_is_cut_by_the_gates_held_run_and_holding_its_per
     (w,) = q.timed
     worth = held_chain(q, [*q.chain, *w.chain])
     for c in w.cuts:
-        start, rows, has, chain, cut, walked_rows = period_run(q, walked(q.of(w), c, c.extent.rows), c.extent.rows[0], Dec.count)
+        start, rows, has, chain, cut, walked_rows = period_run(q, walked(q.of(w), c, c.extent.rows), c.extent.rows[0])
         assert runs.hold(start, rows, has, chain, cut, worth=worth, walked=walked_rows)
         assert not runs.hold(start, rows, has, chain, cut, worth=worth, walked=walked_rows)
         g.sync()
         assert g.snapshot().entries["period"].cuts == cuts
     assert len(runs) == 4
-    start, rows, has, chain, cut, walked_rows = period_run(q, walked(q.of(w), cuts[-1], (8, 9)), 8, 9)     # a count lowered under a period's end
+    g.decoder.count = 9     # a count lowered under a period's end
+    g.sync()
+    lowered = g.snapshot()
+    (w,), last = lowered.timed, lowered.entries["period"].cuts[-1]
+    assert last.extent.rows == (8, 9)
+    start, rows, has, chain, cut, walked_rows = period_run(lowered, walked(lowered.of(w), last, last.extent.rows), 8)
     assert cut == (8, 9) and runs.hold(start, rows, has, chain, cut, worth=worth, walked=walked_rows)
-    assert [(a, len(v["signal"])) for a, v in runs.listed(below, chain, cuts[-1], 9).parts] == [(8, 1)]
+    assert [(a, len(v["signal"])) for a, v in runs.listed(below, chain, last, 9).parts] == [(8, 1)]

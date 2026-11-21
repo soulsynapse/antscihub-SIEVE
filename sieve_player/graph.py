@@ -443,14 +443,14 @@ class Graph:
         return self._in_use | self.readers.open_paths()
 
     def sync(self):
-        """Re-read the document: the plan, pure in the document, the tools and what the cutting
-        nodes' tools answer now (see `plan`), and the decoders' output, which the video node's
-        param sets."""
+        """Re-read the document: the plan, pure in the document, the tools, the decoder's count and
+        what the cutting nodes' tools answer now (see `plan`), and the decoders' output, which the
+        video node's param sets. A count lowered since is the caller's to sync again for."""
         output = video_output(self.doc)
         self.decoder.output = output        # a change empties its cache; a read in flight under the old plan is cancelled
         self._base = base_key(self.decoder.footage_print, output)
         self._failing = {}
-        p = plan(self.doc, self.tools, self._base, self.cut_file, self.cut_result, footage=self.decoder.footage_print)
+        p = plan(self.doc, self.tools, self._base, self.cut_file, self.cut_result, footage=self.decoder.footage_print, count=self.decoder.count)
         self._in_use = self._named(p.entries)
         self.readers.keep({e.file[0] for e in p.entries.values() if e.file is not None})
         for d in self.readers.decoders():

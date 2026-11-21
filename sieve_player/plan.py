@@ -156,9 +156,10 @@ def facts(p, pinned):
             "pinned": list(pinned)}
 
 
-def plan(doc, tools, base, cut_file=None, cut_result=None, footage=None):
+def plan(doc, tools, base, cut_file=None, cut_result=None, footage=None, count=None):
     """The plan for `doc` under `tools`, name to module, with `base` the video node's key,
-    `footage` what the cuts' records say they are of, `base` with none, `cut_result(nid, key, within)`
+    `footage` what the cuts' records say they are of, `base` with none, `count` the footage's rows,
+    every cut's rows held short of it, None for no bound, `cut_result(nid, key, within)`
     answering the result a cutting node reads on its CUT_BY wire over `within`, one of the cuts it
     reads, its rows counted from that cut's first, `key` that of the node wired there and None with
     none, the answer None where no such result is held, and
@@ -320,7 +321,7 @@ def plan(doc, tools, base, cut_file=None, cut_result=None, footage=None):
                         given = results if gate is not None else [cut_result(nid, None, r) if cut_result else None for r in above]
                         extents = [(r, list(cut_extents_of(tool)(computed(tool, node.params), g))) for r, g in zip(above, given)]
                         file = file_of(nid) if sum(len(xs) for _, xs in extents) == 1 else None
-                        made[nid] = tuple(r.cut(**_lifted(x, r, g), file=file) for (r, xs), g in zip(extents, given) for x in xs)
+                        made[nid] = tuple(r.cut(**_within(_lifted(x, r, g), count), file=file) for (r, xs), g in zip(extents, given) for x in xs)
                     except Exception:       # a tool's rule is user code: one that fails cuts nothing
                         pass
         return made[nid]
@@ -406,6 +407,17 @@ def plan(doc, tools, base, cut_file=None, cut_result=None, footage=None):
                       or _standing(doc, tools, entries, heads, walked_chains, nid))
     over = doc.overlay if doc.overlay in entries and overlaid(produces(doc, tools, doc.overlay)) else None
     return Plan(entries, heads, chain, [s for s in series if s not in walked_chains], doc.display if doc.display in entries else None, over, timed)
+
+
+def _within(extent, count):
+    """`extent` with its rows, the footage's, short of a footage of `count` rows, and its rects a
+    row with them; `extent` itself with no `count` or no rows."""
+    rows = extent.get("rows")
+    if count is None or rows is None:
+        return extent
+    held = (min(rows[0], count), min(rows[1], count))
+    rects = extent.get("rects")
+    return {**extent, "rows": held, **({} if rects is None else {"rects": list(rects)[: held[1] - held[0]]})}
 
 
 def _lifted(extent, within, result):

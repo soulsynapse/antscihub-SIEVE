@@ -262,8 +262,8 @@ class Worker(QThread):
                 win.begin(s, n, by)
                 if wp.i < wp.length:
                     wp.halt()
-                self._window_legs[:] = [(nid, c, a, b) for nid, c, a, b, _ in window_legs(p, s, max(0, min(length, count - s)), count)
-                                        if not self._spared(p, nid, c, count)]
+                self._window_legs[:] = [(nid, c, a, b) for nid, c, a, b, _ in window_legs(p, s, max(0, min(length, count - s)))
+                                        if not self._spared(p, nid, c)]
                 wp.by = by
             return "walk", [(win, begin)]
         if self._series_dirty:
@@ -321,7 +321,7 @@ class Worker(QThread):
             nid, cut = self._legs.pop(0)
             if (sub := _walking(p, nid, cut)) is None:
                 continue
-            first, end = cut.extent.rows_within(count)
+            first, end = cut.extent.rows
             ask = self._held(sub, nid, first, end)
             if ask is not None and ask[1]:
                 continue
@@ -341,8 +341,8 @@ class Worker(QThread):
             return None
         return ask
 
-    def _spared(self, p, nid, cut, count):
+    def _spared(self, p, nid, cut):
         """Whether every chain node's result over `cut`, walked from `nid` under the Plan `p`, is held."""
         sub = _walking(p, nid, cut)
-        ask = None if sub is None else self._held(sub, nid, *cut.extent.rows_within(count))
+        ask = None if sub is None else self._held(sub, nid, *cut.extent.rows)
         return ask is not None and ask[1]

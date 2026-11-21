@@ -21,15 +21,14 @@ def as_given(p, part):
             for nid, r in part.items()}
 
 
-def held_periods(p, runs, count):
-    """What the held.Runs `runs` hold of each cut in time of the Plan `p` over a footage of `count`
-    rows, as Worker.give_periods takes it."""
+def held_periods(p, runs):
+    """What the held.Runs `runs` hold of each cut in time of the Plan `p`, as Worker.give_periods takes it."""
     out = {}
     for w in p.timed:
         sub, chain = p.of(w), held_chain(p, w.chain)
         src, stacks = p.entries[w.heads[0]].src, [(q.walk, stacked_key(q)) for q in sub.parts()]
         for c in w.cuts:
-            s, e = c.extent.rows_within(count)
+            s, e = c.extent.rows
             if e <= s:
                 continue
             spared = runs.over(s, e - s, chain, (s, e), (s, e)) is not None
@@ -41,15 +40,14 @@ def held_periods(p, runs, count):
     return out
 
 
-def period_run(p, results, start, count):
-    """The run `periodReady`'s `results` from `start` are held as under the Plan `p` over a footage
-    of `count` rows: (start, rows, the chain's results, the held.Chain of the timed Walk they are
+def period_run(p, results, start):
+    """The run `periodReady`'s `results` from `start` are held as under the Plan `p`: (start, rows, the chain's results, the held.Chain of the timed Walk they are
     of, the cut's rows, each walked node's rows as held.Runs.hold takes them or None); None where
-    they are of no cut of `p` walked whole, a cut's rows ending at the footage's end."""
+    they are of no cut of `p` walked whole."""
     has = {nid: r for nid, r in results.items() if isinstance(r, dict) and "signal" in r}
     rows = max((len(r["signal"]) for r in has.values()), default=0)
     w = next((w for w in p.timed if set(has) == set(w.chain)
-              and (start, start + rows) in {c.extent.rows_within(count) for c in w.cuts}), None)
+              and (start, start + rows) in {c.extent.rows for c in w.cuts}), None)
     if w is None or not rows:
         return None
     folds = {q.walk: q.fold for q in p.of(w).parts()}
@@ -67,24 +65,22 @@ def gate_result(runs, src, key, within, count):
     if rows is None:
         run = runs.from_first_row(src, key)
         return run.results[src] if run is not None and run.rows >= count else None
-    rows = within.extent.rows_within(count)
     run = next((run for run in runs if run.cut == rows and (run.start, run.start + run.rows) == rows
                 and held.good(run.results.get(src), key)), None)
     return None if run is None else run.results[src]
 
 
-def window_periods(p, runs, s, n, count):
-    """What the window of `n` rows from `s` shows of each cut in time of the Plan `p` it overlaps,
-    over a footage of `count` rows: (the node its walk reads, the cut.Record) to (the row its results
+def window_periods(p, runs, s, n):
+    """What the window of `n` rows from `s` shows of each cut in time of the Plan `p` it overlaps: (the node its walk reads, the cut.Record) to (the row its results
     begin at, the results, the chain nodes best effort there, whether they are the cut's walk held).
     A cut whose every chain node the held.Runs `runs` serve over the whole cut, as the worker's
     give_periods is told it, is that walk over the window's rows; another is the window's own walk
     of it, as walk.window_legs has it, its results {} until the worker's windowPeriodReady hands
     them."""
     out = {}
-    for src, c, a, b, best in window_legs(p, s, n, count):
+    for src, c, a, b, best in window_legs(p, s, n):
         w = next(w for w in p.timed if c in w.cuts and p.entries[w.heads[0]].src == src)
-        first, end = c.extent.rows_within(count)
+        first, end = c.extent.rows
         lo, hi = max(first, s), min(end, s + n)
         chain = held_chain(p, w.chain)
         if runs.over(first, end - first, chain, (first, end), (first, end)) is not None:

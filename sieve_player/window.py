@@ -819,7 +819,7 @@ class PlayerWindow(QMainWindow):
         if self.graph is None or count == self.count:
             return
         self.count = count
-        self._recut()
+        self._recut(by_count=True)
         self.timeline.strip.set_count(count, self.fps)
         self.timeline.controls.set_count(count, self.fps)
         if self.pane.video is not None:
@@ -1282,7 +1282,7 @@ class PlayerWindow(QMainWindow):
         part = {} if got is not None else self.runs.part(s, n, chain, (s, s + n))
         self._spared, self._given = got is not None, bool(part)
         self.worker.set_window(s, n, self._spared, self._as_given(part), by)
-        self.window_periods = window_periods(self.graph.snapshot(), self.runs, s, n, self.count)
+        self.window_periods = window_periods(self.graph.snapshot(), self.runs, s, n)
         self._show_lines()
         if got is not None:
             self._series_ready(got, s, self.fps)
@@ -1298,8 +1298,8 @@ class PlayerWindow(QMainWindow):
         self.timeline.strip.set_held(self.runs.spans(chain))
         if self.worker is not None:
             self.worker.give_clip(self.count, self._as_given(self.runs.part(0, self.count, chain, (0, self.count))))
-            self.worker.give_periods(held_periods(self.graph.snapshot(), self.runs, self.count))
-            self.window_periods.update({of: v for of, v in window_periods(self.graph.snapshot(), self.runs, *self.window_, self.count).items()
+            self.worker.give_periods(held_periods(self.graph.snapshot(), self.runs))
+            self.window_periods.update({of: v for of, v in window_periods(self.graph.snapshot(), self.runs, *self.window_).items()
                                         if v[3] and of in self.window_periods})
             self._show_lines()
         self._show_stale(chain)
@@ -1517,7 +1517,7 @@ class PlayerWindow(QMainWindow):
     def _period_ready(self, results, start, fps):
         """A cut in time walked whole from its first row, `start`: held as a run of that cut under
         the chain of the timed Walk its nodes are of, with the walked node's rows it was stepped over."""
-        run = period_run(self.graph.snapshot(), results, start, self.count)
+        run = period_run(self.graph.snapshot(), results, start)
         if run is not None:
             start, rows, has, chain, cut, walked = run
             self._hold_run(start, rows, has, chain, cut, of_clip=True, walked=walked)
@@ -1608,13 +1608,15 @@ class PlayerWindow(QMainWindow):
         w = by and self.doc.source(nid, by[0])
         return gate_result(self.runs, w.src, key, within, self.count) if w else None
 
-    def _recut(self, resume=False):
-        """The graph synced where a cutting node is cut by a result on a wire, and where the cuts it
-        then makes are not those it made, the walk begun again over them, and the clip walk asked
-        again where it was asked or `resume` says a clip walk's run made them."""
+    def _recut(self, resume=False, by_count=False):
+        """The graph synced where a cutting node is cut by a result on a wire, or any cutting node
+        where `by_count` says the count moved, and where the cuts they then make are not those they
+        made, the walk begun again over them, and the clip walk asked again where it was asked or
+        `resume` says a clip walk's run made them."""
         if self.graph is None:
             return
-        cutting = lambda: {nid: e.cuts for nid, e in self.graph.snapshot().entries.items() if registry.cut_by(e.tool)}
+        of = registry.cuts if by_count else registry.cut_by
+        cutting = lambda: {nid: e.cuts for nid, e in self.graph.snapshot().entries.items() if of(e.tool)}
         was = cutting()
         if not was:
             return

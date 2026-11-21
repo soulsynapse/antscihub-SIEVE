@@ -106,7 +106,7 @@ if __name__ == "__main__":
             truth, runs = {}, held.Runs(1 << 40, lambda nid, r: 0)
 
             def period_ready(results, start, fps):
-                run = period_run(g.snapshot(), results, start, g.count)
+                run = period_run(g.snapshot(), results, start)
                 if run is not None:
                     truth[run[4]] = (start, run[2])
                     if run[4] == (PERIODS[0][1], PERIODS[0][2]):
@@ -118,10 +118,10 @@ if __name__ == "__main__":
             w.stop_clip()
             turned(w, g)
             print(f"each period walked alone by the clip lane: {sorted(truth)}, {turns} turns, {time.perf_counter() - t0:.1f} s; the first held")
-            w.give_periods(held_periods(p, runs, g.count))
+            w.give_periods(held_periods(p, runs))
 
             for s, n in WINDOWS:
-                shown = window_periods(p, runs, s, n, g.count)
+                shown = window_periods(p, runs, s, n)
 
                 def ready(results, start, of, fps, shown=shown):
                     got = shown.get(of)

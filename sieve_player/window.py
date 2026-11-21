@@ -42,7 +42,7 @@ from .theme import GAP, PAD, ROW_H, readout
 from .timeline import Timeline
 from .trace import Dump
 from .plot import Plot, Stage
-from .heldwalks import Shown, as_given, gate_result, held_chain, held_periods, period_run, window_periods
+from .heldwalks import Shown, as_given, gate_result, held_chain, held_periods, period_run, shown_at, window_periods
 from .worker import Worker
 
 HOLD_MS = 2000              # how long the held runs rest, nothing new held, before they are written beside the document
@@ -186,15 +186,16 @@ class Display(QWidget):
         self._pix, self.gate, self.reason = None, False, ""
         self._over, self._over_key, self._top = None, None, 0.0   # the overlay image, whose node's key, its running max
         self._frame_key, self._frame_top = None, 0.0               # the shown node's key and running max, for a measured plane
-        self.drawers, self.row, self.results, self.start = [], 0, {}, 0   # drawers: [(node id, tool, node)]
+        self.drawers, self.row, self.results, self.start, self.starts = [], 0, {}, 0, {}   # drawers: [(node id, tool, node)]
         self.dropped = set()                                       # id() of each tool whose draw() or pick() raised; the window keeps them out of drawers
         self.frame_results = {}                                    # node id -> a drawing frame node's output at the row
         self.places = {}                                           # node id -> (x, y) on the frame of the first pixel of what a drawer's node reads; one with no place on it is not here
         self.setMinimumSize(160, 120)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
-    def set_state(self, row, results, start):
-        self.row, self.results, self.start = row, results, start
+    def set_state(self, row, results, start, starts=None):
+        """`results` are node to result, each over the rows from `start`, or from its own row in `starts` where it has one."""
+        self.row, self.results, self.start, self.starts = row, results, start, starts or {}
         self.update()
 
     def set_frame(self, a, key=None):
@@ -265,7 +266,7 @@ class Display(QWidget):
             p.save()
             p.translate(*self.places[nid])
             try:
-                tool.draw(p, self.row, self.frame_results.get(nid, self.results.get(nid)), self.start, node.params)
+                tool.draw(p, self.row, self.frame_results.get(nid, self.results.get(nid)), self.starts.get(nid, self.start), node.params)
             except Exception as e:
                 traceback.print_exc()
                 self.drop(tool)
@@ -867,7 +868,7 @@ class PlayerWindow(QMainWindow):
 
     def _asked_again(self, nid):
         """The graph synced after a change at `nid`, and the walk begun again only where a key moved."""
-        keys = self._keys()
+        keys, ranges = self._keys(), self._own_ranges()
         self.graph.sync()
         self._restate()
         if self._keys() == keys:
@@ -877,9 +878,20 @@ class PlayerWindow(QMainWindow):
                 self._ask_window(EDIT)  # what was held is no longer the chain's, or a run now is: the walk begins again with what is held now
             self.worker.rerun_series()
             self._show_held()
+        elif nid in self._walked_nodes() and self._own_ranges() == ranges:
+            self._walk_periods_again()
         else:
             self._invalidate()
             self.goto(self.row, commit=True)
+
+    def _walk_periods_again(self):
+        """The plan moved under the cuts in time and under nothing either own range walks: each lane
+        walks the cuts the plan now has that the runs do not hold, and neither own range begins again."""
+        self._restate()
+        self.window_periods = window_periods(self.graph.snapshot(), self.runs, *self.window_)
+        self._show_held()
+        self.worker.recut()
+        self.goto(self.row, commit=True)
 
     def _invalidate(self):
         """The frame tools changed: the walk restarts, and the clip walk's rows are of a graph that is
@@ -1252,8 +1264,8 @@ class PlayerWindow(QMainWindow):
                 return False
         self.display.set_frame(frame, self.graph.key(self.graph.shown))
         self.display.places = self._places(src, row, frame.shape[:2])
-        self.display.frame_results = {nid: self.graph.peek(row, nid) for nid, *_ in self.display.drawers
-                                      if nid not in self.graph.chain}
+        walked = self._walked_nodes()
+        self.display.frame_results = {nid: self.graph.peek(row, nid) for nid, *_ in self.display.drawers if nid not in walked}
         over = self.graph.over
         plane = None if over is None else self.graph.peek(row, over)
         self.display.set_overlay(plane, None if over is None else self.graph.key(over))
@@ -1537,6 +1549,8 @@ class PlayerWindow(QMainWindow):
         if got is not None and not got.held and got.start == start:
             self.window_periods[of] = Shown(start, results, got.best, False)
             self._show_lines()
+            self._update_gate()
+            self._show_pinned()
 
     def _show_lines(self):
         """The plot is handed each node's line in pieces: the window walk's from its first row, and
@@ -1633,11 +1647,7 @@ class PlayerWindow(QMainWindow):
         if cutting() == was:
             return
         if not by_count and self._own_ranges() == ranges:
-            self._restate()
-            self.window_periods = window_periods(self.graph.snapshot(), self.runs, *self.window_)
-            self._show_held()
-            self.worker.recut()
-            self.goto(self.row, commit=True)
+            self._walk_periods_again()
             return
         walking = self._clip_asked
         self._restate()
@@ -1700,8 +1710,11 @@ class PlayerWindow(QMainWindow):
         """The strip draws every shown node that has a signal: the clip's when there is one, walked or
         held, else the window's, and with it the node's signal over the rows of every other run held
         under the key it now has that nothing drawn before it is over, the run that began earliest
-        first as held.Runs.over serves, so no row is drawn twice."""
+        first as held.Runs.over serves, so no row is drawn twice. A node below a cut in time has no
+        range of its own: its signal is over each run held under its key, or with none held over
+        each period the window walked."""
         series, more = {}, {}
+        below = set() if self.graph is None else {nid for w in self.graph.snapshot().timed for nid in w.chain}
         for nid in document.shown(self.selection, self.doc.pinned) if self.doc is not None else []:
             if (r := self._clip_result(nid)) is not None:
                 start = 0
@@ -1710,6 +1723,10 @@ class PlayerWindow(QMainWindow):
             if isinstance(r, dict) and "signal" in r:
                 series[nid] = (r["signal"], start, r.get("gate"))
                 more[nid] = self.runs.beside(nid, self._key(nid), start, len(r["signal"]))
+            elif nid in below and (pieces := self.runs.beside(nid, self._key(nid), 0, 0) or [
+                    (v.results[nid]["signal"], v.start, v.results[nid].get("gate")) for v in self.window_periods.values()
+                    if isinstance(v.results.get(nid), dict) and "signal" in v.results[nid]]):
+                series[nid], more[nid] = pieces[0], pieces[1:]
         self.timeline.strip.set_series(series, self.selection, more)
 
     def _set_length(self, rows):
@@ -1730,7 +1747,9 @@ class PlayerWindow(QMainWindow):
         gates = [self.results[nid].get("gate") for nid, *_ in chain
                  if nid not in read and isinstance(self.results.get(nid), dict)]
         self.display.set_gate(bool(gates) and all(g is not None and 0 <= i < len(g) and bool(g[i]) for g in gates))
-        self.display.set_state(self.row, self.results, self.result_start)
+        below = shown_at(self.window_periods, self.row)    # a node below a cut in time: its result over the period holding the row
+        self.display.set_state(self.row, {**self.results, **{nid: r for nid, (r, _) in below.items()}}, self.result_start,
+                               {nid: start for nid, (_, start) in below.items()})
 
     SPLIT = 0.5   # the frame's share of the width until the handle is dragged
 

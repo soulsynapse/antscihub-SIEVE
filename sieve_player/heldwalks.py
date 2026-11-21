@@ -1,7 +1,7 @@
 """What the held runs are to a plan's walks, apart from the window: a chain as held.Runs is told it,
 held results as the worker is given them, what the runs hold of each cut in time, a walked
-period's results as the run they are held as, what the window shows of each period it overlaps, and
-the result a cutting node is cut by. No Qt; the window composes it with the worker."""
+period's results as the run they are held as, what the window shows of each period it overlaps and
+of the one holding a row, and the result a cutting node is cut by. No Qt; the window composes it with the worker."""
 from typing import NamedTuple
 
 from . import held, wire
@@ -108,4 +108,15 @@ def window_periods(p, runs, s, n):
             out[(leg.walked, c)] = Shown(lo, runs.over(lo, hi - lo, chain, (first, end), (first, end)), frozenset(), True)
         else:
             out[(leg.walked, c)] = Shown(leg.first, {}, leg.best, False)
+    return out
+
+
+def shown_at(shown, row):
+    """Node to (its result, the row it begins at) over the period holding `row` among `shown`, as
+    window_periods answers; the first such period's where two hold it."""
+    out = {}
+    for v in shown.values():
+        for nid, r in v.results.items():
+            if nid not in out and isinstance(r, dict) and "signal" in r and v.start <= row < v.start + len(r["signal"]):
+                out[nid] = (r, v.start)
     return out

@@ -384,8 +384,7 @@ def plan(doc, tools, base, cut_file=None, cut_result=None, footage=None):
 
     roots = [s for s in series if entries[s].src is None or entries[entries[s].src].kind != "series"]
     untimed = [s for s in roots if entries[s].src is None or not in_time(s)]
-    anchor = untimed[0] if untimed else None
-    heads = [s for s in untimed if entries[s].fed] or ([anchor] if anchor else [])
+    heads = [s for s in untimed if entries[s].fed]
     chain, timed = chain_from(heads), []
     for s in roots:
         cuts = entries[entries[s].src].cuts if s not in untimed else None

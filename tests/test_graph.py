@@ -440,7 +440,8 @@ def test_one_compute_sees_one_plan():
 
 def test_walk_row_is_the_walked_node_through_the_heads_fold():
     """The worker stacks what the series tool asked for: the row through fold() when it has one, the
-    frame itself when it has not, and None where nothing reaches the walked node."""
+    frame itself when it has not; with no series node fed, none is on the chain and the window walks
+    what is shown, so a frame node's density is folded and no unfed tool is handed a row."""
     head = tool("head", kind="series", produces="signal")
     head.fold = lambda f: np.array([f.sum(), f.size])
     doc = D.from_tools([gray, head])
@@ -450,7 +451,8 @@ def test_walk_row_is_the_walked_node_through_the_heads_fold():
     assert (g.walk_row(3) == g.compute("gray", 3)).all()
     doc.connect("video", "head")
     g.sync()
-    assert g.walk_row(3) is None
+    p = g.snapshot()
+    assert not p.chain and p.unrun == ["head"] and p.walk == p.shown and (g.walk_row(3) == g.compute(p.shown, 3)).all()
 
 
 def test_probe_emits_once_per_run_exclusive_of_what_the_run_reads():

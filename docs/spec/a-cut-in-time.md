@@ -364,7 +364,8 @@ Facts to weigh. A stepped node's result at a row depends on where its walk began
 runs whole on where its range ends. The clip walk and the window walk each step their chain from
 their own first row (`walk._Walk`), and the worker has a lane for each. A gate can make hundreds
 of periods over a clip, each a walk of its own. `held.Runs` drops the oldest run past its limit,
-and a walk closes at `walk.STACK_BYTES`. The runs of as many periods under that limit, and the
+and a walk closes at `walk.STACK_BYTES`. A held run holds the chain's results and not the walked
+node's rows (`held.Run`), which the memo has while it has room. The runs of as many periods under that limit, and the
 periods a band makes of a signal, are measured in that finding; a walk of many short ranges
 against one of the same rows is not. The window walks and shows the chain of nodes no cut in time
 feeds, so a node below a `period` draws no line there; `plot.py:Plot.set_lines` hands every line
@@ -385,11 +386,18 @@ one start, where the strip takes one a node.
   its period.
   Check: a one-off over the crossings clip: the clip walked below a `period`, the rows stepped
   against the periods', and a tracks csv below it, its rows against the periods'.
-- [ ] A period whose walk is held under the keys the chain now has is not walked again; one whose
-  last row moved later is walked from where it ended, a node whose reach after is not none from
-  that reach before; one whose first row moved is walked again for the nodes that read it; and a
-  row two periods share is computed once for a node that read neither's edge. Every period's
-  result so reached is the result of a walk of the same document from no store and no held run.
+- [x] Kendrick: a period's walk holds the walked node's rows beside the chain's results, each of
+  what it read of the period as A value is of what it read has it, and no tool's state. A node
+  that read an edge that moved is stepped again from the period's first row over the rows held,
+  so a tracker reworked later, one that reads past its row among them, is walked as it is.
+  What that costs against the frames is in
+  `docs/findings/2026-11-20-relinking-against-the-frames.md`.
+- [ ] A period whose walk is held under the keys the chain now has is not walked again. One whose
+  edge moved has its walked node computed at the rows no held run serves it alone, and every node
+  that read the edge stepped or run again from the period's first row over the rows held, `track`
+  and every node below it among them; a row two periods share is computed once for a node that
+  read neither's edge. Every period's result so reached is the result of a walk of the same
+  document from no store and no held run.
   Check: a one-off over the crossings clip, `motion` and `background` below the `period` beside
   `track`: a period moved and the clip walked again, the rows stepped that period's alone, and
   every period's result against a walk from no store and no held run, equal, the rows that differ

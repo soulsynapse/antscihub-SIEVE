@@ -17,14 +17,15 @@ this file where they differ.
   torture in about ten seconds and prints a line a scheme. Read "What the simulation has shown"
   before touching either file.
 - Next action, in order: (a) chunks sized by bytes and not by a count of rows, a `Scheme` field,
-  since a chunk of 64 rows of 4K colour passes a 2 GB budget by itself; (b) the pricing half:
+  since a chunk of 64 rows of 4K colour passes a 2 GB budget by itself; (a2) the three changes
+  "What the figures say" asks of the simulation; (b) the pricing half:
   named workloads (building a pipeline by edit and scrub, a full walk then a revisit, a saved
   file reopened, a gate then a heavy chain on its cuts) run on the three `PROFILES`, printing
   simulated seconds, scrub latency, share recomputed, peak memory and disk held, with policies
-  compared side by side; (c) one narrow queued run that reads `docs/findings/` for the measured
-  figures the placeholders in `PROFILES` and `pipeline()` stand in for (decode and tool ms a
-  row, bytes a row, disk rates) and one bare walk to check them; (d) then stage 4's first slice.
-- Counters: queued runs 1 of 15; cycles 1 of 4 (the contract and its first torture).
+  compared side by side, priced from `docs/playground/figures.md` (done, run 2; do not reread
+  it whole, its conclusions are below); (c) no finding measures a disk's read and write rate or
+  seek, so those three stay labelled guesses; (d) then stage 4's first slice.
+- Counters: queued runs 2 of 15; cycles 1 of 4 (the contract and its first torture).
 - Context: `bash ~/.claude/tools/context-used.sh 300` prints what is left before the auto-compact
   window (300k by his `/autocompact` on 2026-11-21). Bring this file up to date before a step
   that reads a lot, and when under about 30k left.
@@ -166,6 +167,32 @@ restore) and checks O1, O3, O5 and O6 after each. `shrunk` cuts a failing sequen
   walk, cores, and any cost figure. O2 is covered through O1 after evict and delete; O4 is not a
   simulation's to show and is counted at stage 4 by what a slice lets a new tool leave alone.
 
+## What the figures say (run 2, `figures.md`; machine: i9-14900KF, 32 threads, 64 GB, NVMe)
+
+- A seek costs 80 to 140 ms at 1080p and 490 ms at 5.3K, against 1.1 to 2.8 ms for a row read
+  in order: one seek is fifty to a hundred rows. Scrub latency is seeks, not tools.
+- Work does not scale with cores inside one clip. Threads flatten at about four (7.03 ms a row
+  at one worker, 2.05 at four and at eight, worse at sixteen); four decoders on chunks give
+  1.3 times one; sixteen processes give 3.4 times after 0.6 s to start. So `Ask.walk`'s
+  `speed = cores` is wrong: cap it near 3.5 within a clip. Filling an HPC node is done across
+  pieces that share nothing (clips, regions, cuts in time, documents), a process each, which is
+  what a store of many writers allows and the reason D6 matters more than I had it.
+- Holding more made a walk slower: the stress document's bare walk ran 515 rows a second under a
+  64 MB memo and 151 to 316 under 4 GB. A put to memory is not free, and "fill the RAM" is wrong
+  for planes a walk passes through.
+- A plane is cheap to make and dear to keep: about 2 ms and 2 MB a row at 1080p, so writing it
+  to a 100 MB/s disk costs ten times recomputing it. A table or a signal is the reverse: a
+  track step is 0.6 to 0.9 ms for 1.2 KB, a signal 4 B. Whole-clip series tools cost seconds
+  (tracks-filter 1.8 s, resolve 2.1 s over 38100 rows).
+- So the tiers take entries by what they save per byte, recompute time over size, not by
+  recency alone: GreedyDual-Size (Cao and Irani 1997) is the referent. Planes stay in memory
+  near the playhead and go to disk only when a slow producer makes them worth it (a 5.3K
+  decode at 31 ms, a background composite at 32 s); tables, signals and whole results always go.
+  This is a policy object in the simulation, compared against plain LRU.
+
+Three changes this asks of `sim.py`: the speed cap; a cost to a memory put and a policy that may
+decline to hold; the real figures in `pipeline()` and `PROFILES`, with a 5.3K variant.
+
 ## Blind spots I know of, and what covers each
 
 - I have not read the runtime myself; I hold the inventory's reading, spot-checked on five rows.
@@ -193,6 +220,7 @@ restore) and checks O1, O3, O5 and O6 after each. `shrunk` cuts a failing sequen
 
 | # | What | Wall | Context, turns | Verdict |
 |---|---|---|---|---|
+| 2 | Measured figures from `docs/findings/`, one table, told which findings to open first | 2m 31s | about 88k, 24 turns | On brief, every row sourced, disagreements kept as two rows, empty cells said. The shape to reuse: one file out, the reader told it is the queued run, where to start reading, a line cap. |
 | 1 | Stage 1 inventory, five questions over the whole tree and the log | 8m 30s | about 215k, 115 turns | Output accurate on five spot checks, dense, on brief. Too wide for one run: five questions should have been two or three runs. It took the journal's "supervising session" to be itself; later prompts say who the reader is. |
 
 ## Log

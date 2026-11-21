@@ -26,10 +26,13 @@ one, and it lays back over the footage beside what was found around it.
 
 A cut is a subset of one footage's pixels and rows, with a reference to each cut it was made
 from: one where a node cut it, two for an intersection, so cuts form a directed acyclic graph and
-not a tree. Its extent is held on the footage, so lifting it back reads no parent. A region is a
-shape over every row, a period every pixel over an unbroken run of rows, a region in a period
-both, and a track a shape a row over a period. A cut of a cut is the intersection of the two. A
-cut restricts and never renumbers: a row and a place below a cut are the footage's.
+not a tree. Made from is restriction and nothing else: a cut is a subset of every cut it was made
+from. How tracks join and part, a merged tube of two tracks that is a subset of neither, is a
+graph of its own over tracks and no edge of this one. A cut's extent is held on the footage, so
+lifting it back reads no parent. A region is a shape over every row, a period every pixel over an
+unbroken run of rows, a region in a period both, and a track a shape a row over a period. A cut of
+a cut is the intersection of the two. A cut restricts and never renumbers: a row and a place below
+a cut are the footage's.
 
 A cut in time is a cut in space turned on its side. A `region` is fed its shapes by a file and
 everything below it runs inside the region; a `period` is fed its periods, by a file or by a
@@ -98,6 +101,9 @@ What each settled, and the box it bears on. A session building a box reads its r
   of windows composed. A cut's record.
 - Bazel's and Nix's hermeticity: a key holds all an action reads, and what is read and not held is
   how a cache goes stale. A value is of what it read.
+- anTraX (Gal, Saragosti and Kronauer, eLife 2020): tracklets a graph whose edges are blobs
+  merging and splitting, identity passed along it, and no edge a containment. Made from is
+  restriction; how tracks join and part is not here.
 - ffmpeg's seeking, and H.264 and MPEG-TS: a seek that snaps to a keyframe under stream copy, a row
   decoded from the keyframe before it, a transport stream's timestamps that jump. Every period
   walked's golden master, over `00000.MTS`.

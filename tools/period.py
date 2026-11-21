@@ -12,6 +12,8 @@ rows [first, end). Periods may touch and may overlap, each its own. A top-level 
 `rows` and `periods` is ignored. `load_periods` raises on a file that does not read, a repeated
 name, a period of no rows and one past `rows`, saying which. A save of the file reaches the node
 through the window's watch on it, as a geometry file's reaches a `region`.
+The card's Write writes a gate's periods to a file of this form, `periods_text`'s, which a
+`period` fed it reads as the same periods.
 
 `cut_extents` is a cut a period, none chosen over another, of the gate's result where one is
 handed and else of the file's. The key holds nothing of where the periods lie, so a node below is
@@ -20,6 +22,7 @@ keyed alike in every period and its values are told apart by the cut each read
 the two counts, as does a file of no periods.
 """
 import json
+import os
 
 import numpy as np
 
@@ -72,6 +75,13 @@ PATHS = {"periods": load_periods}
 CUT_BY = {"gate": ("signal", "tracks")}
 
 
+def periods_text(rows, cuts):
+    """The file of the periods [first, end) in `cuts` of a footage `rows` long, each named by its
+    first row, as `load_periods` reads it back."""
+    periods = [{"name": str(a), "first": a, "end": b} for a, b in cuts]
+    return json.dumps({"rows": rows, "periods": periods}, indent=1) + "\n"
+
+
 def kept(gate):
     """[(first, end)] of each run of rows `gate`, a bool a row, keeps."""
     g = np.concatenate([[False], np.asarray(gate, bool), [False]])
@@ -94,6 +104,59 @@ def cut_extents(params, result):
 
 def reach_in_rows(params):
     return 0, 0
+
+
+def settings(parent=None):
+    """The card: Write, live while a gate cuts the node, asks where with `<stem>_periods.json`
+    beside the footage filled in, the dialog asking before it writes over a file, and writes the
+    periods the gate gives the node now."""
+    from PySide6.QtWidgets import QFileDialog, QPushButton
+
+    from sieve_player import ParamWidget
+    from sieve_player.theme import readout
+    from tools._csvfile import replace
+
+    class _Widget(ParamWidget):
+        def __init__(self, parent=None):
+            super().__init__(parent)
+            self.file = {k: v["default"] for k, v in PARAMS.items()}
+            for k in PARAMS:        # the file's, which the pane would drop from params() were they not here
+                self._get[k], self._set[k] = (lambda k=k: self.file[k]), (lambda v, k=k: self.file.__setitem__(k, v))
+            self.footage, self.cuts, self.count, self.by = None, [], 0, None
+            self.button, self.status = QPushButton("Write…"), readout()
+            self.form.add_row("periods", self.button)
+            self.form.add_line(self.status)
+            self.button.clicked.connect(self._write)
+            self._describe()
+
+        def set_source(self, path, fps):
+            self.footage = path
+            self._describe()
+
+        def show_cuts(self, cuts, count, by):
+            self.cuts, self.count, self.by = [c.extent.rows for c in cuts if c.extent.rows is not None], count, by
+            self._describe()
+
+        def _describe(self):
+            n = len(self.cuts)
+            self.button.setEnabled(self.by is not None and bool(n) and self.footage is not None)
+            self.button.setText(f"Write {n} periods…" if self.by is not None and n else "Write…")
+            self.button.setToolTip("" if self.by is not None else "writes the periods a gate gives; wire a series node into gate")
+
+        def _write(self):
+            default = f"{os.path.splitext(self.footage)[0]}_periods.json"
+            path, _ = QFileDialog.getSaveFileName(self, "Write periods", default, "Periods (*.json);;All (*)")
+            if not path:
+                return
+            try:
+                replace(path, periods_text(self.count, self.cuts))
+            except OSError as e:
+                self.status.setText(f"could not write: {e}")
+                return
+            self.status.setText(f"wrote {len(self.cuts)} periods of {self.by}'s gate to {os.path.basename(path)}; "
+                                "a file selector wired into periods, and the gate's wire broken, cuts by them")
+
+    return _Widget(parent)
 
 
 def run(frames, row, params):

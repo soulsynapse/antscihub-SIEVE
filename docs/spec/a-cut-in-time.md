@@ -256,7 +256,7 @@ Open: the file's form. Recommended, and a session may build on it: JSON as the g
 - [x] A `period` fed both is refused, saying both. A series node whose gate feeds a `period` is
   above it; one below it is a cycle, refused as one, saying both.
   Check: a seam.
-- [ ] The periods a gate gave a `period` are written at the user's ask to a file of the file's
+- [x] The periods a gate gave a `period` are written at the user's ask to a file of the file's
   form, and a `period` fed that file has the same periods.
   Check: a one-off over the crossings clip: a gate's periods written, read back and compared.
 - [ ] A `period` cuts the footage into its periods, each a cut of its own, however many it is

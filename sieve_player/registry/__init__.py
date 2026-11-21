@@ -48,6 +48,7 @@ WIDGET_FACETS = {
     "show_result": "def show_result(self, result, start, fps): ...  # a chain node's card: its result over the rows from start",
     "set_driven": "def set_driven(self, names, by=None): ...  # the params a wire drives, and the node that drives them",
     "show_matches": "def show_matches(self, folder, found, picked): ...  # a selector's card: every path its rule matches, and the one picked",
+    "show_cuts": "def show_cuts(self, cuts, count, by): ...  # a cutting node's card: the cuts it makes, a cut.Record each, the footage's count of rows, and the node whose result on a wire it cuts by, or None",
     "set_cut_files_in_use": "def set_cut_files_in_use(self, paths): ...  # the files the document's cutting nodes name, see cut_files",
     "storeChanged": "storeChanged = Signal()  # files of the store were written or removed here, the params as they were",
 }

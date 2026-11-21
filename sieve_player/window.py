@@ -770,6 +770,8 @@ class PlayerWindow(QMainWindow):
         self.canvas.served = {n.id for n in self.doc.nodes if (e := self.graph.entry(n.id)) is not None and e.file is not None}
         self.pane.set_source(self.decoder.path, self.fps, {n.id: self.graph.footage(n.id) for n in self.doc.nodes})
         self.pane.set_cut_files_in_use(self.graph.cut_files_in_use())
+        self.pane.set_cuts({n.id: (e.cuts, self.count, w.src if (by := registry.cut_by(e.tool)) and (w := self.doc.source(n.id, by[0])) else None)
+                            for n in self.doc.nodes if (e := self.graph.entry(n.id)) is not None and registry.cuts(e.tool)})
         for n in self.doc.nodes:
             text = self.graph.standing(n.id)
             self.pane.set_standing(n.id, text)

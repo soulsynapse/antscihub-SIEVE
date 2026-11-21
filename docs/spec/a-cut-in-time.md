@@ -50,7 +50,9 @@ cut it was computed in, the whole footage where no node cut it. Each is held apa
 one row in two periods is two values, told apart by period and never by which was held first, and
 a node's values are listed period by period under its one key. A period moved, added or gone
 moves the values of that period and of no other. Two periods that overlap each report the rows
-they share, and folding them back up keeps both and merges neither.
+they share, and folding them back up keeps both and merges neither. What names a thing found
+below a cut is the cut's record with what the tool called it: a track's number is of the period
+its walk was of, and the same number in two periods is two tracks.
 
 A period's walk, every row of it from the first, is the result. The window is a view and not a
 cut: it shows a period's walk where one is held, and where none is it walks its own rows as a
@@ -119,12 +121,14 @@ it reads (`frames.key`, `graph.Series`) and nothing of the cut it runs in.
   place lifted through either is the footage's.
 - [ ] The record holds a shape a row though no tool here makes one.
   Check: the same seam, a shape a row intersected with a period.
-- [ ] A tool cuts by saying its cuts: one declaration the registry reads answers, from a node's
-  params, the extent of each cut the node makes, and `region` and `period` both say theirs by it.
-  A tool that cuts need write no file, and nothing in the player asks which tool a cutting node
-  is.
+- [ ] A tool cuts by saying its cuts: one declaration the registry reads answers the extent of
+  each cut the node makes, from the node's params and, where its cuts are of a result it reads on
+  a wire, from that result. `region` says its by it from a file's shapes, and `period` from a
+  file's periods and from a gate, the gate's by the way a later tool whose cuts are a walk's
+  result, a track's shapes among them, would say its own. A tool that cuts need write no file,
+  and nothing in the player asks which tool a cutting node is.
   Check: `tests/test_registry.py`; and the record's seam through a tool made for the test that
-  cuts and serves no file.
+  cuts by a result it reads and serves no file.
 - [ ] A tool is told the cut it runs in as it is told the key of what it reads: what hands it
   frames or a series answers that cut's record.
   Check: a seam: a tool below a region within a period, the record it is told against the

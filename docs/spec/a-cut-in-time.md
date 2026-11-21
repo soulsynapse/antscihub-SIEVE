@@ -389,9 +389,9 @@ rows where they are a table or folded (`held.Run`); the memo has the rest while 
 runs of as many periods under that limit, and the periods a band makes of a signal, are measured
 in `docs/findings/2026-11-20-held-runs-of-many-periods-and-what-a-period-reaches.md`; a walk of
 many short ranges against one of the same rows is not. The window shows the chain of nodes no cut
-in time feeds, and holds what it shows of each period apart (`heldwalks.window_periods`), so a
-node below a `period` draws no line there; `plot.py:Plot.set_lines` hands every line one start,
-where the strip takes one a node.
+in time feeds, and holds what it shows of each period apart (`heldwalks.window_periods`);
+`plot.py:Plot.set_lines` takes a node's line in pieces, each from its own first row, where the
+strip takes one a node.
 
 - [x] Kendrick: a node's result below a `period` is each period walked alone, from the period's
   first row to its last. It is the caveman way, the period cut to a clip of its own and the
@@ -445,7 +445,7 @@ where the strip takes one a node.
   Check: a one-off over the crossings clip: the window's walk turned by hand over several periods,
   `track` below them, held and not, each against its period walked alone, and what the window says
   of each read off what it is handed.
-- [ ] The plot draws each node from the row its result begins at in the window, so a node below a
+- [x] The plot draws each node from the row its result begins at in the window, so a node below a
   `period` has a line over each of its periods' rows in the window, each from its own first row,
   none between them, and two where two periods overlap; the frame shown at a row outside the shown
   node's extent says so in place of a frame.

@@ -165,6 +165,12 @@ def heat(a, top):
 RELOAD_SETTLE_MS = 150   # a loader re-reads a changed file this long after the last write seen
 
 
+def outside_cuts(e, nid, row):
+    """What the frame says in place of a frame at `row` of the node `nid`, whose plan Entry is `e`:
+    that the row is outside its cuts, or "" where one holds it or there is no entry."""
+    return "" if e is None or holding(e.cuts, row) is not None else f"row {row} is outside {nid}'s cuts"
+
+
 class Display(QWidget):
     drawFailed = Signal(str, str)   # a tool's draw() or pick() raised: the node, the line
     picked = Signal(str, dict)      # a drawer claimed a left click: the node, the params to merge
@@ -1123,7 +1129,7 @@ class PlayerWindow(QMainWindow):
         self.timeline.strip.set_periods({})
         self.row, self.window_ = 0, (0, 0)
         self.plot.set_window(0, 0)
-        self.plot.set_lines({}, 0)
+        self.plot.set_lines({})
         self.plot.set_fields({}, 0)
         self.display.clear()
 
@@ -1212,7 +1218,11 @@ class PlayerWindow(QMainWindow):
     def _show(self, row):
         """The shown node's frame at `row` from the memo, with the overlay node's plane over it and
         the drawing frame nodes' outputs if the memo has those too; False when any is not there
-        yet, so a commit asks the worker for them all."""
+        yet, so a commit asks the worker for them all. At a row outside the shown node's cuts the
+        frame says so, and nothing is asked."""
+        if outside := outside_cuts(self.graph.entry(self.graph.shown), self.graph.shown, row):
+            self.display.clear(outside)
+            return True
         frame = self.graph.peek(row)
         if frame is None:
             return False
@@ -1255,6 +1265,7 @@ class PlayerWindow(QMainWindow):
         self._spared, self._given = got is not None, bool(part)
         self.worker.set_window(s, n, self._spared, self._as_given(part), by)
         self.window_periods = window_periods(self.graph.snapshot(), self.runs, s, n, self.count)
+        self._show_lines()
         if got is not None:
             self._series_ready(got, s, self.fps)
         self._show_held()
@@ -1272,6 +1283,7 @@ class PlayerWindow(QMainWindow):
             self.worker.give_periods(held_periods(self.graph.snapshot(), self.runs, self.count))
             self.window_periods.update({of: v for of, v in window_periods(self.graph.snapshot(), self.runs, *self.window_, self.count).items()
                                         if v[3] and of in self.window_periods})
+            self._show_lines()
         self._show_stale(chain)
         self._show_pinned()
         self._show_listed()
@@ -1361,8 +1373,7 @@ class PlayerWindow(QMainWindow):
 
     def _series_ready(self, results, start, fps):
         self.results, self.result_start = results, start
-        self.plot.set_lines({nid: (r["signal"], r.get("gate")) for nid, r in results.items()
-                             if isinstance(r, dict) and "signal" in r}, start)
+        self._show_lines()
         self._restate()
         for nid, result in results.items():
             w = self.pane.widget(nid)
@@ -1499,6 +1510,17 @@ class PlayerWindow(QMainWindow):
         got = self.window_periods.get(of)
         if got is not None and not got[3] and got[0] == start:
             self.window_periods[of] = (start, results, got[2], False)
+            self._show_lines()
+
+    def _show_lines(self):
+        """The plot is handed each node's line in pieces: the window walk's from its first row, and
+        one a period the window shows, each from the row its results begin at."""
+        lines = {}
+        for start, results in [(self.result_start, self.results), *((v[0], v[1]) for v in self.window_periods.values())]:
+            for nid, r in results.items():
+                if isinstance(r, dict) and "signal" in r:
+                    lines.setdefault(nid, []).append((r["signal"], r.get("gate"), start))
+        self.plot.set_lines(lines)
 
     def _clip_ready(self, results, start, fps):
         self.clip_results = results

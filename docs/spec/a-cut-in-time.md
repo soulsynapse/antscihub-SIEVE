@@ -384,12 +384,14 @@ Facts to weigh. A stepped node's result at a row depends on where its walk began
 runs whole on where its range ends. The clip walk and the window walk each step their chain from
 their own first row (`walk._Walk`), and the worker has a lane for each. A gate can make hundreds
 of periods over a clip, each a walk of its own. `held.Runs` drops the oldest run past its limit,
-and a walk closes at `walk.STACK_BYTES`. A held run holds the chain's results and not the walked
-node's rows (`held.Run`), which the memo has while it has room. The runs of as many periods under that limit, and the
-periods a band makes of a signal, are measured in that finding; a walk of many short ranges
-against one of the same rows is not. The window walks and shows the chain of nodes no cut in time
-feeds, so a node below a `period` draws no line there; `plot.py:Plot.set_lines` hands every line
-one start, where the strip takes one a node.
+and a walk closes at `walk.STACK_BYTES`. A held run holds the chain's results and the walked node's
+rows where they are a table or folded (`held.Run`); the memo has the rest while it has room. The
+runs of as many periods under that limit, and the periods a band makes of a signal, are measured
+in `docs/findings/2026-11-20-held-runs-of-many-periods-and-what-a-period-reaches.md`; a walk of
+many short ranges against one of the same rows is not. The window shows the chain of nodes no cut
+in time feeds, and holds what it shows of each period apart (`heldwalks.window_periods`), so a
+node below a `period` draws no line there; `plot.py:Plot.set_lines` hands every line one start,
+where the strip takes one a node.
 
 - [x] Kendrick: a node's result below a `period` is each period walked alone, from the period's
   first row to its last. It is the caveman way, the period cut to a clip of its own and the
@@ -423,14 +425,18 @@ one start, where the strip takes one a node.
   and another's last row moved later, the periods walked again over what the runs serve, the rows
   stepped and computed those of the moved periods alone; and every period's result against the same
   walks from an empty `held.Runs` and no memo, equal, the rows that differ said.
-- [ ] Over a period whose walk is held the window shows that walk. Over one whose walk is not, it
+- [x] Over a period whose walk is held the window shows that walk. Over one whose walk is not, it
   walks each period it overlaps alone, from the later of the period's first row and the window's
-  first less the node's reach, to the earlier of the period's last and the window's last and the
-  node's reach past it, and no row outside the period. A node whose reach is bounded is exact
-  there, as is every node over a period that begins inside the window as far as its rows reach;
-  best effort is of a node whose reach is not bounded, over the period the window begins inside
-  alone, and the window says so of those rows. The rows of a period walked from its first row in
-  the window are that period's walk as far as they reach.
+  first less the reach before, to the earlier of the period's last and the window's last and the
+  reach past it, and no row outside the period; one walk is of a chain, and its reach each side is
+  the largest bounded one of the chain's nodes, a side with no bound reaching none. A node is
+  exact there, its rows that period's walk, save where a side its reach has no bound on is cut
+  short of the period's edge: best effort is of a node whose reach before has no bound over a
+  period the window begins inside, and of one whose reach after has none over a period the window
+  ends inside, and the window holds which nodes of which periods those are.
+  Kendrick: a walk over a period running past the window ends at the window's last row and the
+  reach past it, a node with no bound after then best effort, and is never walked to the period's
+  last; the window's memory stays bounded as the window is.
   Worth a look: how the window says it, which is Kendrick's to settle and not the building
   session's. A best-effort row is what the user expects of it: that a thing is tracked as the
   window moves, and not an identity's number, which only the period's walk gives. What the

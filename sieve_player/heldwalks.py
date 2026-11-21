@@ -1,8 +1,9 @@
 """What the held runs are to a plan's walks, apart from the window: a chain as held.Runs is told it,
-held results as the worker is given them, what the runs hold of each cut in time, and a walked
-period's results as the run they are held as. No Qt; the window composes it with the worker."""
+held results as the worker is given them, what the runs hold of each cut in time, a walked
+period's results as the run they are held as, and what the window shows of each period it overlaps.
+No Qt; the window composes it with the worker."""
 from . import held, wire
-from .walk import WALKED, period_keys, stacked_key
+from .walk import WALKED, period_keys, stacked_key, window_legs
 
 
 def held_chain(p, nodes):
@@ -53,3 +54,24 @@ def period_run(p, results, start):
     walked = tuple((*stack, sum(wire.nbytes(None if folds[stack[0]] is not None else p.entries[stack[0]].produces, r) for r in stack[2]))
                    for stack in results.get(WALKED, ()) if len(stack[2]) == rows and stack[0] in folds)
     return start, rows, has, held_chain(p, w.chain), (start, start + rows), walked or None
+
+
+def window_periods(p, runs, s, n, count):
+    """What the window of `n` rows from `s` shows of each cut in time of the Plan `p` it overlaps,
+    over a footage of `count` rows: (the node its walk reads, the cut.Record) to (the row its results
+    begin at, the results, the chain nodes best effort there, whether they are the cut's walk held).
+    A cut whose every chain node the held.Runs `runs` serve over the whole cut, as the worker's
+    give_periods is told it, is that walk over the window's rows; another is the window's own walk
+    of it, as walk.window_legs has it, its results {} until the worker's windowPeriodReady hands
+    them."""
+    out = {}
+    for src, c, a, b, best in window_legs(p, s, n, count):
+        w = next(w for w in p.timed if c in w.cuts and p.entries[w.heads[0]].src == src)
+        first, end = (min(r, count) for r in c.extent.rows)
+        lo, hi = max(first, s), min(end, s + n)
+        chain = held_chain(p, w.chain)
+        if runs.over(first, end - first, chain, (first, end), (first, end)) is not None:
+            out[(src, c)] = (lo, runs.over(lo, hi - lo, chain, (first, end), (first, end)), frozenset(), True)
+        else:
+            out[(src, c)] = (a, {}, best, False)
+    return out

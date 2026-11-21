@@ -12,7 +12,7 @@ shuts out is absent here, a NaN signal or no table, and writes nothing either wa
 carries `kind=` as the type written, so a reader can refuse a file of the wrong kind by name. The
 band to export is this node's. The range is the window, so the whole video is a window
 the length of the video, and Write writes the rows the walk has so far and says how many. Below a
-cut in time, which the window does not walk, the rows are every period's held so far, one file of
+cut in time the rows are every period's held so far, one file of
 them, each line carrying its period (`lines`). The key line, the write and the widget are
 tools/_csvfile.py's.
 

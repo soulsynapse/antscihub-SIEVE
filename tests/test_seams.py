@@ -409,7 +409,7 @@ def test_the_scheduler_alone_begins_a_job_and_nothing_compares_a_generation():
         return [n for n in ast.walk(node) if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and n.func.attr == "begin"]
 
     assert {id(n) for n in begins(tree)} == {id(n) for n in begins(turn)}
-    assert sorted(ast.unparse(n.func.value) for n in begins(turn)) == ["clip", "per", "win"]
+    assert sorted(ast.unparse(n.func.value) for n in begins(turn)) == ["clip", "per", "win", "wp"]
     compared = [ast.unparse(n) for n in ast.walk(tree) if isinstance(n, ast.Compare)
                 and any(isinstance(o, ast.Attribute) and o.attr in ("gen", "asked") for o in [n.left, *n.comparators])]
     assert not compared, compared

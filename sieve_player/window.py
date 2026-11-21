@@ -42,7 +42,7 @@ from .theme import GAP, PAD, ROW_H, readout
 from .timeline import Timeline
 from .trace import Dump
 from .plot import Plot, Stage
-from .heldwalks import as_given, held_chain, held_periods, period_run
+from .heldwalks import as_given, held_chain, held_periods, period_run, window_periods
 from .worker import Worker
 
 HOLD_MS = 2000              # how long the held runs rest, nothing new held, before they are written beside the document
@@ -419,6 +419,7 @@ class PlayerWindow(QMainWindow):
         self._resume = False  # playback to restore when a playhead drag ends
         self.results, self.result_start = {}, 0   # node id -> the series chain's results, and the row they start at
         self.clip_results = {}                    # the same over the clip walk's rows, from row 0; {} when there are none
+        self.window_periods = {}                  # what the window shows of each cut in time it overlaps, as heldwalks.window_periods has it
         self._clip_asked = False                  # a clip walk was asked for and has not finished or been stopped
         self.runs = held.Runs(HELD_BYTES, self._result_bytes) # the held runs, the file's and this session's walks'
         self._spared = False                      # the window's results are a held run's, and the worker runs no chain over it
@@ -1051,6 +1052,7 @@ class PlayerWindow(QMainWindow):
                              ("failed", self._failed), ("clipWalked", self._clip_walked), ("clipReady", self._clip_ready),
                              ("clipRefused", self._clip_refused), ("walkRefused", ct.progress.setText),
                              ("periodWalked", self._period_walked), ("periodReady", self._period_ready),
+                             ("windowPeriodReady", self._window_period_ready),
                              ("shortened", self._shortened)):
             getattr(self.worker, signal).connect(self._timed("slot", signal, slot))
         self.worker.finished.connect(self._worker_ended)    # no closure over the worker: one connected to its own signal keeps it, its graph and the memo for good
@@ -1110,7 +1112,7 @@ class PlayerWindow(QMainWindow):
         self.graph.close()
         self.decoder.close()
         self.decoder = self.graph = self.stream = self.worker = None
-        self.results, self.clip_results, self._clip_asked = {}, {}, False
+        self.results, self.clip_results, self.window_periods, self._clip_asked = {}, {}, {}, False
         self.header.set_walking(False)
         self.header.clear_note()
         self.header.setEnabled(False)
@@ -1252,6 +1254,7 @@ class PlayerWindow(QMainWindow):
         part = {} if got is not None else self.runs.part(s, n, chain, (s, s + n))
         self._spared, self._given = got is not None, bool(part)
         self.worker.set_window(s, n, self._spared, self._as_given(part), by)
+        self.window_periods = window_periods(self.graph.snapshot(), self.runs, s, n, self.count)
         if got is not None:
             self._series_ready(got, s, self.fps)
         self._show_held()
@@ -1267,6 +1270,8 @@ class PlayerWindow(QMainWindow):
         if self.worker is not None:
             self.worker.give_clip(self.count, self._as_given(self.runs.part(0, self.count, chain, (0, self.count))))
             self.worker.give_periods(held_periods(self.graph.snapshot(), self.runs, self.count))
+            self.window_periods.update({of: v for of, v in window_periods(self.graph.snapshot(), self.runs, *self.window_, self.count).items()
+                                        if v[3] and of in self.window_periods})
         self._show_stale(chain)
         self._show_pinned()
         self._show_listed()
@@ -1487,6 +1492,13 @@ class PlayerWindow(QMainWindow):
         if run is not None:
             start, rows, has, chain, cut, walked = run
             self._hold_run(start, rows, has, chain, cut, of_clip=True, walked=walked)
+
+    def _window_period_ready(self, results, start, of, fps):
+        """The window's walk of one cut in time, `of` as window_periods keys it; one of a window
+        since left, or of a cut whose walk is held, is dropped."""
+        got = self.window_periods.get(of)
+        if got is not None and not got[3] and got[0] == start:
+            self.window_periods[of] = (start, results, got[2], False)
 
     def _clip_ready(self, results, start, fps):
         self.clip_results = results

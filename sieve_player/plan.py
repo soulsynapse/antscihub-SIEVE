@@ -62,7 +62,7 @@ class Plan:
     unrun: list = field(default_factory=list)     # every series node not in the chain nor a timed Walk's; its standing says why
     shown: str | None = None                      # the display flag, when it names a node
     over: str | None = None                       # the overlay flag, when it names a one-plane node
-    timed: list = field(default_factory=list)     # a Walk for each extent cut in time that heads read: none of it on `chain`, and the window walks none of it
+    timed: list = field(default_factory=list)     # a Walk for each extent cut in time that heads read: none of it on `chain`
 
     @property
     def walk(self):
@@ -189,8 +189,8 @@ def plan(doc, tools, base, cut_file=None, cut_result=None, footage=None):
     and a stepping tool so ended names that node in `whole_by`. The chain is of every fed head
     whose walked node's cuts are not cuts in time, whatever node each reads; the heads reading a
     node whose cuts are, or a node below a cutting node that has cut nothing yet, are each extent's
-    `timed` Walk, every head of one extent's cuts in it, and their standing says the window does not
-    walk them."""
+    `timed` Walk, every head of one extent's cuts in it, and their standing says each cut is walked
+    alone."""
     keys, raw_keys, pieces, files, refused = {}, {}, {}, {}, {}
 
     def cuts(nid):
@@ -402,7 +402,7 @@ def plan(doc, tools, base, cut_file=None, cut_result=None, footage=None):
     by_period = {nid: w for w in timed for nid in w.chain}
     for nid, e in entries.items():
         e.standing = (crossings.get(nid) or refused.get(nid) or waiting.get(nid)
-                      or (f"walked by the clip walk over each of {len(by_period[nid].cuts)} periods alone, not by the window" if nid in by_period else "")
+                      or (f"walked over each of {len(by_period[nid].cuts)} periods alone, by the clip walk and by the window where it overlaps one" if nid in by_period else "")
                       or (f"reads {e.src}, which cuts no rows" if e.kind == "series" and e.fed and e.src and not entries[e.src].cuts else "")
                       or _standing(doc, tools, entries, heads, walked_chains, nid))
     over = doc.overlay if doc.overlay in entries and overlaid(produces(doc, tools, doc.overlay)) else None

@@ -58,7 +58,8 @@ printing the tools' files' code. In 44 s that run held 97 periods of the 856, ab
 
 ## What is open
 
-Each is Kendrick's: whether the watchdog dumps by a way that holds the interpreter lock, such as
-a Python thread reading `sys._current_frames()`, or stays as it is; how a leg finds its walk
-without an equality against every cut, and whether the count of legs left is told at every
-telling; and what of a sync and of the stale marks a period's run held needs made again.
+The watchdog no longer arms `dump_traceback_later`: `qt_trace.watchdog` dumps from a thread of its
+own that holds the interpreter lock, so a slow player is reported and not killed. The slowness
+stands: how a leg finds its walk without an equality against every cut, whether the count of legs
+left is told at every telling, and what of a sync and of the stale marks a period's run held needs
+made again.

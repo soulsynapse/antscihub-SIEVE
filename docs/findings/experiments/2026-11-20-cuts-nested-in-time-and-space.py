@@ -88,7 +88,7 @@ def walked(g):
     g.on_event = lambda ev: ev.kind == "step" and ev.lane == "clip" and stepped.setdefault(ev.node, []).append(ev.row)
     g.halt = False          # a worker stopped halts its graph, and this one walks it again
     w = Worker(g, every=1 << 30)
-    w.periodReady.connect(lambda r, s, f: ready.append((s, r)), Qt.DirectConnection)
+    w.periodReady.connect(lambda r, s, of, f: ready.append((s, r)), Qt.DirectConnection)
     w.walk_clip()
     want = sum(len(t.cuts) for t in g.snapshot().timed)
     t0 = time.perf_counter()

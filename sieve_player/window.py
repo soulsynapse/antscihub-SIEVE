@@ -1514,10 +1514,11 @@ class PlayerWindow(QMainWindow):
         self.header.note.setText(f"clip: a period, {done} of {total} rows, {left} periods behind it"
                                  if self._clip_asked else "")
 
-    def _period_ready(self, results, start, fps):
-        """A cut in time walked whole from its first row, `start`: held as a run of that cut under
-        the chain of the timed Walk its nodes are of, with the walked node's rows it was stepped over."""
-        run = period_run(self.graph.snapshot(), results, start)
+    def _period_ready(self, results, start, of, fps):
+        """The cut in time `of`, as period_run takes it, walked whole from its first row, `start`:
+        held as a run of that cut under the chain of the timed Walk its nodes are of, with the
+        walked node's rows it was stepped over."""
+        run = period_run(self.graph.snapshot(), results, start, of)
         if run is not None:
             self._hold_run(run.start, run.rows, run.results, run.chain, run.cut, of_clip=True, walked=run.walked)
 

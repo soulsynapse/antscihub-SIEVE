@@ -88,7 +88,7 @@ def walked(g):
     """The clip's result and every period's, [(start, result)], as the clip lane walks them."""
     ready, clip = [], []
     w = Worker(g, every=1 << 30)
-    w.periodReady.connect(lambda r, s, f: ready.append((s, r)), Qt.DirectConnection)
+    w.periodReady.connect(lambda r, s, of, f: ready.append((s, r)), Qt.DirectConnection)
     w.clipReady.connect(lambda r, s, f: clip.append(r), Qt.DirectConnection)
     w.walk_clip()
     want = sum(len(t.cuts) for t in g.snapshot().timed)

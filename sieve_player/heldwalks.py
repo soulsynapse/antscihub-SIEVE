@@ -61,14 +61,15 @@ def held_periods(p, runs):
     return out
 
 
-def period_run(p, results, start):
-    """The PeriodRun `periodReady`'s `results` from `start` are held as under the Plan `p`; None
-    where they are of no cut of `p` walked whole."""
+def period_run(p, results, start, of):
+    """The PeriodRun `periodReady`'s `results` from `start` over the cut `of`, (the node its walk
+    reads, the cut.Record), are held as under the Plan `p`; None where `p` has no such cut, or the
+    results are not every chain node's over the cut whole."""
+    walked_node, cut = of
     has = {nid: r for nid, r in results.items() if isinstance(r, dict) and "signal" in r}
     rows = max((len(r["signal"]) for r in has.values()), default=0)
-    w = next((w for w in p.timed if set(has) == set(w.chain)
-              and (start, start + rows) in {c.extent.rows for c in w.cuts}), None)
-    if w is None or not rows:
+    w = next((w for w in p.timed if p.entries[w.heads[0]].src == walked_node and cut in w.cuts), None)
+    if w is None or not rows or set(has) != set(w.chain) or cut.extent.rows != (start, start + rows):
         return None
     folds = {q.walk: q.fold for q in p.of(w).parts()}
     walked = tuple((*stack, sum(wire.nbytes(None if folds[stack[0]] is not None else p.entries[stack[0]].produces, r) for r in stack[2]))

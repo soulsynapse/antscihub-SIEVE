@@ -66,8 +66,8 @@ def walked(doc, tools, runs):
     g = Graph(doc, Decoder(doc.video), tools)
     w = Worker(g, tell_every=3600.0)
 
-    def ready(results, start, fps):
-        if (run := period_run(g.snapshot(), results, start)) is not None:
+    def ready(results, start, of, fps):
+        if (run := period_run(g.snapshot(), results, start, of)) is not None:
             start, rows, has, chain, cut, stack = run
             runs.hold(start, rows, has, chain, cut, walked=stack)
         w.give_periods(held_periods(g.snapshot(), runs))

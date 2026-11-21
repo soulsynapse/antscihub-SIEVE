@@ -258,7 +258,7 @@ def test_a_node_above_a_period_is_walked_as_with_none_and_one_below_is_walked_ov
     assert not g.snapshot().chain and g.snapshot().walk == "gray"
     w, stepped, periods, told = Worker(g), [], [], []
     g.on_event = lambda ev: stepped.append((ev.node, ev.row)) if ev.lane == "clip" and ev.kind in ("run", "step") else None
-    w.periodReady.connect(lambda r, s, fps: periods.append(s))
+    w.periodReady.connect(lambda r, s, of, fps: periods.append(s))
     w.periodWalked.connect(lambda *t: told.append(t))
 
     def turned(until=lambda: False):
@@ -343,8 +343,10 @@ def test_a_period_cut_by_a_gate_is_cut_by_the_gates_held_run_and_holding_its_per
     assert [c.extent.rows for c in cuts] == [(0, 2), (4, 6), (8, 10)]
     (w,) = q.timed
     worth = held_chain(q, [*q.chain, *w.chain])
+    read = q.entries[w.heads[0]].src
+    assert period_run(q, walked(q.of(w), cuts[1], (4, 5)), 4, (read, cuts[1])) is None      # a walk closed short of its cut is no cut's run, whatever rows another has
     for c in w.cuts:
-        start, rows, has, chain, cut, walked_rows = period_run(q, walked(q.of(w), c, c.extent.rows), c.extent.rows[0])
+        start, rows, has, chain, cut, walked_rows = period_run(q, walked(q.of(w), c, c.extent.rows), c.extent.rows[0], (read, c))
         assert runs.hold(start, rows, has, chain, cut, worth=worth, walked=walked_rows)
         assert not runs.hold(start, rows, has, chain, cut, worth=worth, walked=walked_rows)
         g.sync()
@@ -355,6 +357,6 @@ def test_a_period_cut_by_a_gate_is_cut_by_the_gates_held_run_and_holding_its_per
     lowered = g.snapshot()
     (w,), last = lowered.timed, lowered.entries["period"].cuts[-1]
     assert last.extent.rows == (8, 9)
-    start, rows, has, chain, cut, walked_rows = period_run(lowered, walked(lowered.of(w), last, last.extent.rows), 8)
+    start, rows, has, chain, cut, walked_rows = period_run(lowered, walked(lowered.of(w), last, last.extent.rows), 8, (read, last))
     assert cut == (8, 9) and runs.hold(start, rows, has, chain, cut, worth=worth, walked=walked_rows)
     assert [(a, len(v["signal"])) for a, v in runs.listed(below, chain, last, 9).parts] == [(8, 1)]

@@ -153,7 +153,7 @@ class Worker(QThread):
     walkRefused = Signal(str)                 # the window walk closed short of the window, and why: its stack passed STACK_BYTES
     shortened = Signal(int)                   # the stream ended short of the container's claim: the count as the decoder now has it
     periodWalked = Signal(int, int, int)      # rows done and rows in the cut in time the clip lane walks, and the cuts left behind it
-    periodReady = Signal(object, int, float)  # as clipReady, over one cut in time walked whole from its first row, which is `start`
+    periodReady = Signal(object, int, object, float)  # as clipReady, over the rows walked of one cut in time from its first row, which is `start`, then (the node its walk reads, the cut.Record)
     windowPeriodWalked = Signal(int, int, int)            # as periodWalked, of the cuts in time the window walks
     windowPeriodReady = Signal(object, int, object, float)  # as seriesReady, over one cut in time the window walks, then (the node its walk reads, the cut.Record)
 
@@ -175,9 +175,10 @@ class Worker(QThread):
         self._clip = _Walk(graph, name="clip", every=every, progress=self.clipWalked, ready=self.clipReady,
                            refused=self.clipRefused, failed=self.failed, tell_every=tell_every)
         self._held_periods = {}               # (walked node, (first, end)) -> the HeldCut give_periods was told of that cut
-        period = _Walk(graph, name="clip", every=1 << 62, progress=None, ready=self.periodReady,
-                       refused=self.clipRefused, failed=self.failed, tell_every=tell_every, keeps=True)
-        self._clip_legs = _Legs(period, self.periodWalked, self._held, given=True)     # every cut in time, set as the clip walk begins and on a recut
+        of_period = _OfCut(self.periodReady)
+        of_period.walk = _Walk(graph, name="clip", every=1 << 62, progress=None, ready=of_period,
+                               refused=self.clipRefused, failed=self.failed, tell_every=tell_every, keeps=True)
+        self._clip_legs = _Legs(of_period.walk, self.periodWalked, self._held, given=True)     # every cut in time, set as the clip walk begins and on a recut
         told = _OfCut(self.windowPeriodReady)
         told.walk = _Walk(graph, name="window", every=every, progress=None, ready=told, refused=self.walkRefused,
                           failed=self.failed, tell_every=tell_every)

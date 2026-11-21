@@ -105,8 +105,8 @@ if __name__ == "__main__":
 
             truth, runs = {}, held.Runs(1 << 40, lambda nid, r: 0)
 
-            def period_ready(results, start, fps):
-                run = period_run(g.snapshot(), results, start)
+            def period_ready(results, start, of, fps):
+                run = period_run(g.snapshot(), results, start, of)
                 if run is not None:
                     truth[run[4]] = (start, run[2])
                     if run[4] == (PERIODS[0][1], PERIODS[0][2]):

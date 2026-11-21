@@ -109,7 +109,7 @@ if __name__ == "__main__":
 
     g.on_event = on_event
     w = Worker(g, every=1 << 30)
-    w.periodReady.connect(lambda r, s, f: ready.append((r, s)), Qt.DirectConnection)
+    w.periodReady.connect(lambda r, s, of, f: ready.append((r, s)), Qt.DirectConnection)
     w.clipReady.connect(lambda r, s, f: clip.append((r, s)), Qt.DirectConnection)
     w.walk_clip()
     t0 = time.perf_counter()

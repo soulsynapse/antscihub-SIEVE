@@ -268,3 +268,55 @@ def test_a_node_above_a_period_is_walked_as_with_none_and_one_below_is_walked_ov
             act()
     assert w._clip.length == 0 and periods == [2, 4]                         # the clip's own range walks no shown node for no one
     assert sorted(row for nid, row in stepped if nid == below) == [2, 3, 4, 4, 5, 6, 7] and {nid for nid, _ in stepped} == {below}
+
+
+def test_a_period_cut_by_a_gate_is_cut_by_the_gates_held_run_and_holding_its_periods_cuts_it_no_differently():
+    """The window's loop: a held run re-plans, new cuts are walked, their runs are held. It ends only
+    because a period's held run is never read as the gate's, and a run held again holds nothing."""
+    import numpy as np
+
+    from sieve_player import held
+    from sieve_player.bare import _Told
+    from sieve_player.heldwalks import gate_result, held_chain, period_run
+    from sieve_player.walk import _Walk
+    from tools import period
+
+    def run(series, params):
+        return {"signal": np.asarray([float(r[0, 0] % 4) for r in series.data])}
+
+    sig = Tool(NAME="sig", KIND="series", EXPECTS="gray", PRODUCES="signal", run=run)
+    tools = {t.NAME: t for t in (gray, sig, period)}
+    doc = D.from_tools([gray, sig])
+    doc.node("sig").band = (1, 2)       # gray is row + 1: the band keeps rows 0-1, 4-5 and 8-9
+    doc.add_node("period", (0, 200), {"rows": 0, "periods": []})
+    doc.connect("gray", "period")
+    doc.connect("sig", "period", "gate")
+    below = doc.add_node("sig").id
+    doc.connect("period", below)
+    runs = held.Runs(1 << 30, lambda nid, r: 0)
+    g = Graph(doc, Dec(), tools, cut_result=lambda nid, key, within: gate_result(runs, "sig", key, within, Dec.count))
+
+    def walked(p, cut=None, rows=(0, Dec.count)):
+        ready = _Told()
+        w = _Walk(g, name="clip", every=1 << 62, progress=_Told(), ready=ready, refused=_Told(), failed=_Told(), plan=p, cut=cut, keeps=True)
+        w.begin(rows[0], rows[1] - rows[0])
+        while w.i < w.length:
+            w.turn()
+        return ready.last[0]
+
+    p = g.snapshot()
+    assert p.entries["period"].cuts == () and p.entries["period"].standing == "gate waits on sig's walk"
+    assert runs.hold(0, Dec.count, walked(p), held_chain(p, p.chain))
+    g.sync()
+    q = g.snapshot()
+    cuts = q.entries["period"].cuts
+    assert [c.extent.rows for c in cuts] == [(0, 2), (4, 6), (8, 10)]
+    (w,) = q.timed
+    worth = held_chain(q, [*q.chain, *w.chain])
+    for c in w.cuts:
+        start, rows, has, chain, cut, walked_rows = period_run(q, walked(q.of(w), c, c.extent.rows), c.extent.rows[0])
+        assert runs.hold(start, rows, has, chain, cut, worth=worth, walked=walked_rows)
+        assert not runs.hold(start, rows, has, chain, cut, worth=worth, walked=walked_rows)
+        g.sync()
+        assert g.snapshot().entries["period"].cuts == cuts
+    assert len(runs) == 4

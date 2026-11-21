@@ -1,7 +1,7 @@
 """What the held runs are to a plan's walks, apart from the window: a chain as held.Runs is told it,
 held results as the worker is given them, what the runs hold of each cut in time, a walked
-period's results as the run they are held as, and what the window shows of each period it overlaps.
-No Qt; the window composes it with the worker."""
+period's results as the run they are held as, what the window shows of each period it overlaps, and
+the result a cutting node is cut by. No Qt; the window composes it with the worker."""
 from . import held, wire
 from .walk import WALKED, period_keys, stacked_key, window_legs
 
@@ -54,6 +54,20 @@ def period_run(p, results, start):
     walked = tuple((*stack, sum(wire.nbytes(None if folds[stack[0]] is not None else p.entries[stack[0]].produces, r) for r in stack[2]))
                    for stack in results.get(WALKED, ()) if len(stack[2]) == rows and stack[0] in folds)
     return start, rows, has, held_chain(p, w.chain), (start, start + rows), walked or None
+
+
+def gate_result(runs, src, key, within, count):
+    """The result of `src`, the node wired into a cutting node's CUT_BY input, under `key` over the
+    cut.Record `within`, as plan.plan's cut_result answers it of the held.Runs `runs`: a run's from
+    row 0 reaching the footage's `count` rows, or for a cut in time a run of that cut walked whole;
+    None with none."""
+    rows = within.extent.rows
+    if rows is None:
+        run = runs.from_first_row(src, key)
+        return run.results[src] if run is not None and run.rows >= count else None
+    run = next((run for run in runs if run.cut == rows and (run.start, run.start + run.rows) == rows
+                and held.good(run.results.get(src), key)), None)
+    return None if run is None else run.results[src]
 
 
 def window_periods(p, runs, s, n, count):

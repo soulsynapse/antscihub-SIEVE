@@ -42,7 +42,7 @@ from .theme import GAP, PAD, ROW_H, readout
 from .timeline import Timeline
 from .trace import Dump
 from .plot import Plot, Stage
-from .heldwalks import as_given, held_chain, held_periods, period_run, window_periods
+from .heldwalks import as_given, gate_result, held_chain, held_periods, period_run, window_periods
 from .worker import Worker
 
 HOLD_MS = 2000              # how long the held runs rest, nothing new held, before they are written beside the document
@@ -1606,15 +1606,7 @@ class PlayerWindow(QMainWindow):
         clip's last row has it, or for a cut in time a run of that cut walked whole; None with none."""
         by = registry.cut_by(self.tools.get(self.doc.node(nid).tool))
         w = by and self.doc.source(nid, by[0])
-        if not w:
-            return None
-        rows = within.extent.rows
-        if rows is None:
-            run = self.runs.from_first_row(w.src, key)
-            return run.results[w.src] if run is not None and run.rows >= self.count else None
-        run = next((run for run in self.runs if run.cut == rows and (run.start, run.start + run.rows) == rows
-                    and held.good(run.results.get(w.src), key)), None)
-        return None if run is None else run.results[w.src]
+        return gate_result(self.runs, w.src, key, within, self.count) if w else None
 
     def _recut(self, resume=False):
         """The graph synced where a cutting node is cut by a result on a wire, and where the cuts it

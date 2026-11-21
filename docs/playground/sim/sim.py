@@ -9,11 +9,12 @@ import hashlib
 import random
 import statistics
 import sys
+from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from store import Address, Refused, Store  # noqa: E402
+from store import Address, Refused, Store, address_of  # noqa: E402
 
 MB, GB = 1 << 20, 1 << 30
 sys.setrecursionlimit(100000)
@@ -56,6 +57,7 @@ class Scheme:
     atomic: bool = True
     chunk_bytes: int = 64 * MB   # a chunk is as many rows as fit this, by the pipeline's widest row
     worth: bool = True           # the store's policy, see Store
+    locked: bool = True
 
 
 class Crash(Exception):
@@ -68,7 +70,7 @@ class Disk:
 
     def __init__(self, profile, clock):
         self.profile, self.clock, self.files, self.crash_in, self.ticks = profile, clock, {}, None, 0
-        self.total, self.made, self.low, self.meddle = 0, set(), 0.0, None
+        self.total, self.made, self.low, self.meddle, self.busy = 0, set(), 0.0, None, False
 
     def _step(self):
         if self.crash_in is not None:
@@ -86,7 +88,17 @@ class Disk:
         self._step()
 
     def rename(self, old, new):
+        self.total -= self.files[new][1] if new in self.files else 0
         self.files[new] = self.files.pop(old)
+
+    @contextmanager
+    def lock(self):
+        """No other writer takes a turn while this is held."""
+        was, self.busy = self.busy, True
+        try:
+            yield
+        finally:
+            self.busy = was
 
     def read(self, name):
         if name not in self.files:
@@ -105,7 +117,7 @@ class Disk:
 
     def _meddled(self):
         """Let another writer on the folder take a turn, between any two steps of this one."""
-        if self.meddle is not None:
+        if self.meddle is not None and not self.busy:
             turn, self.meddle = self.meddle, None
             try:
                 turn()
@@ -205,11 +217,15 @@ class World:
     def changed(self):
         self._memo.clear()
 
+    def made(self):
+        """What no snapshot brings back: the tools' code and the footage."""
+        return tuple(t.code for t in self.tools.values()), self.footage[0]
+
     def snapshot(self):
-        return {n.name: dict(n.params) for n in self.nodes.values()}
+        return {n.name: dict(n.params) for n in self.nodes.values()}, self.made()
 
     def restore(self, snapshot):
-        for name, params in snapshot.items():
+        for name, params in snapshot[0].items():
             self.nodes[name].params = dict(params)
         self.changed()
 
@@ -257,7 +273,7 @@ class World:
             tool = self.tools[node.tool]
             read = tuple(self.truth(n, c) for n, c in self.reads_of(name, chunk))
             params = tuple(sorted((k, v) for k, v in node.params.items() if k in node.computed))
-            self._memo[at] = digest(tool.name, tool.code, params, read, chunk,
+            self._memo[at] = digest(tool.name, tool.code, params, read, chunk * self.chunk, self.chunk,
                                     None if node.reads else self.footage[0])
         return self._memo[at]
 
@@ -268,7 +284,7 @@ class World:
             tool = self.tools[node.tool]
             params = tuple(sorted((k, v) for k, v in node.params.items() if k in node.computed))
             footage = None if node.reads else self.footage[0 if s.strong_print else 1]
-            self._memo[at] = digest(tool.name, tool.code if s.code_in_key else None, params,
+            self._memo[at] = digest(tool.name, tool.code if s.code_in_key else None, params, self.chunk,
                                     tuple(self.key(r) for r in node.reads),
                                     self.key(node.cut_by) if node.cut_by else None, footage)
         return self._memo[at]
@@ -281,6 +297,7 @@ class World:
 class Stats:
     asked: int = 0
     computed: int = 0
+    unanswered: int = 0
     refused: int = 0
     peak: int = 0
     scrubs: list = field(default_factory=list)
@@ -294,22 +311,19 @@ class Ask:
 
     def __init__(self, world, store, profile, clock, stats):
         self.world, self.store, self.profile, self.clock, self.stats = world, store, profile, clock, stats
-        self.speed, self.passing, self.keep, self.flight, self.decoded = 1, False, False, {}, None
+        self.speed, self.passing, self.decoded = 1, False, None
 
     def demand(self, name, chunk):
-        self.flight = {}
         value = self._value(name, chunk)
         if value != self.world.truth(name, chunk):
             self.stats.broken.append(("O1", name, chunk))
         return value
 
     def _value(self, name, chunk):
-        if (name, chunk) not in self.flight:
-            value = self.store.get(Address(self.world.key(name), chunk))
-            self.flight[name, chunk] = self._compute(name, chunk) if value is None else value
-        return self.flight[name, chunk]
+        value = self.store.get(Address(self.world.key(name), chunk))
+        return self._compute(name, chunk) if value is None else value
 
-    def _compute(self, name, chunk):
+    def _compute(self, name, chunk, keep=False):
         w, node = self.world, self.world.nodes[name]
         tool = w.tools[node.tool]
         reads = w.reads_of(name, chunk)
@@ -335,13 +349,12 @@ class Ask:
             self.store.release(live)
         passed = self.passing and self.store.worth and tool.bytes_per_row > PLANE
         self.store.put(Address(w.key(name), chunk), w.truth(name, chunk), w.size(name, chunk),
-                       self.clock[0] - began, keep=self.keep, spare=passed)
+                       self.clock[0] - began, keep=keep, spare=passed)
         return w.truth(name, chunk)
 
     def look(self, name, row):
         """One row for a caller looking at it: read out of its chunk where the store has that,
         made alone and held in memory only where it does not."""
-        self.flight = {}
         return self._looked(name, row)
 
     def _looked(self, name, row):
@@ -406,26 +419,18 @@ class Ask:
         """Walk `name` and name its chunks as the checkpoint `mark`; the addresses named."""
         self.walk(name)
         addresses = [Address(self.world.key(name), c) for c in self.world.chunks_of(name)]
-        self.keep = True
-        try:
-            for last in (False, False, True):   # an entry another writer let go of meanwhile is made again
-                for address in addresses:
-                    if not self.store.to_disk(address):
-                        self.flight = {}
-                        self._compute(name, address.chunk)
-                try:
-                    self.store.checkpoint(mark, self.world.snapshot(), addresses)
-                    return addresses
-                except Refused:
-                    if last:
-                        raise
-        finally:
-            self.keep = False
+        def fill(address):
+            if not self.store.to_disk(address):
+                self._compute(name, address.chunk, keep=True)
+
+        self.store.checkpoint(mark, self.world.snapshot(), addresses,
+                              [self.world.size(name, a.chunk) for a in addresses], fill)
+        return addresses
 
 
 OPS = (("scrub", 30), ("walk", 8), ("edit", 10), ("edit draw", 4), ("code", 3), ("footage", 1),
        ("evict", 6), ("delete", 3), ("reopen", 4), ("crash", 3), ("other", 5), ("checkpoint", 3),
-       ("restore", 3), ("race", 5))
+       ("restore", 3), ("race", 5), ("unmark", 2))
 
 
 def sequence(seed, length, world):
@@ -445,7 +450,7 @@ def run(ops, profile, scheme, rows=1024):
     world, disk = World(rows, scheme), Disk(profile, clock)
 
     def opened(writer):
-        store = Store(disk, profile.memory, profile.disk, writer, atomic=scheme.atomic, worth=scheme.worth)
+        store = Store(disk, profile.memory, profile.disk, writer, atomic=scheme.atomic, worth=scheme.worth, locked=scheme.locked)
         return store, Ask(world, store, profile, clock, stats)
 
     store, ask = opened("a")
@@ -481,8 +486,8 @@ def run(ops, profile, scheme, rows=1024):
                 for victim in names[pick % 7 :: 11]:
                     disk.delete(victim)
                 store.forget()
-                for address in store.gone():
-                    marks = {m: a for m, a in marks.items() if address not in a}   # said gone, by name
+                gone = store.gone()   # said gone, by name
+                marks = {m: a for m, a in marks.items() if m not in gone}
             elif kind == "reopen":
                 opens += 1
                 store, ask = opened(f"a{opens}")
@@ -500,13 +505,27 @@ def run(ops, profile, scheme, rows=1024):
                 marks[f"mark-{i}"] = set(ask.checkpoint(f"mark-{i}", name))
             elif kind == "race":   # a walk or a checkpoint while another writer lets go of entries under it
                 turns = random.Random(pick)
+                opens += 1
+                rival = opened(f"r{opens}")[0]
 
                 def other():
-                    if turns.random() < 0.05:
-                        named = {a.name for a in store.named()}
-                        loose = sorted(n for n in disk.names("entries/") if n not in named)
-                        if loose:
-                            disk.delete(turns.choice(loose))
+                    roll = turns.random()
+                    if roll > 0.3:
+                        return
+                    named = {a.name for a in rival.named()}
+                    loose = sorted((n for n in disk.names("entries/") if n not in named), key=disk.age)
+                    if not loose:
+                        return
+                    if roll < 0.05:
+                        rival.drop(address_of(turns.choice(loose)), "disk")
+                    else:   # it names the entry touched longest ago, the next this writer would let go of
+                        address = address_of(loose[-1])
+                        try:
+                            rival.checkpoint(f"rival-{i}-{len(marks)}", world.snapshot(), [address],
+                                             [disk.size(address.name) or 0], lambda a: None)
+                            marks[f"rival-{i}-{len(marks)}"] = {address}
+                        except Refused:
+                            pass
 
                 disk.meddle = other
                 try:
@@ -516,6 +535,10 @@ def run(ops, profile, scheme, rows=1024):
                         ask.walk(name)
                 finally:
                     disk.meddle = None
+            elif kind == "unmark" and marks:
+                mark = sorted(marks)[pick % len(marks)]
+                store.release_checkpoint(mark)
+                del marks[mark]
             elif kind == "restore" and marks:
                 mark = sorted(marks)[pick % len(marks)]
                 if store.manifest(mark) is None:   # the manifest itself was deleted
@@ -523,10 +546,12 @@ def run(ops, profile, scheme, rows=1024):
                     continue
                 snapshot, addresses = store.manifest(mark)
                 world.restore(snapshot)
+                answers = snapshot[1] == world.made()   # else it is of other code or footage, and says so
+                stats.unanswered += not answers
                 good = {Address(world.key(name), c) for name in world.nodes for c in world.chunks_of(name)}
                 before = stats.computed
                 for address in addresses:
-                    if address in good and store.get(address) is None:
+                    if (address in good or answers) and store.get(address) is None:
                         stats.broken.append(("O3", mark, address.chunk))
                 if stats.computed != before:
                     stats.broken.append(("O3 computed", mark, 0))
@@ -537,6 +562,11 @@ def run(ops, profile, scheme, rows=1024):
             stats.refused += 1
         if store.held_bytes > profile.memory or stats.peak > profile.memory:
             stats.broken.append(("O5", kind, i))
+        for mark in store.gone():
+            if mark in marks:
+                stats.broken.append(("O3 gone", mark, i))
+        if disk.used() > profile.disk:
+            stats.broken.append(("O5 disk", kind, i))
         for entry in disk.names("entries/"):
             if disk.files[entry][0] == TORN and scheme.atomic:
                 stats.broken.append(("O6", entry, i))
@@ -563,10 +593,11 @@ def torture(scheme, seeds, length=60, profile=PROFILES["laptop"]):
     world = World(1024, scheme)
     for seed in range(seeds):
         ops = sequence(seed, length, world)
-        stats = run(ops, profile, scheme)
+        tight = replace(profile, disk=(1, 2, 4, 40)[seed % 4] * GB)
+        stats = run(ops, tight, scheme)
         if stats.broken:
-            least = shrunk(ops, profile, scheme)
-            return seed, run(least, profile, scheme).broken, [(k, n, c) for k, n, c, _ in least]
+            least = shrunk(ops, tight, scheme)
+            return seed, run(least, tight, scheme).broken, [(k, n, c) for k, n, c, _ in least]
     return None
 
 
@@ -578,7 +609,7 @@ def price(scheme, profile, footage="1080p", rows=108000):
     rng, out = random.Random(1), {}
 
     def opened():
-        store = Store(disk, profile.memory, profile.disk, atomic=scheme.atomic, worth=scheme.worth)
+        store = Store(disk, profile.memory, profile.disk, atomic=scheme.atomic, worth=scheme.worth, locked=scheme.locked)
         return store, Ask(world, store, profile, clock, stats)
 
     def timed(label, act):
@@ -658,6 +689,7 @@ def main(seeds=200):
         "code left out of the key (today)": Scheme(code_in_key=False),
         "footage print of size and ends (today)": Scheme(strong_print=False),
         "entries written in place": Scheme(atomic=False),
+        "no lock about letting go and naming": Scheme(locked=False),
     }
     for label, scheme in schemes.items():
         found = torture(scheme, seeds)

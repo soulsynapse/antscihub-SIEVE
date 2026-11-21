@@ -16,14 +16,22 @@ this file where they differ.
   the contract in code: `.venv/Scripts/python.exe docs/playground/sim/sim.py 150` runs the
   torture in about ten seconds and prints a line a scheme. Read "What the simulation has shown"
   before touching either file.
-- Next action, in order: (a) the changes "What the adversary proved" lists for `store.py` and
-  `sim.py`, in its order, the torture rerun after each; do not reread `adversary.md` whole, its
-  items and my answers are below. (b) Rewrite `contract.md` where that section says a line was
-  wrong or does nothing. (c) The on-disk store over a real folder, mine to write, with that
-  section's "a real folder" list as its checklist; then one real walk against the simulation.
-  (d) Slices onto it: the held file, then the walks' results. Then STOP for him to try the
-  player, before the memo is touched. (e) Code beside the key, once he has answered. (f) The
-  whole-file footage hash.
+- Next action, in order: (a) rewrite `contract.md` to `store.py` as it now is and to "What the
+  adversary proved": the lock, the pending manifest, a checkpoint let go, recency on disk, the
+  rule being cost and not "a plane", a piece's share of memory; mark open what nothing does
+  (the log, the monitor's stream, the priority of a look). (b) The on-disk store over a real
+  folder, mine to write, with that section's "a real folder" list as its checklist, per-node
+  chunk grids in the entry's name, and the lock as a folder made and removed; then a second
+  adversary run against it before anything is moved onto it; then one real walk against the
+  simulation. (c) Slices onto it: the held file, then the walks' results. Then STOP for him to
+  try the player, before the memo is touched. (d) Code beside the key, once he has answered.
+  (e) The whole-file footage hash.
+- Done of the adversary's eight in `store.py` and `sim.py`: 1 (a lock about letting go and about
+  a checkpoint's look, not the trash I first wrote: a grace cannot free a disk a walk is
+  filling), 2 (the grid in the key and the rows in `truth`; per-node grids are the real
+  store's), 3, 4 (torture disks of 1, 2, 4 and 40 GB, an oracle on the disk's use, and one that
+  no finished checkpoint misses an entry), 5, 6, 7. The `locked=False` mutant breaks at seed
+  174 of 200, so that oracle sees, rarely. Not rechecked: its other mutants.
 - After a compaction or a slice: `.venv/Scripts/python.exe docs/playground/claims.py` lists the
   claims of `claims.md` whose files changed since they were checked. Each goes to one Haiku
   pass and is stamped (`claims.py <id> <commit>`) or rewritten. New claims go in as I lean on
@@ -298,7 +306,8 @@ on recheck; stale beliefs that bit me unflagged. None false after three slices, 
 own "what I made false" covering it: the script goes and the list stays for recall. Mostly
 unflagged bites: the grain is wrong and the idea goes.
 
-- Count so far: flagged 0, false 0, unflagged bites 1 (the ticked decision in
+- Count so far: flagged 3 (after slice 2; all three held, cleared from the diff I had read, no
+  Haiku needed), false 0, unflagged bites 1 (the ticked decision in
   `what-a-node-declares.md`, which no claim named; a run's report caught it).
 
 ## Two writers at once, and what a real disk costs (2026-11-21)

@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 
 LEDGER = Path(__file__).with_name("claims.md")
-LINE = re.compile(r"- \[(?P<id>\w+)\] (?P<claim>.*?) \| files: (?P<files>.*?) \| leans: (?P<leans>.*?) \| checked: (?P<at>\w+)\s*$")
+LINE = re.compile(r"- \[(?P<id>[\w-]+)\] (?P<claim>.*?) \| files: (?P<files>.*?) \| leans: (?P<leans>.*?) \| checked: (?P<at>\w+)\s*$")
 
 
 def claims():

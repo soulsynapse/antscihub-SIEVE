@@ -105,7 +105,9 @@ the nearest cutting node upstream, not an extent, and `graph.Graph._footage` wal
 the file a node's frames are served from. `tools/region.py:origin` works out a frame's place on
 the plate from its shape and the region's params. `region.py:run` refuses a frame that is not its
 file's plate. The record replacing both is a contract change across `plan.py`, `graph.py` and
-`region.py`, and not a value added beside them.
+`region.py`, and not a value added beside them. A tool cuts, to the plan, by having a `cut_file`
+(`registry.cuts`), so one that serves no file is no cutting tool; a tool is told the key of what
+it reads (`frames.key`, `graph.Series`) and nothing of the cut it runs in.
 
 - [ ] A cut's record is one value: the footage it is of, the cuts it was made from, and its
   extent on the footage, a period of the footage's rows, a shape in the footage's pixels, or a
@@ -117,6 +119,16 @@ file's plate. The record replacing both is a contract change across `plan.py`, `
   place lifted through either is the footage's.
 - [ ] The record holds a shape a row though no tool here makes one.
   Check: the same seam, a shape a row intersected with a period.
+- [ ] A tool cuts by saying its cuts: one declaration the registry reads answers, from a node's
+  params, the extent of each cut the node makes, and `region` and `period` both say theirs by it.
+  A tool that cuts need write no file, and nothing in the player asks which tool a cutting node
+  is.
+  Check: `tests/test_registry.py`; and the record's seam through a tool made for the test that
+  cuts and serves no file.
+- [ ] A tool is told the cut it runs in as it is told the key of what it reads: what hands it
+  frames or a series answers that cut's record.
+  Check: a seam: a tool below a region within a period, the record it is told against the
+  record's own.
 
 ## A tool's reach in rows
 
@@ -375,6 +387,7 @@ A walk with no window, over a folder or from a command: the rest of the review's
 `period`. A tool that makes a shape a row. Periods drawn on the strip by hand. Two cuts
 intersected by a node; two gates met on one signal above a `period` are that signal's gate. A
 margin grown or taken off around a cut, or a halo read past one, which change what the user cut.
+A period too short to keep and two a short gap parts, which are a tool's above the `period`.
 A tool that says it reads its own row alone, so that its rows above a cutting node stand in below
 it. A walk begun elsewhere held as a period's by its nodes' reach. A cut of a series result, a
 `period` on the chain. Region's key, which holds its rect, a served clip's pixels being H.264's

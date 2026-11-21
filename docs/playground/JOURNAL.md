@@ -16,18 +16,22 @@ this file where they differ.
   the contract in code: `.venv/Scripts/python.exe docs/playground/sim/sim.py 150` runs the
   torture in about ten seconds and prints a line a scheme. Read "What the simulation has shown"
   before touching either file.
-- Next action, in order: (a) rewrite `contract.md` to "What the simulation settled" below;
-  (b) stage 4's first slice, queued narrow, its diff read by me; (c) still unpriced and worth
-  one more cycle only if a slice needs it: many pieces walked at once by several stores on one
-  disk (the HPC case), and a cost to holding in memory, which a finding measured and the
-  simulation has free.
+- Next action, in order: (a) "Drift from the referents" below, the two that are the
+  simulation's: disk lets go by GreedyDual-Size as memory does, and two stores interleaved step
+  by step with one letting go while the other reads. (b) Measure read and write rates of C: and
+  D: with a one-off, and put them in `PROFILES`. (c) The on-disk store, `Store` over a real
+  folder, mine to write since it is the design; then one real walk against the simulation's
+  figure for it. (d) Slices onto it: the held file, then the walks' results. Then STOP for him
+  to try the player, before the memo is touched; the memo may stay as the memory tier under
+  the same rules. (e) Code beside the key, as "A decision of his the contract ran into" says.
 - Standing step, his on 2026-11-21 and mine by its results: before a slice or the contract
   leans on a claim about the tree, from this journal, the inventory or my memory, the claim goes
   to a Haiku check, one claim a pass, by the shape under "Claims checked one at a time". Six
   passes corrected two of my claims. Not for searching, not for judging a design.
 - Run the simulation: `.venv/Scripts/python.exe docs/playground/sim/sim.py 150` (torture, a line
   a scheme) and `... sim.py prices 1080p [profile]` (the table below), a few seconds each.
-- Counters: queued runs 2 of 15; cycles 3 of 4 (the contract and its torture; the prices; the policy).
+- Counters: queued runs 4 of 25 (his figure, 2026-11-21). No cap on design cycles, by the same word: a
+  cycle on the simulation is run when a slice raises a question whose answer would change it.
 - Context: `bash ~/.claude/tools/context-used.sh 300` prints what is left before the auto-compact
   window (300k by his `/autocompact` on 2026-11-21). Bring this file up to date before a step
   that reads a lot, and when under about 30k left.
@@ -227,6 +231,38 @@ the hypothesis. The policy below is `worth=True` in `store.py`, and it is the co
   twice. A fused walk that feeds both from one decode is the walk's to gain, not the store's.
 - The torture holds for both policies over 150 seeds and breaks for today's three weaknesses.
 
+## A decision of his the contract ran into
+
+`docs/spec/what-a-node-declares.md:263` is ticked in his name: held results outlive an edit to a
+tool, are served, and are let go by hand; the node shows `!` and the user decides. The contract
+put the code's digest in the key, slice 1 built that, and its run said what it broke: after a
+restart, results of older code are not found at all. Its own test showed the cost he decided
+against, a comment's edit changing the key. I took that half of slice 1 back out (the footage
+sampling stays). Not mine to overrule, and both are wanted: an HPC job must never take another
+code's result for its own, and an edit must not throw away a day's walks unasked.
+
+What I will propose to him, not build unasked: the code's digest rides beside the key and not
+in it. An address is a key, a code and a row; a lookup takes the entry of this code, or failing
+that one of another code and says it is stale, which is his `!`; a walk that must be exact (a
+bare walk, a cluster job, a checkpoint being filled) asks for this code only. O1 then reads:
+two values under one key and one code are equal, and a value of another code is never served
+unmarked.
+
+## Drift from the referents (told to him 2026-11-21)
+
+- The footage print samples; Git's index and Bazel hash the whole file once and remember it by
+  path, size and time. Follow slice 1 with that, the sampled print standing in until the whole
+  one is made in the background.
+- Disk lets go by worth over age, which is mine; GreedyDual-Size is the referent and memory
+  already uses it. The "ten times its write" is tuned to guessed disks.
+- The simulation is stateful property testing, not FoundationDB's: no two stores run
+  interleaved. One letting go of a file another is reading is Bazel's disk cache's known weak
+  spot and is untested here.
+- Keys are of inputs' keys, as Nix's, so there is no early cutoff as Shake and Bazel have.
+  Left so; draw-only params cover the common case.
+- Reservations are Spark's unified memory manager (execution memory may push out storage
+  memory, in one pool). Read how it bounds that before the real one is built.
+
 ## Claims checked one at a time (Haiku, 2026-11-21)
 
 The shape that worked, five of five: "Check ONE claim against code in <repo>. Read only. Claim:
@@ -275,6 +311,8 @@ with its own limit stated. Run them in one message, in parallel.
 
 | # | What | Wall | Context, turns | Verdict |
 |---|---|---|---|---|
+| 4 | Slice 2: `budget.py`, each holder's limit shared out of half the RAM, today's constants as ceilings | 2m 01s | not read | Clean, 39 lines, three tests, said its own choices: an env override can still push the sum past the total; `walk` reads the real machine at import, so a test leaning on the default stack sees less on a machine under about 21 GB; `tests/test_graph.py` restores `STACK_BYTES` to a literal. Kept. |
+| 3 | Slice 1: code digest in `key_of`, footage print sampled at 32 offsets | 2m 21s | not read | Did what was asked and found what I had not: the ticked decision above, and two docs made false (`docs/spec/held-results.md:25`, a finding's line 117). The key half taken back out by me. The prompt's "say what your change made false" line is what surfaced it; keep it in every slice. |
 | 2 | Measured figures from `docs/findings/`, one table, told which findings to open first | 2m 31s | about 88k, 24 turns | On brief, every row sourced, disagreements kept as two rows, empty cells said. The shape to reuse: one file out, the reader told it is the queued run, where to start reading, a line cap. |
 | 1 | Stage 1 inventory, five questions over the whole tree and the log | 8m 30s | about 215k, 115 turns | Output accurate on five spot checks, dense, on brief. Too wide for one run: five questions should have been two or three runs. It took the journal's "supervising session" to be itself; later prompts say who the reader is. |
 

@@ -256,20 +256,38 @@ def test_a_node_above_a_period_is_walked_as_with_none_and_one_below_is_walked_ov
     doc.remove_node("sig")                                                    # every series node below the period: no chain above it
     g.sync()
     assert not g.snapshot().chain and g.snapshot().walk == "gray"
-    w, stepped, periods = Worker(g), [], []
+    w, stepped, periods, told = Worker(g), [], [], []
     g.on_event = lambda ev: stepped.append((ev.node, ev.row)) if ev.lane == "clip" and ev.kind in ("run", "step") else None
     w.periodReady.connect(lambda r, s, fps: periods.append(s))
+    w.periodWalked.connect(lambda *t: told.append(t))
+
+    def turned(until=lambda: False):
+        while not until():
+            with w._cv:
+                turn = w._turn()
+            if turn is None:
+                return
+            for job, act in turn[1]:
+                g.serving(turn[0], job.name)
+                act()
+
     w.walk_clip()
-    while True:
-        with w._cv:
-            turn = w._turn()
-        if turn is None:
-            break
-        for job, act in turn[1]:
-            g.serving(turn[0], job.name)
-            act()
+    turned()
     assert w._clip.length == 0 and periods == [2, 4]                         # the clip's own range walks no shown node for no one
     assert sorted(row for nid, row in stepped if nid == below) == [2, 3, 4, 4, 5, 6, 7] and {nid for nid, _ in stepped} == {below}
+
+    from sieve_player.walk import HeldCut, period_keys
+    periods.clear()
+    w.walk_clip()
+    turned(lambda: w._clip_legs.walk.i == 1)
+    doc.node("period").params["rows"] = [[4, 8], [9, 10]]                     # the period under way leaves the plan as the clip walk begins again
+    g.sync()
+    q = g.snapshot()
+    (timed,) = q.timed
+    w.give_periods({("period", (9, 10)): HeldCut(period_keys(q.of(timed)), True, {}, None)})
+    w.walk_clip()
+    turned()
+    assert periods == [4] and told[-1] == (4, 4, 0)                         # the new legs walked, the held one passed over and the end told
 
 
 def test_a_period_cut_by_a_gate_is_cut_by_the_gates_held_run_and_holding_its_periods_cuts_it_no_differently():

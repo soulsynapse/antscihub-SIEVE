@@ -170,13 +170,11 @@ node read a series node's result on a wire.
 - [ ] A series node whose gate feeds a `period` is above it; one below it is a cycle, refused as
   one, saying both.
   Check: a seam.
-- [ ] A `period` holds its periods and a choice of one. Two `period`s in one document are each
-  their own, fed by one series node's gate or two.
-  Worth a look: what a choice is held as when the gate moves the periods under it, an index, a row
-  the chosen period holds, or the period it overlaps most, is Kendrick's.
+- [ ] A `period` cuts the footage into its periods, each a piece of its own, however many its gate
+  makes; none is chosen over another. Two `period`s in one document are each their own, fed by one
+  series node's gate or two.
 - [ ] The strip draws each `period`'s periods over the whole clip as spans in a colour of its own,
-  its chosen one marked, so periods made by two gates show as two, whichever node is the
-  selection.
+  so periods made by two gates show as two, whichever node is the selection.
   Check: a one-off offscreen: a document with two `period`s fed by two gates, the strip's spans
   against each gate's runs.
 
@@ -192,10 +190,10 @@ sized: how far a node that serves no file and sets the rows of its extent reache
 and `walk.py`. This section's boxes are one change to them.
 
 - [ ] A node's extent is its inputs' intersection, cut where a cutting node cuts. What reads a
-  `period` is walked over the chosen period's rows, and a node no `period` feeds is walked over
-  the rows it is walked over with none in the document.
+  `period` is walked over its periods' rows, each period alone, and a node no `period` feeds is
+  walked over the rows it is walked over with none in the document.
   Check: a seam: a stepped node above a `period` and one below it, the one above's key and held
-  rows the same with the period chosen, moved and gone.
+  rows the same with the periods moved, added and gone.
 - [ ] The stepped nodes of one extent are walked together over it, and those of another apart over
   theirs.
   Check: a one-off over the crossings clip: `count` above a period and `track` below it, the rows
@@ -243,7 +241,7 @@ hands every line one start, where the strip takes one a node.
 
 - [ ] A row outside a node's extent is absent to what reads it: no node is computed or stepped
   at it, and no table written holds a record of it.
-  Check: a one-off over the crossings clip: a csv below a period, its rows against the period's.
+  Check: a one-off over the crossings clip: a csv below a `period`, its rows against the periods'.
 - [ ] A gated-out row is handed to a stepping tool downstream as absent, apart from a zero and
   from an empty table, and what a tool's state does across it is the tool's, each stepping tool
   saying so. Changes keys: it is said before it lands, and the held files of the documents in use
@@ -251,10 +249,11 @@ hands every line one start, where the strip takes one a node.
   Check: a one-off over the crossings clip: `count` below a band, its result over a gated-out run
   against the same rows read as zero.
 - [ ] The plot draws each node from the row its result begins at in the window, so a node below a
-  period has a line over the period's rows in the window and none outside them; the frame shown
-  at a row outside the shown node's extent says so in place of a frame.
-  Check: a one-off offscreen: the window over a period's first row, a node below it, the line's
-  first row and the frame at the row before.
+  `period` has a line over each of its periods' rows in the window, each from its own first row,
+  and none between them; the frame shown at a row outside the shown node's extent says so in place
+  of a frame.
+  Check: a one-off offscreen: the window over several periods, a node below them, each line's
+  first row and the frame at the row before one.
 
 ## A series result below a period
 
@@ -263,15 +262,17 @@ absent.
 
 Facts to weigh. A stepped node's result at a row depends on where its walk began; series in this
 section's name is any node that steps, a frame tool that keeps state among them. The clip walk
-and the window walk each step their chain from their own first row (`walk._Walk`).
+and the window walk each step their chain from their own first row (`walk._Walk`). A gate can
+make hundreds of periods over a clip, each its own origin. Not measured: the runs of as many
+origins under `held.Runs`'s limit.
 
-- [x] Kendrick: a stepped node's result below a `period` is the chosen period walked alone, its
+- [x] Kendrick: a stepped node's result below a `period` is each period walked alone, its
   origin the period's first row. It is the caveman way, the period cut to a clip of its own and
   the pipeline run on it, and so the ground truth; a walk cut from a longer one agrees with it
   only for a tool whose reach is bounded and declared, by A tool's reach in rows.
-- [ ] A period's rows are in no key. A period moved that is not the chosen one moves nothing below
-  it; the chosen one moved moves the extent of every node below it and the origin of a stepped
-  node below it.
+- [ ] A period's rows are in no key. A period moved, added or gone moves the extent of every node
+  below its `period` and the origin of a stepped node's walk of it, and the walk of no other
+  period.
   Check: a seam.
 - [ ] A result below a period is the result of the same document run on the period cut to a
   lossless clip of its own, row for row and equal.
@@ -290,12 +291,13 @@ and the window walk each step their chain from their own first row (`walk._Walk`
   window moves, and not an identity's number, which only the whole clip walked gives. What the
   session builds toward it is conservative, reversible, predictable to the user, and quick
   without buying an unbounded walk.
-- [ ] Below a `period`, the window's walk of a stepped node begins at the later of the chosen
-  period's first row and the window's pre-roll, never before the period's first row. A window
-  that holds the period's first row is exact below it, every node's reach bounded or not; best
-  effort is of a window begun inside the period alone.
-  Check: a one-off over the crossings clip: the window over a period's first row, `track` below it
-  against the period walked alone.
+- [ ] Below a `period`, the window walks each period it overlaps alone, a stepped node's walk of one
+  begun at the later of that period's first row and the window's pre-roll, never before the
+  period's first row. The periods of one `period` are disjoint, so the rows walked below it are
+  at most the window's. A period that begins inside the window is exact below it, every node's
+  reach bounded or not; best effort is of the period the window begins inside alone.
+  Check: a one-off over the crossings clip: the window over several periods, `track` below them,
+  each against its period walked alone.
 
 ## Not here
 

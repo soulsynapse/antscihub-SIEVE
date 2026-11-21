@@ -9,6 +9,10 @@ PARAMS = {
 }
 
 
+def reach_in_rows(params):
+    return 0, 0
+
+
 def run(frames, row, params):
     mode = cv2.THRESH_BINARY_INV if params["invert"] else cv2.THRESH_BINARY
     _, b = cv2.threshold(frames(row), params["thresh"], 255, mode)

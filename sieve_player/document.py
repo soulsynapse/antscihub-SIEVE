@@ -13,7 +13,7 @@ import os
 from dataclasses import dataclass, field
 
 from . import registry
-from .registry import by_name, expects, inputs, is_selector, optional, paths
+from .registry import by_name, cut_by, expects, inputs, is_selector, optional, paths
 
 VERSION = 3                 # 3: pinned is a list in pin order; a 2's one id loads as a list of one. 2: the video node's scale is a rescale node's; a 1 with one loads with that node inserted
 VIDEO_TOOL = "video"        # the reserved tool name of the node the decoder is
@@ -322,7 +322,7 @@ def frame_inputs(tool):
 
 def inputs_of(doc, tools, nid):
     """[(input name, types it expects or None)]: PATH on the video node, none on a selector, else
-    the frame inputs and then each path input."""
+    the frame inputs, each path input and then the input a cutting tool is cut by."""
     node = doc.node(nid)
     if node.tool == VIDEO_TOOL:
         return [(INPUT, (PATH,))]
@@ -331,7 +331,7 @@ def inputs_of(doc, tools, nid):
         return [(INPUT, None)]
     if is_selector(tool):
         return []
-    return [(INPUT, expects(tool)), *inputs(tool).items()] + [(name, (PATH,)) for name in paths(tool)]
+    return [(INPUT, expects(tool)), *inputs(tool).items()] + [(name, (PATH,)) for name in paths(tool)] + ([cut_by(tool)] if cut_by(tool) else [])
 
 
 def wants(doc, tools, nid, input=INPUT):

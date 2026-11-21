@@ -7,7 +7,9 @@ a row of `labels`, (first row, last row, id, identity), on each of the id's rows
 identities on one id, or one already held by an overlapping id with more reads, leave it NaN and
 flagged. Where two ids end as one starts over their last centroids and it ends as two start inside
 its last box, the identities entering and leaving are one set, and the one unlabelled id on a side
-takes the identity the other side has that its own lacks. `main` is the same pass over a tracks csv.
+takes the identity the other side has that its own lacks. A row absent upstream is None in `rows`
+and NaN in the signal, and holds no read and no end or start of an id. `main` is the same pass
+over a tracks csv.
 """
 import os
 
@@ -64,6 +66,8 @@ def reads_of(rows, columns, labels, start):
     for a, last, i, z in labels:
         labelled.setdefault(i, []).append((a, last, z))
     for r, t in enumerate(rows):
+        if t is None:
+            continue
         for c in columns:
             if len(t) and c not in t.dtype.names:
                 raise ValueError(f"resolve: no column {c!r}; one of {t.dtype.names}")
@@ -82,6 +86,8 @@ def contacts(rows):
     one per id with as many entering as leaving and at least two; none where the tables lack boxes."""
     first, last = {}, {}
     for r, t in enumerate(rows):
+        if t is None:
+            continue
         if len(t) and not {"x", "y", "w", "h", "cx", "cy"} <= set(t.dtype.names):
             return []
         for b in t:
@@ -134,7 +140,8 @@ def resolve(rows, columns, min_reads=2, labels=(), start=0):
                         identity[unknown[0]], settled = missing.pop(), False
     out = np.empty(len(rows), object)
     out[:] = [with_column(with_column(t, IDENTITY, np.array([identity.get(int(i), np.nan) for i in t["id"]], np.float64), NONE),
-                          CONFLICT, np.array([int(i) in flagged for i in t["id"]], np.int32), NONE) for t in rows]
+                          CONFLICT, np.array([int(i) in flagged for i in t["id"]], np.int32), NONE) if t is not None else None
+              for t in rows]
     return out
 
 
@@ -142,8 +149,8 @@ def signal(rows, kind):
     if kind not in SIGNALS:
         raise ValueError(f"resolve: no signal {kind!r}; one of {SIGNALS}")
     if kind == "identities":
-        return np.array([len({float(v) for v in t[IDENTITY] if not np.isnan(v)}) for t in rows], np.float32)
-    return np.array([int(t[CONFLICT].sum()) for t in rows], np.float32)
+        return np.array([np.nan if t is None else len({float(v) for v in t[IDENTITY] if not np.isnan(v)}) for t in rows], np.float32)
+    return np.array([np.nan if t is None else int(t[CONFLICT].sum()) for t in rows], np.float32)
 
 
 def run(series, params):
@@ -173,10 +180,14 @@ def tables_of(header, lines, start, n):
 def rewrite(path, columns, min_reads=2, labels=(), out=None):
     """The tracks csv at `path` with `identity` and `conflict` written before `gate` on every line,
     replacing a previous pass's, the key line kept; written to `out` or over `path`. A file whose key
-    line names a kind other than tracks raises ValueError; one naming none is read as tracks."""
+    line names a kind other than tracks raises ValueError, as does one of several periods' rows; one
+    naming no kind is read as tracks."""
     key, start, n, header, lines, kind = read(path)
     if kind not in (None, "tracks"):
         raise ValueError(f"{os.path.basename(path)} is a {kind} csv; resolve reads the one csv writes from a tracks series")
+    if "period_first" in header and len({(p[header.index("period_first")], p[header.index("period_end")]) for p in lines}) > 1:
+        raise ValueError(f"{os.path.basename(path)} holds the tracks of several periods, whose ids are each period's own; "
+                         "resolve reads one period's")
     keep = [i for i, c in enumerate(header) if c not in (IDENTITY, CONFLICT)]
     header, lines = [header[i] for i in keep], [[p[i] for i in keep] for p in lines]
     rows = resolve(tables_of(header, lines, start, n), columns, min_reads, labels, start)

@@ -148,7 +148,7 @@ def test_the_walk_steps_the_prefix_once_a_row_runs_the_suffix_per_emit_and_match
     table = frame_tool("table", "gray", "blobs", blobs_at)
     tools = {**FRAME, "table": table, "track": track, "kinematics": kinematics, "tracks-filter": tracks_filter}
     doc = D.from_tools([fgray, table, track, kinematics, tracks_filter])
-    doc.node("track").band = (1.0, 2.0)      # rows with three tracks are gated out, so kinematics is fed emptied rows there
+    doc.node("track").band = (1.0, 2.0)      # rows with three tracks are gated out, so kinematics is fed absent rows there
     g = Graph(doc, Dec(), tools)
     assert g.chain == ["track", "kinematics", "tracks-filter"] and [g.entry(n).steps for n in g.chain] == [True, True, False]
     w, events, got = stepping_worker(g, 3, 0, 7)

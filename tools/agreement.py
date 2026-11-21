@@ -17,6 +17,10 @@ NAME, KIND, EXPECTS, PRODUCES = "agreement", "frame", "flow", "gray"
 PARAMS = {"block": {"default": 32, "kind": "int", "range": (1, 256)}}
 
 
+def reach_in_rows(params):
+    return 0, 0
+
+
 def run(frames, row, params):
     f = np.asarray(frames(row), np.float32)
     mag = np.hypot(f[..., 0], f[..., 1])

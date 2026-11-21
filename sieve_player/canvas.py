@@ -10,7 +10,6 @@ unresolved node or an unfed pass-through wires like any other and the red wire s
 whether the types fit; only a node's own connectors are refused, a longer cycle is the document's.
 """
 import math
-import zlib
 
 from PySide6.QtCore import QCoreApplication, QEvent, QLineF, QPointF, QRectF, Qt, Signal
 from PySide6.QtGui import QColor, QCursor, QPainter, QPainterPath, QPen
@@ -56,8 +55,7 @@ def type_color(t):
         return qgray(theme.INK_2)
     h = theme.TYPE_HUES.get(t)
     if h is None:
-        h = zlib.crc32(t.encode()) % 240
-        h = 35 + h if h < 160 else 255 + (h - 160)
+        h = theme.hashed_hue(t)
     return QColor.fromHsv(h, *theme.TYPE_SV)
 class Canvas(QWidget):
     """`tools` is the catalogue, name to module; the document's node names index it. `broken` is

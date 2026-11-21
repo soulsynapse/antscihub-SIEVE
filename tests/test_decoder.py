@@ -1,10 +1,12 @@
 """Two cursors on one file: the walk's only steps, the scrub's takes the jumps; a short jump reads
 through; a seek lands a row short so row - 1 after row is a step, not a second seek."""
+import threading
+
 import cv2
 import numpy as np
 import pytest
 
-from sieve_player.decoder import SLICE, Decoder, footage_print
+from sieve_player.decoder import SLICE, Decoder, footage_print, read_frame_times_ahead
 
 
 @pytest.fixture(scope="module")
@@ -103,6 +105,9 @@ def test_a_stream_ending_short_of_the_container_is_said_once_on_stderr(video, tm
     d.read(0)
     assert "inexactly" not in capsys.readouterr().err and d.seeks == 1
     d.close()
+    told, done = [], threading.Event()
+    read_frame_times_ahead(short, lambda rows: told.append(rows) or done.set())
+    assert done.wait(30) and d.count <= told[0] < claimed     # the frame times bring the count down before a read reaches the end, a cut packet past it
 
 
 def test_a_row_by_a_seek_is_the_row_a_walk_reads_where_the_plugin_says_another(video, tmp_path, monkeypatch):

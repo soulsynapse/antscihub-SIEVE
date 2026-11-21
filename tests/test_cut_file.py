@@ -21,7 +21,7 @@ from tools import _cutfile as C
 from tools import region
 
 cut = Tool(NAME="cut", KIND="frame", EXPECTS="bgr", PRODUCES="bgr", run=lambda frames, row, params: frames(row),
-           cut_file=lambda video, footage, params: None)
+           cut_extents=lambda params, result: [{}], cut_file=lambda video, footage, params: None)
 both = Tool(NAME="both", KIND="frame", EXPECTS="gray", PRODUCES="gray", INPUTS={"other": "gray"},
             run=lambda frames, row, params: frames(row))
 TOOLS = {t.NAME: t for t in (cut, gray, add, same, both)}
@@ -66,7 +66,8 @@ def test_a_served_node_and_all_after_it_are_keyed_as_the_document_opened_on_its_
     assert served.entries["cut"].file == FILE["cut"] and served.entries["cut"].srcs == {"in": None} and served.entries["cut"].fed
     assert {n: served.entries[n].key for n in ("cut", "gray", "add")} == {"cut": alone.entries["video"].key, **{n: alone.entries[n].key for n in ("gray", "add")}}
     assert live.entries["cut"].file is None and live.entries["add"].key != served.entries["add"].key
-    assert (served.entries["cut"].piece, served.entries["add"].piece, live.entries["add"].piece) == (None, "cut", "cut")
+    assert served.entries["cut"].reads[0].served() is None and served.entries["add"].reads == served.entries["cut"].cuts
+    assert (served.entries["add"].reads[0].served(), live.entries["add"].reads[0].served()) == (FILE["cut"], None)
     doc.add_node("cut", id="inner")
     doc.connect("cut", "inner")
     inner = {"inner": ("inner.mp4", "inner print")}     # a cut of a served file is served; of a run it is not

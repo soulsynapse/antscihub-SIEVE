@@ -7,7 +7,7 @@ of the runtime nothing.
 """
 import numpy as np
 from PySide6.QtCore import QPointF, QRect, QRectF, Qt, Signal
-from PySide6.QtGui import QFontMetrics, QImage, QMouseEvent, QPainter, QPainterPath, QPen, QPixmap, QPolygonF, QRegion
+from PySide6.QtGui import QColor, QFontMetrics, QImage, QMouseEvent, QPainter, QPainterPath, QPen, QPixmap, QPolygonF, QRegion
 from PySide6.QtWidgets import QSizePolicy, QVBoxLayout, QWidget
 
 from . import density, theme
@@ -29,20 +29,49 @@ def nice(x):
     return float(next(m * e for m in (1, 2, 5, 10) if m * e >= x))
 
 
+def runs(present):
+    """(first, past the last) of each run of True in `present`."""
+    edges = np.flatnonzero(np.diff(np.concatenate(([0], present.astype(np.int8), [0]))))
+    return list(zip(edges[0::2], edges[1::2]))
+
+
 def label(v):
     return "∞" if v == float("inf") else f"{v:.4g}"
 
 
 class Line:
-    """A series node's signal from row `start`, with its gate when it has one."""
+    """A series node's signal from row `start`, with its gate when it has one; a NaN is a row absent.
+    `best` is whether its rows are a walk's best effort and not the walk of their cut."""
 
-    def __init__(self, values, start, gate=None):
+    def __init__(self, values, start, gate=None, best=False):
         self.values = np.asarray(values, np.float32)
-        self.start, self.gate = int(start), None if gate is None else np.asarray(gate, bool)
+        self.start, self.gate, self.best = int(start), None if gate is None else np.asarray(gate, bool), bool(best)
 
     @property
     def top(self):
-        return max(float(self.values.max()), 1e-6) if len(self.values) else 1e-6
+        return max(float(np.nanmax(self.values)), 1e-6) if len(self.values) and not np.isnan(self.values).all() else 1e-6
+
+
+class Pieces:
+    """A series node's line in pieces, a Line each from its own first row: one for the walk of the
+    nodes no cut in time feeds, one a period for a node below a `period`, two periods overlapping
+    each drawn."""
+
+    def __init__(self, pieces):
+        self.pieces = [Line(v, start, g, best) for v, g, start, best in pieces]
+
+    @property
+    def top(self):
+        return max((p.top for p in self.pieces), default=1e-6)
+
+    @property
+    def gated(self):
+        return any(p.gate is not None for p in self.pieces)
+
+    def at(self, row):
+        """(value, best) of each piece holding `row` and not absent there, in their order."""
+        held = (p for p in self.pieces if 0 <= row - p.start < len(p.values))
+        return [(v, p.best) for p in held if not np.isnan(v := float(p.values[row - p.start]))]
 
 
 class Field:
@@ -117,9 +146,9 @@ class ChipRow:
 
 
 class Plot(QWidget):
-    """Feed it the window with set_window(start, length, fps), the lines with set_lines({node: (values,
-    gate)}, start) and the fields with set_fields({node: counts}, start), each from the row the walk
-    began at; set_selection(node), set_pinned([node, ...]) and set_bands({node: (lo, hi)}) say what
+    """Feed it the window with set_window(start, length, fps), the lines with set_lines({node:
+    [(values, gate, start, best), ...]}), each piece from the row its walk began at, and the fields with
+    set_fields({node: counts}, start), from the row the walk began at; set_selection(node), set_pinned([node, ...]) and set_bands({node: (lo, hi)}) say what
     is shown and how. A node is drawn while it is the selection or pinned and has a line or a
     field. Where there are more rows than pixel columns each column is the min and max of the
     rows it covers, so nothing is hidden and nothing is added; a walk still filling in draws what it
@@ -189,8 +218,8 @@ class Plot(QWidget):
         self._redraw()
         self.headMoved.emit()
 
-    def set_lines(self, lines, start):
-        self.lines = {nid: Line(v, start, g) for nid, (v, g) in lines.items()}
+    def set_lines(self, lines):
+        self.lines = {nid: Pieces(pieces) for nid, pieces in lines.items() if pieces}
         self._redraw()
 
     def set_fields(self, fields, start):
@@ -390,8 +419,7 @@ class Plot(QWidget):
             if nid in self.lines and nid != sel:
                 self._paint_pinned_line(p, inner, nid)
         if sel in self.lines:
-            line = self.lines[sel]
-            self._paint_line(p, inner, sel, theme.GATE if line.gate is not None else theme.SERIES, True)
+            self._paint_line(p, inner, sel, theme.GATE if self.lines[sel].gated else theme.SERIES, True)
         if self._handled():
             self._paint_levels(p, inner, sel)
             self._paint_axis(p, inner)
@@ -406,10 +434,9 @@ class Plot(QWidget):
             pm = theme.glyph("pinned" if pinned else "pin", theme.INK if pinned else theme.INK_2, theme.GLYPH, self.devicePixelRatioF())
             p.drawPixmap(pin.topLeft(), pm)
 
-    def _columns(self, nid):
-        """How a node's rows lie over the axis: (xs, width per column, first-sample indices for a dense
-        series or None, the slice of its rows inside the window), or None with nothing inside."""
-        item = self.lines.get(nid) or self.fields.get(nid)
+    def _columns(self, item):
+        """How a Line's or a Field's rows lie over the axis: (xs, width per column, first-sample indices
+        for a dense series or None, the slice of its rows inside the window), or None with nothing inside."""
         inner, N, step = self._inner(), self._axis(), self._step()
         n = len(item.values) if isinstance(item, Line) else len(item.counts)
         i0 = item.start - self.start
@@ -425,8 +452,15 @@ class Plot(QWidget):
         return inner.left() + step * rows, step, None, slice(lo, hi)
 
     def _paint_line(self, p, inner, nid, color, washed):
-        line = self.lines[nid]
-        placed = self._columns(nid)
+        """Each piece of `nid`'s line in `color`, a best-effort piece at half its alpha."""
+        for line in self.lines[nid].pieces:
+            c = QColor(color)
+            if line.best:
+                c.setAlpha(c.alpha() // 2)
+            self._paint_piece(p, inner, nid, line, c, washed)
+
+    def _paint_piece(self, p, inner, nid, line, color, washed):
+        placed = self._columns(line)
         if placed is None:
             return
         xs, w, starts, rows = placed
@@ -442,22 +476,22 @@ class Plot(QWidget):
                 for a, b in zip(edges[0::2], edges[1::2] - 1):
                     x0, x1 = max(xs[a] - w / 2, inner.left()), min(xs[b] + w / 2, inner.right())
                     p.drawRect(QRectF(x0, inner.top(), x1 - x0, inner.height()))
-        if len(values) < 2:
-            if len(values) == 1:
+        with np.errstate(invalid="ignore"):
+            lo, hi = (np.fmin.reduceat(values, starts), np.fmax.reduceat(values, starts)) if starts is not None else (values, values)
+        for a, b in runs(~np.isnan(hi)):     # an absent row draws nothing, so a run of rows on either side of one is its own
+            if b - a == 1:
                 p.setPen(QPen(color, 1.6))
-                p.drawPoint(QPointF(xs[0], self._y(values[0], nid)))
-            return
-        if starts is not None:
-            lo, hi = np.minimum.reduceat(values, starts), np.maximum.reduceat(values, starts)
-            top = [QPointF(x, self._y(v, nid)) for x, v in zip(xs, hi)]
-            bottom = [QPointF(x, self._y(v, nid)) for x, v in zip(xs[::-1], lo[::-1])]
-            p.setPen(QPen(color, 1))
-            p.setBrush(color)
-            p.drawPolygon(QPolygonF(top + bottom))
-        else:
-            p.setPen(QPen(color, self.LINE))
-            p.setBrush(Qt.NoBrush)
-            p.drawPolyline(QPolygonF([QPointF(x, self._y(v, nid)) for x, v in zip(xs, values)]))
+                p.drawPoint(QPointF(xs[a], self._y(hi[a], nid)))
+            elif starts is not None:
+                top = [QPointF(x, self._y(v, nid)) for x, v in zip(xs[a:b], hi[a:b])]
+                bottom = [QPointF(x, self._y(v, nid)) for x, v in zip(xs[a:b][::-1], lo[a:b][::-1])]
+                p.setPen(QPen(color, 1))
+                p.setBrush(color)
+                p.drawPolygon(QPolygonF(top + bottom))
+            else:
+                p.setPen(QPen(color, self.LINE))
+                p.setBrush(Qt.NoBrush)
+                p.drawPolyline(QPolygonF([QPointF(x, self._y(v, nid)) for x, v in zip(xs[a:b], values[a:b])]))
 
     def _paint_pinned_line(self, p, inner, nid):
         """The band is on values and y is monotonic in them, so the kept rows are a y range: the
@@ -489,7 +523,7 @@ class Plot(QWidget):
         pixels); the picture is the field's cropped bins, and the bins the band drops count for
         nothing, so the ramp spends its range on the values kept."""
         f = self.fields[nid]
-        placed = self._columns(nid)
+        placed = self._columns(f)
         if placed is None or f.counts.ndim != 2:
             return
         xs, w, starts, rows = placed
@@ -554,17 +588,14 @@ class Plot(QWidget):
         fm = QFontMetrics(self.font())
         h, inner = fm.height(), self._inner()
         for nid in self.shown():
-            line = self.lines.get(nid)
-            if line is None or not 0 <= self.hover - line.start < len(line.values):
-                continue
-            v = float(line.values[self.hover - line.start])
-            dot = QPointF(self._x(self.hover), self._y(v, nid))
-            text = f"{nid} {v:.4g}"
-            w = fm.horizontalAdvance(text) + 2
-            x = dot.x() + self.DOT + 6
-            if x + w > inner.right():
-                x = dot.x() - self.DOT - 6 - w
-            out.append([nid, text, dot, QRectF(x, dot.y() - h / 2, w, h)])
+            for v, best in self.lines[nid].at(self.hover) if nid in self.lines else []:
+                dot = QPointF(self._x(self.hover), self._y(v, nid))
+                text = f"{nid} {'~' if best else ''}{v:.4g}"
+                w = fm.horizontalAdvance(text) + 2
+                x = dot.x() + self.DOT + 6
+                if x + w > inner.right():
+                    x = dot.x() - self.DOT - 6 - w
+                out.append([nid, text, dot, QRectF(x, dot.y() - h / 2, w, h)])
         out.sort(key=lambda r: r[3].top())
         for a, b in zip(out, out[1:]):
             if b[3].top() < a[3].bottom():
@@ -577,7 +608,7 @@ class Plot(QWidget):
 
     def _paint_readouts(self, p):
         for nid, text, dot, rect in self.readouts():
-            colour = (theme.GATE if self.lines[nid].gate is not None else theme.SERIES) if nid == self.selection else qgray(theme.INK)
+            colour = (theme.GATE if self.lines[nid].gated else theme.SERIES) if nid == self.selection else qgray(theme.INK)
             p.setPen(Qt.NoPen)
             p.setBrush(qgray(theme.layer(0) + theme.MEASURED_LIFT, self.READOUT_ALPHA))   # a line may run under the text
             p.drawRoundedRect(rect.adjusted(-3, 0, 3, 0), 3, 3)
@@ -607,10 +638,9 @@ class Plot(QWidget):
         over a field the value of the bin under the cursor."""
         text = None
         if nid in self.lines:
-            line = self.lines[nid]
-            i = self.playhead - line.start
-            if self.hover < 0 and 0 <= i < len(line.values):
-                text = f"{float(line.values[i]):.4g}"
+            values = self.lines[nid].at(self.playhead)
+            if self.hover < 0 and values:
+                text = "  ".join(f"{'~' if best else ''}{v:.4g}" for v, best in values)
         elif nid in self.fields and self._y_hover is not None:
             f = self.fields[nid]
             frac = (inner.bottom() - self._y_hover) / inner.height()

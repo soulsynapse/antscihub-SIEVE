@@ -66,6 +66,10 @@ def decode(table, plane, prefix="tag", dictionary="4x4_50", margin=0.5):
     return with_column(with_column(table, f"{prefix}_code", code, NONE), f"{prefix}_heading", heading, NONE)
 
 
+def reach_in_rows(params):
+    return 0, 0
+
+
 def run(frames, row, params):
     return decode(frames(row), frames(row, "plane"), params["prefix"], params["dictionary"], float(params["margin"]))
 

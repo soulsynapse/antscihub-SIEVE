@@ -25,6 +25,7 @@ from . import bare, dev, document, filemenu, held, recent, store, theme, wire
 from . import decoder as decoder_module
 from .canvas import Canvas
 from .catalogue import Log
+from .cut import cut_in_time, holding, place_in
 from .decoder import Decoder
 from .graph import Graph
 from .ledger import Ledger, row_cost
@@ -41,6 +42,7 @@ from .theme import GAP, PAD, ROW_H, readout
 from .timeline import Timeline
 from .trace import Dump
 from .plot import Plot, Stage
+from .heldwalks import Shown, as_given, gate_result, held_chain, held_periods, listed_cuts, period_run, shown_at, window_periods
 from .worker import Worker
 
 HOLD_MS = 2000              # how long the held runs rest, nothing new held, before they are written beside the document
@@ -163,28 +165,37 @@ def heat(a, top):
 RELOAD_SETTLE_MS = 150   # a loader re-reads a changed file this long after the last write seen
 
 
+def outside_cuts(e, nid, row):
+    """What the frame says in place of a frame at `row` of the node `nid`, whose plan Entry is `e`:
+    that the row is outside its cuts, or "" where one holds it or there is no entry."""
+    return "" if e is None or holding(e.cuts, row) is not None else f"row {row} is outside {nid}'s cuts"
+
+
 class Display(QWidget):
     drawFailed = Signal(str, str)   # a tool's draw() or pick() raised: the node, the line
     picked = Signal(str, dict)      # a drawer claimed a left click: the node, the params to merge
 
     """The frame, the overlay heated over it, the gate border, and each drawing node's draw() on
     top, in node order, each handed its own node's result: a series node's over the window, a
-    frame node's at the row. A left click is offered to the drawers whose pick() claims it, the
-    one drawn last first."""
+    frame node's at the row, the painter moved to where the pixels its node reads lie on the frame.
+    A left click is offered to the drawers whose pick() claims it, the one drawn last first, as a
+    point in those pixels."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._pix, self.gate, self.reason = None, False, ""
         self._over, self._over_key, self._top = None, None, 0.0   # the overlay image, whose node's key, its running max
         self._frame_key, self._frame_top = None, 0.0               # the shown node's key and running max, for a measured plane
-        self.drawers, self.row, self.results, self.start = [], 0, {}, 0   # drawers: [(node id, tool, node)]
+        self.drawers, self.row, self.results, self.start, self.starts = [], 0, {}, 0, {}   # drawers: [(node id, tool, node)]
         self.dropped = set()                                       # id() of each tool whose draw() or pick() raised; the window keeps them out of drawers
         self.frame_results = {}                                    # node id -> a drawing frame node's output at the row
+        self.places = {}                                           # node id -> (x, y) on the frame of the first pixel of what a drawer's node reads; one with no place on it is not here
         self.setMinimumSize(160, 120)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
-    def set_state(self, row, results, start):
-        self.row, self.results, self.start = row, results, start
+    def set_state(self, row, results, start, starts=None):
+        """`results` are node to result, each over the rows from `start`, or from its own row in `starts` where it has one."""
+        self.row, self.results, self.start, self.starts = row, results, start, starts or {}
         self.update()
 
     def set_frame(self, a, key=None):
@@ -250,12 +261,17 @@ class Display(QWidget):
         p.setViewport(x, y, pix.width(), pix.height())
         p.setWindow(0, 0, self._pix.width(), self._pix.height())
         for nid, tool, node in self.drawers:
+            if nid not in self.places:
+                continue
+            p.save()
+            p.translate(*self.places[nid])
             try:
-                tool.draw(p, self.row, self.frame_results.get(nid, self.results.get(nid)), self.start, node.params)
+                tool.draw(p, self.row, self.frame_results.get(nid, self.results.get(nid)), self.starts.get(nid, self.start), node.params)
             except Exception as e:
                 traceback.print_exc()
                 self.drop(tool)
                 self.drawFailed.emit(nid, f"draw() raised: {type(e).__name__}: {e}")
+            p.restore()
         p.restore()
 
     def drop(self, tool):
@@ -286,10 +302,11 @@ class Display(QWidget):
         shape = (self._pix.height(), self._pix.width())
         for nid, tool, node in reversed(self.drawers):
             pick, result = registry.pick_of(tool), self.frame_results.get(nid, self.results.get(nid))
-            if pick is None or result is None:
+            if pick is None or result is None or nid not in self.places:
                 continue
+            x, y = self.places[nid]
             try:
-                answer = pick(point, shape, self.row, result, node.params)
+                answer = pick((point[0] - x, point[1] - y), shape, self.row, result, node.params)
             except Exception as exc:
                 traceback.print_exc()
                 self.drop(tool)
@@ -384,6 +401,8 @@ class Column(QWidget):
 
 
 class PlayerWindow(QMainWindow):
+    framesCounted = Signal(str, int)    # a video's frame times are read: its path and their rows, never fewer than its stream's frames
+
     def __init__(self, source, title="SIEVE", tools=(), log=None, noted=None):
         """`source` is a list of tools, which become the document, or the path of a saved document.
         The catalogue the Tab menu offers and the document's names index is `tools`, plus the list
@@ -394,6 +413,7 @@ class PlayerWindow(QMainWindow):
         super().__init__()
         self.title, self.log, self.noted = title, log or "stderr", noted
         self.setStyleSheet(theme.sheet())
+        self.framesCounted.connect(self._frames_counted)
         from_file = isinstance(source, (str, os.PathLike))
         modules, self.tools, broken = catalogue(list(tools) if from_file else [*source, *tools])
         if not from_file:
@@ -409,7 +429,9 @@ class PlayerWindow(QMainWindow):
         self._resume = False  # playback to restore when a playhead drag ends
         self.results, self.result_start = {}, 0   # node id -> the series chain's results, and the row they start at
         self.clip_results = {}                    # the same over the clip walk's rows, from row 0; {} when there are none
+        self.window_periods = {}                  # what the window shows of each cut in time it overlaps, as heldwalks.window_periods has it
         self._clip_asked = False                  # a clip walk was asked for and has not finished or been stopped
+        self._of_cuts = (None, None, {})          # (the walked nodes' chain and the count, held_periods, node -> listed_cuts) as _show_held last answered them; the first None once the runs are taken whole
         self.runs = held.Runs(HELD_BYTES, self._result_bytes) # the held runs, the file's and this session's walks'
         self._spared = False                      # the window's results are a held run's, and the worker runs no chain over it
         self._clip_ended = False                  # the clip walk told of its last row and its results have not yet come
@@ -728,6 +750,18 @@ class PlayerWindow(QMainWindow):
                                 and id(self.tools[n.tool]) not in self.display.dropped]
         self._tell_painted()
 
+    def _places(self, shown, row, shape):
+        """Drawer to where, on `shown`'s frame of `shape` at `row`, the first pixel of what its
+        node reads lies, as cut.place_in; a drawer with no place on that frame is left out."""
+        of, plate, out = self.graph.entry(shown), (self.decoder.height, self.decoder.width), {}
+        at = None if of is None else holding(of.cuts, row)
+        for nid, *_ in self.display.drawers:
+            e = self.graph.entry(nid)
+            read = None if e is None else holding(e.reads, row)
+            if at is not None and read is not None and (xy := place_in(read, at, row, shape, plate)) is not None:
+                out[nid] = xy
+        return out
+
     def _tell_painted(self):
         if self.graph is not None:
             self.graph.paints([nid for nid, *_ in self.display.drawers])
@@ -749,6 +783,10 @@ class PlayerWindow(QMainWindow):
         self.canvas.served = {n.id for n in self.doc.nodes if (e := self.graph.entry(n.id)) is not None and e.file is not None}
         self.pane.set_source(self.decoder.path, self.fps, {n.id: self.graph.footage(n.id) for n in self.doc.nodes})
         self.pane.set_cut_files_in_use(self.graph.cut_files_in_use())
+        cutting = {n.id: e for n in self.doc.nodes if (e := self.graph.entry(n.id)) is not None and registry.cuts(e.tool)}
+        self.pane.set_cuts({nid: (e.cuts, self.count, w.src if (by := registry.cut_by(e.tool)) and (w := self.doc.source(nid, by[0])) else None)
+                            for nid, e in cutting.items()})
+        self.timeline.strip.set_periods({nid: [s for r in e.cuts if (s := cut_in_time(r))] for nid, e in cutting.items()})
         for n in self.doc.nodes:
             text = self.graph.standing(n.id)
             self.pane.set_standing(n.id, text)
@@ -769,12 +807,21 @@ class PlayerWindow(QMainWindow):
         if self.worker is not None and self.sender() is self.worker:
             self.timeline.controls.progress.setText(f"the worker stopped, see {self.log}; reopen the video")
 
+    def _frames_counted(self, path, rows):
+        """The open video's frame times have `rows` rows, never fewer than its stream's frames: the
+        count comes down to them where its container claimed more, before any read reaches the end."""
+        if self.decoder is not None and self.decoder.path == path:
+            self.decoder.ends_at(rows)
+            self._shortened(self.decoder.count)
+
     def _shortened(self, count):
         """The stream ended short of its container's claim: everything sized by the count follows
-        the decoder's, and a playhead past the end lands on the last row there is."""
+        the decoder's, a cut made of a run reaching the last row among it, and a playhead past the
+        end lands on the last row there is."""
         if self.graph is None or count == self.count:
             return
         self.count = count
+        self._recut(by_count=True)
         self.timeline.strip.set_count(count, self.fps)
         self.timeline.controls.set_count(count, self.fps)
         if self.pane.video is not None:
@@ -822,19 +869,30 @@ class PlayerWindow(QMainWindow):
 
     def _asked_again(self, nid):
         """The graph synced after a change at `nid`, and the walk begun again only where a key moved."""
-        keys = self._keys()
+        keys, ranges = self._keys(), self._own_ranges()
         self.graph.sync()
         self._restate()
         if self._keys() == keys:
             self.goto(self.row, commit=True)    # nothing is computed differently; a drawer may draw the params as they now are
         elif nid in self.graph.chain:
-            if self._spared or self._given or self.runs.over(*self.window_, self._chain()) is not None:
+            if self._spared or self._given or self._held_over(self._chain()) is not None:
                 self._ask_window(EDIT)  # what was held is no longer the chain's, or a run now is: the walk begins again with what is held now
             self.worker.rerun_series()
             self._show_held()
+        elif nid in self._walked_nodes() and self._own_ranges() == ranges:
+            self._walk_periods_again()
         else:
             self._invalidate()
             self.goto(self.row, commit=True)
+
+    def _walk_periods_again(self):
+        """The plan moved under the cuts in time and under nothing either own range walks: each lane
+        walks the cuts the plan now has that the runs do not hold, and neither own range begins again."""
+        self._restate()
+        self.window_periods = window_periods(self.graph.snapshot(), self.runs, *self.window_)
+        self._show_held()
+        self.worker.recut()
+        self.goto(self.row, commit=True)
 
     def _invalidate(self):
         """The frame tools changed: the walk restarts, and the clip walk's rows are of a graph that is
@@ -998,9 +1056,9 @@ class PlayerWindow(QMainWindow):
         self._unload()
         self.decoder = decoder
         decoder_module.STORE = store.folder
-        decoder_module.read_frame_times_ahead(path)     # the first seek would wait on it: docs/findings/2026-11-15-a-file-whose-times-do-not-count-its-rows.md
+        decoder_module.read_frame_times_ahead(path, lambda rows, path=str(path): self.framesCounted.emit(path, rows))     # the first seek would wait on it: docs/findings/2026-11-15-a-file-whose-times-do-not-count-its-rows.md
         self.stream = Emitter()
-        self.graph = Graph(self.doc, decoder, self.tools, stream=self.stream, **({"memo_bytes": m} if (m := _gb(MEMO_ENV)) else {}))
+        self.graph = Graph(self.doc, decoder, self.tools, stream=self.stream, cut_result=self._cut_result, **({"memo_bytes": m} if (m := _gb(MEMO_ENV)) else {}))
         # the one line a report of this video's run needs beside the log's tracebacks
         print(f"SIEVE {time.strftime('%H:%M:%S')}: opened {path}: {decoder.width}x{decoder.height} at {decoder.fps:.3f} fps, "
               f"{decoder.count} rows claimed, luma plane {'read' if decoder.luma else 'converted'}; "
@@ -1024,6 +1082,8 @@ class PlayerWindow(QMainWindow):
                              ("walked", lambda *row: self._paced("window", *row)),
                              ("failed", self._failed), ("clipWalked", self._clip_walked), ("clipReady", self._clip_ready),
                              ("clipRefused", self._clip_refused), ("walkRefused", ct.progress.setText),
+                             ("periodWalked", self._period_walked), ("periodReady", self._period_ready),
+                             ("windowPeriodWalked", self._window_period_walked), ("windowPeriodReady", self._window_period_ready),
                              ("shortened", self._shortened)):
             getattr(self.worker, signal).connect(self._timed("slot", signal, slot))
         self.worker.finished.connect(self._worker_ended)    # no closure over the worker: one connected to its own signal keeps it, its graph and the memo for good
@@ -1035,9 +1095,14 @@ class PlayerWindow(QMainWindow):
         self.worker.start()
         self.sync()
         self._file = held.File(held.path_for(self.doc.path)) if self.doc.path else None
-        self.runs.take(self._file.load() if self._file is not None else [])
-        self.set_window(0, min(self.count, round(10 * self.fps)), by=HAND)
-        self.goto(0, commit=True)
+        self._take_runs(self._file.load() if self._file is not None else [])
+        self._recut()
+        selected, window = recent.view_of(recent.views_beside(self.noted), self.doc.path) if self.noted and self.doc.path else (None, None)
+        s, n = window or (0, min(self.count, round(10 * self.fps)))
+        self.set_window(s, n, by=HAND)
+        self.goto(self.window_[0], commit=True)
+        if any(n.id == selected for n in self.doc.nodes):
+            self.canvas.select([selected])
         self.toggle_play()  # _unload left it paused
         if self.pane.video is not None:
             self.pane.video.show_source(path, (decoder.width, decoder.height, self.fps, self.count))
@@ -1063,11 +1128,13 @@ class PlayerWindow(QMainWindow):
     def _unload(self):
         if self.worker is None:
             return
+        if self.noted and self.doc is not None and self.doc.path:
+            recent.keep_view(recent.views_beside(self.noted), self.doc.path, self.selection, self.window_)
         if self.playing:
             self.toggle_play()
         self._end_bare()
         self._write_held(wait=True)
-        self.runs.take([])
+        self._take_runs([])
         self._unwritten, self._file = False, None
         self._write_failed.clear()
         self._spared = self._given = False
@@ -1082,7 +1149,7 @@ class PlayerWindow(QMainWindow):
         self.graph.close()
         self.decoder.close()
         self.decoder = self.graph = self.stream = self.worker = None
-        self.results, self.clip_results, self._clip_asked = {}, {}, False
+        self.results, self.clip_results, self.window_periods, self._clip_asked = {}, {}, {}, False
         self.header.set_walking(False)
         self.header.clear_note()
         self.header.setEnabled(False)
@@ -1090,9 +1157,10 @@ class PlayerWindow(QMainWindow):
         self.timeline.controls.progress.setText("no video")
         self.timeline.strip.set_series({})
         self.timeline.strip.set_held([])
+        self.timeline.strip.set_periods({})
         self.row, self.window_ = 0, (0, 0)
         self.plot.set_window(0, 0)
-        self.plot.set_lines({}, 0)
+        self.plot.set_lines({})
         self.plot.set_fields({}, 0)
         self.display.clear()
 
@@ -1181,7 +1249,11 @@ class PlayerWindow(QMainWindow):
     def _show(self, row):
         """The shown node's frame at `row` from the memo, with the overlay node's plane over it and
         the drawing frame nodes' outputs if the memo has those too; False when any is not there
-        yet, so a commit asks the worker for them all."""
+        yet, so a commit asks the worker for them all. At a row outside the shown node's cuts the
+        frame says so, and nothing is asked."""
+        if outside := outside_cuts(self.graph.entry(self.graph.shown), self.graph.shown, row):
+            self.display.clear(outside)
+            return True
         frame = self.graph.peek(row)
         if frame is None:
             return False
@@ -1192,8 +1264,9 @@ class PlayerWindow(QMainWindow):
             if frame is None:
                 return False
         self.display.set_frame(frame, self.graph.key(self.graph.shown))
-        self.display.frame_results = {nid: self.graph.peek(row, nid) for nid, *_ in self.display.drawers
-                                      if nid not in self.graph.chain}
+        self.display.places = self._places(src, row, frame.shape[:2])
+        walked = self._walked_nodes()
+        self.display.frame_results = {nid: self.graph.peek(row, nid) for nid, *_ in self.display.drawers if nid not in walked}
         over = self.graph.over
         plane = None if over is None else self.graph.peek(row, over)
         self.display.set_overlay(plane, None if over is None else self.graph.key(over))
@@ -1204,36 +1277,72 @@ class PlayerWindow(QMainWindow):
         if row == self.row and self.graph is not None:
             self._show(row)
 
+    def _held_over(self, chain):
+        """The chain's results over the window as the runs serve them: those of the clip's walk, or
+        else of the window's own, from its first row to its last; None with neither."""
+        s, n = self.window_
+        got = self.runs.over(s, n, chain, (0, self.count))
+        return got if got is not None else self.runs.over(s, n, chain, (s, s + n))
+
     def _ask_window(self, by=ASKED):
-        """Asks the worker for the window: spared the chain where a held run covers it, whose rows
-        are then the window's results at once; else given what a run holds of the chain's stepped
-        nodes, so only the rest is stepped. The densities the plot shows are folded either way.
-        `by` as set_window's."""
+        """Asks the worker for the window: spared the chain where the runs serve it, by _held_over,
+        whose rows are then the window's results at once; else given what they serve of the chain's
+        stepped nodes to the window's own walk, so only the rest is stepped. The densities the plot
+        shows are folded either way. `by` as set_window's."""
         s, n = self.window_
         chain = self._chain()
-        got = self.runs.over(s, n, chain)
-        part = {} if got is not None else self.runs.part(s, n, chain)
+        got = self._held_over(chain)
+        part = {} if got is not None else self.runs.part(s, n, chain, (s, s + n))
         self._spared, self._given = got is not None, bool(part)
         self.worker.set_window(s, n, self._spared, self._as_given(part), by)
+        self.window_periods = window_periods(self.graph.snapshot(), self.runs, s, n)
+        self._show_lines()
         if got is not None:
             self._series_ready(got, s, self.fps)
         self._show_held()
 
     def _as_given(self, part):
-        """`part`, node to held result, as the worker takes it: node to (raw key, the result's fields
-        as the tool made them, without what the player put beside them, what it says it was made under)."""
-        return {nid: (self.graph.entry(nid).raw_key, {f: v for f, v in r.items() if f not in ("gate", "key", "code")}, r.get("code"))
-                for nid, r in part.items()}
+        return as_given(self.graph.snapshot(), part)
 
-    def _show_held(self):
+    def _take_runs(self, runs):
+        self.runs.take(runs)
+        self._of_cuts = (None, None, {})
+
+    def _show_held(self, moved=None):
         """What is held, or the chain's keys, changed: the strip's bar is over the runs held under
-        the keys the chain now has, and the worker is given what they have of the clip."""
+        the keys the chain now has, and the worker is given what they have of the clip. `moved` is
+        what Runs.hold returned where one run held is all that changed since the last: what is held
+        and listed of a cut in time holding no row of it stands."""
         chain = self._chain()
+        under = None if self.graph is None else (self._chain(self._walked_nodes()), self.count)
+        _, periods, listed = self._of_cuts if moved is not None and under == self._of_cuts[0] else (None, None, {})
+        periods = None if self.worker is None else held_periods(self.graph.snapshot(), self.runs, periods, moved)
+        self._of_cuts = (under, periods, {})
         self.timeline.strip.set_held(self.runs.spans(chain))
         if self.worker is not None:
-            self.worker.give_clip(self.count, self._as_given(self.runs.part(0, self.count, chain)))
+            self.worker.give_clip(self.count, self._as_given(self.runs.part(0, self.count, chain, (0, self.count))))
+            self.worker.give_periods(periods)
+            self.window_periods.update({of: v for of, v in window_periods(self.graph.snapshot(), self.runs, *self.window_).items()
+                                        if v.held and of in self.window_periods})
+            self._show_lines()
         self._show_stale(chain)
         self._show_pinned()
+        self._show_listed(listed, moved)
+
+    def _show_listed(self, was, moved):
+        """Each card of a node below a cut in time is shown its values in every cut it is of, as the
+        runs held under the keys its walk's chain now has serve them; `was`, node to what it was
+        last shown, and `moved` as heldwalks.listed_cuts takes them."""
+        if self.graph is None:
+            return
+        now = self._of_cuts[2]
+        for walk in self.graph.snapshot().timed:
+            chain = self._chain(walk.chain)
+            for nid in walk.chain:
+                w, e = self.pane.widget(nid), self.graph.entry(nid)
+                if w is not None and e is not None and hasattr(w, "show_listed"):
+                    now[nid] = listed_cuts(self.runs, nid, chain, e.cuts, self.count, was.get(nid), moved)
+                    w.show_listed(now[nid], self.fps)
 
     def _show_stale(self, chain):
         """Each card says whether its node is of held.marked, by the tools' files as they lie."""
@@ -1268,7 +1377,7 @@ class PlayerWindow(QMainWindow):
         self._hold.stop()
         if self._writer is not None:
             self._writer.join()
-        self.runs.take([])
+        self._take_runs([])
         self.clip_results = {}
         self._unwritten = False
         self._write_failed.clear()
@@ -1279,11 +1388,16 @@ class PlayerWindow(QMainWindow):
                 self.timeline.controls.progress.setText(f"could not write {os.path.basename(self._file.path)}: {e}")
         self._ask_window(by=HAND)
 
-    def _chain(self):
-        """The series chain as held.Runs is told it; one of no nodes with no video open."""
+    def _chain(self, nodes=None):
+        """The series chain, or `nodes` of the plan, as held.Runs is told it; one of no nodes with no video open."""
         g = self.graph
-        entries = {} if g is None else {nid: e for nid in g.chain if (e := g.entry(nid)) is not None}
-        return held.Chain({nid: e.key for nid, e in entries.items()}, frozenset(nid for nid, e in entries.items() if e.steps))
+        if g is None:
+            return held.Chain({}, frozenset(), {})
+        return held_chain(g.snapshot(), g.chain if nodes is None else nodes)
+
+    def _walked_nodes(self):
+        p = self.graph.snapshot()
+        return [*p.chain, *(nid for w in p.timed for nid in w.chain)]
 
     def _key(self, nid):
         """The key `nid` now has; None for a node the plan does not have."""
@@ -1303,8 +1417,7 @@ class PlayerWindow(QMainWindow):
 
     def _series_ready(self, results, start, fps):
         self.results, self.result_start = results, start
-        self.plot.set_lines({nid: (r["signal"], r.get("gate")) for nid, r in results.items()
-                             if isinstance(r, dict) and "signal" in r}, start)
+        self._show_lines()
         self._restate()
         for nid, result in results.items():
             w = self.pane.widget(nid)
@@ -1419,12 +1532,57 @@ class PlayerWindow(QMainWindow):
                 self._clip_asked = False
                 self.header.set_walking(False)
 
+    def _period_walked(self, done, total, left):
+        """The clip lane walks a cut in time behind the clip's own range: the header says so, and the
+        walk is the clip walk's to stop until the last cut ends."""
+        self._clip_asked = done < total or bool(left)
+        self.header.set_walking(self._clip_asked)
+        self.header.note.setText(f"clip: a period, {done} of {total} rows, {left} periods behind it"
+                                 if self._clip_asked else "")
+
+    def _period_ready(self, results, start, of, fps):
+        """The cut in time `of`, as period_run takes it, walked whole from its first row, `start`:
+        held as a run of that cut under the chain of the timed Walk its nodes are of, with the
+        walked node's rows it was stepped over."""
+        run = period_run(self.graph.snapshot(), results, start, of)
+        if run is not None:
+            self._hold_run(run.start, run.rows, run.results, run.chain, run.cut, of_clip=True, walked=run.walked)
+
+    def _window_period_walked(self, done, total, left):
+        """The window walks a cut in time behind its own range: the progress line says so until the last ends."""
+        ct = self.timeline.controls
+        if done < total or left:
+            ct.progress.setText(f"window: a period, {done} of {total} rows, {left} periods behind it")
+        elif ct.progress.text().startswith("window: a period"):
+            ct.progress.setText("")
+
+    def _window_period_ready(self, results, start, of, fps):
+        """The window's walk of one cut in time, `of` as window_periods keys it; one of a window
+        since left, or of a cut whose walk is held, is dropped."""
+        got = self.window_periods.get(of)
+        if got is not None and not got.held and got.start == start:
+            self.window_periods[of] = Shown(start, results, got.best, False)
+            self._show_lines()
+            self._update_gate()
+            self._show_pinned()
+
+    def _show_lines(self):
+        """The plot is handed each node's line in pieces: the window walk's from its first row, and
+        one a period the window shows, each from the row its results begin at and said best effort
+        where window_periods says so of its node."""
+        lines = {}
+        for start, results, best in [(self.result_start, self.results, ()), *((v.start, v.results, v.best) for v in self.window_periods.values())]:
+            for nid, r in results.items():
+                if isinstance(r, dict) and "signal" in r:
+                    lines.setdefault(nid, []).append((r["signal"], r.get("gate"), start, nid in best))
+        self.plot.set_lines(lines)
+
     def _clip_ready(self, results, start, fps):
         self.clip_results = results
         stands, rows = self._stands()
         if stands and self._clip_ended:
             self._clip_ended = False
-            self._hold_run(0, rows, stands)
+            self._hold_run(0, rows, stands, of_clip=True)
         elif stands:
             self._hold.start()      # a rerun of the chain over a walk long ended: held once the knob is at rest
         self._show_pinned()
@@ -1467,13 +1625,55 @@ class PlayerWindow(QMainWindow):
             if wait:
                 self._writer.join()
 
-    def _hold_run(self, start, rows, results):
-        """Holds `results` as a run where held.Runs.hold does, and one held is written once
-        nothing more has been for HOLD_MS."""
-        if self.runs.hold(start, rows, results, self._chain()):
+    def _hold_run(self, start, rows, results, chain=None, cut=None, of_clip=False, walked=None):
+        """Holds `results` as a run where held.Runs.hold does, under `chain`, the window's with none,
+        inside a cut of rows `cut`, with `walked` as hold takes it, weighed against the others by
+        every walk's chain; and one held is written once nothing more has been for HOLD_MS. A run
+        `of_clip` is a clip walk's."""
+        if moved := self.runs.hold(start, rows, results, chain or self._chain(), cut, worth=self._chain(self._walked_nodes()), walked=walked):
             self._unwritten = True
             self._hold.start()
-            self._show_held()
+            self._show_held(moved)
+            self._recut(resume=of_clip)
+
+    def _cut_result(self, nid, key, within):
+        """What plan.plan asks of a cutting node `nid` cut by a result on a wire over `within`, a
+        cut.Record: the result of the node wired there under `key`, as a held run from row 0 to the
+        clip's last row has it, or for a cut in time a run of that cut walked whole; None with none."""
+        by = registry.cut_by(self.tools.get(self.doc.node(nid).tool))
+        w = by and self.doc.source(nid, by[0])
+        return gate_result(self.runs, w.src, key, within, self.count) if w else None
+
+    def _recut(self, resume=False, by_count=False):
+        """The graph synced where a cutting node is cut by a result on a wire, or any cutting node
+        where `by_count` says the count moved, and where the cuts they then make are not those they
+        made, the walk begun again over them, and the clip walk asked again where it was asked or
+        `resume` says a clip walk's run made them. Where a run held moved only cuts in time, nothing
+        the own ranges walk, each lane walks the cuts now made and neither own range begins again."""
+        if self.graph is None:
+            return
+        of = registry.cuts if by_count else registry.cut_by
+        cutting = lambda: {nid: e.cuts for nid, e in self.graph.snapshot().entries.items() if of(e.tool)}
+        was, ranges = cutting(), self._own_ranges()
+        if not was:
+            return
+        self.graph.sync()
+        if cutting() == was:
+            return
+        if not by_count and self._own_ranges() == ranges:
+            self._walk_periods_again()
+            return
+        walking = self._clip_asked
+        self._restate()
+        self._invalidate()
+        self.goto(self.row, commit=True)
+        if walking or resume:
+            self._toggle_clip()
+
+    def _own_ranges(self):
+        """What the window's and the clip's own ranges walk under: the walked node and each chain node, their keys and cuts."""
+        p = self.graph.snapshot()
+        return {nid: (p.entries[nid].key, p.entries[nid].cuts) for nid in [p.walk, *p.walks, *p.chain] if nid in p.entries}
 
     def _clip_result(self, nid):
         """The clip's result for `nid`: the clip walk's, or the held run's from row 0 that reaches
@@ -1524,8 +1724,11 @@ class PlayerWindow(QMainWindow):
         """The strip draws every shown node that has a signal: the clip's when there is one, walked or
         held, else the window's, and with it the node's signal over the rows of every other run held
         under the key it now has that nothing drawn before it is over, the run that began earliest
-        first as held.Runs.over serves, so no row is drawn twice."""
+        first as held.Runs.over serves, so no row is drawn twice. A node below a cut in time has no
+        range of its own: its signal is over each run held under its key, or with none held over
+        each period the window walked."""
         series, more = {}, {}
+        below = set() if self.graph is None else {nid for w in self.graph.snapshot().timed for nid in w.chain}
         for nid in document.shown(self.selection, self.doc.pinned) if self.doc is not None else []:
             if (r := self._clip_result(nid)) is not None:
                 start = 0
@@ -1534,6 +1737,10 @@ class PlayerWindow(QMainWindow):
             if isinstance(r, dict) and "signal" in r:
                 series[nid] = (r["signal"], start, r.get("gate"))
                 more[nid] = self.runs.beside(nid, self._key(nid), start, len(r["signal"]))
+            elif nid in below and (pieces := self.runs.beside(nid, self._key(nid), 0, 0) or [
+                    (v.results[nid]["signal"], v.start, v.results[nid].get("gate")) for v in self.window_periods.values()
+                    if isinstance(v.results.get(nid), dict) and "signal" in v.results[nid]]):
+                series[nid], more[nid] = pieces[0], pieces[1:]
         self.timeline.strip.set_series(series, self.selection, more)
 
     def _set_length(self, rows):
@@ -1547,14 +1754,16 @@ class PlayerWindow(QMainWindow):
 
     def _update_gate(self):
         """The border is on while every leaf of the series chain, a chain node no chain node reads,
-        gates the playhead's row: each band zeroes what the next reads, so a leaf's gate is its branch's."""
+        gates the playhead's row: each band shuts out of what the next reads the rows it does not keep, so a leaf's gate is its branch's."""
         i = self.row - self.result_start
         chain = self.graph.series_chain() if self.graph is not None else []
         read = {src for _, _, _, _, src in chain}
         gates = [self.results[nid].get("gate") for nid, *_ in chain
                  if nid not in read and isinstance(self.results.get(nid), dict)]
         self.display.set_gate(bool(gates) and all(g is not None and 0 <= i < len(g) and bool(g[i]) for g in gates))
-        self.display.set_state(self.row, self.results, self.result_start)
+        below = shown_at(self.window_periods, self.row)    # a node below a cut in time: its result over the period holding the row
+        self.display.set_state(self.row, {**self.results, **{nid: r for nid, (r, _) in below.items()}}, self.result_start,
+                               {nid: start for nid, (_, start) in below.items()})
 
     SPLIT = 0.5   # the frame's share of the width until the handle is dragged
 

@@ -1,6 +1,7 @@
-"""Frame tool: a static composite of the whole clip, the same image at every row; gray, BGR or mask in, out as in.
+"""Frame tool: a static composite of the rows it runs over, the whole clip or a period, the same image at every row;
+gray, BGR or mask in, out as in.
 
-`samples` rows spaced evenly over the clip are read through the upstream node and folded to one
+`samples` rows spaced evenly over those rows (`frames.rows`) are read through the upstream node and folded to one
 image per pixel by `stat`. `mean` and `max` and `min` stream; `median` holds the sample stack while
 it partitions and takes the lower middle value, so it stays in the frame's dtype. Mean and median
 keep an animal that sat in one place for half the samples, and the composite then carries it: a
@@ -46,7 +47,8 @@ def samples_of(frames, rows):
 
 
 def composite(frames, params):
-    stat, rows = params["stat"], sample_rows(frames.count, params["samples"])
+    first, end = frames.rows
+    stat, rows = params["stat"], first + sample_rows(end - first, params["samples"])
     if stat not in STATS:
         raise ValueError(f"background: no stat {stat!r}; one of {STATS}")
     if stat == "median":

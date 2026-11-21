@@ -118,6 +118,7 @@ class Pane(QWidget):
         self.current = None
         self._src, self._fps, self._of = None, None, {}
         self._in_use = ()     # the cut files the document's nodes would serve, see set_cut_files_in_use
+        self._cuts = {}
         lay = _column(self, 0)
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -209,6 +210,8 @@ class Pane(QWidget):
                     w.set_source(self._of.get(node.id, self._src), self._fps)
                 if hasattr(w, "set_cut_files_in_use"):
                     w.set_cut_files_in_use(self._in_use)
+                if hasattr(w, "show_cuts") and node.id in self._cuts:
+                    w.show_cuts(*self._cuts[node.id])
                 if hasattr(w, "storeChanged"):
                     w.storeChanged.connect(lambda nid=node.id: self.storeChanged.emit(nid))
                 if is_selector(tool) or paths(tool):
@@ -311,6 +314,14 @@ class Pane(QWidget):
         for w in self.widgets.values():
             if hasattr(w, "set_cut_files_in_use"):
                 w.set_cut_files_in_use(self._in_use)
+
+    def set_cuts(self, cuts):
+        """Node to (its cuts, the footage's count of rows, the node it cuts by or None), from the
+        window, for a settings widget with a `show_cuts`. A widget is told only when they changed."""
+        was, self._cuts = self._cuts, dict(cuts)
+        for nid, w in self.widgets.items():
+            if hasattr(w, "show_cuts") and nid in self._cuts and was.get(nid) != self._cuts[nid]:
+                w.show_cuts(*self._cuts[nid])
 
     def set_source(self, path, fps, of=None):
         """The footage every settings widget with a `set_source` writes from or beside: `path`, the

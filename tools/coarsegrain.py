@@ -22,6 +22,10 @@ def grid(h, w, block):
     return -(-h // block), -(-w // block)
 
 
+def reach_in_rows(params):
+    return 0, 0
+
+
 def run(frames, row, params):
     f = frames(row)
     m = params["method"]

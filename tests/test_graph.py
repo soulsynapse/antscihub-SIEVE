@@ -186,7 +186,7 @@ def test_a_read_after_the_node_moved_on_or_a_halt_is_cancelled():
         g.on_event = lambda ev: kinds.append(ev.kind) if ev.node == "add" else None
         with pytest.raises(Cancelled):
             g.compute("add", 0)
-        assert seen == [0, 1, 2, 3] and kinds[-1] == "cancel" and g.memo.get((g.key("add"), 0)) is None
+        assert seen == [0, 1, 2, 3] and kinds[-1] == "cancel" and g.memo.get((g.key("add"), 0, (None, None))) is None
         g.halt = True
         with pytest.raises(Cancelled):
             g.compute("same", 1)
@@ -240,7 +240,7 @@ def test_a_static_node_is_computed_once_held_once_and_peeked_at_any_row():
     for row in range(10):                                                 # a walk past the memo's limit evicts every plane but the static one
         g.compute("add", row)
     assert g.memo.evictions and g.peek(9, "const") is not None and g.compute("const", 5) is not None and const.runs == runs + 1
-    old, fold = (g._plan["const"].raw_key, None), g.density("const", 3)
+    old, fold = (g._plan["const"].raw_key, None, (None, None)), g.density("const", 3)
     g.sync()
     assert g.memo.get(old) is not None and g.density("const", 3) is fold   # a sync that leaves the node alone keeps both pins
     doc.node("const").params["k"] = 2
@@ -358,23 +358,25 @@ def test_rewire_during_walk():
     assert not errors and (g.compute("slow", 0) == g.compute("gray", 0) + 100).all()
 
 
-def test_series_nodes_reading_the_walked_node_are_all_heads():
-    """Two series nodes on gray both run; one on a different frame node is unrun; the fold is shared
-    only when the heads agree on it."""
+def test_series_nodes_reading_any_walked_node_are_all_heads():
+    """Two series nodes on gray and one on a different frame node all run, each part of the plan
+    one walked node; the fold is shared only when the heads of one walked node agree on it."""
     s1, s2, s3 = (tool(n, kind="series", produces=None) for n in ("s1", "s2", "s3"))
     s1.fold = s2.fold = lambda frame: np.asarray([frame.sum()])
     doc = D.from_tools([gray, s1, s2])
     doc.add_node("add", (0, 300)); doc.connect("gray", "add")
     doc.add_node("s3", (0, 400)); doc.connect("add", "s3")
     g = Graph(doc, Dec(), {**TOOLS, "s1": s1, "s2": s2, "s3": s3})
-    assert g.series == "s1" and g.heads == g.chain == ["s1", "s2"] and g.unrun_series == ["s3"] and g.walk == "gray"
+    p = g.snapshot()
+    assert g.series == "s1" and g.heads == g.chain == ["s1", "s2", "s3"] and not g.unrun_series and g.walk == "gray"
+    assert p.walks == ["gray", "add"] and [(q.walk, q.heads) for q in p.parts()] == [("gray", ["s1", "s2"]), ("add", ["s3"])]
     assert g.fold is s1.fold and g.walk_row(2).tolist() == [24 * 3]
     s2.fold = lambda frame: np.asarray([frame.max()])
     g.sync()
     assert g.fold is None and g.walk_row(2).shape == (4, 6)
-    doc.connect("video", "s1")                  # "bgr" into a series node that expects "gray"
+    doc.connect("video", "s1")                  # "bgr" into a series node that expects "gray": it alone stands, the rest walked
     g.sync()
-    assert g.walk is None
+    assert g.heads == ["s2", "s3"] and g.unrun_series == ["s1"] and g.walk == "gray"
 
 
 def test_series_chain_runs_on_from_the_head():
@@ -393,20 +395,25 @@ def test_series_chain_runs_on_from_the_head():
     assert g.chain == ["head", "s1"] and g.unrun_series == ["s2"]
 
 
-def test_a_series_band_gates_the_signal_and_zeroes_what_the_next_reads():
+def test_a_series_band_gates_the_signal_and_hands_the_next_a_gated_out_row_absent():
     """The gate is the player's, not the tool's: the result keeps the tool's signal whole and gains
-    the gate; the feed downstream is zeroed outside the band, inside it once lo is above hi; no
-    band keeps every row; a result without a signal feeds nothing."""
+    the gate; the feed downstream is absent outside the band, inside it once lo is above hi, masked
+    with NaN beneath and never zero, a table's row None; no band keeps every row but a NaN; a
+    result without a signal feeds nothing."""
     sig = np.array([0.0, 2.0, 5.0, 9.0, 20.0], np.float32)
     r, feed = gated({"signal": sig}, (1.0, 10.0), "signal")
     assert r["gate"].tolist() == [False, True, True, True, False] and r["signal"] is sig
-    assert feed.tolist() == [0.0, 2.0, 5.0, 9.0, 0.0]
+    assert feed.tolist() == [None, 2.0, 5.0, 9.0, None] and np.isnan(feed.data[[0, 4]]).all()
     r, feed = gated({"signal": sig}, (10.0, 1.0), "signal")
-    assert r["gate"].tolist() == [True, False, False, False, True] and feed.tolist() == [0.0, 0.0, 0.0, 0.0, 20.0]
-    r, feed = gated({"signal": sig}, None, "signal")
-    assert r["gate"].all() and feed.tolist() == sig.tolist()
-    r, feed = gated({"signal": np.array([-3.0, 0.0, 4.0])}, None, "signal")         # no band gates nothing, a negative row included
-    assert r["gate"].all() and feed.tolist() == [-3.0, 0.0, 4.0]
+    assert r["gate"].tolist() == [True, False, False, False, True] and feed.tolist() == [0.0, None, None, None, 20.0]
+    r, feed = gated({"signal": np.array([-3, 0, 4])}, None, "signal")              # no band gates nothing, a negative row included
+    assert r["gate"].all() and feed.tolist() == [-3.0, 0.0, 4.0] and feed.dtype == np.float64
+    r, feed = gated({"signal": np.array([1.0, np.nan, 0.0], np.float32)}, None, "signal")
+    assert r["gate"].tolist() == [True, False, True] and feed.tolist() == [1.0, None, 0.0]
+    tables = np.empty(3, object)
+    tables[:] = [np.zeros(n, [("cx", "f4")]) for n in (1, 2, 0)]
+    r, feed = gated({"signal": np.array([1.0, 2.0, 0.0], np.float32), "rows": tables}, (1.0, 1.0), "blobs")
+    assert [None if t is None else len(t) for t in feed] == [1, None, None]
     assert gated({"other": 1}, (0.0, 1.0), "signal") == ({"other": 1}, None)
 
 
@@ -433,7 +440,8 @@ def test_one_compute_sees_one_plan():
 
 def test_walk_row_is_the_walked_node_through_the_heads_fold():
     """The worker stacks what the series tool asked for: the row through fold() when it has one, the
-    frame itself when it has not, and None where nothing reaches the walked node."""
+    frame itself when it has not; with no series node fed, none is on the chain and the window walks
+    what is shown, so a frame node's density is folded and no unfed tool is handed a row."""
     head = tool("head", kind="series", produces="signal")
     head.fold = lambda f: np.array([f.sum(), f.size])
     doc = D.from_tools([gray, head])
@@ -443,7 +451,8 @@ def test_walk_row_is_the_walked_node_through_the_heads_fold():
     assert (g.walk_row(3) == g.compute("gray", 3)).all()
     doc.connect("video", "head")
     g.sync()
-    assert g.walk_row(3) is None
+    p = g.snapshot()
+    assert not p.chain and p.unrun == ["head"] and p.walk == p.shown and (g.walk_row(3) == g.compute(p.shown, 3)).all()
 
 
 def test_probe_emits_once_per_run_exclusive_of_what_the_run_reads():
@@ -620,7 +629,7 @@ def test_a_sync_event_carries_the_plan_it_began(tmp_path):
     doc = fan_out()
     doc.pin("same", TOOLS)
     (tmp_path / "cut.mp4").write_bytes(b"cut")
-    cuts = Tool(**{**vars(gray), "cut_file": lambda video, footage, params: tmp_path / "cut.mp4"})
+    cuts = Tool(**{**vars(gray), "cut_extents": lambda params, result: [{}], "cut_file": lambda video, footage, params: tmp_path / "cut.mp4"})
     g = Graph(doc, Dec(), {**TOOLS, "gray": cuts})
     events = []
     g.on_event = events.append
@@ -847,7 +856,8 @@ def test_a_tool_raising_indexerror_fails_the_walk_and_only_the_stream_end_closes
 def test_a_clip_stack_of_tables_is_counted_through_its_object_columns():
     """A row of a table type is counted with the arrays behind its object columns, and at its
     pointers under a type that is no table; the clip walk stops where the running total
-    passes STACK_BYTES, the rows it has standing, where the first row's forecast let it start."""
+    passes STACK_BYTES, the rows it has standing, where the first row's forecast let it start. The
+    forecast is of every walked node's stack together."""
     from PySide6.QtWidgets import QApplication
     from sieve_player import walk as W
     from sieve_player.worker import Worker
@@ -887,6 +897,24 @@ def test_a_clip_stack_of_tables_is_counted_through_its_object_columns():
     assert len(clips[-1]["head"]["signal"]) == walked[-1][0]
     clip = led.view().walks[-1]
     assert (clip.lane, clip.done, clip.length) == ("clip", walked[-1][0], walked[-1][0])       # refused, its record is closed at the rows it had
+
+    from sieve_player.bare import _Told
+    heads = [tool(f"h{i}", kind="series", produces="signal") for i in (1, 2)]
+    for h in heads:
+        h.run = lambda series, params: {"signal": np.zeros(len(series.data), np.float32)}
+    doc = fan_out()
+    for h, frames in zip(heads, ("add", "same")):
+        doc.connect(frames, doc.add_node(h.NAME).id)
+    g = Graph(doc, Dec(), {**TOOLS, **{h.NAME: h for h in heads}})
+    told = _Told()
+    w = W._Walk(g, name="clip", every=1 << 62, progress=_Told(), ready=_Told(), refused=told, failed=_Told(), plan=g.snapshot())
+    W.STACK_BYTES = Dec.count * nbytes("gray", g.compute("add", 0)) * 3 // 2      # one walked node's stack fits, the two together do not
+    try:
+        w.begin(0, Dec.count)
+        w.turn()
+    finally:
+        W.STACK_BYTES = 512 << 20
+    assert told.last and told.last[0].startswith("the clip's stack would be") and not w.stacks
 
 
 def test_a_shown_table_walks_without_a_series_node():
@@ -990,8 +1018,7 @@ def test_standing_says_why_a_node_does_not_run_and_what_its_run_said():
     doc.add_node("s1", (0, 400)); doc.connect("gray", "s1")
     doc.add_node("s3", (0, 500)); doc.connect("add", "s3")
     g = Graph(doc, Dec(), {**TOOLS, "s1": s1, "s3": s3})
-    assert g.standing("video") == g.standing("gray") == g.standing("add") == g.standing("s1") == ""
-    assert g.standing("s3") == "unrun: reads add; the walk is gray, which s1 reads"
+    assert g.standing("video") == g.standing("gray") == g.standing("add") == g.standing("s1") == g.standing("s3") == ""
     doc.disconnect("gray")
     g.sync()
     assert g.standing("gray") == "in is unwired" and g.standing("add") == "in waits on gray"

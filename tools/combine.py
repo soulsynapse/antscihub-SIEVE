@@ -31,6 +31,10 @@ def combine(a, b, method):
     raise ValueError(f"no method {method!r}")
 
 
+def reach_in_rows(params):
+    return 0, 0
+
+
 def run(frames, row, params):
     method = params["method"]
     return combine(frames(row), None if method == "not" else frames(row, "with"), method)

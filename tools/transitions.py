@@ -3,7 +3,8 @@
 
 Either bound blank is any value, so both blank counts every change. The values are compared as
 numbers, and an id reading NaN on either row has no value there and changes nothing. An id absent
-in the row before counts nothing, so an entry is a crossing and never an appearance. A column the
+in the row before counts nothing, so an entry is a crossing and never an appearance. A row absent
+upstream reads NaN, and the row after it counts nothing, as the first row does. A column the
 tables lack raises.
 """
 import numpy as np
@@ -39,6 +40,10 @@ def changed(prev, cur, column, lo=None, hi=None):
     return int(np.count_nonzero(hit))
 
 
+def reach_in_rows(params):
+    return 1, 0
+
+
 def run(series, params):
     out, state = np.zeros(len(series.data), np.float32), None
     for r, t in enumerate(series.data):
@@ -48,6 +53,8 @@ def run(series, params):
 
 
 def step(state, row, i, params):
-    """The state is the row before, None at the first, which counts nothing."""
+    """The state is the row before, None at the first and after an absent row, either of which counts nothing."""
+    if row is None:
+        return None, {"signal": np.float32(np.nan)}
     n = 0 if state is None else changed(state, row, params["column"], _value(params["from"]), _value(params["to"]))
     return row, {"signal": np.float32(n)}

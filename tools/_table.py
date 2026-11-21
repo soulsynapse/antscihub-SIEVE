@@ -89,9 +89,10 @@ def is_table(row):
 
 
 def is_tables(data):
-    """Whether a series' rows are tables, read off the first; False for an empty series or a signal.
-    A Series carries no type, so a tool over both reads the shape."""
-    return len(data) > 0 and is_table(data[0])
+    """Whether a series' rows are tables, read off the first that is not absent; False for an empty
+    series, one absent at every row, or a signal. A Series carries no type, so a tool over both
+    reads the shape."""
+    return is_table(next((r for r in data if r is not None), None))
 
 
 def with_column(table, name, values, unit, of=None):

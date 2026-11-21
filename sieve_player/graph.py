@@ -14,9 +14,11 @@ from typing import NamedTuple
 import numpy as np
 
 from . import density
+from .cut import computed_in
+from .cut import read as read_of_cut
 from .decoder import CLEAR, Decoder, EndOfStream, footage_print_by_stamp, letting_go
 from .document import INPUT, VIDEO_TOOL, video_output
-from .registry import by_name, computed, names_cut_files
+from .registry import by_name, computed, names_cut_files, reach_of
 from .plan import _key, base_key, facts, plan
 from .stream import Emitter
 from .wire import ROWS, is_table, nbytes, own_bytes
@@ -41,28 +43,54 @@ def banded(v, band):
     return out
 
 
+def kept(signal, band):
+    """The rows of `signal` that `band` keeps, every row with None; a NaN, a row absent, is kept by none."""
+    s = np.asarray(signal)
+    present = ~np.isnan(s) if s.dtype.kind == "f" else np.ones(len(s), bool)
+    return present if band is None else present & inband(s, band)
+
+
+def absent_dtype(signal):
+    """The dtype a signal is handed downstream in, one that holds NaN."""
+    return signal.dtype if signal.dtype.kind == "f" else np.dtype(np.float64)
+
+
 def gated(result, band, type):
     """A series node's result as the player hands it out, the node producing `type`: the tool's dict
     with "gate", the rows its signal keeps under the node's band, and `fed`, what a series node
-    downstream reads: where the type is a table, the result's tables, one a row, with each
-    gated-out row emptied, else the signal with the rest zeroed. A result without a signal passes
-    through ungated, and feeds nothing."""
+    downstream reads, every gated-out row absent: where the type is a table, the result's tables,
+    one a row, None at a gated-out row; else the signal as a masked array, a gated-out row masked
+    and NaN beneath, so a tool that drops the mask reads NaN there and never a zero. A result
+    without a signal passes through ungated, and feeds nothing."""
     if not isinstance(result, dict) or "signal" not in result:
         return result, None
     signal = np.asarray(result["signal"])
-    gate = np.ones(len(signal), bool) if band is None else inband(signal, band)
+    gate = kept(signal, band)
     if is_table(type):
         fed = np.empty(len(result[ROWS]), object)
-        fed[:] = [r if g else r[:0] for r, g in zip(result[ROWS], gate)]
+        fed[:] = result[ROWS]
+        fed[~gate] = None
         return {**result, "gate": gate}, fed
-    return {**result, "gate": gate}, np.where(gate, signal, np.zeros((), signal.dtype))
+    return {**result, "gate": gate}, np.ma.MaskedArray(np.where(gate, signal, np.nan).astype(absent_dtype(signal)), mask=~gate)
 
 
 class Ref(NamedTuple):
     """What the memo holds for a result that is another store's array: the key that store holds it
-    under and its row there, None for a static node's."""
+    under, its row there, None for a static node's, and, in the memo, what it read of its cut."""
     key: str
     row: int | None
+    read: tuple = (None, None)
+
+
+def _address(e, row, cut=None):
+    """(the cut `e`'s value at `row` is computed in, by cut.computed_in, `cut` its reader's; the
+    memo key the value is held under): its raw key, its row, None for a static node's, and what it
+    read of that cut, by cut.read, a static node reading its whole extent."""
+    c = computed_in(e.cuts, cut, row)
+    rows = None if c is None else c.extent.rows
+    if e.static:
+        return c, (e.raw_key, None, read_of_cut(rows, (None, None), 0))
+    return c, (e.raw_key, row, read_of_cut(rows, e.reach, row))
 
 
 def _same(v, a):
@@ -205,16 +233,28 @@ class Frames:
     """What a frame tool's run() gets: frames(r) is the output of the node its first input reads,
     at row r, read-only, and frames(r, name) that of another of its INPUTS; frames.type(name) is what the node
     wired into that input produces, for a tool whose EXPECTS admits types its run() must tell
-    apart. `key` changes whenever anything upstream of any input does. It reads through the plan the computation began in, so one run()
+    apart. `key` changes whenever anything upstream of any input does, and `cut` is the record of the cut
+    the node runs in: of its inputs' cuts, the one `cut`, the cut its value is computed in, is or was made
+    from; with none, their one, or None for several. Each read is of the input in that cut, and a read at a row
+    outside the cut's rows or before the footage's first is None, absent as no row is; `rows` is
+    (first, the row past the last) of the cut's rows, (0, count) for the whole footage, and `count`
+    the footage's rows whatever the cut. It reads through the plan the computation began in, so one run()
     sees one graph even if the document is synced under it; but a read made once the node's raw key
     under the current plan differs from the one it began under, or once the graph is halted,
     raises Cancelled, so a run of many reads, a composite over the clip, dies at its next read
-    rather than finishing work nothing will take."""
+    rather than finishing work nothing will take. Made with the `row` its run is asked at, a read of
+    a row outside what the tool's `reach_in_rows` says raises ValueError."""
 
-    def __init__(self, graph, plan, nid, sources, key, types=None):
-        self._graph, self._plan, self._nid, self._sources = graph, plan, nid, sources
+    def __init__(self, graph, plan, nid, sources, key, types=None, row=None, cut=None):
+        self._graph, self._plan, self._nid, self._sources, self._in = graph, plan, nid, sources, cut
+        before, after = reach_of(plan[nid].tool, plan[nid].computed)
+        self._reads = None if row is None else (None if before is None else row - before, None if after is None else row + after)
         self._raw_key, self._types = plan[nid].raw_key, types or {}
         self.key, self.fps, self.count = key, graph.fps, graph.count
+        reads = plan[nid].reads
+        self.cut = computed_in(reads, cut, row) if cut is not None else reads[0] if len(reads) == 1 else None
+        self._within = None if self.cut is None else self.cut.extent.rows
+        self.rows = self._within or (0, self.count)
         self.handed = []        # [(array, Ref)]: each array a read handed the run that a store holds, and where
 
     def named(self, ref, default=None):
@@ -229,9 +269,13 @@ class Frames:
         now = g._plan.get(self._nid)
         if g.halt or now is None or now.raw_key != self._raw_key:
             raise Cancelled(f"{self._nid} at row {row}: the graph moved on")
+        if self._reads is not None and ((self._reads[0] is not None and row < self._reads[0]) or (self._reads[1] is not None and row > self._reads[1])):
+            raise ValueError(f"read row {row}, outside the rows its tool's reach_in_rows says it reads")
+        if row < 0 or (self._within is not None and not self._within[0] <= row < self._within[1]):
+            return None
         src = self._sources[input]
         try:
-            v = g._compute(self._plan, src, row, raw=True, reader=self._nid)
+            v = g._compute(self._plan, src, row, raw=True, reader=self._nid, cut=self._in)
         except Exception as exc:
             if not hasattr(exc, "sieve_node"):
                 exc.sieve_node = src     # a read that fails is the read node's, never the reader's
@@ -240,17 +284,18 @@ class Frames:
         out = v if e is None or e.band is None else banded(v, e.band)
         if out is v and isinstance(v, np.ndarray):
             memoized = e.kind == "frame" and e.file is None
-            self.handed.append((v, Ref(e.raw_key, None if memoized and e.static else row)))
+            self.handed.append((v, Ref(*_address(e, row, self._in)[1]) if memoized else Ref(e.raw_key, row)))
         return out
 
 
 class Series:
     """What a series tool's run() gets: data is (T, ...), the read node stacked over the window, each
     row through the tool's fold() first when it has one; or, for a series node reading another, what
-    `gated` fed from the upstream result: its (T,) signal, or its rows, under the band."""
+    `gated` fed from the upstream result: its (T,) signal, or its rows, under the band. `cut` is the
+    record of the cut the node runs in, None where whoever made the series said none."""
 
-    def __init__(self, data, key, start, fps):
-        self.data, self.key, self.start, self.fps = data, key, start, fps
+    def __init__(self, data, key, start, fps, cut=None):
+        self.data, self.key, self.start, self.fps, self.cut = data, key, start, fps, cut
 
 
 class Readers:
@@ -314,9 +359,11 @@ class Readers:
 
 
 class Graph:
-    def __init__(self, doc, decoder, tools, memo_bytes=4 << 30, stream=None):
-        """`stream` is the Emitter it emits through, one of its own when none is handed."""
-        self.doc, self.decoder = doc, decoder
+    def __init__(self, doc, decoder, tools, memo_bytes=4 << 30, stream=None, cut_result=None):
+        """`stream` is the Emitter it emits through, one of its own when none is handed;
+        `cut_result` is what `plan` is handed under that name at every sync, asked on the thread
+        that syncs."""
+        self.doc, self.decoder, self.cut_result = doc, decoder, cut_result
         self.tools = by_name(tools)
         self.readers = Readers()
         self._lately = []                   # the served files' Decoders in the order they were last read, latest first
@@ -396,14 +443,14 @@ class Graph:
         return self._in_use | self.readers.open_paths()
 
     def sync(self):
-        """Re-read the document: the plan, pure in the document, the tools and what the cutting
-        nodes' tools answer now (see `plan`), and the decoders' output, which the video node's
-        param sets."""
+        """Re-read the document: the plan, pure in the document, the tools, the decoder's count and
+        what the cutting nodes' tools answer now (see `plan`), and the decoders' output, which the
+        video node's param sets. A count lowered since is the caller's to sync again for."""
         output = video_output(self.doc)
         self.decoder.output = output        # a change empties its cache; a read in flight under the old plan is cancelled
         self._base = base_key(self.decoder.footage_print, output)
         self._failing = {}
-        p = plan(self.doc, self.tools, self._base, self.cut_file)
+        p = plan(self.doc, self.tools, self._base, self.cut_file, self.cut_result, footage=self.decoder.footage_print, count=self.decoder.count)
         self._in_use = self._named(p.entries)
         self.readers.keep({e.file[0] for e in p.entries.values() if e.file is not None})
         for d in self.readers.decoders():
@@ -503,11 +550,8 @@ class Graph:
     def _footage(self, entries, nid):
         """`footage` under the plan's `entries`, as (path, footage print)."""
         e = entries.get(nid)
-        while e is not None and e.piece is not None:
-            e = entries[e.piece]
-            if e.file is not None:
-                return e.file
-        return self.decoder.path, self.decoder.footage_print
+        served = next((f for r in (() if e is None else e.reads) if (f := r.served()) is not None), None)
+        return served or (self.decoder.path, self.decoder.footage_print)
 
     @contextmanager
     def scrubbing(self):
@@ -564,15 +608,17 @@ class Graph:
         None when they differ or none has one, so that the stack holds the rows as they are."""
         return self.snapshot().fold
 
-    def walk_row(self, row, p=None):
-        """The walked node at `row` as the worker stacks it: through the heads' shared fold() when
-        they have one, so what the window holds is what the series tools asked for and never the
-        frame; under the Plan `p`, the current one with none. Worker threads only."""
+    def walk_row(self, row, p=None, cut=None, nid=None):
+        """The walked node `nid`, the plan's first with none, at `row` as the worker stacks it:
+        through its heads' shared fold() when they have one, so what the window holds is what the
+        series tools asked for and never the frame; under the Plan `p`, the current one with none,
+        and computed in `cut`, as compute's. Worker threads only."""
         p = p or self.snapshot()
-        nid, fold = p.walk, p.fold
+        nid = p.walk if nid is None else nid
+        fold = p.fold_for(nid)
         self._walks_at = {**self._walks_at, self.stream.lane: row}
         with self.demand("walk", nid):
-            out = self._compute(p.entries, nid, row)
+            out = self._compute(p.entries, nid, row, cut=cut)
         return out if fold is None or out is None else fold(out)
 
     def drawing(self, p=None):
@@ -641,15 +687,17 @@ class Graph:
             e = self._plan.get(nid)
         return e is not None and e.fed
 
-    def compute(self, nid, row, raw=False, demand="display", p=None):
-        """Output of `nid` at `row`, memoized; None for a node nothing reaches. Worker threads only.
+    def compute(self, nid, row, raw=False, demand="display", p=None, cut=None):
+        """Output of `nid` at `row`, memoized; None for a node nothing reaches, and at a row outside
+        the cut it is computed in, absent there as no row is. Worker threads only.
         The whole recursion runs in the Plan `p`, the one current at the call with none, so what
         lands in the memo under a key was computed from the graph that key describes. `raw` is the
         plane before the node's band, what its density counts, so the axis holds while a handle
-        moves. `demand` is what the caller answers, the display unless it says otherwise."""
+        moves. `demand` is what the caller answers, the display unless it says otherwise. `cut` is the
+        cut of the node's that the value is computed in, by cut.computed_in, the one holding `row` with none."""
         plan = (p or self.snapshot()).entries
         with self.demand(demand, nid):
-            return self._compute(plan, nid, row, raw)
+            return self._compute(plan, nid, row, raw, cut=cut)
 
     def progress(self, done, length, stack=None):
         """The walk's progress, `done` rows of `length`, as an event; whoever drives the walk, the
@@ -728,7 +776,7 @@ class Graph:
             if v.key in files:
                 d = self.readers.held(files[v.key])
                 return None if d is None else d.cached(v.row)
-            v = self.memo.get((v.key, v.row), count=False)
+            v = self.memo.get((v.key, v.row, v.read), count=False)
         return v
 
     def _memoized(self, mk):
@@ -739,7 +787,7 @@ class Graph:
         self.memo.counted(v is not None)
         return got, v
 
-    def _compute(self, plan, nid, row, raw=False, reader=None):
+    def _compute(self, plan, nid, row, raw=False, reader=None, cut=None):
         e = plan.get(nid)
         if e is None or e.kind in ("series", "selector") or not e.fed:
             return None
@@ -752,6 +800,9 @@ class Graph:
                 ev[1], ev[2] = v.nbytes, v.shape
             v.setflags(write=False)
             return v
+        c, mk = _address(e, row, cut)
+        if c is None or not c.extent.holds(row):
+            return None
         if e.file is not None:
             d = self._reader(nid, e)
             with self.probe(nid, row, e.raw_key, reader) as ev:
@@ -766,10 +817,9 @@ class Graph:
                 ev[1], ev[2] = v.nbytes, v.shape
             v.setflags(write=False)
             return v if raw or e.band is None else banded(v, e.band)
-        mk = (e.raw_key, None if e.static else row)
         got, v = self._memoized(mk)
         if v is None:
-            frames = Frames(self, plan, nid, e.srcs, e.src_key, e.types)
+            frames = Frames(self, plan, nid, e.srcs, e.src_key, e.types, row, c)
             with self.probe(nid, row, e.raw_key, reader) as ev:
                 try:
                     v = e.tool.run(frames, row, e.computed)
@@ -795,13 +845,16 @@ class Graph:
 
     def density(self, nid, row, p=None):
         """`nid`'s plane at `row` folded to (BINS,) counts, memoized under its own key and probed on
-        the node as a "fold"; None when the output is not a plane; under the Plan `p`, the current
+        the node as a "fold"; None when the output is not a plane or its cut does not hold `row`; under the Plan `p`, the current
         one with none. Worker threads only."""
         plan = (p or self.snapshot()).entries
         e = plan.get(nid)
         if e is None or e.kind != "frame" or not e.fed:
             return None
-        k = (_key(e.raw_key, "fold"), None if e.static else row)
+        c, mk = _address(e, row)
+        if c is None or not c.extent.holds(row):
+            return None
+        k = (_key(e.raw_key, "fold"), *mk[1:])
         v = self.memo.get(k)
         if v is None:
             with self.demand("fold", nid):
@@ -824,11 +877,14 @@ class Graph:
             return None
         if e.kind == "video":
             return self.decoder.cached(row)
+        c, mk = _address(e, row)
+        if c is None or not c.extent.holds(row):
+            return None
         if e.file is not None:
             d = self.readers.held(e.file[0])
             v = None if d is None else d.cached(row)
             return v if v is None or e.band is None else banded(v, e.band)
-        v = self._memoized((e.raw_key, None if e.static else row))[1]
+        v = self._memoized(mk)[1]
         return v if v is None or e.band is None else banded(v, e.band)
 
 

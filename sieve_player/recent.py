@@ -1,6 +1,8 @@
 """The documents lately opened or saved: their paths, each with when it was noted, a line a
 document and newest first, in a file its caller names. FILE is the user's own, which the launcher
-hands the window; a window handed none notes nothing."""
+hands the window; a window handed none notes nothing. Beside it, each document's last view: the
+node selected and the window, kept apart from the document so moving them changes nothing saved."""
+import json
 import os
 import tempfile
 import time
@@ -52,6 +54,52 @@ def note(file, path):
         os.makedirs(os.path.dirname(file), exist_ok=True)
         with open(part, "w", encoding="utf-8", newline="\n") as f:
             f.write("".join(f"{when:.0f}\t{p}\n" if when is not None else f"{p}\n" for p, when in kept))
+        os.replace(part, file)
+    except OSError:
+        pass
+
+
+KEEP_VIEWS = 100
+
+
+def views_beside(file):
+    """The file beside `file` that keeps each document's last view."""
+    return os.path.join(os.path.dirname(file), "views.json")
+
+
+def _views(file):
+    try:
+        with open(file, encoding="utf-8") as f:
+            views = json.load(f)
+        return views if isinstance(views, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def view_of(file, path):
+    """(the node selected, (first row, rows) of the window) as last kept in `file` for the document
+    at `path`, each None where it was not kept; a view that will not read is none."""
+    v = _views(file).get(os.path.normcase(os.path.abspath(path)))
+    if not isinstance(v, dict):
+        return None, None
+    sel, win = v.get("selection"), v.get("window")
+    ok = isinstance(win, list) and len(win) == 2 and all(isinstance(x, int) for x in win)
+    return (sel if isinstance(sel, str) else None), (tuple(win) if ok else None)
+
+
+def keep_view(file, path, selection, window):
+    """Keeps in `file` the view of the document at `path`, the newest of at most KEEP_VIEWS; a file
+    that will not write is left as it was, whole."""
+    views = _views(file)
+    key = os.path.normcase(os.path.abspath(path))
+    views.pop(key, None)
+    views[key] = {"selection": selection, "window": [int(window[0]), int(window[1])]}
+    views = dict(list(views.items())[-KEEP_VIEWS:])
+    part = f"{file}.part"
+    try:
+        os.makedirs(os.path.dirname(file), exist_ok=True)
+        with open(part, "w", encoding="utf-8", newline="\n") as f:
+            json.dump(views, f, indent=1)
         os.replace(part, file)
     except OSError:
         pass

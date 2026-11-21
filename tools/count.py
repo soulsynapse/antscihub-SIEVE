@@ -2,8 +2,9 @@
 
 The walk folds a frame node's rows to their lengths, so the window holds (T, 1) and never the
 tables, and the signal is that column; fed by a series node, track say, the rows arrive as tables
-and the signal is their lengths. The band on the trace is the player's, as reduce's is: handles at
-1 and 1 gate the rows with exactly one record in them.
+and the signal is their lengths. A row absent upstream, gated out there, reads NaN: absent, and
+never the zero of a row where nothing was found. The band on the trace is the player's, as
+reduce's is: handles at 1 and 1 gate the rows with exactly one record in them.
 """
 import numpy as np
 
@@ -18,6 +19,10 @@ def fold(frame):
     return np.array([len(frame)], np.float64)
 
 
+def reach_in_rows(params):
+    return 0, 0
+
+
 def run(series, params):
     out = np.zeros(len(series.data), np.float32)
     for r, row in enumerate(series.data):
@@ -26,7 +31,9 @@ def run(series, params):
 
 
 def step(state, row, i, params):
-    """No state: a row's signal is its table's length or its fold's one number."""
+    """No state: a row's signal is its table's length or its fold's one number, NaN where it is absent."""
+    if row is None:
+        return None, {"signal": np.float32(np.nan)}
     return None, {"signal": np.float32(len(row) if is_table(row) else np.asarray(row, np.float64).reshape(-1)[0])}
 
 

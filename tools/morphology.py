@@ -28,5 +28,9 @@ def morph(mask, method, radius, iterations):
     return cv2.morphologyEx(mask, OPS[method], kernel, iterations=int(iterations))
 
 
+def reach_in_rows(params):
+    return 0, 0
+
+
 def run(frames, row, params):
     return morph(frames(row), params["method"], params["radius"], params["iterations"])

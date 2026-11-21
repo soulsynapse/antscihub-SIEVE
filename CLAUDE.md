@@ -24,7 +24,9 @@
 - `tests/` holds seams and invariants: what a later change elsewhere could break without anyone
   looking. A feature is not pinned to a test for having been built.
 - That a behaviour was seen working once is shown by a one-off script under
-  `docs/findings/experiments/` or a simulation's exit, not by a new test.
+  `docs/findings/experiments/`, not by a new test. A one-off is deterministic as a test is: it
+  takes the worker's turns on its own thread and hands a view what it draws; it opens no player
+  window and polls nothing until done.
 - A spec's `Check:` is a one-off by the same rule and a test only for a seam or an invariant; a
   check already ticked as a test stands.
 - Tests built of wall time carry the `simulation` marker and stay out of the default run;

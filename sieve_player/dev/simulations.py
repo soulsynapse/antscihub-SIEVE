@@ -125,7 +125,7 @@ def _tools(rows):
 def _cut(path):
     """A node that passes its frame through, whose cut file is the clip at `path`."""
     return Tool(NAME="cut", KIND="frame", EXPECTS="bgr", PRODUCES="bgr", run=lambda frames, row, params: frames(row),
-                cut_file=lambda video, footage, params: path)
+                cut_extents=lambda params, result: [{}], cut_file=lambda video, footage, params: path)
 
 
 class _Run:

@@ -40,6 +40,10 @@ def reduced(folded, m):
     return s
 
 
+def reach_in_rows(params):
+    return 0, 0
+
+
 def run(series, params):
     d = np.asarray(series.data, np.float64).reshape(len(series.data), 4)
     return {"signal": np.asarray(reduced(d, params["method"]), np.float32)}

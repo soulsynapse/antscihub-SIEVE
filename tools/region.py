@@ -14,9 +14,10 @@ malformed file, saying what was wrong.
 the file lacks, the whole plate. A box is the shape's extent, grown outward to even
 pixels where the plate allows, so the clip H.264 writes is the cut served. A frame whose shape is
 not the plate's raises with the two shapes, so a region wired after a rescale is seen and never
-scaled, as does a file with no shapes. `pick` answers a click inside a shape, on a frame of the
-plate's shape or of the cut's, with that name as the choice, or with empty when it is the choice
-already; `draw` outlines the shapes on either frame. The card's Draw button opens the geometry
+scaled, as does a file with no shapes. `cut_extents` is the rect `run` cuts, the node's one cut.
+`pick` answers a click inside a shape with that name as the choice, or with empty when it is the
+choice already, and `draw` outlines the shapes; both are in the plate's pixels, where the player
+puts a click and the painter whichever frame is shown. The card's Draw button opens the geometry
 utility, `python -m utilities.geometry`, on the footage the node reads and the file wired into
 `geometry`, in a process of its own; a save there reaches the region through the window's watch on
 the file.
@@ -204,6 +205,14 @@ def key_params(params):
     return {"plate": params["plate"], "rect": served(params)}
 
 
+def cut_extents(params, result):
+    return [{"rect": served(params)}]
+
+
+def reach_in_rows(params):
+    return 0, 0
+
+
 def run(frames, row, params):
     plate = params["plate"]
     if not plate:
@@ -225,25 +234,9 @@ def inside(point, shape):
     return cv2.pointPolygonTest(np.asarray(shape["polygon"], np.float32).reshape(-1, 1, 2), (float(x), float(y)), False) >= 0
 
 
-def origin(shape, params):
-    """(x, y) on the plate of the first pixel of a frame of `shape`, (height, width): the plate's
-    own, or the cut `run` hands out; None for a frame that is neither."""
-    if list(shape) == list(params["plate"]):
-        return 0, 0
-    try:
-        y0, y1, x0, x1 = served(params)
-    except ValueError:
-        return None
-    return (x0, y0) if list(shape) == [y1 - y0, x1 - x0] else None
-
-
 def pick(point, shape, row, result, params):
-    """The choice a click at `point` on a frame of `shape` means: the shape under it, or empty when
-    that is the choice already; None off every shape or on a frame that is not the plate or the cut."""
-    at = origin(shape, params)
-    if at is None:
-        return None
-    point = (point[0] + at[0], point[1] + at[1])
+    """The choice a click at `point` on the plate means: the shape under it, or empty when that is
+    the choice already; None off every shape."""
     for s in reversed(params["shapes"]):
         if inside(point, s):
             return {"choice": "" if s["name"] == params["choice"] else s["name"]}
@@ -254,12 +247,7 @@ def draw(painter, row, result, start, params):
     from PySide6.QtCore import Qt
     from PySide6.QtGui import QColor, QPen
 
-    window = painter.window()
-    at = origin((window.height(), window.width()), params)
-    if at is None:
-        return
     painter.save()
-    painter.translate(-at[0], -at[1])
     painter.setBrush(Qt.NoBrush)
     for s in params["shapes"]:
         chosen = s["name"] == params["choice"]

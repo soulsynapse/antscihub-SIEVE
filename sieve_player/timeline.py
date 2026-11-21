@@ -3,7 +3,9 @@
 and under its handle it draws every series the plot shows at its rows, the selection in its colour
 and the pinned in dimmed ink, each as the plot does over the window: a column covering more than
 one row is their min and max, so nothing is hidden and nothing is added, and the rows the
-selection's gate keeps are washed. A bar along its top edge is over the rows held."""
+selection's gate keeps are washed. A row absent, NaN, is drawn as nothing. A bar along its top edge is over the rows held, and along its
+bottom edge each node that cuts in time has lanes of its own, its periods spans in its colour,
+whichever node is the selection."""
 import numpy as np
 from PySide6.QtCore import QPoint, QPointF, QRect, QRectF, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QIcon, QPainter, QPen, QPixmap, QPolygonF
@@ -25,6 +27,12 @@ class Envelope(NamedTuple):
     lo: np.ndarray
     hi: np.ndarray
     kept: np.ndarray | None
+
+
+def present(values, start, gate):
+    """[(values, start, gate)] of each run of `values`' rows that is not NaN, an absent row being in none."""
+    edges = np.flatnonzero(np.diff(np.concatenate(([0], (~np.isnan(values)).astype(np.int8), [0]))))
+    return [(values[a:b], start + a, None if gate is None else gate[a:b]) for a, b in zip(edges[0::2], edges[1::2])]
 
 
 def envelope(values, start, gate, width, count, selected, top):
@@ -71,6 +79,22 @@ def changed(old, new, width):
     return (max(0, min(a for a, _ in spans)), min(width, max(b for _, b in spans))) if spans else None
 
 
+def lanes(spans):
+    """[(node, [(first, end), ...]), ...] of `spans`, {node: [(first, end), ...]}: each node's
+    spans laid on the fewest lanes on which none overlaps another, nodes in their order and a
+    span on the first lane it fits, one that touches another sharing its lane."""
+    out = []
+    for nid, ss in spans.items():
+        mine = []
+        for first, end in sorted(ss):
+            lane = next((lane for lane in mine if lane[-1][1] <= first), None)
+            if lane is None:
+                mine.append(lane := [])
+            lane.append((first, end))
+        out += [(nid, lane) for lane in mine]
+    return out
+
+
 def timecode(row, fps, places=3):
     s = round(row / fps, places) if fps else 0.0
     return f"{int(s // 60):02d}:{s % 60:0{places + 3}.{places}f}"
@@ -86,6 +110,7 @@ class Strip(QWidget):
     hovered = Signal(int)             # the row under the cursor, -1 on leave
     H, GRAB = 60, 10  # GRAB: height of the handle along the window's top edge
     HELD = 3          # height of the bar along the top edge over the rows held, drawn over the handle where they meet
+    LANE = 3          # height of a lane of periods along the bottom edge, one pixel between lanes
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -95,6 +120,8 @@ class Strip(QWidget):
         self.series, self.selection = {}, None   # node -> (values, start, gate) drawn; the selection's in colour, the rest in ink
         self.more = {}           # node -> its further stretches, see set_series
         self.held = []           # (start, rows) spans drawn along the top edge, see set_held
+        self.lanes = []          # (node, [(first, end), ...]) drawn along the bottom edge, see set_periods
+        self._lanes = None       # (the size and lanes it was painted for, the pixmap of the lanes alone)
         self._mode = None        # "head" | "body" | "place"
         self._draft = None       # (start, length) while a window drag is live
         self._grab = 0           # row offset of the grab point inside the body
@@ -142,6 +169,34 @@ class Strip(QWidget):
         costs the series chain nothing; drawn as a bar along the top edge."""
         self.held = [(int(s), int(n)) for s, n in spans]
         self.update()
+
+    def set_periods(self, spans):
+        """{node: [(first, end), ...]}, the rows of each period a node cuts, drawn along the bottom
+        edge in the node's colour, on as many lanes of its own as its periods overlap."""
+        was = len(self.lanes)
+        self.lanes = lanes({nid: [(int(a), int(b)) for a, b in ss] for nid, ss in spans.items() if ss})
+        if len(self.lanes) != was:
+            self._still = None      # the series' floor moved, so every column of them is drawn again
+        self.update()
+
+    def lane_rect(self, k, first, end):
+        """Where lane `k`, counted up from the bottom edge, draws the rows [first, end)."""
+        x0 = self._x(first)
+        return QRectF(x0, self.height() - 1 - (k + 1) * (self.LANE + 1) + 1, max(1.0, self._x(end) - x0), self.LANE)
+
+    def _lanes_pixmap(self, key):
+        if self._lanes is None or self._lanes[0] != (key, self.lanes):
+            pix = QPixmap(self.size() * key[1])
+            pix.setDevicePixelRatio(key[1])
+            pix.fill(Qt.transparent)
+            p = QPainter(pix)
+            for k, (nid, spans) in enumerate(self.lanes):
+                colour = QColor.fromHsv(theme.hashed_hue(nid), *theme.TYPE_SV)
+                for first, end in spans:
+                    p.fillRect(self.lane_rect(k, first, end), colour)
+            p.end()
+            self._lanes = ((key, self.lanes), pix)
+        return self._lanes[1]
 
     def _redraw(self):
         """The series or the axis they are drawn on changed: the next paint draws what of them is other than it drew."""
@@ -192,6 +247,8 @@ class Strip(QWidget):
             p.fillRect(QRectF(x0, 1, x1 - x0, self.height() - 2), QColor(a.red(), a.green(), a.blue(), 40))
             p.fillRect(QRectF(x0, 1, x1 - x0, self.GRAB), a)
         p.drawPixmap(0, 0, self._still[1])
+        if self.lanes:
+            p.drawPixmap(0, 0, self._lanes_pixmap(key))
         for s, n in self.held:
             x0 = self._x(s)
             p.fillRect(QRectF(x0, 1, max(1.0, self._x(s + n) - x0), self.HELD), qgray(theme.INK_2))
@@ -208,7 +265,7 @@ class Strip(QWidget):
         them in its colour with its gate's wash; a node's stretches share its largest value."""
         out, w = [], max(1, self.width())
         for nid in [n for n in self.series if n != self.selection] + [n for n in self.series if n == self.selection]:
-            segs = [self.series[nid], *self.more.get(nid, [])]
+            segs = [run for seg in [self.series[nid], *self.more.get(nid, [])] for run in present(*seg)]
             top = max((float(values.max()) for values, _, _ in segs if len(values)), default=0.0)
             out += [envelope(values, start, gate if nid == self.selection else None, w, self.count, nid == self.selection, top)
                     for values, start, gate in segs if len(values)]
@@ -233,7 +290,8 @@ class Strip(QWidget):
         its top, the columns its gate keeps washed first. A column that stands alone is a line."""
         a = max(int(np.searchsorted(e.cols, span[0])) - BEYOND, 0)
         b = min(int(np.searchsorted(e.cols, span[1], "right")) + BEYOND, len(e.cols))
-        inner = QRectF(1, self.GRAB + 2, self.width() - 2, self.height() - self.GRAB - 4)
+        floor = len(self.lanes) * (self.LANE + 1)      # the series end above the lanes, which would hide their lowest values
+        inner = QRectF(1, self.GRAB + 2, self.width() - 2, self.height() - self.GRAB - 4 - floor)
         xs = e.cols[a:b] + 0.5
         y = lambda v: inner.bottom() - inner.height() * np.minimum(v[a:b].astype(np.float64) / max(e.top, 1e-6), 1.0)
         lo, hi = y(e.lo), y(e.hi)

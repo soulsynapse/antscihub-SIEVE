@@ -7,7 +7,8 @@ reads a direction where one row is the centroid's jitter; `speed` is their lengt
 their direction in degrees from the x axis with y down, the convention of blobs' `angle` and
 decode's heading, which resolves the 180 degrees `angle` cannot. A record with none that far back
 reads NaN in all four. The signal is the mean speed of the row's records that have one, 0 where
-none does. A table that already has one of the columns raises.
+none does. A row absent upstream is None in `rows` and NaN in the signal, and an id's step across
+it is a step across a gap. A table that already has one of the columns raises.
 """
 from collections import deque
 
@@ -26,7 +27,10 @@ PARAMS = {"span": {"default": 1, "kind": "int", "range": (1, MAX_SPAN)}}
 
 
 def _row(seen, t, r, span):
-    """Row `r`'s table with the motion columns, from and into `seen`: {id: deque of (row, cx, cy)}."""
+    """Row `r`'s table with the motion columns, from and into `seen`: {id: deque of (row, cx, cy)};
+    None for a row absent."""
+    if t is None:
+        return None
     v = np.full((len(t), 2), np.nan)
     for i, b in enumerate(t):
         past = seen.setdefault(int(b["id"]), deque())
@@ -45,6 +49,8 @@ def _row(seen, t, r, span):
 
 
 def _mean_speed(t):
+    if t is None:
+        return np.float32(np.nan)
     return np.float32(np.nanmean(t["speed"])) if len(t) and not np.all(np.isnan(t["speed"])) else np.float32(0.0)
 
 

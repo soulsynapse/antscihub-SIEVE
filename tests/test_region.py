@@ -118,8 +118,6 @@ def test_the_choice_narrows_to_one_record_a_missing_name_reads_as_every_shape_a_
     assert region.pick((20, 20), (H, W), 0, result, params("nest")) == {"choice": ""}
     assert region.pick((45, 20), (H, W), 0, result, params("nest")) == {"choice": "dish"}
     assert region.pick((2, 2), (H, W), 0, result, params()) is None
-    assert region.pick((10, 10), (H // 2, W // 2), 0, result, params()) is None
-    assert region.pick((10, 10), (22, 22), 0, result, params("nest")) == {"choice": ""}        # on the cut, at its place on the plate
 
 
 def test_a_frame_of_another_shape_than_the_plate_is_refused_and_said():

@@ -3,7 +3,8 @@
 `property` is rows (records of the id), displacement (px, first record to last), path (px, summed
 over the id's consecutive records, across any gap), or mean (of `column`, NaN where every value
 is). A blank bound is none; a NaN property never passes. Ids are not renumbered, and a dropped
-id's records leave every row; the signal is the records each row keeps. `column` is read only for
+id's records leave every row; the signal is the records each row keeps. A row absent upstream is
+None in `rows`, NaN in the signal, and holds no record of any id. `column` is read only for
 mean, and one the tables lack raises then.
 """
 import numpy as np
@@ -28,6 +29,8 @@ def properties(rows, property, column="area"):
         raise ValueError(f"tracks-filter: no property {property!r}; one of {PROPERTIES}")
     seen = {}
     for t in rows:
+        if t is None:
+            continue
         if property == "mean" and len(t) and column not in t.dtype.names:
             raise ValueError(f"tracks-filter: no column {column!r}; one of {t.dtype.names}")
         for b in t:
@@ -50,13 +53,13 @@ def keep(rows, property, column, lo, hi):
     lo, hi = bound(lo, -np.inf), bound(hi, np.inf)
     kept = {id for id, v in value.items() if lo <= v <= hi}
     out = np.empty(len(rows), object)
-    out[:] = [t[np.isin(t["id"], list(kept))] if len(t) else t for t in rows]
+    out[:] = [t[np.isin(t["id"], list(kept))] if t is not None and len(t) else t for t in rows]
     return out
 
 
 def run(series, params):
     rows = keep(series.data, params["property"], params["column"], params["lo"], params["hi"])
-    return {"rows": rows, "signal": np.array([len(t) for t in rows], np.float32)}
+    return {"rows": rows, "signal": np.array([np.nan if t is None else len(t) for t in rows], np.float32)}
 
 
 def draw(painter, row, result, start, params):

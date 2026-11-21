@@ -15,10 +15,11 @@ HEADER_LINES = 10   # a module docstring states the module and its seams; past t
 MAY_IMPORT = {
     "document": {"registry"},                     # what a tool declares is the registry's to read, and the registry imports nothing of the player
     "wire": set(),                                # what a wire carries; a tool reads it too, see TOOLS_MAY_IMPORT
-    "plan": {"document", "registry", "wire"},
+    "cut": set(),                                 # a cut's record; the plan builds it and every reader of an extent takes it from there
+    "plan": {"cut", "document", "registry", "wire"},
     "stream": set(),                              # the Event, the kinds and the Emitter; a reader of a dump loads nothing else
     "stats": {"stream"},                          # a reader of the stream; the Graph it is made on is handed to it
-    "graph": {"decoder", "document", "density", "plan", "registry", "stream", "wire"},     # Graph.density folds planes; sync holds a plan; it emits through an Emitter; a served file is read by a Decoder
+    "graph": {"cut", "decoder", "document", "density", "plan", "registry", "stream", "wire"},     # a value is memoized by what it read of its cut; Graph.density folds planes; sync holds a plan; it emits through an Emitter; a served file is read by a Decoder
     "canvas": {"document", "menu", "registry", "theme", "wire"},
     "menu": {"theme"},
     "pane": {"document", "registry", "theme", "widgets"},
@@ -26,9 +27,10 @@ MAY_IMPORT = {
     "plot": {"density", "document", "theme"},       # document.shown is the one statement of what is drawn
     "timeline": {"theme"},
     "decoder": set(),
-    "held": set(),                                # a pickle and a stamp; the window writes and reads it
+    "held": {"cut"},                              # a pickle and a stamp, and what a walk read of its cut; the window writes and reads it
     "walk": {"density", "graph", "registry", "stream", "wire"},         # of the stream, the words a begin says what began it by; no Qt, see below
     "worker": {"decoder", "graph", "stream", "walk"},
+    "heldwalks": {"held", "walk", "wire"},       # the held runs as the walks take them; no Qt, so a one-off drives them without a window
     "bare": {"decoder", "document", "graph", "registry", "walk"},      # the clip walk's own process: no window, no stream's reader, no Qt
     "density": set(),
     "recent": set(),
@@ -294,7 +296,7 @@ def test_a_tools_computing_is_never_handed_a_param_declared_to_change_nothing():
     from sieve_player.graph import Series
     from tools import blobs, track
 
-    facets = {"run", "step", "key_params", "cut_file", "cut_files", "select", "matches"}
+    facets = {"run", "step", "key_params", "cut_extents", "cut_file", "cut_files", "select", "matches"}
     whole = [(path.name, ast.unparse(n)) for path in PKG.glob("*.py") for n in ast.walk(ast.parse(path.read_text(encoding="utf-8")))
              if isinstance(n, ast.Call) and isinstance(n.func, (ast.Attribute, ast.Name)) and ast.unparse(n.func).split(".")[-1] in facets | {"facet"}
              and any(re.search(r"\.params\b", ast.unparse(a)) and "computed(" not in ast.unparse(a) for a in n.args)]
@@ -396,18 +398,21 @@ def test_a_module_header_states_the_module_not_its_history():
 
 
 def test_the_scheduler_alone_begins_a_job_and_nothing_compares_a_generation():
-    """A job's reset is its begin(), called once per job and only from _turn, the ladder; an ask is
-    a flag the ladder takes under the lock, so no generation counter is compared, by a job or by
-    anyone. A job's due-ness is read in one place, _turn, which is both what the loop waits on and
-    what it serves: no job answers `pending`, and nothing outside _turn reads an ask or a `due`."""
+    """A job's reset is its begin(), called once per job and only by the ladder: from _turn, or by
+    a lane's _Legs in a step its due() hands _turn; an ask is a flag the ladder takes under the
+    lock, so no generation counter is compared, by a job or by anyone. A job's due-ness is read in
+    one place, _turn, which is both what the loop waits on and what it serves: no job answers
+    `pending`, and nothing outside _turn reads an ask or a `due`."""
     tree = jobs_tree()
     turn = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == "_turn")
+    legs = next(n for n in ast.walk(tree) if isinstance(n, ast.ClassDef) and n.name == "_Legs")
 
     def begins(node):
         return [n for n in ast.walk(node) if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and n.func.attr == "begin"]
 
-    assert {id(n) for n in begins(tree)} == {id(n) for n in begins(turn)}
-    assert sorted(ast.unparse(n.func.value) for n in begins(turn)) == ["clip", "win"]
+    assert {id(n) for n in begins(tree)} == {id(n) for n in [*begins(turn), *begins(legs)]}
+    assert sorted(ast.unparse(n.func.value) for n in begins(turn)) == ["clip", "self._clip_legs", "self._window_legs", "win"]
+    assert [ast.unparse(n.func.value) for n in begins(legs)] == ["w"]
     compared = [ast.unparse(n) for n in ast.walk(tree) if isinstance(n, ast.Compare)
                 and any(isinstance(o, ast.Attribute) and o.attr in ("gen", "asked") for o in [n.left, *n.comparators])]
     assert not compared, compared

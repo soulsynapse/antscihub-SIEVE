@@ -15,7 +15,8 @@ HEADER_LINES = 10   # a module docstring states the module and its seams; past t
 MAY_IMPORT = {
     "document": {"registry"},                     # what a tool declares is the registry's to read, and the registry imports nothing of the player
     "wire": set(),                                # what a wire carries; a tool reads it too, see TOOLS_MAY_IMPORT
-    "plan": {"document", "registry", "wire"},
+    "cut": set(),                                 # a cut's record; the plan builds it and every reader of an extent takes it from there
+    "plan": {"cut", "document", "registry", "wire"},
     "stream": set(),                              # the Event, the kinds and the Emitter; a reader of a dump loads nothing else
     "stats": {"stream"},                          # a reader of the stream; the Graph it is made on is handed to it
     "graph": {"decoder", "document", "density", "plan", "registry", "stream", "wire"},     # Graph.density folds planes; sync holds a plan; it emits through an Emitter; a served file is read by a Decoder
@@ -294,7 +295,7 @@ def test_a_tools_computing_is_never_handed_a_param_declared_to_change_nothing():
     from sieve_player.graph import Series
     from tools import blobs, track
 
-    facets = {"run", "step", "key_params", "cut_file", "cut_files", "select", "matches"}
+    facets = {"run", "step", "key_params", "cut_extents", "cut_file", "cut_files", "select", "matches"}
     whole = [(path.name, ast.unparse(n)) for path in PKG.glob("*.py") for n in ast.walk(ast.parse(path.read_text(encoding="utf-8")))
              if isinstance(n, ast.Call) and isinstance(n.func, (ast.Attribute, ast.Name)) and ast.unparse(n.func).split(".")[-1] in facets | {"facet"}
              and any(re.search(r"\.params\b", ast.unparse(a)) and "computed(" not in ast.unparse(a) for a in n.args)]

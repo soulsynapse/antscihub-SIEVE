@@ -4,7 +4,7 @@ from types import SimpleNamespace as Tool
 
 import pytest
 
-from sieve_player.registry import FACETS, category, changes_nothing, code_print, defaults, description, discover, hint, imported_print, params, signature
+from sieve_player.registry import FACETS, category, changes_nothing, code_print, cuts, defaults, description, discover, hint, imported_print, params, serves_cut_file, signature
 
 
 def test_the_first_rule_that_fits_decides_the_category():
@@ -25,6 +25,8 @@ def test_over_the_catalogue_csv_is_a_transform():
     assert signature(by_name["blobs"]) == "mask, gray → blobs" and signature(by_name["file"]) == "→ path"
     assert "key_params" in FACETS and hint("key_params").startswith("def key_params(params)")
     assert "key_params" not in {f for e in discover("tools") if e.name == "region" for f in e.missing}
+    assert cuts(by_name["region"]) and cuts(Tool(cut_extents=lambda params, result: [])) and not cuts(Tool(cut_file=lambda *a: None))
+    assert serves_cut_file(by_name["region"]) and not serves_cut_file(Tool(cut_extents=lambda params, result: []))
 
 
 def test_a_param_is_declared_once_and_a_declaration_that_cannot_be_read_is_its_entrys_error(tmp_path):

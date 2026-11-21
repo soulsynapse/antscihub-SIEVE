@@ -1,6 +1,6 @@
 """The plan: what the runtime will compute, read off the document and the tools alone.
 
-`plan()` is pure in the document, the tools, the video key and what `cut_file` answers, with no decoder,
+`plan()` is pure in the document, the tools, the video key and what `cut_file` and `cut_result` answer, with no decoder,
 thread, memo or disk of its own in sight, so a test or `python -m sieve_player doc.json --plan` reads it as a table. The
 Graph calls it at every sync and holds the result under its lock; nothing here is touched after it is built.
 """
@@ -8,9 +8,10 @@ import hashlib
 import json
 from dataclasses import dataclass, field
 
+from .cut import Record
 from .document import INPUT, VIDEO_TOOL, fed, fits, frame_inputs, kind_of, produces, video_output, wants
 from .registry import cuts as tool_cuts
-from .registry import computed, fold_of, is_selector, key_params_of, optional, static, steps
+from .registry import computed, cut_extents_of, fold_of, is_selector, key_params_of, optional, serves_cut_file, static, steps
 from .wire import overlaid
 
 
@@ -41,7 +42,8 @@ class Entry:
     standing: str = ""  # why the node does not run, as the plan sees it; "" when it runs
     types: dict = field(default_factory=dict)   # frame input name -> what the node wired into it produces, or None
     file: tuple | None = None                   # (path, footage print) of the file the node serves in place of its run, or None
-    piece: str | None = None                    # the nearest node upstream whose tool cuts, by its cut_file: the node's inputs are of that node's piece of the plate; None for the plate
+    cuts: tuple = ()                            # the cuts the node's output is of, a cut.Record each: the footage's own where no cutting node is above it
+    reads: tuple = ()                           # the cuts its inputs are of: its own, but for a cutting node, whose cuts are made from them
     steps: bool = False                         # a chain node the walk steps a row at a time; a chain node without it runs whole
     whole_by: str | None = None                 # a stepping tool run whole: the chain node that ended the prefix; None on every other node
     produces: str | None = None                 # the type the node hands out, of wire.TYPES; None for one unresolved or that nothing feeds
@@ -107,11 +109,13 @@ def facts(p, pinned):
             "pinned": list(pinned)}
 
 
-def plan(doc, tools, base, cut_file=None):
-    """The plan for `doc` under `tools`, name to module, with `base` the video node's key and
+def plan(doc, tools, base, cut_file=None, cut_result=None, footage=None):
+    """The plan for `doc` under `tools`, name to module, with `base` the video node's key,
+    `footage` what the cuts' records say they are of, `base` with none, `cut_result(nid)` answering
+    the result a cutting node reads on a wire, None where it reads none, and
     `cut_file(nid, up)` answering (path, footage print) of the file that holds a cutting node's cut
     of the footage it reads, or None: `up` is that footage as the node above answered, None for the
-    video. It is asked only of a node whose tool has the cut_file facet and that reads the video
+    video. It is asked only of a node whose tool cuts, has the cut_file facet and that reads the video
     node or a node that serves a file, and only such a node serves one; with no `cut_file` none
     does. A str for an answer is why a node that is to serve a file has none: the node is not fed,
     nor is anything that reads it, and the str is its standing, so what a document computes is
@@ -120,7 +124,9 @@ def plan(doc, tools, base, cut_file=None):
     is not. Of a node's params the raw key holds those its tool's computing is handed, the
     registry's `computed`, or what its tool's `key_params` answers of them where it has one that
     does not raise. A node that serves its file reads nothing, and its key is the one a document opened on
-    that file gives its video node, so everything below it is keyed as that document's is. A node reads one piece of the plate: one
+    that file gives its video node, so everything below it is keyed as that document's is. A node's cuts are its inputs', and a cutting node's are made from them, one for
+    each extent its tool's `cut_extents` answers of its params and of `cut_result`; a tool that
+    raises there cuts nothing. A node reads one piece of the plate: one
     whose inputs are of two, the plate among them, is not fed, nor is anything that reads it, and
     its standing says which. A chain node is stepped when its tool steps and everything it reads on
     the chain is stepped; the first node that runs whole ends the prefix for every node after it,
@@ -135,7 +141,7 @@ def plan(doc, tools, base, cut_file=None):
             return None
         if nid not in files:
             w, said = doc.source(nid), None
-            if cut_file is not None and w is not None and cuts(nid):
+            if cut_file is not None and w is not None and cuts(nid) and serves_cut_file(tools.get(doc.node(nid).tool)):
                 if doc.node(w.src).tool == VIDEO_TOOL:
                     said = cut_file(nid, None)
                 elif (up := file_of(w.src, (*stack, nid))) is not None:
@@ -202,6 +208,29 @@ def plan(doc, tools, base, cut_file=None):
             pieces[nid] = out
         return pieces[nid]
 
+    root = Record(base if footage is None else footage)
+    reads, made = {}, {}
+
+    def reads_of(nid, stack=()):
+        if nid not in reads:
+            src = next((s for s in wired(nid).values() if s is not None and s not in stack), None)
+            reads[nid] = (root,) if src is None else cuts_of(src, (*stack, nid))
+        return reads[nid]
+
+    def cuts_of(nid, stack=()):
+        if nid not in made:
+            made[nid] = above = reads_of(nid, stack)
+            if cuts(nid):
+                node = doc.node(nid)
+                tool = tools[node.tool]
+                try:
+                    extents = list(cut_extents_of(tool)(computed(tool, node.params), cut_result(nid) if cut_result else None))
+                    file = file_of(nid) if len(above) * len(extents) == 1 else None
+                    made[nid] = tuple(r.cut(**x, file=file) for r in above for x in extents)
+                except Exception:       # a tool's rule is user code: one that fails cuts nothing
+                    pass
+        return made[nid]
+
     def said(piece):
         return "the plate" if piece is None else piece
 
@@ -226,7 +255,7 @@ def plan(doc, tools, base, cut_file=None):
         entries[n.id] = Entry(tool, kind, dict(n.params), n.band, src, key_of(n.id), raw_keys[n.id],
                               up_key(n.id) if src else None, fed(doc, n.id, tools) and n.id not in blocked, srcs, static_of(n.id),
                               types={name: produces(doc, tools, s) if s else None for name, s in srcs.items()},
-                              file=file_of(n.id), piece=next(iter(pieces_of(n.id).values()), None), produces=produces(doc, tools, n.id),
+                              file=file_of(n.id), cuts=cuts_of(n.id), reads=reads_of(n.id), produces=produces(doc, tools, n.id),
                               computed=computed(tool, n.params))
         if kind == "series":
             series.append(n.id)

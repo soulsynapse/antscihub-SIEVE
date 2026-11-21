@@ -13,7 +13,7 @@ assumes only sections above it, and each box's check runs on what the sections a
 
 Words. A *cut* is what a cutting node makes of the footage it reads: a region, a period, or one
 inside another. A *cutting node* is the node that makes it, a `region` or a `period`. The tree's
-name for a cut is `piece` (`plan.py:Entry.piece`).
+name for a cut's record is `cut.Record`, and a node's are `plan.py:Entry.cuts`.
 
 ## Why
 
@@ -115,7 +115,7 @@ file's plate. The record replacing both is a contract change across `plan.py`, `
 (`registry.cuts`), so one that serves no file is no cutting tool; a tool is told the key of what
 it reads (`frames.key`, `graph.Series`) and nothing of the cut it runs in.
 
-- [ ] A cut's record is one value: the footage it is of, the cuts it was made from, and its
+- [x] A cut's record is one value: the footage it is of, the cuts it was made from, and its
   extent on the footage, a period of the footage's rows, a shape in the footage's pixels, or a
   shape a row over a period. Two records intersected are the record of the cut made from both,
   and a row or a place lifted through one is the footage's. What cut a node is of, the file its
@@ -123,9 +123,9 @@ it reads (`frames.key`, `graph.Series`) and nothing of the cut it runs in.
   no module computes its own.
   Check: a seam: a region within a period and a period within a region have one extent, and a
   place lifted through either is the footage's.
-- [ ] The record holds a shape a row though no tool here makes one.
+- [x] The record holds a shape a row though no tool here makes one.
   Check: the same seam, a shape a row intersected with a period.
-- [ ] A tool cuts by saying its cuts: one declaration the registry reads answers the extent of
+- [x] A tool cuts by saying its cuts: one declaration the registry reads answers the extent of
   each cut the node makes, from the node's params and, where its cuts are of a result it reads on
   a wire, from that result. `region` says its by it from a file's shapes, and `period` from a
   file's periods and from a gate, the gate's by the way a later tool whose cuts are a walk's
@@ -133,7 +133,7 @@ it reads (`frames.key`, `graph.Series`) and nothing of the cut it runs in.
   and nothing in the player asks which tool a cutting node is.
   Check: `tests/test_registry.py`; and the record's seam through a tool made for the test that
   cuts by a result it reads and serves no file.
-- [ ] A tool is told the cut it runs in as it is told the key of what it reads: what hands it
+- [x] A tool is told the cut it runs in as it is told the key of what it reads: what hands it
   frames or a series answers that cut's record.
   Check: a seam: a tool below a region within a period, the record it is told against the
   record's own.

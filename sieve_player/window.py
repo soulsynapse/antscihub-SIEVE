@@ -25,6 +25,7 @@ from . import bare, dev, document, filemenu, held, recent, store, theme, wire
 from . import decoder as decoder_module
 from .canvas import Canvas
 from .catalogue import Log
+from .cut import holding, place_in
 from .decoder import Decoder
 from .graph import Graph
 from .ledger import Ledger, row_cost
@@ -169,8 +170,9 @@ class Display(QWidget):
 
     """The frame, the overlay heated over it, the gate border, and each drawing node's draw() on
     top, in node order, each handed its own node's result: a series node's over the window, a
-    frame node's at the row. A left click is offered to the drawers whose pick() claims it, the
-    one drawn last first."""
+    frame node's at the row, the painter moved to where the pixels its node reads lie on the frame.
+    A left click is offered to the drawers whose pick() claims it, the one drawn last first, as a
+    point in those pixels."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -180,6 +182,7 @@ class Display(QWidget):
         self.drawers, self.row, self.results, self.start = [], 0, {}, 0   # drawers: [(node id, tool, node)]
         self.dropped = set()                                       # id() of each tool whose draw() or pick() raised; the window keeps them out of drawers
         self.frame_results = {}                                    # node id -> a drawing frame node's output at the row
+        self.places = {}                                           # node id -> (x, y) on the frame of the first pixel of what a drawer's node reads; one with no place on it is not here
         self.setMinimumSize(160, 120)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
@@ -250,12 +253,17 @@ class Display(QWidget):
         p.setViewport(x, y, pix.width(), pix.height())
         p.setWindow(0, 0, self._pix.width(), self._pix.height())
         for nid, tool, node in self.drawers:
+            if nid not in self.places:
+                continue
+            p.save()
+            p.translate(*self.places[nid])
             try:
                 tool.draw(p, self.row, self.frame_results.get(nid, self.results.get(nid)), self.start, node.params)
             except Exception as e:
                 traceback.print_exc()
                 self.drop(tool)
                 self.drawFailed.emit(nid, f"draw() raised: {type(e).__name__}: {e}")
+            p.restore()
         p.restore()
 
     def drop(self, tool):
@@ -286,10 +294,11 @@ class Display(QWidget):
         shape = (self._pix.height(), self._pix.width())
         for nid, tool, node in reversed(self.drawers):
             pick, result = registry.pick_of(tool), self.frame_results.get(nid, self.results.get(nid))
-            if pick is None or result is None:
+            if pick is None or result is None or nid not in self.places:
                 continue
+            x, y = self.places[nid]
             try:
-                answer = pick(point, shape, self.row, result, node.params)
+                answer = pick((point[0] - x, point[1] - y), shape, self.row, result, node.params)
             except Exception as exc:
                 traceback.print_exc()
                 self.drop(tool)
@@ -727,6 +736,18 @@ class PlayerWindow(QMainWindow):
                                 if n.id in self.doc.drawn and n.tool in self.tools and registry.draws(self.tools[n.tool])
                                 and id(self.tools[n.tool]) not in self.display.dropped]
         self._tell_painted()
+
+    def _places(self, shown, row, shape):
+        """Drawer to where, on `shown`'s frame of `shape` at `row`, the first pixel of what its
+        node reads lies, as cut.place_in; a drawer with no place on that frame is left out."""
+        of, plate, out = self.graph.entry(shown), (self.decoder.height, self.decoder.width), {}
+        at = None if of is None else holding(of.cuts, row)
+        for nid, *_ in self.display.drawers:
+            e = self.graph.entry(nid)
+            read = None if e is None else holding(e.reads, row)
+            if at is not None and read is not None and (xy := place_in(read, at, row, shape, plate)) is not None:
+                out[nid] = xy
+        return out
 
     def _tell_painted(self):
         if self.graph is not None:
@@ -1192,6 +1213,7 @@ class PlayerWindow(QMainWindow):
             if frame is None:
                 return False
         self.display.set_frame(frame, self.graph.key(self.graph.shown))
+        self.display.places = self._places(src, row, frame.shape[:2])
         self.display.frame_results = {nid: self.graph.peek(row, nid) for nid, *_ in self.display.drawers
                                       if nid not in self.graph.chain}
         over = self.graph.over

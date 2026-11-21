@@ -17,13 +17,13 @@ _HINTS = {
     "KIND": 'KIND = "frame"  # or "series", or "same": the kind of the node wired into its first input',
     "EXPECTS": 'EXPECTS = "gray"  # or a tuple; the report lists the types in use',
     "PRODUCES": 'PRODUCES = "gray"  # or "same": out as in',
-    "PARAMS": 'PARAMS = {"radius": {"default": 3, "kind": "int", "range": (1, 15)}}  # every param, once, in the order of its rows: its default, the kind of its value among KINDS, and "range" for an int or a float, "decimals" for a float, "choices" for a choice with "unlisted": True where a value outside them is taken; one of a default alone has no row; "changes result": False for one a draw or a card alone reads: it is in no key, and run, step, key_params, cut_file, cut_files, select and matches are handed the params without it',
+    "PARAMS": 'PARAMS = {"radius": {"default": 3, "kind": "int", "range": (1, 15)}}  # every param, once, in the order of its rows: its default, the kind of its value among KINDS, and "range" for an int or a float, "decimals" for a float, "choices" for a choice with "unlisted": True where a value outside them is taken; one of a default alone has no row; "changes result": False for one a draw or a card alone reads: it is in no key, and run, step, key_params, cut_extents, cut_file, cut_files, select and matches are handed the params without it',
     "run": "def run(frames, row, params): ...",
     "fold": "def fold(frame): ...  # a series tool: what the walk stacks per row in place of the frame",
     "step": "def step(state, row, i, params): ...  # a series tool that steps: (the next state, {field: this row's share of run's result}); state is None at the first row",
     "settings": "def settings(parent=None): ...  # a card of the tool's own; unsaid, the player makes the widget of PARAMS",
-    "draw": "def draw(painter, row, result, start, params): ...",
-    "pick": "def pick(point, shape, row, result, params): ...  # a drawer answers a left click at point, (x, y) in the displayed frame's pixels, on a frame of shape (height, width): the params to merge, or None for a click it does not claim",
+    "draw": "def draw(painter, row, result, start, params): ...  # painted over the shown frame, the painter's coordinates the pixels of what the node reads",
+    "pick": "def pick(point, shape, row, result, params): ...  # a drawer answers a left click at point, (x, y) in the pixels of what the node reads, on a shown frame of shape (height, width): the params to merge, or None for a click it does not claim",
     "INPUTS": 'INPUTS = {"bg": "gray"}  # frame inputs after the first: name -> the types it expects; run reads one as frames(row, name)',
     "OPTIONAL": 'OPTIONAL = ("bg",)  # the INPUTS the node computes without; run reads an unwired one as None',
     "STATIC": "STATIC = True  # the same output at every row: computed once per key, held once, counted per change",
@@ -31,7 +31,8 @@ _HINTS = {
     "key_params": "def key_params(params): ...  # what of params run reads, a JSON value, the same for any two params under which run hands out the same result of the same input: the node is keyed by it in place of its params",
     "select": "def select(folder, params): ...  # a selector: the path it picks under folder, or None",
     "matches": "def matches(folder, params): ...  # a selector: every path its rule matches, picked first",
-    "cut_file": "def cut_file(video, footage, params): ...  # the node cuts the video into files: the path of the file the tool wrote of what run hands out of video, whose decoder.footage_print is footage, under params, exact or lossy as the tool wrote it, or None where the node is to run; FileNotFoundError, saying why, where the params say to serve a file and there is none, and the node then does not run; a node that reads the video node, or a node that serves a file, in which case video is that file, serves it; never a file written over",
+    "cut_extents": 'def cut_extents(params, result): ...  # the node cuts what it reads: the extent of each cut it makes, a list of dicts, each of "rows", (first, the row past the last) of the rows of the footage, of "rect", (y0, y1, x0, x1) in the pixels of the frame it reads, of both, or of "rows" and "rects", one rect a row; result is what the node reads on a wire where its cuts are of one, else None; it need write no file',
+    "cut_file": "def cut_file(video, footage, params): ...  # a node that cuts serves a file: the path of the file the tool wrote of what run hands out of video, whose decoder.footage_print is footage, under params, exact or lossy as the tool wrote it, or None where the node is to run; FileNotFoundError, saying why, where the params say to serve a file and there is none, and the node then does not run; a node that reads the video node, or a node that serves a file, in which case video is that file, serves it; never a file written over",
     "cut_files": "def cut_files(video, footage, params): ...  # beside cut_file: every file the node would serve under some choice of its params",
 }
 FACETS = tuple(_HINTS)
@@ -182,7 +183,17 @@ def is_selector(tool):
 
 
 def cuts(tool):
-    """Whether the tool cuts the footage into files, by its cut_file."""
+    """Whether the tool cuts what it reads, by its cut_extents."""
+    return probe(tool, "cut_extents") is not None
+
+
+def cut_extents_of(tool):
+    """The tool's cut_extents, or None."""
+    return probe(tool, "cut_extents")
+
+
+def serves_cut_file(tool):
+    """Whether the tool names a file that holds its cut, by its cut_file."""
     return probe(tool, "cut_file") is not None
 
 
@@ -223,7 +234,7 @@ def matches_of(tool):
 READERS = {
     "NAME": ("name", "by_name"), "KIND": ("kind",), "EXPECTS": ("expects", "is_selector"),
     "PRODUCES": ("produces", "is_selector"), "PARAMS": ("params", "defaults", "changes_nothing", "computed"), "settings": ("settings_of",), "INPUTS": ("inputs",),
-    "OPTIONAL": ("optional",), "STATIC": ("static",), "PATHS": ("paths",), "cut_file": ("cuts",),
+    "OPTIONAL": ("optional",), "STATIC": ("static",), "PATHS": ("paths",), "cut_extents": ("cuts", "cut_extents_of"), "cut_file": ("serves_cut_file",),
     "cut_files": ("names_cut_files",), "step": ("steps",), "draw": ("draws",), "fold": ("fold_of",),
     "key_params": ("key_params_of",), "pick": ("pick_of",), "matches": ("matches_of",),
 }
@@ -382,4 +393,4 @@ def signature(tool):
 
 __all__ = ["MARKER", "FACETS", "WIDGET_FACETS", "READERS", "KINDS", "Entry", "is_tool", "probe", "hint", "discover", "code_print", "imported_print", "types", "CATEGORIES", "category",
            "description", "signature", "name", "by_name", "kind", "expects", "produces", "params", "defaults", "changes_nothing", "computed", "settings_of", "inputs", "optional", "static", "paths",
-           "is_selector", "cuts", "names_cut_files", "steps", "draws", "fold_of", "key_params_of", "pick_of", "matches_of"]
+           "is_selector", "cuts", "cut_extents_of", "serves_cut_file", "names_cut_files", "steps", "draws", "fold_of", "key_params_of", "pick_of", "matches_of"]

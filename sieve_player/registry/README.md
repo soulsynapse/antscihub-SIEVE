@@ -25,7 +25,7 @@ choices. The player makes a node's first params and a plain settings widget of i
 that says a kind, in the tool's order; a tool with a card of its own says `settings` and builds
 its rows of the same declaration. A param a `draw` or a card alone reads says
 `"changes result": False`: it is in no key, so a change to it computes nothing again, and the
-player hands `run`, `step`, `key_params`, `cut_file`, `cut_files`, `select` and `matches` the
+player hands `run`, `step`, `key_params`, `cut_extents`, `cut_file`, `cut_files`, `select` and `matches` the
 params without it, so a tool that reads one there raises and no result follows it. One left
 unsaid is in the key and handed over. A tool whose rule a mark cannot say, a param read only
 under some value of another, says `key_params`, which answers in place of the params and is
@@ -76,7 +76,9 @@ category beside each tool.
 - `static(tool)`
 - `paths(tool)` -- `PATHS`, name -> loader
 - `is_selector(tool)`
-- `cuts(tool)` -- whether it has `cut_file`
+- `cuts(tool)` -- whether it has `cut_extents`: it cuts what it reads, whether or not it writes a file
+- `cut_extents_of(tool)` -- its `cut_extents`, or None
+- `serves_cut_file(tool)` -- whether it has `cut_file`
 - `names_cut_files(tool)` -- whether it has `cut_files`
 - `steps(tool)`
 - `draws(tool)`

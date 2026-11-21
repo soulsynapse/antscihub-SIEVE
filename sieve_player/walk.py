@@ -395,6 +395,10 @@ def run_chain(graph, stack, start, done, folds, stepped=None, p=None):
         own = imported_print(p.entries[nid].tool)
         return None if up is None else {**up, **({} if own is None else {nid: own})}
 
+    def told(nid):
+        reads = p.entries[nid].reads
+        return reads[0] if len(reads) == 1 else None
+
     for nid, tool, params, band, src in chain:
         if stepped is not None and nid in stepped:
             results[nid], feeds[nid] = stepped[nid]
@@ -411,9 +415,9 @@ def run_chain(graph, stack, start, done, folds, stepped=None, p=None):
                 if held is None or held[0] is not buffer or held[1] != len(stack):
                     held = (buffer, len(stack), np.stack([fold(row) for row in stack]) if len(stack) else np.zeros((0, 0)))
                     folds[id(fold)] = held
-            series = Series(stack if fold is None else held[2], key[src], start, fps)
+            series = Series(stack if fold is None else held[2], key[src], start, fps, told(nid))
         elif feeds.get(src) is not None:
-            series = Series(feeds[src], key[src], start, fps)
+            series = Series(feeds[src], key[src], start, fps, told(nid))
         else:
             graph.note(nid, f"{src} handed out no signal")
             continue

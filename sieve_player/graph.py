@@ -205,7 +205,8 @@ class Frames:
     """What a frame tool's run() gets: frames(r) is the output of the node its first input reads,
     at row r, read-only, and frames(r, name) that of another of its INPUTS; frames.type(name) is what the node
     wired into that input produces, for a tool whose EXPECTS admits types its run() must tell
-    apart. `key` changes whenever anything upstream of any input does. It reads through the plan the computation began in, so one run()
+    apart. `key` changes whenever anything upstream of any input does, and `cut` is the record of the cut
+    the node runs in, None for a node whose inputs are of several. It reads through the plan the computation began in, so one run()
     sees one graph even if the document is synced under it; but a read made once the node's raw key
     under the current plan differs from the one it began under, or once the graph is halted,
     raises Cancelled, so a run of many reads, a composite over the clip, dies at its next read
@@ -215,6 +216,7 @@ class Frames:
         self._graph, self._plan, self._nid, self._sources = graph, plan, nid, sources
         self._raw_key, self._types = plan[nid].raw_key, types or {}
         self.key, self.fps, self.count = key, graph.fps, graph.count
+        self.cut = plan[nid].reads[0] if len(plan[nid].reads) == 1 else None
         self.handed = []        # [(array, Ref)]: each array a read handed the run that a store holds, and where
 
     def named(self, ref, default=None):
@@ -247,10 +249,11 @@ class Frames:
 class Series:
     """What a series tool's run() gets: data is (T, ...), the read node stacked over the window, each
     row through the tool's fold() first when it has one; or, for a series node reading another, what
-    `gated` fed from the upstream result: its (T,) signal, or its rows, under the band."""
+    `gated` fed from the upstream result: its (T,) signal, or its rows, under the band. `cut` is the
+    record of the cut the node runs in, None where whoever made the series said none."""
 
-    def __init__(self, data, key, start, fps):
-        self.data, self.key, self.start, self.fps = data, key, start, fps
+    def __init__(self, data, key, start, fps, cut=None):
+        self.data, self.key, self.start, self.fps, self.cut = data, key, start, fps, cut
 
 
 class Readers:
@@ -403,7 +406,7 @@ class Graph:
         self.decoder.output = output        # a change empties its cache; a read in flight under the old plan is cancelled
         self._base = base_key(self.decoder.footage_print, output)
         self._failing = {}
-        p = plan(self.doc, self.tools, self._base, self.cut_file)
+        p = plan(self.doc, self.tools, self._base, self.cut_file, footage=self.decoder.footage_print)
         self._in_use = self._named(p.entries)
         self.readers.keep({e.file[0] for e in p.entries.values() if e.file is not None})
         for d in self.readers.decoders():
@@ -503,11 +506,8 @@ class Graph:
     def _footage(self, entries, nid):
         """`footage` under the plan's `entries`, as (path, footage print)."""
         e = entries.get(nid)
-        while e is not None and e.piece is not None:
-            e = entries[e.piece]
-            if e.file is not None:
-                return e.file
-        return self.decoder.path, self.decoder.footage_print
+        served = next((f for r in (() if e is None else e.reads) if (f := r.served()) is not None), None)
+        return served or (self.decoder.path, self.decoder.footage_print)
 
     @contextmanager
     def scrubbing(self):

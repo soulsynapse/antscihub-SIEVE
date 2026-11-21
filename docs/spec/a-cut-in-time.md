@@ -341,8 +341,7 @@ Facts to weigh. `graph.gated` hands a series node downstream a gated-out row as 
 an empty table, so a sum, a mean or a count below it counts a row no one measured as a measured
 zero, and an empty table reads as a row where nothing was found; `walk.py` is its one caller.
 `walk._Walk.step` hands a stepping tool `None` where nothing feeds it. `smooth` reads the zeros,
-by its own docstring. `plot.py:Plot.set_lines` hands every line one start, where the strip takes
-one a node.
+by its own docstring.
 
 - [x] A row outside a node's extent is absent to what reads it: no node is computed or stepped
   at it, and no table written holds a record of it.
@@ -355,12 +354,6 @@ one a node.
   documents in use are walked again, as `docs/spec/what-a-node-declares.md`'s Keys that move once.
   Check: a one-off over the crossings clip: `count` below a band, its result over a gated-out run
   against the same rows read as zero.
-- [ ] The plot draws each node from the row its result begins at in the window, so a node below a
-  `period` has a line over each of its periods' rows in the window, each from its own first row,
-  none between them, and two where two periods overlap; the frame shown at a row outside the shown
-  node's extent says so in place of a frame.
-  Check: a one-off offscreen: the window over several periods, a node below them, each line's
-  first row and the frame at the row before one.
 
 ## Every period walked
 
@@ -373,7 +366,9 @@ their own first row (`walk._Walk`), and the worker has a lane for each. A gate c
 of periods over a clip, each a walk of its own. `held.Runs` drops the oldest run past its limit,
 and a walk closes at `walk.STACK_BYTES`. The runs of as many periods under that limit, and the
 periods a band makes of a signal, are measured in that finding; a walk of many short ranges
-against one of the same rows is not.
+against one of the same rows is not. The window walks and shows the chain of nodes no cut in time
+feeds, so a node below a `period` draws no line there; `plot.py:Plot.set_lines` hands every line
+one start, where the strip takes one a node.
 
 - [x] Kendrick: a node's result below a `period` is each period walked alone, from the period's
   first row to its last. It is the caveman way, the period cut to a clip of its own and the
@@ -418,6 +413,12 @@ against one of the same rows is not.
   without buying an unbounded walk.
   Check: a one-off over the crossings clip: the window over several periods, `track` below them,
   held and not, each against its period walked alone and what the window says of each.
+- [ ] The plot draws each node from the row its result begins at in the window, so a node below a
+  `period` has a line over each of its periods' rows in the window, each from its own first row,
+  none between them, and two where two periods overlap; the frame shown at a row outside the shown
+  node's extent says so in place of a frame.
+  Check: a one-off offscreen: the window over several periods, a node below them, each line's
+  first row and the frame at the row before one.
 
 ## Not here
 

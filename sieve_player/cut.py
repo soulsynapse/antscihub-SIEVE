@@ -110,6 +110,14 @@ def read(rows, reach, row):
             end if after is None or row + after >= end else None)
 
 
+def cut_in_time(record):
+    """(first, the row past the last) of the rows `record` cuts from the one cut it was made
+    from, or None where it cuts no rows of it or was made from two."""
+    if len(record.made_from) != 1 or record.extent.rows is None:
+        return None
+    return None if record.extent.rows == record.made_from[0].extent.rows else record.extent.rows
+
+
 def holding(records, row):
     """The first of `records` whose rows hold `row`, or None."""
     return next((r for r in records if r.extent.holds(row)), None)

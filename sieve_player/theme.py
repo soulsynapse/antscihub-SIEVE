@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import ctypes
 import sys
+import zlib
 from functools import lru_cache
 from pathlib import Path
 
@@ -77,11 +78,18 @@ EXCLUDED = QColor(0, 0, 0, 72)  # the values a trace's band shuts out
 HELD = {"KB": GATE, "MB": QColor(245, 204, 72), "GB": RED, "TB": RED}   # a size's badge by its unit; one in bytes is a badge's own gray
 DENSITY = ((32, 110, 138), (70, 180, 200), (190, 240, 248))   # a density's ramp above its field: v2's cyan, never HEAT, which is a value not a count
 TYPE_HUES = {"bgr": 30, "gray": 165, "mask": 210, "path": 275}   # a connector's hue per product type; a type not here is hashed
-TYPE_SV = (150, 225)            # every connector's saturation and value, so the hue alone says the type
+TYPE_SV = (150, 225)            # every connector's saturation and value, so the hue alone says the type; a cut's spans on the strip share it
 MONO = ["Cascadia Mono", "Consolas", "Menlo", "DejaVu Sans Mono", "monospace"]
 FAMILIES = ["Inter", "Segoe UI Variable Text", "Segoe UI", "SF Pro Text", "Helvetica Neue", "Helvetica", "Arial"]
 HERE = Path(__file__).parent
 FONTS, GLYPHS = HERE / "fonts", HERE / "glyphs"   # bundled, so Mac and Windows render alike
+
+
+def hashed_hue(name: str) -> int:
+    """A hue for `name`, the same in every session, out of the red and the accent bands so it
+    never reads as a mark."""
+    h = zlib.crc32(name.encode()) % 240
+    return 35 + h if h < 160 else 255 + (h - 160)
 
 
 def gray(v: int) -> str:

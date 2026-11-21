@@ -25,7 +25,7 @@ from . import bare, dev, document, filemenu, held, recent, store, theme, wire
 from . import decoder as decoder_module
 from .canvas import Canvas
 from .catalogue import Log
-from .cut import holding, place_in
+from .cut import cut_in_time, holding, place_in
 from .decoder import Decoder
 from .graph import Graph
 from .ledger import Ledger, row_cost
@@ -770,8 +770,10 @@ class PlayerWindow(QMainWindow):
         self.canvas.served = {n.id for n in self.doc.nodes if (e := self.graph.entry(n.id)) is not None and e.file is not None}
         self.pane.set_source(self.decoder.path, self.fps, {n.id: self.graph.footage(n.id) for n in self.doc.nodes})
         self.pane.set_cut_files_in_use(self.graph.cut_files_in_use())
-        self.pane.set_cuts({n.id: (e.cuts, self.count, w.src if (by := registry.cut_by(e.tool)) and (w := self.doc.source(n.id, by[0])) else None)
-                            for n in self.doc.nodes if (e := self.graph.entry(n.id)) is not None and registry.cuts(e.tool)})
+        cutting = {n.id: e for n in self.doc.nodes if (e := self.graph.entry(n.id)) is not None and registry.cuts(e.tool)}
+        self.pane.set_cuts({nid: (e.cuts, self.count, w.src if (by := registry.cut_by(e.tool)) and (w := self.doc.source(nid, by[0])) else None)
+                            for nid, e in cutting.items()})
+        self.timeline.strip.set_periods({nid: [s for r in e.cuts if (s := cut_in_time(r))] for nid, e in cutting.items()})
         for n in self.doc.nodes:
             text = self.graph.standing(n.id)
             self.pane.set_standing(n.id, text)
@@ -1114,6 +1116,7 @@ class PlayerWindow(QMainWindow):
         self.timeline.controls.progress.setText("no video")
         self.timeline.strip.set_series({})
         self.timeline.strip.set_held([])
+        self.timeline.strip.set_periods({})
         self.row, self.window_ = 0, (0, 0)
         self.plot.set_window(0, 0)
         self.plot.set_lines({}, 0)

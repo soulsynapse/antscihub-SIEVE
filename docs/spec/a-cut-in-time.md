@@ -259,9 +259,9 @@ Open: the file's form. Recommended, and a session may build on it: JSON as the g
 - [x] The periods a gate gave a `period` are written at the user's ask to a file of the file's
   form, and a `period` fed that file has the same periods.
   Check: a one-off over the crossings clip: a gate's periods written, read back and compared.
-- [ ] A `period` cuts the footage into its periods, each a cut of its own, however many it is
+- [x] A `period` cuts the footage into its periods, each a cut of its own, however many it is
   fed; none is chosen over another. Two `period`s in one document are each their own.
-- [ ] The strip draws each `period`'s periods over the whole clip as spans in a colour of its own,
+- [x] The strip draws each `period`'s periods over the whole clip as spans in a colour of its own,
   so the periods of two `period`s show as two whichever node is the selection, and two periods of
   one that overlap show as two.
   Check: a one-off offscreen: a document with two `period`s, one fed a gate and one a file with an

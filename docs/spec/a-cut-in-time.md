@@ -161,7 +161,8 @@ is of the whole footage.
   (`region.py:key_params`).
 - [ ] A value, a frame node's, a static node's or a series node's, is held and served under its
   key, its cut's record and its row. Under one key and row, two cuts hold two values, and neither
-  is served for the other.
+  is served for the other. Changes the held file's form: it is said before it lands, and a held
+  file of the form before it reads as none.
   Check: a seam: one key and row held in two cuts with two values, each served in its own.
 - [ ] A run is a cut's walk when it began at the first row of that cut's extent, and is held as
   that cut's. The window's own walk from any other row is held as no cut's: it is never served as
@@ -361,9 +362,9 @@ against one of the same rows is not.
   the window are that period's walk as far as they reach.
   Worth a look: how the window says it, which is Kendrick's to settle and not the building
   session's. A best-effort row is what the user expects of it: that a thing is tracked as the
-  window moves, and not an identity's number, which only the period's walk gives. What the session builds
-  toward it is conservative, reversible, predictable to the user, and quick without buying an
-  unbounded walk.
+  window moves, and not an identity's number, which only the period's walk gives. What the
+  session builds toward it is conservative, reversible, predictable to the user, and quick
+  without buying an unbounded walk.
   Check: a one-off over the crossings clip: the window over several periods, `track` below them,
   held and not, each against its period walked alone and what the window says of each.
 
@@ -375,6 +376,6 @@ A walk with no window, over a folder or from a command: the rest of the review's
 intersected by a node; two gates met on one signal above a `period` are that signal's gate. A
 margin grown or taken off around a cut, or a halo read past one, which change what the user cut.
 A tool that says it reads its own row alone, so that its rows above a cutting node stand in below
-it. A walk begun elsewhere held as a period's by its nodes' reach. A cut of a
-series result, a `period` on the chain. Region's key, which holds its rect, a served clip's
-pixels being H.264's and not the plate's. A lift. Identity across periods.
+it. A walk begun elsewhere held as a period's by its nodes' reach. A cut of a series result, a
+`period` on the chain. Region's key, which holds its rect, a served clip's pixels being H.264's
+and not the plate's. A lift. Identity across periods.

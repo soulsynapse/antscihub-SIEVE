@@ -234,8 +234,11 @@ class Runs:
         """Holds `runs`, oldest first, and no other."""
         self.all = list(runs)
 
-    def _earliest(self):
-        return sorted(self.all, key=lambda run: (run.start, -run.rows))
+    def _earliest(self, over=None):
+        """The runs, the one that began earliest first; with `over`, (first row, row past the last),
+        those alone that hold a row of it."""
+        runs = self.all if over is None else [run for run in self.all if run.start < over[1] and over[0] < run.start + run.rows]
+        return sorted(runs, key=lambda run: (run.start, -run.rows))
 
     @staticmethod
     def _has(results, chain):
@@ -260,7 +263,7 @@ class Runs:
         """Node of `nodes` to its result over `n` rows from `s`, cut from the run that began earliest
         and serves it, for each one served."""
         out = {}
-        for run in self._earliest():
+        for run in self._earliest((s, s + n)):
             for nid in nodes:
                 if nid not in out and self._serves(run, nid, s, n, walk, cut, chain):
                     out[nid] = rows_of(run.results[nid], run.rows, s - run.start, n)
@@ -321,7 +324,7 @@ class Runs:
         walk._Walk.handed takes them."""
         out, have = np.empty(n, object), np.zeros(n, bool)
         want = _reads(walk, cut, reach, s, s + n)
-        for run in self._earliest():
+        for run in self._earliest((s, s + n)):
             rows = next((w[2] for w in run.walked or () if w[:2] == (nid, key)), None)
             if rows is None:
                 continue
@@ -343,14 +346,15 @@ class Runs:
         cut = record.extent.rows
         walk = cut or (0, count)
         before, after = chain.reach.get(nid, (None, None))
-        spans = [walk, *((run.start, run.start + run.rows) for run in self.all), *(run.cut for run in self.all if run.cut)]
+        near = self._earliest(walk)     # a run holding no row of the cut serves none of it, and where it lies moves no part
+        spans = [walk, *((run.start, run.start + run.rows) for run in near), *(run.cut for run in near if run.cut)]
         marks = {m for span in spans for m in span}
         marks |= {f + before for f, _ in spans} if before is not None else set()
         marks |= {e - after for _, e in spans} if after is not None else set()
         points = sorted(m for m in marks if walk[0] <= m <= walk[1])     # between two, what a row reads of every edge is one
         parts = []
         for a, b in zip(points, points[1:]):
-            run = next((run for run in self._earliest() if self._serves(run, nid, a, b - a, walk, cut, chain)), None)
+            run = next((run for run in near if self._serves(run, nid, a, b - a, walk, cut, chain)), None)
             if run is not None and parts and parts[-1][2] is run and parts[-1][1] == a:
                 parts[-1][1] = b
             elif run is not None:

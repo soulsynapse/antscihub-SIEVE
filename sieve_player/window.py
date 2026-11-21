@@ -1639,7 +1639,7 @@ class PlayerWindow(QMainWindow):
 
     def _update_gate(self):
         """The border is on while every leaf of the series chain, a chain node no chain node reads,
-        gates the playhead's row: each band zeroes what the next reads, so a leaf's gate is its branch's."""
+        gates the playhead's row: each band shuts out of what the next reads the rows it does not keep, so a leaf's gate is its branch's."""
         i = self.row - self.result_start
         chain = self.graph.series_chain() if self.graph is not None else []
         read = {src for _, _, _, _, src in chain}

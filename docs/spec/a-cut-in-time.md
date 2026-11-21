@@ -347,7 +347,9 @@ one a node.
 - [x] A row outside a node's extent is absent to what reads it: no node is computed or stepped
   at it, and no table written holds a record of it.
   Check: a one-off over the crossings clip: a csv below a `period`, its rows against the periods'.
-- [ ] A gated-out row is handed to a tool downstream, one that steps or one that runs whole, as
+- [x] Kendrick: a gated-out signal row is handed as a masked array with NaN beneath, a signal
+  of integers handed as floats; a table's row and a stepped row as None.
+- [x] A gated-out row is handed to a tool downstream, one that steps or one that runs whole, as
   absent, apart from a zero and from an empty table, and what a tool does across it is the tool's,
   each such tool saying so. Changes keys: it is said before it lands, and the held files of the
   documents in use are walked again, as `docs/spec/what-a-node-declares.md`'s Keys that move once.

@@ -3,7 +3,7 @@
 and under its handle it draws every series the plot shows at its rows, the selection in its colour
 and the pinned in dimmed ink, each as the plot does over the window: a column covering more than
 one row is their min and max, so nothing is hidden and nothing is added, and the rows the
-selection's gate keeps are washed. A bar along its top edge is over the rows held, and along its
+selection's gate keeps are washed. A row absent, NaN, is drawn as nothing. A bar along its top edge is over the rows held, and along its
 bottom edge each node that cuts in time has lanes of its own, its periods spans in its colour,
 whichever node is the selection."""
 import numpy as np
@@ -27,6 +27,12 @@ class Envelope(NamedTuple):
     lo: np.ndarray
     hi: np.ndarray
     kept: np.ndarray | None
+
+
+def present(values, start, gate):
+    """[(values, start, gate)] of each run of `values`' rows that is not NaN, an absent row being in none."""
+    edges = np.flatnonzero(np.diff(np.concatenate(([0], (~np.isnan(values)).astype(np.int8), [0]))))
+    return [(values[a:b], start + a, None if gate is None else gate[a:b]) for a, b in zip(edges[0::2], edges[1::2])]
 
 
 def envelope(values, start, gate, width, count, selected, top):
@@ -259,7 +265,7 @@ class Strip(QWidget):
         them in its colour with its gate's wash; a node's stretches share its largest value."""
         out, w = [], max(1, self.width())
         for nid in [n for n in self.series if n != self.selection] + [n for n in self.series if n == self.selection]:
-            segs = [self.series[nid], *self.more.get(nid, [])]
+            segs = [run for seg in [self.series[nid], *self.more.get(nid, [])] for run in present(*seg)]
             top = max((float(values.max()) for values, _, _ in segs if len(values)), default=0.0)
             out += [envelope(values, start, gate if nid == self.selection else None, w, self.count, nid == self.selection, top)
                     for values, start, gate in segs if len(values)]

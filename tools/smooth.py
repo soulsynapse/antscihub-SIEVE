@@ -7,9 +7,11 @@ window; a median drops it and leaves a plateau alone, so impulse noise wants the
 the mean. At either end, and at the end of a walk still filling in, the window is the rows that
 exist, so the edge rows smooth over fewer and settle as rows land.
 
-Reads what the upstream node's band lets through, zeros where it does not (see
-`sieve_player.graph.gated`): a stretch shut out upstream pulls a mean down at its edges.
+A row the upstream node's band shuts out is absent (see `sieve_player.graph.gated`): it is NaN
+here too, and the window about a row beside it is the rows that are present, as at either end.
 """
+import warnings
+
 import numpy as np
 
 SIEVE_TOOL = True
@@ -27,7 +29,7 @@ def reach_in_rows(params):
 
 
 def run(series, params):
-    x = np.asarray(series.data, np.float64).reshape(-1)
+    x = np.ma.filled(np.ma.asarray(series.data, np.float64), np.nan).reshape(-1)
     reach, k = max(0, int(params["reach"])), params["kernel"]
     if k not in KERNELS:
         raise ValueError(f"smooth: no kernel {k!r}; one of {KERNELS}")
@@ -36,7 +38,10 @@ def run(series, params):
     w = 2 * reach + 1
     padded = np.concatenate((np.full(reach, np.nan), x, np.full(reach, np.nan)))   # nan past either end: a row that is not there
     windows = np.lib.stride_tricks.sliding_window_view(padded, w)                   # one per row of x
-    s = np.nanmean(windows, axis=1) if k == "mean" else np.nanmedian(windows, axis=1)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)     # a window of absent rows alone: NaN, as the row is
+        s = np.nanmean(windows, axis=1) if k == "mean" else np.nanmedian(windows, axis=1)
+    s[np.isnan(x)] = np.nan
     return {"signal": s.astype(np.float32)}
 
 

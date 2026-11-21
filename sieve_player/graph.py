@@ -43,21 +43,35 @@ def banded(v, band):
     return out
 
 
+def kept(signal, band):
+    """The rows of `signal` that `band` keeps, every row with None; a NaN, a row absent, is kept by none."""
+    s = np.asarray(signal)
+    present = ~np.isnan(s) if s.dtype.kind == "f" else np.ones(len(s), bool)
+    return present if band is None else present & inband(s, band)
+
+
+def absent_dtype(signal):
+    """The dtype a signal is handed downstream in, one that holds NaN."""
+    return signal.dtype if signal.dtype.kind == "f" else np.dtype(np.float64)
+
+
 def gated(result, band, type):
     """A series node's result as the player hands it out, the node producing `type`: the tool's dict
     with "gate", the rows its signal keeps under the node's band, and `fed`, what a series node
-    downstream reads: where the type is a table, the result's tables, one a row, with each
-    gated-out row emptied, else the signal with the rest zeroed. A result without a signal passes
-    through ungated, and feeds nothing."""
+    downstream reads, every gated-out row absent: where the type is a table, the result's tables,
+    one a row, None at a gated-out row; else the signal as a masked array, a gated-out row masked
+    and NaN beneath, so a tool that drops the mask reads NaN there and never a zero. A result
+    without a signal passes through ungated, and feeds nothing."""
     if not isinstance(result, dict) or "signal" not in result:
         return result, None
     signal = np.asarray(result["signal"])
-    gate = np.ones(len(signal), bool) if band is None else inband(signal, band)
+    gate = kept(signal, band)
     if is_table(type):
         fed = np.empty(len(result[ROWS]), object)
-        fed[:] = [r if g else r[:0] for r, g in zip(result[ROWS], gate)]
+        fed[:] = result[ROWS]
+        fed[~gate] = None
         return {**result, "gate": gate}, fed
-    return {**result, "gate": gate}, np.where(gate, signal, np.zeros((), signal.dtype))
+    return {**result, "gate": gate}, np.ma.MaskedArray(np.where(gate, signal, np.nan).astype(absent_dtype(signal)), mask=~gate)
 
 
 class Ref(NamedTuple):

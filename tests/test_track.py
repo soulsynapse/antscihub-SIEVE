@@ -37,5 +37,7 @@ def test_travel_reads_the_steps_under_the_gate():
     assert hold(travel, rows, {"method": "mean", "moving": 1.0})["signal"].tolist() == [0, 2.5, 5]
     assert hold(travel, rows, {"method": "count", "moving": 1.0})["signal"].tolist() == [0, 1, 1]
     _, fed = gated({"rows": rows, "signal": np.array([2.0, 2.0, 1.0])}, (2.0, 2.0), "tracks")
-    assert [len(t) for t in fed] == [2, 2, 0]                     # a gated-out row feeds an empty table
-    assert hold(travel, fed, {"method": "sum", "moving": 1.0})["signal"].tolist() == [0, 5, 0]
+    assert [None if t is None else len(t) for t in fed] == [2, 2, None]      # a gated-out row is absent, no empty table
+    assert np.array_equal(hold(travel, fed, {"method": "sum", "moving": 1.0})["signal"], [0, 5, np.nan], equal_nan=True)
+    _, fed = gated({"rows": rows, "signal": np.array([2.0, 1.0, 2.0])}, (2.0, 2.0), "tracks")
+    assert np.array_equal(hold(travel, fed, {"method": "sum", "moving": 1.0})["signal"], [0, np.nan, 0], equal_nan=True)  # after it, as at the first row

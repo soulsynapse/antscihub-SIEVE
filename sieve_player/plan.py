@@ -15,6 +15,9 @@ from .registry import computed, cut_by, cut_extents_of, fold_of, is_selector, ke
 from .wire import overlaid
 
 
+FED_ABSENT = "a gated-out row is absent"     # in the key of a series node another feeds: what it is handed at a row that one's band shuts out
+
+
 def _key(*parts):
     return hashlib.sha1("|".join(map(str, parts)).encode()).hexdigest()[:16]
 
@@ -231,8 +234,9 @@ def plan(doc, tools, base, cut_file=None, cut_result=None, footage=None):
             if node.tool == VIDEO_TOOL:
                 keys[nid] = raw_keys[nid] = base
                 return base
+            fed_by_series = any(s is not None and kind_of(doc, tools, s) == "series" for s in sources(nid).values())
             raw = (base_key(file_of(nid)[1], video_output(doc)) if file_of(nid)
-                   else _key(up_key(nid, (*stack, nid)), node.tool, json.dumps(keyed(node), sort_keys=True)))
+                   else _key(up_key(nid, (*stack, nid)), node.tool, json.dumps(keyed(node), sort_keys=True), *[FED_ABSENT][:fed_by_series]))
             raw_keys[nid] = raw
             keys[nid] = raw if node.band is None else _key(raw, node.band)
         return keys[nid]

@@ -7,7 +7,9 @@ a row of `labels`, (first row, last row, id, identity), on each of the id's rows
 identities on one id, or one already held by an overlapping id with more reads, leave it NaN and
 flagged. Where two ids end as one starts over their last centroids and it ends as two start inside
 its last box, the identities entering and leaving are one set, and the one unlabelled id on a side
-takes the identity the other side has that its own lacks. `main` is the same pass over a tracks csv.
+takes the identity the other side has that its own lacks. A row absent upstream is None in `rows`
+and NaN in the signal, and holds no read and no end or start of an id. `main` is the same pass
+over a tracks csv.
 """
 import os
 
@@ -64,6 +66,8 @@ def reads_of(rows, columns, labels, start):
     for a, last, i, z in labels:
         labelled.setdefault(i, []).append((a, last, z))
     for r, t in enumerate(rows):
+        if t is None:
+            continue
         for c in columns:
             if len(t) and c not in t.dtype.names:
                 raise ValueError(f"resolve: no column {c!r}; one of {t.dtype.names}")
@@ -82,6 +86,8 @@ def contacts(rows):
     one per id with as many entering as leaving and at least two; none where the tables lack boxes."""
     first, last = {}, {}
     for r, t in enumerate(rows):
+        if t is None:
+            continue
         if len(t) and not {"x", "y", "w", "h", "cx", "cy"} <= set(t.dtype.names):
             return []
         for b in t:
@@ -134,7 +140,8 @@ def resolve(rows, columns, min_reads=2, labels=(), start=0):
                         identity[unknown[0]], settled = missing.pop(), False
     out = np.empty(len(rows), object)
     out[:] = [with_column(with_column(t, IDENTITY, np.array([identity.get(int(i), np.nan) for i in t["id"]], np.float64), NONE),
-                          CONFLICT, np.array([int(i) in flagged for i in t["id"]], np.int32), NONE) for t in rows]
+                          CONFLICT, np.array([int(i) in flagged for i in t["id"]], np.int32), NONE) if t is not None else None
+              for t in rows]
     return out
 
 
@@ -142,8 +149,8 @@ def signal(rows, kind):
     if kind not in SIGNALS:
         raise ValueError(f"resolve: no signal {kind!r}; one of {SIGNALS}")
     if kind == "identities":
-        return np.array([len({float(v) for v in t[IDENTITY] if not np.isnan(v)}) for t in rows], np.float32)
-    return np.array([int(t[CONFLICT].sum()) for t in rows], np.float32)
+        return np.array([np.nan if t is None else len({float(v) for v in t[IDENTITY] if not np.isnan(v)}) for t in rows], np.float32)
+    return np.array([np.nan if t is None else int(t[CONFLICT].sum()) for t in rows], np.float32)
 
 
 def run(series, params):

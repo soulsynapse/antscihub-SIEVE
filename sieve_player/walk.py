@@ -13,7 +13,7 @@ import numpy as np
 
 from . import density
 from .registry import fold_of, imported_print
-from .graph import Series, gated, inband
+from .graph import Series, absent_dtype, gated, kept
 from .stream import ASKED, GIVEN, HAND, SHAPE
 from .wire import ROWS, is_table, nbytes, own_bytes, share_bytes
 
@@ -37,7 +37,8 @@ class _Stepped:
     """A stepping node's progress over a range: the key it is stepped under, the state its tool
     returned last, its result accumulated over `rows` rows, and the bytes the result holds; beside
     it what graph.gated makes of that result, `gate` and `fed` over the first `gated` rows under
-    `band`, None for a result with no signal. `table` is whether the node's type is a table.
+    `band`, None for a result with no signal, `fed` holding NaN, or None for a table, at a row
+    the gate shuts out. `table` is whether the node's type is a table.
     `given` is whether the result was held elsewhere and handed in, `code` then what it was made
     under as that result said it, None for one that said nothing."""
     key: str
@@ -52,7 +53,6 @@ class _Stepped:
     gated: int = 0
     gate: object = None
     fed: object = None
-    empty: object = None    # the one emptied table every gated-out row of a table type's result feeds
 
     def regate(self, band):
         """Brings `gate` and `fed` up to `rows` under `band`: from the row they reached under the
@@ -68,17 +68,14 @@ class _Stepped:
         tables = self.fields[ROWS] if self.table else None
         if self.gate is None:
             self.gate = np.ones(len(signal), bool)
-            self.fed = np.empty(len(signal), object) if tables is not None else np.zeros(len(signal), signal.dtype)
-        kept = np.ones(hi - lo, bool) if band is None else inband(signal[lo:hi], band)
-        self.gate[lo:hi] = kept
+            self.fed = np.empty(len(signal), object) if tables is not None else np.full(len(signal), np.nan, absent_dtype(signal))
+        keeps = kept(signal[lo:hi], band)
+        self.gate[lo:hi] = keeps
         if tables is not None:
             self.fed[lo:hi] = tables[lo:hi]
-            if self.empty is None:
-                self.empty = tables[lo][:0]
-            for r in np.flatnonzero(~kept):
-                self.fed[lo + r] = self.empty
+            self.fed[lo + np.flatnonzero(~keeps)] = None
         else:
-            self.fed[lo:hi] = np.where(kept, signal[lo:hi], np.zeros((), signal.dtype))
+            self.fed[lo:hi] = np.where(keeps, signal[lo:hi], np.nan)
         self.gated = hi
 
     def upto(self, rows):
@@ -88,7 +85,8 @@ class _Stepped:
             result["code"] = self.code
         if self.gate is None:
             return result, None
-        return {**result, "gate": self.gate[:rows]}, self.fed[:rows]
+        fed = self.fed[:rows] if self.table else np.ma.MaskedArray(self.fed[:rows], mask=~self.gate[:rows])
+        return {**result, "gate": self.gate[:rows]}, fed
 
 
 @dataclass
@@ -265,7 +263,7 @@ class _Walk:
                     row = self.stack[r] if fold is None else fold(self.stack[r])
                 else:
                     up = self.stepped[src]
-                    row = None if up.fed is None else up.fed[r]
+                    row = None if up.fed is None or not up.gate[r] else up.fed[r]
                 with g.demand("walk", nid), g.probe(nid, self.start + r, e.raw_key) as ev:
                     try:
                         held.state, share = e.tool.step(held.state, row, r, params)

@@ -7,10 +7,10 @@ loop window: `row`, the frame index; `time`, row over fps, in seconds; `signal`;
 node's band keeps the row (see `sieve_player.graph.gated`). Over a table series the signal is the
 records each row holds, a count this tool mints, and the file is long format, one line per record:
 `row`, `time`, `id` for tracks and no such column for blobs, the table's numeric columns less
-`contour` and `id`, and `gate`; a row with no records writes nothing, so an upstream band's rows
-are simply absent. The key line carries `kind=` as the type written, so a reader can refuse a file
-of the wrong kind by name. The band to export is this node's; an upstream band zeroes rows before
-they reach here, as for any series node. The range is the window, so the whole video is a window
+`contour` and `id`, and `gate`; a row with no records writes nothing. A row an upstream band
+shuts out is absent here, a NaN signal or no table, and writes nothing either way. The key line
+carries `kind=` as the type written, so a reader can refuse a file of the wrong kind by name. The
+band to export is this node's. The range is the window, so the whole video is a window
 the length of the video, and Write writes the rows the walk has so far and says how many. The key
 line, the write and the widget are tools/_csvfile.py's.
 
@@ -37,19 +37,19 @@ def reach_in_rows(params):
 
 def run(series, params):
     if not is_tables(series.data):
-        return {"signal": np.asarray(series.data, np.float32).reshape(-1)}
+        return {"signal": np.ma.filled(np.ma.asarray(series.data, np.float32), np.nan).reshape(-1)}
     rows = np.empty(len(series.data), object)
     rows[:] = list(series.data)
-    return {"rows": rows, "signal": np.array([len(t) for t in rows], np.float32)}
+    return {"rows": rows, "signal": np.array([np.nan if t is None else len(t) for t in rows], np.float32)}
 
 
 def kind_of(result):
     """The type `result` writes: signal, or tracks and blobs by whether the tables carry `id`; None
-    for a table result with no rows, which says nothing."""
+    for a table result with no rows or none present, which says nothing."""
     if not isinstance(result, dict) or "rows" not in result:
         return "signal"
-    rows = result["rows"]
-    return None if not len(rows) else "tracks" if "id" in rows[0].dtype.names else "blobs"
+    first = next((t for t in result["rows"] if t is not None), None)
+    return None if first is None else "tracks" if "id" in first.dtype.names else "blobs"
 
 
 def fields(dtype):
@@ -84,20 +84,22 @@ def lines(result, start, fps, footage):
         yield key_line(result.get("key", ""), start, len(sig), footage, kind) + "\n"
         yield ",".join(COLUMNS) + "\n"
         for i, (v, g) in enumerate(zip(sig, gate)):
+            if np.isnan(v):
+                continue
             r = start + i
             yield f"{r},{r / fps:.6f},{np.format_float_positional(v, trim='-')},{int(g)}\n"
         return
     rows = result["rows"]
     gate = np.asarray(result.get("gate", np.ones(len(rows), bool)), bool)
     yield key_line(result.get("key", ""), start, len(rows), footage, kind) + "\n"
-    if not len(rows):
+    if kind is None:
         return
-    dtype = rows[0].dtype
+    dtype = next(t for t in rows if t is not None).dtype
     names = fields(dtype)
     yield ",".join(columns(dtype)) + "\n"
     for i, (t, g) in enumerate(zip(rows, gate)):
         r = start + i
-        for b in t:
+        for b in () if t is None else t:
             vals = (np.format_float_positional(float(b[f]), trim="-") if np.issubdtype(dtype[f], np.floating) else str(int(b[f]))
                     for f in names)
             id = f"{int(b['id'])}," if kind == "tracks" else ""

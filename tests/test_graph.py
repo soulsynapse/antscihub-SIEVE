@@ -393,20 +393,25 @@ def test_series_chain_runs_on_from_the_head():
     assert g.chain == ["head", "s1"] and g.unrun_series == ["s2"]
 
 
-def test_a_series_band_gates_the_signal_and_zeroes_what_the_next_reads():
+def test_a_series_band_gates_the_signal_and_hands_the_next_a_gated_out_row_absent():
     """The gate is the player's, not the tool's: the result keeps the tool's signal whole and gains
-    the gate; the feed downstream is zeroed outside the band, inside it once lo is above hi; no
-    band keeps every row; a result without a signal feeds nothing."""
+    the gate; the feed downstream is absent outside the band, inside it once lo is above hi, masked
+    with NaN beneath and never zero, a table's row None; no band keeps every row but a NaN; a
+    result without a signal feeds nothing."""
     sig = np.array([0.0, 2.0, 5.0, 9.0, 20.0], np.float32)
     r, feed = gated({"signal": sig}, (1.0, 10.0), "signal")
     assert r["gate"].tolist() == [False, True, True, True, False] and r["signal"] is sig
-    assert feed.tolist() == [0.0, 2.0, 5.0, 9.0, 0.0]
+    assert feed.tolist() == [None, 2.0, 5.0, 9.0, None] and np.isnan(feed.data[[0, 4]]).all()
     r, feed = gated({"signal": sig}, (10.0, 1.0), "signal")
-    assert r["gate"].tolist() == [True, False, False, False, True] and feed.tolist() == [0.0, 0.0, 0.0, 0.0, 20.0]
-    r, feed = gated({"signal": sig}, None, "signal")
-    assert r["gate"].all() and feed.tolist() == sig.tolist()
-    r, feed = gated({"signal": np.array([-3.0, 0.0, 4.0])}, None, "signal")         # no band gates nothing, a negative row included
-    assert r["gate"].all() and feed.tolist() == [-3.0, 0.0, 4.0]
+    assert r["gate"].tolist() == [True, False, False, False, True] and feed.tolist() == [0.0, None, None, None, 20.0]
+    r, feed = gated({"signal": np.array([-3, 0, 4])}, None, "signal")              # no band gates nothing, a negative row included
+    assert r["gate"].all() and feed.tolist() == [-3.0, 0.0, 4.0] and feed.dtype == np.float64
+    r, feed = gated({"signal": np.array([1.0, np.nan, 0.0], np.float32)}, None, "signal")
+    assert r["gate"].tolist() == [True, False, True] and feed.tolist() == [1.0, None, 0.0]
+    tables = np.empty(3, object)
+    tables[:] = [np.zeros(n, [("cx", "f4")]) for n in (1, 2, 0)]
+    r, feed = gated({"signal": np.array([1.0, 2.0, 0.0], np.float32), "rows": tables}, (1.0, 1.0), "blobs")
+    assert [None if t is None else len(t) for t in feed] == [1, None, None]
     assert gated({"other": 1}, (0.0, 1.0), "signal") == ({"other": 1}, None)
 
 

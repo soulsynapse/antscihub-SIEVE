@@ -49,6 +49,8 @@ def draw_tracks(painter, row, result, start, kind="box"):
     if not isinstance(result, dict) or not 0 <= row - start < len(result["rows"]):
         return
     rows, i = result["rows"], row - start
+    if rows[i] is None:
+        return
     painter.setBrush(Qt.NoBrush)
     for b in rows[i]:
         pen = QPen(QColor.fromHsv(int(b["id"]) * 47 % 360, 200, 240), 0)
@@ -57,6 +59,6 @@ def draw_tracks(painter, row, result, start, kind="box"):
         outline(painter, b, kind)
         painter.drawText(QPointF(float(b["x"]), float(b["y"]) - 2), str(int(b["id"])))
         path = [(float(t["cx"][0]), float(t["cy"][0])) for t in (rows[k][rows[k]["id"] == b["id"]]
-                                                                 for k in range(max(0, i - TRAIL), i + 1)) if len(t)]
+                                                                 for k in range(max(0, i - TRAIL), i + 1) if rows[k] is not None) if len(t)]
         for (x0, y0), (x1, y1) in zip(path, path[1:]):
             painter.drawLine(QPointF(x0, y0), QPointF(x1, y1))

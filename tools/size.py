@@ -1,8 +1,8 @@
 """Series tool: the `method` over a numeric column of each row's table; a blobs or a tracks table in, signal out.
 
 `field` is `area`, `major`, `minor`, `w` or `h`, in px, or any numeric column added upstream;
-`method` reduces the row's column to one number. A row with no records reads 0, as count's does,
-since the trace scales by the signal's max and a NaN there would blank it. No fold: the median needs the whole column, so the window holds
+`method` reduces the row's column to one number. A row with no records reads 0, as count's does;
+a row absent upstream reads NaN. No fold: the median needs the whole column, so the window holds
 the tables, as it does for track.
 """
 import numpy as np
@@ -29,8 +29,10 @@ def run(series, params):
 
 
 def step(state, row, i, params):
-    """No state: a row's signal is its own table's."""
+    """No state: a row's signal is its own table's, NaN where it is absent."""
     field, m = params["field"], params["method"]
+    if row is None:
+        return None, {"signal": np.float32(np.nan)}
     if m not in METHODS:
         raise ValueError(f"size: no method {m!r}; one of {METHODS}")
     if field not in row.dtype.names or row.dtype[field] == object:

@@ -7,7 +7,9 @@ while lost. A track unseen over `lost_rows` ends and its id is not reused. Ids a
 each run. With `merge_ratio` over 0, a track never continues onto a blob within reach whose area
 is over that ratio of its own, the mean over its rows, or under its own over the ratio; a track
 refused that way and taking nothing ends there, so a merged blob and the pieces it parts into are
-new ids and a tracklet never spans a contact. At 0 area is not read.
+new ids and a tracklet never spans a contact. At 0 area is not read. A row absent upstream is
+None in `rows` and NaN in the signal, and a track is unseen over it as over a row where nothing
+was found, so `lost_rows` counts it.
 """
 import numpy as np
 
@@ -54,7 +56,10 @@ class _Track:
 
 def _link_row(live, next_id, t, r, max_step, lost_rows, min_rows, min_p, merge_ratio):
     """Row `r`'s table linked onto `live`: the tracks still live after it, the next free id, the table
-    with its ids and the count of tracks seen in it with at least `min_rows` hits."""
+    with its ids and the count of tracks seen in it with at least `min_rows` hits; None and NaN for
+    a row absent, which leaves `live` as it was."""
+    if t is None:
+        return live, next_id, None, np.float32(np.nan)
     t = np.asarray(t)
     rec = with_column(t, "id", np.full(len(t), -1, np.int32), NONE)
     live = [k for k in live if r - k.seen <= lost_rows]

@@ -29,12 +29,18 @@ def nice(x):
     return float(next(m * e for m in (1, 2, 5, 10) if m * e >= x))
 
 
+def runs(present):
+    """(first, past the last) of each run of True in `present`."""
+    edges = np.flatnonzero(np.diff(np.concatenate(([0], present.astype(np.int8), [0]))))
+    return list(zip(edges[0::2], edges[1::2]))
+
+
 def label(v):
     return "∞" if v == float("inf") else f"{v:.4g}"
 
 
 class Line:
-    """A series node's signal from row `start`, with its gate when it has one."""
+    """A series node's signal from row `start`, with its gate when it has one; a NaN is a row absent."""
 
     def __init__(self, values, start, gate=None):
         self.values = np.asarray(values, np.float32)
@@ -42,7 +48,7 @@ class Line:
 
     @property
     def top(self):
-        return max(float(self.values.max()), 1e-6) if len(self.values) else 1e-6
+        return max(float(np.nanmax(self.values)), 1e-6) if len(self.values) and not np.isnan(self.values).all() else 1e-6
 
 
 class Field:
@@ -442,22 +448,22 @@ class Plot(QWidget):
                 for a, b in zip(edges[0::2], edges[1::2] - 1):
                     x0, x1 = max(xs[a] - w / 2, inner.left()), min(xs[b] + w / 2, inner.right())
                     p.drawRect(QRectF(x0, inner.top(), x1 - x0, inner.height()))
-        if len(values) < 2:
-            if len(values) == 1:
+        with np.errstate(invalid="ignore"):
+            lo, hi = (np.fmin.reduceat(values, starts), np.fmax.reduceat(values, starts)) if starts is not None else (values, values)
+        for a, b in runs(~np.isnan(hi)):     # an absent row draws nothing, so a run of rows on either side of one is its own
+            if b - a == 1:
                 p.setPen(QPen(color, 1.6))
-                p.drawPoint(QPointF(xs[0], self._y(values[0], nid)))
-            return
-        if starts is not None:
-            lo, hi = np.minimum.reduceat(values, starts), np.maximum.reduceat(values, starts)
-            top = [QPointF(x, self._y(v, nid)) for x, v in zip(xs, hi)]
-            bottom = [QPointF(x, self._y(v, nid)) for x, v in zip(xs[::-1], lo[::-1])]
-            p.setPen(QPen(color, 1))
-            p.setBrush(color)
-            p.drawPolygon(QPolygonF(top + bottom))
-        else:
-            p.setPen(QPen(color, self.LINE))
-            p.setBrush(Qt.NoBrush)
-            p.drawPolyline(QPolygonF([QPointF(x, self._y(v, nid)) for x, v in zip(xs, values)]))
+                p.drawPoint(QPointF(xs[a], self._y(hi[a], nid)))
+            elif starts is not None:
+                top = [QPointF(x, self._y(v, nid)) for x, v in zip(xs[a:b], hi[a:b])]
+                bottom = [QPointF(x, self._y(v, nid)) for x, v in zip(xs[a:b][::-1], lo[a:b][::-1])]
+                p.setPen(QPen(color, 1))
+                p.setBrush(color)
+                p.drawPolygon(QPolygonF(top + bottom))
+            else:
+                p.setPen(QPen(color, self.LINE))
+                p.setBrush(Qt.NoBrush)
+                p.drawPolyline(QPolygonF([QPointF(x, self._y(v, nid)) for x, v in zip(xs[a:b], values[a:b])]))
 
     def _paint_pinned_line(self, p, inner, nid):
         """The band is on values and y is monotonic in them, so the kept rows are a y range: the

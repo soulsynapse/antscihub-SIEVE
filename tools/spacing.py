@@ -2,7 +2,7 @@
 
 `method` is the mean, median or min over the row's blobs of the distance in px from each centroid
 to its nearest other, or pairs, the count of centroid pairs within `r` px. A row with fewer than
-two blobs reads 0, as count's empty row does, since a NaN would blank the trace. No fold: the
+two blobs reads 0, as count's empty row does, and a row absent upstream NaN. No fold: the
 window holds the tables, as it does for size.
 """
 import numpy as np
@@ -19,6 +19,8 @@ PARAMS = {
 def spacing(table, method, r=0.0):
     if method not in METHODS:
         raise ValueError(f"spacing: no method {method!r}; one of {METHODS}")
+    if table is None:
+        return np.nan
     if len(table) < 2:
         return 0.0
     xy = np.stack([table["cx"], table["cy"]], axis=1).astype(np.float64)

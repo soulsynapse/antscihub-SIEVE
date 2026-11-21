@@ -8,6 +8,7 @@ the prefix's accumulated result at each cadence row."""
 import time
 import traceback
 from dataclasses import dataclass, field
+from typing import NamedTuple
 
 import numpy as np
 
@@ -19,6 +20,26 @@ from .wire import ROWS, is_table, nbytes, own_bytes, share_bytes
 
 STACK_BYTES = 512 << 20   # the most a walk's stack and stepped results, the window's or the clip's, may take, as nbytes counts them
 WALKED = "walk:stack"     # where a walk that keeps its stacks puts them among the chain's results: ((walked node, stacked_key, rows), ...)
+
+
+class Leg(NamedTuple):
+    """One cut in time a lane walks alone: `walked`, the node its timed Walk's first head reads, the
+    cut.Record, the walk's first row and the row past its last, and the chain nodes best effort there."""
+    walked: str
+    cut: object
+    first: int
+    end: int
+    best: frozenset = frozenset()
+
+
+class HeldCut(NamedTuple):
+    """What is held of one cut in time, as a walk of it takes it: `keys` as period_keys says them of the
+    plan it was read under; `spared`, every chain node's result over the cut is held; `given` and
+    `handed` as _Walk's."""
+    keys: dict
+    spared: bool
+    given: dict
+    handed: dict | None
 
 
 def _stack_for(n, out, table):
@@ -104,6 +125,7 @@ class _Walk:
     densities: object = None    # Signal(object, int) the window's plane densities go out on; None, and the walk folds none
     plan: object = None # the Plan a turn runs under, set by whoever drives the walk before it: a turn reads the plan off no other
     cut: object = None  # the cut.Record of a cut in time the range is walked inside, set beside `plan`; None for the walked node's one cut or the footage
+    walked: str | None = None   # the node a walk of a cut in time reads, set beside `cut`; None on a lane's own range
     asked: bool = False # set under the worker's lock by anything that restarts this range; the scheduler takes it
     by: str = ASKED     # what last set `asked`, one of stream.BEGUN_BY; the scheduler takes it with the ask
     tell_every: float = 0.0     # s between a turn's tellings of the rows done, the range's end always told; 0 tells of each row
@@ -391,9 +413,8 @@ def period_keys(p):
 
 
 def window_legs(p, s, n):
-    """Each cut in time of the Plan `p` that the window of `n` rows from `s` overlaps, as the window walks it alone: (the node its timed Walk's first head reads, the
-    cut, the walk's first row and the row past its last, the chain nodes best effort there). The
-    walk reaches past the window by its chain's largest bounded reach each side, a side with no
+    """Each cut in time of the Plan `p` that the window of `n` rows from `s` overlaps, as the window
+    walks it alone, a Leg each. The walk reaches past the window by its chain's largest bounded reach each side, a side with no
     bound reaching none, and never outside the cut; a node is best effort where a side it has no
     bound on is cut short of the cut's edge."""
     legs = []
@@ -406,7 +427,7 @@ def window_legs(p, s, n):
                 continue
             a, b = max(first, s - before), min(end, s + n + after)
             best = frozenset(nid for nid, (rb, ra) in reach.items() if (rb is None and a > first) or (ra is None and b < end))
-            legs.append((p.entries[w.heads[0]].src, c, a, b, best))
+            legs.append(Leg(p.entries[w.heads[0]].src, c, a, b, best))
     return legs
 
 

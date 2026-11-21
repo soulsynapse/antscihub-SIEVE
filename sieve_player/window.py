@@ -42,7 +42,7 @@ from .theme import GAP, PAD, ROW_H, readout
 from .timeline import Timeline
 from .trace import Dump
 from .plot import Plot, Stage
-from .heldwalks import as_given, gate_result, held_chain, held_periods, period_run, window_periods
+from .heldwalks import Shown, as_given, gate_result, held_chain, held_periods, period_run, window_periods
 from .worker import Worker
 
 HOLD_MS = 2000              # how long the held runs rest, nothing new held, before they are written beside the document
@@ -1070,7 +1070,7 @@ class PlayerWindow(QMainWindow):
                              ("failed", self._failed), ("clipWalked", self._clip_walked), ("clipReady", self._clip_ready),
                              ("clipRefused", self._clip_refused), ("walkRefused", ct.progress.setText),
                              ("periodWalked", self._period_walked), ("periodReady", self._period_ready),
-                             ("windowPeriodReady", self._window_period_ready),
+                             ("windowPeriodWalked", self._window_period_walked), ("windowPeriodReady", self._window_period_ready),
                              ("shortened", self._shortened)):
             getattr(self.worker, signal).connect(self._timed("slot", signal, slot))
         self.worker.finished.connect(self._worker_ended)    # no closure over the worker: one connected to its own signal keeps it, its graph and the memo for good
@@ -1300,7 +1300,7 @@ class PlayerWindow(QMainWindow):
             self.worker.give_clip(self.count, self._as_given(self.runs.part(0, self.count, chain, (0, self.count))))
             self.worker.give_periods(held_periods(self.graph.snapshot(), self.runs))
             self.window_periods.update({of: v for of, v in window_periods(self.graph.snapshot(), self.runs, *self.window_).items()
-                                        if v[3] and of in self.window_periods})
+                                        if v.held and of in self.window_periods})
             self._show_lines()
         self._show_stale(chain)
         self._show_pinned()
@@ -1519,15 +1519,22 @@ class PlayerWindow(QMainWindow):
         the chain of the timed Walk its nodes are of, with the walked node's rows it was stepped over."""
         run = period_run(self.graph.snapshot(), results, start)
         if run is not None:
-            start, rows, has, chain, cut, walked = run
-            self._hold_run(start, rows, has, chain, cut, of_clip=True, walked=walked)
+            self._hold_run(run.start, run.rows, run.results, run.chain, run.cut, of_clip=True, walked=run.walked)
+
+    def _window_period_walked(self, done, total, left):
+        """The window walks a cut in time behind its own range: the progress line says so until the last ends."""
+        ct = self.timeline.controls
+        if done < total or left:
+            ct.progress.setText(f"window: a period, {done} of {total} rows, {left} periods behind it")
+        elif ct.progress.text().startswith("window: a period"):
+            ct.progress.setText("")
 
     def _window_period_ready(self, results, start, of, fps):
         """The window's walk of one cut in time, `of` as window_periods keys it; one of a window
         since left, or of a cut whose walk is held, is dropped."""
         got = self.window_periods.get(of)
-        if got is not None and not got[3] and got[0] == start:
-            self.window_periods[of] = (start, results, got[2], False)
+        if got is not None and not got.held and got.start == start:
+            self.window_periods[of] = Shown(start, results, got.best, False)
             self._show_lines()
 
     def _show_lines(self):
@@ -1535,7 +1542,7 @@ class PlayerWindow(QMainWindow):
         one a period the window shows, each from the row its results begin at and said best effort
         where window_periods says so of its node."""
         lines = {}
-        for start, results, best in [(self.result_start, self.results, ()), *((v[0], v[1], v[2]) for v in self.window_periods.values())]:
+        for start, results, best in [(self.result_start, self.results, ()), *((v.start, v.results, v.best) for v in self.window_periods.values())]:
             for nid, r in results.items():
                 if isinstance(r, dict) and "signal" in r:
                     lines.setdefault(nid, []).append((r["signal"], r.get("gate"), start, nid in best))

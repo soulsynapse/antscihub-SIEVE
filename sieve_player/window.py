@@ -804,10 +804,12 @@ class PlayerWindow(QMainWindow):
 
     def _shortened(self, count):
         """The stream ended short of its container's claim: everything sized by the count follows
-        the decoder's, and a playhead past the end lands on the last row there is."""
+        the decoder's, a cut made of a run reaching the last row among it, and a playhead past the
+        end lands on the last row there is."""
         if self.graph is None or count == self.count:
             return
         self.count = count
+        self._recut()
         self.timeline.strip.set_count(count, self.fps)
         self.timeline.controls.set_count(count, self.fps)
         if self.pane.video is not None:

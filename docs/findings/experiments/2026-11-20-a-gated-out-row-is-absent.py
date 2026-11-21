@@ -5,11 +5,13 @@ the same rows read as zero, and a `csv` below `count` writing no line for them.
 
     .venv\\Scripts\\python -X utf8 docs\\findings\\experiments\\2026-11-20-a-gated-out-row-is-absent.py 2>NUL
 
-The band is this script's. Qt runs offscreen, so no window opens.
+The band is this script's. Qt runs offscreen, so no window opens, and the worker's turns are taken on this thread.
 """
 import os
 import sys
+import threading
 import time
+import traceback
 
 os.environ.setdefault("OPENCV_LOG_LEVEL", "ERROR")
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -22,26 +24,54 @@ from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from sieve_player import decoder as decmod  # noqa: E402
 from sieve_player import document as D  # noqa: E402
-from sieve_player.decoder import Decoder  # noqa: E402
-from sieve_player.graph import Graph  # noqa: E402
+from sieve_player.decoder import Decoder, EndOfStream  # noqa: E402
+from sieve_player.graph import Cancelled, Graph  # noqa: E402
 from sieve_player.registry import defaults, discover  # noqa: E402
 from sieve_player.worker import Worker  # noqa: E402
 
 DOC = os.path.join(ROOT, "video-tests", "purb-168-178.json")
 
 
-def walked(app, g):
+TURNS = 1_000_000
+
+
+def turned(w, between=None):
+    """Takes the Worker `w`'s turns on this thread, as its loop takes them, until no rung is due,
+    calling `between` after each; the turns taken."""
+    threading.current_thread().name = "worker"     # as Worker.run names its thread: the probe and Readers.reap read it
+    for turns in range(TURNS):
+        with w._cv:
+            turn = w._turn()
+        if turn is None:
+            return turns
+        serves, steps = turn
+        w.graph.readers.reap()
+        job = None
+        try:
+            for job, act in steps:
+                w.graph.serving(serves, job.name)
+                act()
+        except Cancelled:
+            job.cancelled()
+        except EndOfStream:
+            w.shortened.emit(w.graph.count)
+            job.ended()
+        except Exception as e:
+            traceback.print_exc()
+            job.raised(e)
+        if between is not None:
+            between()
+    raise RuntimeError(f"still turning after {TURNS} turns")
+
+
+def walked(g):
     """The clip walk's results once it reaches the clip's last row."""
     got = []
     w = Worker(g, every=1 << 30)
     w.clipReady.connect(lambda r, s, f: got.append(r), Qt.DirectConnection)
     w.walk_clip()
     t0 = time.perf_counter()
-    w.start()
-    while time.perf_counter() - t0 < 20 and not (got and len(got[-1].get("track", {}).get("signal", ())) == g.count):
-        app.processEvents()
-        time.sleep(0.01)
-    w.stop()
+    turned(w)
     return got[-1]
 
 
@@ -67,7 +97,7 @@ if __name__ == "__main__":
     doc.connect(count, smooth)
     doc.connect(count, csv)
     g = Graph(doc, Decoder(doc.video), tools)
-    open_ = walked(app, g)
+    open_ = walked(g)
     g.close()
     tracks = np.asarray(open_["track"]["signal"], np.float64)
     lo = float(np.median(tracks))
@@ -75,7 +105,7 @@ if __name__ == "__main__":
 
     doc.node("track").band = (lo, float("inf"))
     g = Graph(doc, Decoder(doc.video), tools)
-    banded = walked(app, g)
+    banded = walked(g)
     g.close()
     gate = np.asarray(banded["track"]["gate"], bool)
     out = runs(~gate)

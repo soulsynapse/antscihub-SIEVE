@@ -8,12 +8,14 @@ lines against each period's rows and the records `track`'s held run of that peri
 
     .venv\\Scripts\\python -X utf8 docs\\findings\\experiments\\2026-11-20-a-table-of-every-period.py 2>NUL
 
-Qt runs offscreen, so no window opens.
+Qt runs offscreen, so no window opens, and the worker's turns are taken on this thread.
 """
 import os
 import sys
 import tempfile
+import threading
 import time
+import traceback
 from collections import Counter
 
 os.environ.setdefault("OPENCV_LOG_LEVEL", "ERROR")
@@ -26,21 +28,46 @@ from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from sieve_player import decoder as decmod  # noqa: E402
 from sieve_player import document as D  # noqa: E402
-from sieve_player.decoder import Decoder  # noqa: E402
-from sieve_player.graph import Graph, Series  # noqa: E402
+from sieve_player.decoder import Decoder, EndOfStream  # noqa: E402
+from sieve_player.graph import Cancelled, Graph, Series  # noqa: E402
 from sieve_player.registry import computed, defaults, discover  # noqa: E402
 from sieve_player.window import PlayerWindow  # noqa: E402
+from sieve_player.worker import Worker  # noqa: E402
 from tools import _csvfile  # noqa: E402
 
 DOC = os.path.join(ROOT, "video-tests", "purb-168-178.json")
 
 
-def turn(until, cap):
-    t = time.perf_counter()
-    while not until() and time.perf_counter() - t < cap:
-        QApplication.processEvents()
-        time.sleep(0.005)
-    return time.perf_counter() - t
+TURNS = 1_000_000
+
+
+def turned(w, between=None):
+    """Takes the Worker `w`'s turns on this thread, as its loop takes them, until no rung is due,
+    calling `between` after each; the turns taken."""
+    threading.current_thread().name = "worker"     # as Worker.run names its thread: the probe and Readers.reap read it
+    for turns in range(TURNS):
+        with w._cv:
+            turn = w._turn()
+        if turn is None:
+            return turns
+        serves, steps = turn
+        w.graph.readers.reap()
+        job = None
+        try:
+            for job, act in steps:
+                w.graph.serving(serves, job.name)
+                act()
+        except Cancelled:
+            job.cancelled()
+        except EndOfStream:
+            w.shortened.emit(w.graph.count)
+            job.ended()
+        except Exception as e:
+            traceback.print_exc()
+            job.raised(e)
+        if between is not None:
+            between()
+    raise RuntimeError(f"still turning after {TURNS} turns")
 
 
 if __name__ == "__main__":
@@ -71,6 +98,7 @@ if __name__ == "__main__":
     with tempfile.TemporaryDirectory() as tmp:
         path = os.path.join(tmp, "doc.json")
         D.save(doc, path)
+        Worker.start = lambda self: None      # the window's worker turns on this thread, not its own
         win = PlayerWindow(path, "t", entries)
         win.resize(1280, 720)
         win.show()
@@ -89,7 +117,9 @@ if __name__ == "__main__":
         cuts = lambda: [c.extent.rows for c in win.graph.entry(table).cuts] if win.graph.entry(table) else []
         card = lambda: win.pane.widget(table)
         held = lambda: len({r for r, *_ in (card().result or {}).get("periods", [])}) if card() is not None else 0
-        took = turn(lambda: cuts() and held() == len(cuts()) and not win._clip_asked, 50)
+        t = time.perf_counter()
+        turned(win.worker, between=app.processEvents)
+        took = time.perf_counter() - t
         periods = cuts()
         print(f"{n} rows; one click of Walk clip, {took:.1f} s; {len(periods)} periods, {held()} held on the csv card")
         print(f"runs of a cut held: {sum(1 for r in win.runs if r.cut)}; rows stepped a node: {({k: len(v) for k, v in stepped.items()})}")

@@ -8,12 +8,14 @@ against the runs that gate keeps inside each upper period, and each a cut of the
 
 The region is `diamond` of video-tests/00000_168-178.shapes.geometry.json, cut from the plate and
 never served; its periods and the upper periods are this script's. The band on the gate is `count`'s
-median over the clip, as 2026-11-20-a-period-fed-a-gate.py's. Qt runs offscreen, so no window opens.
+median over the clip, as 2026-11-20-a-period-fed-a-gate.py's. Qt runs offscreen, so no window opens, and the worker's turns are taken on this thread.
 """
 import os
 import sys
 import tempfile
+import threading
 import time
+import traceback
 
 os.environ.setdefault("OPENCV_LOG_LEVEL", "ERROR")
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -27,8 +29,8 @@ from PySide6.QtWidgets import QApplication  # noqa: E402
 from sieve_player import decoder as decmod  # noqa: E402
 from sieve_player import document as D  # noqa: E402
 from sieve_player.cut import made_from  # noqa: E402
-from sieve_player.decoder import Decoder  # noqa: E402
-from sieve_player.graph import Graph, Series  # noqa: E402
+from sieve_player.decoder import Decoder, EndOfStream  # noqa: E402
+from sieve_player.graph import Cancelled, Graph, Series  # noqa: E402
 from sieve_player.registry import computed, defaults, discover  # noqa: E402
 from sieve_player.worker import Worker  # noqa: E402
 
@@ -36,6 +38,38 @@ DOC = os.path.join(ROOT, "video-tests", "purb-168-178.json")
 GEOMETRY = os.path.join(ROOT, "video-tests", "00000_168-178.shapes.geometry.json")
 PERIODS = [(100, 160), (140, 200)]
 UPPER = [(0, 300), (350, 590)]
+
+
+TURNS = 1_000_000
+
+
+def turned(w, between=None):
+    """Takes the Worker `w`'s turns on this thread, as its loop takes them, until no rung is due,
+    calling `between` after each; the turns taken."""
+    threading.current_thread().name = "worker"     # as Worker.run names its thread: the probe and Readers.reap read it
+    for turns in range(TURNS):
+        with w._cv:
+            turn = w._turn()
+        if turn is None:
+            return turns
+        serves, steps = turn
+        w.graph.readers.reap()
+        job = None
+        try:
+            for job, act in steps:
+                w.graph.serving(serves, job.name)
+                act()
+        except Cancelled:
+            job.cancelled()
+        except EndOfStream:
+            w.shortened.emit(w.graph.count)
+            job.ended()
+        except Exception as e:
+            traceback.print_exc()
+            job.raised(e)
+        if between is not None:
+            between()
+    raise RuntimeError(f"still turning after {TURNS} turns")
 
 
 def filed(doc, tools, nid, rows, n, folder):
@@ -48,7 +82,7 @@ def filed(doc, tools, nid, rows, n, folder):
     doc.node(nid).params.update(tools["period"].PATHS["periods"](D.pick_path(doc, tools, nid, "periods")[0]))
 
 
-def walked(app, g):
+def walked(g):
     """Every cut in time the clip lane walks of `g`: [(start, result)] in the order walked, and the rows each node was stepped over."""
     ready, stepped = [], {}
     g.on_event = lambda ev: ev.kind == "step" and ev.lane == "clip" and stepped.setdefault(ev.node, []).append(ev.row)
@@ -58,11 +92,7 @@ def walked(app, g):
     w.walk_clip()
     want = sum(len(t.cuts) for t in g.snapshot().timed)
     t0 = time.perf_counter()
-    w.start()
-    while len(ready) < want and time.perf_counter() - t0 < 20:
-        app.processEvents()
-        time.sleep(0.01)
-    w.stop()
+    turned(w)
     g.on_event = None
     return ready, stepped
 
@@ -101,7 +131,7 @@ if __name__ == "__main__":
         g = Graph(doc, Decoder(doc.video), tools)
         e = g.snapshot().entries["track"]
         extents[order] = [c.extent for c in e.cuts]
-        ready, stepped = walked(app, g)
+        ready, stepped = walked(g)
         g.close()
         print(f"{' under '.join(reversed(order))}: track's cuts {[(x.rows, x.rect) for x in extents[order]]}; "
               f"{len(ready)} periods walked, track over {[(s, len(r['track']['signal'])) for s, r in ready]}, "
@@ -138,7 +168,7 @@ if __name__ == "__main__":
     p = g.snapshot()
     print(f"\na period under a period, nothing held: {lower}'s standing {p.entries[lower].standing!r}; "
           f"walked: {[w.chain for w in p.timed]}")
-    ready, _ = walked(app, g)
+    ready, _ = walked(g)
     held.update({(s, s + len(r[gate]["signal"])): r[gate] for s, r in ready})
     print(f"{gate} walked over {sorted(held)}, each holding a gate: {all('gate' in r for r in held.values())}")
     g.sync()
@@ -150,7 +180,7 @@ if __name__ == "__main__":
     inside = all(any(made_from(c, u) and u.extent.rows[0] <= c.extent.rows[0] < c.extent.rows[1] <= u.extent.rows[1] for u in ups) for c in lows)
     print(f"each a cut of the upper period it lies in, and inside it: {inside}; none across two: "
           f"{all(sum(made_from(c, u) for u in ups) == 1 for c in lows)}")
-    ready, stepped = walked(app, g)
+    ready, stepped = walked(g)
     g.close()
     below = [s for s, r in ready if "track" in r]
     print(f"walked: {[w.chain for w in p.timed]}; track over {len(below)} periods, "

@@ -7,11 +7,13 @@ over it and those of another apart over theirs: over the crossings clip, `count`
     .venv\\Scripts\\python -X utf8 docs\\findings\\experiments\\2026-11-20-stepped-nodes-of-two-extents.py 2>NUL
 
 The gate is `count`'s over the clip as a held run would hand it, made here first; the band is that
-of 2026-11-20-a-period-fed-a-gate.py. Qt runs offscreen, so no window opens.
+of 2026-11-20-a-period-fed-a-gate.py. Qt runs offscreen, so no window opens, and the worker's turns are taken on this thread.
 """
 import os
 import sys
+import threading
 import time
+import traceback
 
 os.environ.setdefault("OPENCV_LOG_LEVEL", "ERROR")
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -24,12 +26,44 @@ from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from sieve_player import decoder as decmod  # noqa: E402
 from sieve_player import document as D  # noqa: E402
-from sieve_player.decoder import Decoder  # noqa: E402
-from sieve_player.graph import Graph, Series, gated  # noqa: E402
+from sieve_player.decoder import Decoder, EndOfStream  # noqa: E402
+from sieve_player.graph import Cancelled, Graph, Series, gated  # noqa: E402
 from sieve_player.registry import computed, defaults, discover  # noqa: E402
 from sieve_player.worker import Worker  # noqa: E402
 
 DOC = os.path.join(ROOT, "video-tests", "purb-168-178.json")
+
+
+TURNS = 1_000_000
+
+
+def turned(w, between=None):
+    """Takes the Worker `w`'s turns on this thread, as its loop takes them, until no rung is due,
+    calling `between` after each; the turns taken."""
+    threading.current_thread().name = "worker"     # as Worker.run names its thread: the probe and Readers.reap read it
+    for turns in range(TURNS):
+        with w._cv:
+            turn = w._turn()
+        if turn is None:
+            return turns
+        serves, steps = turn
+        w.graph.readers.reap()
+        job = None
+        try:
+            for job, act in steps:
+                w.graph.serving(serves, job.name)
+                act()
+        except Cancelled:
+            job.cancelled()
+        except EndOfStream:
+            w.shortened.emit(w.graph.count)
+            job.ended()
+        except Exception as e:
+            traceback.print_exc()
+            job.raised(e)
+        if between is not None:
+            between()
+    raise RuntimeError(f"still turning after {TURNS} turns")
 
 
 if __name__ == "__main__":
@@ -79,11 +113,7 @@ if __name__ == "__main__":
     w.clipReady.connect(lambda r, s, f: clip.append((r, s)), Qt.DirectConnection)
     w.walk_clip()
     t0 = time.perf_counter()
-    w.start()
-    while len(ready) < len(cuts) and time.perf_counter() - t0 < 50:
-        app.processEvents()
-        time.sleep(0.01)
-    w.stop()
+    turned(w)
     g.close()
     print(f"walked in {time.perf_counter() - t0:.1f} s; {len(begun)} ranges begun on the clip lane, {len(ready)} periods ready")
 

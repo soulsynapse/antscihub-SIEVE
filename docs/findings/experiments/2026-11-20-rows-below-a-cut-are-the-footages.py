@@ -9,14 +9,16 @@ plate's rows.
 The periods are this script's. A track's ids are of where its walk began, so the csvs are compared
 by row and centroid and not by id. The served clip is an FFV1 crop of the plate this script writes
 to a folder of its own, put in place of the store's by `region.cut_file`, so no clip is cut into the
-store. Qt runs offscreen, so no window opens.
+store. Qt runs offscreen, so no window opens, and the worker's turns are taken on this thread.
 """
 import csv as csvmod
 import io
 import os
 import sys
 import tempfile
+import threading
 import time
+import traceback
 
 os.environ.setdefault("OPENCV_LOG_LEVEL", "ERROR")
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -30,8 +32,8 @@ from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from sieve_player import decoder as decmod  # noqa: E402
 from sieve_player import document as D  # noqa: E402
-from sieve_player.decoder import Decoder  # noqa: E402
-from sieve_player.graph import Graph  # noqa: E402
+from sieve_player.decoder import Decoder, EndOfStream  # noqa: E402
+from sieve_player.graph import Cancelled, Graph  # noqa: E402
 from sieve_player.registry import defaults, discover  # noqa: E402
 from sieve_player.worker import Worker  # noqa: E402
 
@@ -39,6 +41,38 @@ DOC = os.path.join(ROOT, "video-tests", "purb-168-178.json")
 GEOMETRY = os.path.join(ROOT, "video-tests", "00000_168-178.shapes.geometry.json")
 PERIODS = [(100, 160), (140, 200)]
 BACKGROUND = [(20, 120), (300, 460)]
+
+
+TURNS = 1_000_000
+
+
+def turned(w, between=None):
+    """Takes the Worker `w`'s turns on this thread, as its loop takes them, until no rung is due,
+    calling `between` after each; the turns taken."""
+    threading.current_thread().name = "worker"     # as Worker.run names its thread: the probe and Readers.reap read it
+    for turns in range(TURNS):
+        with w._cv:
+            turn = w._turn()
+        if turn is None:
+            return turns
+        serves, steps = turn
+        w.graph.readers.reap()
+        job = None
+        try:
+            for job, act in steps:
+                w.graph.serving(serves, job.name)
+                act()
+        except Cancelled:
+            job.cancelled()
+        except EndOfStream:
+            w.shortened.emit(w.graph.count)
+            job.ended()
+        except Exception as e:
+            traceback.print_exc()
+            job.raised(e)
+        if between is not None:
+            between()
+    raise RuntimeError(f"still turning after {TURNS} turns")
 
 
 def filed(doc, tools, nid, rows, n, folder):
@@ -50,7 +84,7 @@ def filed(doc, tools, nid, rows, n, folder):
     doc.node(nid).params.update(tools["period"].PATHS["periods"](D.pick_path(doc, tools, nid, "periods")[0]))
 
 
-def walked(app, g):
+def walked(g):
     """The clip's result and every period's, [(start, result)], as the clip lane walks them."""
     ready, clip = [], []
     w = Worker(g, every=1 << 30)
@@ -59,11 +93,7 @@ def walked(app, g):
     w.walk_clip()
     want = sum(len(t.cuts) for t in g.snapshot().timed)
     t0 = time.perf_counter()
-    w.start()
-    while len(ready) < want and time.perf_counter() - t0 < 25:
-        app.processEvents()
-        time.sleep(0.01)
-    w.stop()
+    turned(w)
     return clip[-1] if clip else None, ready
 
 
@@ -102,7 +132,7 @@ if __name__ == "__main__":
     e = g.snapshot().entries
     print(f"{n} rows. {track} below {period} keyed as track above it: {e[track].key == e['track'].key}; "
           f"{blobs} as blobs: {e[blobs].key == e['blobs'].key}")
-    whole, ready = walked(app, g)
+    whole, ready = walked(g)
     g.close()
     csv = tools["csv"]
     above = records(csv.text(whole["track"], 0, g.fps, doc.video))

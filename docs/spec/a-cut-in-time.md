@@ -104,9 +104,9 @@ What each settled, and the box it bears on. A session building a box reads its r
 - anTraX (Gal, Saragosti and Kronauer, eLife 2020): tracklets a graph whose edges are blobs
   merging and splitting, identity passed along it, and no edge a containment. Made from is
   restriction; how tracks join and part is not here.
-- ffmpeg's seeking, and H.264 and MPEG-TS: a seek that snaps to a keyframe under stream copy, a row
-  decoded from the keyframe before it, a transport stream's timestamps that jump. Every period
-  walked's golden master, over `00000.MTS`.
+- Self-adjusting computation (Acar, 2005): an incremental result checked against the same
+  computation run from scratch, from-scratch consistency the property that a stale value breaks. A
+  period held not walked again.
 
 ## A cut's record
 
@@ -385,20 +385,15 @@ one start, where the strip takes one a node.
   its period.
   Check: a one-off over the crossings clip: the clip walked below a `period`, the rows stepped
   against the periods', and a tracks csv below it, its rows against the periods'.
-- [ ] A result below a `period` is the result of the nodes below it run on the period cut to a
-  lossless clip of its own, row for row and equal. A node above the `period` is of the footage
-  and is not in the comparison.
-  Check: a one-off under `docs/findings/experiments/`, the golden master: each period of a
-  `period` over the crossings clip cut by the player's decoder's rows to an RGB-lossless clip, its
-  decoded rows checked byte for byte against the source's first; a document of the nodes below
-  the `period`, its video the clip, run on it; its tables, shifted by the period's first row,
-  against those below the period, the rows that differ said.
 - [ ] A period whose walk is held under the keys the chain now has is not walked again; one whose
   last row moved later is walked from where it ended, a node whose reach after is not none from
   that reach before; one whose first row moved is walked again for the nodes that read it; and a
-  row two periods share is computed once for a node that read neither's edge.
-  Check: a one-off over the crossings clip: a period moved and the clip walked again, the rows
-  stepped that period's alone, and the golden master run again over the moved period, equal.
+  row two periods share is computed once for a node that read neither's edge. Every period's
+  result so reached is the result of a walk of the same document from no store and no held run.
+  Check: a one-off over the crossings clip, `motion` and `background` below the `period` beside
+  `track`: a period moved and the clip walked again, the rows stepped that period's alone, and
+  every period's result against a walk from no store and no held run, equal, the rows that differ
+  said.
 - [ ] Over a period whose walk is held the window shows that walk. Over one whose walk is not, it
   walks each period it overlaps alone, from the later of the period's first row and the window's
   first less the node's reach, to the earlier of the period's last and the window's last and the
@@ -432,3 +427,7 @@ A period too short to keep and two a short gap parts, which are a tool's above t
 A cut of a series result, a `period` on the chain. A period written to a clip and served in its
 place, and the keys below one, as a `region`'s served clip has. Region's key, which holds its
 rect, a served clip's pixels being H.264's and not the plate's. A lift. Identity across periods.
+Each period cut to a lossless clip and the pipeline run on it, compared with the period's result:
+beside a walk below the `period` of the period's rows alone, it checks only the decoder's
+numbering of rows, which earns its cost over `00000.MTS`, its seeks snapping to keyframes and its timestamps
+jumping, and not over a clip the player made.

@@ -6,7 +6,7 @@ import pickle
 
 import numpy as np
 
-from sieve_player import held, theme
+from sieve_player import cut, held, theme
 
 
 def test_a_held_file_reads_back_by_the_form_of_its_records_alone_and_is_let_go_by_a_write_of_no_runs(tmp_path):
@@ -134,6 +134,19 @@ def test_a_run_serves_a_node_where_its_rows_read_the_same_of_the_run_as_of_the_w
     inside.hold(20, 30, of(20, 30), chain, cut=(20, 50))         # a period's walk, from its first row
     assert seen(inside.over(30, 5, held.Chain({"track": "kt"}, frozenset({"track"}), {"track": (3, 0)}), (25, 60), (10, 60)))["track"] == 130.0
     assert inside.over(30, 5, chain, (20, 50), (20, 50)) is not None and inside.over(30, 5, chain, (20, 50)) is None
+    whole = cut.Record("v")
+    a, b = whole.cut(rows=(20, 50)), whole.cut(rows=(40, 70))      # two periods that overlap, under one key
+    both = held.Chain({"detect": "kd", "track": "kt"}, frozenset({"track"}), {"detect": (0, 0), "track": (None, 0)})
+    of_both = lambda start, rows: {"track": of(start, rows)["track"],
+                                   "detect": {"signal": np.arange(start, start + rows, dtype=np.float32) + (100 * (start > 20)), "key": "kd"}}
+    two = held.Runs(1 << 20, lambda nid, r: 0)
+    assert two.hold(20, 30, of_both(20, 30), both, cut=(20, 50)) and two.hold(40, 30, of_both(40, 30), both, cut=(40, 70))
+    spans = lambda nid, record: [(at, r["signal"][0], len(r["signal"])) for at, r in two.listed(nid, both, record, 100).parts]
+    assert two.listed("detect", both, a, 100).record is a and two.listed("detect", both, b, 100).record is b
+    assert spans("detect", a) == [(20, 20.0, 30)]
+    assert spans("detect", b) == [(40, 40.0, 10), (50, 150.0, 20)]     # the rows they share, which read no edge, from the run that began earliest
+    assert spans("track", a) == [(20, 120.0, 30)] and spans("track", b) == [(40, 140.0, 30)]    # read where each walk began
+    assert spans("detect", whole) == [(20, 20.0, 30), (50, 150.0, 20)] and spans("track", whole) == []    # what read no edge is the footage's too
 
 
 def test_a_node_is_marked_by_the_code_its_held_result_was_made_under_and_so_is_every_node_below_it():

@@ -208,7 +208,7 @@ below a `period` read nothing of it.
   cut from the clip's walk, `travel`'s rows one past the window's first served by either and
   `track`'s by the clip's alone; and the window handed `track`'s rows of row 0 and stepping
   `count` from its own first row, refused.
-- [ ] A node's values in a cut are listed by the cut's record, whatever each read of it.
+- [x] A node's values in a cut are listed by the cut's record, whatever each read of it.
   Check: the same seam, two periods under one key listed, each record its own and the rows they
   share listed in both.
 

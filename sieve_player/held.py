@@ -2,7 +2,7 @@
 its keys alone. A run is a Run, (start, rows, {node: result}, bytes, cut), a walk's
 results over `rows` rows from `start` inside a cut and what they hold. The file is the stamp and then a record a run, and
 File pickles a run once however often it writes. Runs is the runs held and which of them a range is
-served from, a node at a time, told the chain as a Chain; `marked` is the nodes whose held results were made under
+served from, a node at a time, told the chain as a Chain, and a node's values in a cut listed as a Listed; `marked` is the nodes whose held results were made under
 other code than lies on disk. Imports nothing of sieve_player but cut; the window says when a run
 is held and written, and what the chain now is."""
 import os
@@ -179,6 +179,14 @@ class Chain(NamedTuple):
     reach: dict = {}
 
 
+class Listed(NamedTuple):
+    """A node's values in a cut: `record`, the cut.Record they are of, and `parts`, (first row,
+    result) in row order, each its result over a stretch of the cut's rows as one run serves it, no
+    row twice and a row no run serves in none."""
+    record: object
+    parts: list
+
+
 def _read(walk, cut, reach, s, n):
     """What a node's rows over `n` rows from `s` read, at their first row and their last, of a walk
     over `walk`, (first row, row past the last), inside a cut of rows `cut`, by cut.read."""
@@ -284,6 +292,28 @@ class Runs:
         """The stepped nodes' results that `over` would serve, each node's its own: rows a walk over
         `walk` can step the rest from as it would its own; {} with none."""
         return self._serving(s, n, chain, walk, cut, [nid for nid in chain.keys if nid in chain.steps])
+
+    def listed(self, nid, chain, record, count):
+        """`nid`'s values in the cut `record`, a cut.Record, as a Listed: its rows, or the `count`
+        rows of the footage for a record of every row, each served to a walk of the cut from its
+        first row to its last from the run that began earliest and serves it, whatever the value
+        read of the cut, so a row may be served by a run of another cut."""
+        cut = record.extent.rows
+        walk = cut or (0, count)
+        before, after = chain.reach.get(nid, (None, None))
+        spans = [walk, *((run.start, run.start + run.rows) for run in self.all), *(run.cut for run in self.all if run.cut)]
+        marks = {m for span in spans for m in span}
+        marks |= {f + before for f, _ in spans} if before is not None else set()
+        marks |= {e - after for _, e in spans} if after is not None else set()
+        points = sorted(m for m in marks if walk[0] <= m <= walk[1])     # between two, what a row reads of every edge is one
+        parts = []
+        for a, b in zip(points, points[1:]):
+            run = next((run for run in self._earliest() if self._serves(run, nid, a, b - a, walk, cut, chain)), None)
+            if run is not None and parts and parts[-1][2] is run and parts[-1][1] == a:
+                parts[-1][1] = b
+            elif run is not None:
+                parts.append([a, b, run])
+        return Listed(record, [(a, rows_of(run.results[nid], run.rows, a - run.start, b - a)) for a, b, run in parts])
 
     def spans(self, chain):
         """The rows held under the keys the chain now has, as (start, rows) stretches in order,

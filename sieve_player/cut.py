@@ -8,6 +8,8 @@ the footage's pixels. Imports nothing of the player.
 from dataclasses import dataclass, field
 from typing import NamedTuple
 
+INF = float("inf")
+
 
 class Extent(NamedTuple):
     """Where a cut lies on its footage: `rows`, None for every row; `rect`, None for every pixel;
@@ -105,9 +107,17 @@ def read(rows, reach, row):
     count not always known."""
     if rows is None:
         return None, None
+    below, on_from = reading(rows, reach)
+    return rows[0] if row < below else None, rows[1] if row >= on_from else None
+
+
+def reading(rows, reach):
+    """Where a value read each edge of a cut of `rows`, as `read` has it: (the row below which it
+    read the first row, the row from which it read the last), either infinite where every row or
+    none did."""
     (first, end), (before, after) = rows, reach
-    return (first if first > 0 and (before is None or row - before < first) else None,
-            end if after is None or row + after >= end else None)
+    return (-INF if first <= 0 else INF if before is None else first + before,
+            -INF if after is None else end - after)
 
 
 def cut_in_time(record):

@@ -12,7 +12,7 @@ from typing import NamedTuple
 
 import numpy as np
 
-from .cut import read
+from .cut import read, reading
 
 EXT = ".series"
 VERSION = 7
@@ -204,10 +204,8 @@ def _reads(walk, cut, reach, lo, hi):
     def edges(span):
         if span is None:
             return np.full(len(rows), -1), np.full(len(rows), -1)
-        (first, end), (before, after) = span, reach
-        reads_first = np.full(len(rows), first > 0) if before is None else (first > 0) & (rows - before < first)
-        reads_end = np.ones(len(rows), bool) if after is None else rows + after >= end
-        return np.where(reads_first, first, -1), np.where(reads_end, end, -1)
+        below, on_from = reading(span, reach)
+        return np.where(rows < below, span[0], -1), np.where(rows >= on_from, span[1], -1)
     (wf, we), (cf, ce) = edges(walk), edges(cut)
     return wf, cf, we, ce
 

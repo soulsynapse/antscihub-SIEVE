@@ -400,7 +400,7 @@ class Column(QWidget):
 
 
 class PlayerWindow(QMainWindow):
-    framesCounted = Signal(str, int)    # a video's frame times are read: its path, the frames its stream has
+    framesCounted = Signal(str, int)    # a video's frame times are read: its path and their rows, never fewer than its stream's frames
 
     def __init__(self, source, title="SIEVE", tools=(), log=None, noted=None):
         """`source` is a list of tools, which become the document, or the path of a saved document.
@@ -806,8 +806,8 @@ class PlayerWindow(QMainWindow):
             self.timeline.controls.progress.setText(f"the worker stopped, see {self.log}; reopen the video")
 
     def _frames_counted(self, path, rows):
-        """The open video's frame times say its stream has `rows` frames: the count comes down to
-        them where its container claimed more, before any read reaches the end."""
+        """The open video's frame times have `rows` rows, never fewer than its stream's frames: the
+        count comes down to them where its container claimed more, before any read reaches the end."""
         if self.decoder is not None and self.decoder.path == path:
             self.decoder.ends_at(rows)
             self._shortened(self.decoder.count)

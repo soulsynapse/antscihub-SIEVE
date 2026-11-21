@@ -213,7 +213,8 @@ def frame_times(path, anew=False):
 def read_frame_times_ahead(path, then=None):
     """Reads `frame_times(path)` on a thread of its own and does not wait, so a first seek finds
     the table read; a file that cannot be read is left for whoever reads it next to say. `then` is
-    called on that thread with the table's rows, the frames the stream has, where it has any."""
+    called on that thread with the table's rows where it has any: the frames the stream has, or
+    more where a packet past them is cut short, never fewer."""
     def read():
         try:
             rows = len(frame_times(path))

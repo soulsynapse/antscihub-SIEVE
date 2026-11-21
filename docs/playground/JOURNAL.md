@@ -22,10 +22,13 @@ this file where they differ.
   plane while memory is free and stops when it is not. (b) A 5.3K table
   (`sim.py prices 5.3K`, not yet run) and a workload of many pieces walked at once by several
   stores on one disk, which is the HPC case and the one thing about cores still unpriced.
-  (c) A cheap claims pass, he offered Haiku for it on 2026-11-21: an Agent with `model: haiku`
-  handed one section of this journal or of `contract.md` and told to list each claim about the
-  tree with the file and line that bears it out or does not. Calibrate before trusting: plant
-  one claim known false and one known true and see both come back right. (d) Rewrite
+  (c) Cheap claim checks, which he offered Haiku for on 2026-11-21 with the rule that it is
+  given one claim at a time and never a section to search: an Agent with `model: haiku`, one
+  claim about the tree, the file to look in, and the answer wanted as holds, does not hold or
+  cannot tell, with the line. I pick the claims, the ones a later step leans on. Calibrate
+  first with a claim known true and one known false. The one-minute cap on runs is lifted, by
+  his word the same day; a queued run's prompt no longer carries it.
+  (d) Rewrite
   `contract.md` to what the simulation settled, then stage 4's first slice.
 - Run the simulation: `.venv/Scripts/python.exe docs/playground/sim/sim.py 150` (torture, a line
   a scheme) and `... sim.py prices 1080p [profile]` (the table below), a few seconds each.

@@ -6,6 +6,10 @@ NAME, KIND, EXPECTS, PRODUCES = "rescale", "frame", ("bgr", "gray", "mask"), "sa
 PARAMS = {"scale": {"default": 0.5, "kind": "float", "range": (0.1, 1.0)}}
 
 
+def reach_in_rows(params):
+    return 0, 0
+
+
 def run(frames, row, params):
     f = frames(row)
     s = params["scale"]

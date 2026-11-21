@@ -16,6 +16,10 @@ def masked(frame, mask):
     return np.where(keep if frame.ndim == 2 else keep[..., None], frame, np.zeros((), frame.dtype))
 
 
+def reach_in_rows(params):
+    return 0, 0
+
+
 def run(frames, row, params):
     return masked(frames(row), frames(row, "mask"))
 

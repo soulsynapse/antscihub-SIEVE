@@ -17,6 +17,10 @@ PARAMS = {
 }
 
 
+def reach_in_rows(params):
+    return 0, 0
+
+
 def run(series, params):
     out = np.zeros(len(series.data), np.float32)
     for r, t in enumerate(series.data):

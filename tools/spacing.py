@@ -29,6 +29,10 @@ def spacing(table, method, r=0.0):
     return float(getattr(np, method)(d.min(axis=1)))
 
 
+def reach_in_rows(params):
+    return 0, 0
+
+
 def run(series, params):
     m, r = params["method"], float(params["r"])
     return {"signal": np.array([spacing(t, m, r) for t in series.data], np.float32)}

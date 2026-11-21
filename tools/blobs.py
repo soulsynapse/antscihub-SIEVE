@@ -92,6 +92,10 @@ def find(mask, min_area, max_area=0, diff=None, core_threshold=0, split=False):
     return np.concatenate([out, *pieces]) if pieces else out
 
 
+def reach_in_rows(params):
+    return 0, 0
+
+
 def run(frames, row, params):
     return find(frames(row), int(params["min_area"]), int(params["max_area"]), frames(row, "diff"),
                 int(params["core_threshold"]), bool(params["split"]))

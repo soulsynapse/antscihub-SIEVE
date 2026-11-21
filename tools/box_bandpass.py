@@ -60,6 +60,10 @@ def bandpass(frame, inner, outer, mode, precision="16 bit"):
     return cv2.convertScaleAbs(d, alpha=scale)
 
 
+def reach_in_rows(params):
+    return 0, 0
+
+
 def run(frames, row, params):
     return bandpass(frames(row), params["inner"], params["outer"], params["mode"], params["precision"])
 

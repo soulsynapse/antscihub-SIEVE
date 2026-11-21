@@ -18,6 +18,10 @@ def fold(frame):
     return np.array([len(frame)], np.float64)
 
 
+def reach_in_rows(params):
+    return 0, 0
+
+
 def run(series, params):
     out = np.zeros(len(series.data), np.float32)
     for r, row in enumerate(series.data):

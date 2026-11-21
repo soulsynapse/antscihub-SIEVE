@@ -151,12 +151,12 @@ rows to be exact, nor of a value below a cut whether it read the cut. The regist
 reader of what a tool declares
 (`docs/spec/what-a-node-declares.md`).
 
-- [ ] A tool that reads a row other than the one it is asked at, one that steps, one that runs
+- [x] A tool that reads a row other than the one it is asked at, one that steps, one that runs
   whole or one that reads a neighbouring frame, declares its reach in rows, how far before a row
   and how far after it its result there reads, or none, its reach unbounded; one left unsaid is
   unbounded, as is one whose memory fades and never ends and one that reads its whole extent.
   Check: `tests/test_registry.py`.
-- [ ] A node's reach is its own added to that of every node it reads, a frame node among them,
+- [x] A node's reach is its own added to that of every node it reads, a frame node among them,
   unbounded where any is.
   Check: a seam: `travel` below `motion`, its reach the two added. And a one-off, each such tool
   walked from two first rows over the crossings clip, the rows past the later at which the two

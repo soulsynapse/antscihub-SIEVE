@@ -66,6 +66,10 @@ def attach(table, marks, prefix="mark", columns=(), outline="contour"):
     return with_column(out, f"{prefix}_n", count, NONE)
 
 
+def reach_in_rows(params):
+    return 0, 0
+
+
 def run(frames, row, params):
     return attach(frames(row), frames(row, "marks"), params["prefix"], names(params["columns"]), params["outline"])
 

@@ -22,6 +22,10 @@ PARAMS = {
 }
 
 
+def reach_in_rows(params):
+    return max(0, int(params["reach"])), max(0, int(params["reach"]))
+
+
 def run(series, params):
     x = np.asarray(series.data, np.float64).reshape(-1)
     reach, k = max(0, int(params["reach"])), params["kernel"]

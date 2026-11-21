@@ -9,6 +9,10 @@ SIEVE_TOOL = True
 NAME, KIND, EXPECTS, PRODUCES = "speed", "frame", "flow", "gray"
 
 
+def reach_in_rows(params):
+    return 0, 0
+
+
 def run(frames, row, params):
     f = frames(row)
     return (np.hypot(f[..., 0], f[..., 1]) * frames.fps).astype(np.float32)

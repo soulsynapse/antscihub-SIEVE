@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from .cut import Record
 from .document import INPUT, VIDEO_TOOL, fed, fits, frame_inputs, kind_of, produces, video_output, wants
 from .registry import cuts as tool_cuts
-from .registry import computed, cut_extents_of, fold_of, is_selector, key_params_of, optional, serves_cut_file, static, steps
+from .registry import computed, cut_extents_of, fold_of, is_selector, key_params_of, optional, reach_of, serves_cut_file, static, steps
 from .wire import overlaid
 
 
@@ -44,6 +44,7 @@ class Entry:
     file: tuple | None = None                   # (path, footage print) of the file the node serves in place of its run, or None
     cuts: tuple = ()                            # the cuts the node's output is of, a cut.Record each: the footage's own where no cutting node is above it
     reads: tuple = ()                           # the cuts its inputs are of: its own, but for a cutting node, whose cuts are made from them
+    reach: tuple = (None, None)                 # (rows before, rows after) a row that the node's result there reads, through everything above it; None a side without bound
     steps: bool = False                         # a chain node the walk steps a row at a time; a chain node without it runs whole
     whole_by: str | None = None                 # a stepping tool run whole: the chain node that ended the prefix; None on every other node
     produces: str | None = None                 # the type the node hands out, of wire.TYPES; None for one unresolved or that nothing feeds
@@ -126,7 +127,9 @@ def plan(doc, tools, base, cut_file=None, cut_result=None, footage=None):
     does not raise. A node that serves its file reads nothing, and its key is the one a document opened on
     that file gives its video node, so everything below it is keyed as that document's is. A node's cuts are its inputs', and a cutting node's are made from them, one for
     each extent its tool's `cut_extents` answers of its params and of `cut_result`; a tool that
-    raises there cuts nothing. A node reads one piece of the plate: one
+    raises there cuts nothing. A node's reach is its tool's, the registry's `reach_of`, added a side
+    to the furthest of the nodes it reads, and without bound where either is; the video node and
+    a node that serves its file read their own row. A node reads one piece of the plate: one
     whose inputs are of two, the plate among them, is not fed, nor is anything that reads it, and
     its standing says which. A chain node is stepped when its tool steps and everything it reads on
     the chain is stepped; the first node that runs whole ends the prefix for every node after it,
@@ -231,6 +234,23 @@ def plan(doc, tools, base, cut_file=None, cut_result=None, footage=None):
                     pass
         return made[nid]
 
+    reaches = {}
+
+    def reach_of_node(nid, stack=()):
+        if nid in stack:
+            return None, None
+        if nid not in reaches:
+            node = doc.node(nid)
+            tool = tools.get(node.tool)
+            if node.tool == VIDEO_TOOL or file_of(nid) or (tool is not None and is_selector(tool)):
+                reaches[nid] = (0, 0)
+            else:
+                sides = [(0, 0) if tool is None else reach_of(tool, computed(tool, node.params)),
+                         *(reach_of_node(s, (*stack, nid)) for s in wired(nid).values() if s is not None)]
+                own, above = sides[0], list(zip(*sides[1:])) or [(0,), (0,)]
+                reaches[nid] = tuple(None if o is None or None in up else o + max(up) for o, up in zip(own, above))
+        return reaches[nid]
+
     def said(piece):
         return "the plate" if piece is None else piece
 
@@ -255,7 +275,7 @@ def plan(doc, tools, base, cut_file=None, cut_result=None, footage=None):
         entries[n.id] = Entry(tool, kind, dict(n.params), n.band, src, key_of(n.id), raw_keys[n.id],
                               up_key(n.id) if src else None, fed(doc, n.id, tools) and n.id not in blocked, srcs, static_of(n.id),
                               types={name: produces(doc, tools, s) if s else None for name, s in srcs.items()},
-                              file=file_of(n.id), cuts=cuts_of(n.id), reads=reads_of(n.id), produces=produces(doc, tools, n.id),
+                              file=file_of(n.id), cuts=cuts_of(n.id), reads=reads_of(n.id), reach=reach_of_node(n.id), produces=produces(doc, tools, n.id),
                               computed=computed(tool, n.params))
         if kind == "series":
             series.append(n.id)

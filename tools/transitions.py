@@ -39,6 +39,10 @@ def changed(prev, cur, column, lo=None, hi=None):
     return int(np.count_nonzero(hit))
 
 
+def reach_in_rows(params):
+    return 1, 0
+
+
 def run(series, params):
     out, state = np.zeros(len(series.data), np.float32), None
     for r, t in enumerate(series.data):

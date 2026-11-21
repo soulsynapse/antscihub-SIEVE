@@ -48,6 +48,10 @@ def difference(frame, bg, mode, match_light=False):
     return d.max(axis=2) if d.ndim == 3 else d
 
 
+def reach_in_rows(params):
+    return 0, 0
+
+
 def run(frames, row, params):
     return difference(frames(row), frames(row, "bg"), params["mode"], params["match_light"])
 

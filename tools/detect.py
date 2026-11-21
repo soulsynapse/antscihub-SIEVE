@@ -64,6 +64,10 @@ def find(mask, min_area, max_area=0, dark=False):
     return out
 
 
+def reach_in_rows(params):
+    return 0, 0
+
+
 def run(frames, row, params):
     return find(frames(row), int(params["min_area"]), int(params["max_area"]), bool(params["dark"]))
 

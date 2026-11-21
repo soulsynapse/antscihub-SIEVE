@@ -31,6 +31,10 @@ NAME, KIND, EXPECTS, PRODUCES = "csv", "series", ("signal", "blobs", "tracks"), 
 COLUMNS = ("row", "time", "signal", "gate")
 
 
+def reach_in_rows(params):
+    return 0, 0
+
+
 def run(series, params):
     if not is_tables(series.data):
         return {"signal": np.asarray(series.data, np.float32).reshape(-1)}

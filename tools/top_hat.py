@@ -36,6 +36,10 @@ def top_hat(frame, mode, radius, inner=0):
     return cv2.morphologyEx(frame, OPS[mode], kernel)
 
 
+def reach_in_rows(params):
+    return 0, 0
+
+
 def run(frames, row, params):
     return top_hat(frames(row), params["mode"], params["radius"], params["inner"])
 

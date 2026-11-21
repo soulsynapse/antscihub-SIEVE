@@ -43,6 +43,10 @@ def sample(table, plane, column, method="mean"):
     return with_column(table, column, out, unit, of)
 
 
+def reach_in_rows(params):
+    return 0, 0
+
+
 def run(frames, row, params):
     return sample(frames(row), frames(row, "plane"), params["column"], params["method"])
 

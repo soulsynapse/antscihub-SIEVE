@@ -4,7 +4,7 @@ from types import SimpleNamespace as Tool
 
 import pytest
 
-from sieve_player.registry import FACETS, category, changes_nothing, code_print, cuts, defaults, description, discover, hint, imported_print, params, serves_cut_file, signature
+from sieve_player.registry import FACETS, category, changes_nothing, code_print, cuts, defaults, description, discover, hint, imported_print, params, reach_of, serves_cut_file, signature
 
 
 def test_the_first_rule_that_fits_decides_the_category():
@@ -63,3 +63,34 @@ def test_a_tools_code_print_is_its_own_file_and_the_shared_ones_and_the_imported
     assert code_print(b) != was[1]
     discover(str(folder))
     assert (imported_print(a), imported_print(b)) == was and imported_print(Tool()) is None and code_print(Tool()) is None
+
+
+def test_a_tool_says_its_reach_a_nodes_is_added_down_the_wires_and_a_frame_read_past_it_raises():
+    from sieve_player import document as D
+    from sieve_player.graph import Graph
+    from sieve_player.plan import plan
+    from tests.test_graph import Dec, gray
+
+    by_name = {e.name: e.module for e in discover("tools") if e.ok}
+    assert (reach_of(by_name["motion"], {}), reach_of(by_name["smooth"], {"reach": 3}), reach_of(by_name["track"], {})) == ((1, 0), (3, 3), (None, 0))
+    assert reach_of(Tool(), {}) == reach_of(by_name["background"], {}) == reach_of(Tool(reach_in_rows=lambda params: (1, -1)), {}) == (None, None)
+    below = D.from_tools([by_name["gray"], by_name["motion"], by_name["travel"]])
+    below.wires.append(D.Wire("motion", "travel"))      # no type of motion's fits travel, and a reach is added whatever the wire carries
+    e = plan(below, by_name, "base").entries
+    assert (e["video"].reach, e["gray"].reach, e["motion"].reach, e["travel"].reach) == ((0, 0), (0, 0), (1, 0), (2, 0))
+
+    def reads(name, reach, at=0, **more):
+        return Tool(NAME=name, KIND="frame", EXPECTS="gray", PRODUCES="gray", reach_in_rows=lambda params: reach, run=lambda frames, row, params: frames(row + at), **more)
+
+    gray = Tool(**{**vars(gray), "reach_in_rows": lambda params: (0, 0)})
+    tools = {t.NAME: t for t in (gray, reads("ahead", (0, 3)), reads("behind", (1, 0), -1), reads("both", (1, 1), INPUTS={"other": "gray"}), reads("lies", (0, 0), -1), Tool(NAME="unsaid"))}
+    doc = D.from_tools([gray, tools["ahead"], tools["both"]])
+    for name, src, into in (("behind", "gray", "in"), ("lies", "gray", "in"), ("unsaid", "both", "in")):
+        doc.add_node(name)
+        doc.connect(src, name, into)
+    doc.connect("behind", "both", "other")
+    g = Graph(doc, Dec(), tools)
+    assert (g.entry("both").reach, g.entry("unsaid").reach) == ((2, 4), (None, None))        # the furthest of what it reads, a side, and its own
+    assert g.compute("behind", 3) is not None
+    with pytest.raises(ValueError, match="reach_in_rows"):
+        g.compute("lies", 3)

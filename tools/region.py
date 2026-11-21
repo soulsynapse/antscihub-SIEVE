@@ -209,6 +209,10 @@ def cut_extents(params, result):
     return [{"rect": served(params)}]
 
 
+def reach_in_rows(params):
+    return 0, 0
+
+
 def run(frames, row, params):
     plate = params["plate"]
     if not plate:

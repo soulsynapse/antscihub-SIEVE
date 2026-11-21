@@ -10,6 +10,10 @@ SIEVE_TOOL = True
 NAME, KIND, EXPECTS, PRODUCES = "motion", "frame", ("gray", "mask"), "gray"
 
 
+def reach_in_rows(params):
+    return 1, 0
+
+
 def run(frames, row, params):
     f = frames(row)
     return cv2.absdiff(f, frames(row - 1)) if row > 0 else np.zeros_like(f)

@@ -19,6 +19,10 @@ def steps(prev, cur):
     return np.hypot(cur["cx"][i_cur] - prev["cx"][i_prev], cur["cy"][i_cur] - prev["cy"][i_prev]).astype(np.float64)
 
 
+def reach_in_rows(params):
+    return 1, 0
+
+
 def run(series, params):
     out, state = np.zeros(len(series.data), np.float32), None
     for r, t in enumerate(series.data):

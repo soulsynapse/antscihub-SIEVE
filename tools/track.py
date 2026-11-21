@@ -104,6 +104,10 @@ def _knobs(params):
             float(params["merge_ratio"]))
 
 
+def reach_in_rows(params):
+    return None, 0
+
+
 def run(series, params):
     rows, signal = link(series.data, *_knobs(params))
     return {"rows": rows, "signal": signal}

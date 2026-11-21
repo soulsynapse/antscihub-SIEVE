@@ -16,7 +16,7 @@ import numpy as np
 from . import density
 from .decoder import CLEAR, Decoder, EndOfStream, footage_print_by_stamp, letting_go
 from .document import INPUT, VIDEO_TOOL, video_output
-from .registry import by_name, computed, names_cut_files
+from .registry import by_name, computed, names_cut_files, reach_of
 from .plan import _key, base_key, facts, plan
 from .stream import Emitter
 from .wire import ROWS, is_table, nbytes, own_bytes
@@ -210,10 +210,13 @@ class Frames:
     sees one graph even if the document is synced under it; but a read made once the node's raw key
     under the current plan differs from the one it began under, or once the graph is halted,
     raises Cancelled, so a run of many reads, a composite over the clip, dies at its next read
-    rather than finishing work nothing will take."""
+    rather than finishing work nothing will take. Made with the `row` its run is asked at, a read of
+    a row outside what the tool's `reach_in_rows` says raises ValueError."""
 
-    def __init__(self, graph, plan, nid, sources, key, types=None):
+    def __init__(self, graph, plan, nid, sources, key, types=None, row=None):
         self._graph, self._plan, self._nid, self._sources = graph, plan, nid, sources
+        before, after = reach_of(plan[nid].tool, plan[nid].computed)
+        self._reads = None if row is None else (None if before is None else row - before, None if after is None else row + after)
         self._raw_key, self._types = plan[nid].raw_key, types or {}
         self.key, self.fps, self.count = key, graph.fps, graph.count
         self.cut = plan[nid].reads[0] if len(plan[nid].reads) == 1 else None
@@ -231,6 +234,8 @@ class Frames:
         now = g._plan.get(self._nid)
         if g.halt or now is None or now.raw_key != self._raw_key:
             raise Cancelled(f"{self._nid} at row {row}: the graph moved on")
+        if self._reads is not None and ((self._reads[0] is not None and row < self._reads[0]) or (self._reads[1] is not None and row > self._reads[1])):
+            raise ValueError(f"read row {row}, outside the rows its tool's reach_in_rows says it reads")
         src = self._sources[input]
         try:
             v = g._compute(self._plan, src, row, raw=True, reader=self._nid)
@@ -769,7 +774,7 @@ class Graph:
         mk = (e.raw_key, None if e.static else row)
         got, v = self._memoized(mk)
         if v is None:
-            frames = Frames(self, plan, nid, e.srcs, e.src_key, e.types)
+            frames = Frames(self, plan, nid, e.srcs, e.src_key, e.types, row)
             with self.probe(nid, row, e.raw_key, reader) as ev:
                 try:
                     v = e.tool.run(frames, row, e.computed)

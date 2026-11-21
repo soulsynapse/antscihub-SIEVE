@@ -20,6 +20,10 @@ PARAMS = {f"{c}_{end}": {"default": top if end == "hi" else 0, "kind": "int", "r
 PATHS = {"settings": lambda path: load_bounds(path)}
 
 
+def reach_in_rows(params):
+    return 0, 0
+
+
 def run(frames, row, params):
     hsv = frames(row) if frames.type() == "hsv" else cv2.cvtColor(frames(row), cv2.COLOR_BGR2HSV)
     h0, h1 = params["h_lo"], params["h_hi"]

@@ -5,6 +5,10 @@ SIEVE_TOOL = True
 NAME, KIND, EXPECTS, PRODUCES = "gray", "frame", "bgr", "gray"
 
 
+def reach_in_rows(params):
+    return 0, 0
+
+
 def run(frames, row, params):
     return cv2.cvtColor(frames(row), cv2.COLOR_BGR2GRAY)
 

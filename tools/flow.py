@@ -29,6 +29,10 @@ def lk(prev, gray, sigma):
     return np.dstack([u, v]).astype(np.float32)
 
 
+def reach_in_rows(params):
+    return 1, 0
+
+
 def run(frames, row, params):
     g = np.asarray(frames(row), np.float32)
     if row == 0:

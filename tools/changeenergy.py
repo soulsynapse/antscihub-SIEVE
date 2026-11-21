@@ -12,6 +12,10 @@ NAME, KIND, EXPECTS, PRODUCES = "changeenergy", "frame", ("gray", "mask"), "gray
 PARAMS = {"sigma": {"default": 2.0, "kind": "float", "range": (0.5, 8.0), "decimals": 1}}
 
 
+def reach_in_rows(params):
+    return 1, 0
+
+
 def run(frames, row, params):
     f = np.asarray(frames(row), np.float32)
     if row == 0:

@@ -1619,8 +1619,8 @@ class PlayerWindow(QMainWindow):
         """The graph synced where a cutting node is cut by a result on a wire, or any cutting node
         where `by_count` says the count moved, and where the cuts they then make are not those they
         made, the walk begun again over them, and the clip walk asked again where it was asked or
-        `resume` says a clip walk's run made them. Where a run held moved only cuts in time, nothing the own
-        ranges walk, each lane walks the cuts now made and neither own range begins again."""
+        `resume` says a clip walk's run made them. Where a run held moved only cuts in time, nothing
+        the own ranges walk, each lane walks the cuts now made and neither own range begins again."""
         if self.graph is None:
             return
         of = registry.cuts if by_count else registry.cut_by

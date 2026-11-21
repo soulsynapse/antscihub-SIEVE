@@ -177,7 +177,7 @@ class Worker(QThread):
         self._held_periods = {}               # (walked node, (first, end)) -> the HeldCut give_periods was told of that cut
         period = _Walk(graph, name="clip", every=1 << 62, progress=None, ready=self.periodReady,
                        refused=self.clipRefused, failed=self.failed, tell_every=tell_every, keeps=True)
-        self._clip_legs = _Legs(period, self.periodWalked, self._held, given=True)     # every cut in time, set as the clip walk begins
+        self._clip_legs = _Legs(period, self.periodWalked, self._held, given=True)     # every cut in time, set as the clip walk begins and on a recut
         told = _OfCut(self.windowPeriodReady)
         told.walk = _Walk(graph, name="window", every=every, progress=None, ready=told, refused=self.walkRefused,
                           failed=self.failed, tell_every=tell_every)

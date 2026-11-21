@@ -414,9 +414,9 @@ def period_keys(p):
 
 def window_legs(p, s, n):
     """Each cut in time of the Plan `p` that the window of `n` rows from `s` overlaps, as the window
-    walks it alone, a Leg each. The walk reaches past the window by its chain's largest bounded reach each side, a side with no
-    bound reaching none, and never outside the cut; a node is best effort where a side it has no
-    bound on is cut short of the cut's edge."""
+    walks it alone, a Leg each. The walk reaches past the window by its chain's largest bounded
+    reach each side, a side with no bound reaching none, and never outside the cut; a node is best
+    effort where a side it has no bound on is cut short of the cut's edge."""
     legs = []
     for w in p.timed:
         reach = {nid: p.entries[nid].reach for nid in w.chain}

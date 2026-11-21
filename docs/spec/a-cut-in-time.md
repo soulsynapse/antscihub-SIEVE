@@ -442,6 +442,8 @@ strip takes one a node.
   window moves, and not an identity's number, which only the period's walk gives. What the
   session builds toward it is conservative, reversible, predictable to the user, and quick
   without buying an unbounded walk.
+  Kendrick: the plot draws a best-effort piece at half its colour's alpha, and its readout marks
+  its value with a `~`.
   Check: a one-off over the crossings clip: the window's walk turned by hand over several periods,
   `track` below them, held and not, each against its period walked alone, and what the window says
   of each read off what it is handed.

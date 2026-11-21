@@ -18,7 +18,7 @@ from .stream import ASKED, GIVEN, HAND, SHAPE
 from .wire import ROWS, is_table, nbytes, own_bytes, share_bytes
 
 STACK_BYTES = 512 << 20   # the most a walk's stack and stepped results, the window's or the clip's, may take, as nbytes counts them
-WALKED = "walk:stack"     # where a walk that keeps its stack puts it among the chain's results: (walked node, stacked_key, rows)
+WALKED = "walk:stack"     # where a walk that keeps its stacks puts them among the chain's results: ((walked node, stacked_key, rows), ...)
 
 
 def _stack_for(n, out, table):
@@ -112,21 +112,26 @@ class _Walk:
     ask: tuple = (0, 0, False, {})  # (start, length, spared, given) the range was asked over; the clip's is the clip
     spared: bool = False        # the chain's results over the range are held elsewhere: nothing is stacked or stepped and no result goes out
     given: dict = field(default_factory=dict)     # node -> (raw key, its result's fields over the range, the code it was made under or None), held elsewhere: stepped nodes the walk does not step
-    handed: tuple = None        # (served, rows): the walked node's rows over the range held elsewhere, bool and object arrays; a row served is stacked and not walked
-    keeps: bool = False         # the chain's result goes out with the stack beside it under WALKED, where stacked_key has one
+    handed: dict = None         # walked node -> (served, rows): its rows over the range held elsewhere, bool and object arrays; a row served is stacked and not walked
+    keeps: bool = False         # the chain's result goes out with each stack beside it under WALKED, where stacked_key has one
     start: int = 0
     length: int = 0
     i: int = 0
     ran: int = 0        # of the rows done, those whose walked row a store did not hold: Graph.tally moved under it
     bytes: int = 0
-    stack: object = None
+    stacks: dict = field(default_factory=dict)    # walked node -> its rows over the range; one nothing reads is not held
     dens: dict = field(default_factory=dict)      # node -> (length, BINS) counts, for the planes the walk folds
     at: dict = field(default_factory=dict)        # node -> the rows of the range folded for it; one whose output is no plane is at the range's end, with no counts
     refolding: bool = False     # the range is walked and a refold is under way: a walk of its own in the stream, see refold()
-    # fold id -> (the stack's buffer, rows, that head's own folding of the stack); the buffer is held, not
-    # its id, since a freed buffer's address comes back for the next stack of the same shape
+    # walked node -> fold id -> (its stack's buffer, rows, that head's own folding of the stack); the buffer is
+    # held, not its id, since a freed buffer's address comes back for the next stack of the same shape
     folded: dict = field(default_factory=dict)
     stepped: dict = field(default_factory=dict)   # node -> _Stepped
+
+    @property
+    def stack(self):
+        """The stack of the plan's first walked node, or None."""
+        return self.stacks.get(self.plan.walk) if self.plan is not None else None
 
     def begin(self, start, length, by=ASKED):
         """Starts over `length` rows from `start`, dropping every row held, and tells the probe a walk
@@ -142,7 +147,7 @@ class _Walk:
 
     def drop(self):
         self.i = self.ran = self.bytes = 0
-        self.stack, self.dens, self.at, self.folded, self.stepped = None, {}, {}, {}, {}
+        self.stacks, self.dens, self.at, self.folded, self.stepped = {}, {}, {}, {}, {}
         self.refolding = False
 
     def turn(self):
@@ -153,28 +158,34 @@ class _Walk:
             self.drop()
             g.began(self.start, self.length, GIVEN)
             return
-        read = not self.spared and any(h not in self.given for h in p.heads or [None])   # whether anything reads the walked node's row
         before = g.tally()
-        if read and self.handed is not None and self.handed[0][self.i]:
-            out = np.asarray(self.handed[1][self.i])
-        else:
-            out = np.asarray(g.walk_row(row, p, self.cut)) if read else None
+        rows = []       # (part, its row, its type, whether it is stacked), every walked node at this one row
+        for q in p.parts():
+            read = not self.spared and any(h not in self.given for h in q.heads or [None])   # whether anything reads the walked node's row
+            handed = (self.handed or {}).get(q.walk)
+            if read and handed is not None and handed[0][self.i]:
+                out = np.asarray(handed[1][self.i])
+            else:
+                out = np.asarray(g.walk_row(row, p, self.cut, q.walk)) if read else None
+            of = None if q.fold is not None or q.walk not in q.entries else q.entries[q.walk].produces    # a folded row is of no type
+            rows.append((q, out, of, bool(q.chain) and read))     # without a chain to run nothing reads the stack, and the rows are not held
         ran = g.tally() != before
-        stacked = bool(p.chain) and read     # without a chain to run nothing reads the stack, and the rows are not held
-        of = None if p.fold is not None or p.walk not in p.entries else p.entries[p.walk].produces    # a folded row is of no type
-        if self.i and ((self.stack is not None) != stacked or (stacked and not _fits(self.stack, out, is_table(of)))):
+        if self.i and (set(self.stacks) != {q.walk for q, _, _, stacked in rows if stacked}
+                       or any(stacked and not _fits(self.stacks[q.walk], out, is_table(of)) for q, out, of, stacked in rows)):
             self.drop()      # the nodes or the shape changed under the walk; start over
             g.began(self.start, self.length, SHAPE)
             return
         if not self.i:
-            if stacked and self.length * nbytes(of, out) > STACK_BYTES:
-                self.refuse(f"the {self.name}'s stack would be {self.length * nbytes(of, out) / 2**30:.1f} GB; "
-                            f"{', '.join(p.heads)} do not share a fold()")
-                return
-            self.stack = _stack_for(self.length, out, is_table(of)) if stacked else None
-        if stacked:
-            self.stack[self.i] = out
-            self.bytes += nbytes(of, out)
+            for q, out, of, stacked in rows:
+                if stacked and self.length * nbytes(of, out) > STACK_BYTES:
+                    self.refuse(f"the {self.name}'s stack would be {self.length * nbytes(of, out) / 2**30:.1f} GB; "
+                                f"{', '.join(q.heads)} do not share a fold()")
+                    return
+            self.stacks = {q.walk: _stack_for(self.length, out, is_table(of)) for q, out, of, stacked in rows if stacked}
+        for q, out, of, stacked in rows:
+            if stacked:
+                self.stacks[q.walk][self.i] = out
+                self.bytes += nbytes(of, out)
         if not self.spared:
             self.step(self.i + 1)
         self.i += 1
@@ -248,25 +259,24 @@ class _Walk:
         source's share feeds under the source's band. What the
         walk was given is the plan's still, by stale_given(), which every caller asks first."""
         g, p = self.graph, self.plan
-        chain = chain_of(p)
-        heads, shared = set(p.heads), p.fold is not None
-        bands = {nid: band for nid, _, _, band, _ in chain}
-        stepping = [(nid, p.entries[nid], params, src) for nid, _, params, _, src in chain if p.entries[nid].steps]
+        stepping = [(q, nid, p.entries[nid], params, band, src) for q in p.parts()
+                    for nid, _, params, band, src in chain_of(q) if p.entries[nid].steps]
         for nid, (key, fields, code) in self.given.items():
             if nid not in self.stepped:
                 self.stepped[nid] = _Stepped(key, is_table(p.entries[nid].produces), given=True, code=code, fields=fields, rows=self.length)
-        for nid in [n for n in self.stepped if n not in {s[0] for s in stepping}]:
+        for nid in [n for n in self.stepped if n not in {s[1] for s in stepping}]:
             self.bytes -= self.stepped.pop(nid).bytes
-        for nid, e, params, src in stepping:
+        for q, nid, e, params, band, src in stepping:
             held = self.stepped.get(nid)
             if held is None or held.key != e.raw_key:
                 if held is not None:
                     self.bytes -= held.bytes
                 held = self.stepped[nid] = _Stepped(e.raw_key, is_table(e.produces))
-            fold = None if shared or nid not in heads else fold_of(e.tool)
+            heads, stack = set(q.heads), self.stacks.get(q.walk)
+            fold = None if q.fold is not None or nid not in heads else fold_of(e.tool)
             for r in range(held.rows, rows):
                 if nid in heads:
-                    row = self.stack[r] if fold is None else fold(self.stack[r])
+                    row = stack[r] if fold is None else fold(stack[r])
                 else:
                     up = self.stepped[src]
                     row = None if up.fed is None or not up.gate[r] else up.fed[r]
@@ -286,7 +296,7 @@ class _Walk:
                 held.rows = r + 1
                 held.bytes += ev[1]
                 self.bytes += ev[1]
-            held.regate(bands[nid])
+            held.regate(band)
             g.note(nid, "")
 
     def emit(self):
@@ -297,12 +307,19 @@ class _Walk:
         results = None
         if self.stale_given():
             return              # the next turn begins the range again without it
-        if not self.spared and (self.stack is not None or self.given):
+        parts = self.plan.parts()
+        if not self.spared and (self.stacks or self.given):
             self.step(self.i)
             stepped = {nid: h.upto(self.i) for nid, h in self.stepped.items()}
-            results = run_chain(g, None if self.stack is None else self.stack[: self.i], self.start, self.i, self.folded, stepped, self.plan, self.cut)
-        if results is not None and self.keeps and self.stack is not None and (key := stacked_key(self.plan)) is not None:
-            results[WALKED] = (self.plan.walk, key, self.stack[: self.i])
+            for q in parts:
+                stack = self.stacks.get(q.walk)
+                got = run_chain(g, None if stack is None else stack[: self.i], self.start, self.i, self.folded.setdefault(q.walk, {}), stepped, q, self.cut)
+                if got is not None:
+                    results = {**(results or {}), **got}
+        kept = tuple((q.walk, key, self.stacks[q.walk][: self.i]) for q in parts
+                     if q.walk in self.stacks and (key := stacked_key(q)) is not None) if self.keeps else ()
+        if results is not None and kept:
+            results[WALKED] = kept
         if results is not None:
             self.ready.emit(results, self.start, g.fps)
 
@@ -352,8 +369,8 @@ class _Walk:
 
 
 def stacked_key(p):
-    """The key a stack of the Plan `p`'s walked node is held under: the node's, with the fold its
-    heads share; None for a stack of images, which is not held."""
+    """The key a stack of the Plan `p`'s walked node, `p.walk`, is held under: the node's, with the
+    fold its heads share; None for a stack of images, which is not held."""
     e = p.entries.get(p.walk)
     if e is None:
         return None
@@ -364,8 +381,8 @@ def stacked_key(p):
 
 def period_keys(p):
     """What a held cut in time is checked against before a walk of it under the Plan `p` takes
-    it: each chain node's raw key, and the key its walked node's stack is held under."""
-    return {**{nid: p.entries[nid].raw_key for nid in p.chain}, None: stacked_key(p)}
+    it: each chain node's raw key, and the key each walked node's stack is held under."""
+    return {**{nid: p.entries[nid].raw_key for nid in p.chain}, None: tuple((q.walk, stacked_key(q)) for q in p.parts())}
 
 
 def chain_of(p):

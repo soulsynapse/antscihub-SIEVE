@@ -26,29 +26,30 @@ def held_periods(p, runs, count):
     out = {}
     for w in p.timed:
         sub, chain = p.of(w), held_chain(p, w.chain)
-        src, walked, key = p.entries[w.heads[0]].src, sub.walk, stacked_key(sub)
+        src, stacks = p.entries[w.heads[0]].src, [(q.walk, stacked_key(q)) for q in sub.parts()]
         for c in w.cuts:
             s, e = (min(r, count) for r in c.extent.rows)
             if e <= s:
                 continue
             spared = runs.over(s, e - s, chain, (s, e), (s, e)) is not None
             given = {} if spared else as_given(p, runs.part(s, e - s, chain, (s, e), (s, e)))
-            handed = None if spared or key is None else runs.walked_rows(walked, key, sub.entries[walked].reach, s, e - s, (s, e), (s, e))
-            out[(src, (s, e))] = (period_keys(sub), spared, given, handed if handed is not None and handed[0].any() else None)
+            handed = {} if spared else {
+                walked: rows for walked, key in stacks if key is not None
+                and (rows := runs.walked_rows(walked, key, sub.entries[walked].reach, s, e - s, (s, e), (s, e)))[0].any()}
+            out[(src, (s, e))] = (period_keys(sub), spared, given, handed or None)
     return out
 
 
 def period_run(p, results, start):
     """The run `periodReady`'s `results` from `start` are held as under the Plan `p`: (start, rows,
-    the chain's results, the held.Chain of the timed Walk they are of, the cut's rows, the walked
-    rows as held.Runs.hold takes them or None); None where they are of no cut of `p` walked whole."""
+    the chain's results, the held.Chain of the timed Walk they are of, the cut's rows, each walked
+    node's rows as held.Runs.hold takes them or None); None where they are of no cut of `p` walked whole."""
     has = {nid: r for nid, r in results.items() if isinstance(r, dict) and "signal" in r}
     rows = max((len(r["signal"]) for r in has.values()), default=0)
     w = next((w for w in p.timed if set(has) == set(w.chain) and (start, start + rows) in {c.extent.rows for c in w.cuts}), None)
     if w is None or not rows:
         return None
-    stack, walked = results.get(WALKED), None
-    if stack is not None and len(stack[2]) == rows and (e := p.entries.get(stack[0])) is not None:
-        of = None if p.of(w).fold is not None else e.produces
-        walked = (*stack, sum(wire.nbytes(of, r) for r in stack[2]))
-    return start, rows, has, held_chain(p, w.chain), (start, start + rows), walked
+    folds = {q.walk: q.fold for q in p.of(w).parts()}
+    walked = tuple((*stack, sum(wire.nbytes(None if folds[stack[0]] is not None else p.entries[stack[0]].produces, r) for r in stack[2]))
+                   for stack in results.get(WALKED, ()) if len(stack[2]) == rows and stack[0] in folds)
+    return start, rows, has, held_chain(p, w.chain), (start, start + rows), walked or None

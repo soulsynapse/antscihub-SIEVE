@@ -57,7 +57,7 @@ class Entry:
 @dataclass
 class Plan:
     entries: dict = field(default_factory=dict)   # node id -> Entry
-    heads: list = field(default_factory=list)     # the series nodes that run on the stack: those fed by the walked node
+    heads: list = field(default_factory=list)     # the series nodes that run on a stack: those fed by a walked node
     chain: list = field(default_factory=list)     # the heads and each fed series node on from a chain node, in run order
     unrun: list = field(default_factory=list)     # every series node not in the chain nor a timed Walk's; its standing says why
     shown: str | None = None                      # the display flag, when it names a node
@@ -66,22 +66,50 @@ class Plan:
 
     @property
     def walk(self):
+        """The first of `walks`; with no chain, what is shown."""
         return walked(self.entries, self.chain, self.shown)
 
     @property
+    def walks(self):
+        """Each node a fed head reads, in the heads' order: every node a walk of this plan stacks."""
+        out = []
+        for h in self.heads:
+            if self.entries[h].fed and self.entries[h].src not in out:
+                out.append(self.entries[h].src)
+        return out
+
+    @property
     def fold(self):
-        return shared_fold(self.entries, self.heads)
+        """The fold the heads reading `walk` share, or None."""
+        return self.fold_for(self.walk)
+
+    def fold_for(self, nid):
+        """The fold the heads reading `nid` share, or None."""
+        return shared_fold(self.entries, [h for h in self.heads if self.entries[h].src == nid])
 
     def of(self, walk):
         """This plan with `walk`, one of `timed`, for its heads and chain: what a walk of one of its cuts runs under."""
         return Plan(self.entries, walk.heads, walk.chain, [], self.shown, self.over)
 
+    def parts(self):
+        """This plan as a Plan a walked node, in the order of `walks`: the heads reading it and what
+        is fed on from them, so each part has one walk and one fold; this plan alone where it has
+        one walked node or none."""
+        walks = self.walks
+        if len(walks) < 2:
+            return [self]
+        root = {}
+        for nid in self.chain:
+            root[nid] = self.entries[nid].src if nid in self.heads else root.get(self.entries[nid].src)
+        return [Plan(self.entries, [h for h in self.heads if root[h] == w], [n for n in self.chain if root[n] == w], [], self.shown, self.over)
+                for w in walks]
+
 
 @dataclass
 class Walk:
-    """The series nodes reading one walked node whose cuts are cuts in time, walked over each of
-    `cuts` alone: `heads` read the walked node, and `chain` is they and what is fed on from them,
-    in run order, as Plan's are."""
+    """The series nodes reading the walked nodes of one extent whose cuts are cuts in time, walked
+    over each of `cuts` alone: `heads` read those nodes, and `chain` is they and what is fed on from
+    them, in run order, as Plan's are."""
     cuts: tuple
     heads: list
     chain: list
@@ -158,10 +186,11 @@ def plan(doc, tools, base, cut_file=None, cut_result=None, footage=None):
     whose inputs are of two, the plate among them, is not fed, nor is anything that reads it, and
     its standing says which. A chain node is stepped when its tool steps and everything it reads on
     the chain is stepped; the first node that runs whole ends the prefix for every node after it,
-    and a stepping tool so ended names that node in `whole_by`. The chain is of the heads reading
-    the first walked node whose cuts are not cuts in time; the heads reading a node whose cuts are,
-    or a node below a cutting node that has cut nothing yet, are each extent's `timed` Walk, the
-    heads of one walked node an extent, and their standing says the window does not walk them."""
+    and a stepping tool so ended names that node in `whole_by`. The chain is of every fed head
+    whose walked node's cuts are not cuts in time, whatever node each reads; the heads reading a
+    node whose cuts are, or a node below a cutting node that has cut nothing yet, are each extent's
+    `timed` Walk, every head of one extent's cuts in it, and their standing says the window does not
+    walk them."""
     keys, raw_keys, pieces, files, refused = {}, {}, {}, {}, {}
 
     def cuts(nid):
@@ -356,12 +385,13 @@ def plan(doc, tools, base, cut_file=None, cut_result=None, footage=None):
     roots = [s for s in series if entries[s].src is None or entries[entries[s].src].kind != "series"]
     untimed = [s for s in roots if entries[s].src is None or not in_time(s)]
     anchor = untimed[0] if untimed else None
-    heads = [s for s in untimed if entries[s].src == entries[anchor].src and (entries[s].fed or s == anchor)] if anchor else []
+    heads = [s for s in untimed if entries[s].fed] or ([anchor] if anchor else [])
     chain, timed = chain_from(heads), []
     for s in roots:
-        if s not in untimed and entries[s].fed and entries[entries[s].src].cuts and all(w.cuts != entries[entries[s].src].cuts for w in timed):
-            within = [r for r in roots if r not in untimed and entries[r].src == entries[s].src and entries[r].fed]
-            timed.append(Walk(entries[entries[s].src].cuts, within, chain_from(within)))
+        cuts = entries[entries[s].src].cuts if s not in untimed else None
+        if cuts and entries[s].fed and all(w.cuts != cuts for w in timed):
+            within = [r for r in roots if r not in untimed and entries[r].fed and entries[entries[r].src].cuts == cuts]
+            timed.append(Walk(cuts, within, chain_from(within)))
     walked_chains = {nid for c in [chain, *(w.chain for w in timed)] for nid in c}
     enders = {}
     for nid in [*chain, *(n for w in timed for n in w.chain)]:
@@ -406,7 +436,5 @@ def _standing(doc, tools, entries, heads, chain, nid):
     if e.kind == "series" and nid not in chain:
         if entries[e.src].kind == "series":
             return f"in waits on {e.src}"
-        if not heads:
-            return f"unrun: reads {e.src}, which no walk walks"
-        return f"unrun: reads {e.src}; the walk is {entries[heads[0]].src}, which {heads[0]} reads"
+        return f"unrun: reads {e.src}, which no walk walks"
     return "" if e.fed else "in a cycle"

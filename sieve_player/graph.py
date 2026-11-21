@@ -608,13 +608,14 @@ class Graph:
         None when they differ or none has one, so that the stack holds the rows as they are."""
         return self.snapshot().fold
 
-    def walk_row(self, row, p=None, cut=None):
-        """The walked node at `row` as the worker stacks it: through the heads' shared fold() when
-        they have one, so what the window holds is what the series tools asked for and never the
-        frame; under the Plan `p`, the current one with none, and computed in `cut`, as compute's.
-        Worker threads only."""
+    def walk_row(self, row, p=None, cut=None, nid=None):
+        """The walked node `nid`, the plan's first with none, at `row` as the worker stacks it:
+        through its heads' shared fold() when they have one, so what the window holds is what the
+        series tools asked for and never the frame; under the Plan `p`, the current one with none,
+        and computed in `cut`, as compute's. Worker threads only."""
         p = p or self.snapshot()
-        nid, fold = p.walk, p.fold
+        nid = p.walk if nid is None else nid
+        fold = p.fold_for(nid)
         self._walks_at = {**self._walks_at, self.stream.lane: row}
         with self.demand("walk", nid):
             out = self._compute(p.entries, nid, row, cut=cut)

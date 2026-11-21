@@ -11,15 +11,15 @@ from .registry import discover
 def show_plan(path, tools):
     from . import document
     from .decoder import footage_print
-    from .plan import base_key, plan, walked
+    from .plan import base_key, plan
 
     doc = document.load(path, tools)
     p = plan(doc, tools, base_key(footage_print(doc.video_path()), document.video_output(doc)))
-    walk = walked(p.entries, p.chain, p.shown)
+    walks = p.walks or [p.walk]
     width = max(len(n.id) for n in doc.nodes)
     for n in doc.nodes:
         e = p.entries[n.id]
-        role = "walked" if n.id == walk else "head" if n.id in p.heads else "chain" if n.id in p.chain else ""
+        role = "walked" if n.id in walks else "head" if n.id in p.heads else "chain" if n.id in p.chain else ""
         steps = "" if n.id not in p.chain else "step" if e.steps else f"whole after {e.whole_by}" if e.whole_by else "whole"
         print(f"{n.id:<{width}}  {'?' if n.unresolved else e.kind:<8} {e.key}  {role:<6} {steps:<6} {e.standing}")
     return 0

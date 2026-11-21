@@ -150,8 +150,8 @@ class Worker(QThread):
             self._clip.ask = (0, rows, False, dict(given))
 
     def give_periods(self, held):
-        """What the caller holds of each cut in time, (walked node, (first, end) clamped to the
-        count) to (keys, spared, given, handed): `keys` as period_keys says them of the plan it was
+        """What the caller holds of each cut in time, (the node its timed Walk's first head reads,
+        (first, end) clamped to the count) to (keys, spared, given, handed): `keys` as period_keys says them of the plan it was
         read under, `spared` that every chain node's result over the cut is held, so the clip lane
         walks it not at all, `given` as give_clip's, and `handed` as _Walk's. One whose keys the
         plan has left is walked as though nothing were held."""
@@ -284,7 +284,7 @@ class Worker(QThread):
                 continue
             first, end = (min(r, count) for r in cut.extent.rows)
             ask = self._held_periods.get((nid, (first, end)))
-            if ask is not None and (ask[0] != period_keys(sub) or (ask[3] is not None and len(ask[3][0]) != end - first)):
+            if ask is not None and (ask[0] != period_keys(sub) or any(len(served) != end - first for served, _ in (ask[3] or {}).values())):
                 ask = None
             if ask is not None and ask[1]:
                 continue

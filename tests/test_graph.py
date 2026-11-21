@@ -358,23 +358,25 @@ def test_rewire_during_walk():
     assert not errors and (g.compute("slow", 0) == g.compute("gray", 0) + 100).all()
 
 
-def test_series_nodes_reading_the_walked_node_are_all_heads():
-    """Two series nodes on gray both run; one on a different frame node is unrun; the fold is shared
-    only when the heads agree on it."""
+def test_series_nodes_reading_any_walked_node_are_all_heads():
+    """Two series nodes on gray and one on a different frame node all run, each part of the plan
+    one walked node; the fold is shared only when the heads of one walked node agree on it."""
     s1, s2, s3 = (tool(n, kind="series", produces=None) for n in ("s1", "s2", "s3"))
     s1.fold = s2.fold = lambda frame: np.asarray([frame.sum()])
     doc = D.from_tools([gray, s1, s2])
     doc.add_node("add", (0, 300)); doc.connect("gray", "add")
     doc.add_node("s3", (0, 400)); doc.connect("add", "s3")
     g = Graph(doc, Dec(), {**TOOLS, "s1": s1, "s2": s2, "s3": s3})
-    assert g.series == "s1" and g.heads == g.chain == ["s1", "s2"] and g.unrun_series == ["s3"] and g.walk == "gray"
+    p = g.snapshot()
+    assert g.series == "s1" and g.heads == g.chain == ["s1", "s2", "s3"] and not g.unrun_series and g.walk == "gray"
+    assert p.walks == ["gray", "add"] and [(q.walk, q.heads) for q in p.parts()] == [("gray", ["s1", "s2"]), ("add", ["s3"])]
     assert g.fold is s1.fold and g.walk_row(2).tolist() == [24 * 3]
     s2.fold = lambda frame: np.asarray([frame.max()])
     g.sync()
     assert g.fold is None and g.walk_row(2).shape == (4, 6)
-    doc.connect("video", "s1")                  # "bgr" into a series node that expects "gray"
+    doc.connect("video", "s1")                  # "bgr" into a series node that expects "gray": it alone stands, the rest walked
     g.sync()
-    assert g.walk is None
+    assert g.heads == ["s2", "s3"] and g.unrun_series == ["s1"] and g.walk == "gray"
 
 
 def test_series_chain_runs_on_from_the_head():
@@ -995,8 +997,7 @@ def test_standing_says_why_a_node_does_not_run_and_what_its_run_said():
     doc.add_node("s1", (0, 400)); doc.connect("gray", "s1")
     doc.add_node("s3", (0, 500)); doc.connect("add", "s3")
     g = Graph(doc, Dec(), {**TOOLS, "s1": s1, "s3": s3})
-    assert g.standing("video") == g.standing("gray") == g.standing("add") == g.standing("s1") == ""
-    assert g.standing("s3") == "unrun: reads add; the walk is gray, which s1 reads"
+    assert g.standing("video") == g.standing("gray") == g.standing("add") == g.standing("s1") == g.standing("s3") == ""
     doc.disconnect("gray")
     g.sync()
     assert g.standing("gray") == "in is unwired" and g.standing("add") == "in waits on gray"

@@ -21,9 +21,10 @@ def test_a_held_file_reads_back_by_the_form_of_its_records_alone_and_is_let_go_b
     assert held.rows_of(results["count"], rows, 1, 2)["code"] == {"count": "d"}
     tables = np.empty(4, object)
     tables[:] = [np.zeros(i, [("x", "f4")]) for i in range(4)]
-    held.File(path).write([held.Run(10, 4, {"count": result}, 16, (10, 14), ("blobs", "kb", tables))])
+    held.File(path).write([held.Run(10, 4, {"count": result}, 16, (10, 14), (("blobs", "kb", tables), ("motion", "km", np.arange(4.0))))])
     (run,) = read()
-    assert run.cut == (10, 14) and run.walked[:2] == ("blobs", "kb") and [len(t) for t in run.walked[2]] == [0, 1, 2, 3]
+    assert run.cut == (10, 14) and [w[:2] for w in run.walked] == [("blobs", "kb"), ("motion", "km")]
+    assert [len(t) for t in run.walked[0][2]] == [0, 1, 2, 3] and run.walked[1][2].tolist() == [0.0, 1.0, 2.0, 3.0]
     held.File(path).write([(10, 4, {"count": result}, 16)])
     with open(path, "rb") as f:
         assert pickle.load(f) == (held.VERSION,)        # nothing of the tools' code: an edited tool leaves the runs serving

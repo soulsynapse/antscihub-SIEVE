@@ -362,6 +362,12 @@ def stacked_key(p):
     return e.key if is_table(e.produces) else None
 
 
+def period_keys(p):
+    """What a held cut in time is checked against before a walk of it under the Plan `p` takes
+    it: each chain node's raw key, and the key its walked node's stack is held under."""
+    return {**{nid: p.entries[nid].raw_key for nid in p.chain}, None: stacked_key(p)}
+
+
 def chain_of(p):
     """The Plan `p`'s chain as Graph.series_chain gives the current one's."""
     return [(nid, e.tool, dict(e.computed), e.band, e.src) for nid in p.chain for e in [p.entries[nid]]]

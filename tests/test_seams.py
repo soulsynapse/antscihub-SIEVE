@@ -30,6 +30,7 @@ MAY_IMPORT = {
     "held": {"cut"},                              # a pickle and a stamp, and what a walk read of its cut; the window writes and reads it
     "walk": {"density", "graph", "registry", "stream", "wire"},         # of the stream, the words a begin says what began it by; no Qt, see below
     "worker": {"decoder", "graph", "stream", "walk"},
+    "heldwalks": {"held", "walk", "wire"},       # the held runs as the walks take them; no Qt, so a one-off drives them without a window
     "bare": {"decoder", "document", "graph", "registry", "walk"},      # the clip walk's own process: no window, no stream's reader, no Qt
     "density": set(),
     "recent": set(),

@@ -1,8 +1,8 @@
 """The one-off of docs/spec/a-cut-in-time.md's box of a period held not walked again: over the
 crossings clip, purb's document with a `period` fed three periods on the video, everything of it
 below the `period`, and beside `blobs` a `motion` and a `background` each reduced. A Worker's turns
-are taken on this thread, its periods held in a held.Runs by the window's own `_period_ready` and
-told back by its `_held_periods`, with no window, event loop or timer. The runs are written and
+are taken on this thread, its periods held in a held.Runs by `heldwalks.period_run` and told back by
+`heldwalks.held_periods` as the window does, with no window, event loop or timer. The runs are written and
 read back through held.File; the document's first period then begins later and its last ends
 later, a new Graph with no memo walks the clip again over the runs read back, and the rows each
 node was stepped over and computed at are set against the periods that moved. Last the moved
@@ -16,8 +16,6 @@ import os
 import sys
 import tempfile
 import time
-from functools import partial
-from types import SimpleNamespace
 
 os.environ.setdefault("OPENCV_LOG_LEVEL", "ERROR")
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
@@ -31,7 +29,7 @@ from sieve_player import held  # noqa: E402
 from sieve_player.decoder import Decoder  # noqa: E402
 from sieve_player.graph import Graph  # noqa: E402
 from sieve_player.registry import defaults, discover  # noqa: E402
-from sieve_player.window import PlayerWindow  # noqa: E402
+from sieve_player.heldwalks import held_chain, held_periods, period_run  # noqa: E402
 from sieve_player.worker import Worker  # noqa: E402
 
 DOC = os.path.join(ROOT, "video-tests", "purb-168-178.json")
@@ -64,18 +62,17 @@ def document(tools, folder, periods, frame):
 
 def walked(doc, tools, runs):
     """The clip walked by a Worker whose turns are taken here, each period it walks held in `runs`
-    as the window holds it: the window's stand-in, the clip lane's (node, kind) -> rows, and the
-    turns it took."""
+    as the window holds it: the Graph, the clip lane's (node, kind) -> rows, and the turns it took."""
     g = Graph(doc, Decoder(doc.video), tools)
-    win = SimpleNamespace(graph=g, runs=runs, count=g.count)
-    win._chain = partial(PlayerWindow._chain, win)
-    win._as_given = partial(PlayerWindow._as_given, win)
-    win._walked_nodes = partial(PlayerWindow._walked_nodes, win)
-    win._hold_run = lambda start, rows, results, chain=None, cut=None, of_clip=False, walked=None: runs.hold(
-        start, rows, results, chain, cut, worth=win._chain(win._walked_nodes()), walked=walked)
     w = Worker(g, tell_every=3600.0)
-    w.periodReady.connect(lambda r, s, fps: (PlayerWindow._period_ready(win, r, s, fps), w.give_periods(PlayerWindow._held_periods(win))))
-    w.give_periods(PlayerWindow._held_periods(win))
+
+    def ready(results, start, fps):
+        if (run := period_run(g.snapshot(), results, start)) is not None:
+            start, rows, has, chain, cut, stack = run
+            runs.hold(start, rows, has, chain, cut, walked=stack)
+        w.give_periods(held_periods(g.snapshot(), runs, g.count))
+    w.periodReady.connect(ready)
+    w.give_periods(held_periods(g.snapshot(), runs, g.count))
     seen = {}
 
     def on_event(ev):
@@ -94,17 +91,17 @@ def walked(doc, tools, runs):
             act()
     else:
         print(f"  still turning after {TURNS} turns")
-    return win, seen, turns
+    return g, seen, turns
 
 
-def results(win):
-    """(chain node, period rows) -> that node's result over the period, as the runs list it."""
-    out = {}
-    for w in win.graph.snapshot().timed:
-        chain = win._chain(w.chain)
+def results(g, runs):
+    """(chain node, period rows) -> that node's result over the period, as `runs` list it."""
+    out, p = {}, g.snapshot()
+    for w in p.timed:
+        chain = held_chain(p, w.chain)
         for nid in w.chain:
-            for c in win.graph.entry(nid).cuts:
-                parts = win.runs.listed(nid, chain, c, win.count).parts
+            for c in p.entries[nid].cuts:
+                parts = runs.listed(nid, chain, c, g.count).parts
                 if parts:
                     out[(nid, c.extent.rows)] = {f: np.concatenate([r[f] for _, r in parts]) for f in ("signal", "rows") if f in parts[0][1]}
     return out
@@ -142,7 +139,7 @@ if __name__ == "__main__":
         with tempfile.TemporaryDirectory() as tmp:
             t = time.perf_counter()
             runs = held.Runs(1 << 40, size)
-            win, seen, turns = walked(document(tools, tmp, BEFORE, frame), tools, runs)
+            g, seen, turns = walked(document(tools, tmp, BEFORE, frame), tools, runs)
             cut_runs = [r for r in runs if r.cut]
             path = os.path.join(tmp, "doc.json.series")
             held.File(path).write(runs.all)
@@ -152,16 +149,17 @@ if __name__ == "__main__":
                   f"{sum(1 for r in cut_runs if r.walked)} holding walked rows; written and read back, {len(again)} runs, {os.path.getsize(path)} bytes")
 
             t = time.perf_counter()
-            win, seen, turns = walked(document(tools, tmp, AFTER, frame), tools, again)
+            g, seen, turns = walked(document(tools, tmp, AFTER, frame), tools, again)
             print(f"  after, over the runs read back: {turns} turns, {time.perf_counter() - t:.1f} s")
             for (nid, kind), rows in sorted(seen.items()):
                 outside = sorted(set(rows) - moved)
                 print(f"    {nid:<10} {kind:<4} {len(rows):>4} rows, {min(rows)}-{max(rows)}; outside the moved periods: {outside[:6] or 'none'}")
-            reached = results(win)
+            reached = results(g, again)
 
             t = time.perf_counter()
-            win, _, turns = walked(document(tools, tmp, AFTER, frame), tools, held.Runs(1 << 40, size))
-            truth = results(win)
+            scratch = held.Runs(1 << 40, size)
+            g, _, turns = walked(document(tools, tmp, AFTER, frame), tools, scratch)
+            truth = results(g, scratch)
             bad = {k: differ(reached[k], truth[k]) for k in truth if k in reached}
             print(f"  from an empty held.Runs and no memo: {turns} turns, {time.perf_counter() - t:.1f} s; {len(truth)} results a node a period, "
                   f"equal to those reached: {not any(bad.values()) and set(reached) == set(truth)}")

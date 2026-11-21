@@ -42,8 +42,8 @@ from .theme import GAP, PAD, ROW_H, readout
 from .timeline import Timeline
 from .trace import Dump
 from .plot import Plot, Stage
-from .walk import WALKED, stacked_key
-from .worker import Worker, period_keys
+from .heldwalks import as_given, held_chain, held_periods, period_run
+from .worker import Worker
 
 HOLD_MS = 2000              # how long the held runs rest, nothing new held, before they are written beside the document
 HELD_BYTES = 512 << 20      # what the held runs may take together, as wire.result_bytes counts them, before the oldest go
@@ -1257,10 +1257,7 @@ class PlayerWindow(QMainWindow):
         self._show_held()
 
     def _as_given(self, part):
-        """`part`, node to held result, as the worker takes it: node to (raw key, the result's fields
-        as the tool made them, without what the player put beside them, what it says it was made under)."""
-        return {nid: (self.graph.entry(nid).raw_key, {f: v for f, v in r.items() if f not in ("gate", "key", "code")}, r.get("code"))
-                for nid, r in part.items()}
+        return as_given(self.graph.snapshot(), part)
 
     def _show_held(self):
         """What is held, or the chain's keys, changed: the strip's bar is over the runs held under
@@ -1269,26 +1266,10 @@ class PlayerWindow(QMainWindow):
         self.timeline.strip.set_held(self.runs.spans(chain))
         if self.worker is not None:
             self.worker.give_clip(self.count, self._as_given(self.runs.part(0, self.count, chain, (0, self.count))))
-            self.worker.give_periods(self._held_periods())
+            self.worker.give_periods(held_periods(self.graph.snapshot(), self.runs, self.count))
         self._show_stale(chain)
         self._show_pinned()
         self._show_listed()
-
-    def _held_periods(self):
-        """What the runs hold of each cut in time of the plan, as Worker.give_periods takes it."""
-        out, p = {}, self.graph.snapshot()
-        for w in p.timed:
-            sub, chain = p.of(w), self._chain(w.chain)
-            src, walked, key = p.entries[w.heads[0]].src, sub.walk, stacked_key(sub)
-            for c in w.cuts:
-                s, e = (min(r, self.count) for r in c.extent.rows)
-                if e <= s:
-                    continue
-                spared = self.runs.over(s, e - s, chain, (s, e), (s, e)) is not None
-                given = {} if spared else self._as_given(self.runs.part(s, e - s, chain, (s, e), (s, e)))
-                handed = None if spared or key is None else self.runs.walked_rows(walked, key, sub.entries[walked].reach, s, e - s, (s, e), (s, e))
-                out[(src, (s, e))] = (period_keys(sub), spared, given, handed if handed is not None and handed[0].any() else None)
-        return out
 
     def _show_listed(self):
         """Each card of a node below a cut in time is shown its values in every cut it is of, as the
@@ -1349,9 +1330,9 @@ class PlayerWindow(QMainWindow):
     def _chain(self, nodes=None):
         """The series chain, or `nodes` of the plan, as held.Runs is told it; one of no nodes with no video open."""
         g = self.graph
-        entries = {} if g is None else {nid: e for nid in (g.chain if nodes is None else nodes) if (e := g.entry(nid)) is not None}
-        return held.Chain({nid: e.key for nid, e in entries.items()}, frozenset(nid for nid, e in entries.items() if e.steps),
-                          {nid: e.reach for nid, e in entries.items()})
+        if g is None:
+            return held.Chain({}, frozenset(), {})
+        return held_chain(g.snapshot(), g.chain if nodes is None else nodes)
 
     def _walked_nodes(self):
         p = self.graph.snapshot()
@@ -1502,16 +1483,10 @@ class PlayerWindow(QMainWindow):
     def _period_ready(self, results, start, fps):
         """A cut in time walked whole from its first row, `start`: held as a run of that cut under
         the chain of the timed Walk its nodes are of, with the walked node's rows it was stepped over."""
-        has = {nid: r for nid, r in results.items() if isinstance(r, dict) and "signal" in r}
-        rows = max((len(r["signal"]) for r in has.values()), default=0)
-        p = self.graph.snapshot()
-        w = next((w for w in p.timed if set(has) == set(w.chain) and (start, start + rows) in {c.extent.rows for c in w.cuts}), None)
-        if w is not None and rows:
-            stack, walked = results.get(WALKED), None
-            if stack is not None and len(stack[2]) == rows and (e := self.graph.entry(stack[0])) is not None:
-                of = None if p.of(w).fold is not None else e.produces
-                walked = (*stack, sum(wire.nbytes(of, r) for r in stack[2]))
-            self._hold_run(start, rows, has, self._chain(w.chain), (start, start + rows), of_clip=True, walked=walked)
+        run = period_run(self.graph.snapshot(), results, start)
+        if run is not None:
+            start, rows, has, chain, cut, walked = run
+            self._hold_run(start, rows, has, chain, cut, of_clip=True, walked=walked)
 
     def _clip_ready(self, results, start, fps):
         self.clip_results = results

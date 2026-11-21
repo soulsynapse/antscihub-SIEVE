@@ -14,7 +14,7 @@ from PySide6.QtCore import QThread, Signal
 from .decoder import EndOfStream
 from .graph import Cancelled
 from .stream import ASKED, EDIT
-from .walk import _Walk, stacked_key
+from .walk import _Walk, period_keys
 
 STOP_PATIENCE_MS = 10_000  # how long stop() waits before saying on stderr what it is waiting for
 
@@ -53,12 +53,6 @@ def _walking(p, nid, cut):
     among its cuts; None where `p` has none, or that node is not fed."""
     w = next((w for w in p.timed if p.entries[w.heads[0]].src == nid and cut in w.cuts), None)
     return None if w is None or not p.entries[nid].fed else p.of(w)
-
-
-def period_keys(p):
-    """What a held cut in time is checked against before a walk of it under the Plan `p` takes
-    it: each chain node's raw key, and the key its walked node's stack is held under."""
-    return {**{nid: p.entries[nid].raw_key for nid in p.chain}, None: stacked_key(p)}
 
 
 class _Left:

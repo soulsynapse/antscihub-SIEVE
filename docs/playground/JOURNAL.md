@@ -16,21 +16,24 @@ this file where they differ.
   the contract in code: `.venv/Scripts/python.exe docs/playground/sim/sim.py 150` runs the
   torture in about ten seconds and prints a line a scheme. Read "What the simulation has shown"
   before touching either file.
-- Next action, in order: (a) "Drift from the referents" below, the two that are the
-  simulation's: disk lets go by GreedyDual-Size as memory does, and two stores interleaved step
-  by step with one letting go while the other reads. (b) Measure read and write rates of C: and
-  D: with a one-off, and put them in `PROFILES`. (c) The on-disk store, `Store` over a real
-  folder, mine to write since it is the design; then one real walk against the simulation's
-  figure for it. (d) Slices onto it: the held file, then the walks' results. Then STOP for him
-  to try the player, before the memo is touched; the memo may stay as the memory tier under
-  the same rules. (e) Code beside the key, as "A decision of his the contract ran into" says.
+- Next action, in order: (a) read `docs/playground/adversary.md` when run 5 lands (Opus, told
+  to break the store and the contract where the torture does not reach) and take what holds
+  into `sim.py` as ops. (b) The on-disk store, `Store` over a real folder, mine to write since
+  it is the design: per-file cost and the grace below are its two hard parts; then one real
+  walk against the simulation's figure for it. (c) Slices onto it: the held file, then the
+  walks' results. Then STOP for him to try the player, before the memo is touched; the memo
+  may stay as the memory tier under the same rules. (d) Code beside the key, once he has
+  answered "A decision of his the contract ran into". (e) The whole-file footage hash.
+- This journal is notes to resume from, not rules. He said so on 2026-11-21 ("sometimes you make
+  documentation and then treat it as binding"), and it was true of the cycle cap and of the
+  contract's line on code in the key. Where the work shows a line here is wrong, the line goes.
 - Standing step, his on 2026-11-21 and mine by its results: before a slice or the contract
   leans on a claim about the tree, from this journal, the inventory or my memory, the claim goes
   to a Haiku check, one claim a pass, by the shape under "Claims checked one at a time". Six
   passes corrected two of my claims. Not for searching, not for judging a design.
 - Run the simulation: `.venv/Scripts/python.exe docs/playground/sim/sim.py 150` (torture, a line
   a scheme) and `... sim.py prices 1080p [profile]` (the table below), a few seconds each.
-- Counters: queued runs 4 of 25 (his figure, 2026-11-21). No cap on design cycles, by the same word: a
+- Counters: queued runs 5 of 25 (his figure, 2026-11-21). No cap on design cycles, by the same word: a
   cycle on the simulation is run when a slice raises a question whose answer would change it.
 - Context: `bash ~/.claude/tools/context-used.sh 300` prints what is left before the auto-compact
   window (300k by his `/autocompact` on 2026-11-21). Bring this file up to date before a step
@@ -230,6 +233,26 @@ the hypothesis. The policy below is `worth=True` in `store.py`, and it is the co
 - The gate's pass and the detect pass both decode the kept pieces, so a walk decodes them
   twice. A fused walk that feeds both from one decode is the walk's to gain, not the store's.
 - The torture holds for both policies over 150 seeds and breaks for today's three weaknesses.
+
+## Two writers at once, and what a real disk costs (2026-11-21)
+
+- `diskrate.py`: the store's NVMe writes 1637 MB/s through an fsync and the USB hard drive 235;
+  a small file costs 1.4 ms and 3.2 ms to write and rename whatever its size. Its read figures
+  came from the page cache and mean nothing. `PROFILES` has the writes and a `usb-hdd` profile.
+  The per-file cost says a table's chunk should be far more rows than a plane's: ten rows a
+  file is 10800 files a node an hour. Chunks sized by the node's own row, not the widest.
+- The torture has a `race` op: a walk or a checkpoint while another writer lets go of loose
+  entries between any two of this one's disk steps. It broke two things at once. A checkpoint
+  looked for its entries and then named them, and one went in between: now the manifest lands
+  first, then the look, and a refused checkpoint fills and tries again. And letting go listed
+  the files and then ranked them, and one was gone: a file gone since it was listed is skipped.
+  400 seeds hold for both policies after.
+- What the simulation cannot show: its other writer reads the manifests at the moment it lets
+  go. A real one reads them, then deletes, and a manifest can land in between. Git's prune has
+  this race and answers it with a grace period, never pruning what is younger than it. Here:
+  letting go is a rename into a `trash/` folder, emptied of what has lain there past a grace;
+  a checkpoint that finds an entry gone takes it back out of the trash by a rename.
+- Disk lets go by GreedyDual-Size now, the floor kept on the disk for every writer.
 
 ## A decision of his the contract ran into
 

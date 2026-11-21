@@ -1,7 +1,8 @@
 """The candidate store of docs/playground/contract.md: a memory tier over a disk tier, under budgets.
 
 It reaches a disk only through the object it is handed (`write`, `rename`, `read`, `names`,
-`delete`, `size`, `age`, `worth`, `used`, `write_seconds`, `read_seconds`, `mark`, `marked`), so the simulation hands it a simulated one and the player a real one.
+`delete`, `size`, `age`, `rank`, `floor`, `lift`, `used`, `write_seconds`, `read_seconds`, `mark`,
+`marked`), so the simulation hands it a simulated one and the player a real one.
 """
 import heapq
 from dataclasses import dataclass
@@ -136,15 +137,17 @@ class Store:
 
     def checkpoint(self, name, snapshot, addresses):
         """Name `addresses` and `snapshot` as a checkpoint. Refused, naming nothing, when an
-        address is not on disk or the manifests together would pass the disk budget."""
-        absent = [a for a in addresses if self.disk.size(a.name) is None]
-        if absent:
-            raise Refused(f"checkpoint {name}: {len(absent)} of {len(addresses)} entries are not on disk")
-        named = self.named() | set(addresses)
-        need = sum(self.disk.size(a.name) or 0 for a in named)
-        if need > self.disk_budget:
-            raise Refused(f"checkpoint {name}: the checkpoints would hold {need} bytes of a disk budget of {self.disk_budget}")
+        address is not on disk or the manifests together would pass the disk budget. The manifest
+        lands before the entries are looked for, so a writer that honours manifests cannot let go
+        of one between the look and the naming."""
         self._land(MANIFESTS + name, (snapshot, tuple(addresses)), 0)
+        absent = [a for a in addresses if self.disk.size(a.name) is None]
+        need = sum(self.disk.size(a.name) or 0 for a in self.named())
+        if absent or need > self.disk_budget:
+            self.disk.delete(MANIFESTS + name)
+            if absent:
+                raise Refused(f"checkpoint {name}: {len(absent)} of {len(addresses)} entries are not on disk")
+            raise Refused(f"checkpoint {name}: the checkpoints would hold {need} bytes of a disk budget of {self.disk_budget}")
 
     def manifest(self, name):
         found = self.disk.read(MANIFESTS + name)
@@ -175,21 +178,27 @@ class Store:
     def _make_room(self, size):
         """Whether `size` more bytes fit the disk budget, after letting go of entries no manifest
         names, down to nine tenths of the budget: those touched longest ago first, or under
-        `worth` those saving the fewest seconds a byte for their age."""
+        `worth` those of the least rank, which is GreedyDual-Size's: the seconds a byte an entry
+        saves over the disk's floor when it was last touched, the floor rising to each rank let go."""
         if size > self.disk_budget:
             return False
         used = self.disk.used()
         if used + size <= self.disk_budget:
             return True
         named = self.named()
-        def rank(name):
+        def rank(name):   # None of a file another writer has let go of since it was listed
+            if self.worth:
+                return self.disk.rank(name)
             age = self.disk.age(name)
-            return self.disk.worth(name) / (1 + age) if self.worth else -age
+            return None if age is None else -age
 
-        for name in sorted(self.disk.names(ENTRIES), key=rank):
+        ranked = sorted((r, n) for n in self.disk.names(ENTRIES) if (r := rank(n)) is not None)
+        for ranked_at, name in ranked:
             if address_of(name) in named:
                 continue
-            used -= self.disk.size(name)
+            used -= self.disk.size(name) or 0
+            if self.worth:
+                self.disk.lift(ranked_at)
             self.disk.delete(name)
             self.emit("let go", address_of(name), "disk")
             if used + size <= self.disk_budget * 0.9:

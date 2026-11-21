@@ -36,13 +36,15 @@ class Profile:
     read_bps: float
     write_bps: float
     seek_s: float
+    file_s: float   # what a file costs to make and rename whatever its size
     slow: float = 1.0   # how many times slower a core is than on figures.md's machine
 
 
-PROFILES = {   # the desktop is figures.md's machine; the disk rates and the other two are guesses no finding measures
-    "laptop": Profile("laptop", 4, 3 * GB, 40 * GB, 150 * MB, 120 * MB, 0.008, 2.5),
-    "desktop": Profile("desktop", 32, 24 * GB, 500 * GB, 2000 * MB, 1500 * MB, 0.0002),
-    "hpc": Profile("hpc", 64, 200 * GB, 5000 * GB, 300 * MB, 300 * MB, 0.005, 1.3),
+PROFILES = {   # the desktop is figures.md's machine, its writes by diskrate.py; reads and the other two are guesses
+    "laptop": Profile("laptop", 4, 3 * GB, 40 * GB, 150 * MB, 120 * MB, 0.008, 0.003, 2.5),
+    "desktop": Profile("desktop", 32, 24 * GB, 500 * GB, 2000 * MB, 1600 * MB, 0.0002, 0.0015),
+    "usb-hdd": Profile("usb-hdd", 32, 24 * GB, 500 * GB, 200 * MB, 235 * MB, 0.012, 0.0032),
+    "hpc": Profile("hpc", 64, 200 * GB, 5000 * GB, 300 * MB, 300 * MB, 0.005, 0.005, 1.3),
 }
 
 
@@ -66,7 +68,7 @@ class Disk:
 
     def __init__(self, profile, clock):
         self.profile, self.clock, self.files, self.crash_in, self.ticks = profile, clock, {}, None, 0
-        self.total, self.made = 0, set()
+        self.total, self.made, self.low, self.meddle = 0, set(), 0.0, None
 
     def _step(self):
         if self.crash_in is not None:
@@ -77,9 +79,9 @@ class Disk:
 
     def write(self, name, value, size, worth=0.0):
         self.total += size - (self.size(name) or 0)
-        self.files[name] = [TORN, size, self._tick(), worth]
+        self.files[name] = [TORN, size, self._tick(), self.low + worth, worth]
         self._step()
-        self.clock[0] += size / self.profile.write_bps
+        self.clock[0] += self.write_seconds(size)
         self.files[name][0] = value
         self._step()
 
@@ -89,13 +91,26 @@ class Disk:
     def read(self, name):
         if name not in self.files:
             return None
+        self._meddled()
+        if name not in self.files:
+            return None
         value, size = self.files[name][:2]
-        self.files[name][2] = self._tick()
+        self.files[name][2:4] = self._tick(), self.low + self.files[name][4]
         self.clock[0] += self.profile.seek_s + size / self.profile.read_bps
         return value, size
 
     def size(self, name):
+        self._meddled()
         return self.files[name][1] if name in self.files else None
+
+    def _meddled(self):
+        """Let another writer on the folder take a turn, between any two steps of this one."""
+        if self.meddle is not None:
+            turn, self.meddle = self.meddle, None
+            try:
+                turn()
+            finally:
+                self.meddle = turn
 
     def names(self, prefix):
         return [n for n in self.files if n.startswith(prefix)]
@@ -110,13 +125,19 @@ class Disk:
         return name in self.made
 
     def age(self, name):
-        return self.ticks - self.files[name][2]
+        return self.ticks - self.files[name][2] if name in self.files else None
 
-    def worth(self, name):
-        return self.files[name][3]
+    def rank(self, name):
+        return self.files[name][3] if name in self.files else None
+
+    def floor(self):
+        return self.low
+
+    def lift(self, floor):
+        self.low = max(self.low, floor)
 
     def write_seconds(self, size):
-        return size / self.profile.write_bps
+        return self.profile.file_s + size / self.profile.write_bps
 
     def read_seconds(self, size):
         return self.profile.seek_s + size / self.profile.read_bps
@@ -387,19 +408,24 @@ class Ask:
         addresses = [Address(self.world.key(name), c) for c in self.world.chunks_of(name)]
         self.keep = True
         try:
-            for address in addresses:
-                if not self.store.to_disk(address):
-                    self.flight = {}
-                    self._compute(name, address.chunk)
+            for last in (False, False, True):   # an entry another writer let go of meanwhile is made again
+                for address in addresses:
+                    if not self.store.to_disk(address):
+                        self.flight = {}
+                        self._compute(name, address.chunk)
+                try:
+                    self.store.checkpoint(mark, self.world.snapshot(), addresses)
+                    return addresses
+                except Refused:
+                    if last:
+                        raise
         finally:
             self.keep = False
-        self.store.checkpoint(mark, self.world.snapshot(), addresses)
-        return addresses
 
 
 OPS = (("scrub", 30), ("walk", 8), ("edit", 10), ("edit draw", 4), ("code", 3), ("footage", 1),
        ("evict", 6), ("delete", 3), ("reopen", 4), ("crash", 3), ("other", 5), ("checkpoint", 3),
-       ("restore", 3))
+       ("restore", 3), ("race", 5))
 
 
 def sequence(seed, length, world):
@@ -472,6 +498,24 @@ def run(ops, profile, scheme, rows=1024):
                 other.walk(name)
             elif kind == "checkpoint":
                 marks[f"mark-{i}"] = set(ask.checkpoint(f"mark-{i}", name))
+            elif kind == "race":   # a walk or a checkpoint while another writer lets go of entries under it
+                turns = random.Random(pick)
+
+                def other():
+                    if turns.random() < 0.05:
+                        named = {a.name for a in store.named()}
+                        loose = sorted(n for n in disk.names("entries/") if n not in named)
+                        if loose:
+                            disk.delete(turns.choice(loose))
+
+                disk.meddle = other
+                try:
+                    if pick % 2:
+                        marks[f"mark-{i}"] = set(ask.checkpoint(f"mark-{i}", name))
+                    else:
+                        ask.walk(name)
+                finally:
+                    disk.meddle = None
             elif kind == "restore" and marks:
                 mark = sorted(marks)[pick % len(marks)]
                 if store.manifest(mark) is None:   # the manifest itself was deleted

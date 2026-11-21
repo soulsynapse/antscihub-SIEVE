@@ -11,15 +11,25 @@ file already concludes: a row of the inventory is opened only to check one fact,
 verifies state with `git log --oneline v5..HEAD` and `orchestrator list`, and trusts the tree over
 this file where they differ.
 
-- Stage: 2 (the contract), not yet written. Stage 1 is done: `docs/playground/inventory.md`.
-- Next action: write `docs/playground/contract.md` from "The hypothesis" below, then build the
-  simulator of stage 3 (`docs/playground/sim/`) against it.
-- Counters: queued runs 1 of 15; cycles 0 of 4.
+- Stage: 3 (the simulation), its first half done. Stage 1 is `docs/playground/inventory.md`,
+  stage 2 is `docs/playground/contract.md`, and `docs/playground/sim/store.py` with `sim.py` are
+  the contract in code: `.venv/Scripts/python.exe docs/playground/sim/sim.py 150` runs the
+  torture in about ten seconds and prints a line a scheme. Read "What the simulation has shown"
+  before touching either file.
+- Next action, in order: (a) chunks sized by bytes and not by a count of rows, a `Scheme` field,
+  since a chunk of 64 rows of 4K colour passes a 2 GB budget by itself; (b) the pricing half:
+  named workloads (building a pipeline by edit and scrub, a full walk then a revisit, a saved
+  file reopened, a gate then a heavy chain on its cuts) run on the three `PROFILES`, printing
+  simulated seconds, scrub latency, share recomputed, peak memory and disk held, with policies
+  compared side by side; (c) one narrow queued run that reads `docs/findings/` for the measured
+  figures the placeholders in `PROFILES` and `pipeline()` stand in for (decode and tool ms a
+  row, bytes a row, disk rates) and one bare walk to check them; (d) then stage 4's first slice.
+- Counters: queued runs 1 of 15; cycles 1 of 4 (the contract and its first torture).
 - Context: `bash ~/.claude/tools/context-used.sh 300` prints what is left before the auto-compact
   window (300k by his `/autocompact` on 2026-11-21). Bring this file up to date before a step
   that reads a lot, and when under about 30k left.
-- No PushNotification in this effort, by his word on 2026-11-21, though his global CLAUDE.md asks
-  for one.
+- No PushNotification: he had the Finishing section taken out of his global CLAUDE.md on
+  2026-11-21.
 
 ## What Kendrick asked for (2026-11-21)
 
@@ -133,6 +143,29 @@ a chunk may not be independently valid (the tree keys this by `walk.py:stacked_k
 simulation must model it); the GUI thread's cost of asking a store on every paint; chunk size
 against scrub latency on a slow disk.
 
+## What the simulation has shown
+
+`sim.py` holds a `World` (the document, the tools' code, the footage), whose `truth` is a digest
+of everything a value really depends on and whose `key` is what a `Scheme` puts in a key; a
+simulated `Disk` with a clock, a crash between the two steps of a write, and several stores on
+one folder; an `Ask` that is the contract's `demand`; and `run`, which plays a seeded sequence of
+a user's doings (scrub, walk, edit, edit of a draw's param, edit of tool code, footage changed in
+its middle, evict, delete files, reopen, crash mid-walk, a second process walking, checkpoint,
+restore) and checks O1, O3, O5 and O6 after each. `shrunk` cuts a failing sequence to its least.
+
+- The contract's scheme breaks no oracle over 150 seeds of 60 doings on the laptop profile.
+- Tool code left out of the key, as today: O1 broken by scrub, edit code, a second process walks.
+- The footage print of size and ends, as today: O1 broken by scrub, footage changes, walk.
+- Entries written in place: O1 broken by a crash mid-walk, twice. So the oracles have teeth.
+- The first run broke O5 in my own store: memory let go before the inputs were read was filled
+  again by reading them. The fix is in the contract's terms a reservation: work under way takes
+  its output and its live inputs out of the one budget (`Store.reserve`, `release`), and what is
+  held plus what is reserved never passes it. Today's `graph.py:Ref` and the "pinned" memo
+  entries are this same double count unsolved.
+- Not yet exercised: the disk budget under pressure with checkpoints, priority of a scrub over a
+  walk, cores, and any cost figure. O2 is covered through O1 after evict and delete; O4 is not a
+  simulation's to show and is counted at stage 4 by what a slice lets a new tool leave alone.
+
 ## Blind spots I know of, and what covers each
 
 - I have not read the runtime myself; I hold the inventory's reading, spot-checked on five rows.
@@ -165,3 +198,5 @@ against scrub latency on a slow disk.
 ## Log
 
 - 2026-11-21. Branch cut, journal written, stage 1 run and read. Hypothesis written above.
+- 2026-11-21. Contract written; store and simulation written here, not queued, being small and
+  the design itself. Torture passes for the contract and fails for today's three weaknesses.

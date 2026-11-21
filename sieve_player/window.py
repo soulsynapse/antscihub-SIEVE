@@ -1084,8 +1084,12 @@ class PlayerWindow(QMainWindow):
         self._file = held.File(held.path_for(self.doc.path)) if self.doc.path else None
         self.runs.take(self._file.load() if self._file is not None else [])
         self._recut()
-        self.set_window(0, min(self.count, round(10 * self.fps)), by=HAND)
-        self.goto(0, commit=True)
+        selected, window = recent.view_of(recent.views_beside(self.noted), self.doc.path) if self.noted and self.doc.path else (None, None)
+        s, n = window or (0, min(self.count, round(10 * self.fps)))
+        self.set_window(s, n, by=HAND)
+        self.goto(self.window_[0], commit=True)
+        if any(n.id == selected for n in self.doc.nodes):
+            self.canvas.select([selected])
         self.toggle_play()  # _unload left it paused
         if self.pane.video is not None:
             self.pane.video.show_source(path, (decoder.width, decoder.height, self.fps, self.count))
@@ -1111,6 +1115,8 @@ class PlayerWindow(QMainWindow):
     def _unload(self):
         if self.worker is None:
             return
+        if self.noted and self.doc is not None and self.doc.path:
+            recent.keep_view(recent.views_beside(self.noted), self.doc.path, self.selection, self.window_)
         if self.playing:
             self.toggle_play()
         self._end_bare()

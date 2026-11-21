@@ -432,7 +432,9 @@ def window_legs(p, s, n):
 
 
 def chain_of(p):
-    """The Plan `p`'s chain as Graph.series_chain gives the current one's."""
+    """[(node, tool, the params its computing is handed, band, the node it reads)] of the Plan `p` in run order: the heads first,
+    then each series node on from a chain node. A head is fed the stack and the rest what `gated` fed from the upstream
+    result under its band, its signal or its rows."""
     return [(nid, e.tool, dict(e.computed), e.band, e.src) for nid in p.chain for e in [p.entries[nid]]]
 
 

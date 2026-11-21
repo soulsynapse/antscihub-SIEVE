@@ -17,6 +17,7 @@ from sieve_player.stats import Stats
 from sieve_player.stream import NODE_FACTS, PLAN_FACTS, Event
 from sieve_player.plan import base_key, plan
 from sieve_player.registry import defaults
+from sieve_player.walk import chain_of
 
 
 class Dec:
@@ -389,7 +390,7 @@ def test_series_chain_runs_on_from_the_head():
     tools = {**TOOLS, "head": head, "s1": s1, "s2": s2}
     g = Graph(doc, Dec(), tools)
     assert g.chain == ["head", "s1", "s2"] and g.walk == "gray" and not g.unrun_series
-    assert [(nid, band, src) for nid, _, _, band, src in g.series_chain()] == [("head", None, "gray"), ("s1", (1.0, 2.0), "head"), ("s2", None, "s1")]
+    assert [(nid, band, src) for nid, _, _, band, src in chain_of(g.snapshot())] == [("head", None, "gray"), ("s1", (1.0, 2.0), "head"), ("s2", None, "s1")]
     doc.connect("gray", "s2")                   # "gray" into a node that expects "signal": off the chain, unrun
     g.sync()
     assert g.chain == ["head", "s1"] and g.unrun_series == ["s2"]

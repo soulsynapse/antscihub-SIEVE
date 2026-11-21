@@ -658,14 +658,6 @@ class Graph:
         with self._lock:
             return dict(self._plan[self.series].params) if self.series else {}
 
-    def series_chain(self):
-        """[(node, tool, the params its computing is handed, band, the node it reads)] in run order: the heads first, then each
-        series node on from a chain node. The worker feeds each head the stack and the rest what
-        `gated` fed from the upstream result under its band, its signal or its rows."""
-        with self._lock:
-            return [(nid, self._plan[nid].tool, dict(self._plan[nid].computed), self._plan[nid].band, self._plan[nid].src)
-                    for nid in self.chain]
-
     def key(self, nid):
         with self._lock:
             return self._plan[nid].key

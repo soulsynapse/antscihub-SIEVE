@@ -303,7 +303,7 @@ def test_a_tools_computing_is_never_handed_a_param_declared_to_change_nothing():
     assert not whole, whole
     chains = [f for name in ("graph", "walk") for f in ast.walk(ast.parse((PKG / f"{name}.py").read_text(encoding="utf-8")))
               if isinstance(f, ast.FunctionDef) and f.name in ("series_chain", "chain_of")]
-    assert len(chains) == 2 and not [f.name for f in chains if ".params" in ast.unparse(f)]     # what the walk runs and steps a chain node with
+    assert [f.name for f in chains] == ["chain_of"] and ".params" not in ast.unparse(chains[0])     # what the walk runs and steps a chain node with
 
     plane = np.zeros((40, 60), np.uint8)
     plane[5:15, 5:20], plane[22:34, 30:50] = 200, 255
@@ -430,7 +430,7 @@ def test_the_worker_reads_the_plan_off_one_snapshot_a_turn():
     graphs once a sync lands between. What the graph computes or lists for a job it is handed that
     Plan to do under. invalidate() is the GUI thread's, one read."""
     tree = jobs_tree()
-    says = {"heads", "chain", "series_chain", "entry", "key", "walk", "fold", "fed", "shown", "over", "series", "source"}
+    says = {"heads", "chain", "entry", "key", "walk", "fold", "fed", "shown", "over", "series", "source"}
     theirs = {id(n) for f in ast.walk(tree) if isinstance(f, ast.FunctionDef) and f.name == "invalidate" for n in ast.walk(f)}
     read = [ast.unparse(n) for n in ast.walk(tree) if isinstance(n, ast.Attribute) and n.attr in says
             and ast.unparse(n.value) in ("g", "graph", "self.graph") and id(n) not in theirs]

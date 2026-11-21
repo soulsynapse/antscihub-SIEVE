@@ -874,11 +874,14 @@ class Graph:
             return None
         if e.kind == "video":
             return self.decoder.cached(row)
+        c, mk = _address(e, row)
+        if c is None or not c.extent.holds(row):
+            return None
         if e.file is not None:
             d = self.readers.held(e.file[0])
             v = None if d is None else d.cached(row)
             return v if v is None or e.band is None else banded(v, e.band)
-        v = self._memoized(_address(e, row)[1])[1]
+        v = self._memoized(mk)[1]
         return v if v is None or e.band is None else banded(v, e.band)
 
 

@@ -176,11 +176,11 @@ class _Walk:
             g.began(self.start, self.length, SHAPE)
             return
         if not self.i:
-            for q, out, of, stacked in rows:
-                if stacked and self.length * nbytes(of, out) > STACK_BYTES:
-                    self.refuse(f"the {self.name}'s stack would be {self.length * nbytes(of, out) / 2**30:.1f} GB; "
-                                f"{', '.join(q.heads)} do not share a fold()")
-                    return
+            sizes = [(q, self.length * nbytes(of, out)) for q, out, of, stacked in rows if stacked]
+            if sum(b for _, b in sizes) > STACK_BYTES:
+                self.refuse(f"the {self.name}'s stack would be {sum(b for _, b in sizes) / 2**30:.1f} GB; "
+                            f"{', '.join(h for q, _ in sizes for h in q.heads)} do not share a fold()")
+                return
             self.stacks = {q.walk: _stack_for(self.length, out, is_table(of)) for q, out, of, stacked in rows if stacked}
         for q, out, of, stacked in rows:
             if stacked:

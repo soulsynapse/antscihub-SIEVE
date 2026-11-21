@@ -29,7 +29,7 @@ def held_periods(p, runs, count):
         sub, chain = p.of(w), held_chain(p, w.chain)
         src, stacks = p.entries[w.heads[0]].src, [(q.walk, stacked_key(q)) for q in sub.parts()]
         for c in w.cuts:
-            s, e = (min(r, count) for r in c.extent.rows)
+            s, e = _clamped(c.extent.rows, count)
             if e <= s:
                 continue
             spared = runs.over(s, e - s, chain, (s, e), (s, e)) is not None
@@ -41,13 +41,19 @@ def held_periods(p, runs, count):
     return out
 
 
-def period_run(p, results, start):
-    """The run `periodReady`'s `results` from `start` are held as under the Plan `p`: (start, rows,
-    the chain's results, the held.Chain of the timed Walk they are of, the cut's rows, each walked
-    node's rows as held.Runs.hold takes them or None); None where they are of no cut of `p` walked whole."""
+def _clamped(rows, count):
+    return tuple(min(r, count) for r in rows)
+
+
+def period_run(p, results, start, count):
+    """The run `periodReady`'s `results` from `start` are held as under the Plan `p` over a footage
+    of `count` rows: (start, rows, the chain's results, the held.Chain of the timed Walk they are
+    of, the cut's rows, each walked node's rows as held.Runs.hold takes them or None); None where
+    they are of no cut of `p` walked whole, a cut's rows ending at the footage's end."""
     has = {nid: r for nid, r in results.items() if isinstance(r, dict) and "signal" in r}
     rows = max((len(r["signal"]) for r in has.values()), default=0)
-    w = next((w for w in p.timed if set(has) == set(w.chain) and (start, start + rows) in {c.extent.rows for c in w.cuts}), None)
+    w = next((w for w in p.timed if set(has) == set(w.chain)
+              and (start, start + rows) in {_clamped(c.extent.rows, count) for c in w.cuts}), None)
     if w is None or not rows:
         return None
     folds = {q.walk: q.fold for q in p.of(w).parts()}
@@ -65,6 +71,7 @@ def gate_result(runs, src, key, within, count):
     if rows is None:
         run = runs.from_first_row(src, key)
         return run.results[src] if run is not None and run.rows >= count else None
+    rows = _clamped(rows, count)
     run = next((run for run in runs if run.cut == rows and (run.start, run.start + run.rows) == rows
                 and held.good(run.results.get(src), key)), None)
     return None if run is None else run.results[src]
@@ -81,7 +88,7 @@ def window_periods(p, runs, s, n, count):
     out = {}
     for src, c, a, b, best in window_legs(p, s, n, count):
         w = next(w for w in p.timed if c in w.cuts and p.entries[w.heads[0]].src == src)
-        first, end = (min(r, count) for r in c.extent.rows)
+        first, end = _clamped(c.extent.rows, count)
         lo, hi = max(first, s), min(end, s + n)
         chain = held_chain(p, w.chain)
         if runs.over(first, end - first, chain, (first, end), (first, end)) is not None:

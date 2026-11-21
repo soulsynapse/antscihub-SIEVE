@@ -1517,7 +1517,7 @@ class PlayerWindow(QMainWindow):
     def _period_ready(self, results, start, fps):
         """A cut in time walked whole from its first row, `start`: held as a run of that cut under
         the chain of the timed Walk its nodes are of, with the walked node's rows it was stepped over."""
-        run = period_run(self.graph.snapshot(), results, start)
+        run = period_run(self.graph.snapshot(), results, start, self.count)
         if run is not None:
             start, rows, has, chain, cut, walked = run
             self._hold_run(start, rows, has, chain, cut, of_clip=True, walked=walked)

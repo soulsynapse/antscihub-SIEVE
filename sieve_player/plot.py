@@ -69,8 +69,9 @@ class Pieces:
         return any(p.gate is not None for p in self.pieces)
 
     def at(self, row):
-        """(value, best) of each piece holding `row`, in their order."""
-        return [(float(p.values[row - p.start]), p.best) for p in self.pieces if 0 <= row - p.start < len(p.values)]
+        """(value, best) of each piece holding `row` and not absent there, in their order."""
+        held = (p for p in self.pieces if 0 <= row - p.start < len(p.values))
+        return [(v, p.best) for p in held if not np.isnan(v := float(p.values[row - p.start]))]
 
 
 class Field:

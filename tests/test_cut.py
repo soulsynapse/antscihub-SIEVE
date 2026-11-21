@@ -314,9 +314,10 @@ def test_a_period_cut_by_a_gate_is_cut_by_the_gates_held_run_and_holding_its_per
     (w,) = q.timed
     worth = held_chain(q, [*q.chain, *w.chain])
     for c in w.cuts:
-        start, rows, has, chain, cut, walked_rows = period_run(q, walked(q.of(w), c, c.extent.rows), c.extent.rows[0])
+        start, rows, has, chain, cut, walked_rows = period_run(q, walked(q.of(w), c, c.extent.rows), c.extent.rows[0], Dec.count)
         assert runs.hold(start, rows, has, chain, cut, worth=worth, walked=walked_rows)
         assert not runs.hold(start, rows, has, chain, cut, worth=worth, walked=walked_rows)
         g.sync()
         assert g.snapshot().entries["period"].cuts == cuts
     assert len(runs) == 4
+    assert period_run(q, walked(q.of(w), cuts[-1], (8, 9)), 8, 9)[4] == (8, 9)      # a count lowered under a period's end

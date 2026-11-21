@@ -35,7 +35,6 @@ def test_a_held_file_reads_back_by_the_form_of_its_records_alone_and_is_let_go_b
             pickle.dump(stamp, f)
             f.write(records)
         return read()
-    assert len(begun_with((held.VERSION, "a digest of the tools' folder"))) == 1       # as a file written before the stamp lost it
     assert begun_with((held.VERSION + 1,)) == [] and begun_with(held.VERSION) == []
     file = held.File(path)
     file.write(begun_with((held.VERSION,)))

@@ -15,7 +15,7 @@ import numpy as np
 from .cut import read
 
 EXT = ".series"
-VERSION = 6
+VERSION = 7
 SAMPLE = 256    # the most rows per_row pickles
 COPY = 1 << 20  # the most bytes of a kept record in memory as the file is made again
 
@@ -29,10 +29,8 @@ STAMP = (VERSION,)      # what a file begins with: the form of its records, and 
 
 
 def _stamped(said):
-    """Whether `said`, what a file begins with, is a stamp of this form: STAMP, or the tuple a
-    file written before it began with, VERSION and a digest of the tools' folder behind it that
-    nothing reads."""
-    return isinstance(said, tuple) and said[:1] == STAMP
+    """Whether `said`, what a file begins with, is a stamp of this form."""
+    return said == STAMP
 
 
 class Run(NamedTuple):
@@ -125,11 +123,8 @@ class File:
                     return []
                 self._had, self._end = had, f.tell()
                 while True:
-                    start, rows, results, size, *more = pickle.load(f)
-                    cut, walked = (*more, None, None)[:2]
-                    walked = (walked,) if walked and isinstance(walked[0], str) else walked     # a record whose walked is one (node, key, rows) bare
-                    # "plate": a field a result once carried that is no row of it, which a walk given the result would step
-                    run = Run(start, rows, {nid: {k: _rows(v) for k, v in r.items() if k != "plate"} for nid, r in results.items()}, size,
+                    start, rows, results, size, cut, walked = pickle.load(f)
+                    run = Run(start, rows, {nid: {k: _rows(v) for k, v in r.items()} for nid, r in results.items()}, size,
                               cut, None if walked is None else tuple((*w[:2], _rows(w[2])) for w in walked))
                     had.append((run, self._end, f.tell() - self._end))
                     self._end = f.tell()

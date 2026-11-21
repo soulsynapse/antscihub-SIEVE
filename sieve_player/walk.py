@@ -1,4 +1,4 @@
-"""A walk of one range, the window's or the clip's, and the series chain run over its rows. It imports no Qt:
+"""A walk of one range, the window's, the clip's or a cut in time's, and the series chain run over its rows. It imports no Qt:
 the signals a walk tells through are handed to it, so the worker's thread turns one and bare.py drives one alone.
 The window walk keeps the densities, and each walk reports its rows to the probe in its own lane. A stack holds
 images by shape, one row each, and tables in an object array, one table a row, so a walked node handing out a
@@ -104,6 +104,7 @@ class _Walk:
     failed: object      # Signal(int, str): a tool raised at this row, on this node
     densities: object = None    # Signal(object, int) the window's plane densities go out on; None, and the walk folds none
     plan: object = None # the Plan a turn runs under, set by whoever drives the walk before it: a turn reads the plan off no other
+    cut: object = None  # the cut.Record of a cut in time the range is walked inside, set beside `plan`; None for the walked node's one cut or the footage
     asked: bool = False # set under the worker's lock by anything that restarts this range; the scheduler takes it
     by: str = ASKED     # what last set `asked`, one of stream.BEGUN_BY; the scheduler takes it with the ask
     tell_every: float = 0.0     # s between a turn's tellings of the rows done, the range's end always told; 0 tells of each row
@@ -153,7 +154,7 @@ class _Walk:
             return
         read = not self.spared and any(h not in self.given for h in p.heads or [None])   # whether anything reads the walked node's row
         before = g.tally()
-        out = np.asarray(g.walk_row(row, p)) if read else None
+        out = np.asarray(g.walk_row(row, p, self.cut)) if read else None
         ran = g.tally() != before
         stacked = bool(p.chain) and read     # without a chain to run nothing reads the stack, and the rows are not held
         of = None if p.fold is not None or p.walk not in p.entries else p.entries[p.walk].produces    # a folded row is of no type
@@ -295,7 +296,7 @@ class _Walk:
         if not self.spared and (self.stack is not None or self.given):
             self.step(self.i)
             stepped = {nid: h.upto(self.i) for nid, h in self.stepped.items()}
-            results = run_chain(g, None if self.stack is None else self.stack[: self.i], self.start, self.i, self.folded, stepped, self.plan)
+            results = run_chain(g, None if self.stack is None else self.stack[: self.i], self.start, self.i, self.folded, stepped, self.plan, self.cut)
         if results is not None:
             self.ready.emit(results, self.start, g.fps)
 
@@ -367,7 +368,7 @@ def ran_above(p, nid):
     return out
 
 
-def run_chain(graph, stack, start, done, folds, stepped=None, p=None):
+def run_chain(graph, stack, start, done, folds, stepped=None, p=None, cut=None):
     """The series chain of the Plan `p`, the graph's current one with none, over `stack`, the
     walked node's rows from `start`, `done` of them so far, with `folds` the stack's own cache of
     each head's folding and `stepped`, for each node the walk stepped, which runs nothing here,
@@ -376,7 +377,8 @@ def run_chain(graph, stack, start, done, folds, stepped=None, p=None):
     says under "code" what it was made under, node to imported_print over the node and every node
     above it whose tool ran: a head's by ran_above, any other's what its source's result says and
     its own, and a result handed in what it said where it was held; None where that or a source's
-    said nothing."""
+    said nothing. `cut` is the cut.Record of the cut in time the rows are walked inside, which each
+    node is told it runs in; None tells a node its one cut, and a node of several none."""
     p = p or graph.snapshot()
     chain = chain_of(p)
     if not chain:
@@ -397,7 +399,7 @@ def run_chain(graph, stack, start, done, folds, stepped=None, p=None):
 
     def told(nid):
         reads = p.entries[nid].reads
-        return reads[0] if len(reads) == 1 else None
+        return reads[0] if len(reads) == 1 else cut if cut in reads else None
 
     for nid, tool, params, band, src in chain:
         if stepped is not None and nid in stepped:

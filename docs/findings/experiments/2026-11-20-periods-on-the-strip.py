@@ -67,7 +67,7 @@ if __name__ == "__main__":
         selector = doc.add_node("file", (0.0, 0.0), {**defaults(tools["file"]), "folder": folder, "pattern": "filed.json"})
         doc.connect(selector.id, by_file.id, "periods")
         doc.node(by_file.id).params.update(period.PATHS["periods"](D.pick_path(doc, tools, by_file.id, "periods")[0]))
-    entries = plan(doc, tools, "video key", cut_result=lambda nid, key: gated({**result, "key": key}, band, "signal")[0] if nid == by_gate.id else None).entries
+    entries = plan(doc, tools, "video key", cut_result=lambda nid, key, within: gated({**result, "key": key}, band, "signal")[0] if nid == by_gate.id else None).entries
     spans = {n.id: [s for r in e.cuts if (s := cut_in_time(r))] for n in doc.nodes if (e := entries.get(n.id)) and cuts(e.tool)}
     print({nid: len(ss) for nid, ss in spans.items()}, "periods a node; the file's", FILED)
 

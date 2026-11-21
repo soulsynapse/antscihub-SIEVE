@@ -61,7 +61,7 @@ def test_a_tool_cuts_by_its_declaration_alone_and_a_tool_below_two_cuts_is_told_
 
     doc = D.from_tools([gray, found, tools["below"]])
     asked = []
-    p = plan(doc, tools, "base", cut_file=lambda nid, up: asked.append(nid), cut_result=lambda nid, key: [(0, 2), (5, 7)], footage="print")
+    p = plan(doc, tools, "base", cut_file=lambda nid, up: asked.append(nid), cut_result=lambda nid, key, within: [(0, 2), (5, 7)], footage="print")
     assert [c.extent.rows for c in p.entries["below"].cuts] == [(0, 2), (5, 7)] and not asked and p.entries["found"].file is None
     assert plan(doc, tools, "base", footage="print").entries["below"].cuts == (Record("print"),)        # a declaration that raises cuts nothing
 
@@ -74,7 +74,7 @@ def test_a_tool_cuts_by_its_declaration_alone_and_a_tool_below_two_cuts_is_told_
     doc.connect("gray", "sig")
     doc.connect("sig", "gated", "gate")
     asked = []
-    of = lambda held: plan(doc, tools, "base", cut_result=lambda nid, key: asked.append((nid, key)) or held, footage="print").entries
+    of = lambda held: plan(doc, tools, "base", cut_result=lambda nid, key, within: asked.append((nid, key)) or held, footage="print").entries
     e = of([(0, 2)])
     assert [c.extent.rows for c in e["below"].cuts] == [(0, 2)] and asked == [("gated", e["sig"].key)]       # asked under the key the node wired there has
     e = of(None)
@@ -129,3 +129,56 @@ def test_a_value_is_one_in_every_period_holding_its_row_but_where_it_read_an_edg
     for name, row in (("own", 6), ("walk", 6), ("ahead", 6), ("ahead", 7)):
         ran(name, row, (2, 9))
     assert runs[before:] == [("ahead", 7, (2, 9))]                              # within reach of the old last row, it read it
+
+
+def test_a_node_above_a_period_is_walked_as_with_none_and_one_below_is_walked_over_each_period_alone():
+    import numpy as np
+
+    from sieve_player import held
+    from sieve_player.bare import _Told
+    from sieve_player.walk import _Walk
+
+    def step(state, row, i, params):
+        return state, {"signal": float(row[0, 0])}
+
+    def run(series, params):
+        return {"signal": np.asarray([float(r[0, 0]) for r in series.data])}
+
+    sig = Tool(NAME="sig", KIND="series", EXPECTS="gray", PRODUCES="signal", run=run, step=step)
+    period = Tool(NAME="period", KIND="frame", EXPECTS="gray", PRODUCES="gray", PARAMS={"rows": {"default": []}},
+                  run=lambda frames, row, params: frames(row), key_params=lambda params: {}, reach_in_rows=lambda params: (0, 0),
+                  cut_extents=lambda params, result: [{"rows": r} for r in params["rows"]])
+    tools = {t.NAME: t for t in (gray, period, sig)}
+    doc = D.from_tools([gray, sig])
+    doc.add_node("period", (0, 200), {"rows": [[2, 5], [4, 8]]})
+    doc.connect("gray", "period")
+    below = doc.add_node("sig").id
+    doc.connect("period", below)
+    g = Graph(doc, Dec(), tools)
+
+    def walked(p, cut=None, rows=(0, Dec.count)):
+        ready = _Told()
+        w = _Walk(g, name="clip", every=1 << 62, progress=_Told(), ready=ready, refused=_Told(), failed=_Told(), plan=p, cut=cut)
+        w.begin(rows[0], rows[1] - rows[0])
+        while w.i < w.length:
+            w.turn()
+        return ready.last[0]
+
+    p = g.snapshot()
+    (w,) = p.timed
+    assert p.chain == ["sig"] and w.chain == [below] and [c.extent.rows for c in w.cuts] == [(2, 5), (4, 8)]
+    for c in w.cuts:
+        got = walked(p.of(w), c, c.extent.rows)[below]["signal"]
+        assert got.tolist() == [r + 1.0 for r in range(*c.extent.rows)]         # gray is the row and its k, over the period's rows alone
+    runs, key = held.Runs(1 << 30, lambda nid, r: 0), p.entries["sig"].key
+    chain = held.Chain({"sig": key}, frozenset({"sig"}), {"sig": (0, 0)})
+    above = walked(p)
+    assert runs.hold(0, Dec.count, above, chain)
+    for rows in ([[2, 6], [4, 8]], [[2, 5], [4, 8], [0, 3]], []):        # moved, added, gone
+        doc.node("period").params["rows"] = rows
+        g.sync()
+        q = g.snapshot()
+        assert q.chain == ["sig"] and q.entries["sig"].key == key and q.entries[below].key == p.entries[below].key
+        assert runs.over(0, Dec.count, chain, (0, Dec.count))["sig"]["signal"].tolist() == above["sig"]["signal"].tolist()
+        assert [c.extent.rows for w in q.timed for c in w.cuts] == [tuple(r) for r in rows]
+    assert not q.timed and q.entries[below].standing == "reads period, which cuts no rows"

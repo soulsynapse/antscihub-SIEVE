@@ -56,9 +56,10 @@ class Plan:
     entries: dict = field(default_factory=dict)   # node id -> Entry
     heads: list = field(default_factory=list)     # the series nodes that run on the stack: those fed by the walked node
     chain: list = field(default_factory=list)     # the heads and each fed series node on from a chain node, in run order
-    unrun: list = field(default_factory=list)     # every series node not in the chain; its standing says why
+    unrun: list = field(default_factory=list)     # every series node not in the chain nor a timed Walk's; its standing says why
     shown: str | None = None                      # the display flag, when it names a node
     over: str | None = None                       # the overlay flag, when it names a one-plane node
+    timed: list = field(default_factory=list)     # a Walk for each extent cut in time that heads read: none of it on `chain`, and the window walks none of it
 
     @property
     def walk(self):
@@ -67,6 +68,20 @@ class Plan:
     @property
     def fold(self):
         return shared_fold(self.entries, self.heads)
+
+    def of(self, walk):
+        """This plan with `walk`, one of `timed`, for its heads and chain: what a walk of one of its cuts runs under."""
+        return Plan(self.entries, walk.heads, walk.chain, [], self.shown, self.over)
+
+
+@dataclass
+class Walk:
+    """The series nodes reading one walked node whose cuts are cuts in time, walked over each of
+    `cuts` alone: `heads` read the walked node, and `chain` is they and what is fed on from them,
+    in run order, as Plan's are."""
+    cuts: tuple
+    heads: list
+    chain: list
 
 
 def walked(entries, chain, shown):
@@ -112,9 +127,10 @@ def facts(p, pinned):
 
 def plan(doc, tools, base, cut_file=None, cut_result=None, footage=None):
     """The plan for `doc` under `tools`, name to module, with `base` the video node's key,
-    `footage` what the cuts' records say they are of, `base` with none, `cut_result(nid, key)`
-    answering the result a cutting node reads on its CUT_BY wire over the whole extent, `key` that
-    of the node wired there and None with none, the answer None where no such result is held, and
+    `footage` what the cuts' records say they are of, `base` with none, `cut_result(nid, key, within)`
+    answering the result a cutting node reads on its CUT_BY wire over `within`, one of the cuts it
+    reads, its rows counted from that cut's first, `key` that of the node wired there and None with
+    none, the answer None where no such result is held, and
     `cut_file(nid, up)` answering (path, footage print) of the file that holds a cutting node's cut
     of the footage it reads, or None: `up` is that footage as the node above answered, None for the
     video. It is asked only of a node whose tool cuts, has the cut_file facet and that reads the video
@@ -127,7 +143,8 @@ def plan(doc, tools, base, cut_file=None, cut_result=None, footage=None):
     registry's `computed`, or what its tool's `key_params` answers of them where it has one that
     does not raise. A node that serves its file reads nothing, and its key is the one a document opened on
     that file gives its video node, so everything below it is keyed as that document's is. A node's cuts are its inputs', and a cutting node's are made from them, one for
-    each extent its tool's `cut_extents` answers of its params and of `cut_result`. A cutting node
+    each extent its tool's `cut_extents` answers of its params and of `cut_result` over each cut it
+    reads, the rows it answers of a result over a cut in time lifted by that cut's first row. A cutting node
     is refused, saying why, where its CUT_BY input is wired beside a
     path input, and where the node wired into it reads it; one whose CUT_BY wire's result is not held
     cuts no cut and waits on that node's walk, and one with neither wired is refused. A tool that
@@ -137,7 +154,10 @@ def plan(doc, tools, base, cut_file=None, cut_result=None, footage=None):
     whose inputs are of two, the plate among them, is not fed, nor is anything that reads it, and
     its standing says which. A chain node is stepped when its tool steps and everything it reads on
     the chain is stepped; the first node that runs whole ends the prefix for every node after it,
-    and a stepping tool so ended names that node in `whole_by`."""
+    and a stepping tool so ended names that node in `whole_by`. The chain is of the heads reading
+    the first walked node whose cuts are not cuts in time; the heads reading a node whose cuts are,
+    or a node below a cutting node that has cut nothing yet, are each extent's `timed` Walk, the
+    heads of one walked node an extent, and their standing says the window does not walk them."""
     keys, raw_keys, pieces, files, refused = {}, {}, {}, {}, {}
 
     def cuts(nid):
@@ -244,14 +264,14 @@ def plan(doc, tools, base, cut_file=None, cut_result=None, footage=None):
                     refused[nid] = f"fed both: {', '.join(filed)} by a file and {by[0]} by {gate}; one cuts it"
                 elif gate is not None and reads_node(gate, nid):
                     refused[nid] = f"in a cycle: {by[0]} is fed by {gate}, which reads {nid}"
-                elif gate is not None and (result := cut_result and cut_result(nid, key_of(gate, (*stack, nid)))) is None:
+                elif gate is not None and None in (results := [cut_result and cut_result(nid, key_of(gate, (*stack, nid)), r) for r in above]):
                     waiting[nid], made[nid] = f"{by[0]} waits on {gate}'s walk", ()
                 else:
                     try:
-                        given = cut_result(nid, None) if gate is None and cut_result else (None if gate is None else result)
-                        extents = list(cut_extents_of(tool)(computed(tool, node.params), given))
-                        file = file_of(nid) if len(above) * len(extents) == 1 else None
-                        made[nid] = tuple(r.cut(**x, file=file) for r in above for x in extents)
+                        given = results if gate is not None else [cut_result(nid, None, r) if cut_result else None for r in above]
+                        extents = [(r, list(cut_extents_of(tool)(computed(tool, node.params), g))) for r, g in zip(above, given)]
+                        file = file_of(nid) if sum(len(xs) for _, xs in extents) == 1 else None
+                        made[nid] = tuple(r.cut(**_lifted(x, r, g), file=file) for (r, xs), g in zip(extents, given) for x in xs)
                     except Exception:       # a tool's rule is user code: one that fails cuts nothing
                         pass
         return made[nid]
@@ -302,21 +322,51 @@ def plan(doc, tools, base, cut_file=None, cut_result=None, footage=None):
                               computed=computed(tool, n.params))
         if kind == "series":
             series.append(n.id)
+    def chain_from(heads):
+        chain = list(heads)
+        for nid in chain:
+            chain += [s for s in series if entries[s].src == nid and entries[s].fed and s not in chain]
+        return chain
+
+    def in_time(s):
+        """Whether the node `s` reads is of cuts in time, or of none, a cutting node above it having cut nothing yet."""
+        cuts = entries[entries[s].src].cuts
+        return not cuts or any(c.extent.rows is not None for c in cuts)
+
     roots = [s for s in series if entries[s].src is None or entries[entries[s].src].kind != "series"]
-    heads = [s for s in roots if entries[s].src == entries[roots[0]].src and (entries[s].fed or s == roots[0])] if roots else []
-    chain = list(heads)
-    for nid in chain:
-        chain += [s for s in series if entries[s].src == nid and entries[s].fed and s not in chain]
+    untimed = [s for s in roots if entries[s].src is None or not in_time(s)]
+    anchor = untimed[0] if untimed else None
+    heads = [s for s in untimed if entries[s].src == entries[anchor].src and (entries[s].fed or s == anchor)] if anchor else []
+    chain, timed = chain_from(heads), []
+    for s in roots:
+        if s not in untimed and entries[s].fed and entries[entries[s].src].cuts and all(w.cuts != entries[entries[s].src].cuts for w in timed):
+            within = [r for r in roots if r not in untimed and entries[r].src == entries[s].src and entries[r].fed]
+            timed.append(Walk(entries[entries[s].src].cuts, within, chain_from(within)))
+    walked_chains = {nid for c in [chain, *(w.chain for w in timed)] for nid in c}
     enders = {}
-    for nid in chain:
+    for nid in [*chain, *(n for w in timed for n in w.chain)]:
         e = entries[nid]
         own = not steps(e.tool)
         enders[nid] = nid if own else enders.get(e.src)
         e.steps, e.whole_by = enders[nid] is None, None if own else enders[nid]
+    by_period = {nid: w for w in timed for nid in w.chain}
     for nid, e in entries.items():
-        e.standing = crossings.get(nid) or refused.get(nid) or waiting.get(nid) or _standing(doc, tools, entries, heads, chain, nid)
+        e.standing = (crossings.get(nid) or refused.get(nid) or waiting.get(nid)
+                      or (f"walked by the clip walk over each of {len(by_period[nid].cuts)} periods alone, not by the window" if nid in by_period else "")
+                      or (f"reads {e.src}, which cuts no rows" if e.kind == "series" and e.fed and e.src and not entries[e.src].cuts else "")
+                      or _standing(doc, tools, entries, heads, walked_chains, nid))
     over = doc.overlay if doc.overlay in entries and overlaid(produces(doc, tools, doc.overlay)) else None
-    return Plan(entries, heads, chain, [s for s in series if s not in chain], doc.display if doc.display in entries else None, over)
+    return Plan(entries, heads, chain, [s for s in series if s not in walked_chains], doc.display if doc.display in entries else None, over, timed)
+
+
+def _lifted(extent, within, result):
+    """`extent`, as a tool's cut_extents answered it of `result`, with rows on the footage: a
+    result handed over a cut in time counts its rows from that cut's first row."""
+    rows = extent.get("rows")
+    if result is None or rows is None or within.extent.rows is None:
+        return extent
+    first = within.extent.rows[0]
+    return {**extent, "rows": (rows[0] + first, rows[1] + first)}
 
 
 def _standing(doc, tools, entries, heads, chain, nid):
@@ -336,5 +386,7 @@ def _standing(doc, tools, entries, heads, chain, nid):
     if e.kind == "series" and nid not in chain:
         if entries[e.src].kind == "series":
             return f"in waits on {e.src}"
+        if not heads:
+            return f"unrun: reads {e.src}, which no walk walks"
         return f"unrun: reads {e.src}; the walk is {entries[heads[0]].src}, which {heads[0]} reads"
     return "" if e.fed else "in a cycle"

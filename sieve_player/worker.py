@@ -2,7 +2,8 @@
 condition it waits on. Each rung is a job, _Scrub and two of walk.py's _Walk, holding its own state and doing one
 thing with a turn; the GUI side sets a job's ask under the lock and the scheduler takes it and tells the job to
 begin, once. The clip walk runs behind a finished window so what is viewed never waits on it, and a frame change
-abandons it and its rows."""
+abandons it and its rows. Behind the clip's own range the clip lane walks each cut in time of the plan's `timed`
+alone, a third _Walk, from the cut's first row to its last; the window walks none of them."""
 import sys
 import threading
 import traceback
@@ -46,6 +47,23 @@ class _Scrub:
         self.failed.emit(self.row, getattr(exc, "sieve_node", ""))
 
 
+def _walking(p, nid, cut):
+    """The plan `p` with the timed Walk for its chain whose walked node is `nid` and which has `cut`
+    among its cuts; None where `p` has none, or that node is not fed."""
+    w = next((w for w in p.timed if p.entries[w.heads[0]].src == nid and cut in w.cuts), None)
+    return None if w is None or not p.entries[nid].fed else p.of(w)
+
+
+class _Left:
+    """A walk's progress told with the count of `legs` left behind it."""
+
+    def __init__(self, signal, legs):
+        self.signal, self.legs = signal, legs
+
+    def emit(self, done, total, ran):
+        self.signal.emit(done, total, len(self.legs))
+
+
 class Worker(QThread):
     rowReady = Signal(int)                    # a requested row is computed and peekable
     walked = Signal(int, int, int)            # rows done, rows in window, and of those done the rows that ran; the rest a store held
@@ -57,6 +75,8 @@ class Worker(QThread):
     clipRefused = Signal(str)                 # the clip walk did not start, or stopped short of the clip, and why
     walkRefused = Signal(str)                 # the window walk closed short of the window, and why: its stack passed STACK_BYTES
     shortened = Signal(int)                   # the stream ended short of the container's claim: the count as the decoder now has it
+    periodWalked = Signal(int, int, int)      # rows done and rows in the cut in time the clip lane walks, and the cuts left behind it
+    periodReady = Signal(object, int, float)  # as clipReady, over one cut in time walked whole from its first row, which is `start`
 
     def __init__(self, graph, every=30, tell_every=0.0):
         """`every` is the cadence, in rows walked, at which either range runs its chain;
@@ -74,6 +94,10 @@ class Worker(QThread):
                           refused=self.walkRefused, failed=self.failed, densities=self.densityReady, tell_every=tell_every)
         self._clip = _Walk(graph, name="clip", every=every, progress=self.clipWalked, ready=self.clipReady,
                            refused=self.clipRefused, failed=self.failed, tell_every=tell_every)
+        self._legs = []                       # [(walked node, cut.Record)]: the cuts in time the clip lane is yet to walk, set as the clip walk begins
+        self._period = _Walk(graph, name="clip", every=1 << 62, progress=_Left(self.periodWalked, self._legs), ready=self.periodReady,
+                             refused=self.clipRefused, failed=self.failed, tell_every=tell_every)
+        self._period.walked, self._legs_by = None, ASKED     # the walked node of the cut under way; what began the clip walk the legs are of
 
     # -- GUI-side calls --------------------------------------------------
     def request_row(self, row):
@@ -185,7 +209,7 @@ class Worker(QThread):
                 job.raised(e)
 
     def _turn(self):
-        """The ladder: a scrub, then the window walk, then a refold of the window, then the clip walk. Returns the first rung due as what
+        """The ladder: a scrub, then the window walk, then a refold of the window, then the clip walk, then each cut in time. Returns the first rung due as what
         its events serve and the (job, call) steps that are its turn, or None when no rung
         is, which is the condition the loop waits on, so waking means turning. Called under the
         lock; the ask of the rung picked is taken here, so one landing meanwhile is not lost. The
@@ -222,6 +246,8 @@ class Worker(QThread):
             def begin():
                 clip.given = given if rows == count else {}
                 clip.begin(0, count if on and fed else 0, by)
+                self._legs[:] = [(p.entries[w.heads[0]].src, c) for w in p.timed for c in w.cuts] if on else []
+                self._legs_by = by
                 if clip.length and clip.given and not clip.stale_given() and all(
                         nid in clip.given for nid in p.chain if p.entries[nid].steps or nid in p.heads):
                     clip.i = clip.length - 1    # nothing is left to step and no head reads a row: the last turn runs what runs whole and ends the walk
@@ -233,4 +259,21 @@ class Worker(QThread):
             if self._clip_on and fed:
                 return "walk", [(clip, clip.turn)]
             return "walk", [(clip, clip.halt), (clip, clip.emit)]   # the chain over the rows it stopped at: the cadence's last result is short of them
+        per = self._period
+        if per.i < per.length:
+            if self._clip_on and (sub := _walking(p, per.walked, per.cut)) is not None:
+                per.plan = sub
+                return "walk", [(per, per.turn)]
+            self._legs.clear()
+            return "walk", [(per, per.halt)]
+        while self._clip_on and self._legs:
+            nid, cut = self._legs.pop(0)
+            if (sub := _walking(p, nid, cut)) is None:
+                continue
+            first, end = (min(r, count) for r in cut.extent.rows)
+
+            def begin(sub=sub, nid=nid, cut=cut, first=first, end=end):
+                per.plan, per.walked, per.cut, per.spared, per.given = sub, nid, cut, False, {}
+                per.begin(first, end - first, self._legs_by)
+            return "walk", [(per, begin)]
         return None

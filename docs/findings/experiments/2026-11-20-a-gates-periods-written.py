@@ -50,7 +50,7 @@ if __name__ == "__main__":
     by_gate = doc.add_node("period", (0.0, 0.0), defaults(period))
     doc.connect("video", by_gate.id)
     doc.connect("count", by_gate.id, "gate")
-    entries = plan(doc, tools, "video key", cut_result=lambda nid, key: gated({**result, "key": key}, band, "signal")[0]).entries
+    entries = plan(doc, tools, "video key", cut_result=lambda nid, key, within: gated({**result, "key": key}, band, "signal")[0]).entries
     gave = [r.extent.rows for r in entries[by_gate.id].cuts]
 
     with tempfile.TemporaryDirectory() as folder:
@@ -73,7 +73,7 @@ if __name__ == "__main__":
         print(f"the selector picks the written file: {picked is not None and os.path.samefile(picked, path)} {why}")
         params = period.PATHS["periods"](picked)
     doc.node(by_file.id).params.update(params)
-    read = [r.extent.rows for r in plan(doc, tools, "video key", cut_result=lambda nid, key: None).entries[by_file.id].cuts]
+    read = [r.extent.rows for r in plan(doc, tools, "video key", cut_result=lambda nid, key, within: None).entries[by_file.id].cuts]
     print(f"{n} rows; file rows {params['rows']}; names of the first three {[p['name'] for p in params['periods'][:3]]}")
     print(f"the gate gave {len(gave)} periods, the file {len(read)}: {'the same' if read == gave else 'DIFFER'}")
     unfed = period.settings()

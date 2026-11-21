@@ -1049,6 +1049,7 @@ class PlayerWindow(QMainWindow):
                              ("walked", lambda *row: self._paced("window", *row)),
                              ("failed", self._failed), ("clipWalked", self._clip_walked), ("clipReady", self._clip_ready),
                              ("clipRefused", self._clip_refused), ("walkRefused", ct.progress.setText),
+                             ("periodWalked", self._period_walked), ("periodReady", self._period_ready),
                              ("shortened", self._shortened)):
             getattr(self.worker, signal).connect(self._timed("slot", signal, slot))
         self.worker.finished.connect(self._worker_ended)    # no closure over the worker: one connected to its own signal keeps it, its graph and the memo for good
@@ -1314,12 +1315,16 @@ class PlayerWindow(QMainWindow):
                 self.timeline.controls.progress.setText(f"could not write {os.path.basename(self._file.path)}: {e}")
         self._ask_window(by=HAND)
 
-    def _chain(self):
-        """The series chain as held.Runs is told it; one of no nodes with no video open."""
+    def _chain(self, nodes=None):
+        """The series chain, or `nodes` of the plan, as held.Runs is told it; one of no nodes with no video open."""
         g = self.graph
-        entries = {} if g is None else {nid: e for nid in g.chain if (e := g.entry(nid)) is not None}
+        entries = {} if g is None else {nid: e for nid in (g.chain if nodes is None else nodes) if (e := g.entry(nid)) is not None}
         return held.Chain({nid: e.key for nid, e in entries.items()}, frozenset(nid for nid, e in entries.items() if e.steps),
                           {nid: e.reach for nid, e in entries.items()})
+
+    def _walked_nodes(self):
+        p = self.graph.snapshot()
+        return [*p.chain, *(nid for w in p.timed for nid in w.chain)]
 
     def _key(self, nid):
         """The key `nid` now has; None for a node the plan does not have."""
@@ -1455,6 +1460,24 @@ class PlayerWindow(QMainWindow):
                 self._clip_asked = False
                 self.header.set_walking(False)
 
+    def _period_walked(self, done, total, left):
+        """The clip lane walks a cut in time behind the clip's own range: the header says so, and the
+        walk is the clip walk's to stop until the last cut ends."""
+        self._clip_asked = done < total or bool(left)
+        self.header.set_walking(self._clip_asked)
+        self.header.note.setText(f"clip: a period, {done} of {total} rows, {left} periods behind it"
+                                 if self._clip_asked else "")
+
+    def _period_ready(self, results, start, fps):
+        """A cut in time walked whole from its first row, `start`: held as a run of that cut under
+        the chain of the timed Walk its nodes are of."""
+        has = {nid: r for nid, r in results.items() if isinstance(r, dict) and "signal" in r}
+        rows = max((len(r["signal"]) for r in has.values()), default=0)
+        p = self.graph.snapshot()
+        w = next((w for w in p.timed if set(has) == set(w.chain) and (start, start + rows) in {c.extent.rows for c in w.cuts}), None)
+        if w is not None and rows:
+            self._hold_run(start, rows, has, self._chain(w.chain), (start, start + rows))
+
     def _clip_ready(self, results, start, fps):
         self.clip_results = results
         stands, rows = self._stands()
@@ -1503,23 +1526,31 @@ class PlayerWindow(QMainWindow):
             if wait:
                 self._writer.join()
 
-    def _hold_run(self, start, rows, results):
-        """Holds `results` as a run where held.Runs.hold does, and one held is written once
-        nothing more has been for HOLD_MS."""
-        if self.runs.hold(start, rows, results, self._chain()):
+    def _hold_run(self, start, rows, results, chain=None, cut=None):
+        """Holds `results` as a run where held.Runs.hold does, under `chain`, the window's with none,
+        inside a cut of rows `cut`, weighed against the others by every walk's chain; and one held is
+        written once nothing more has been for HOLD_MS."""
+        if self.runs.hold(start, rows, results, chain or self._chain(), cut, worth=self._chain(self._walked_nodes())):
             self._unwritten = True
             self._hold.start()
             self._show_held()
             self._recut()
 
-    def _cut_result(self, nid, key):
-        """What plan.plan asks of a cutting node `nid` cut by a result on a wire: the result of the
-        node wired there under `key`, as a held run from row 0 to the clip's last row has it; None
-        with none."""
+    def _cut_result(self, nid, key, within):
+        """What plan.plan asks of a cutting node `nid` cut by a result on a wire over `within`, a
+        cut.Record: the result of the node wired there under `key`, as a held run from row 0 to the
+        clip's last row has it, or for a cut in time a run of that cut walked whole; None with none."""
         by = registry.cut_by(self.tools.get(self.doc.node(nid).tool))
         w = by and self.doc.source(nid, by[0])
-        run = self.runs.from_first_row(w.src, key) if w else None
-        return run.results[w.src] if run is not None and run.rows >= self.count else None
+        if not w:
+            return None
+        rows = within.extent.rows
+        if rows is None:
+            run = self.runs.from_first_row(w.src, key)
+            return run.results[w.src] if run is not None and run.rows >= self.count else None
+        run = next((run for run in self.runs if run.cut == rows and (run.start, run.start + run.rows) == rows
+                    and held.good(run.results.get(w.src), key)), None)
+        return None if run is None else run.results[w.src]
 
     def _recut(self):
         """The graph synced where a cutting node is cut by a result on a wire, and where the cuts it

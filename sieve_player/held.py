@@ -249,14 +249,14 @@ class Runs:
                     out[nid] = rows_of(run.results[nid], run.rows, s - run.start, n)
         return out
 
-    def hold(self, start, rows, results, chain, cut=None):
+    def hold(self, start, rows, results, chain, cut=None, worth=None):
         """Holds `results` as a run over `rows` rows from `start` inside a cut of rows `cut` when every
         chain node has `rows` rows in it under a key, unless a run held serves every node it has over
         its rows under the same key and its walk and cut; whether the runs held changed. A run it so
         serves goes, and while the runs together pass the limit the oldest goes that is not the one
-        the chain has most of, a run it has nothing of before any other. What the chain has of a run is the run's rows for
-        each node of `_has`, the longer run of two it has as much of and the one held last of two as
-        long. The last run stays whatever it takes."""
+        `worth`, a Chain and `chain` with none, has most of, a run it has nothing of before any other.
+        What it has of a run is the run's rows for each node of `_has`, the longer run of two it has
+        as much of and the one held last of two as long. The last run stays whatever it takes."""
         nodes = list(chain.keys)
         if not nodes or not all(isinstance(r := results.get(nid), dict) and "signal" in r and len(r["signal"]) == rows
                                 and r.get("key") is not None for nid in nodes):
@@ -274,7 +274,7 @@ class Runs:
         self.all = [run for run in self.all if not stands_in(new, run)]
         self.all.append(new)
         while len(self.all) > 1 and sum(run.size for run in self.all) > self.limit:
-            has = {run: len(self._has(run.results, chain)) * run.rows for run in self.all}
+            has = {run: len(self._has(run.results, worth or chain)) * run.rows for run in self.all}
             most = max(reversed(self.all), key=lambda run: (has[run], run.rows))
             spare = [run for run in self.all if run is not most]
             left = [run for run in spare if not has[run]]

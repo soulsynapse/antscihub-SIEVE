@@ -57,12 +57,12 @@ if __name__ == "__main__":
     doc.connect("video", period.id)
     doc.connect("count", period.id, "gate")
 
-    waiting = plan(doc, tools, "video key", cut_result=lambda nid, key: None).entries[period.id]
+    waiting = plan(doc, tools, "video key", cut_result=lambda nid, key, within: None).entries[period.id]
     print(f"no walk held: cuts {waiting.cuts}, fed {waiting.fed}, standing {waiting.standing!r}")
 
     asked = []
 
-    def held(nid, key):
+    def held(nid, key, within):
         asked.append((nid, key))
         return {**gated({**result, "key": key}, band, "signal")[0]}
 

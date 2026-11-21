@@ -279,16 +279,16 @@ is walked over for a served clip alone. How far a node that serves no file, sets
 extent and is of a cut a period reaches into the player is sized in that finding, by module.
 This section's boxes are one change to them.
 
-- [ ] A node's extent is its inputs' intersection, cut where a cutting node cuts. A node below a
+- [x] A node's extent is its inputs' intersection, cut where a cutting node cuts. A node below a
   `period` is of each of its periods, under its one key. A node no `period` feeds is walked over
   the rows it is walked over with none in the document.
   Check: a seam: a stepped node above a `period` and one below it, the one above's key and held
   rows the same with the periods moved, added and gone.
-- [ ] The stepped nodes of one extent are walked together over it, and those of another apart over
+- [x] The stepped nodes of one extent are walked together over it, and those of another apart over
   theirs.
   Check: a one-off over the crossings clip: `count` above a period and `track` below it, the rows
   each was stepped over.
-- [ ] A period under a region and a region under a period both run, and the two have one extent.
+- [x] A period under a region and a region under a period both run, and the two have one extent.
   A `period` under a `period` runs: the gate feeding the lower is read over the upper's periods,
   and each period it makes is a cut of the period it lies in.
   Check: a one-off over the crossings clip.

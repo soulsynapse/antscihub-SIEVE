@@ -2,10 +2,10 @@
 runs inside; a frame of any plane kind in, out as in.
 
 The periods are fed by a file a `file` selector finds, wired into `periods`, or by a series node
-wired into `gate`, and never both. A gate's periods are the runs of rows its gate keeps over the
-whole footage, each [first, end) and named by its first row, so two that touch are one; while no
-walk of the clip is held under the key the node wired there has, there are none, and the plan says
-the `period` waits on it. A file is JSON:
+wired into `gate`, and never both. A gate's periods are the runs of rows its gate keeps over each
+cut the node reads, the whole footage or the periods of a `period` above, each [first, end) and
+named by its first row, so two that touch are one; while no walk of each such cut is held under the
+key the node wired there has, there are none, and the plan says the `period` waits on it. A file is JSON:
 `{"rows": the footage's count of rows, "periods": [{"name": ..., "first": ..., "end": ...}, ...]}`,
 `first` the footage row a period begins at and `end` the row past its last, so a period is the
 rows [first, end). Periods may touch and may overlap, each its own. A top-level key other than

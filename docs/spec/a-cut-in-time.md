@@ -34,8 +34,7 @@ cut restricts and never renumbers: a row and a place below a cut are the footage
 A cut in time is a cut in space turned on its side. A `region` is fed its shapes by a file and
 everything below it runs inside the region; a `period` is fed its periods, by a file or by a
 gate, and everything below it runs inside each. What is computed inside a cut is what the
-caveman way
-computes: the cut written to a clip of its own and the pipeline run on that clip.
+caveman way computes: the cut written to a clip of its own and the pipeline run on that clip.
 
 A node's extent follows the wires: it is its inputs' intersection, cut where a cutting node cuts,
 and a node no cutting node feeds is of the whole footage whatever else the document cuts. Outside

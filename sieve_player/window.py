@@ -1619,16 +1619,24 @@ class PlayerWindow(QMainWindow):
         """The graph synced where a cutting node is cut by a result on a wire, or any cutting node
         where `by_count` says the count moved, and where the cuts they then make are not those they
         made, the walk begun again over them, and the clip walk asked again where it was asked or
-        `resume` says a clip walk's run made them."""
+        `resume` says a clip walk's run made them. Where a run held moved only cuts in time, nothing the own
+        ranges walk, each lane walks the cuts now made and neither own range begins again."""
         if self.graph is None:
             return
         of = registry.cuts if by_count else registry.cut_by
         cutting = lambda: {nid: e.cuts for nid, e in self.graph.snapshot().entries.items() if of(e.tool)}
-        was = cutting()
+        was, ranges = cutting(), self._own_ranges()
         if not was:
             return
         self.graph.sync()
         if cutting() == was:
+            return
+        if not by_count and self._own_ranges() == ranges:
+            self._restate()
+            self.window_periods = window_periods(self.graph.snapshot(), self.runs, *self.window_)
+            self._show_held()
+            self.worker.recut()
+            self.goto(self.row, commit=True)
             return
         walking = self._clip_asked
         self._restate()
@@ -1636,6 +1644,11 @@ class PlayerWindow(QMainWindow):
         self.goto(self.row, commit=True)
         if walking or resume:
             self._toggle_clip()
+
+    def _own_ranges(self):
+        """What the window's and the clip's own ranges walk under: the walked node and each chain node, their keys and cuts."""
+        p = self.graph.snapshot()
+        return {nid: (p.entries[nid].key, p.entries[nid].cuts) for nid in [p.walk, *p.walks, *p.chain] if nid in p.entries}
 
     def _clip_result(self, nid):
         """The clip's result for `nid`: the clip walk's, or the held run's from row 0 that reaches

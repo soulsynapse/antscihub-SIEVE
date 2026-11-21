@@ -289,6 +289,16 @@ def test_a_node_above_a_period_is_walked_as_with_none_and_one_below_is_walked_ov
     turned()
     assert periods == [4] and told[-1] == (4, 4, 0)                         # the new legs walked, the held one passed over and the end told
 
+    periods.clear()
+    doc.node("period").params["rows"] = [[4, 8], [9, 10], [0, 2]]
+    g.sync()
+    q = g.snapshot()
+    (timed,) = q.timed
+    w.give_periods({("period", r): HeldCut(period_keys(q.of(timed)), True, {}, None) for r in ((4, 8), (9, 10))})
+    w.recut()
+    turned()
+    assert periods == [0] and not w._clip.asked and not w._win.asked         # a period added walked alone, neither own range begun again
+
 
 def test_a_period_cut_by_a_gate_is_cut_by_the_gates_held_run_and_holding_its_periods_cuts_it_no_differently():
     """The window's loop: a held run re-plans, new cuts are walked, their runs are held. It ends only

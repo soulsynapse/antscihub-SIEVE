@@ -83,6 +83,11 @@ class _Legs:
         if self.walk.i < self.walk.length:
             self.walk.halt()
 
+    def requeue(self, legs):
+        """Walks `legs` behind the leg under way, which goes on where `legs` has its cut and is halted where not."""
+        w = self.walk
+        self.queue[:] = [leg for leg in legs if w.i >= w.length or (leg.walked, leg.cut) != (w.walked, w.cut)]
+
     def due(self, p, on=True):
         """The (job, call) steps of the lane's next turn under the Plan `p`, or None with nothing to
         walk. `on` False halts the leg under way and drops the rest."""
@@ -119,6 +124,11 @@ class _Legs:
         w.plan, w.walked, w.cut, w.spared = sub, leg.walked, leg.cut, False
         w.given, w.handed = (ask.given, ask.handed) if ask is not None and self.given else ({}, None)
         w.begin(leg.first, leg.end - leg.first, self.by)
+
+
+def _clip_legs(p):
+    """Every cut in time of the Plan `p` as the clip lane walks it, whole."""
+    return [Leg(p.entries[w.heads[0]].src, c, *c.extent.rows) for w in p.timed for c in w.cuts]
 
 
 class _OfCut:
@@ -158,6 +168,7 @@ class Worker(QThread):
         self._stop = False
         self._series_dirty = False
         self._clip_on = False                 # whether a clip walk is wanted
+        self._recut = False                   # the cuts in time moved under the lanes: each walks those the plan now has
         self._scrub = _Scrub(graph, self.rowReady, self.failed)
         self._win = _Walk(graph, name="window", every=every, progress=self.walked, ready=self.seriesReady,
                           refused=self.walkRefused, failed=self.failed, densities=self.densityReady, tell_every=tell_every)
@@ -225,6 +236,13 @@ class Worker(QThread):
         the plan has left is walked as though nothing were held."""
         with self._cv:
             self._held_periods = dict(held)
+
+    def recut(self):
+        """The cuts in time moved and nothing either lane's own range walks did: each lane walks the
+        cuts the plan now has, the clip lane only where a clip walk is wanted, and neither own range begins again."""
+        with self._cv:
+            self._recut = True
+            self._cv.notify()
 
     def walk_clip(self, by=ASKED):
         """Walk the whole clip, from its first row, once the window is walked; `by` as set_window's."""
@@ -320,6 +338,13 @@ class Worker(QThread):
             return "walk", [(win, win.turn)]
         if fed and (win.refolding or win.behind()):
             return "walk", [(win, win.refold)]
+        if self._recut:
+            self._recut = False
+            start, length = win.ask[:2]
+            s = max(0, min(start, count - 1))
+            self._window_legs.requeue(window_legs(p, s, max(0, min(length, count - s))))
+            if self._clip_on:
+                self._clip_legs.requeue(_clip_legs(p))
         if (steps := self._window_legs.due(p)) is not None:
             return "walk", steps
         if clip.asked:
@@ -330,7 +355,7 @@ class Worker(QThread):
             def begin():
                 clip.given = given if rows == count else {}
                 clip.begin(0, count if on and chained else 0, by)
-                self._clip_legs.begin([Leg(p.entries[w.heads[0]].src, c, *c.extent.rows) for w in p.timed for c in w.cuts] if on else [], by)
+                self._clip_legs.begin(_clip_legs(p) if on else [], by)
                 if clip.length and clip.given and not clip.stale_given() and all(
                         nid in clip.given for nid in p.chain if p.entries[nid].steps or nid in p.heads):
                     clip.i = clip.length - 1    # nothing is left to step and no head reads a row: the last turn runs what runs whole and ends the walk

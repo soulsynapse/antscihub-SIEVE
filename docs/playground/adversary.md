@@ -1,7 +1,6 @@
 # Where the contract's scheme does not hold
 
-An adversary's reading of `contract.md`, `sim/store.py` and `sim/sim.py` at the commit this file lands in. Proofs are
-scratch copies of the two scripts outside the repo (`Code/Scratch/sieve-adversary/p*.py`); line numbers are this commit's.
+Proofs are scratch copies of sim.py and store.py outside the repo (`Code/Scratch/sieve-adversary/p*.py`).
 
 ## Proved
 
@@ -10,9 +9,9 @@ scratch copies of the two scripts outside the repo (`Code/Scratch/sieve-adversar
    then deletes (:202). Sequence (laptop, disk 700 MB): store B walks `energy`; store A walks `gray` with `keep`;
    inside A's letting go, after its listing, B checkpoints the entry A is about to delete. B's `checkpoint` returns,
    having found it on disk (:144); afterwards `B.gone()` holds that address. Breaks contract:48. `race`
-   (sim.py:501-518) cannot express it: its other writer lists and deletes in one turn (:504-509) and never
-   checkpoints. `drop` has the same window (store.py:135-136). Landing the manifest first protects only against a
-   deleter that re-lists between its last look and its delete, and no list-then-delete is atomic on a folder.
+   (sim.py:501-518) cannot express it: its other writer lists and deletes in one turn (:504-509), never checkpoints.
+   `drop` has the same window (store.py:135-136). Landing the manifest first protects only against a deleter that
+   re-lists between its last look and its delete, and no list-then-delete is atomic on a folder.
 2. **The chunk grid is not in the key, and O1 cannot see it.** The grid is the widest row of all tools (sim.py:201);
    `key` (:264-274) does not hold it; `truth` (:260) digests the chunk's index, not its rows. With `truth` also
    digesting the rows held (`chunk * rows`, `rows`): walk `energy`; add a tool with 8 MB rows reading `gray` (which
@@ -44,9 +43,8 @@ scratch copies of the two scripts outside the repo (`Code/Scratch/sieve-adversar
 7. **Parts a crash tears leak for good.** A crash between a write's two steps leaves `parts/<writer>-n` torn; nothing
    lists `parts/` (store.py:195 lists `entries/` only); its bytes count in `used()`. Forty crashed checkpoints of
    `gray`: 40 torn parts hold 800 MB of 800 MB used. O6 (sim.py:540) looks only at `entries/`.
-8. **A plane is taken to disk at once.** Contract:31-32 says what disk takes at once is "a table or a signal and not
-   a plane"; store.py:75 takes anything costing `SURE` times its write. In the 5.3K price, desktop takes 8 and hpc 5
-   chunks of planes at once on first make.
+8. **A plane is taken to disk at once.** Contract:31-32 says "not a plane"; store.py:75 takes anything costing `SURE`
+   times its write. In the 5.3K price, desktop takes 8 and hpc 5 chunks of planes at once on first make.
 
 ## Lines of contract.md nothing does or nothing checks (proved by reading)
 
@@ -55,12 +53,11 @@ scratch copies of the two scripts outside the repo (`Code/Scratch/sieve-adversar
   (store.py:165-167) tests presence, not wholeness, and gives addresses, not the checkpoint's name.
 - :40-41, the monitor: `drop` (store.py:131-134) lets go of memory unsaid; `Refused` from `reserve` (:102) and
   `checkpoint` (:149-150) is not emitted; the sim hands no `emit` (sim.py:448), so nothing checks any of it.
-- :14-15, the print's sampling: the sim's strong print is the content itself (sim.py:270); the odds a sampled print
-  misses an edit are never drawn and its cost is not modelled.
-- :64 and :65-67: `Ask` has no queue for what the user looks at; cores enter only as `speed` (sim.py:397).
+- :14-15: the sim's strong print is the content itself (sim.py:270); a sampled print's odds and cost are never drawn.
+- :64 and :65-67: `Ask` has no queue for what the user looks at; cores enter only as `speed` (sim.py:397). :39
+  against :71: two stores on one folder may carry two overridden disk budgets; each `_make_room` keeps its own.
 - :66 against :71: pieces are a process each, and each reads memory off the machine, so N pieces hold N times the
   machine's memory. The sim's second stores (sim.py:497) each get all of `profile.memory`; none is checked alongside.
-- :39 against :71: two stores on one folder may carry two overridden disk budgets; each `_make_room` keeps its own.
 
 ## Where the simulated disk is kinder than a real one (suspected)
 
@@ -74,19 +71,18 @@ scratch copies of the two scripts outside the repo (`Code/Scratch/sieve-adversar
 - What writers share is free and exact: `used()` (sim.py:145), the marks (:121-125), the floor (:133-137), and a rank
   rewritten on every read (:98). A real folder needs a walk or a per-process count for `used`, files for marks and
   floor, and a write per read for rank (last-access updates are off on many Windows volumes and on noatime mounts);
-  ticks from two machines are not comparable. Budget and policy lean on these; the manifest guarantee does not.
-- A write never meets a full disk (sim.py:80-86); a real one raises out of `put` and leaves a part as in 7.
-- `names()` (sim.py:115-116) is an instant snapshot. SMB and NFS cache directory listings for seconds, so another
-  machine's fresh manifest can be invisible to `named()`, widening 1 from an interleaving to a window of seconds.
+  ticks from two machines are not comparable. Budget and policy lean on these; the manifest guarantee does not. A
+  write never meets a full disk (sim.py:80-86); a real one raises out of `put` and leaves a part as in 7.
+- `names()` (sim.py:115-116) is instant; SMB and NFS cache listings for seconds, so `named()` can miss another
+  machine's fresh manifest, widening 1 from an interleaving to a window of seconds.
 
 ## The price table
 
-- The "worth" and "lru" columns change admission and eviction together (store.py:45, :71-76, :114, :123, :190). Keeping
-  worth's admission and swapping GreedyDual-Size ranking for recency leaves the first walk and the disk held unchanged
-  on all four profiles; GDS gains only "the same walk again" (laptop 0 against 16.9 s, usb-hdd 0 against 99.5) and loses
-  the first nudge on usb-hdd (302.5 against 287.0) and hpc (275.8 against 262.4). The table supports not writing planes
-  on first make; it does not support GreedyDual-Size over recency.
+- "worth" and "lru" change admission and eviction together (store.py:45, :71-76, :114, :123, :190). Worth's admission
+  with recency in place of GreedyDual-Size ranking leaves first walk and disk held unchanged on three profiles, within
+  7% on hpc; GDS gains only "the same walk again" (laptop 0 against 16.9 s, usb-hdd 0 against 99.5) and loses the first
+  nudge on usb-hdd (302.5 against 287.0) and hpc (275.8 against 262.4). The table supports not writing planes on first
+  make, not GreedyDual-Size over recency.
 - No headline flipped under the guessed figures tried: hpc read 1000 and 3000 MB/s, write 1000, `file_s` 0.0015;
   laptop at desktop's disk figures; usb-hdd read 120. Under hpc read 3000 LRU's first nudge is half worth's (86.2
   against 172.7 s), a gap that already favours LRU at the guessed 300 (214.1 against 275.8).
-- Suspected: on laptop at NVMe figures, worth's nudges grow 201, 237, 261 s repeating one act; not chased.

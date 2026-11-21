@@ -201,9 +201,9 @@ values at the same rows, and the window shows whichever was held first.
   session builds toward it is conservative, reversible, predictable to the user, and quick
   without buying an unbounded walk.
 - [ ] A held stepped result is addressed by its key, its origin and its rows, and a walk handed rows
-  of one origin steps nothing of another from them, under either answer above. A run serves a
-  range at the origin the answers say it is asked at, and one of another origin only as
-  A tool's reach in rows allows.
+  of one origin steps nothing of another from them. A run serves a range at the origin it is
+  asked at, a period's first row or the window's, and one of another origin only as A tool's
+  reach in rows allows.
   Check: a seam: `Runs.over` across a period walked from its own first row and the same rows cut
   from a longer run, two results under one key, each served at its own origin alone; and the
   window handed `track`'s rows of row 0 and stepping `count` from its own first row, refused.
@@ -260,8 +260,8 @@ and `walk.py`.
 - [ ] What reads a `period` is walked over the chosen period's rows.
   Check: a one-off over the crossings clip: the rows a node below a period hands out.
 - [ ] A period's rows are in no key. A period moved that is not the chosen one moves nothing below
-  it; the chosen one moved moves the extent of every node below it and, under the first answer,
-  the origin of a stepped node below it.
+  it; the chosen one moved moves the extent of every node below it and the
+  origin of a stepped node below it.
   Check: a seam.
 - [ ] A period under a region and a region under a period both run, and their pieces have one
   extent.

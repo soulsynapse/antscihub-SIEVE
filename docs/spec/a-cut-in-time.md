@@ -11,6 +11,13 @@ holds is `docs/spec/what-leaves-the-player.md`'s.
 As `docs/spec/monitor.md`'s How to read this. The sections are in the order they build: each
 assumes only sections above it, and each box's check runs on what the sections above it built.
 
+Kendrick: a check here is deterministic. It takes its walks' turns on its own thread, a `_Walk`
+begun and turned by hand and its runs held in a `held.Runs` as `tests/test_cut.py` does, and a
+view handed the results it draws; it opens no player window, turns no event loop until a walk is
+done, and waits on no timer, so it passes or names the row that fails within the minute any run
+here has. A simulation's exit is a check only where a box names one. A seam a box needs extends
+the test that already holds its neighbour, and a box adds no test of its own.
+
 Words. A *cut* is what a cutting node makes of the footage it reads: a region, a period, or one
 inside another. A *cutting node* is the node that makes it, a `region` or a `period`. The tree's
 name for a cut's record is `cut.Record`, and a node's are `plan.py:Entry.cuts`.
@@ -399,9 +406,10 @@ one start, where the strip takes one a node.
   read neither's edge. Every period's result so reached is the result of a walk of the same
   document from no store and no held run.
   Check: a one-off over the crossings clip, `motion` and `background` below the `period` beside
-  `track`: a period moved and the clip walked again, the rows stepped that period's alone, and
-  every period's result against a walk from no store and no held run, equal, the rows that differ
-  said.
+  `track`, each period's walk turned by hand and held in a `held.Runs`: a period's first row moved
+  and another's last row moved later, the periods walked again over what the runs serve, the rows
+  stepped and computed those of the moved periods alone; and every period's result against the same
+  walks from an empty `held.Runs` and no memo, equal, the rows that differ said.
 - [ ] Over a period whose walk is held the window shows that walk. Over one whose walk is not, it
   walks each period it overlaps alone, from the later of the period's first row and the window's
   first less the node's reach, to the earlier of the period's last and the window's last and the
@@ -415,14 +423,15 @@ one start, where the strip takes one a node.
   window moves, and not an identity's number, which only the period's walk gives. What the
   session builds toward it is conservative, reversible, predictable to the user, and quick
   without buying an unbounded walk.
-  Check: a one-off over the crossings clip: the window over several periods, `track` below them,
-  held and not, each against its period walked alone and what the window says of each.
+  Check: a one-off over the crossings clip: the window's walk turned by hand over several periods,
+  `track` below them, held and not, each against its period walked alone, and what the window says
+  of each read off what it is handed.
 - [ ] The plot draws each node from the row its result begins at in the window, so a node below a
   `period` has a line over each of its periods' rows in the window, each from its own first row,
   none between them, and two where two periods overlap; the frame shown at a row outside the shown
   node's extent says so in place of a frame.
-  Check: a one-off offscreen: the window over several periods, a node below them, each line's
-  first row and the frame at the row before one.
+  Check: a one-off offscreen: the plot handed a node's results over several periods, no walk under
+  it, each line's first row, and the frame view handed the row before one.
 
 ## Not here
 

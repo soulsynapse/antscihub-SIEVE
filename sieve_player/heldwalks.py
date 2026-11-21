@@ -1,5 +1,5 @@
 """What the held runs are to a plan's walks, apart from the window: a chain as held.Runs is told it,
-held results as the worker is given them, what the runs hold of each cut in time, a walked
+held results as the worker is given them, what the runs hold of each cut in time and list of a node's, a walked
 period's results as the run they are held as, what the window shows of each period it overlaps and
 of the one holding a row, and the result a cutting node is cut by. No Qt; the window composes it with the worker."""
 from typing import NamedTuple
@@ -42,23 +42,43 @@ def as_given(p, part):
             for nid, r in part.items()}
 
 
-def held_periods(p, runs):
-    """What the held.Runs `runs` hold of each cut in time of the Plan `p`, as Worker.give_periods takes it."""
+def _apart(rows, moved):
+    return all(b <= rows[0] or rows[1] <= a for a, b in moved)
+
+
+def held_periods(p, runs, was=None, moved=None):
+    """What the held.Runs `runs` hold of each cut in time of the Plan `p`, as Worker.give_periods
+    takes it. `was` is what it answered under the same chains of runs since changed by `moved`
+    alone, the rows Runs.hold returned: a cut holding no row of those is as `was` has it."""
     out = {}
     for w in p.timed:
         sub, chain = p.of(w), held_chain(p, w.chain)
         src, stacks = p.entries[w.heads[0]].src, [(q.walk, stacked_key(q)) for q in sub.parts()]
+        keys = period_keys(sub)
         for c in w.cuts:
             s, e = c.extent.rows
             if e <= s:
+                continue
+            had = None if was is None or moved is None else was.get((src, (s, e)))
+            if had is not None and had.keys == keys and _apart((s, e), moved):
+                out[(src, (s, e))] = had
                 continue
             spared = runs.over(s, e - s, chain, (s, e), (s, e)) is not None
             given = {} if spared else as_given(p, runs.part(s, e - s, chain, (s, e), (s, e)))
             handed = {} if spared else {
                 walked: rows for walked, key in stacks if key is not None
                 and (rows := runs.walked_rows(walked, key, sub.entries[walked].reach, s, e - s, (s, e), (s, e)))[0].any()}
-            out[(src, (s, e))] = HeldCut(period_keys(sub), spared, given, handed or None)
+            out[(src, (s, e))] = HeldCut(keys, spared, given, handed or None)
     return out
+
+
+def listed_cuts(runs, nid, chain, cuts, count, was=None, moved=None):
+    """`nid`'s values in each cut.Record of `cuts`, a held.Listed each as Runs.listed answers under
+    `chain` and the footage's `count` rows. `was` is what it answered under the same of runs since
+    changed by `moved` alone, as held_periods takes them: a cut holding no row of those is as
+    `was` has it."""
+    had = {} if was is None or moved is None else {lst.record: lst for lst in was}
+    return [had[c] if c in had and _apart(c.extent.rows or (0, count), moved) else runs.listed(nid, chain, c, count) for c in cuts]
 
 
 def period_run(p, results, start, of):

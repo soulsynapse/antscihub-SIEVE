@@ -42,7 +42,7 @@ from .theme import GAP, PAD, ROW_H, readout
 from .timeline import Timeline
 from .trace import Dump
 from .plot import Plot, Stage
-from .heldwalks import Shown, as_given, gate_result, held_chain, held_periods, period_run, shown_at, window_periods
+from .heldwalks import Shown, as_given, gate_result, held_chain, held_periods, listed_cuts, period_run, shown_at, window_periods
 from .worker import Worker
 
 HOLD_MS = 2000              # how long the held runs rest, nothing new held, before they are written beside the document
@@ -431,6 +431,7 @@ class PlayerWindow(QMainWindow):
         self.clip_results = {}                    # the same over the clip walk's rows, from row 0; {} when there are none
         self.window_periods = {}                  # what the window shows of each cut in time it overlaps, as heldwalks.window_periods has it
         self._clip_asked = False                  # a clip walk was asked for and has not finished or been stopped
+        self._of_cuts = (None, None, {})          # (the walked nodes' chain and the count, held_periods, node -> listed_cuts) as _show_held last answered them; the first None once the runs are taken whole
         self.runs = held.Runs(HELD_BYTES, self._result_bytes) # the held runs, the file's and this session's walks'
         self._spared = False                      # the window's results are a held run's, and the worker runs no chain over it
         self._clip_ended = False                  # the clip walk told of its last row and its results have not yet come
@@ -1094,7 +1095,7 @@ class PlayerWindow(QMainWindow):
         self.worker.start()
         self.sync()
         self._file = held.File(held.path_for(self.doc.path)) if self.doc.path else None
-        self.runs.take(self._file.load() if self._file is not None else [])
+        self._take_runs(self._file.load() if self._file is not None else [])
         self._recut()
         selected, window = recent.view_of(recent.views_beside(self.noted), self.doc.path) if self.noted and self.doc.path else (None, None)
         s, n = window or (0, min(self.count, round(10 * self.fps)))
@@ -1133,7 +1134,7 @@ class PlayerWindow(QMainWindow):
             self.toggle_play()
         self._end_bare()
         self._write_held(wait=True)
-        self.runs.take([])
+        self._take_runs([])
         self._unwritten, self._file = False, None
         self._write_failed.clear()
         self._spared = self._given = False
@@ -1303,32 +1304,45 @@ class PlayerWindow(QMainWindow):
     def _as_given(self, part):
         return as_given(self.graph.snapshot(), part)
 
-    def _show_held(self):
+    def _take_runs(self, runs):
+        self.runs.take(runs)
+        self._of_cuts = (None, None, {})
+
+    def _show_held(self, moved=None):
         """What is held, or the chain's keys, changed: the strip's bar is over the runs held under
-        the keys the chain now has, and the worker is given what they have of the clip."""
+        the keys the chain now has, and the worker is given what they have of the clip. `moved` is
+        what Runs.hold returned where one run held is all that changed since the last: what is held
+        and listed of a cut in time holding no row of it stands."""
         chain = self._chain()
+        under = None if self.graph is None else (self._chain(self._walked_nodes()), self.count)
+        _, periods, listed = self._of_cuts if moved is not None and under == self._of_cuts[0] else (None, None, {})
+        periods = None if self.worker is None else held_periods(self.graph.snapshot(), self.runs, periods, moved)
+        self._of_cuts = (under, periods, {})
         self.timeline.strip.set_held(self.runs.spans(chain))
         if self.worker is not None:
             self.worker.give_clip(self.count, self._as_given(self.runs.part(0, self.count, chain, (0, self.count))))
-            self.worker.give_periods(held_periods(self.graph.snapshot(), self.runs))
+            self.worker.give_periods(periods)
             self.window_periods.update({of: v for of, v in window_periods(self.graph.snapshot(), self.runs, *self.window_).items()
                                         if v.held and of in self.window_periods})
             self._show_lines()
         self._show_stale(chain)
         self._show_pinned()
-        self._show_listed()
+        self._show_listed(listed, moved)
 
-    def _show_listed(self):
+    def _show_listed(self, was, moved):
         """Each card of a node below a cut in time is shown its values in every cut it is of, as the
-        runs held under the keys its walk's chain now has serve them."""
+        runs held under the keys its walk's chain now has serve them; `was`, node to what it was
+        last shown, and `moved` as heldwalks.listed_cuts takes them."""
         if self.graph is None:
             return
+        now = self._of_cuts[2]
         for walk in self.graph.snapshot().timed:
             chain = self._chain(walk.chain)
             for nid in walk.chain:
                 w, e = self.pane.widget(nid), self.graph.entry(nid)
                 if w is not None and e is not None and hasattr(w, "show_listed"):
-                    w.show_listed([self.runs.listed(nid, chain, c, self.count) for c in e.cuts], self.fps)
+                    now[nid] = listed_cuts(self.runs, nid, chain, e.cuts, self.count, was.get(nid), moved)
+                    w.show_listed(now[nid], self.fps)
 
     def _show_stale(self, chain):
         """Each card says whether its node is of held.marked, by the tools' files as they lie."""
@@ -1363,7 +1377,7 @@ class PlayerWindow(QMainWindow):
         self._hold.stop()
         if self._writer is not None:
             self._writer.join()
-        self.runs.take([])
+        self._take_runs([])
         self.clip_results = {}
         self._unwritten = False
         self._write_failed.clear()
@@ -1616,10 +1630,10 @@ class PlayerWindow(QMainWindow):
         inside a cut of rows `cut`, with `walked` as hold takes it, weighed against the others by
         every walk's chain; and one held is written once nothing more has been for HOLD_MS. A run
         `of_clip` is a clip walk's."""
-        if self.runs.hold(start, rows, results, chain or self._chain(), cut, worth=self._chain(self._walked_nodes()), walked=walked):
+        if moved := self.runs.hold(start, rows, results, chain or self._chain(), cut, worth=self._chain(self._walked_nodes()), walked=walked):
             self._unwritten = True
             self._hold.start()
-            self._show_held()
+            self._show_held(moved)
             self._recut(resume=of_clip)
 
     def _cut_result(self, nid, key, within):

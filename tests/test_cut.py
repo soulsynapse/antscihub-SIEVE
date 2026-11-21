@@ -307,7 +307,7 @@ def test_a_period_cut_by_a_gate_is_cut_by_the_gates_held_run_and_holding_its_per
 
     from sieve_player import held
     from sieve_player.bare import _Told
-    from sieve_player.heldwalks import gate_result, held_chain, period_run
+    from sieve_player.heldwalks import gate_result, held_chain, held_periods, listed_cuts, period_run
     from sieve_player.walk import _Walk
     from tools import period
 
@@ -345,10 +345,15 @@ def test_a_period_cut_by_a_gate_is_cut_by_the_gates_held_run_and_holding_its_per
     worth = held_chain(q, [*q.chain, *w.chain])
     read = q.entries[w.heads[0]].src
     assert period_run(q, walked(q.of(w), cuts[1], (4, 5)), 4, (read, cuts[1])) is None      # a walk closed short of its cut is no cut's run, whatever rows another has
+    told = lambda held, lists: ({of: (h.keys, h.spared, sorted(h.given), sorted(h.handed or ())) for of, h in held.items()},
+                                [[(a, len(v["signal"])) for a, v in lst.parts] for lst in lists])
+    was, lists = held_periods(q, runs), listed_cuts(runs, below, held_chain(q, w.chain), w.cuts, Dec.count)
     for c in w.cuts:
         start, rows, has, chain, cut, walked_rows = period_run(q, walked(q.of(w), c, c.extent.rows), c.extent.rows[0], (read, c))
-        assert runs.hold(start, rows, has, chain, cut, worth=worth, walked=walked_rows)
+        assert (moved := runs.hold(start, rows, has, chain, cut, worth=worth, walked=walked_rows)) == [cut]
         assert not runs.hold(start, rows, has, chain, cut, worth=worth, walked=walked_rows)
+        was, lists = held_periods(q, runs, was, moved), listed_cuts(runs, below, chain, w.cuts, Dec.count, lists, moved)     # what one hold moved, and what stands of the rest
+        assert told(was, lists) == told(held_periods(q, runs), listed_cuts(runs, below, chain, w.cuts, Dec.count)) and was[(read, cut)].spared
         g.sync()
         assert g.snapshot().entries["period"].cuts == cuts
     assert len(runs) == 4

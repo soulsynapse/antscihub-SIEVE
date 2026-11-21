@@ -272,8 +272,9 @@ class Runs:
     def hold(self, start, rows, results, chain, cut=None, worth=None, walked=None):
         """Holds `results` as a run over `rows` rows from `start` inside a cut of rows `cut` when every
         chain node has `rows` rows in it under a key, unless a run held serves every node it has over
-        its rows under the same key and its walk and cut, and holds the walked rows if it has them;
-        whether the runs held changed. `walked` is a (node, key, its rows, the bytes they hold) for
+        its rows under the same key and its walk and cut, and holds the walked rows if it has them.
+        Returns the rows, (first, row past the last), of each run that went or came, none where the
+        runs held did not change. `walked` is a (node, key, its rows, the bytes they hold) for
         each walked node, or None. A run it so serves goes unless it holds walked rows it does not, and while the runs
         together pass the limit the oldest goes that is not the one
         `worth`, a Chain and `chain` with none, has most of, a run it has nothing of before any other.
@@ -302,7 +303,7 @@ class Runs:
             spare = [run for run in self.all if run is not most]
             left = [run for run in spare if not has[run]]
             self.all.remove((left or spare)[0])
-        return self.all != was
+        return [(run.start, run.start + run.rows) for run in set(was) ^ set(self.all)]
 
     def over(self, s, n, chain, walk, cut=None):
         """The chain's results over `n` rows from `s` to a walk over `walk`, (first row, row past the

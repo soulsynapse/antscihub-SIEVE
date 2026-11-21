@@ -210,14 +210,17 @@ def frame_times(path, anew=False):
         return _times[path][1]
 
 
-def read_frame_times_ahead(path):
+def read_frame_times_ahead(path, then=None):
     """Reads `frame_times(path)` on a thread of its own and does not wait, so a first seek finds
-    the table read; a file that cannot be read is left for whoever reads it next to say."""
+    the table read; a file that cannot be read is left for whoever reads it next to say. `then` is
+    called on that thread with the table's rows, the frames the stream has, where it has any."""
     def read():
         try:
-            frame_times(path)
+            rows = len(frame_times(path))
         except OSError:
-            pass
+            return
+        if then is not None and rows:
+            then(rows)
     threading.Thread(target=read, name="frame-times", daemon=True).start()
 
 

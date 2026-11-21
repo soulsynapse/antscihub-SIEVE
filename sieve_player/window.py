@@ -400,6 +400,8 @@ class Column(QWidget):
 
 
 class PlayerWindow(QMainWindow):
+    framesCounted = Signal(str, int)    # a video's frame times are read: its path, the frames its stream has
+
     def __init__(self, source, title="SIEVE", tools=(), log=None, noted=None):
         """`source` is a list of tools, which become the document, or the path of a saved document.
         The catalogue the Tab menu offers and the document's names index is `tools`, plus the list
@@ -410,6 +412,7 @@ class PlayerWindow(QMainWindow):
         super().__init__()
         self.title, self.log, self.noted = title, log or "stderr", noted
         self.setStyleSheet(theme.sheet())
+        self.framesCounted.connect(self._frames_counted)
         from_file = isinstance(source, (str, os.PathLike))
         modules, self.tools, broken = catalogue(list(tools) if from_file else [*source, *tools])
         if not from_file:
@@ -802,6 +805,13 @@ class PlayerWindow(QMainWindow):
         if self.worker is not None and self.sender() is self.worker:
             self.timeline.controls.progress.setText(f"the worker stopped, see {self.log}; reopen the video")
 
+    def _frames_counted(self, path, rows):
+        """The open video's frame times say its stream has `rows` frames: the count comes down to
+        them where its container claimed more, before any read reaches the end."""
+        if self.decoder is not None and self.decoder.path == path:
+            self.decoder.ends_at(rows)
+            self._shortened(self.decoder.count)
+
     def _shortened(self, count):
         """The stream ended short of its container's claim: everything sized by the count follows
         the decoder's, a cut made of a run reaching the last row among it, and a playhead past the
@@ -1033,7 +1043,7 @@ class PlayerWindow(QMainWindow):
         self._unload()
         self.decoder = decoder
         decoder_module.STORE = store.folder
-        decoder_module.read_frame_times_ahead(path)     # the first seek would wait on it: docs/findings/2026-11-15-a-file-whose-times-do-not-count-its-rows.md
+        decoder_module.read_frame_times_ahead(path, lambda rows, path=str(path): self.framesCounted.emit(path, rows))     # the first seek would wait on it: docs/findings/2026-11-15-a-file-whose-times-do-not-count-its-rows.md
         self.stream = Emitter()
         self.graph = Graph(self.doc, decoder, self.tools, stream=self.stream, cut_result=self._cut_result, **({"memo_bytes": m} if (m := _gb(MEMO_ENV)) else {}))
         # the one line a report of this video's run needs beside the log's tracebacks

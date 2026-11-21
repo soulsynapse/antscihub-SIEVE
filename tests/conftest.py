@@ -18,7 +18,7 @@ def nothing_read_ahead(monkeypatch):
     """No window a test opens a video in leaves a thread reading the file's packets: what the store
     holds, and whether a clip can be removed, would be that thread's to decide. A seek reads them."""
     from sieve_player import decoder
-    monkeypatch.setattr(decoder, "read_frame_times_ahead", lambda path: None)
+    monkeypatch.setattr(decoder, "read_frame_times_ahead", lambda path, then=None: None)
     monkeypatch.setattr(decoder, "STORE", None)
 
 

@@ -235,3 +235,23 @@ def test_a_node_above_a_period_is_walked_as_with_none_and_one_below_is_walked_ov
         assert runs.over(0, Dec.count, chain, (0, Dec.count))["sig"]["signal"].tolist() == above["sig"]["signal"].tolist()
         assert [c.extent.rows for w in q.timed for c in w.cuts] == [tuple(r) for r in rows]
     assert not q.timed and q.entries[below].standing == "reads period, which cuts no rows"
+
+    from sieve_player.worker import Worker
+    doc.node("period").params["rows"] = [[2, 5], [4, 8]]
+    doc.remove_node("sig")                                                    # every series node below the period: no chain above it
+    g.sync()
+    assert not g.snapshot().chain and g.snapshot().walk == "gray"
+    w, stepped, periods = Worker(g), [], []
+    g.on_event = lambda ev: stepped.append((ev.node, ev.row)) if ev.lane == "clip" and ev.kind in ("run", "step") else None
+    w.periodReady.connect(lambda r, s, fps: periods.append(s))
+    w.walk_clip()
+    while True:
+        with w._cv:
+            turn = w._turn()
+        if turn is None:
+            break
+        for job, act in turn[1]:
+            g.serving(turn[0], job.name)
+            act()
+    assert w._clip.length == 0 and periods == [2, 4]                         # the clip's own range walks no shown node for no one
+    assert sorted(row for nid, row in stepped if nid == below) == [2, 3, 4, 4, 5, 6, 7] and {nid for nid, _ in stepped} == {below}

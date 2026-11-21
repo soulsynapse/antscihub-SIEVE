@@ -233,6 +233,7 @@ class Worker(QThread):
             return "scrub", [(scrub, lambda: scrub.turn(row))]
         count = g.count
         fed = (e := p.entries.get(p.walk)) is not None and e.fed
+        chained = fed and bool(p.chain)     # the clip's own range runs a chain or is not walked: the shown node alone is the window's to fold
         if win.asked:
             (start, length, spared, given), by, win.asked = win.ask, win.by, False
             s = max(0, min(start, count - 1))
@@ -257,7 +258,7 @@ class Worker(QThread):
 
             def begin():
                 clip.given = given if rows == count else {}
-                clip.begin(0, count if on and fed else 0, by)
+                clip.begin(0, count if on and chained else 0, by)
                 self._legs[:] = [(p.entries[w.heads[0]].src, c) for w in p.timed for c in w.cuts] if on else []
                 self._legs_by = by
                 if clip.length and clip.given and not clip.stale_given() and all(
@@ -268,7 +269,7 @@ class Worker(QThread):
                 clip.report()
             return "walk", [(clip, begin)]
         if clip.i < clip.length:
-            if self._clip_on and fed:
+            if self._clip_on and chained:
                 return "walk", [(clip, clip.turn)]
             return "walk", [(clip, clip.halt), (clip, clip.emit)]   # the chain over the rows it stopped at: the cadence's last result is short of them
         per = self._period

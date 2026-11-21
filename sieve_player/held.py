@@ -141,8 +141,10 @@ class File:
         pickled for want of room, the file then taken as unknown and the next write made of every
         run."""
         had, self._had = self._had, None
-        kept = [(run, at, n) for run, at, n in had or [] if any(run is r for r in runs)]
-        new = [r for r in runs if all(r is not run for run, _, _ in kept)]
+        asked = {id(r) for r in runs}
+        kept = [(run, at, n) for run, at, n in had or [] if id(run) in asked]
+        has = {id(run) for run, _, _ in kept}
+        new = [r for r in runs if id(r) not in has]
         if had is not None and len(kept) == len(had):
             with open(self.path, "r+b") as f:
                 f.seek(self._end)
@@ -383,17 +385,17 @@ class Runs:
         """`nid`'s signal under `key` over the rows the runs have outside the `rows`
         from `start`: [(signal, its first row, gate or None)], the run that began earliest first
         as `over` serves, and no row twice."""
-        drawn, out = [(start, start + rows)], []
+        out, reached = [], 0     # reached: the row past the last an earlier run drew, each beginning no later than the next
         for s, n, results, *_ in self._earliest():
             if not good(h := results.get(nid), key):
                 continue
-            gate, at = h.get("gate"), s
-            for a, b in sorted(drawn) + [(s + n, s + n)]:
+            gate, at = h.get("gate"), max(s, reached)
+            for a, b in ((start, start + rows), (s + n, s + n)):
                 if at < min(a, s + n):
                     out.append((h["signal"][at - s:min(a, s + n) - s], at,
                                 None if gate is None else gate[at - s:min(a, s + n) - s]))
                 at = max(at, b)
-            drawn.append((s, s + n))
+            reached = max(reached, s + n)
         return out
 
 

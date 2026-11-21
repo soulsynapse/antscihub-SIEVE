@@ -1,11 +1,12 @@
 """The candidate store of docs/playground/contract.md: a memory tier over a disk tier, under budgets.
 
 It reaches a disk only through the object it is handed (`write`, `rename`, `read`, `names`,
-`delete`, `size`, `touched`, `used`, `write_seconds`, `read_seconds`), so the simulation hands it a simulated one and the player a real one.
+`delete`, `size`, `age`, `worth`, `used`, `write_seconds`, `read_seconds`, `mark`, `marked`), so the simulation hands it a simulated one and the player a real one.
 """
 import heapq
 from dataclasses import dataclass
 
+SURE = 10
 ENTRIES, MANIFESTS, PARTS = "entries/", "checkpoints/", "parts/"
 
 
@@ -33,8 +34,9 @@ class Store:
     write one temporary name. `emit(kind, address, tier)` is told each hit, miss, put, letting go
     and refusal. `atomic=False` writes an entry in place, which the contract forbids and the
     simulation uses to show its oracle sees a torn entry. `worth=True` ranks what is held by
-    the seconds a byte it saves (GreedyDual-Size) and keeps off the disk what is quicker to make
-    again than to write; False ranks by recency and writes everything."""
+    the seconds a byte it saves (GreedyDual-Size) and writes to disk at once only what costs
+    `SURE` times its write to make, and what costs at least its write the second time it is
+    made; False ranks by recency and writes everything."""
 
     def __init__(self, disk, memory, disk_budget, writer="a", emit=None, atomic=True, worth=True):
         self.disk, self.memory, self.disk_budget = disk, memory, disk_budget
@@ -60,24 +62,31 @@ class Store:
         self._hold(address, value, size, self.disk.read_seconds(size))
         return value
 
-    def put(self, address, value, size, cost=0.0, keep=False, hold=True):
+    def put(self, address, value, size, cost=0.0, keep=False, spare=False, memory_only=False):
         """Keep `value`, which took `cost` seconds to make, under `address`. It goes to disk when
-        `keep` says so or the policy finds it worth the write, and the disk budget has room; and
-        to memory when `hold` and the memory budget allow."""
-        wanted = keep or not self.worth or cost >= self.disk.write_seconds(size)
+        `keep` says so or the policy finds it worth the write, and the disk budget has room,
+        never when `memory_only`; and to memory when the budget allows, which under `spare` is
+        only when nothing held has to be let go for it."""
+        wanted = not memory_only and (keep or not self.worth)
+        if self.worth and not memory_only and not wanted:
+            write, again = self.disk.write_seconds(size), self.disk.marked(address.name)
+            room = self.disk.used() + size <= self.disk_budget * 0.9   # nothing is let go for a maybe
+            wanted = cost >= SURE * write or (again and cost >= write and room)
+            self.disk.mark(address.name)
         if wanted and self.disk.size(address.name) is None:
             if self._make_room(size):
-                self._land(address.name, value, size)
+                self._land(address.name, value, size, cost / max(size, 1))
                 self.emit("put", address, "disk")
             else:
                 self.emit("refused", address, "disk")
-        if hold:
+        if not (spare and self.held_bytes + self.reserved + size > self.memory):
             self._hold(address, value, size, cost)
 
     def to_disk(self, address):
         """Write an entry held in memory to disk whatever the policy thinks of it; whether it is there."""
         if self.disk.size(address.name) is None and address in self.held and self._make_room(self.held[address][1]):
-            self._land(address.name, *self.held[address][:2])
+            value, size, cost = self.held[address]
+            self._land(address.name, value, size, cost / max(size, 1))
         return self.disk.size(address.name) is not None
 
     def forget(self):
@@ -154,25 +163,30 @@ class Store:
         """The addresses a manifest names that the disk does not hold whole."""
         return {a for a in self.named() if self.disk.size(a.name) is None}
 
-    def _land(self, name, value, size):
+    def _land(self, name, value, size, worth=0.0):
         if not self.atomic:
-            self.disk.write(name, value, size)
+            self.disk.write(name, value, size, worth)
             return
         self.parts += 1
         part = f"{PARTS}{self.writer}-{self.parts}"
-        self.disk.write(part, value, size)
+        self.disk.write(part, value, size, worth)
         self.disk.rename(part, name)
 
     def _make_room(self, size):
-        """Whether `size` more bytes fit the disk budget, after letting go of the entries no
-        manifest names that were touched longest ago, down to nine tenths of the budget."""
+        """Whether `size` more bytes fit the disk budget, after letting go of entries no manifest
+        names, down to nine tenths of the budget: those touched longest ago first, or under
+        `worth` those saving the fewest seconds a byte for their age."""
         if size > self.disk_budget:
             return False
         used = self.disk.used()
         if used + size <= self.disk_budget:
             return True
         named = self.named()
-        for name in sorted(self.disk.names(ENTRIES), key=self.disk.touched):
+        def rank(name):
+            age = self.disk.age(name)
+            return self.disk.worth(name) / (1 + age) if self.worth else -age
+
+        for name in sorted(self.disk.names(ENTRIES), key=rank):
             if address_of(name) in named:
                 continue
             used -= self.disk.size(name)

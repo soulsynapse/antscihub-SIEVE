@@ -18,6 +18,7 @@ from store import Address, Refused, Store  # noqa: E402
 MB, GB = 1 << 20, 1 << 30
 sys.setrecursionlimit(100000)
 WITHIN = 3.5      # the most threads or processes inside one clip gain, by figures.md
+AHEAD = 40        # rows a decoder reads forward to reach a row sooner than it seeks
 PLANE = 64 << 10  # a result of more bytes a row than this is a plane and not a table
 TORN = "torn"
 
@@ -65,7 +66,7 @@ class Disk:
 
     def __init__(self, profile, clock):
         self.profile, self.clock, self.files, self.crash_in, self.ticks = profile, clock, {}, None, 0
-        self.total = 0
+        self.total, self.made = 0, set()
 
     def _step(self):
         if self.crash_in is not None:
@@ -74,9 +75,9 @@ class Disk:
                 self.crash_in = None
                 raise Crash()
 
-    def write(self, name, value, size):
+    def write(self, name, value, size, worth=0.0):
         self.total += size - (self.size(name) or 0)
-        self.files[name] = [TORN, size, self._tick()]
+        self.files[name] = [TORN, size, self._tick(), worth]
         self._step()
         self.clock[0] += size / self.profile.write_bps
         self.files[name][0] = value
@@ -88,7 +89,7 @@ class Disk:
     def read(self, name):
         if name not in self.files:
             return None
-        value, size, _ = self.files[name]
+        value, size = self.files[name][:2]
         self.files[name][2] = self._tick()
         self.clock[0] += self.profile.seek_s + size / self.profile.read_bps
         return value, size
@@ -102,8 +103,17 @@ class Disk:
     def delete(self, name):
         self.total -= self.files.pop(name, (0, 0))[1]
 
-    def touched(self, name):
-        return self.files[name][2]
+    def mark(self, name):
+        self.made.add(name)
+
+    def marked(self, name):
+        return name in self.made
+
+    def age(self, name):
+        return self.ticks - self.files[name][2]
+
+    def worth(self, name):
+        return self.files[name][3]
 
     def write_seconds(self, size):
         return size / self.profile.write_bps
@@ -283,6 +293,7 @@ class Ask:
         tool = w.tools[node.tool]
         reads = w.reads_of(name, chunk)
         sizes = [w.size(n, c) for n, c in reads]
+        began = self.clock[0]   # an entry's cost is all the time its making took, its inputs' too
         live = w.size(name, chunk) + (max(sizes, default=0) if tool.kind == "whole" else sum(sizes))
         self.store.reserve(live)   # the output and the inputs alive at once, whoever else holds them
         try:
@@ -294,17 +305,72 @@ class Ask:
             if tool.kind == "frame":
                 seconds /= self.speed
             if not node.reads:
-                if self.decoded != chunk - 1:
+                if self.decoded != chunk * w.chunk:
                     seconds += w.seek_s * self.profile.slow
-                self.decoded = chunk
+                self.decoded = (chunk + 1) * w.chunk
             self.clock[0] += seconds
             self.stats.computed += rows
         finally:
             self.store.release(live)
         passed = self.passing and self.store.worth and tool.bytes_per_row > PLANE
-        self.store.put(Address(w.key(name), chunk), w.truth(name, chunk), w.size(name, chunk), seconds,
-                       keep=self.keep, hold=not passed)
+        self.store.put(Address(w.key(name), chunk), w.truth(name, chunk), w.size(name, chunk),
+                       self.clock[0] - began, keep=self.keep, spare=passed)
         return w.truth(name, chunk)
+
+    def look(self, name, row):
+        """One row for a caller looking at it: read out of its chunk where the store has that,
+        made alone and held in memory only where it does not."""
+        self.flight = {}
+        return self._looked(name, row)
+
+    def _looked(self, name, row):
+        w = self.world
+        if w.tools[w.nodes[name].tool].kind == "whole":
+            return self._value(name, 0)
+        chunk = row // w.chunk
+        whole, alone = Address(w.key(name), chunk), Address(w.key(name), -1 - row)
+        value = self.store.get(alone) if alone in self.store.held else None
+        if value is None and self.store.covered(whole.key, [chunk]):
+            got = self.store.get(whole)
+            value = None if got is None else digest(got, row)
+        if value is None:
+            value = self._row(name, row, alone)
+        if value != digest(w.truth(name, chunk), row):
+            self.stats.broken.append(("O1", name, chunk))
+        return value
+
+    def _row(self, name, row, alone):
+        w, node = self.world, self.world.nodes[name]
+        tool = w.tools[node.tool]
+        chunk = row // w.chunk
+        reads = w.reads_of(name, chunk)
+        began = self.clock[0]
+        live = tool.bytes_per_row + sum(w.tools[w.nodes[n].tool].bytes_per_row for n, _ in reads)
+        self.store.reserve(live)
+        try:
+            for n, c in reads:
+                if n == name or w.tools[w.nodes[n].tool].kind == "whole":
+                    self._value(n, c)
+                elif tool.kind == "stepped":
+                    for r in range(chunk * w.chunk, row + 1):
+                        self._looked(n, r)
+                else:
+                    self._looked(n, row)
+            self.stats.peak = max(self.stats.peak, self.store.held_bytes + self.store.reserved)
+            rows = row - chunk * w.chunk + 1 if tool.kind == "stepped" else 1
+            seconds = rows * tool.ms_per_row / 1000 * self.profile.slow
+            if not node.reads:
+                ahead = -1 if self.decoded is None else row - self.decoded
+                read = ahead * tool.ms_per_row / 1000 if 0 <= ahead <= AHEAD else w.seek_s
+                seconds += read * self.profile.slow
+                self.decoded = row + 1
+            self.clock[0] += seconds
+            self.stats.computed += rows
+        finally:
+            self.store.release(live)
+        value = digest(w.truth(name, chunk), row)
+        self.store.put(alone, value, tool.bytes_per_row, self.clock[0] - began, memory_only=True)
+        return value
 
     def walk(self, name):
         self.speed, self.passing = min(self.profile.cores, WITHIN), True
@@ -366,7 +432,7 @@ def run(ops, profile, scheme, rows=1024):
                 if kept:
                     start = clock[0]
                     stats.asked += world.chunk
-                    ask.demand(name, kept[chunk % len(kept)])
+                    ask.look(name, kept[chunk % len(kept)] * world.chunk + pick % world.chunk)
                     stats.scrubs.append(clock[0] - start)
             elif kind == "walk":
                 ask.walk(name)
@@ -480,12 +546,15 @@ def price(scheme, profile, footage="1080p", rows=108000):
             out[label] = str(refused)
 
     def scrubs(name, count, spread):
+        """`count` looks at rows of `name`, each within `spread` rows of the last, or anywhere."""
         kept, took = world.chunks_of(name), []
-        at = rng.randrange(len(kept))
+        has, row = set(kept), None
         for _ in range(count):
-            at = min(len(kept) - 1, max(0, at + rng.randint(-spread, spread)))
+            row = None if row is None or spread is None else row + rng.randint(-spread, spread)
+            if row is None or row < 0 or row // world.chunk not in has:
+                row = kept[rng.randrange(len(kept))] * world.chunk
             start = clock[0]
-            ask.demand(name, kept[at])
+            ask.look(name, row)
             took.append((clock[0] - start) * 1000)
         return took
 
@@ -494,15 +563,15 @@ def price(scheme, profile, footage="1080p", rows=108000):
         for round_ in range(20):
             world.nodes["motion"].params["span"] = round_
             world.changed()
-            took += scrubs("motion", 5, 3)
+            took += scrubs("motion", 5, 30)
         out["build: a scrub in ms, median / worst"] = (statistics.median(took), max(took))
 
     def revisit():
-        took = scrubs("detect", 50, 10 ** 6)
+        took = scrubs("detect", 50, None)
         out["revisit: a scrub in ms, median / worst"] = (statistics.median(took), max(took))
 
-    def nudge():
-        world.nodes["detect"].params["level"] = 41
+    def nudge(level):
+        world.nodes["detect"].params["level"] = level
         world.changed()
         ask.walk("track")
 
@@ -514,7 +583,9 @@ def price(scheme, profile, footage="1080p", rows=108000):
     timed("checkpoint the tracks", lambda: ask.checkpoint("kept", "track"))
     store, ask = opened()
     timed("reopened: walk the tracks", lambda: ask.walk("track"))
-    timed("nudge detect, walk again", nudge)
+    timed("nudge detect, walk again", lambda: nudge(41))
+    timed("nudge it a second time", lambda: nudge(42))
+    timed("and a third", lambda: nudge(43))
     out["peak memory GB"], out["disk held GB"] = stats.peak / GB, disk.used() / GB
     return out
 

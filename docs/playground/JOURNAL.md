@@ -16,23 +16,18 @@ this file where they differ.
   the contract in code: `.venv/Scripts/python.exe docs/playground/sim/sim.py 150` runs the
   torture in about ten seconds and prints a line a scheme. Read "What the simulation has shown"
   before touching either file.
-- Next action, in order: (a) the three changes "What the prices say" asks of the store and the
-  ask, each tried in `sim.py` and kept only if the table moves: a scrub computes the row looked
-  at and not its chunk; the disk tier lets go by worth as the memory tier does; a walk holds a
-  plane while memory is free and stops when it is not. (b) A 5.3K table
-  (`sim.py prices 5.3K`, not yet run) and a workload of many pieces walked at once by several
-  stores on one disk, which is the HPC case and the one thing about cores still unpriced.
-  (c) Cheap claim checks, which he offered Haiku for on 2026-11-21 with the rule that it is
-  given one claim at a time and never a section to search: an Agent with `model: haiku`, one
-  claim about the tree, the file to look in, and the answer wanted as holds, does not hold or
-  cannot tell, with the line. I pick the claims, the ones a later step leans on. Calibrate
-  first with a claim known true and one known false. The one-minute cap on runs is lifted, by
-  his word the same day; a queued run's prompt no longer carries it.
-  (d) Rewrite
-  `contract.md` to what the simulation settled, then stage 4's first slice.
+- Next action, in order: (a) rewrite `contract.md` to "What the simulation settled" below;
+  (b) stage 4's first slice, queued narrow, its diff read by me; (c) still unpriced and worth
+  one more cycle only if a slice needs it: many pieces walked at once by several stores on one
+  disk (the HPC case), and a cost to holding in memory, which a finding measured and the
+  simulation has free.
+- Standing step, his on 2026-11-21 and mine by its results: before a slice or the contract
+  leans on a claim about the tree, from this journal, the inventory or my memory, the claim goes
+  to a Haiku check, one claim a pass, by the shape under "Claims checked one at a time". Six
+  passes corrected two of my claims. Not for searching, not for judging a design.
 - Run the simulation: `.venv/Scripts/python.exe docs/playground/sim/sim.py 150` (torture, a line
   a scheme) and `... sim.py prices 1080p [profile]` (the table below), a few seconds each.
-- Counters: queued runs 2 of 15; cycles 2 of 4 (the contract and its torture; the prices).
+- Counters: queued runs 2 of 15; cycles 3 of 4 (the contract and its torture; the prices; the policy).
 - Context: `bash ~/.claude/tools/context-used.sh 300` prints what is left before the auto-compact
   window (300k by his `/autocompact` on 2026-11-21). Bring this file up to date before a step
   that reads a lot, and when under about 30k left.
@@ -200,26 +195,58 @@ restore) and checks O1, O3, O5 and O6 after each. `shrunk` cuts a failing sequen
 Three changes this asks of `sim.py`: the speed cap; a cost to a memory put and a policy that may
 decline to hold; the real figures in `pipeline()` and `PROFILES`, with a 5.3K variant.
 
-## What the prices say (`sim.py prices 1080p`; an hour of footage, the ants-like pipeline)
+## What the simulation settled (`sim.py prices 1080p` and `5.3K`; an hour, the ants-like pipeline)
 
-The policies compared: "worth" ranks memory by seconds saved a byte, writes to disk only what
-costs more to make than to write, and lets a plane pass through a walk unheld; "lru" holds by
-recency and writes everything. Disk rates and the laptop and HPC profiles are guesses.
+Disk rates and the laptop and HPC profiles are guesses; the desktop is the measured machine.
+"lru" is one budgeted store that holds by recency and writes everything, the naive reading of
+the hypothesis. The policy below is `worth=True` in `store.py`, and it is the contract's.
 
-- The first walk of the tracks: 755 s against 11384 on the laptop, 374 against 1048 on the
-  desktop, 395 against 3944 on the HPC profile. Writing planes is the whole difference.
-- Under lru the laptop's 40 GB fills with planes, which push the tables off the disk: the same
-  walk again costs 1988 s where worth costs none, and the checkpoint is refused with 1653 of
-  2132 entries gone. Under worth the hour's results are 0.1 GB. This is the case for goal 4.
-- Reopened, the walk is answered from disk in 0.4 to 17 s under worth.
-- Where worth loses: after a nudge to detect, the walk decodes again what it let pass, 137 s
-  against 52 on the desktop and 276 against 193 on HPC. Memory was free there and worth did not
-  use it. Hence change three above.
-- A scrub while building is 168 ms on the desktop and 317 on the laptop, nearly all of it one
-  seek and a chunk of ten rows computed for one looked at. Hence change one.
-- On the desktop worth still wrote 129 GB: decoded chunks reached by a seek cost more than their
-  write. Right by its own rule, and they are what the disk should let go of first. Change two.
-- The torture still holds for both policies and still breaks for today's three weaknesses.
+- An address is a key and a row to a caller. A chunk is how the disk packs rows, sized by bytes,
+  and a caller never names one. A row looked at is made alone and held in memory only; a walk
+  fills chunks. A scrub while building is then one seek and one row: 103 ms on the desktop,
+  257 on the laptop, 526 at 5.3K. The store cannot make that less; a decoder reading ahead can.
+- An entry's cost is all the time its making took, its inputs' too, handed to the store with it.
+- Memory lets go by seconds saved a byte (GreedyDual-Size). In a walk a plane passing through
+  is held only into free memory and never pushes anything out.
+- Disk takes at once what cost ten times its write to make, which is every table and signal and
+  no plane; a plane that cost at least its write is written the second time it is made, and
+  only into free disk. Nothing is let go to make room for a maybe. Disk lets go by worth a
+  byte for its age, never what a checkpoint names.
+- What that buys at 1080p: the first walk 392 s against 1049 under lru on the desktop, 1031
+  against 11386 on the laptop; the same walk again and a reopened file's walk answered in under
+  20 s everywhere; a detect nudge 106 s, then 59, then 51, where lru is 52 each time. The first
+  nudge is the price of not writing planes on a guess.
+- What lru loses: planes fill the disk and push the tables off it. On the laptop the same walk
+  again costs 1989 s and the checkpoint is refused; at 5.3K the desktop does the same (9711 s,
+  checkpoint refused with 14296 of 21706 entries gone). One store with one recency order is
+  worse than today's separate holders. The policy is the design, not a tuning.
+- Where the policy still loses: the laptop at 5.3K, 21476 s for every nudge, since 40 GB holds
+  almost none of the gray planes. Slow and never failing, which is what he asked of small
+  machines; a region or a scale on the pipeline is the user's lever there, not the store's.
+- The gate's pass and the detect pass both decode the kept pieces, so a walk decodes them
+  twice. A fused walk that feeds both from one decode is the walk's to gain, not the store's.
+- The torture holds for both policies over 150 seeds and breaks for today's three weaknesses.
+
+## Claims checked one at a time (Haiku, 2026-11-21)
+
+The shape that worked, five of five: "Check ONE claim against code in <repo>. Read only. Claim:
+<one sentence, with the file and the function>. <what to read or grep>. Answer in under N
+words: HOLDS, DOES NOT HOLD or CANNOT TELL; the file:line that decides it, quoted." Each took 7
+to 17 s and two to six tool calls. A planted false claim (the footage print hashes every byte)
+came back DOES NOT HOLD with the lines; a known true one (`bare.py` never reads `timed`) HOLDS,
+with its own limit stated. Run them in one message, in parallel.
+
+- Holds: no key of `plan.py` carries a code digest (`plan.py:269`). But the claim as I had it
+  was too strong: `registry.code_print` exists, `walk.py:453` and `:485` record it beside held
+  results, and `window.py:1344` marks a card stale from it (`held.marked`, `held.py:402`). A
+  sixth pass found no caller that keeps a stale held result from being served, without tracing
+  the serve path; and corrected me that `store.py` names no file: `tools/_cutfile.py` and the
+  decoder do, under the store's folder.
+- Holds: nothing sizes a budget from the machine's RAM; `machine.py:129` reads it to report.
+- Does not hold, that the held file is always written beside and renamed: `held.py:149` appends
+  in place when every record is kept, and `load` (`held.py:131`) stops at the first record that
+  does not read, so a torn tail loses the tail and nothing else. An append-only log with a
+  tolerant reader is a sound second way to be atomic; the contract may allow it for tables.
 
 ## Blind spots I know of, and what covers each
 

@@ -16,16 +16,20 @@ this file where they differ.
   the contract in code: `.venv/Scripts/python.exe docs/playground/sim/sim.py 150` runs the
   torture in about ten seconds and prints a line a scheme. Read "What the simulation has shown"
   before touching either file.
-- Next action, in order: (a) rewrite `contract.md` to `store.py` as it now is and to "What the
-  adversary proved": the lock, the pending manifest, a checkpoint let go, recency on disk, the
-  rule being cost and not "a plane", a piece's share of memory; mark open what nothing does
-  (the log, the monitor's stream, the priority of a look). (b) The on-disk store over a real
-  folder, mine to write, with that section's "a real folder" list as its checklist, per-node
-  chunk grids in the entry's name, and the lock as a folder made and removed; then a second
-  adversary run against it before anything is moved onto it; then one real walk against the
-  simulation. (c) Slices onto it: the held file, then the walks' results. Then STOP for him to
-  try the player, before the memo is touched. (d) Code beside the key, once he has answered.
-  (e) The whole-file footage hash.
+- Next action, in order: (a) read `docs/playground/adversary-2.md` when run 6 lands (Opus,
+  against `sim/folder.py`, the real folder under `store.py`) and mend what it proves, with
+  `folder_check.py` grown to see each. (b) Per-node chunk grids in the entry's name, then a
+  one-off that walks real footage through `Store` over `Folder` and sets its time beside the
+  simulation's. (c) Move `store.py` and `folder.py` into `sieve_player` and queue the slices
+  onto them: the held file, then the walks' results. Then STOP for him to try the player,
+  before the memo is touched. (d) Code beside the key, once he has answered. (e) The
+  whole-file footage hash.
+- `sim/folder.py` is the disk of `store.py` over real files: a header of length and crc32, a
+  write flushed before its rename, a truncated file counted absent, Windows' refusals passed
+  over, the lock a folder made and removed, the bytes used walked afresh under the lock.
+  `sim/folder_check.py 40` plays two stores over one temporary folder against a dict, with
+  files torn and parts left: nothing wrong over 40 seeds, 105 s, which is slow: about 9 ms a
+  doing, the flush and a header read for every `size`. To be priced before a walk leans on it.
 - Done of the adversary's eight in `store.py` and `sim.py`: 1 (a lock about letting go and about
   a checkpoint's look, not the trash I first wrote: a grace cannot free a disk a walk is
   filling), 2 (the grid in the key and the rows in `truth`; per-node grids are the real
@@ -45,7 +49,7 @@ this file where they differ.
   passes corrected two of my claims. Not for searching, not for judging a design.
 - Run the simulation: `.venv/Scripts/python.exe docs/playground/sim/sim.py 150` (torture, a line
   a scheme) and `... sim.py prices 1080p [profile]` (the table below), a few seconds each.
-- Counters: queued runs 5 of 25 (the adversary was the fifth) (his figure, 2026-11-21). No cap on design cycles, by the same word: a
+- Counters: queued runs 6 of 25 (his figure, 2026-11-21). No cap on design cycles, by the same word: a
   cycle on the simulation is run when a slice raises a question whose answer would change it.
 - Context: `bash ~/.claude/tools/context-used.sh 300` prints what is left before the auto-compact
   window (300k by his `/autocompact` on 2026-11-21). Bring this file up to date before a step

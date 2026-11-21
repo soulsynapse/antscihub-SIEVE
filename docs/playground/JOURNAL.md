@@ -16,14 +16,18 @@ this file where they differ.
   the contract in code: `.venv/Scripts/python.exe docs/playground/sim/sim.py 150` runs the
   torture in about ten seconds and prints a line a scheme. Read "What the simulation has shown"
   before touching either file.
-- Next action, in order: (a) read `docs/playground/adversary.md` when run 5 lands (Opus, told
-  to break the store and the contract where the torture does not reach) and take what holds
-  into `sim.py` as ops. (b) The on-disk store, `Store` over a real folder, mine to write since
-  it is the design: per-file cost and the grace below are its two hard parts; then one real
-  walk against the simulation's figure for it. (c) Slices onto it: the held file, then the
-  walks' results. Then STOP for him to try the player, before the memo is touched; the memo
-  may stay as the memory tier under the same rules. (d) Code beside the key, once he has
-  answered "A decision of his the contract ran into". (e) The whole-file footage hash.
+- Next action, in order: (a) the changes "What the adversary proved" lists for `store.py` and
+  `sim.py`, in its order, the torture rerun after each; do not reread `adversary.md` whole, its
+  items and my answers are below. (b) Rewrite `contract.md` where that section says a line was
+  wrong or does nothing. (c) The on-disk store over a real folder, mine to write, with that
+  section's "a real folder" list as its checklist; then one real walk against the simulation.
+  (d) Slices onto it: the held file, then the walks' results. Then STOP for him to try the
+  player, before the memo is touched. (e) Code beside the key, once he has answered. (f) The
+  whole-file footage hash.
+- After a compaction or a slice: `.venv/Scripts/python.exe docs/playground/claims.py` lists the
+  claims of `claims.md` whose files changed since they were checked. Each goes to one Haiku
+  pass and is stamped (`claims.py <id> <commit>`) or rewritten. New claims go in as I lean on
+  them. It is an experiment with a kill rule, see "The claims ledger" below.
 - This journal is notes to resume from, not rules. He said so on 2026-11-21 ("sometimes you make
   documentation and then treat it as binding"), and it was true of the cycle cap and of the
   contract's line on code in the key. Where the work shows a line here is wrong, the line goes.
@@ -33,7 +37,7 @@ this file where they differ.
   passes corrected two of my claims. Not for searching, not for judging a design.
 - Run the simulation: `.venv/Scripts/python.exe docs/playground/sim/sim.py 150` (torture, a line
   a scheme) and `... sim.py prices 1080p [profile]` (the table below), a few seconds each.
-- Counters: queued runs 5 of 25 (his figure, 2026-11-21). No cap on design cycles, by the same word: a
+- Counters: queued runs 5 of 25 (the adversary was the fifth) (his figure, 2026-11-21). No cap on design cycles, by the same word: a
   cycle on the simulation is run when a slice raises a question whose answer would change it.
 - Context: `bash ~/.claude/tools/context-used.sh 300` prints what is left before the auto-compact
   window (300k by his `/autocompact` on 2026-11-21). Bring this file up to date before a step
@@ -234,6 +238,69 @@ the hypothesis. The policy below is `worth=True` in `store.py`, and it is the co
   twice. A fused walk that feeds both from one decode is the walk's to gain, not the store's.
 - The torture holds for both policies over 150 seeds and breaks for today's three weaknesses.
 
+## What the adversary proved (run 5, `adversary.md`), and what I do about each
+
+1. Letting go reads the manifests once, then deletes; another writer's checkpoint landing in
+   between loses its entry. My manifest-first fix only narrowed it. Answer: letting go is a
+   rename into `trash/`, emptied of what has lain past a grace; a checkpoint takes its entry
+   back out of the trash. The `race` op's other writer must also checkpoint.
+2. The chunk grid is not in the key: adding a tool with wider rows moved every node's grid under
+   the same keys, and O1 could not see it since `truth` digests a chunk's index and not its
+   rows. Answer: the grid is the node's own, by its own row's bytes, and is part of the entry's
+   name on disk; `truth` digests the rows.
+3. `Ask.flight` kept every value of a demand alive outside the budget: 10.4 GB alive under a
+   3 GB budget. Answer: no flight; a value is alive under its reader's reservation or in the
+   store and nowhere else, and O5 counts what is alive.
+4. The torture never filled the disk: `_make_room` ran zero times in 150 seeds, and mutants that
+   ignore the budget or the manifests passed. Answer: the torture's disk is 1 to 4 GB, and an
+   oracle compares the disk's use with its budget.
+5. Restoring after a code or footage edit brings back nothing and O3 skipped it silently; and
+   nothing un-names a manifest, so its entries hold disk for good. Answer: a checkpoint whose
+   keys nothing answers now is said so by name; a checkpoint can be let go.
+6. A checkpoint too big for the disk was refused only after three rounds of filling, without
+   the figures; and under lru a 26 MB checkpoint was refused on a 40 GB disk because filling one
+   entry pushed out another not yet named. Answer: the manifest lands as pending before the
+   fill, the sizes are summed and refused before any work, and it is finished after a look.
+7. Parts torn by a crash are never listed and count as used for good. Answer: a part older than
+   the grace is let go.
+8. "Not a plane" in the contract is false at 5.3K, where a decoded chunk costs ten times its
+   write. The rule is the cost, and the contract's wording goes.
+
+Contract lines nothing does or checks: the log landing (no log exists; mark it open); gone at
+open (not looked for, and by address not by name); the monitor's stream (the sim hands no
+`emit`, `drop` and `Refused` say nothing); the priority of a look and the cores (no queue, cores
+are a divisor); two stores with two overridden budgets; and N pieces each reading the whole
+machine's memory, which is N times it. The last is real: a piece started as one of N takes a
+share.
+
+A real folder, the checklist for the on-disk store: a rename over or a delete of a file another
+process has open raises `PermissionError` on Windows, to be caught and passed over; data is
+flushed before the rename and an entry carries its length and a checksum that a read verifies;
+`used` is a walk of the folder or a count a process keeps, never exact across writers; a full
+disk raises out of a write and leaves a part; listings on SMB and NFS lag by seconds, which the
+grace must exceed; clocks of two machines differ, so age is by the file's own time against the
+same filesystem's now.
+
+The price table, by its analysis: what the table supports is not writing planes on first
+making. GreedyDual-Size against plain recency changes little once admission is the same, and
+on disk it needs a rank rewritten on every read and a floor shared by all writers. So disk lets
+go by recency, by the file's time touched at most now and then, and admission is the policy.
+Memory keeps GreedyDual-Size, where it is free. No headline flipped under the guessed figures
+it tried.
+
+## The claims ledger, an experiment (his idea, 2026-11-21)
+
+`claims.md` holds what I believe of the tree with the files each belief is about, what leans on
+it and the commit it was checked at; `claims.py` lists those a change has put in doubt. It is
+Make's staleness over observations, and truth maintenance (Doyle, de Kleer) in small. Over the
+next three slices that touch the player, count here: claims flagged; flagged claims found false
+on recheck; stale beliefs that bit me unflagged. None false after three slices, with the runs'
+own "what I made false" covering it: the script goes and the list stays for recall. Mostly
+unflagged bites: the grain is wrong and the idea goes.
+
+- Count so far: flagged 0, false 0, unflagged bites 1 (the ticked decision in
+  `what-a-node-declares.md`, which no claim named; a run's report caught it).
+
 ## Two writers at once, and what a real disk costs (2026-11-21)
 
 - `diskrate.py`: the store's NVMe writes 1637 MB/s through an fsync and the USB hard drive 235;
@@ -334,6 +401,7 @@ with its own limit stated. Run them in one message, in parallel.
 
 | # | What | Wall | Context, turns | Verdict |
 |---|---|---|---|---|
+| 5 | Adversary (Opus) against the contract, `store.py` and `sim.py`, told to prove each break in a scratch copy and to use Haiku for single claims | 11m 44s | not read | The best run so far: eight proved breaks with sequences and line numbers, four of them holes in my own oracles; contract lines nothing checks; where the simulated disk flatters. Worth repeating before each thing I am about to trust: the on-disk store, then the first migrated holder. |
 | 4 | Slice 2: `budget.py`, each holder's limit shared out of half the RAM, today's constants as ceilings | 2m 01s | not read | Clean, 39 lines, three tests, said its own choices: an env override can still push the sum past the total; `walk` reads the real machine at import, so a test leaning on the default stack sees less on a machine under about 21 GB; `tests/test_graph.py` restores `STACK_BYTES` to a literal. Kept. |
 | 3 | Slice 1: code digest in `key_of`, footage print sampled at 32 offsets | 2m 21s | not read | Did what was asked and found what I had not: the ticked decision above, and two docs made false (`docs/spec/held-results.md:25`, a finding's line 117). The key half taken back out by me. The prompt's "say what your change made false" line is what surfaced it; keep it in every slice. |
 | 2 | Measured figures from `docs/findings/`, one table, told which findings to open first | 2m 31s | about 88k, 24 turns | On brief, every row sourced, disagreements kept as two rows, empty cells said. The shape to reuse: one file out, the reader told it is the queued run, where to start reading, a line cap. |

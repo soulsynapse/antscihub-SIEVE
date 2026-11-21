@@ -131,7 +131,7 @@ def test_a_value_is_one_in_every_period_holding_its_row_but_where_it_read_an_edg
     assert runs[before:] == [("ahead", 7, (2, 9))]                              # within reach of the old last row, it read it
 
 
-def test_a_node_below_a_period_is_keyed_as_beside_it_and_reads_no_row_outside_the_period():
+def test_a_node_below_a_period_is_keyed_as_beside_it_and_neither_computes_at_nor_reads_a_row_outside_it():
     import numpy as np
 
     from tools import motion
@@ -165,6 +165,7 @@ def test_a_node_below_a_period_is_keyed_as_beside_it_and_reads_no_row_outside_th
 
     e = g.snapshot().entries
     assert all(e[nodes[t, "below"]].key == e[nodes[t, "beside"]].key for t in ("detect", "motion"))
+    assert at("detect", "below", 1) == at("detect", "below", 7, (2, 6)) == (None, 0)
     assert at("detect", "beside", 5)[1] == 1 and at("detect", "below", 5, (2, 6))[1] == at("detect", "below", 5, (5, 9))[1] == 0
     first, ran = at("motion", "below", 2, (2, 6))
     assert ran == 1 and not first.any() and at("motion", "beside", 0)[0].tolist() == first.tolist()      # the row before absent, as before row 0

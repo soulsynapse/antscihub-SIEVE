@@ -673,7 +673,8 @@ class Graph:
         return e is not None and e.fed
 
     def compute(self, nid, row, raw=False, demand="display", p=None, cut=None):
-        """Output of `nid` at `row`, memoized; None for a node nothing reaches. Worker threads only.
+        """Output of `nid` at `row`, memoized; None for a node nothing reaches, and at a row outside
+        the cut it is computed in, absent there as no row is. Worker threads only.
         The whole recursion runs in the Plan `p`, the one current at the call with none, so what
         lands in the memo under a key was computed from the graph that key describes. `raw` is the
         plane before the node's band, what its density counts, so the axis holds while a handle
@@ -784,6 +785,9 @@ class Graph:
                 ev[1], ev[2] = v.nbytes, v.shape
             v.setflags(write=False)
             return v
+        c, mk = _address(e, row, cut)
+        if c is None or not c.extent.holds(row):
+            return None
         if e.file is not None:
             d = self._reader(nid, e)
             with self.probe(nid, row, e.raw_key, reader) as ev:
@@ -798,7 +802,6 @@ class Graph:
                 ev[1], ev[2] = v.nbytes, v.shape
             v.setflags(write=False)
             return v if raw or e.band is None else banded(v, e.band)
-        c, mk = _address(e, row, cut)
         got, v = self._memoized(mk)
         if v is None:
             frames = Frames(self, plan, nid, e.srcs, e.src_key, e.types, row, c)

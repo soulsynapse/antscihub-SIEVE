@@ -344,7 +344,7 @@ zero, and an empty table reads as a row where nothing was found; `walk.py` is it
 by its own docstring. `plot.py:Plot.set_lines` hands every line one start, where the strip takes
 one a node.
 
-- [ ] A row outside a node's extent is absent to what reads it: no node is computed or stepped
+- [x] A row outside a node's extent is absent to what reads it: no node is computed or stepped
   at it, and no table written holds a record of it.
   Check: a one-off over the crossings clip: a csv below a `period`, its rows against the periods'.
 - [ ] A gated-out row is handed to a tool downstream, one that steps or one that runs whole, as

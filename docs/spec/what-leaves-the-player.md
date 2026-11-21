@@ -14,7 +14,7 @@ so its rows and positions are the footage's, whatever piece and plane it was fou
 
 ## A table in the footage's rows and pixels
 
-Assumes: `docs/spec/pieces-of-footage.md`'s A piece's record.
+Assumes: `docs/spec/pieces-of-footage.md`'s A cut's record.
 
 Facts to weigh. A csv written below a region is in the cut clip's pixels, so two regions' tables
 cannot be laid side by side or drawn over the footage. `rescale` and `coarsegrain` hand out a plane

@@ -12,7 +12,6 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from . import density
-from .cut import holding
 from .registry import fold_of, imported_print
 from .graph import Series, absent_dtype, gated, kept
 from .stream import ASKED, GIVEN, HAND, SHAPE
@@ -227,7 +226,7 @@ class _Walk:
             if r >= self.length:
                 continue
             e = self.plan.entries.get(nid)
-            if e is not None and holding(e.cuts, self.start + r) is None:
+            if e is not None and not any(c.extent.holds(self.start + r) for c in e.cuts):
                 self.at[nid] = r + 1
                 continue
             v = self.graph.density(nid, self.start + r, self.plan)

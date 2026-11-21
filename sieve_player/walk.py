@@ -18,6 +18,7 @@ from .stream import ASKED, GIVEN, HAND, SHAPE
 from .wire import ROWS, is_table, nbytes, own_bytes, share_bytes
 
 STACK_BYTES = 512 << 20   # the most a walk's stack and stepped results, the window's or the clip's, may take, as nbytes counts them
+WALKED = "walk:stack"     # where a walk that keeps its stack puts it among the chain's results: (walked node, stacked_key, rows)
 
 
 def _stack_for(n, out, table):
@@ -111,6 +112,8 @@ class _Walk:
     ask: tuple = (0, 0, False, {})  # (start, length, spared, given) the range was asked over; the clip's is the clip
     spared: bool = False        # the chain's results over the range are held elsewhere: nothing is stacked or stepped and no result goes out
     given: dict = field(default_factory=dict)     # node -> (raw key, its result's fields over the range, the code it was made under or None), held elsewhere: stepped nodes the walk does not step
+    handed: tuple = None        # (served, rows): the walked node's rows over the range held elsewhere, bool and object arrays; a row served is stacked and not walked
+    keeps: bool = False         # the chain's result goes out with the stack beside it under WALKED, where stacked_key has one
     start: int = 0
     length: int = 0
     i: int = 0
@@ -152,7 +155,10 @@ class _Walk:
             return
         read = not self.spared and any(h not in self.given for h in p.heads or [None])   # whether anything reads the walked node's row
         before = g.tally()
-        out = np.asarray(g.walk_row(row, p, self.cut)) if read else None
+        if read and self.handed is not None and self.handed[0][self.i]:
+            out = np.asarray(self.handed[1][self.i])
+        else:
+            out = np.asarray(g.walk_row(row, p, self.cut)) if read else None
         ran = g.tally() != before
         stacked = bool(p.chain) and read     # without a chain to run nothing reads the stack, and the rows are not held
         of = None if p.fold is not None or p.walk not in p.entries else p.entries[p.walk].produces    # a folded row is of no type
@@ -295,6 +301,8 @@ class _Walk:
             self.step(self.i)
             stepped = {nid: h.upto(self.i) for nid, h in self.stepped.items()}
             results = run_chain(g, None if self.stack is None else self.stack[: self.i], self.start, self.i, self.folded, stepped, self.plan, self.cut)
+        if results is not None and self.keeps and self.stack is not None and (key := stacked_key(self.plan)) is not None:
+            results[WALKED] = (self.plan.walk, key, self.stack[: self.i])
         if results is not None:
             self.ready.emit(results, self.start, g.fps)
 
@@ -341,6 +349,17 @@ class _Walk:
         row = self.start + self.i
         again = self.close()
         self.failed.emit(row, getattr(again, "sieve_node", getattr(exc, "sieve_node", "")))
+
+
+def stacked_key(p):
+    """The key a stack of the Plan `p`'s walked node is held under: the node's, with the fold its
+    heads share; None for a stack of images, which is not held."""
+    e = p.entries.get(p.walk)
+    if e is None:
+        return None
+    if p.fold is not None:
+        return f"{e.key}|{p.fold.__module__}.{p.fold.__qualname__}"
+    return e.key if is_table(e.produces) else None
 
 
 def chain_of(p):

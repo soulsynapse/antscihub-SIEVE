@@ -3,7 +3,8 @@ condition it waits on. Each rung is a job, _Scrub and two of walk.py's _Walk, ho
 thing with a turn; the GUI side sets a job's ask under the lock and the scheduler takes it and tells the job to
 begin, once. The clip walk runs behind a finished window so what is viewed never waits on it, and a frame change
 abandons it and its rows. Behind the clip's own range the clip lane walks each cut in time of the plan's `timed`
-alone, a third _Walk, from the cut's first row to its last; the window walks none of them."""
+alone, a third _Walk, from the cut's first row to its last, save one give_periods says is held, and over the
+walked node's rows it says are; the window walks none of them."""
 import sys
 import threading
 import traceback
@@ -13,7 +14,7 @@ from PySide6.QtCore import QThread, Signal
 from .decoder import EndOfStream
 from .graph import Cancelled
 from .stream import ASKED, EDIT
-from .walk import _Walk
+from .walk import _Walk, stacked_key
 
 STOP_PATIENCE_MS = 10_000  # how long stop() waits before saying on stderr what it is waiting for
 
@@ -52,6 +53,12 @@ def _walking(p, nid, cut):
     among its cuts; None where `p` has none, or that node is not fed."""
     w = next((w for w in p.timed if p.entries[w.heads[0]].src == nid and cut in w.cuts), None)
     return None if w is None or not p.entries[nid].fed else p.of(w)
+
+
+def period_keys(p):
+    """What a held cut in time is checked against before a walk of it under the Plan `p` takes
+    it: each chain node's raw key, and the key its walked node's stack is held under."""
+    return {**{nid: p.entries[nid].raw_key for nid in p.chain}, None: stacked_key(p)}
 
 
 class _Left:
@@ -98,6 +105,8 @@ class Worker(QThread):
         self._period = _Walk(graph, name="clip", every=1 << 62, progress=_Left(self.periodWalked, self._legs), ready=self.periodReady,
                              refused=self.clipRefused, failed=self.failed, tell_every=tell_every)
         self._period.walked, self._legs_by = None, ASKED     # the walked node of the cut under way; what began the clip walk the legs are of
+        self._period.keeps = True
+        self._held_periods = {}               # (walked node, (first, end)) -> what give_periods was told of that cut
 
     # -- GUI-side calls --------------------------------------------------
     def request_row(self, row):
@@ -145,6 +154,15 @@ class Worker(QThread):
         stepped node and every head has no row to walk and ends in a turn."""
         with self._cv:
             self._clip.ask = (0, rows, False, dict(given))
+
+    def give_periods(self, held):
+        """What the caller holds of each cut in time, (walked node, (first, end) clamped to the
+        count) to (keys, spared, given, handed): `keys` as period_keys says them of the plan it was
+        read under, `spared` that every chain node's result over the cut is held, so the clip lane
+        walks it not at all, `given` as give_clip's, and `handed` as _Walk's. One whose keys the
+        plan has left is walked as though nothing were held."""
+        with self._cv:
+            self._held_periods = dict(held)
 
     def walk_clip(self, by=ASKED):
         """Walk the whole clip, from its first row, once the window is walked; `by` as set_window's."""
@@ -271,9 +289,15 @@ class Worker(QThread):
             if (sub := _walking(p, nid, cut)) is None:
                 continue
             first, end = (min(r, count) for r in cut.extent.rows)
+            ask = self._held_periods.get((nid, (first, end)))
+            if ask is not None and (ask[0] != period_keys(sub) or (ask[3] is not None and len(ask[3][0]) != end - first)):
+                ask = None
+            if ask is not None and ask[1]:
+                continue
 
-            def begin(sub=sub, nid=nid, cut=cut, first=first, end=end):
-                per.plan, per.walked, per.cut, per.spared, per.given = sub, nid, cut, False, {}
+            def begin(sub=sub, nid=nid, cut=cut, first=first, end=end, ask=ask):
+                per.plan, per.walked, per.cut, per.spared = sub, nid, cut, False
+                per.given, per.handed = ({}, None) if ask is None else (ask[2], ask[3])
                 per.begin(first, end - first, self._legs_by)
             return "walk", [(per, begin)]
         return None

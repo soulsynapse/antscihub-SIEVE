@@ -19,6 +19,12 @@ def test_a_held_file_reads_back_by_the_form_of_its_records_alone_and_is_let_go_b
     assert held.rows_of(results["count"], rows, 1, 2)["key"] == "k"
     assert held.rows_of(results["count"], rows, 1, 2)["said"] == (0, 1, 2, 3)
     assert held.rows_of(results["count"], rows, 1, 2)["code"] == {"count": "d"}
+    tables = np.empty(4, object)
+    tables[:] = [np.zeros(i, [("x", "f4")]) for i in range(4)]
+    held.File(path).write([held.Run(10, 4, {"count": result}, 16, (10, 14), ("blobs", "kb", tables))])
+    (run,) = read()
+    assert run.cut == (10, 14) and run.walked[:2] == ("blobs", "kb") and [len(t) for t in run.walked[2]] == [0, 1, 2, 3]
+    held.File(path).write([(10, 4, {"count": result}, 16)])
     with open(path, "rb") as f:
         assert pickle.load(f) == (held.VERSION,)        # nothing of the tools' code: an edited tool leaves the runs serving
         records = f.read()
@@ -147,6 +153,15 @@ def test_a_run_serves_a_node_where_its_rows_read_the_same_of_the_run_as_of_the_w
     assert spans("detect", b) == [(40, 40.0, 10), (50, 150.0, 20)]     # the rows they share, which read no edge, from the run that began earliest
     assert spans("track", a) == [(20, 120.0, 30)] and spans("track", b) == [(40, 140.0, 30)]    # read where each walk began
     assert spans("detect", whole) == [(20, 20.0, 30), (50, 150.0, 20)] and spans("track", whole) == []    # what read no edge is the footage's too
+    stacked = lambda start, rows: ("blobs", "kb", np.arange(start, start + rows) + 100 * (start > 20), 0)
+    rows = held.Runs(1 << 20, lambda nid, r: 0)
+    assert rows.hold(20, 30, of_both(20, 30), both, cut=(20, 50), walked=stacked(20, 30))
+    assert not rows.hold(20, 30, of_both(20, 30), both, cut=(20, 50))     # stood in for, walked rows and all
+    have, got = rows.walked_rows("blobs", "kb", (0, 0), 20, 40, (20, 60), (20, 60))     # the period grown to 60
+    assert have.tolist() == [True] * 30 + [False] * 10 and got[:30].tolist() == list(range(20, 50))
+    have, got = rows.walked_rows("blobs", "kb", (1, 0), 25, 25, (25, 50), (25, 50))     # its first row moved, a row read before it
+    assert have.tolist() == [False] + [True] * 24
+    assert not rows.walked_rows("blobs", "kb2", (0, 0), 20, 30, (20, 50), (20, 50))[0].any()
 
 
 def test_a_node_is_marked_by_the_code_its_held_result_was_made_under_and_so_is_every_node_below_it():

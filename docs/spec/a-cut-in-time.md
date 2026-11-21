@@ -399,7 +399,7 @@ one start, where the strip takes one a node.
   so a tracker reworked later, one that reads past its row among them, is walked as it is.
   What that costs against the frames is in
   `docs/findings/2026-11-20-relinking-against-the-frames.md`.
-- [ ] A period whose walk is held under the keys the chain now has is not walked again. One whose
+- [x] A period whose walk is held under the keys the chain now has is not walked again. One whose
   edge moved has its walked node computed at the rows no held run serves it alone, and every node
   that read the edge stepped or run again from the period's first row over the rows held, `track`
   and every node below it among them; a row two periods share is computed once for a node that

@@ -1,6 +1,7 @@
 """A document's held series: the runs its walks made, in one file beside the document, good under
-its keys alone. A run is a Run, (start, rows, {node: result}, bytes, cut), a walk's
-results over `rows` rows from `start` inside a cut and what they hold. The file is the stamp and then a record a run, and
+its keys alone. A run is a Run, (start, rows, {node: result}, bytes, cut, walked), a walk's
+results over `rows` rows from `start` inside a cut, what they hold, and the walked node's rows they were
+stepped over. The file is the stamp and then a record a run, and
 File pickles a run once however often it writes. Runs is the runs held and which of them a range is
 served from, a node at a time, told the chain as a Chain, and a node's values in a cut listed as a Listed; `marked` is the nodes whose held results were made under
 other code than lies on disk. Imports nothing of sieve_player but cut; the window says when a run
@@ -36,13 +37,16 @@ def _stamped(said):
 
 class Run(NamedTuple):
     """A walk's results over `rows` rows from `start`, node to result, the bytes they hold, and
-    `cut`, (first row, row past the last) of the cut it was walked inside, None the whole footage.
-    Equal to itself alone: its results are arrays, whose equality is not a truth value."""
+    `cut`, (first row, row past the last) of the cut it was walked inside, None the whole footage,
+    and `walked`, (node, key, its `rows` rows) of the walked node the walk stacked, or None. `size`
+    counts the walked rows too. Equal to itself alone: its results are arrays, whose equality is
+    not a truth value."""
     start: int
     rows: int
     results: dict
     size: int
     cut: tuple | None = None
+    walked: tuple | None = None
 
     def __eq__(self, other):
         return self is other
@@ -84,8 +88,10 @@ def _dump(f, runs):
     """A record for each of `runs` at `f`'s position; where each lies, (offset, length), a run
     that does not pickle leaving no record and lying at length 0."""
     at = []
-    for start, rows, results, size, *cut in runs:
-        record = (start, rows, {nid: {k: _flat(v, rows) for k, v in r.items()} for nid, r in results.items()}, size, *cut[:1])
+    for start, rows, results, size, *more in runs:
+        cut, walked = (*more, None, None)[:2]
+        record = (start, rows, {nid: {k: _flat(v, rows) for k, v in r.items()} for nid, r in results.items()}, size, cut,
+                  None if walked is None else (*walked[:2], _flat(walked[2], rows)))
         was = f.tell()
         try:
             pickle.dump(record, f, protocol=pickle.HIGHEST_PROTOCOL)
@@ -119,9 +125,11 @@ class File:
                     return []
                 self._had, self._end = had, f.tell()
                 while True:
-                    start, rows, results, size, *cut = pickle.load(f)
+                    start, rows, results, size, *more = pickle.load(f)
+                    cut, walked = (*more, None, None)[:2]
                     # "plate": a field a result once carried that is no row of it, which a walk given the result would step
-                    run = Run(start, rows, {nid: {k: _rows(v) for k, v in r.items() if k != "plate"} for nid, r in results.items()}, size, *cut)
+                    run = Run(start, rows, {nid: {k: _rows(v) for k, v in r.items() if k != "plate"} for nid, r in results.items()}, size,
+                              cut, None if walked is None else (*walked[:2], _rows(walked[2])))
                     had.append((run, self._end, f.tell() - self._end))
                     self._end = f.tell()
         except Exception:       # the file's end, or a truncated or foreign pickle, which raises whatever its bytes spell
@@ -193,6 +201,21 @@ def _read(walk, cut, reach, s, n):
     return (read(walk, reach, s)[0], read(cut, reach, s)[0], read(walk, reach, s + n - 1)[1], read(cut, reach, s + n - 1)[1])
 
 
+def _reads(walk, cut, reach, lo, hi):
+    """`_read`'s four edges a row at a time over rows `lo` to `hi`, -1 where a row read none."""
+    rows = np.arange(lo, hi)
+
+    def edges(span):
+        if span is None:
+            return np.full(len(rows), -1), np.full(len(rows), -1)
+        (first, end), (before, after) = span, reach
+        reads_first = np.full(len(rows), first > 0) if before is None else (first > 0) & (rows - before < first)
+        reads_end = np.ones(len(rows), bool) if after is None else rows + after >= end
+        return np.where(reads_first, first, -1), np.where(reads_end, end, -1)
+    (wf, we), (cf, ce) = edges(walk), edges(cut)
+    return wf, cf, we, ce
+
+
 def good(result, key):
     """Whether `result` is a series node's result under `key`; never for a `key` of None, a node
     the plan does not have."""
@@ -249,11 +272,13 @@ class Runs:
                     out[nid] = rows_of(run.results[nid], run.rows, s - run.start, n)
         return out
 
-    def hold(self, start, rows, results, chain, cut=None, worth=None):
+    def hold(self, start, rows, results, chain, cut=None, worth=None, walked=None):
         """Holds `results` as a run over `rows` rows from `start` inside a cut of rows `cut` when every
         chain node has `rows` rows in it under a key, unless a run held serves every node it has over
-        its rows under the same key and its walk and cut; whether the runs held changed. A run it so
-        serves goes, and while the runs together pass the limit the oldest goes that is not the one
+        its rows under the same key and its walk and cut, and holds the walked rows if it has them;
+        whether the runs held changed. `walked` is (node, key, its rows, the bytes they hold), or
+        None. A run it so serves goes unless it holds walked rows it does not, and while the runs
+        together pass the limit the oldest goes that is not the one
         `worth`, a Chain and `chain` with none, has most of, a run it has nothing of before any other.
         What it has of a run is the run's rows for each node of `_has`, the longer run of two it has
         as much of and the one held last of two as long. The last run stays whatever it takes."""
@@ -267,11 +292,12 @@ class Runs:
             return all(self._serves(over, nid, run.start, run.rows, (run.start, run.start + run.rows), run.cut, within)
                        for nid in within.keys)
         kept = {nid: results[nid] for nid in nodes}
-        new = Run(start, rows, kept, sum(self.size_of(nid, r) for nid, r in kept.items()), cut)
-        if any(stands_in(run, new) for run in self.all):
+        new = Run(start, rows, kept, sum(self.size_of(nid, r) for nid, r in kept.items()) + (walked[3] if walked else 0),
+                  cut, None if walked is None else tuple(walked[:3]))
+        if any(stands_in(run, new) and (new.walked is None or run.walked is not None) for run in self.all):
             return False
         was = self.all
-        self.all = [run for run in self.all if not stands_in(new, run)]
+        self.all = [run for run in self.all if not stands_in(new, run) or (run.walked is not None and new.walked is None)]
         self.all.append(new)
         while len(self.all) > 1 and sum(run.size for run in self.all) > self.limit:
             has = {run: len(self._has(run.results, worth or chain)) * run.rows for run in self.all}
@@ -292,6 +318,28 @@ class Runs:
         """The stepped nodes' results that `over` would serve, each node's its own: rows a walk over
         `walk` can step the rest from as it would its own; {} with none."""
         return self._serving(s, n, chain, walk, cut, [nid for nid in chain.keys if nid in chain.steps])
+
+    def walked_rows(self, nid, key, reach, s, n, walk, cut=None):
+        """The walked node `nid`'s rows under `key` over `n` rows from `s` to a walk over `walk`
+        inside a cut of rows `cut`, as `serves` serves a series node's, a row at a time from the run
+        that began earliest whose row read the same of its walk and cut, `reach` the node's:
+        (a bool array of which of the `n` rows are served, an object array of them), as
+        walk._Walk.handed takes them."""
+        out, have = np.empty(n, object), np.zeros(n, bool)
+        want = _reads(walk, cut, reach, s, s + n)
+        for run in self._earliest():
+            if run.walked is None or run.walked[:2] != (nid, key):
+                continue
+            a, b = max(s, run.start), min(s + n, run.start + run.rows)
+            if a >= b:
+                continue
+            got = _reads((run.start, run.start + run.rows), run.cut, reach, a, b)
+            ok = ~have[a - s:b - s] & np.all([g == w[a - s:b - s] for g, w in zip(got, want)], axis=0)
+            rows = run.walked[2]
+            for i in np.flatnonzero(ok).tolist():
+                out[a - s + i] = rows[a - run.start + i]
+            have[a - s:b - s] |= ok
+        return have, out
 
     def listed(self, nid, chain, record, count):
         """`nid`'s values in the cut `record`, a cut.Record, as a Listed: its rows, or the `count`

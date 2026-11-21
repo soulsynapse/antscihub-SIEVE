@@ -18,7 +18,7 @@ import traceback
 import cv2
 import numpy as np
 from PySide6.QtCore import QFileSystemWatcher, QProcess, QProcessEnvironment, QRectF, Qt, QTimer, Signal
-from PySide6.QtGui import QImage, QKeySequence, QPainter, QPen, QPixmap, QShortcut
+from PySide6.QtGui import QImage, QKeySequence, QPainter, QPixmap, QShortcut
 from PySide6.QtWidgets import QFileDialog, QHBoxLayout, QMainWindow, QMenu, QMessageBox, QProgressBar, QPushButton, QSizePolicy, QVBoxLayout, QWidget
 
 from . import bare, dev, document, filemenu, held, recent, store, theme, wire
@@ -175,7 +175,7 @@ class Display(QWidget):
     drawFailed = Signal(str, str)   # a tool's draw() or pick() raised: the node, the line
     picked = Signal(str, dict)      # a drawer claimed a left click: the node, the params to merge
 
-    """The frame, the overlay heated over it, the gate border, and each drawing node's draw() on
+    """The frame, the overlay heated over it, and each drawing node's draw() on
     top, in node order, each handed its own node's result: a series node's over the window, a
     frame node's at the row, the painter moved to where the pixels its node reads lie on the frame.
     A left click is offered to the drawers whose pick() claims it, the one drawn last first, as a
@@ -183,7 +183,7 @@ class Display(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._pix, self.gate, self.reason = None, False, ""
+        self._pix, self.reason = None, ""
         self._over, self._over_key, self._top = None, None, 0.0   # the overlay image, whose node's key, its running max
         self._frame_key, self._frame_top = None, 0.0               # the shown node's key and running max, for a measured plane
         self.drawers, self.row, self.results, self.start, self.starts = [], 0, {}, 0, {}   # drawers: [(node id, tool, node)]
@@ -230,11 +230,6 @@ class Display(QWidget):
             self._over = heat(a, self._top)
         self.update()
 
-    def set_gate(self, on):
-        if on != self.gate:
-            self.gate = on
-            self.update()
-
     def paintEvent(self, _):
         p = QPainter(self)
         p.fillRect(self.rect(), theme.qgray(theme.GROUND))
@@ -250,9 +245,6 @@ class Display(QWidget):
         p.drawPixmap(x, y, pix)
         if self._over is not None:
             p.drawImage(QRectF(x, y, pix.width(), pix.height()), self._over)   # stretched to the frame, as draw() is
-        if self.gate:
-            p.setPen(QPen(theme.GATE, 4))
-            p.drawRect(x + 2, y + 2, pix.width() - 4, pix.height() - 4)
         if not self.drawers:
             return
         p.save()
@@ -1205,7 +1197,7 @@ class PlayerWindow(QMainWindow):
             if w is not None and hasattr(w, "set_playhead"):
                 w.set_playhead(row)
         self.plot.set_playhead(row)
-        self._update_gate()
+        self._update_display()
 
     def _scrub_begin(self, row):
         """The playhead is held: pause so the loop doesn't run away under the cursor."""
@@ -1423,7 +1415,7 @@ class PlayerWindow(QMainWindow):
             w = self.pane.widget(nid)
             if w is not None and hasattr(w, "show_result"):
                 w.show_result(result, start, fps)
-        self._update_gate()
+        self._update_display()
         self._show_pinned()
         self._show_size()
         self._show_takes()
@@ -1563,7 +1555,7 @@ class PlayerWindow(QMainWindow):
         if got is not None and not got.held and got.start == start:
             self.window_periods[of] = Shown(start, results, got.best, False)
             self._show_lines()
-            self._update_gate()
+            self._update_display()
             self._show_pinned()
 
     def _show_lines(self):
@@ -1752,15 +1744,7 @@ class PlayerWindow(QMainWindow):
         self.plot.set_hover(row)
         self.timeline.strip.set_hover(row)
 
-    def _update_gate(self):
-        """The border is on while every leaf of the series chain, a chain node no chain node reads,
-        gates the playhead's row: each band shuts out of what the next reads the rows it does not keep, so a leaf's gate is its branch's."""
-        i = self.row - self.result_start
-        chain = self.graph.series_chain() if self.graph is not None else []
-        read = {src for _, _, _, _, src in chain}
-        gates = [self.results[nid].get("gate") for nid, *_ in chain
-                 if nid not in read and isinstance(self.results.get(nid), dict)]
-        self.display.set_gate(bool(gates) and all(g is not None and 0 <= i < len(g) and bool(g[i]) for g in gates))
+    def _update_display(self):
         below = shown_at(self.window_periods, self.row)    # a node below a cut in time: its result over the period holding the row
         self.display.set_state(self.row, {**self.results, **{nid: r for nid, (r, _) in below.items()}}, self.result_start,
                                {nid: start for nid, (_, start) in below.items()})

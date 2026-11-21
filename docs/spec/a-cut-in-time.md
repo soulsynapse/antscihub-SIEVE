@@ -240,7 +240,7 @@ Open: the file's form. Recommended, and a session may build on it: JSON as the g
 
 - [x] Kendrick: a `period` is fed as a `region` is, by a file the user fixed, and by a gate. The
   gate finds the periods; the file holds them still. Periods may overlap.
-- [ ] A `period` fed a file by a `file` selector has the file's periods, each the footage row it
+- [x] A `period` fed a file by a `file` selector has the file's periods, each the footage row it
   begins at and the row past its last, and a name. Periods of a file may touch and may overlap,
   each its own. A file that does not read, a repeated name, a period of no rows and one past the
   footage's rows are each refused, saying which. A save of the file reaches the `period` as a

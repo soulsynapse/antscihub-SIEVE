@@ -21,7 +21,7 @@ Where I am getting lost in the weeds a bit is how to do this with tracking. I ca
 
 What I think this means is I have to build the temporal piece first (period), and then the tracking.
 
-This is just lookahead for development. I think what this means is the tracking plan should be revisited later. The atomic unit of this appears to be converging on one thing: a subset of (x, y, t) that carries a reference to its parent(s).
+This is just lookahead for development. I think what this means is the tracking plan should be revisited later. The atomic unit of this appears to be converging on one thing: a subset of (x, y, t) that carries a reference to what it was cut from, each of which contains it. 
 
 - The region tool is a cylinder, a fixed mask over all frames
 - A period is a slab, the whole frame over an interval
@@ -34,6 +34,6 @@ For keying, a cut that only restricts and doesn't renumber probably saves a ton 
 
 These should give us all the components we need, so that detection can be simple algebra over the supports.
 
-But the bottom line is that **getting atomization and keying correct for units as (x, y, t) such that it rolls back up to its parent** is what makes the rest work.
+But the bottom line is that **getting atomization and keying correct for units as (x, y, t) and references of what it was cut** is what makes the rest work.
 
 --- end write up

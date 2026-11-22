@@ -1,8 +1,8 @@
 """The store of results: a memory tier over a disk tier, under budgets, with checkpoints.
 
 It reaches a disk only through the object it is handed (`write`, `rename`, `read`, `names`,
-`delete`, `size`, `age`, `touch`, `used`, `budgeted`, `write_seconds`, `read_seconds`, `mark`, `marked`, `lock`), so the
-simulation in docs/playground/sim hands it a simulated one and the player result_folder's.
+`delete`, `size`, `age`, `touch`, `used`, `budgeted`, `write_seconds`, `read_seconds`, `mark`, `marked`, `lock`):
+result_folder's Folder is the one there is.
 """
 import heapq
 from contextlib import nullcontext
@@ -41,7 +41,7 @@ class Store:
     and writes to disk at once only what cost `SURE` times its write to make, and what cost at
     least its write the second time it is made; False ranks by recency and writes everything.
     `atomic=False` writes an entry in place and `locked=False` lets go and names without the
-    disk's lock; the contract forbids both and the simulation uses them to show its oracles see."""
+    disk's lock; the contract forbids both, and a check that is to see a break turns them off."""
 
     def __init__(self, disk, memory, disk_budget, writer="a", emit=None, atomic=True, worth=True, locked=True):
         self.disk, self.memory, self.disk_budget = disk, memory, disk_budget

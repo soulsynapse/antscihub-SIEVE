@@ -86,6 +86,19 @@ this file where they differ.
   because walking again is dear today, and is looked at again when track is kept (code in the
   key everywhere would then be one rule and no stale regime). To check first: whether `!`
   follows a stale value into a csv written from a card and into periods a stale gate cuts.
+- Checked, by a Haiku trace whose main lines I reread: the `!` is a badge on a card and
+  nothing else reads it (`window.py:1427`, `pane.py:288`). A result of older code is found by
+  key alone (`held.py:good`), is drawn, feeds walks, cuts a `period` through `gate_result`
+  (`heldwalks.py:100`), and is written to a csv whose key line holds no code
+  (`tools/_csvfile.py:28`) and whose card then reads "on disk: this graph's". The trace also
+  says `_show_stale` is handed the main chain only, so nodes under a cut in time get no
+  badge; that line I did not reread. A second Haiku, asked the bare question with no repo,
+  picked code in the key, switching only if most edits change no behaviour.
+- So the window's half does not stand: a stale value leaves the player unmarked. Decided,
+  mine: the code goes in `plan.py`'s key for every ask, as a digest of the tool's parsed code
+  and not its bytes, so a comment or a reflow changes nothing. It orphans every held file's
+  results once (run 3 showed this); he is to be told before it lands, as he reopens the
+  player mid-change. The `!` and `held.marked` then have nothing to say and go.
 - `docs/playground/walkthrough.qmd` is a slideshow of the whole branch for him, rendered by
   `quarto render`; its html is not tracked. He also said the processor is a hypothesis and
   never the assumed cause of a failed check.

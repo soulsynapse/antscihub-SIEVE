@@ -45,7 +45,9 @@ that nothing checks.
 - O9, his: nothing computed only for the window reaches a tool, a walk of the clip or the held
   file.
 - O10, his: the window shows what is asked of it, every series node's line over its rows, whether
-  or not a clip walk was made.
+  or not a clip walk was made. The miniature asks it over a window inside a period, one over two
+  whole periods and one cutting periods at both edges; before a clip walk the lines at a period
+  cut off by the window's edge are to be best effort, and after one none is.
 - O11, his: a full run made and the document saved, the document and its checkpoint copied
   elsewhere and opened: every run the first player held is served without walking.
 - O14, his ruling: a held run made under a tool's older code is served after the tool's code
@@ -72,9 +74,12 @@ found on a real document is pinned there. An alternative holder goes behind the 
 runs sit behind and is driven against the same checks.
 
 1. Which of the places results are held in are apart for no reason, and can be one.
-2. O10: a cutting node cut by a result on a wire makes no cut until a run of that result over
-   the whole clip is held (`heldwalks.gate_result`), so the window shows nothing below it.
-3. The held runs onto the store behind that seam, driven against today's. Goal 2 moves here.
+2. O10 is open for a gate inside a cut in time: a cutting node whose CUT_BY wire's node is below
+   another cut in time is answered by held runs alone (`heldwalks.window_gate_result` answers
+   none for a cut in time) and the window shows nothing below it until that cut is walked whole.
+3. A window moved costs more with more cuts held: the miniature prints the steps of one beside O7.
+   Which function grows is unread.
+4. The held runs onto the store behind that seam, driven against today's. Goal 2 moves here.
 
 Not to be done on this machine: long walks or timing runs for their own sake. He said no stress
 testing, and a restart now and then is fine.
@@ -89,6 +94,11 @@ testing, and a restart now and then is fine.
   `<document>.checkpoint`, one append-only file of its held runs and nothing else (`held.py`),
   written at a save where a run was held or the path changed. A tool's code is in no key: a run
   held under older code is served and its node marked (`held.marked`, the window's `_show_stale`).
+  A cutting node whose gate no held run answers is cut provisionally of the gate's result as the
+  window walked it (`plan.Provisional`, `cut.Record.provisional` and `cut_off`, `Plan.unheld`):
+  those cuts are walked by the window lane alone, shown, best effort where cut off at the
+  window's edge, and never held, written, baked or handed to a card; the cuts are made again as
+  the window's walk hands the gate's result (the window's `_cut_again`).
 - Not in the player: the memo, the decode cache, the held runs and cut files are each their own
   holder still; no one ask. Frame, series and stepped results are kept by nothing across sessions
   but the runs the series chain's results are held as.
@@ -120,6 +130,9 @@ testing, and a restart now and then is fine.
 ## His to decide, none blocking
 
 - Whether a csv written from a window's card says it is the window's.
+- `docs/spec/a-cut-in-time.md`, the box of a `period` fed a series node's result: while no walk is
+  held it "has no periods and says it waits"; the tree gives it provisional periods inside the
+  window beside the waiting.
 - The encoder's version is in no cut file's key.
 - A test in `tests/test_graph.py` asserting wall time failed once and is not marked `simulation`.
 

@@ -150,10 +150,8 @@ this file where they differ.
   store's), 3, 4 (torture disks of 1, 2, 4 and 40 GB, an oracle on the disk's use, and one that
   no finished checkpoint misses an entry), 5, 6, 7. The `locked=False` mutant breaks at seed
   174 of 200, so that oracle sees, rarely. Not rechecked: its other mutants.
-- After a compaction or a slice: `.venv/Scripts/python.exe docs/playground/claims.py` lists the
-  claims of `claims.md` whose files changed since they were checked. Each goes to one Haiku
-  pass and is stamped (`claims.py <id> <commit>`) or rewritten. New claims go in as I lean on
-  them. It is an experiment with a kill rule, see "The claims ledger" below.
+- After a compaction: `claims.md` is a list to recall by, each claim reread against the tree
+  before it is leaned on. Its script is gone, see "The claims ledger" below.
 - This journal is notes to resume from, not rules. He said so on 2026-11-21 ("sometimes you make
   documentation and then treat it as binding"), and it was true of the cycle cap and of the
   contract's line on code in the key. Where the work shows a line here is wrong, the line goes.
@@ -427,6 +425,12 @@ unflagged bites: the grain is wrong and the idea goes.
 - Count so far: flagged 3 (after slice 2; all three held, cleared from the diff I had read, no
   Haiku needed), false 0, unflagged bites 1 (the ticked decision in
   `what-a-node-declares.md`, which no claim named; a run's report caught it).
+- Ended by its own rule the same day: three unflagged bites against no catch. The 850-period hang
+  and old code's results being found by key were both beliefs no claim stated, and a file's
+  change is the wrong grain, flagging what was only touched. `claims.py` is deleted and the
+  list stays, less the two claims that code in the key made false. What did catch things: an
+  adversary told to prove a break, an unanchored reader tracing one path, a profile of the
+  real document.
 
 ## Two writers at once, and what a real disk costs (2026-11-21)
 

@@ -75,8 +75,7 @@ testing, and a restart now and then is fine.
 
 - In the player, to be verified in the tree: holders sized from the machine's RAM (`budget.py`);
   the window-against-full test over the registry; display proxies; a tool's code in every node's
-  key; a bare walk's small frame rows kept on disk (`result_store.py`, `result_folder.py`,
-  `result_keeper.py`) under a digest of the whole footage file.
+  key; a bare walk's small frame rows kept on disk (`result_store.py`, `result_keeper.py`) under a digest of the whole footage file.
 - Not in the player: the memo, the decode cache, the held runs and their file, and cut files are
   each their own holder still. No checkpoint, no one ask. Series and stepped results are kept by
   nothing across a bare walk.

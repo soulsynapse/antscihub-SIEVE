@@ -12,9 +12,8 @@ import pytest
 from sieve_player import bare, decoder, registry
 from sieve_player import document as D
 from sieve_player.registry import discover
-from sieve_player.result_folder import Folder
 from sieve_player.result_keeper import FOLDER_ENV
-from sieve_player.result_store import ENTRIES, PARTS, Address, Refused, Store
+from sieve_player.result_store import ENTRIES, PARTS, Address, Folder, Refused, Store
 from tests.stepping import same
 
 ROOT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tools")

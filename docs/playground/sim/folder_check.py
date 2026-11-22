@@ -10,8 +10,7 @@ import tempfile
 from pathlib import Path
 
 sys.path[:0] = [str(Path(__file__).parent), str(Path(__file__).parents[3])]
-from sieve_player.result_folder import Folder  # noqa: E402
-from sieve_player.result_store import ENTRIES, PARTS, Address, Refused, Store  # noqa: E402
+from sieve_player.result_store import ENTRIES, PARTS, Address, Folder, Refused, Store  # noqa: E402
 
 BUDGET, MEMORY = 200_000, 60_000
 

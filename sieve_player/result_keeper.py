@@ -1,5 +1,5 @@
 """What a bare walk keeps of a frame node's rows between processes: a Graph handed a Keeper asks it
-on a memo miss and tells it each row it made; the rows go to result_store over result_folder a
+on a memo miss and tells it each row it made; the rows go to result_store over its Folder a
 chunk at a time. Only rows that are no image (ndim < 2 arrays, tables, scalars) of frame nodes that
 are not static, served or stepped are kept. No failure of the folder reaches the caller.
 """
@@ -14,8 +14,7 @@ import numpy as np
 from . import registry
 from .budget import gb
 from .recent import app_folder
-from .result_folder import Folder
-from .result_store import Address, Store
+from .result_store import Address, Folder, Store
 from .wire import nbytes
 
 CHUNK = 256         # rows a chunk holds; in every address's name

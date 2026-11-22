@@ -111,6 +111,15 @@ this file where they differ.
 - `docs/playground/walkthrough.qmd` is a slideshow of the whole branch for him, rendered by
   `quarto render`; its html is not tracked. He also said the processor is a hypothesis and
   never the assumed cause of a failed check.
+- 850 periods hung the player (d9313e6b; the finding is 2026-11-21-the-player-died-walking-856-periods.md,
+  its last section). Kendrick's reading, and it is right: the simulation models the store and
+  nothing of what the scheduler pays a cut, so no oracle here could have seen it, and `cut.read`'s
+  address, this branch's, was one of the scans. He said this means it is not ready for a
+  colleague's laptop. Ahead of the order below: a one-off that counts, not times, what one more
+  cut costs each thread at 100, 1000 and 3000 cuts (hold, window_periods, the lane's count are
+  still linear a hold), and whatever it finds fixed. The playing player must be reopened to run
+  the fix. docs/playground/walkthrough.qmd was deleted from disk by someone other than this
+  session and is left uncommitted either way.
 - Order now, mine: the contract's line on the cut becomes "what it read of its cut" and the
   keeper's address follows `cut.read`; then cold-twice and cold-against-warm over the
   registry with a bare walk printing rows made against rows read back; then (a).

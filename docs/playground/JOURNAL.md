@@ -16,17 +16,24 @@ this file where they differ.
   the contract in code: `.venv/Scripts/python.exe docs/playground/sim/sim.py 150` runs the
   torture in about ten seconds and prints a line a scheme. Read "What the simulation has shown"
   before touching either file.
-- STOPPED HERE for him to try the player (2026-11-21): run 8's proxies are in
-  (`e1e63ba8`, `984461fb`), the suite is 286 passed, and nothing of it has been seen on a
-  screen. Not to be gone past without his word on "The plan turned over" below.
-- Next action, in order, once he has spoken: (a) what he finds wrong in the loop. (b) The
-  proxy check's known hole: `loop_spills` sets the loop's rows of the one painted plane
-  against the memo's limit and ignores the other planes the memo holds a row, so a chain of
-  several planes can pass it and still be made again each pass; and a video node's frame is
-  the decoder cache's, not the memo's. (c) If the order below stands: `store.py` and
-  `folder.py` into `sieve_player` under the cut files and the full walks' tables, with
-  `folder_check.py`'s seams and the window-against-full rule as tests. (d) Code beside the
-  key, once he has answered. (e) The whole-file footage hash.
+- He said continue (2026-11-21, evening) and restated the goal: he develops tools and runs
+  experiments to publish with SIEVE and does not worry whether the back end behaves; a
+  collaborator's weak computer runs it, a strong one too; above all no worry as tools are
+  added. He has not yet said what he saw of the loop, nor answered "The plan turned over";
+  I told him the order below and went on.
+- My own account to him of the branch: little has reached the player (budgets, the sampled
+  print, proxies unseen); the store is sound and unused; the first framing, three holders
+  as one problem, was wrong and his check-ins found it, not my process. The published path
+  is safe already by brute force: a bare walk reuses nothing.
+- Next action, in order: (a) read run 9 (the window-against-full rule as a test over the
+  registry, and an explicit unbounded reach on the tools that declared none), run the suite.
+  (b) The proxy check's hole: `loop_spills` sets the loop's rows of the one painted plane
+  against the memo's limit and ignores the other planes the memo holds a row; a video node's
+  frame is the decoder cache's. (c) The store under the exact path only: `store.py` and
+  `folder.py` into `sieve_player`, a full walk's tables (detect first) put and asked under
+  keys that hold the tool's code digest, so a second bare walk reuses them; `held.py` and
+  his ticked decision untouched; `folder_check.py`'s seams as tests. Read `bare.py` and how a
+  walk asks a table node before designing it. (d) The whole-file footage hash.
 - For him besides: `tests/test_graph.py::test_events_carry_start_thread_and_cpu...` failed
   once in run 8's first full run and passed after; run 8 says it asserts wall time and is not
   marked `simulation`. By CLAUDE.md that is a defect in the test or a race, his to settle.
@@ -63,7 +70,7 @@ this file where they differ.
   passes corrected two of my claims. Not for searching, not for judging a design.
 - Run the simulation: `.venv/Scripts/python.exe docs/playground/sim/sim.py 150` (torture, a line
   a scheme) and `... sim.py prices 1080p [profile]` (the table below), a few seconds each.
-- Counters: queued runs 8 of 25, all eight landed (his figure, 2026-11-21). No cap on design cycles, by the same word: a
+- Counters: queued runs 9 of 25, the ninth in flight when this was written (his figure, 2026-11-21). No cap on design cycles, by the same word: a
   cycle on the simulation is run when a slice raises a question whose answer would change it.
 - Context: `bash ~/.claude/tools/context-used.sh 300` prints what is left before the auto-compact
   window (300k by his `/autocompact` on 2026-11-21). Bring this file up to date before a step

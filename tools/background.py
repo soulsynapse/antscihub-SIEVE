@@ -67,6 +67,10 @@ def composite(frames, params):
     return (acc / n).round().astype(f.dtype) if stat == "mean" else acc
 
 
+def reach_in_rows(params):
+    return None, None
+
+
 def run(frames, row, params):
     return composite(frames, params)
 

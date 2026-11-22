@@ -57,6 +57,10 @@ def keep(rows, property, column, lo, hi):
     return out
 
 
+def reach_in_rows(params):
+    return None, None
+
+
 def run(series, params):
     rows = keep(series.data, params["property"], params["column"], params["lo"], params["hi"])
     return {"rows": rows, "signal": np.array([np.nan if t is None else len(t) for t in rows], np.float32)}

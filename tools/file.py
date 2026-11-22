@@ -39,6 +39,10 @@ def matches(folder, params):
     return found
 
 
+def reach_in_rows(params):
+    return None, None
+
+
 def select(folder, params):
     found = matches(folder, params)
     if not found:

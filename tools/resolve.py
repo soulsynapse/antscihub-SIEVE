@@ -153,6 +153,10 @@ def signal(rows, kind):
     return np.array([np.nan if t is None else int(t[CONFLICT].sum()) for t in rows], np.float32)
 
 
+def reach_in_rows(params):
+    return None, None
+
+
 def run(series, params):
     rows = resolve(series.data, names(params["columns"]), int(params["min_reads"]), params.get("labels") or [], series.start)
     return {"rows": rows, "signal": signal(rows, params["signal"])}

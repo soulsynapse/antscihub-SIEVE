@@ -61,6 +61,10 @@ def kinematics(rows, span=1):
     return out
 
 
+def reach_in_rows(params):
+    return None, None
+
+
 def run(series, params):
     rows = kinematics(series.data, int(params["span"]))
     return {"rows": rows, "signal": np.array([_mean_speed(t) for t in rows], np.float32)}

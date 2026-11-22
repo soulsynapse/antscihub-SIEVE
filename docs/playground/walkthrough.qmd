@@ -479,13 +479,29 @@ downstream of X is made and everything else is read back.
 That count exists only inside a test. A bare walk does not print it. What none of this catches:
 a tool that reads an undeclared file passes all three until the file moves.
 
+## Decided: a tool's code, in two regimes
+
+A result depends on the code that made it: the tool's file, every tool upstream, `sieve_player`
+itself, numpy and OpenCV. Edit `detect.py`, or upgrade OpenCV, and the same key can name a
+different value.
+
+| | The window (interactive) | A bare walk (what is published) |
+|---|---|---|
+| A result made under older code | Still shown, with `!` on the node and every node below | Never read back; made again |
+| Who lets it go | You, by hand | Nobody has to: it is simply not found |
+| Why | A tool is edited most days; an edit must not throw away a day's walks unasked | A published number must come from the code as it lies |
+
+This is the same split as "a window is best effort, a full walk is exact", applied to code. The
+window's half is `v5`'s behaviour and stays. The bare walk's half is what the keeper built. It
+was listed as open for you; it is not, the two do not collide.
+
+The cost I accept: the digest is of the file's bytes, so a comment edit makes a bare walk
+remake that tool's rows and everything below it. Slower, never wrong.
+
 ## Open, and yours to decide
 
 None of these blocks the work.
 
-- **Code beside the key, not in it.** An address would be a key, a code and a row; an entry of
-  other code is served marked stale, which is your `!`; an exact walk asks for this code only.
-  Proposed, not built: it meets your ticked decision that held results outlive a tool edit.
 - **Where bare-walk results live**, and the 20 GiB figure.
 - **A csv written from a window's card** is the window's, not exact. Whether the card says so.
 - **The encoder's version is not in a cut file's key.** Two bakes gave the same bytes on this
@@ -526,7 +542,7 @@ an explanation to reach for when a check fails.
 | A loop that outgrows the memo | Every row made again on every pass | Painted from display proxies, 70 KB a row | Changed |
 | A window against the full walk | Nothing checked it; five tools declared no reach | A test over every registered tool, 40 cases; a wrong reach fails by name | Changed |
 | A bare walk run a second time | Reuses nothing; full cost every time | Reads back a frame node's small rows: 2.5 s, then 0.9 s on the crossings clip | Changed |
-| Tool code and library versions in an address | In no key | In the address of a bare walk's kept rows; still not in `plan.py`'s key, by your ticked decision | Partly |
+| A result made under older code | Served in the window marked `!`; a bare walk reused nothing anyway | The window as before; a bare walk's kept rows are never read back under other code of a tool, of `sieve_player`, of numpy or of OpenCV | Changed |
 | Results on disk under many writers | The held file, appended in place | A store with atomic, checksummed entries and a folder lock, called by the bare walk alone | Partly |
 | A bare walk's series and stepped nodes, `track` above all | Made every walk | Made every walk | Same |
 | A bare walk and cuts in time | Never walks them | Never walks them | Same |

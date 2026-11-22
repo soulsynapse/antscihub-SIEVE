@@ -73,6 +73,20 @@ this file where they differ.
   orphaned. About a second for the 2.1 GB camera file here, the file cache's state unknown.
   The stamp's entry sits under `entries/` beside the chunks, named `-footage`. Not covered:
   a cut file a bare walk is served is still named by the sampled print.
+- He said again (2026-11-21, late) that this is my playground: how it is built is mine, specs
+  are historical referents and not rulings, and a thing that does not make sense is to be
+  reasoned about, not deferred on. So "code beside the key" is no longer held for him. Decided:
+  two regimes. The window keeps `v5`'s way (a result of older code is served with `!`, let go
+  by hand; `plan.py`'s key holds no code), because a tool is edited most days. An exact ask (a
+  bare walk now; a checkpoint's fill and a cluster job when built) has the code in its
+  address and never reads back another code's result. It is the best-effort and exact split
+  applied to code, and the keeper already is its exact half.
+- `docs/playground/walkthrough.qmd` is a slideshow of the whole branch for him, rendered by
+  `quarto render`; its html is not tracked. He also said the processor is a hypothesis and
+  never the assumed cause of a failed check.
+- Order now, mine: the contract's line on the cut becomes "what it read of its cut" and the
+  keeper's address follows `cut.read`; then cold-twice and cold-against-warm over the
+  registry with a bare walk printing rows made against rows read back; then (a).
 - Next action, in order: (a) series and stepped nodes under the keeper, track above all
   (`walk.py:136`, `:291`), as a queued slice, once the window is open. (c) A long walk's
   figure with rows kept, on another machine or when he says. `held.py` and his ticked

@@ -16,17 +16,24 @@ this file where they differ.
   the contract in code: `.venv/Scripts/python.exe docs/playground/sim/sim.py 150` runs the
   torture in about ten seconds and prints a line a scheme. Read "What the simulation has shown"
   before touching either file.
-- Next action, in order: (a) mend `sim/folder.py` and `store.py` for what `adversary-2.md`
-  proved (its twelve items and my answer to each are under "The second adversary"), with
-  `folder_check.py` grown to see what it can. (b) Rewrite `contract.md` and the simulation
-  around "Windows are best effort" below: the exact and window split, a range-reading tool, a
-  cut that re-encodes, a loop in the price table, display proxies. (c) The invariant over the
-  registry that a window and a full walk agree where a tool says they do (a test, it is a
-  seam). (d) Per-node chunk grids in the entry's name, then one real walk through `Store` over
-  `Folder` beside the simulation's figure. (e) Move the store into `sieve_player` and queue the
-  slices: the held file, then the walks' results. Then STOP for him to try the player, before
-  the memo is touched. (f) Code beside the key, once he has answered. (g) The whole-file
-  footage hash.
+- Next action, in order: (a) read `held.py`, `heldwalks.py` and how `walk.py` and `worker.py`
+  hand a walk's results on, enough to write down the layer between a walk and the store: what
+  a walk puts (a node's rows over a range, each row exact or the window's by "Windows are best
+  effort" below), what it asks, and where per-node chunk grids go in an entry's name. Write
+  that as a short section here before any code. (b) Move `store.py` and `folder.py` into
+  `sieve_player` with `folder_check.py`'s seams as tests and the window-against-full rule as
+  an invariant test, and one real walk through it beside the simulation's figure. (c) Queue
+  the slices: the held file onto it, then the walks' results; proxies for a loop that does not
+  fit after those. Then STOP for him to try the player, before the memo is touched. (d) Code
+  beside the key, once he has answered. (e) The whole-file footage hash.
+- Done since the second adversary: its twelve items mended and its scripts run again; the
+  contract's section "What is exact and what is a window's"; the simulation's window walk
+  and its oracle; a loop priced as planes and as proxies; a bake tried twice.
+- For him at the stop, none blocking: code beside the key (below); a csv written from a
+  window's card is the window's; `walked_rows` merges runs by row and feeds a walk; the
+  encoder's version is not in a cut file's key; an untimed window is not widened by reach and
+  one below a period is; a Graph driven without a window does not load a selector's file and
+  the plan quietly drops the cut that raises (`plan.py:325`, run 7's word, unchecked).
 - `sim/folder.py` is the disk of `store.py` over real files: a header of length and crc32, a
   write flushed before its rename, a truncated file counted absent, Windows' refusals passed
   over, the lock a folder made and removed, the bytes used walked afresh under the lock.
@@ -52,7 +59,7 @@ this file where they differ.
   passes corrected two of my claims. Not for searching, not for judging a design.
 - Run the simulation: `.venv/Scripts/python.exe docs/playground/sim/sim.py 150` (torture, a line
   a scheme) and `... sim.py prices 1080p [profile]` (the table below), a few seconds each.
-- Counters: queued runs 6 of 25, all six landed (his figure, 2026-11-21). No cap on design cycles, by the same word: a
+- Counters: queued runs 7 of 25, all seven landed (his figure, 2026-11-21). No cap on design cycles, by the same word: a
   cycle on the simulation is run when a slice raises a question whose answer would change it.
 - Context: `bash ~/.claude/tools/context-used.sh 300` prints what is left before the auto-compact
   window (300k by his `/autocompact` on 2026-11-21). Bring this file up to date before a step
@@ -404,6 +411,15 @@ of the whole clip, and no walk of a window, which is what the player does most. 
 tracker's row makes every chunk before it exactly, which the player does not and he does not
 want.
 
+Run 7 tried the rule on the tree (`docs/findings/window-against-full.md`): of 39 tools 38 hold
+and `file` is skipped; smooth differs at exactly the rows its (2, 2) reaches out of the window
+and matches where the window touches the clip's start. What it does not show, in its own
+words: a frame tool cannot fail it, a read past its reach raising at `graph.py:273`; an
+unbounded side allows every row, so track, kinematics, tracks-filter and resolve are not
+tested, and the last three with background and file declare no reach at all, which the
+registry takes as unbounded; nothing enforces a series tool's reach. Under the rule those are
+the window's unless the walk covered their extent, which is what he wants of a tracker.
+
 Withdrawn: asking a reach tool's input for rows either side so that a window is exact. He does
 not want a window exact. The ledger experiment counts this as a second miss no claim named,
 caught by him.
@@ -565,6 +581,8 @@ with its own limit stated. Run them in one message, in parallel.
 
 | # | What | Wall | Context, turns | Verdict |
 |---|---|---|---|---|
+| 7 | One-off over every registered tool: a window's walk against the clip's, row by row, against declared reach (`docs/findings/window-against-full.md`) | about 8m | not read | On brief and frank about what its 38 HOLDS do not show; corrected my prompt (five tools declare no reach) and found two things about how a walk is driven that I did not know. A one-off asked to say what it could not determine says it. |
+| 6 | Second adversary (Opus) against `sim/folder.py`, told to use real processes, kills and a held lock, and to time the calls | 15m 26s | not read | Twelve items, eleven proved with scripts kept outside the repo, which I ran again after mending; the scripts being kept is what made the mending checkable. Worth its place before anything is moved onto the folder. |
 | 5 | Adversary (Opus) against the contract, `store.py` and `sim.py`, told to prove each break in a scratch copy and to use Haiku for single claims | 11m 44s | not read | The best run so far: eight proved breaks with sequences and line numbers, four of them holes in my own oracles; contract lines nothing checks; where the simulated disk flatters. Worth repeating before each thing I am about to trust: the on-disk store, then the first migrated holder. |
 | 4 | Slice 2: `budget.py`, each holder's limit shared out of half the RAM, today's constants as ceilings | 2m 01s | not read | Clean, 39 lines, three tests, said its own choices: an env override can still push the sum past the total; `walk` reads the real machine at import, so a test leaning on the default stack sees less on a machine under about 21 GB; `tests/test_graph.py` restores `STACK_BYTES` to a literal. Kept. |
 | 3 | Slice 1: code digest in `key_of`, footage print sampled at 32 offsets | 2m 21s | not read | Did what was asked and found what I had not: the ticked decision above, and two docs made false (`docs/spec/held-results.md:25`, a finding's line 117). The key half taken back out by me. The prompt's "say what your change made false" line is what surfaced it; keep it in every slice. |

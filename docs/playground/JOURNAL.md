@@ -25,15 +25,18 @@ this file where they differ.
   print, proxies unseen); the store is sound and unused; the first framing, three holders
   as one problem, was wrong and his check-ins found it, not my process. The published path
   is safe already by brute force: a bare walk reuses nothing.
-- Next action, in order: (a) read run 9 (the window-against-full rule as a test over the
-  registry, and an explicit unbounded reach on the tools that declared none), run the suite.
-  (b) The proxy check's hole: `loop_spills` sets the loop's rows of the one painted plane
-  against the memo's limit and ignores the other planes the memo holds a row; a video node's
-  frame is the decoder cache's. (c) The store under the exact path only: `store.py` and
-  `folder.py` into `sieve_player`, a full walk's tables (detect first) put and asked under
-  keys that hold the tool's code digest, so a second bare walk reuses them; `held.py` and
-  his ticked decision untouched; `folder_check.py`'s seams as tests. Read `bare.py` and how a
-  walk asks a table node before designing it. (d) The whole-file footage hash.
+- Run 9 is in (`3eca29de`): `tests/test_window_against_full.py` over the registry, 40 cases,
+  suite 326 passed. A tool with a wrong or missing reach fails by name with the rows.
+- Next action, in order: (a) the proxy check's hole: `loop_spills` in `window.py` sets the
+  loop's rows of the one painted plane against the memo's limit and ignores the other planes
+  the memo holds a row; a video node's frame is the decoder cache's. Small; mine or a run's.
+  (b) The store under the exact path, as "The exact path" below ends: first write the layer
+  between `Graph._compute` and the store as a short section here (the address, the chunk
+  packing a bare walk fills and reads in order, which nodes are put), then `store.py` and
+  `folder.py` into `sieve_player` with `folder_check.py`'s seams as tests, then a queued
+  slice wiring it for bare walks only, behind the cost rule, with a test that a second bare
+  walk gives the same results as the first and computes no detect row. (c) The whole-file
+  footage hash. `held.py` and his ticked decision stay untouched.
 - For him besides: `tests/test_graph.py::test_events_carry_start_thread_and_cpu...` failed
   once in run 8's first full run and passed after; run 8 says it asserts wall time and is not
   marked `simulation`. By CLAUDE.md that is a defect in the test or a race, his to settle.
@@ -70,7 +73,7 @@ this file where they differ.
   passes corrected two of my claims. Not for searching, not for judging a design.
 - Run the simulation: `.venv/Scripts/python.exe docs/playground/sim/sim.py 150` (torture, a line
   a scheme) and `... sim.py prices 1080p [profile]` (the table below), a few seconds each.
-- Counters: queued runs 9 of 25, the ninth in flight when this was written (his figure, 2026-11-21). No cap on design cycles, by the same word: a
+- Counters: queued runs 9 of 25, all nine landed (his figure, 2026-11-21). No cap on design cycles, by the same word: a
   cycle on the simulation is run when a slice raises a question whose answer would change it.
 - Context: `bash ~/.claude/tools/context-used.sh 300` prints what is left before the auto-compact
   window (300k by his `/autocompact` on 2026-11-21). Bring this file up to date before a step
@@ -512,6 +515,11 @@ is therefore not where I will stop; I stop after run 8 for him to try the loop, 
   window seeks and a full walk steps).
 - A stopped bare walk keeps nothing (`window.py:1585`).
 
+Tried the same evening (a script in the scratchpad, not kept): 60 rows reached by a fresh
+decoder's seek and 60 by one decoder jumping about, against the same rows read in order, on
+the crossings clip (250 rows) and on `video-tests/00000.MTS` (400 rows): none differ. So a
+window's decoded frame is the full walk's, on these two files.
+
 What I take from it for the store under the exact path: the address is the memo's, with the
 code print and the library versions added; rows are packed a chunk at a time by the layer
 between `_compute` and the store, which a bare walk fills in order and a later one reads in
@@ -657,6 +665,7 @@ with its own limit stated. Run them in one message, in parallel.
 
 | # | What | Wall | Context, turns | Verdict |
 |---|---|---|---|---|
+| 9 | Slice 4: the window-against-full rule as a test over the registry, explicit reach on the five tools that had none | about 6m | not read | Did more than asked and said so: the check that a declared reach is not larger than the true one is stricter than mine, a tool listed as undrivable that becomes drivable fails, and it mutated smooth's reach both ways to show the messages. Named one declaration looser than the truth (kinematics after, 0 not None) and left it. This is the slice nearest his goal. |
 | 8 | Slice 3: a looping window's rows the memo let go are painted from display proxies, with the outcome and what must hold stated and the design left to it | about 7m | not read | 110 lines in `window.py`, two seam tests, suite green. It found what my prompt had wrong and said so: an overlay cannot be baked into the jpeg because each plane is shown over a running maximum, pausing never re-showed the row, and my 70 KB is 490 KB on noise. I read the whole diff; the hole it named in its own fit check is real. A prompt that states outcomes and asks for contradictions gets a better design than one that states a design. |
 | 7 | One-off over every registered tool: a window's walk against the clip's, row by row, against declared reach (`docs/findings/window-against-full.md`) | about 8m | not read | On brief and frank about what its 38 HOLDS do not show; corrected my prompt (five tools declare no reach) and found two things about how a walk is driven that I did not know. A one-off asked to say what it could not determine says it. |
 | 6 | Second adversary (Opus) against `sim/folder.py`, told to use real processes, kills and a held lock, and to time the calls | 15m 26s | not read | Twelve items, eleven proved with scripts kept outside the repo, which I ran again after mending; the scripts being kept is what made the mending checkable. Worth its place before anything is moved onto the folder. |

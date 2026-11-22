@@ -90,7 +90,7 @@ class Keeper:
         at = (e.raw_key, None if cut.extent.rows is None else tuple(cut.extent.rows), e.reach)
         if at not in self.addresses:
             try:
-                prints = sorted({registry.code_print(t, {}) for t in self._upstream(plan, e)}, key=str)
+                prints = sorted({registry.imported_print(t) or registry.code_print(t, {}) for t in self._upstream(plan, e)}, key=str)
                 self.addresses[at] = hashlib.sha1(repr((at, prints, self.libraries)).encode()).hexdigest()[:24] + f"-{CHUNK}rows"
             except Exception:
                 self.addresses[at] = None

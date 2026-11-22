@@ -1395,11 +1395,7 @@ class PlayerWindow(QMainWindow):
         return as_given(self.graph.snapshot(), part)
 
     def _take_runs(self, runs):
-        """Holds `runs` and no other. One of no cut that begins past row 0 is a window's, which a
-        held file of an older player has: it goes with the window's own."""
-        of_window = [run for run in runs if run.cut is None and run.start]
-        self.runs.take([run for run in runs if not (run.cut is None and run.start)])
-        self.window_runs.take(of_window)
+        self.runs.take(runs)
         self._of_cuts = (None, None, {})
 
     def _show_held(self, moved=None, changed=None):

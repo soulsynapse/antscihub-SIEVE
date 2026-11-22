@@ -44,9 +44,8 @@ overrule them. His freeing me from a spec's decision endorses neither side of it
 
 ## What checks the work
 
-- `sim/sim.py` is a model of the store's design with a seeded user, a simulated machine and
-  prices from `figures.md`. It finds flaws in a design. It shares no code with the player's
-  plan, worker or window, so it finds none of theirs, and it has no workload of many cuts.
+- `sim/miniature.py`, the player itself over a clip made for it, says which of O7 to O10 hold.
+  It writes nothing outside a temp folder. It does not see real threads, decode or disk.
 - What caught real defects: an adversary told to prove a break in a scratch copy; an unanchored
   reader tracing one path; a profile of the real document
   (`docs/findings/experiments/2026-11-21-the-gui-thread-while-the-clip-lane-walks-periods.py`).
@@ -62,9 +61,7 @@ for it, the worker's turns taken on one thread, and it says which of O7 to O10 h
 found on a real document is pinned there. An alternative holder goes behind the seam the held
 runs sit behind and is driven against the same checks.
 
-1. O9: a window's walk is held as a run (`PlayerWindow._window_ready`) and served to the clip
-   walk. Either a window's runs serve the window alone and are never written, or they are not
-   held.
+1. Which of the places results are held in are apart for no reason, and can be one.
 2. O10: a cutting node cut by a result on a wire makes no cut until a run of that result over
    the whole clip is held (`heldwalks.gate_result`), so the window shows nothing below it.
 3. The held runs onto the store behind that seam, driven against today's. Goal 2 moves here.

@@ -1,9 +1,7 @@
 # The contract: one address, one store, one ask
 
 The design, each line an assertion that holds of the thing once built; most of it is not built,
-and a line here is no evidence about the tree. `docs/playground/sim/` is this contract in code, and
-where the two differ the simulation is right and this file is behind. A line marked (open) is a
-choice not yet settled.
+and a line here is no evidence about the tree. A line marked (open) is a choice not yet settled.
 
 ## What is exact and what is a window's
 

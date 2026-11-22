@@ -492,7 +492,8 @@ class PlayerWindow(QMainWindow):
         self._clip_asked = False                  # a clip walk was asked for and has not finished or been stopped
         self._of_plan = None                      # the Plan _of_cuts was answered of
         self._of_cuts = (None, None, {})          # (the walked nodes' chain and the count, held_periods, node -> listed_cuts) as _show_held last answered them; the first None once the runs are taken whole
-        self.runs = held.Runs(HELD_BYTES, self._result_bytes) # the held runs, the file's and this session's walks'
+        self.runs = held.Runs(HELD_BYTES, self._result_bytes) # the held runs, the file's and this session's walks of the clip and its cuts
+        self.window_runs = held.Runs(HELD_BYTES // 8, self._result_bytes)   # the window's own walks: they serve the window again and nothing else reads them
         self._spared = False                      # the window's results are a held run's, and the worker runs no chain over it
         self._clip_ended = False                  # the clip walk told of its last row and its results have not yet come
         self._clip_rests = False                  # the clip walk last told of every row of its range done: the clip's last, or the one it was stopped at
@@ -1365,10 +1366,11 @@ class PlayerWindow(QMainWindow):
 
     def _held_over(self, chain):
         """The chain's results over the window as the runs serve them: those of the clip's walk, or
-        else of the window's own, from its first row to its last; None with neither."""
+        else of a walk from the window's first row to its last, a window's own before it; None
+        with none."""
         s, n = self.window_
-        got = self.runs.over(s, n, chain, (0, self.count))
-        return got if got is not None else self.runs.over(s, n, chain, (s, s + n))
+        asks = ((self.runs, (0, self.count)), (self.runs, (s, s + n)), (self.window_runs, (s, s + n)))
+        return next((got for runs, walk in asks if (got := runs.over(s, n, chain, walk)) is not None), None)
 
     def _ask_window(self, by=ASKED):
         """Asks the worker for the window: spared the chain where the runs serve it, by _held_over,
@@ -1378,7 +1380,7 @@ class PlayerWindow(QMainWindow):
         s, n = self.window_
         chain = self._chain()
         got = self._held_over(chain)
-        part = {} if got is not None else self.runs.part(s, n, chain, (s, s + n))
+        part = {} if got is not None else self.runs.part(s, n, chain, (s, s + n)) or self.window_runs.part(s, n, chain, (s, s + n))
         self._spared, self._given = got is not None, bool(part)
         self.worker.set_window(s, n, self._spared, self._as_given(part), by)
         self.window_periods = window_periods(self.graph.snapshot(), self.runs, s, n)
@@ -1391,7 +1393,11 @@ class PlayerWindow(QMainWindow):
         return as_given(self.graph.snapshot(), part)
 
     def _take_runs(self, runs):
-        self.runs.take(runs)
+        """Holds `runs` and no other. One of no cut that begins past row 0 is a window's, which a
+        held file of an older player has: it goes with the window's own."""
+        of_window = [run for run in runs if run.cut is None and run.start]
+        self.runs.take([run for run in runs if not (run.cut is None and run.start)])
+        self.window_runs.take(of_window)
         self._of_cuts = (None, None, {})
 
     def _show_held(self, moved=None, changed=None):
@@ -1501,15 +1507,16 @@ class PlayerWindow(QMainWindow):
         return None if e is None else e.key
 
     def _window_ready(self, results, start, fps):
-        """The window walk's results, held as a run once they reach the window's last row; one that
-        arrives while a held run is shown is of a walk since left. A walk given held rows is not
-        held: its run would hold those rows a second time, and the window is stepped from them
-        again for the rest when it returns."""
+        """The window walk's results, held among the window's own once they reach the window's last
+        row: they serve the window when it returns, and no walk of the clip, cut or file is handed
+        them. One that arrives while a held run is shown is of a walk since left. A walk given
+        held rows is not held: its run would hold those rows a second time, and the window is
+        stepped from them again for the rest when it returns."""
         if self._spared:
             return
         self._series_ready(results, start, fps)
         if start == self.window_[0] and not self._given:
-            self._hold_run(start, self.window_[1], results)
+            self.window_runs.hold(start, self.window_[1], results, self._chain())
 
     def _series_ready(self, results, start, fps):
         self.results, self.result_start = results, start

@@ -50,13 +50,12 @@ def test_the_holders_a_player_and_a_bare_walk_build_take_no_more_than_the_plan(t
 def _built(folder, out):
     """Opens a player window over a small clip and walks it bare, and leaves at `out` [class, where
     it was built, bytes] of each results holder built: a Memo, a Decoder's cache, a held.Runs, a
-    result_keeper.Keeper that has a limit, a walk's stack, a display's proxies. The bare walk's
+    walk's stack, a display's proxies. The bare walk's
     Runs is the walk's output, sized 0 a run, and is left out."""
     from PySide6.QtWidgets import QApplication
 
     from sieve_player import bare, decoder, graph, held, store, walk, window
     from sieve_player import document as D
-    from sieve_player import result_keeper
     from tests.test_crop import clip
     from tools import count, detect, gray, threshold
 
@@ -64,8 +63,7 @@ def _built(folder, out):
     decoder.read_frame_times_ahead = lambda path, then=None: None
     window.PlayerWindow.ask_unsaved = lambda self: "discard"
     built = []
-    of = {graph.Memo: lambda o: o.limit, decoder.Decoder: lambda o: o.cache_limit, held.Runs: lambda o: o.limit,
-          result_keeper.Keeper: lambda o: getattr(o, "limit", None), walk._Walk: lambda o: walk.STACK_BYTES,
+    of = {graph.Memo: lambda o: o.limit, decoder.Decoder: lambda o: o.cache_limit, held.Runs: lambda o: o.limit, walk._Walk: lambda o: walk.STACK_BYTES,
           window.Display: lambda o: window.PROXY_BYTES}
     for cls, limit in of.items():
         def recorded(self, *args, _init=cls.__init__, _limit=limit, **kwargs):

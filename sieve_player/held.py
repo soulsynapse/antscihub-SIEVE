@@ -1,13 +1,11 @@
-"""A document's checkpoint, one append-only file beside it that opens it where it was left: the runs
-its walks made, the frame nodes' small rows its memo held, and the document as it stood. A run is a Run,
-(start, rows, {node: result}, bytes, cut, walked), a walk's results over `rows` rows from `start`
-inside a cut, what they hold, and each walked node's rows they were stepped over. The file is the
-stamp and then tagged records, each one pickle, and File pickles a run and a chunk of kept rows
-once however often it writes. Runs is the runs held and which of them a range
-is served from, told the chain as a Chain, a node's values in a cut listed as a Listed; `marked` is
-the nodes whose held results were made under other code than lies on disk. Imports nothing of
-sieve_player but cut; the window says when a run is held and written, and what the chain is; the
-kept rows are handed in by a callable and lent out as File.chunks, never read here."""
+"""A document's checkpoint, one file beside it that opens it on the runs its walks made, good under
+its keys alone. A run is a Run, (start, rows, {node: result}, bytes, cut, walked), a walk's results
+over `rows` rows from `start` inside a cut, what they hold, and each walked node's rows they were
+stepped over. The file is the stamp and then a record a run, and File pickles a run once however
+often it writes. Runs is the runs held and which of them a range is served from, a node at a time,
+told the chain as a Chain, and a node's values in a cut listed as a Listed; `marked` is the nodes
+whose held results were made under other code than lies on disk. Imports nothing of sieve_player
+but cut; the window says when a run is held and written, and what the chain now is."""
 import os
 import pickle
 from typing import NamedTuple
@@ -17,7 +15,7 @@ import numpy as np
 from .cut import read, reading
 
 EXT = ".checkpoint"
-VERSION = 9
+VERSION = 10
 SAMPLE = 256    # the most rows per_row pickles
 COPY = 1 << 20  # the most bytes of a kept record in memory as the file is made again
 
@@ -84,152 +82,97 @@ def _rows(v):
     return out
 
 
-RUN, ROWS, DOCUMENT = "run", "rows", "document"     # a record's tag: a Run; (address key, chunk, {row: value}) of kept rows; a document's to_dict()
-
-
-def _put(f, record):
-    """`record` pickled at `f`'s position; its length, 0 where the value refuses pickle and leaves
-    nothing there."""
-    was = f.tell()
-    try:
-        pickle.dump(record, f, protocol=pickle.HIGHEST_PROTOCOL)
-    except (OSError, MemoryError):      # the machine's refusal and not the value's: the record is tried again
-        raise
-    except Exception:       # a value pickle refuses, which raises whatever the value does
-        f.seek(was)
-        f.truncate()
-    return f.tell() - was
-
-
-def _record(run):
-    start, rows, results, size, *more = run
-    cut, walked = (*more, None, None)[:2]
-    return (RUN, (start, rows, {nid: {k: _flat(v, rows) for k, v in r.items()} for nid, r in results.items()}, size, cut,
-                  None if walked is None else tuple((*w[:2], _flat(w[2], rows)) for w in walked)))
-
-
-def _read_record(tag, body):
-    """What a record of `tag` holds: a Run, (address key, chunk, rows), or a document's dict;
-    ValueError for a tag of no form here."""
-    if tag == RUN:
-        start, rows, results, size, cut, walked = body
-        return Run(start, rows, {nid: {k: _rows(v) for k, v in r.items()} for nid, r in results.items()}, size,
-                   cut, None if walked is None else tuple((*w[:2], _rows(w[2])) for w in walked))
-    if tag == ROWS:
-        key, chunk, rows = body
-        if isinstance(key, str) and isinstance(chunk, int) and isinstance(rows, dict):
-            return key, chunk, rows
-    if tag == DOCUMENT and isinstance(body, dict):
-        return body
-    raise ValueError(f"a record tagged {tag!r}")
+def _dump(f, runs):
+    """A record for each of `runs` at `f`'s position; where each lies, (offset, length), a run
+    that does not pickle leaving no record and lying at length 0."""
+    at = []
+    for start, rows, results, size, *more in runs:
+        cut, walked = (*more, None, None)[:2]
+        record = (start, rows, {nid: {k: _flat(v, rows) for k, v in r.items()} for nid, r in results.items()}, size, cut,
+                  None if walked is None else tuple((*w[:2], _flat(w[2], rows)) for w in walked))
+        was = f.tell()
+        try:
+            pickle.dump(record, f, protocol=pickle.HIGHEST_PROTOCOL)
+        except (OSError, MemoryError):      # the machine's refusal and not the value's: the run is tried again
+            raise
+        except Exception:       # a value pickle refuses, which raises whatever the value does
+            f.seek(was)
+            f.truncate()
+        at.append((was, f.tell() - was))
+    return at
 
 
 class File:
-    """The checkpoint at `path`. It knows where each record it has read or written lies, a run's by
-    the run's identity and a chunk's by its address, so the interpreter's time in a write is what
-    the file has not had and never what it has: each is pickled once. `limit` bounds the bytes of
-    the kept-rows records together, None none. After `load`, `chunks` is (address key, chunk) to
-    {row: value} of the kept rows read, and `document` the last document record's dict, or None.
-    One thread at a time may call it."""
+    """The checkpoint at `path`. It knows where the record of each run it has read or written
+    lies, by the run's identity, so the interpreter's time in a write is the runs the file has not
+    had and never those it has: a run is pickled once. One thread at a time may call it."""
 
-    def __init__(self, path, limit=None):
-        self.path, self.limit = path, limit
-        self._had = None        # [(tag, run or (key, chunk) or None, offset, length)], the records at path in their order; None when what is there is not known to be good
+    def __init__(self, path):
+        self.path = path
+        self._had = None        # [(run, offset, length)], the records at path in their order; None when what is there is not known to be good
         self._end = 0           # where the last good record ends: what lies past it is a write cut short
-        self._full = False      # a chunk was refused for `limit`: `kept` is not asked again
-        self.chunks, self.document = {}, None
 
     def load(self):
-        """The runs at the path, up to the first record that does not read or has a tag of no
-        form here; [] for a file that is absent, does not read or begins with no stamp of this form."""
-        self._had, had, self.chunks, self.document = None, [], {}, None
+        """The runs at the path, up to the first record that does not read; [] for a file that is
+        absent, does not read or begins with no stamp of this form."""
+        self._had, had = None, []
         try:
             with open(self.path, "rb") as f:
                 if not _stamped(pickle.load(f)):
                     return []
                 self._had, self._end = had, f.tell()
                 while True:
-                    tag, body = pickle.load(f)
-                    got = _read_record(tag, body)
-                    if tag == ROWS:
-                        self.chunks[got[:2]] = got[2]
-                    elif tag == DOCUMENT:
-                        self.document = got
-                    had.append((tag, got[:2] if tag == ROWS else None if tag == DOCUMENT else got, self._end, f.tell() - self._end))
+                    start, rows, results, size, cut, walked = pickle.load(f)
+                    run = Run(start, rows, {nid: {k: _rows(v) for k, v in r.items()} for nid, r in results.items()}, size,
+                              cut, None if walked is None else tuple((*w[:2], _rows(w[2])) for w in walked))
+                    had.append((run, self._end, f.tell() - self._end))
                     self._end = f.tell()
         except Exception:       # the file's end, or a truncated or foreign pickle, which raises whatever its bytes spell
-            return [run for tag, run, _, _ in had if tag == RUN]
+            return [run for run, _, _ in had]
 
-    def write(self, runs, kept=None, document=None):
-        """Leaves `runs` at the path in their order, those the file has first, with every chunk of
-        kept rows it has, those `kept` hands that it has not, and `document`, a document's dict, or
-        the last it has with None. `kept(had)` is an iterable of (address key, chunk, rows), none of
-        `had`, a set of (key, chunk); it is taken from until a chunk would pass `limit`, which is
-        then left out with every one after it and `kept` asked no more, and nothing had is let go
-        for room. The new are
-        added behind the file's when it has every run it had, and else the file is made again,
-        whole or not at all, the records kept copied as bytes; of no runs it leaves a file that
-        loads as none. Returns the runs that did not pickle: each is left out of the file and
-        counted as had, so it is tried once and costs the others nothing; so is a chunk. OSError
-        when the file cannot be written and MemoryError when a record cannot be pickled for want of
-        room, the file then taken as unknown and the next write made of every run."""
+    def write(self, runs):
+        """Leaves `runs` at the path in their order, those the file has first: the new are added
+        behind the file's when it has no other, and else the file is made again, whole or not at
+        all, the records of the runs kept copied as bytes; of no runs it leaves a file that loads
+        as none. Returns the runs that did not pickle:
+        each is left out of the file and counted as had, so it is tried once and costs the others
+        nothing. OSError when the file cannot be written and MemoryError when a run cannot be
+        pickled for want of room, the file then taken as unknown and the next write made of every
+        run."""
         had, self._had = self._had, None
         asked = {id(r) for r in runs}
-        ran = [h for h in had or [] if h[0] == RUN]
-        keep = [h for h in had or [] if h[0] == ROWS or (h[0] == RUN and id(h[1]) in asked)]
-        has = {id(h[1]) for h in keep if h[0] == RUN}
+        kept = [(run, at, n) for run, at, n in had or [] if id(run) in asked]
+        has = {id(run) for run, _, _ in kept}
         new = [r for r in runs if id(r) not in has]
-        doc = self.document if document is None else document
-        if had is not None and len(has) == len(ran):
+        if had is not None and len(kept) == len(had):
             with open(self.path, "r+b") as f:
                 f.seek(self._end)
                 f.truncate()
-                came = self._new(f, new, keep, kept, None if doc == self.document else doc)
+                at = _dump(f, new)
                 end = f.tell()
-            records = had + came
         else:
-            part, moved = f"{self.path}.part", []
+            part, kept_at = f"{self.path}.part", []
             try:
                 with open(part, "wb") as f:
                     pickle.dump(STAMP, f, protocol=pickle.HIGHEST_PROTOCOL)
-                    if keep:
+                    if kept:
                         with open(self.path, "rb") as old:
-                            for tag, what, was, n in keep:
+                            for _, was, n in kept:
                                 old.seek(was)
-                                moved.append((tag, what, f.tell(), n))
+                                kept_at.append((f.tell(), n))
                                 while n and (piece := old.read(min(n, COPY))):
                                     n -= f.write(piece)
                                 if n:
                                     raise OSError(f"{self.path} ends inside a record it had")
-                    came = self._new(f, new, keep, kept, doc)
+                    at = _dump(f, new)
                     end = f.tell()
                 os.replace(part, self.path)      # the old file is closed by here: an open reader refuses the replace on Windows
             finally:
                 if os.path.exists(part):
                     os.remove(part)
-            records = moved + came
-        self._had, self._end, self.document = records, end, doc
-        return [what for tag, what, _, n in came if tag == RUN and not n]
-
-    def _new(self, f, runs, had, kept, document):
-        """The records of `runs`, of what `kept` hands beside the chunks of `had`, and of `document`
-        unless None, at `f`'s position, as `_had` lists them."""
-        came = [(RUN, run, f.tell(), _put(f, _record(run))) for run in runs]
-        used = sum(n for tag, _, _, n in had if tag == ROWS)
-        if kept is not None and not self._full:
-            for key, chunk, rows in kept({what for tag, what, _, _ in had if tag == ROWS}):
-                was = f.tell()
-                n = _put(f, (ROWS, (key, chunk, rows)))
-                if self.limit is not None and used + n > self.limit:
-                    f.seek(was)
-                    f.truncate()
-                    self._full = True
-                    break
-                used += n
-                came.append((ROWS, (key, chunk), was, n))
-        if document is not None:
-            came.append((DOCUMENT, None, f.tell(), _put(f, (DOCUMENT, document))))
-        return came
+            kept = [(run, *where) for (run, _, _), where in zip(kept, kept_at)]
+        self._had, self._end = kept + [(run, *where) for run, where in zip(new, at)], end
+        return [run for run, (_, n) in zip(new, at) if not n]
 
 
 class Chain(NamedTuple):

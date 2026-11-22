@@ -5,9 +5,7 @@ window starts it and reads its stdout, one JSON object a line: `{"done", "total"
 land, `{"count"}` where the stream ended short, `{"period", "of"}` as cuts are walked, then one of
 `{"results": path}`, `{"refused": why}` or `{"failed": [row, node, text]}`. The file pickles (the
 clip's results, their first row, fps, [(a cut's results, its first row, the cut as
-heldwalks.period_run takes it), ...] as walked, the frame nodes' small rows its memo still holds, as
-result_keeper.Keeper.take takes them). The walk is walk._Walk's, driven on this thread. Nothing else
-of the walk is left on disk: the player's checkpoint carries the rows.
+heldwalks.period_run takes it), ...] as walked). The walk is walk._Walk's, driven on this thread.
 """
 import json
 import os
@@ -69,7 +67,7 @@ def main(path):
         return gate_result(runs, wired.src, key, within, footage.count) if wired else None
 
     footage = Decoder(j["video"], cache_bytes=HOLD)
-    g = Graph(doc, footage, tools, memo_bytes=HOLD, keeps=True, cut_result=cut_result)
+    g = Graph(doc, footage, tools, memo_bytes=HOLD, cut_result=cut_result)
     g.sync()
     p = g.snapshot()
     if not g.fed(p.walk):
@@ -132,9 +130,8 @@ def main(path):
     except Exception as e:
         say(failed=[leg.start + leg.i, getattr(e, "sieve_node", ""), f"{type(e).__name__}: {e}"])
         return 1
-    rows = {(key, chunk): got for key, chunk, got in g.keeper.kept(short=True)}
     with open(j["out"], "wb") as f:
-        pickle.dump((results, start, fps, periods, rows), f, protocol=pickle.HIGHEST_PROTOCOL)
+        pickle.dump((results, start, fps, periods), f, protocol=pickle.HIGHEST_PROTOCOL)
     say(results=j["out"])
     return 0
 

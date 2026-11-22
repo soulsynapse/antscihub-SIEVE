@@ -6,7 +6,6 @@ changed; the window carries the change to the runtime, built on every load of a 
 re-synced on every change, and carries the runtime's results and standings back to the widgets.
 The display reads the memo and never waits on the decoder. It opens on whatever the document names, or empty, and never prompts.
 """
-import functools
 import json
 import os
 import pickle
@@ -77,11 +76,11 @@ DOCUMENT_SUFFIX = "json"
 DOCUMENT_FILTER = f"SIEVE document (*.{DOCUMENT_SUFFIX});;All (*)"
 
 
-def _save_held(file, runs, kept, document, failed):
+def _save_held(file, runs, failed):
     """held.File.write on the writer's thread, where a failure can only be said on stderr;
     `failed` is set when the file did not land."""
     try:
-        for start, rows, *_ in file.write(runs, kept, document):
+        for start, rows, *_ in file.write(runs):
             print(f"SIEVE {time.strftime('%H:%M:%S')}: the run of {rows} rows from {start} does not pickle and is not in {file.path}", file=sys.stderr)
     except Exception as e:
         failed.set()
@@ -500,7 +499,7 @@ class PlayerWindow(QMainWindow):
         self._clip_ended = False                  # the clip walk told of its last row and its results have not yet come
         self._clip_rests = False                  # the clip walk last told of every row of its range done: the clip's last, or the one it was stopped at
         self._given = False                       # the window walk was given held results for some of the chain and steps the rest
-        self._unwritten = False                   # a run was held, or the document saved, since the checkpoint was written
+        self._unwritten = False                   # a run was held since the checkpoint was written
         self._file = None                         # the held.File the runs were read from or last written to; the writer's thread's while that lives
         self._writer = None                       # the thread writing the checkpoint, or the last that did
         self._write_failed = threading.Event()    # the last writer's file did not land: the next write carries its runs
@@ -653,6 +652,7 @@ class PlayerWindow(QMainWindow):
         path = path or self.doc.path
         if not path:
             return self._save_as()
+        was = self.doc.path
         try:
             document.save(self.doc, path)
         except OSError as e:
@@ -660,7 +660,7 @@ class PlayerWindow(QMainWindow):
             return False
         self._written = self._text()
         self._note()
-        self._unwritten = True      # the checkpoint holds the document as saved
+        self._unwritten |= was != self.doc.path
         self._write_held(wait=True)
         self._retitle()
         return True
@@ -1124,12 +1124,7 @@ class PlayerWindow(QMainWindow):
         decoder_module.STORE = store.folder
         decoder_module.read_frame_times_ahead(path, lambda rows, path=str(path): self.framesCounted.emit(path, rows))     # the first seek would wait on it: docs/findings/2026-11-15-a-file-whose-times-do-not-count-its-rows.md
         self.stream = Emitter()
-        self._file = held.File(held.path_for(self.doc.path), HELD_BYTES) if self.doc.path else None
-        loaded = self._file.load() if self._file is not None else []
-        self.graph = Graph(self.doc, decoder, self.tools, stream=self.stream, cut_result=self._cut_result, memo_bytes=budget.here()["memo"], keeps=True)
-        if self._file is not None:
-            self.graph.keeper.lend(self._file.chunks)
-            self._file.chunks = {}      # the memo holds them, and lets them go as it does its own
+        self.graph = Graph(self.doc, decoder, self.tools, stream=self.stream, cut_result=self._cut_result, memo_bytes=budget.here()["memo"])
         # the one line a report of this video's run needs beside the log's tracebacks
         print(f"SIEVE {time.strftime('%H:%M:%S')}: opened {path}: {decoder.width}x{decoder.height} at {decoder.fps:.3f} fps, "
               f"{decoder.count} rows claimed, luma plane {'read' if decoder.luma else 'converted'}; "
@@ -1165,7 +1160,8 @@ class PlayerWindow(QMainWindow):
         self.timeline.setEnabled(True)
         self.worker.start()
         self.sync()
-        self._take_runs(loaded)
+        self._file = held.File(held.path_for(self.doc.path)) if self.doc.path else None
+        self._take_runs(self._file.load() if self._file is not None else [])
         self._recut()
         selected, window = recent.view_of(recent.views_beside(self.noted), self.doc.path) if self.noted and self.doc.path else (None, None)
         s, n = window or (0, min(self.count, round(10 * self.fps)))
@@ -1595,22 +1591,20 @@ class PlayerWindow(QMainWindow):
                 if not self._bare_stands():
                     return
                 with open(said["results"], "rb") as f:
-                    results, start, fps, periods, rows = pickle.load(f)
+                    results, start, fps, periods = pickle.load(f)
                 self._end_bare(f"bare: the clip in {clock(took)}, {getattr(self, '_bare_rate', 0.0):.0f} rows a second"
                                + (f"; {', '.join(results)} read back" if results else "")
                                + (f", and {len(periods)} periods" if periods else ""))
-                self._take_bare(results, start, fps, periods, rows)
+                self._take_bare(results, start, fps, periods)
             elif "refused" in said:
                 self._end_bare(f"bare: {said['refused']}")
             elif "failed" in said:
                 row, nid, text = said["failed"]
                 self._end_bare(f"bare: {nid or 'a tool'} raised at row {row}: {text}")
 
-    def _take_bare(self, results, start, fps, periods, rows):
+    def _take_bare(self, results, start, fps, periods):
         """What a bare walk left, as bare.py's file has it, is held as a clip walk's is: the clip's
-        results at once, so the cuts they make are the plan's before each cut's own are held; and
-        its small rows are lent to the memo through the keeper, for the checkpoint to carry."""
-        self.graph.keeper.take(rows)
+        results at once, so the cuts they make are the plan's before each cut's own are held."""
         if results:
             self._clip_ended = True
             self._clip_ready(results, start, fps)
@@ -1716,12 +1710,9 @@ class PlayerWindow(QMainWindow):
 
     def _write_held(self, wait=False):
         """A clip walk's results that stand are held as a run, and the runs held since the checkpoint
-        was written go into it when the document has been saved, with the keeper's whole chunks the
-        file lacks and the document as it stands, on a thread of their own, which pickles only what
-        the file has not had; `wait` returns once the file has landed. A save and the video's close
-        wait, and they write the chunks short of their rows too, and a close writes where the keeper
-        has a chunk no write took though no run was held. A write that did not land is made again
-        with the next, the one at the video's close included."""
+        was written go into it when the document has been saved, on a thread of their own, which
+        pickles only the runs the file has not had; `wait` returns once the file has landed. A
+        write that did not land is made again with the next, the one at the video's close included."""
         if self.graph is None:
             return
         stands, rows = self._stands()
@@ -1736,13 +1727,11 @@ class PlayerWindow(QMainWindow):
         if self._write_failed.is_set() and not self._writer.is_alive():
             self._write_failed.clear()
             self._unwritten = True
-        keeper = self.graph.keeper
-        if path and (self._unwritten or (wait and keeper.waiting())):
+        if path and self._unwritten:
             self._unwritten = False
             if self._file is None or self._file.path != path:
-                self._file = held.File(path, HELD_BYTES)       # the document saved under another name: nothing there is known to be this one's
-            self._writer = threading.Thread(target=_save_held, args=(self._file, list(self.runs), functools.partial(keeper.kept, short=wait),
-                                                                     json.loads(self._text()), self._write_failed), name="held")
+                self._file = held.File(path)       # the document saved under another name: nothing there is known to be this one's
+            self._writer = threading.Thread(target=_save_held, args=(self._file, list(self.runs), self._write_failed), name="held")
             self._writer.start()
             if wait:
                 self._writer.join()

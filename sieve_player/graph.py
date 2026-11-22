@@ -20,7 +20,6 @@ from .decoder import CLEAR, Decoder, EndOfStream, footage_print_by_stamp, lettin
 from .document import INPUT, VIDEO_TOOL, video_output
 from .registry import by_name, computed, names_cut_files, reach_of
 from .plan import _key, base_key, facts, plan
-from .result_keeper import Keeper
 from .stream import Emitter
 from .wire import ROWS, is_table, nbytes, own_bytes
 
@@ -91,13 +90,7 @@ def _address(e, row, cut=None):
     rows = None if c is None else c.extent.rows
     if e.static:
         return c, (e.raw_key, None, read_of_cut(rows, (None, None), 0))
-    return c, _memo_key((e.raw_key, rows, e.reach), row)
-
-
-def _memo_key(at, row):
-    """The memo key of a frame node's value at `row` that is not static, `at` its (raw key, cut's rows, reach)."""
-    raw_key, rows, reach = at
-    return raw_key, row, read_of_cut(rows, reach, row)
+    return c, (e.raw_key, row, read_of_cut(rows, e.reach, row))
 
 
 def _same(v, a):
@@ -135,17 +128,13 @@ class Memo:
     With `order` set it keeps some image-shaped entries back: `order()` is asked once the memo is
     past its limit, under the memo's lock, for a function of a key, None for an entry that goes as
     any does and a rank for one kept back, and they go as decoder.letting_go says, those kept back
-    only when no other is left and then until CLEAR of the limit is clear. Beside the entries it
-    holds rows lent, chunks of them under a key of their own that no `get` answers, counted to the
-    limit with the rest and let go, a chunk at a time and told to no `on_evict`, after every other
-    entry but the pinned."""
+    only when no other is left and then until CLEAR of the limit is clear."""
 
     def __init__(self, limit_bytes):
         self.limit = limit_bytes
         self.order = None
         self.bytes = 0
         self._big, self._small, self._pinned = OrderedDict(), OrderedDict(), {}     # pinned: key -> (owner, value)
-        self._lent = OrderedDict()      # key -> {row: value}
         self._sizes = {}        # key -> the bytes its entry was put with
         self._lock = threading.Lock()
         self.hits = self.misses = self.evictions = 0
@@ -180,7 +169,6 @@ class Memo:
         with self._lock:
             self._big.clear()
             self._small.clear()
-            self._lent.clear()
             self._pinned.clear()
             self._sizes.clear()
             self.bytes = 0
@@ -220,59 +208,18 @@ class Memo:
                     self.bytes -= n
                     self.evictions += 1
                     gone.append((ok, n))
-            self._let_go(gone)
-        if self.on_evict is not None:
-            for ok, n in gone:
-                self.on_evict(ok, n)
-
-    def lend(self, k, rows, size):
-        """`rows`, {row: value} of `size` bytes as wire.nbytes counts them, lent under `k` beside
-        any lent there before, a row it has kept as it was; whether the memo holds them once it
-        has made room."""
-        gone = []
-        with self._lock:
-            held = self._lent.setdefault(k, {})
-            new = {r: v for r, v in rows.items() if r not in held}
-            held.update(new)
-            n = size if len(new) == len(rows) else sum(nbytes(None, v) for v in new.values())
-            self._sizes[k] = self._sizes.get(k, 0) + n
-            self.bytes += n
-            self._let_go(gone)
-            lent = k in self._lent
-        if self.on_evict is not None:
-            for ok, n in gone:
-                self.on_evict(ok, n)
-        return lent
-
-    def lent(self, k, row=None):
-        """The value lent at `row` under `k`, or with None a copy of every row lent under it; None
-        where nothing is."""
-        with self._lock:
-            rows = self._lent.get(k)
-            if rows is None:
-                return None
-            self._lent.move_to_end(k)
-            return dict(rows) if row is None else rows.get(row)
-
-    def entries(self, keys):
-        """{key: entry} of `keys` that the memo holds as entries, not lent, as `get` would hand them
-        but counting nothing and moving none."""
-        with self._lock:
-            return {k: v for k in keys if (v := self._small.get(k, self._big.get(k))) is not None}
-
-    def _let_go(self, gone):
-        """Lets go while past the limit, the least lately read first, every image before the small
-        ones and those before the lent; under the lock, each entry let go added to `gone`."""
-        while self.bytes > self.limit:
-            src = self._big or self._small or self._lent
-            if not src:
-                break
-            ok, _ = src.popitem(last=False)
-            n = self._sizes.pop(ok)
-            self.bytes -= n
-            self.evictions += 1
-            if src is not self._lent:
+            while self.bytes > self.limit:
+                src = self._big or self._small
+                if not src:
+                    break
+                ok, _ = src.popitem(last=False)
+                n = self._sizes.pop(ok)
+                self.bytes -= n
+                self.evictions += 1
                 gone.append((ok, n))
+        if self.on_evict is not None:
+            for ok, n in gone:
+                self.on_evict(ok, n)
 
 
 class Cancelled(Exception):
@@ -412,12 +359,10 @@ class Readers:
 
 
 class Graph:
-    def __init__(self, doc, decoder, tools, memo_bytes=4 << 30, stream=None, cut_result=None, keeps=False):
+    def __init__(self, doc, decoder, tools, memo_bytes=4 << 30, stream=None, cut_result=None):
         """`stream` is the Emitter it emits through, one of its own when none is handed;
         `cut_result` is what `plan` is handed under that name at every sync, asked on the thread
-        that syncs. With `keeps`, `keeper` is a result_keeper.Keeper over the memo, asked a frame
-        node's row on a memo miss before its tool runs and told each row a tool made; None without.
-        One thread computes on a Graph that keeps."""
+        that syncs."""
         self.doc, self.decoder, self.cut_result = doc, decoder, cut_result
         self.tools = by_name(tools)
         self.readers = Readers()
@@ -425,7 +370,6 @@ class Graph:
         self._in_use = set()                # the files the cutting nodes' tools named at the last sync, see cut_files_named
         self._failing, self._failed = {}, {}    # node -> what its tool's cut_file or cut_files raised: at the sync under way, and at the last
         self.memo = Memo(memo_bytes)
-        self.keeper = Keeper(self.memo, _memo_key) if keeps else None
         self._lock = threading.Lock()
         self.halt = False                   # set by whoever is stopping the worker: every Frames read from then on raises Cancelled
         self.stream = stream or Emitter()
@@ -560,7 +504,8 @@ class Graph:
         self._shown_at = row
 
     def rests(self):
-        """This thread's lane's walk is at no row: it finished, was stopped, or begins again. Worker threads only."""
+        """This thread's lane's walk is at no row: it finished, was stopped, or begins again.
+        Worker threads only."""
         self._walks_at = {lane: row for lane, row in self._walks_at.items() if lane != self.stream.lane}
 
     def _row_order(self):
@@ -826,12 +771,11 @@ class Graph:
             v = self.memo.get((v.key, v.row, v.read), count=False)
         return v
 
-    def _memoized(self, mk, lent=None):
+    def _memoized(self, mk):
         """(the memo's entry under `mk`, the array it stands for): one hit where there is an array,
-        one miss where there is none, a reference whose store let the array go among them. With no
-        entry, the array is what `lent()` answers, the keeper's, where it is handed."""
+        one miss where there is none, a reference whose store let the array go among them."""
         got = self.memo.get(mk, count=False)
-        v = self._held(got) if got is not None or lent is None else lent()
+        v = self._held(got)
         self.memo.counted(v is not None)
         return got, v
 
@@ -865,7 +809,7 @@ class Graph:
                 ev[1], ev[2] = v.nbytes, v.shape
             v.setflags(write=False)
             return v if raw or e.band is None else banded(v, e.band)
-        got, v = self._memoized(mk, self.keeper and (lambda: self.keeper.ask(e, row, c)))
+        got, v = self._memoized(mk)
         if v is None:
             frames = Frames(self, plan, nid, e.srcs, e.src_key, e.types, row, c)
             with self.probe(nid, row, e.raw_key, reader) as ev:
@@ -887,8 +831,6 @@ class Graph:
                     v = frames.named(held) if isinstance(held, Ref) else held
             if not isinstance(got, Ref):
                 self.memo.put(mk, held, owner=e.raw_key if e.static else None, size=size)
-                if self.keeper is not None:
-                    self.keeper.made(e, row, c, held)
         elif self.stream.on_event is not None:
             self._hit(nid, 0)
         return v if raw or e.band is None else banded(v, e.band)

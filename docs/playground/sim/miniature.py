@@ -3,7 +3,8 @@ player to ask: O7, what one more cut in time costs does not grow with how many t
 bare walk and a clip walk hold the same; O9, nothing walked for the window is held, and a clip
 walk holds the same whatever the window walked first; O10, the window shows a line of every
 series node the document has, a clip walk made or not; O11, a document and its checkpoint taken to
-another folder and a results folder of nothing open where they were left.
+another folder and a results folder of nothing open where they were left; O12, O7's for the keeper:
+what a cut costs it in steps, writes, bytes, reads and lock takes does not grow with the cuts.
 
 The player's own window, worker, plan, held runs and tools, offscreen, over a clip of tiny frames
 made here whose gray cycles so that a banded `reduce` gates a `period` into one cut every PERIOD
@@ -16,9 +17,11 @@ steps a cut at the larger count pass GROWS times those at the smaller. The monit
 left out: the clock turns them, and what they cost a cut is not seen here. O8 to O11 are asked of
 clips of CHECKED cuts; the bare walk is bare.main's, in this process. No checkpoint is written but
 O11's, whose document is its own: detect below threshold, whose tables the keeper keeps, and size.
+O12 walks O7's gate and period with those three below the period, at O7's two counts, counting the
+keeper's Folder calls and the steps in result_keeper.py and result_store.py alone.
 
 Run: .venv/Scripts/python.exe -X utf8 docs/playground/sim/miniature.py [tree] [small large]
-`tree` is a checkout of the repository to drive, this one with none; `0 0` leaves O7 out. Exit 1
+`tree` is a checkout of the repository to drive, this one with none; `0 0` leaves O7 and O12 out. Exit 1
 where an oracle fails.
 With MINIATURE_WHY set to a function's name, the larger count is walked under cProfile as well and
 who called it is printed.
@@ -51,7 +54,7 @@ import cv2  # noqa: E402
 import numpy as np  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
-from sieve_player import bare, decoder, held, result_keeper, store, window  # noqa: E402
+from sieve_player import bare, decoder, held, result_keeper, result_store, store, window  # noqa: E402
 from sieve_player import document as D  # noqa: E402
 from sieve_player.registry import discover  # noqa: E402
 from sieve_player.stream import HAND  # noqa: E402
@@ -78,11 +81,15 @@ def clip(path, cuts):
     return str(path)
 
 
-def document(path, video):
+BELOW = (("below", "reduce", "period"), ("smooth", "smooth", "below"))
+KEPT_BELOW = (("mask", "threshold", "period"), ("detect", "detect", "mask"), ("size", "size", "detect"))    # O12's: detect's tables the keeper keeps
+
+
+def document(path, video, below=BELOW):
     doc = D.Document(video=video)
     doc.add_node(D.VIDEO_TOOL)
     for nid, tool, src, into in (("gray", "gray", D.VIDEO_TOOL, None), ("gate", "reduce", "gray", None), ("period", "period", "gray", None),
-                                 ("below", "reduce", "period", None), ("smooth", "smooth", "below", None), (None, None, "gate", "gate")):
+                                 *((n, t, s, None) for n, t, s in below), (None, None, "gate", "gate")):
         if tool is not None:
             doc.add_node(tool, (0.0, 100.0 * len(doc.nodes)), None, nid)
         doc.connect(src, nid or "period", *([into] if into else []))
@@ -104,11 +111,11 @@ def turned(win):
             act()
 
 
-def opened(name, cuts=CHECKED):
+def opened(name, cuts=CHECKED, below=BELOW):
     """A player on a clip of `cuts` cuts made under `name`, its first window walked."""
     folder = Path(SCRATCH) / name
     folder.mkdir()
-    win = window.PlayerWindow(document(folder / "doc.json", clip(folder / "v.avi", cuts)), "t", TOOLS)
+    win = window.PlayerWindow(document(folder / "doc.json", clip(folder / "v.avi", cuts), below), "t", TOOLS)
     if win.playing:
         win.toggle_play()
     turned(win)
@@ -304,6 +311,92 @@ def walked(cuts, callers=False):
     return steps, sum(run.cut is not None for run in win.runs), prof
 
 
+KEPT_FILES = ("result_keeper.py", "result_store.py")
+CHUNK_WRITES = 2    # a chunk is put once when its walk ends, and once more where a walk of the window put its first rows short
+
+
+def kept_walk(cuts):
+    """O12's figures over a clip walk of `cuts` cuts of the document with KEPT_BELOW under its
+    period, on a results folder of its own whose clock stands still, so no count of its bytes
+    is walked for a timer's sake: {figure: total}, function of the keeper or the store -> its
+    steps, each entry's puts, and the cuts held."""
+    t0, made, results = result_store.time.time(), result_keeper.Folder, os.environ["SIEVE_RESULTS"]
+    os.environ["SIEVE_RESULTS"] = os.path.join(SCRATCH, f"kept-results-{cuts}")
+    result_keeper.Folder = lambda root, writer: made(root, writer, now=lambda: t0)
+    try:
+        win = opened(f"kept-{cuts}", cuts, KEPT_BELOW)
+    finally:
+        result_keeper.Folder, os.environ["SIEVE_RESULTS"] = made, results
+    F, was = result_store.Folder, {n: getattr(result_store.Folder, n) for n in ("write", "read", "rename", "lock", "size")}
+    counts, puts, steps, names = dict.fromkeys(("writes", "bytes", "reads", "locks", "sizes"), 0), {}, {}, {}
+
+    def write(self, name, value, size, durable=False):
+        ok = was["write"](self, name, value, size, durable)
+        counts["writes"] += 1
+        counts["bytes"] += os.path.getsize(self._path(name)) if ok else 0
+        return ok
+
+    def rename(self, old, new):
+        puts[new] = puts.get(new, 0) + new.startswith(result_store.ENTRIES)
+        return was["rename"](self, old, new)
+
+    def read(self, name, touch=True):
+        counts["reads"] += 1
+        return was["read"](self, name, touch)
+
+    def lock(self):
+        counts["locks"] += self._depth == 0
+        return was["lock"](self)
+
+    def size(self, name):
+        counts["sizes"] += 1
+        return was["size"](self, name)
+
+    def step(code, *_):
+        name = names.get(code)
+        if name is None:
+            fn = code.co_filename
+            name = names[code] = f"{Path(fn).name}:{code.co_name}" if "sieve_player" in fn and Path(fn).name in KEPT_FILES else False
+        if name is False:
+            return sys.monitoring.DISABLE
+        steps[name] = steps.get(name, 0) + 1
+
+    F.write, F.rename, F.read, F.lock, F.size = write, rename, read, lock, size
+    sys.monitoring.use_tool_id(TOOL, "miniature")
+    sys.monitoring.register_callback(TOOL, sys.monitoring.events.LINE, step)
+    sys.monitoring.register_callback(TOOL, sys.monitoring.events.JUMP, step)
+    sys.monitoring.set_events(TOOL, EVENTS)
+    try:
+        win._toggle_clip()
+        settled(win)
+    finally:
+        sys.monitoring.set_events(TOOL, 0)
+        sys.monitoring.free_tool_id(TOOL)
+        for n, f in was.items():
+            setattr(F, n, f)
+    return counts, steps, {n: k for n, k in puts.items() if k}, sum(run.cut is not None for run in win.runs)
+
+
+def kept_rows():
+    """O12: what the keeper costs a cut in time, on the disk and in steps, does not grow with how
+    many there are, and no entry is put more than CHUNK_WRITES times."""
+    (c_small, s_small, p_small, h_small), (c_large, s_large, p_large, h_large) = kept_walk(SMALL), kept_walk(LARGE)
+    a_cut = {f: (c_small[f] / SMALL, c_large[f] / LARGE) for f in c_small}
+    a_cut["steps"] = (sum(s_small.values()) / SMALL, sum(s_large.values()) / LARGE)
+    most = max(p_large.values(), default=0)
+    print(f"O12 figures a cut at {SMALL} and {LARGE} cuts: " + ", ".join(f"{f} {a:.1f} and {b:.1f}" for f, (a, b) in a_cut.items())
+          + f"; entries put {len(p_small)} and {len(p_large)}, the most puts of one {max(p_small.values(), default=0)} and {most}")
+    said = [f"{h} of {n} cuts held" for h, n in ((h_small, SMALL), (h_large, LARGE)) if h != n]
+    said += [f"no entry put at {LARGE} cuts"] * (not p_large)
+    said += [f"{f} a cut grew {b / a:.1f}x, {a:.1f} -> {b:.1f}" for f in ("steps", "writes", "bytes")
+             if (a := a_cut[f][0]) and (b := a_cut[f][1]) > GROWS * a]
+    said += [f"grows {(s_large[f] / LARGE) / (n / SMALL):5.1f}x  {n / SMALL:9.1f} -> {s_large[f] / LARGE:9.1f} steps a cut  {f}"
+             for f, n in sorted(s_small.items(), key=lambda fn: -s_large.get(fn[0], 0))
+             if n >= SMALL and s_large.get(f, 0) / LARGE > GROWS * n / SMALL]
+    said += [f"{name} put {k} times" for name, k in sorted(p_large.items(), key=lambda nk: -nk[1]) if k > CHUNK_WRITES]
+    return said
+
+
 failed = False
 if LARGE:
     small, held_small, _ = walked(SMALL)
@@ -320,7 +413,7 @@ if LARGE:
         print(f"O7 {'fails' if grew else 'holds'}: {len(grew)} functions' steps a cut grew past {GROWS}x from {SMALL} cuts to {LARGE}")
     if prof:
         pstats.Stats(prof, stream=sys.stdout).strip_dirs().print_callers(os.environ["MINIATURE_WHY"])
-for oracle, check in (("O8", bare_and_clip), ("O9", window_first), ("O10", window_shows), ("O11", checkpoint_travels)):
+for oracle, check in (("O8", bare_and_clip), ("O9", window_first), ("O10", window_shows), ("O11", checkpoint_travels)) + ((("O12", kept_rows),) if LARGE else ()):
     try:
         said = check()
     except Exception as e:

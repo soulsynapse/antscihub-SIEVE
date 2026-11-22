@@ -45,10 +45,13 @@ overrule them. His freeing me from a spec's decision endorses neither side of it
   checkpoint is what should be beside it: copied to another folder and opened with an empty
   results folder, it serves every run held without walking, and after an edit below a frame node
   that makes small rows a clip walk runs that node zero times.
+- O12, from O7: what one more cut in time costs the keeper, in steps of `result_keeper.py` and
+  `result_store.py`, in the folder's writes and their bytes, reads and lock takes, does not grow
+  with how many there are, and no chunk is put more than twice.
 
 ## What checks the work
 
-- `sim/miniature.py`, the player itself over a clip made for it, says which of O7 to O11 hold.
+- `sim/miniature.py`, the player itself over a clip made for it, says which of O7 to O12 hold.
   It writes nothing outside a temp folder. It does not see real threads, decode or disk.
 - What caught real defects: an adversary told to prove a break in a scratch copy; an unanchored
   reader tracing one path; a profile of the real document
@@ -61,7 +64,7 @@ overrule them. His freeing me from a spec's decision endorses neither side of it
 ## Next
 
 `sim/miniature.py` is the player's own window, worker, plan, held runs and tools over a clip made
-for it, the worker's turns taken on one thread, and it says which of O7 to O11 hold. A defect
+for it, the worker's turns taken on one thread, and it says which of O7 to O12 hold. A defect
 found on a real document is pinned there. An alternative holder goes behind the seam the held
 runs sit behind and is driven against the same checks.
 

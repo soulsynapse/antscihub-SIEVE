@@ -103,3 +103,31 @@ cut then costs 28188 steps at 200 cuts and 28884 at 800, and no function's steps
 
 Not seen by it: the monitor's modules, which the clock turns; what Qt does with 850 results
 queued; a count of several thousand.
+
+## What the keeper costs a period, 2026-11-22
+
+On `f67bc808`, the miniature's O12: O7's gate and period with `threshold`, `detect` and `size`
+below the period, a clip walk at 200 cuts and at 800, the keeper's Folder on a clock that stands
+still. Counted a cut: the Folder's `write` calls and the bytes of the files they wrote, `read`
+calls, `size` calls, the folder lock taken (not re-entered), and the lines run and jumps back in
+`result_keeper.py` and `result_store.py`; and each entry's renames into `entries/`, its puts.
+
+| a cut at        | 200   | 800   |
+|-----------------|-------|-------|
+| steps           | 454.0 | 469.5 |
+| writes          | 1.0   | 1.0   |
+| bytes written   | 673.4 | 673.8 |
+| reads           | 3.0   | 3.0   |
+| sizes           | 3.0   | 3.0   |
+| locks           | 0     | 0     |
+
+Entries put: 200 and 800, each once. No player code was changed for it. The three reads a cut are
+misses, one each for `period`, `threshold` and `detect`; only `detect`'s rows are kept. The write
+is durable, an fsync a cut and a node, of a file of its own under a folder of its own.
+
+Not seen by it: real disk latency, an antivirus or a synced folder; the folder's count of its
+bytes walked again on RECOUNT's timer and after every lock, each over every file the results
+folder holds; a window walking a cut the clip lane has not reached while that lane closes the
+keeper at each period: by the code, each close then reads the window's short chunk back, lets it
+go under the lock and writes it whole again, and the lock makes the next put walk the folder's
+count. That is read, not measured.

@@ -1,8 +1,9 @@
 # The contract: one address, one store, one ask
 
-Stage 2 of `docs/playground/JOURNAL.md`. Each line is an assertion that holds of the built thing.
-`docs/playground/sim/` is this contract in code, and where the two differ the simulation is right
-and this file is behind. A line marked (open) is a choice not yet settled.
+The design, each line an assertion that holds of the thing once built; most of it is not built,
+and a line here is no evidence about the tree. `docs/playground/sim/` is this contract in code, and
+where the two differ the simulation is right and this file is behind. A line marked (open) is a
+choice not yet settled.
 
 ## What is exact and what is a window's
 
@@ -26,8 +27,9 @@ and this file is behind. A line marked (open) is a choice not yet settled.
 - A caller addresses a result by a key and a row. The key is `plan.py`'s. A result with no rows
   has one address.
 - A key holds everything the value depends on and nothing else: the tool's name, the digest of
-  its code, the params its run reads, the keys of what it reads, the footage's print, and the cut
-  it was made inside. Two values under one address are equal. (open: a cut baked to a clip is
+  its code, the params its run reads, the keys of what it reads, the footage's print, and what it
+  read of the cut it was made inside: an edge of the cut only where its reach met it. Two values
+  under one address are equal. (open: a cut baked to a clip is
   encoded; if baking it twice gives other pixels, what was made from the first bake does not
   outlive it, and the bake is kept as long as a checkpoint names what was made from it.)
 - The footage's print changes when the file's bytes change anywhere in it, to the odds its

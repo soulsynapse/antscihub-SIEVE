@@ -75,7 +75,8 @@ testing, and a restart now and then is fine.
 
 - In the player, to be verified in the tree: holders sized from the machine's RAM (`budget.py`);
   the window-against-full test over the registry; display proxies; a tool's code in every node's
-  key; a bare walk's small frame rows kept on disk (`result_store.py`, `result_keeper.py`) under a digest of the whole footage file.
+  key; a bare walk's small frame rows kept on disk (`result_store.py`, `result_keeper.py`) under the
+  node's raw key.
 - Not in the player: the memo, the decode cache, the held runs and their file, and cut files are
   each their own holder still. No checkpoint, no one ask. Series and stepped results are kept by
   nothing across a bare walk.
@@ -87,7 +88,8 @@ testing, and a restart now and then is fine.
 
 - Five tools declare a reach without bound and no measurement stands behind it.
 - The keeper decides what to keep by a value's shape, and saves no stepped state at a chunk's edge.
-- A cut file served to a bare walk is named by the sampled footage print.
+- A cut file served to a bare walk, and a row the keeper keeps, are named by the sampled footage
+  print: footage changed only between its samples is taken for the one before.
 - Whether the mark of other code reaches nodes under a cut in time is unread.
 - The registry's types are unchecked for a set of periods as a value, a gate of two inputs, a
   matrix of time by scale.

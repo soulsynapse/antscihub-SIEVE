@@ -75,17 +75,18 @@ def test_a_changed_param_or_code_print_makes_rows_again(clip, monkeypatch):
     walk, _, _ = clip
     walk()
     assert walk(min_area=5)[1] == ROWS
-    printed = registry.code_print
-    monkeypatch.setattr(registry, "code_print", lambda t, seen=None: f"{printed(t, seen)}-changed")
+    detect = next(t for t in registry._IMPORTED.values() if t[0].__name__.endswith(".detect"))[0]
+    monkeypatch.setitem(registry._IMPORTED, id(detect), (detect, "changed"))
     assert walk(min_area=5)[1] == ROWS and walk(min_area=5)[1] == 0
 
 
-def test_footage_the_sampled_print_takes_for_the_same_makes_rows_again(clip, monkeypatch, tmp_path):
+def test_footage_its_sampled_print_tells_apart_makes_rows_again(clip, tmp_path):
     walk, _, _ = clip
-    monkeypatch.setattr(decoder, "footage_print", lambda path: "one print")
+    before = decoder.footage_print(tmp_path / "v.avi")
     walk()
     with open(tmp_path / "v.avi", "ab") as f:
         f.write(b"\0")
+    assert decoder.footage_print(tmp_path / "v.avi") != before
     assert walk()[1] == ROWS and walk()[1] == 0
 
 

@@ -62,7 +62,7 @@ def main(path):
     tools = {e.name: e.module for e in discover(*j["roots"]) if e.ok}
     doc = Document.from_dict(j["document"], tools)
     doc.path = j["path"]
-    keeper = Keeper(j["video"])
+    keeper = Keeper()
     runs = held.Runs(1 << 62, lambda nid, result: 0)    # every run stays: the file is written of them all
 
     def cut_result(nid, key, within):

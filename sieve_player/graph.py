@@ -811,7 +811,7 @@ class Graph:
             v.setflags(write=False)
             return v if raw or e.band is None else banded(v, e.band)
         got, v = self._memoized(mk)
-        if v is None and got is None and self.keeper is not None and (v := self.keeper.ask(plan, e, row, c)) is not None:
+        if v is None and got is None and self.keeper is not None and (v := self.keeper.ask(e, row, c)) is not None:
             self.memo.put(mk, v, size=nbytes(e.produces, v))
         if v is None:
             frames = Frames(self, plan, nid, e.srcs, e.src_key, e.types, row, c)
@@ -835,7 +835,7 @@ class Graph:
             if not isinstance(got, Ref):
                 self.memo.put(mk, held, owner=e.raw_key if e.static else None, size=size)
                 if self.keeper is not None:
-                    self.keeper.made(plan, e, row, c, held)
+                    self.keeper.made(e, row, c, held)
         elif self.stream.on_event is not None:
             self._hit(nid, 0)
         return v if raw or e.band is None else banded(v, e.band)

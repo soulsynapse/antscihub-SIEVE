@@ -2,7 +2,9 @@
 listened to and no interface beside it, and the series chain's results left in a file. The window
 starts it (PlayerWindow's Bare) and reads its stdout, one JSON object a line: `{"done", "total",
 "rate"}` as rows land, `{"count"}` where the stream ended short of the rows claimed, then one of `{"results": path}`, `{"refused": why}` or `{"failed": [row,
-node, text]}`. The job is `job()`'s dict. The walk is walk._Walk's own, driven on this thread.
+node, text]}`. The job is `job()`'s dict. The walk is walk._Walk's own, driven on this thread, and
+its Graph's the one result_keeper.Keeper: a frame node's small rows made here are read back by the
+next bare walk of the same document, code and footage instead of made again.
 """
 import json
 import os
@@ -49,12 +51,14 @@ def main(path):
     from .document import Document
     from .graph import Graph
     from .registry import discover
+    from .result_keeper import Keeper
     from .walk import _Walk
 
     tools = {e.name: e.module for e in discover(*j["roots"]) if e.ok}
     doc = Document.from_dict(j["document"], tools)
     doc.path = j["path"]
-    g = Graph(doc, Decoder(j["video"], cache_bytes=HOLD), tools, memo_bytes=HOLD)
+    keeper = Keeper()
+    g = Graph(doc, Decoder(j["video"], cache_bytes=HOLD), tools, memo_bytes=HOLD, keeper=keeper)
     g.sync()
     p = g.snapshot()
     if not g.fed(p.walk):
@@ -82,6 +86,8 @@ def main(path):
     except Exception as e:
         say(failed=[walk.start + walk.i, getattr(e, "sieve_node", ""), f"{type(e).__name__}: {e}"])
         return 1
+    finally:
+        keeper.close()
     if refused.last:
         say(refused=refused.last[0])
         return 1

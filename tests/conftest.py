@@ -6,10 +6,11 @@ from sieve_player.worker import Worker
 
 @pytest.fixture(autouse=True)
 def in_store(tmp_path, monkeypatch):
-    """The store's folder and the file its choice is kept in are under tmp_path for the test, so
-    none reads or writes the user's."""
+    """The store's folder, the file its choice is kept in and a bare walk's kept rows are under
+    tmp_path for the test, so none reads or writes the user's."""
     monkeypatch.setattr(store, "CHOICE", str(tmp_path / "app" / "store.txt"))
     monkeypatch.setenv(store.STORE_ENV, str(tmp_path / "store"))
+    monkeypatch.setenv("SIEVE_RESULTS", str(tmp_path / "results"))
     return tmp_path / "store"
 
 

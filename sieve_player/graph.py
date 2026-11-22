@@ -359,11 +359,12 @@ class Readers:
 
 
 class Graph:
-    def __init__(self, doc, decoder, tools, memo_bytes=4 << 30, stream=None, cut_result=None):
+    def __init__(self, doc, decoder, tools, memo_bytes=4 << 30, stream=None, cut_result=None, keeper=None):
         """`stream` is the Emitter it emits through, one of its own when none is handed;
         `cut_result` is what `plan` is handed under that name at every sync, asked on the thread
-        that syncs."""
-        self.doc, self.decoder, self.cut_result = doc, decoder, cut_result
+        that syncs. `keeper`, a result_keeper.Keeper, is asked a frame node's row on a memo miss
+        before its tool runs and told each row a tool made; one thread computes on a Graph with one."""
+        self.doc, self.decoder, self.cut_result, self.keeper = doc, decoder, cut_result, keeper
         self.tools = by_name(tools)
         self.readers = Readers()
         self._lately = []                   # the served files' Decoders in the order they were last read, latest first
@@ -810,6 +811,8 @@ class Graph:
             v.setflags(write=False)
             return v if raw or e.band is None else banded(v, e.band)
         got, v = self._memoized(mk)
+        if v is None and got is None and self.keeper is not None and (v := self.keeper.ask(plan, e, row, c)) is not None:
+            self.memo.put(mk, v, size=nbytes(e.produces, v))
         if v is None:
             frames = Frames(self, plan, nid, e.srcs, e.src_key, e.types, row, c)
             with self.probe(nid, row, e.raw_key, reader) as ev:
@@ -831,6 +834,8 @@ class Graph:
                     v = frames.named(held) if isinstance(held, Ref) else held
             if not isinstance(got, Ref):
                 self.memo.put(mk, held, owner=e.raw_key if e.static else None, size=size)
+                if self.keeper is not None:
+                    self.keeper.made(plan, e, row, c, held)
         elif self.stream.on_event is not None:
             self._hit(nid, 0)
         return v if raw or e.band is None else banded(v, e.band)

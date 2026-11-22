@@ -16,16 +16,13 @@ this file where they differ.
   the contract in code: `.venv/Scripts/python.exe docs/playground/sim/sim.py 150` runs the
   torture in about ten seconds and prints a line a scheme. Read "What the simulation has shown"
   before touching either file.
-- Next action, in order: (a) read `held.py`, `heldwalks.py` and how `walk.py` and `worker.py`
-  hand a walk's results on, enough to write down the layer between a walk and the store: what
-  a walk puts (a node's rows over a range, each row exact or the window's by "Windows are best
-  effort" below), what it asks, and where per-node chunk grids go in an entry's name. Write
-  that as a short section here before any code. (b) Move `store.py` and `folder.py` into
-  `sieve_player` with `folder_check.py`'s seams as tests and the window-against-full rule as
-  an invariant test, and one real walk through it beside the simulation's figure. (c) Queue
-  the slices: the held file onto it, then the walks' results; proxies for a loop that does not
-  fit after those. Then STOP for him to try the player, before the memo is touched. (d) Code
-  beside the key, once he has answered. (e) The whole-file footage hash.
+- Next action, in order: (a) read run 8's diff when it lands (display proxies for a loop that
+  does not fit the memo) and its final message; run the suite; he tries the player on it.
+  (b) Tell him "The plan turned over" below and take his word on it before anything of
+  `held.py` is touched. (c) If the order below stands: move `store.py` and `folder.py` into
+  `sieve_player` under the cut files and the full walks' tables, with `folder_check.py`'s
+  seams and the window-against-full rule as tests. (d) Code beside the key, once he has
+  answered. (e) The whole-file footage hash.
 - Done since the second adversary: its twelve items mended and its scripts run again; the
   contract's section "What is exact and what is a window's"; the simulation's window walk
   and its oracle; a loop priced as planes and as proxies; a bake tried twice.
@@ -441,6 +438,38 @@ clip, and "dropping an entry changes time and nothing else" holds of it. It is n
 across ffmpeg or x264 versions, which a cluster's nodes or an upgrade would differ in: the
 cut file's key holds footage, extent and recipe and not the encoder's version. To hold across
 machines the key wants the encoder's print in it. His to hear at the stop; nothing is built.
+
+## The plan turned over: the held file is not the first thing to move (2026-11-21)
+
+An Opus read of `held.py`, `heldwalks.py` and their callers (its lines, not reread by me) says:
+
+- `held.py` already does what I wrote as new in the contract. `_serves` and `_read`
+  (`held.py:199`, `:255`) reuse a row only when what its reach read of the walk's and the cut's
+  edges is the same; `over` takes each node from a run good under its present key, so an
+  edit downstream keeps what is upstream. It is the range-aware holder, working.
+- Its file is `<document>.series`, beside the document, appended, rewritten through a part
+  file, loaded up to the first record that does not read. That is what makes a saved file
+  open where he left off, and it goes where the document goes. A store under
+  `%LOCALAPPDATA%` does not.
+- It is small: a signal and its gate are 5 to 9 bytes a row a node, 90 to 160 KB for ten
+  minutes; tables more, unmeasured. Its limit is 512 MiB.
+- About twenty call sites in `window.py` lean on it, several on a result being of exactly the
+  range walked (`gate_result`, `period_run`, `worker._held`).
+- Possibly a bug, unrun: `window.py:81` unpacks four fields of what `File.write` returns as
+  six-field runs, reached only when a run will not pickle. For him.
+
+So moving the held file onto the store first spends the most seams on the smallest bytes and
+the part that works, and would take results away from beside the document. I had it first
+because my inventory called the three holders one problem; by bytes and by what he named they
+are not. What costs him is planes: a loop that does not fit the memo is made again every
+pass (above), and nothing of a plane outlives the session. What the store is for is what is
+big, shared or must outlive: baked cuts (already in the store's folder, under no budget that
+I know of), a full walk's tables for a cluster's many writers, and checkpoints. The order I
+now mean: proxies for the loop (run 8, needs no store); then the store under the cut files
+and under full walks' tables with checkpoints; `held.py` left as it is unless he wants one
+mechanism for its own sake, in which case its file becomes a checkpoint's manifest beside the
+document. The stop we agreed, "after the held file and the walks' results are on the store",
+is therefore not where I will stop; I stop after run 8 for him to try the loop, and say this.
 
 ## What a loop costs, planes against proxies (`sim/proxyrate.py`, `sim/loop.py`)
 

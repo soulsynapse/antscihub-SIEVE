@@ -2,8 +2,8 @@
 listened to and no interface beside it, and the series chain's results left in a file. The window
 starts it (PlayerWindow's Bare) and reads its stdout, one JSON object a line: `{"done", "total",
 "rate"}` as rows land, `{"count"}` where the stream ended short of the rows claimed, then one of `{"results": path}`, `{"refused": why}` or `{"failed": [row,
-node, text]}`. The job is `job()`'s dict. The walk is walk._Walk's own, driven on this thread, and
-its Graph's the one result_keeper.Keeper: a frame node's small rows made here are read back by the
+node, text]}`. The job is `job()`'s dict. The walk is walk._Walk's own, driven on this thread, on a
+Graph handed a result_keeper.Keeper: a frame node's small rows made here are read back by the
 next bare walk of the same document, code and footage instead of made again.
 """
 import json

@@ -408,6 +408,28 @@ Withdrawn: asking a reach tool's input for rows either side so that a window is 
 not want a window exact. The ledger experiment counts this as a second miss no claim named,
 caught by him.
 
+## What a loop costs, planes against proxies (`sim/proxyrate.py`, `sim/loop.py`)
+
+Measured on this machine from the crossings clip (`proxyrate.py video-tests/00000_168-178.mp4`):
+a 1080p frame is 6.2 MB and a 5.3K one 47.6 MB; a 1280x720 jpeg at 85 of either is 70 KB, 2.2 ms
+to make at 1080p and 4.7 ms at 5.3K, 2.0 ms to show, mean error about 1.2 of 255. Shrunk and not
+packed it is 2.76 MB, 0.9 and 3.4 ms to make, nothing to show. So a proxy is 89 times smaller
+than the 1080p frame and 680 times smaller than the 5.3K one.
+
+Priced by `loop.py` over sim.py's pipeline (what a held plane costs to paint is unmeasured and
+counted as nothing): a ten second loop is 1.8 GB of 1080p planes, or 13.8 GB at 5.3K, against
+0.02 GB of proxies. Where the planes fit, later passes cost nothing and proxies cost 2 ms a
+row a view, 0.6 s a pass on the desktop and 1.5 s on the laptop, well inside ten seconds. Where
+they do not fit, planes are made again every pass: on the laptop at 5.3K a ten second loop of
+one view is 24 s a pass and of two views 419 s, against 1.5 and 3.0 s with proxies; on the
+desktop a thirty second loop at 5.3K is 28 s a pass against 1.8 s. Making the proxies adds 2
+to 5 ms a row to the first pass, a third again at 1080p and a twelfth at 5.3K.
+
+What I take from it: planes when the loop's rows of what is shown fit free memory, which is
+known before the walk starts, and proxies when they do not, made as the rows are; never a
+plane made again each pass. A zoom past the proxy's pixels, or a paused row, asks for the
+exact frame of that one row. The shrunk and unpacked form is a middle I have not priced.
+
 ## The second adversary (run 6, `adversary-2.md`, against `sim/folder.py`)
 
 Its scripts are in `Code/Scratch/sieve-adversary-2/`. Twelve items, eleven proved. My answers:

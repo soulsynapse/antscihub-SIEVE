@@ -1,4 +1,5 @@
 """The catalogue of tools. README.md beside this file is the spec; `__all__` is what it names."""
+import ast
 import hashlib
 import importlib
 import os
@@ -285,8 +286,22 @@ class Entry:
         return [f for f in FACETS if self.get(f) is None]
 
 
-_FILES = {}     # path -> ((size, mtime), the digest of its bytes then)
+_FILES = {}     # path -> ((size, mtime), the digest of its code then, by _parsed)
 _IMPORTED = {}  # id of a module -> (the module, its code_print when discover first imported it); by id since a tool may be any object, hashable or not
+
+
+def _parsed(source):
+    """What of the Python `source`, bytes, its print is taken of: its parsed code less every
+    docstring, so a comment, a reflow or a docstring's edit is the same code; the bytes
+    themselves where they do not parse."""
+    try:
+        tree = ast.parse(source)
+    except (SyntaxError, ValueError):
+        return source
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)) and ast.get_docstring(node, clean=False) is not None:
+            node.body = node.body[1:] or [ast.Pass()]
+    return ast.dump(tree).encode()
 
 
 def _file_print(path, seen=None):
@@ -296,7 +311,7 @@ def _file_print(path, seen=None):
     stamp = st.st_size, st.st_mtime_ns
     if _FILES.get(path, (None,))[0] != stamp:
         with open(path, "rb") as f:
-            _FILES[path] = (stamp, hashlib.sha1(f.read()).hexdigest())
+            _FILES[path] = (stamp, hashlib.sha1(_parsed(f.read())).hexdigest())
     if seen is not None:
         seen[path] = _FILES[path][1]
     return _FILES[path][1]
@@ -304,7 +319,8 @@ def _file_print(path, seen=None):
 
 def code_print(tool, seen=None):
     """A digest of the code `tool` is made of as it lies on disk now: its own file and every file
-    of its folder whose name begins with an underscore, what the tools there share. None for a
+    of its folder whose name begins with an underscore, what the tools there share, each as
+    `_parsed` has it, so a comment's or a docstring's edit leaves it. None for a
     module of no file, or one whose file is gone. `seen` is a dict of the caller's, empty at
     first, handed to each call that is to read the disk as one moment: a folder is listed and a
     file looked at once among them."""

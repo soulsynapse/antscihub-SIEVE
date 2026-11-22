@@ -57,9 +57,11 @@ def test_a_tools_code_print_is_its_own_file_and_the_shared_ones_and_the_imported
     a, b = (e.module for e in discover(str(folder)))
     was = imported_print(a), imported_print(b)
     assert was == (code_print(a), code_print(b)) and None not in was and was[0] != was[1]
-    write("a.py", 'SIEVE_TOOL = True; NAME = "a"  # edited\n')       # another length, so the file's stamp moves whatever the clock's grain
+    write("a.py", '"""Said of it."""\nSIEVE_TOOL = True; NAME = "a"  # a comment\n')
+    assert (code_print(a), code_print(b)) == was
+    write("a.py", 'SIEVE_TOOL = True; NAME = "a"; X = 2\n')       # another length each time, so the file's stamp moves whatever the clock's grain
     assert code_print(a) != was[0] and code_print(b) == was[1]
-    write("_shared.py", "X = 1  # edited\n")
+    write("_shared.py", "X = 2\n")
     assert code_print(b) != was[1]
     discover(str(folder))
     assert (imported_print(a), imported_print(b)) == was and imported_print(Tool()) is None and code_print(Tool()) is None

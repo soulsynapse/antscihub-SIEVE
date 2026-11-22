@@ -479,7 +479,33 @@ downstream of X is made and everything else is read back.
 That count exists only inside a test. A bare walk does not print it. What none of this catches:
 a tool that reads an undeclared file passes all three until the file moves.
 
-## A tool's code: two regimes for now
+## A tool's code is in every key
+
+A node's key now holds a fingerprint of its tool's code, beside the tool's name, its settings
+and the keys of what it reads. It is a hash, taken once when the tool is imported; no code is
+stored and nothing is per row.
+
+```{mermaid}
+%%| fig-width: 11
+flowchart LR
+  G[gray<br/>key unchanged] --> T[threshold<br/>key unchanged] --> D[detect<br/>EDITED: new key] --> C[count<br/>new key, because<br/>detect's key is in it]
+  style D fill:#fdf3c7
+  style C fill:#fdf3c7
+```
+
+- The fingerprint is of the parsed code less its docstrings, so a comment or a reflow changes
+  no key.
+- Why it changed: a trace showed the `!` mark was a badge on a card and nothing else. A result
+  of older code was found by key alone, cut periods, and was written to a csv whose card then
+  read "on disk: this graph's". Two unanchored reads, one of the code and one of the bare
+  question, both picked the key.
+- The `!` still has a meaning: tools are imported once, so a file edited while the player is
+  open differs from the code that is running until the player is restarted.
+- Cost, once: results held under the old keys are not found and are walked again.
+
+The slide that follows is the position this replaced, kept as the record of the reasoning.
+
+## Replaced: two regimes for now
 
 A result depends on the code that made it: the tool's file, every tool upstream, `sieve_player`
 itself, numpy and OpenCV. Edit `detect.py`, or upgrade OpenCV, and the same key can name a
@@ -548,7 +574,7 @@ an explanation to reach for when a check fails.
 | A loop that outgrows the memo | Every row made again on every pass | Painted from display proxies, 70 KB a row | Changed |
 | A window against the full walk | Nothing checked it; five tools declared no reach | A test over every registered tool, 40 cases; a wrong reach fails by name | Changed |
 | A bare walk run a second time | Reuses nothing; full cost every time | Reads back a frame node's small rows: 2.5 s, then 0.9 s on the crossings clip | Changed |
-| A result made under older code | Served in the window marked `!`; a bare walk reused nothing anyway | The window as before; a bare walk's kept rows are never read back under other code of a tool, of `sieve_player`, of numpy or of OpenCV | Changed |
+| A result made under older code | Found by key alone: drawn, cut periods, written to csv, with a `!` on the card | Not found: the tool's code is in every key, comments and docstrings aside. A bare walk's kept rows also go by `sieve_player`, numpy and OpenCV | Changed |
 | Results on disk under many writers | The held file, appended in place | A store with atomic, checksummed entries and a folder lock, called by the bare walk alone | Partly |
 | A bare walk's series and stepped nodes, `track` above all | Made every walk | Made every walk | Same |
 | A bare walk and cuts in time | Never walks them | Never walks them | Same |

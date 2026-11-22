@@ -99,6 +99,15 @@ this file where they differ.
   and not its bytes, so a comment or a reflow changes nothing. It orphans every held file's
   results once (run 3 showed this); he is to be told before it lands, as he reopens the
   player mid-change. The `!` and `held.marked` then have nothing to say and go.
+- Built, he having said it is fine ("good insurance"): `plan.py`'s key holds
+  `registry.imported_print` of the node's tool, and a file's print is of its parsed code less
+  docstrings (`registry._parsed`). Suite 332. I was wrong that the `!` goes: tools are
+  imported once and never reloaded, so a file edited while the player is open still differs
+  from what runs, and `!` says that; it stays. Not done: `sieve_player`'s own files and the
+  numpy and cv2 versions at the root key (every edit of the player would orphan every held
+  result, too dear while it changes daily; the bare walk's keeper has them). Made false and
+  left, being historic specs: `docs/spec/what-a-node-declares.md:263` and the lines of
+  `docs/spec/held-results.md` that say the key holds no code.
 - `docs/playground/walkthrough.qmd` is a slideshow of the whole branch for him, rendered by
   `quarto render`; its html is not tracked. He also said the processor is a hypothesis and
   never the assumed cause of a failed check.

@@ -192,12 +192,12 @@ def window_shows():
 
 
 BY_NAME = {e.name: e.module for e in TOOLS}
-DETECT, RAN = BY_NAME["detect"], [0]     # O11's and O14's frame node, and its runs counted
+DETECT, RAN = BY_NAME["detect"], []     # O11's and O14's frame node, and the rows it ran at
 RUN = DETECT.run
 
 
 def counted_run(frames, row, params):
-    RAN[0] += 1
+    RAN.append(row)
     return RUN(frames, row, params)
 
 
@@ -242,17 +242,19 @@ def saved_full_run(name):
 
 def served_unwalked(want, folder):
     """A player of the document in `folder`, opened and turned with detect counted, and what of
-    `want` it does not serve, or how often detect ran."""
+    `want` it does not serve, or the rows detect ran at for a walk: at any but the playhead's,
+    which the display draws and no checkpoint holds."""
     DETECT.run = counted_run
-    RAN[0] = 0
+    RAN.clear()
     try:
         win = player(folder)
         got = holds(win)
         turned(win)
     finally:
         DETECT.run = RUN
+    walked = [r for r in RAN if r != win.row]
     return win, [f"the first player holds {len(want)} results and none"] * (not want) + apart(want, got) + (
-        [f"detect ran {RAN[0]} times as it opened"] * bool(RAN[0]))
+        [f"detect ran at {len(walked)} rows besides the playhead's as it opened"] * bool(walked))
 
 
 def checkpoint_travels():

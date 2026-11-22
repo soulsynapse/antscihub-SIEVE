@@ -94,7 +94,7 @@ def test_a_bare_walks_small_rows_reach_the_checkpoint_and_answer_a_player_of_it_
     assert lent and after == lent       # a row answered from what was lent is not held again
 
 
-def test_an_address_tells_apart_params_code_footage_and_cut_rows(clip, tmp_path, monkeypatch):
+def test_an_address_tells_apart_params_footage_and_cut_rows(clip, tmp_path):
     video, tools, runs, _ = clip
     some = range(10)
     _, ran, chunks, _ = walked(tables(tools, video), video, tools, runs, some)
@@ -106,9 +106,6 @@ def test_an_address_tells_apart_params_code_footage_and_cut_rows(clip, tmp_path,
     with open(copy, "ab") as f:
         f.write(b"\0")
     assert walked(tables(tools, copy), copy, tools, runs, some, chunks)[1] == 10
-    detect = next(t for t in registry._IMPORTED.values() if t[0].__name__.endswith(".detect"))[0]
-    monkeypatch.setitem(registry._IMPORTED, id(detect), (detect, "changed"))
-    assert walked(tables(tools, video), video, tools, runs, some, chunks)[1] == 10
 
     e = SimpleNamespace(kind="frame", static=False, file=None, steps=False, raw_key="k", reach=(0, 0))
     within = SimpleNamespace(extent=SimpleNamespace(rows=(0, 8)))

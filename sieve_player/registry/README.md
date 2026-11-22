@@ -57,7 +57,7 @@ category beside each tool.
 - `hint(facet)`
 - `discover(*roots)` -- imports each `.py` under `roots` as `<dirname>.<stem>`, skipping a stem that begins with `_`: those are what tools share, never tools
 - `code_print(tool)` -- a digest of its file and of every file of its folder whose name begins with `_`, as they lie now, each parsed and less its docstrings, so a comment's edit leaves it; no key holds it
-- `imported_print(tool)` -- that digest as `discover` found it when it first imported the module: the code the process runs; `plan.plan` puts it in the node's key
+- `imported_print(tool)` -- that digest as `discover` found it when it first imported the module: the code the process runs
 - `types(entries, extra=())` -- type -> (producers, expecters)
 - `CATEGORIES` -- the groups in the Tab menu's order
 - `category(tool)` -- the group a tool's facets put it in

@@ -23,8 +23,7 @@ def keepable(row):
 
 class Keeper:
     """Which of `memo`'s entries a checkpoint carries, by (address key, chunk). An address is the
-    row's raw key, which holds the footage as decoder.footage_print samples it, the code of every
-    tool above as discover imported it and the params, with the cut's rows and the node's reach:
+    row's raw key, which holds the footage as decoder.footage_print samples it, and the params, with the cut's rows and the node's reach:
     footage changed only where that print does not sample it is taken for the one before, and
     nothing of the player's own code or its libraries is in it. `key_of((raw key, cut rows, reach),
     row)` is the memo key a row of that address is held under. A chunk lent or taken is held in the

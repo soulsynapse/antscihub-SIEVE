@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from .cut import Record
 from .document import INPUT, VIDEO_TOOL, fed, fits, frame_inputs, kind_of, produces, video_output, wants
 from .registry import cuts as tool_cuts
-from .registry import computed, cut_by, cut_extents_of, fold_of, imported_print, is_selector, key_params_of, optional, paths, reach_of, serves_cut_file, static, steps
+from .registry import computed, cut_by, cut_extents_of, fold_of, is_selector, key_params_of, optional, paths, reach_of, serves_cut_file, static, steps
 from .wire import overlaid
 
 
@@ -173,8 +173,7 @@ def plan(doc, tools, base, cut_file=None, cut_result=None, footage=None, count=N
     band, which is applied on read, so what downstream sees is keyed by it and the node's own run
     is not. Of a node's params the raw key holds those its tool's computing is handed, the
     registry's `computed`, or what its tool's `key_params` answers of them where it has one that
-    does not raise, and its tool's code as this process imported it, the registry's
-    `imported_print`, where discover imported it. A node that serves its file reads nothing, and its key is the one a document opened on
+    does not raise. A node that serves its file reads nothing, and its key is the one a document opened on
     that file gives its video node, so everything below it is keyed as that document's is. A node that cuts
     in its rows alone enters no key below it: what reads it is keyed by what it reads. A node's cuts are its inputs', and a cutting node's are made from them, one for
     each extent its tool's `cut_extents` answers of its params and of `cut_result` over each cut it
@@ -259,10 +258,6 @@ def plan(doc, tools, base, cut_file=None, cut_result=None, footage=None, count=N
         ups = [read_key(src, stack) if src is not None and src not in stack else "none" for src in sources(nid).values()]
         return ups[0] if len(ups) == 1 else _key(*ups)
 
-    def code_of(node):
-        printed = imported_print(tools.get(node.tool))
-        return () if printed is None else (printed,)
-
     def key_of(nid, stack=()):
         if nid not in keys:
             node = doc.node(nid)
@@ -271,7 +266,7 @@ def plan(doc, tools, base, cut_file=None, cut_result=None, footage=None, count=N
                 return base
             fed_by_series = any(s is not None and kind_of(doc, tools, s) == "series" for s in sources(nid).values())
             raw = (base_key(file_of(nid)[1], video_output(doc)) if file_of(nid)
-                   else _key(up_key(nid, (*stack, nid)), node.tool, *code_of(node), json.dumps(keyed(node), sort_keys=True), *[FED_ABSENT][:fed_by_series]))
+                   else _key(up_key(nid, (*stack, nid)), node.tool, json.dumps(keyed(node), sort_keys=True), *[FED_ABSENT][:fed_by_series]))
             raw_keys[nid] = raw
             keys[nid] = raw if node.band is None else _key(raw, node.band)
         return keys[nid]

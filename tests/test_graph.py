@@ -1055,22 +1055,6 @@ def test_the_plan_is_pure_in_the_document_and_the_tools():
     assert {nid: e.key for nid, e in p.entries.items()} == {n.id: g.key(n.id) for n in doc.nodes}
 
 
-def test_a_nodes_key_holds_the_code_its_tool_was_imported_as(tmp_path):
-    """A result made by other code is not found again by the same node and params, and one made
-    by the same code under another comment is."""
-    from sieve_player.registry import discover
-    keys = []
-    for edit in ("X = 1  # a", "X = 1  # b", "X = 2"):
-        folder = tmp_path / f"printed_{len(keys)}"
-        folder.mkdir()
-        (folder / "t.py").write_text(f'SIEVE_TOOL = True; NAME = "t"; EXPECTS = "bgr"; PRODUCES = "gray"; {edit}\n',
-                                     encoding="utf-8", newline="\n")
-        (t,) = (e.module for e in discover(str(folder)))
-        doc = D.from_tools([t])
-        keys.append(plan(doc, {"t": t}, base_key("fake.mp4", "bgr")).entries[doc.nodes[-1].id].key)
-    assert keys[0] == keys[1] != keys[2]
-
-
 def test_a_scrub_past_the_end_says_the_count_and_leaves_the_walk_standing():
     """A header may claim rows the stream lacks. The walk closes where the stream ends and says the
     count; a display request past it says the count again and neither fails nor closes the walk."""

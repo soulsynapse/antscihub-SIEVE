@@ -64,9 +64,8 @@ removes its temp folder); quoted lines are their output. Most damaging first.
 9. **Proved: a lock left for ever, its waiter spinning unthrottled.** A stale lock folder `rmdir`
    cannot remove (non-empty, held open) hits `except OSError: continue`, skipping `wait`
    (folder.py:149-152). `s5_lock.py`: `unremovable lock: lock() had not returned after 10 s`.
-   Suspected, not run: a process killed holding the lock stalls others' `drop`, `checkpoint` and
-   room-making `put` for `STALE_LOCK`, against "nothing else waits on the lock". Not made to fail:
-   20 rounds of 8 processes on a stale lock never put two inside (gap at folder.py:148-149).
+   Suspected: a killed holder stalls others' locked calls for `STALE_LOCK`, against "nothing else
+   waits on the lock"; 8 processes on a stale lock, 20 rounds, never put two inside (folder.py:148-149).
 
 10. **Proved: a refused write raises out of `put`.** `write` catches nothing (folder.py:46-50) and
     `rename`'s `makedirs` is outside its `try` (folder.py:57). `s8_cost.py`, `parts/` denied write:
@@ -86,5 +85,4 @@ removes its temp folder); quoted lines are their output. Most damaging first.
     folder.py:50), 18 s a minute at 3000 puts; the 0.5 s walk recurs each `RECOUNT` and after every
     lock; at budget every put pays 190 ms, under a lock held across the walk (store.py:205-219),
     which on a cluster filesystem makes item 8 likely. `checkpoint` reads every manifest first
-    (store.py:134). Suspected, not timed: `made-*.log` is never let go, counts in `used()`, and is
-    read whole at each open (folder.py:31-35).
+    (store.py:134). Untimed: `made-*.log` is never let go and is read whole at open (folder.py:31-35).

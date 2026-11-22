@@ -80,7 +80,12 @@ this file where they differ.
   by hand; `plan.py`'s key holds no code), because a tool is edited most days. An exact ask (a
   bare walk now; a checkpoint's fill and a cluster job when built) has the code in its
   address and never reads back another code's result. It is the best-effort and exact split
-  applied to code, and the keeper already is its exact half.
+  applied to code, and the keeper already is its exact half. He then said he does not know
+  the old decision to be good, only that I am not bound by it; I had repeated its reason
+  untested. What stands: the exact half is forced; the window's half is kept for now only
+  because walking again is dear today, and is looked at again when track is kept (code in the
+  key everywhere would then be one rule and no stale regime). To check first: whether `!`
+  follows a stale value into a csv written from a card and into periods a stale gate cuts.
 - `docs/playground/walkthrough.qmd` is a slideshow of the whole branch for him, rendered by
   `quarto render`; its html is not tracked. He also said the processor is a hypothesis and
   never the assumed cause of a failed check.

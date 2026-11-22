@@ -479,7 +479,7 @@ downstream of X is made and everything else is read back.
 That count exists only inside a test. A bare walk does not print it. What none of this catches:
 a tool that reads an undeclared file passes all three until the file moves.
 
-## Decided: a tool's code, in two regimes
+## A tool's code: two regimes for now
 
 A result depends on the code that made it: the tool's file, every tool upstream, `sieve_player`
 itself, numpy and OpenCV. Edit `detect.py`, or upgrade OpenCV, and the same key can name a
@@ -491,12 +491,18 @@ different value.
 | Who lets it go | You, by hand | Nobody has to: it is simply not found |
 | Why | A tool is edited most days; an edit must not throw away a day's walks unasked | A published number must come from the code as it lies |
 
-This is the same split as "a window is best effort, a full walk is exact", applied to code. The
-window's half is `v5`'s behaviour and stays. The bare walk's half is what the keeper built. It
-was listed as open for you; it is not, the two do not collide.
+The bare walk's column is forced: a published number cannot come from code that is gone. The
+window's column is `v5`'s behaviour, kept for now and not defended as right:
 
-The cost I accept: the digest is of the file's bytes, so a comment edit makes a bare walk
-remake that tool's rows and everything below it. Slower, never wrong.
+- Its reason holds only while walking again is dear. Once series and tracker results are kept,
+  an edit costs the edited tool and what is below it, and code in the key everywhere becomes
+  affordable and simpler: one rule, no stale regime.
+- Unchecked: whether the `!` follows a stale value into a csv written from a card, or into the
+  periods a stale gate cuts.
+
+To be looked at again when the track slice lands, with rows made against rows read back as the
+evidence. The digest is of a file's bytes, so a comment edit makes a bare walk remake that
+tool's rows and everything below it: slower, never wrong.
 
 ## Open, and yours to decide
 

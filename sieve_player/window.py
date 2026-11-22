@@ -482,6 +482,7 @@ class PlayerWindow(QMainWindow):
         self.dump = None                          # the stream's file, while DUMP_ENV names one
         self.fps, self.count = 30.0, 0
         self.row, self.playing, self.window_ = 0, False, (0, 0)
+        self._spill_under, self._spill_from = None, 0   # the picture proxies are of, and the memo's evictions when it was first shown
         self._bare = None          # the QProcess of a bare walk under way
         self._resume = False  # playback to restore when a playhead drag ends
         self.results, self.result_start = {}, 0   # node id -> the series chain's results, and the row they start at
@@ -1311,7 +1312,9 @@ class PlayerWindow(QMainWindow):
         the drawing frame nodes' outputs if the memo has those too; False when any is not there
         yet, so a commit asks the worker for them all. While playing, a row the memo lacks is
         painted from the display's proxy of it where there is one, and True. A row painted whole
-        while the window's rows of its plane pass the memo's limit is kept as a proxy. At a row
+        is kept as a proxy while the window's rows of its plane pass the memo's limit, or once the
+        memo has let anything go since this picture was first shown: the memo holds a row's other
+        planes too, which the first test does not count. At a row
         outside the shown node's cuts the frame says so, and nothing is asked."""
         if outside := outside_cuts(self.graph.entry(self.graph.shown), self.graph.shown, row):
             self.display.clear(outside)
@@ -1336,7 +1339,9 @@ class PlayerWindow(QMainWindow):
         drawn = all(self.display.frame_results.get(nid, True) is not None for nid in self.graph.drawing())
         if not (drawn and (over is None or plane is not None)):
             return self.playing and self.display.show_proxy(row, under)
-        if loop_spills(self.window_[1], frame, self.graph.memo.limit):
+        if under != self._spill_under:
+            self._spill_under, self._spill_from = under, self.graph.memo.evictions
+        if loop_spills(self.window_[1], frame, self.graph.memo.limit) or self.graph.memo.evictions > self._spill_from:
             self.display.keep(row, under, frame, plane, PROXY_BYTES)
         return True
 

@@ -61,11 +61,13 @@ def test_a_proxy_is_the_display_s_alone_and_goes_with_the_shown_key(tmp_path):
     win.close()
 
 
-def test_a_loop_that_fits_the_memo_makes_no_proxy(tmp_path):
+def test_a_loop_makes_no_proxy_until_the_memo_lets_go(tmp_path):
     from tools import gray
     win = _stopped_window(tmp_path, [gray], "gray")
     for row in range(win.count):
         win.graph.compute("gray", row)
         assert win._show(row)
     assert win.display._proxies == {}
+    win.graph.memo.evictions += 1                               # the memo let a plane go: the loop did not fit after all
+    assert win._show(0) and 0 in win.display._proxies
     win.close()

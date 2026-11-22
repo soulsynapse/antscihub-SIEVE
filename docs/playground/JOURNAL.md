@@ -35,6 +35,13 @@ overrule them. His freeing me from a spec's decision endorses neither side of it
 - O7, from the 850 periods: what one more cut, run or node costs a turn of either thread does
   not grow with how many there are.
 
+- O8, his: a bare walk and a clip walk leave the same held; bare is only the faster for having
+  no window beside it.
+- O9, his: nothing computed only for the window reaches a tool, a walk of the clip or the held
+  file.
+- O10, his: the window shows what is asked of it, every series node's line over its rows, whether
+  or not a clip walk was made.
+
 ## What checks the work
 
 - `sim/sim.py` is a model of the store's design with a seeded user, a simulated machine and
@@ -50,15 +57,16 @@ overrule them. His freeing me from a spec's decision endorses neither side of it
 
 ## Next
 
-The miniature he asked for at the start and I built narrower than: the player's own pure modules
-(plan, cut, held runs, heldwalks, the worker's ladder, the memo's address) driven by a faked
-decoder, tools that are a price and a digest, a clock, a disk and a seeded user, under the oracles
-with operations counted a turn. An alternative holder goes behind the seam the held runs sit
-behind and is driven against the same user.
+`sim/miniature.py` is the player's own window, worker, plan, held runs and tools over a clip made
+for it, the worker's turns taken on one thread, and it says which of O7 to O10 hold. A defect
+found on a real document is pinned there. An alternative holder goes behind the seam the held
+runs sit behind and is driven against the same checks.
 
-1. The harness, with a user who thresholds a noisy gate into hundreds and thousands of cuts. It
-   is the miniature once it fails O7 on the commit before the 850-period fix and passes after.
-2. What it finds of the three costs still linear a hold (the finding below names them), fixed.
+1. O9: a window's walk is held as a run (`PlayerWindow._window_ready`) and served to the clip
+   walk. Either a window's runs serve the window alone and are never written, or they are not
+   held.
+2. O10: a cutting node cut by a result on a wire makes no cut until a run of that result over
+   the whole clip is held (`heldwalks.gate_result`), so the window shows nothing below it.
 3. The held runs onto the store behind that seam, driven against today's. Goal 2 moves here.
 4. The keeper's address follows `cut.read`, as the memo's does; then series and stepped nodes
    under it, `track` above all.

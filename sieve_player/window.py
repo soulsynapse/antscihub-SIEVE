@@ -1577,6 +1577,8 @@ class PlayerWindow(QMainWindow):
                 left = f", {clock((total - done) / rate)} left" if rate else ""
                 self.header.note.setText(f"bare: {done} of {total} rows, {rate:.0f} a second{left}")
                 self._bare_rate = rate
+            elif "period" in said:
+                self.header.note.setText(f"bare: a period, {said['period']} of {said['of']}")
             elif "count" in said:
                 self.decoder.ends_at(said["count"])   # the bare walk found the stream's end; this process's decoder may not have read that far
                 self._shortened(self.decoder.count)
@@ -1585,16 +1587,25 @@ class PlayerWindow(QMainWindow):
                 if not self._bare_stands():
                     return
                 with open(said["results"], "rb") as f:
-                    results, start, fps = pickle.load(f)
+                    results, start, fps, periods = pickle.load(f)
                 self._end_bare(f"bare: the clip in {clock(took)}, {getattr(self, '_bare_rate', 0.0):.0f} rows a second"
-                               + (f"; {', '.join(results)} read back" if results else ""))
-                if results:
-                    self._clip_ready(results, start, fps)
+                               + (f"; {', '.join(results)} read back" if results else "")
+                               + (f", and {len(periods)} periods" if periods else ""))
+                self._take_bare(results, start, fps, periods)
             elif "refused" in said:
                 self._end_bare(f"bare: {said['refused']}")
             elif "failed" in said:
                 row, nid, text = said["failed"]
                 self._end_bare(f"bare: {nid or 'a tool'} raised at row {row}: {text}")
+
+    def _take_bare(self, results, start, fps, periods):
+        """What a bare walk left, as bare.py's file has it, is held as a clip walk's is: the clip's
+        results at once, so the cuts they make are the plan's before each cut's own are held."""
+        if results:
+            self._clip_ended = True
+            self._clip_ready(results, start, fps)
+        for got, first, of in periods:
+            self._period_ready(got, first, of, fps)
 
     def _bare_stands(self):
         """Whether the bare walk under way stands, by the keys it began under; one that does not is ended, its results dropped."""

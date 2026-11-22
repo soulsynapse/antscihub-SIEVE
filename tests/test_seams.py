@@ -34,7 +34,7 @@ MAY_IMPORT = {
     "walk": {"budget", "cut", "density", "graph", "registry", "stream", "wire"},         # of the stream, the words a begin says what began it by; no Qt, see below
     "worker": {"decoder", "graph", "stream", "walk"},
     "heldwalks": {"cut", "held", "walk", "wire"},       # the held runs as the walks take them; no Qt, so a one-off drives them without a window
-    "bare": {"budget", "decoder", "document", "graph", "registry", "result_keeper", "walk"},      # the clip walk's own process: no window, no stream's reader, no Qt
+    "bare": {"budget", "decoder", "document", "graph", "held", "heldwalks", "registry", "result_keeper", "walk"},      # the clip walk's own process: no window, no stream's reader, no Qt
     "density": set(),
     "recent": set(),
     "theme": set(),

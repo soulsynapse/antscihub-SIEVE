@@ -1,10 +1,13 @@
 """`python -m sieve_player.bare job.json`: the clip walked in a process of its own, with no stream
-listened to and no interface beside it, and the series chain's results left in a file. The window
-starts it (PlayerWindow's Bare) and reads its stdout, one JSON object a line: `{"done", "total",
-"rate"}` as rows land, `{"count"}` where the stream ended short of the rows claimed, then one of `{"results": path}`, `{"refused": why}` or `{"failed": [row,
-node, text]}`. The job is `job()`'s dict. The walk is walk._Walk's own, driven on this thread, on a
-Graph handed a result_keeper.Keeper: a frame node's small rows made here are read back by the
-next bare walk of the same document, code and footage instead of made again.
+and no interface beside it, and what a clip walk in the player holds left in a file: the series
+chain's results over the clip, then each cut in time's that those and the cuts' own make. The
+window starts it and reads its stdout, one JSON object a line: `{"done", "total", "rate"}` as rows
+land, `{"count"}` where the stream ended short, `{"period", "of"}` as cuts are walked, then one of
+`{"results": path}`, `{"refused": why}` or `{"failed": [row, node, text]}`. The file pickles (the
+clip's results, their first row, fps, [(a cut's results, its first row, the cut as
+heldwalks.period_run takes it), ...] as walked). The walk is walk._Walk's, driven on this thread,
+on a Graph handed a result_keeper.Keeper, which reads a frame node's small rows back to the next
+bare walk of the same document, code and footage.
 """
 import json
 import os
@@ -47,10 +50,12 @@ def main(path):
         j = json.load(f)
     for root in j["roots"]:
         sys.path.insert(0, os.path.dirname(root))
+    from . import held
     from .decoder import Decoder, EndOfStream
     from .document import Document
     from .graph import Graph
-    from .registry import discover
+    from .heldwalks import gate_result, held_chain, period_run
+    from .registry import cut_by, discover
     from .result_keeper import Keeper
     from .walk import _Walk
 
@@ -58,7 +63,15 @@ def main(path):
     doc = Document.from_dict(j["document"], tools)
     doc.path = j["path"]
     keeper = Keeper(j["video"])
-    g = Graph(doc, Decoder(j["video"], cache_bytes=HOLD), tools, memo_bytes=HOLD, keeper=keeper)
+    runs = held.Runs(1 << 62, lambda nid, result: 0)    # every run stays: the file is written of them all
+
+    def cut_result(nid, key, within):
+        by = cut_by(tools.get(doc.node(nid).tool))
+        wired = by and doc.source(nid, by[0])
+        return gate_result(runs, wired.src, key, within, footage.count) if wired else None
+
+    footage = Decoder(j["video"], cache_bytes=HOLD)
+    g = Graph(doc, footage, tools, memo_bytes=HOLD, keeper=keeper, cut_result=cut_result)
     g.sync()
     p = g.snapshot()
     if not g.fed(p.walk):
@@ -84,16 +97,49 @@ def main(path):
             say(failed=[failed.last[0], failed.last[1], "the chain raised over the rows the stream had"])
             return 1
     except Exception as e:
+        keeper.close()
         say(failed=[walk.start + walk.i, getattr(e, "sieve_node", ""), f"{type(e).__name__}: {e}"])
         return 1
-    finally:
-        keeper.close()
     if refused.last:
+        keeper.close()
         say(refused=refused.last[0])
         return 1
     results, start, fps = ready.last or ({}, 0, g.fps)
+    has = {nid: r for nid, r in results.items() if isinstance(r, dict) and "signal" in r}
+    rows = max((len(r["signal"]) for r in has.values()), default=0)
+    runs.hold(0, rows, {nid: r for nid, r in has.items() if len(r["signal"]) == rows}, held_chain(p, p.chain))
+    periods, tried = [], set()
+    leg = _Walk(g, name="clip", every=1 << 62, progress=_Told(), ready=_Told(), refused=refused, failed=failed, keeps=True)
+    try:
+        while True:
+            g.sync()
+            p = g.snapshot()
+            due = [(w, c) for w in p.timed for c in w.cuts
+                   if c.extent.rows[0] < c.extent.rows[1] and (p.entries[w.heads[0]].src, c) not in tried]
+            if not due:
+                break
+            for n, (w, c) in enumerate(due):
+                of = (p.entries[w.heads[0]].src, c)
+                tried.add(of)
+                leg.plan, leg.walked, leg.cut, leg.ready.last = p.of(w), *of, None
+                leg.begin(c.extent.rows[0], c.extent.rows[1] - c.extent.rows[0])
+                while leg.i < leg.length:
+                    leg.turn()
+                if leg.ready.last is None:
+                    continue
+                got, first, _ = leg.ready.last
+                periods.append((got, first, of))
+                run = period_run(p, got, first, of)
+                if run is not None:
+                    runs.hold(run.start, run.rows, run.results, run.chain, run.cut, walked=run.walked)
+                say(period=len(tried), of=len(tried) + len(due) - n - 1)
+    except Exception as e:
+        say(failed=[leg.start + leg.i, getattr(e, "sieve_node", ""), f"{type(e).__name__}: {e}"])
+        return 1
+    finally:
+        keeper.close()
     with open(j["out"], "wb") as f:
-        pickle.dump((results, start, fps), f, protocol=pickle.HIGHEST_PROTOCOL)
+        pickle.dump((results, start, fps, periods), f, protocol=pickle.HIGHEST_PROTOCOL)
     say(results=j["out"])
     return 0
 

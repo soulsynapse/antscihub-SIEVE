@@ -10,7 +10,7 @@ import psutil
 
 CEILINGS = {"cache": 4 << 30, "memo": 4 << 30, "stack": 512 << 20, "held": 512 << 20, "hold": 64 << 20,
             "proxy": 512 << 20}   # the display's packed pictures of rows a looping window's memo cannot hold
-HELD_AT_ONCE = {"cache": 1, "memo": 1, "stack": 4, "held": 1, "hold": 2, "proxy": 1}   # the worker's four walks; the bare process's memo and cache
+HELD_AT_ONCE = {"cache": 1, "memo": 1, "stack": 6, "held": 1, "hold": 2, "proxy": 1}   # the worker's four walks and the bare process's two; its memo and cache
 SHARE = 0.5
 TOTAL_ENV, MEMO_ENV, CACHE_ENV = "SIEVE_MEMORY_GB", "SIEVE_MEMO_GB", "SIEVE_CACHE_GB"
 OVERRIDES = {"memo": MEMO_ENV, "cache": CACHE_ENV}

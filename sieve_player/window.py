@@ -38,7 +38,6 @@ from .pane import Pane
 from .plan import stands, walked_keys
 from . import registry
 from .registry import CATEGORIES, Entry, category, description, signature
-from .result_keeper import Keeper
 from .stream import ASKED, EDIT, HAND, Emitter
 from .theme import GAP, PAD, ROW_H, readout
 from .timeline import Timeline
@@ -49,7 +48,8 @@ from .worker import Worker
 
 STALE_MS = 250              # how long the cards' marks of other code may wait on a run held alone
 HOLD_MS = 2000              # how long the held runs rest, nothing new held, before they are written beside the document
-HELD_BYTES = budget.here()["held"]      # what the held runs may take together, as wire.result_bytes counts them, before the oldest go
+HELD_BYTES = budget.here()["held"]      # what the held runs and the window's own take together, as wire.result_bytes counts them, before the oldest go
+WINDOW_RUNS_BYTES = HELD_BYTES // 8     # the window's own runs' part of it
 TELL = 0.1                  # s between the worker's tellings of a walk's rows; docs/findings/2026-11-13-a-signal-a-row.md
 DUMP_ENV = "SIEVE_DUMP"  # names the file every video opened in this process dumps its stream to
 
@@ -494,8 +494,8 @@ class PlayerWindow(QMainWindow):
         self._clip_asked = False                  # a clip walk was asked for and has not finished or been stopped
         self._of_plan = None                      # the Plan _of_cuts was answered of
         self._of_cuts = (None, None, {})          # (the walked nodes' chain and the count, held_periods, node -> listed_cuts) as _show_held last answered them; the first None once the runs are taken whole
-        self.runs = held.Runs(HELD_BYTES, self._result_bytes) # the held runs, the file's and this session's walks of the clip and its cuts
-        self.window_runs = held.Runs(HELD_BYTES // 8, self._result_bytes)   # the window's own walks: they serve the window again and nothing else reads them
+        self.runs = held.Runs(HELD_BYTES - WINDOW_RUNS_BYTES, self._result_bytes)  # the held runs, the file's and this session's walks of the clip and its cuts
+        self.window_runs = held.Runs(WINDOW_RUNS_BYTES, self._result_bytes)   # the window's own walks: they serve the window again and nothing else reads them
         self._spared = False                      # the window's results are a held run's, and the worker runs no chain over it
         self._clip_ended = False                  # the clip walk told of its last row and its results have not yet come
         self._clip_rests = False                  # the clip walk last told of every row of its range done: the clip's last, or the one it was stopped at
@@ -1125,9 +1125,11 @@ class PlayerWindow(QMainWindow):
         decoder_module.read_frame_times_ahead(path, lambda rows, path=str(path): self.framesCounted.emit(path, rows))     # the first seek would wait on it: docs/findings/2026-11-15-a-file-whose-times-do-not-count-its-rows.md
         self.stream = Emitter()
         self._file = held.File(held.path_for(self.doc.path), HELD_BYTES) if self.doc.path else None
-        loaded, keeper = self._file.load() if self._file is not None else [], Keeper(HELD_BYTES)
-        keeper.lend(self._file.chunks if self._file is not None else {})
-        self.graph = Graph(self.doc, decoder, self.tools, stream=self.stream, cut_result=self._cut_result, memo_bytes=budget.here()["memo"], keeper=keeper)
+        loaded = self._file.load() if self._file is not None else []
+        self.graph = Graph(self.doc, decoder, self.tools, stream=self.stream, cut_result=self._cut_result, memo_bytes=budget.here()["memo"], keeps=True)
+        if self._file is not None:
+            self.graph.keeper.lend(self._file.chunks)
+            self._file.chunks = {}      # the memo holds them, and lets them go as it does its own
         # the one line a report of this video's run needs beside the log's tracebacks
         print(f"SIEVE {time.strftime('%H:%M:%S')}: opened {path}: {decoder.width}x{decoder.height} at {decoder.fps:.3f} fps, "
               f"{decoder.count} rows claimed, luma plane {'read' if decoder.luma else 'converted'}; "
@@ -1607,7 +1609,7 @@ class PlayerWindow(QMainWindow):
     def _take_bare(self, results, start, fps, periods, rows):
         """What a bare walk left, as bare.py's file has it, is held as a clip walk's is: the clip's
         results at once, so the cuts they make are the plan's before each cut's own are held; and
-        its small rows are the keeper's, for the checkpoint to carry."""
+        its small rows are lent to the memo through the keeper, for the checkpoint to carry."""
         self.graph.keeper.take(rows)
         if results:
             self._clip_ended = True

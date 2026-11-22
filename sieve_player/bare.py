@@ -5,8 +5,8 @@ window starts it and reads its stdout, one JSON object a line: `{"done", "total"
 land, `{"count"}` where the stream ended short, `{"period", "of"}` as cuts are walked, then one of
 `{"results": path}`, `{"refused": why}` or `{"failed": [row, node, text]}`. The file pickles (the
 clip's results, their first row, fps, [(a cut's results, its first row, the cut as
-heldwalks.period_run takes it), ...] as walked, the frame nodes' small rows its result_keeper.Keeper
-holds, as Keeper.take takes them). The walk is walk._Walk's, driven on this thread. Nothing else
+heldwalks.period_run takes it), ...] as walked, the frame nodes' small rows its memo still holds, as
+result_keeper.Keeper.take takes them). The walk is walk._Walk's, driven on this thread. Nothing else
 of the walk is left on disk: the player's checkpoint carries the rows.
 """
 import json
@@ -56,13 +56,11 @@ def main(path):
     from .graph import Graph
     from .heldwalks import gate_result, held_chain, period_run
     from .registry import cut_by, discover
-    from .result_keeper import Keeper
     from .walk import _Walk
 
     tools = {e.name: e.module for e in discover(*j["roots"]) if e.ok}
     doc = Document.from_dict(j["document"], tools)
     doc.path = j["path"]
-    keeper = Keeper(budget.here()["held"])
     runs = held.Runs(1 << 62, lambda nid, result: 0)    # every run stays: the file is written of them all
 
     def cut_result(nid, key, within):
@@ -71,7 +69,7 @@ def main(path):
         return gate_result(runs, wired.src, key, within, footage.count) if wired else None
 
     footage = Decoder(j["video"], cache_bytes=HOLD)
-    g = Graph(doc, footage, tools, memo_bytes=HOLD, keeper=keeper, cut_result=cut_result)
+    g = Graph(doc, footage, tools, memo_bytes=HOLD, keeps=True, cut_result=cut_result)
     g.sync()
     p = g.snapshot()
     if not g.fed(p.walk):
@@ -134,7 +132,7 @@ def main(path):
     except Exception as e:
         say(failed=[leg.start + leg.i, getattr(e, "sieve_node", ""), f"{type(e).__name__}: {e}"])
         return 1
-    rows = {(key, chunk): got for key, chunk, got in keeper.kept(short=True)}
+    rows = {(key, chunk): got for key, chunk, got in g.keeper.kept(short=True)}
     with open(j["out"], "wb") as f:
         pickle.dump((results, start, fps, periods, rows), f, protocol=pickle.HIGHEST_PROTOCOL)
     say(results=j["out"])

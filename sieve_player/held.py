@@ -1,5 +1,5 @@
 """A document's checkpoint, one append-only file beside it that opens it where it was left: the runs
-its walks made, the frame nodes' small rows its keeper held, and the document as it stood. A run is a Run,
+its walks made, the frame nodes' small rows its memo held, and the document as it stood. A run is a Run,
 (start, rows, {node: result}, bytes, cut, walked), a walk's results over `rows` rows from `start`
 inside a cut, what they hold, and each walked node's rows they were stepped over. The file is the
 stamp and then tagged records, each one pickle, and File pickles a run and a chunk of kept rows

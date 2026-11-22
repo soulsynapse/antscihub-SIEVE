@@ -50,11 +50,11 @@ checkpoint that nothing checks.
   checkpoint is what should be beside it: copied to another folder and opened with no other
   source of rows, it serves every run held without walking, and after an edit below a frame node
   that makes small rows a clip walk runs that node zero times.
-- O12, from O7: what one more cut in time costs the kept rows, in steps of `result_keeper.py` and
-  in the checkpoint's bytes, does not grow with how many there are, and no chunk is written to
-  the checkpoint twice.
+- O12, from O7: what one more cut in time costs the kept rows, in steps of the trip to the
+  checkpoint (`result_keeper.py` and the memo's lent tier) and in the checkpoint's bytes, does
+  not grow with how many there are, and no chunk is written to the checkpoint twice.
 - O13, his: what a bare walk computed of a frame node's small rows reaches the checkpoint: handed
-  back with its results, held by the player's keeper, written at the save, and a player of a
+  back with its results, lent to the player's memo, written at the save, and a player of a
   copy runs that node zero times after an edit below it.
 
 ## What checks the work
@@ -90,14 +90,17 @@ testing, and a restart now and then is fine.
 
 - In the player, to be verified in the tree: holders sized from the machine's RAM (`budget.py`);
   the window-against-full test over the registry; display proxies; a tool's code in every node's
-  key; a frame node's small rows held in memory by the session's keeper (`result_keeper.py`)
-  under the node's raw key, the cut's rows and its reach, a bare walk's handed back with its
-  results; a checkpoint beside the document, one append-only file of its held runs, the keeper's
+  key; a frame node's small rows held in memory by the graph's memo alone, those this session made
+  under their memo keys and those a checkpoint or a bare walk lent in chunks beside them, one limit
+  over both; the keeper (`result_keeper.py`) holds no row, only each row's address across sessions,
+  the node's raw key, the cut's rows and its reach, and which chunks the file has had; a bare walk's
+  handed back with its results; the held runs and the window's own runs within `budget.py`'s
+  "held"; a checkpoint beside the document, one append-only file of its held runs, the kept
   chunks and the document's form (`held.py`), the one place on disk the small rows lie, whose
   document record nothing reads yet.
-- Not in the player: the memo, the decode cache, the held runs, the keeper and cut files are each
-  their own holder still; no one ask. Series and stepped results are kept by nothing across a
-  bare walk but the runs its results are held as.
+- Not in the player: the memo, the decode cache, the held runs and cut files are each their own
+  holder still; no one ask. Series and stepped results are kept by nothing across a bare walk but
+  the runs its results are held as.
 - Findings of this branch: `docs/findings/2026-11-21-the-player-died-walking-856-periods.md`,
   `docs/findings/2026-11-21-bare-walk-crashes-on-the-full-file.md`,
   `docs/findings/window-against-full.md`.
@@ -110,6 +113,9 @@ testing, and a restart now and then is fine.
   print: footage changed only between its samples is taken for the one before.
 - A kept row's address holds nothing of the player's own code or numpy's and cv2's versions, as a
   held run's key does not: an edit of the walking code or a library leaves kept rows answering.
+- A small row the memo lets go before a write is not written; the memo lets them go only after
+  every image. A bare walk's memo is `budget.py`'s "hold", well under "held": past that many
+  bytes of small rows its earliest are not handed back.
 - A crash loses every kept chunk no write has taken; a write a held run waits on takes the whole
   ones, a save and a close the rest.
 - Whether the mark of other code reaches nodes under a cut in time is unread.
@@ -118,8 +124,8 @@ testing, and a restart now and then is fine.
 
 ## His to decide, none blocking
 
-- How much of the checkpoint the kept rows may take: the window hands the keeper and the file the
-  held runs' figure, `budget.py`'s "held", as their bound.
+- How much of the checkpoint the kept rows may take: the window hands the file the held runs'
+  figure, `budget.py`'s "held", as their bound on disk; in memory they are the memo's.
 - Whether a csv written from a window's card says it is the window's.
 - The encoder's version is in no cut file's key.
 - A test in `tests/test_graph.py` asserting wall time failed once and is not marked `simulation`.

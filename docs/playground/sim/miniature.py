@@ -18,9 +18,9 @@ steps a cut at the larger count pass GROWS times those at the smaller. The monit
 left out: the clock turns them, and what they cost a cut is not seen here. O8 to O11 are asked of
 clips of CHECKED cuts; the bare walk is bare.main's, in this process. No checkpoint is written but
 O11's, O12's and O13's. O11 and O13 have a document of their own: detect below threshold, whose
-tables the keeper keeps, and size. O12 walks O7's gate and period with those three below the
+tables the checkpoint carries, and size. O12 walks O7's gate and period with those three below the
 period, at O7's two counts, then saves twice, counting the rows records the checkpoint writes and
-the steps in result_keeper.py alone.
+the steps of the trip to it alone, KEPT_IN's.
 
 Run: .venv/Scripts/python.exe -X utf8 docs/playground/sim/miniature.py [tree] [small large]
 `tree` is a checkout of the repository to drive, this one with none; `0 0` leaves O7 and O12 out. Exit 1
@@ -367,7 +367,7 @@ def walked(cuts, callers=False):
     return steps, sum(run.cut is not None for run in win.runs), prof
 
 
-KEPT_FILES = ("result_keeper.py",)
+KEPT_IN = {"result_keeper.py": None, "graph.py": ("lend", "lent", "entries")}    # file -> its functions on the trip, None every one
 
 
 def kept_walk(cuts):
@@ -390,8 +390,9 @@ def kept_walk(cuts):
     def step(code, *_):
         name = names.get(code)
         if name is None:
-            fn = code.co_filename
-            name = names[code] = f"{Path(fn).name}:{code.co_name}" if "sieve_player" in fn and Path(fn).name in KEPT_FILES else False
+            fn = Path(code.co_filename)
+            on = "sieve_player" in str(fn) and fn.name in KEPT_IN and (KEPT_IN[fn.name] is None or code.co_name in KEPT_IN[fn.name])
+            name = names[code] = f"{fn.name}:{code.co_name}" if on else False
         if name is False:
             return sys.monitoring.DISABLE
         steps[name] = steps.get(name, 0) + 1

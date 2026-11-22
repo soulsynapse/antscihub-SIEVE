@@ -47,20 +47,24 @@ this file where they differ.
   walk; two bare processes at once over one chunk are untried.
 - The mid-walk edit hole is closed (`imported_print` first). The three-walk script is kept
   as `docs/findings/experiments/bare_walk_thrice.py`.
-- FOUND, and above everything else here for his goal: a bare walk of the whole
-  `video-tests/00000.MTS` (38100 rows) under the clip's document dies of an access violation
-  every time, on `v5` as on this branch, at a row that moves, the fault handler naming
-  `tools/track.py:80`. `docs/findings/2026-11-21-bare-walk-crashes-on-the-full-file.md`. Not
-  caused by the playground and not understood. `video-tests/purb-settings.json` is refused by
-  a bare walk ("nothing reaches a walked node"), which may be the document's own state.
+- FOUND, and above everything else here: a bare walk of the whole `video-tests/00000.MTS`
+  dies of an access violation every time with `track` in it, on `v5` as here, at a row that
+  moves; and so do loops of plain Python with no numpy imported, under 3.12 and 3.13, some
+  runs. Windows logged corrected machine checks (internal parity error, a processor core) in
+  the same hour. The machine is an i9-14900KF. The finding is
+  `docs/findings/2026-11-21-bare-walk-crashes-on-the-full-file.md`; it is the machine's, not
+  SIEVE's, as far as the evidence goes, and it is his to settle (BIOS, memory test, cores).
+  Do not chase it through SIEVE. Any timing or long walk on this machine may die of it.
 - I ran `git worktree prune` after removing my own temporary checkout of v5; it cleared the
   admin entries of worktrees whose folders were already gone (it printed permission errors
   for about 25 of them). No branch was touched; `git worktree list` shows six, none prunable.
   He has been told.
-- Next action, in order: (a) the crash, as the finding's last section says: without track,
-  with memory printed, to find whether it is memory run out or memory spoiled. (b) Series and
-  stepped nodes under the keeper, track above all (`walk.py:136`, `:291`). (c) The whole-file
-  footage hash. `held.py` and his ticked decision stay untouched.
+- `video-tests/purb-settings.json` is refused by a bare walk ("nothing reaches a walked
+  node"), which may be the document's own state.
+- Next action, in order: (a) series and stepped nodes under the keeper, track above all
+  (`walk.py:136`, `:291`), as a queued slice. (b) The whole-file footage hash. (c) A long
+  walk's figure with rows kept, once the machine is settled or on another. `held.py` and his
+  ticked decision stay untouched.
 - For him besides: `tests/test_graph.py::test_events_carry_start_thread_and_cpu...` failed
   once in run 8's first full run and passed after; run 8 says it asserts wall time and is not
   marked `simulation`. By CLAUDE.md that is a defect in the test or a race, his to settle.

@@ -9,9 +9,9 @@ import statistics
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path[:0] = [str(Path(__file__).parent), str(Path(__file__).parents[3])]
 from sim import GB, PROFILES, Disk, pipeline  # noqa: E402
-from store import Address, Store  # noqa: E402
+from sieve_player.result_store import Address, Store  # noqa: E402
 
 PROXY_BYTES = 70_000
 PROXY_MAKE_MS = {"1080p": 2.2, "5.3K": 4.7}

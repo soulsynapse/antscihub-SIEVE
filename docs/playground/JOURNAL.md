@@ -27,16 +27,17 @@ this file where they differ.
   is safe already by brute force: a bare walk reuses nothing.
 - Run 9 is in (`3eca29de`): `tests/test_window_against_full.py` over the registry, 40 cases,
   suite 326 passed. A tool with a wrong or missing reach fails by name with the rows.
-- Next action, in order: (a) the proxy check's hole: `loop_spills` in `window.py` sets the
-  loop's rows of the one painted plane against the memo's limit and ignores the other planes
-  the memo holds a row; a video node's frame is the decoder cache's. Small; mine or a run's.
-  (b) The store under the exact path, as "The exact path" below ends: first write the layer
-  between `Graph._compute` and the store as a short section here (the address, the chunk
-  packing a bare walk fills and reads in order, which nodes are put), then `store.py` and
-  `folder.py` into `sieve_player` with `folder_check.py`'s seams as tests, then a queued
-  slice wiring it for bare walks only, behind the cost rule, with a test that a second bare
-  walk gives the same results as the first and computes no detect row. (c) The whole-file
-  footage hash. `held.py` and his ticked decision stay untouched.
+- Done after run 9: the proxy check also keeps proxies once the memo has let anything go
+  since the picture was first shown (`3fee9e78`, the existing test extended); `store.py` and
+  `folder.py` are now `sieve_player/result_store.py` and `result_folder.py`, named in
+  `tests/test_seams.py` as importing nothing of the player, and the simulation imports them
+  from there. Nothing in the player calls them yet.
+- Next action, in order: (a) read run 10 (the store under a bare walk's small frame rows, as
+  "The layer between a frame node and the store" below), run the suite, read its diff whole:
+  it touches `graph.py`. (b) One real bare walk twice on the crossings clip with the purb
+  document, timed, beside the simulation's figure; say the screen is not needed, it is a
+  process. (c) `folder_check.py`'s seams as a test if run 10 did not bring them. (d) The
+  whole-file footage hash. `held.py` and his ticked decision stay untouched.
 - For him besides: `tests/test_graph.py::test_events_carry_start_thread_and_cpu...` failed
   once in run 8's first full run and passed after; run 8 says it asserts wall time and is not
   marked `simulation`. By CLAUDE.md that is a defect in the test or a race, his to settle.
@@ -73,7 +74,7 @@ this file where they differ.
   passes corrected two of my claims. Not for searching, not for judging a design.
 - Run the simulation: `.venv/Scripts/python.exe docs/playground/sim/sim.py 150` (torture, a line
   a scheme) and `... sim.py prices 1080p [profile]` (the table below), a few seconds each.
-- Counters: queued runs 9 of 25, all nine landed (his figure, 2026-11-21). No cap on design cycles, by the same word: a
+- Counters: queued runs 10 of 25, the tenth in flight when this was written (his figure, 2026-11-21). No cap on design cycles, by the same word: a
   cycle on the simulation is run when a slice raises a question whose answer would change it.
 - Context: `bash ~/.claude/tools/context-used.sh 300` prints what is left before the auto-compact
   window (300k by his `/autocompact` on 2026-11-21). Bring this file up to date before a step
@@ -525,6 +526,25 @@ code print and the library versions added; rows are packed a chunk at a time by 
 between `_compute` and the store, which a bare walk fills in order and a later one reads in
 order; only nodes whose rows are small (tables, scalars) are put, by the cost rule. First to
 settle, by a one-off: that a row decoded after a seek equals the row decoded in sequence.
+
+## The layer between a frame node and the store (what run 10 is asked to build)
+
+- Only a bare walk has it: `bare.py` hands its Graph a keeper; the window's Graph has none,
+  so nothing a window shows changes.
+- What is kept: a frame node's row that is not image-shaped (a table, a scalar) and not
+  static. Planes are never kept: the cost rule, decided by kind and not measured a row.
+- The address: a digest of the memo's own address less the row (raw key, what was read of
+  the cut), the code print of the node's tool and of every tool upstream of it, and the
+  versions of sieve_player's own files it runs through, numpy and cv2; then the chunk, a
+  fixed count of rows (256), the count in the name.
+- A walk in order fills a chunk's rows and puts the chunk when it is whole, or at the walk's
+  end; a memo miss asks for the row's chunk first, once a chunk, and a row answered is made
+  read-only and memoized as a made one is, its inputs never asked.
+- Holds: a second bare walk's results equal the first's by `tests/stepping.same` and it runs
+  detect for no row; a changed param, a changed tool file, or a chunk cut short makes rows
+  again and raises nothing; a folder that cannot be written is a walk as today.
+- Not in it: series and stepped nodes, `p.timed`, the window, checkpoints, a budget read off
+  the disk (a fixed figure with an env override for now).
 
 ## What a loop costs, planes against proxies (`sim/proxyrate.py`, `sim/loop.py`)
 

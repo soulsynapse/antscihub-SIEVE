@@ -1,8 +1,8 @@
-"""The candidate store of docs/playground/contract.md: a memory tier over a disk tier, under budgets.
+"""The store of results: a memory tier over a disk tier, under budgets, with checkpoints.
 
 It reaches a disk only through the object it is handed (`write`, `rename`, `read`, `names`,
 `delete`, `size`, `age`, `touch`, `used`, `budgeted`, `write_seconds`, `read_seconds`, `mark`, `marked`, `lock`), so the
-simulation hands it a simulated one and the player a real one.
+simulation in docs/playground/sim hands it a simulated one and the player result_folder's.
 """
 import heapq
 from contextlib import nullcontext

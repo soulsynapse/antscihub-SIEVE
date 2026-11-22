@@ -13,8 +13,8 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent))
-from store import Address, Refused, Store, address_of  # noqa: E402
+sys.path[:0] = [str(Path(__file__).parent), str(Path(__file__).parents[3])]
+from sieve_player.result_store import Address, Refused, Store, address_of  # noqa: E402
 
 MB, GB = 1 << 20, 1 << 30
 sys.setrecursionlimit(100000)

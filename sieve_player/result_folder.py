@@ -1,4 +1,4 @@
-"""A real folder as store.py's disk: the same calls the simulated Disk answers, over files.
+"""A real folder as result_store's disk, over files.
 
 An entry's file is a header of a magic, the payload's length and its crc32, then the pickled
 value; a file whose header, length or checksum is wrong is no entry. Ages are seconds by the

@@ -27,6 +27,8 @@ MAY_IMPORT = {
     "plot": {"density", "document", "theme"},       # document.shown is the one statement of what is drawn
     "timeline": {"theme"},
     "decoder": set(),
+    "result_store": set(),                        # a store of results over a disk it is handed; it knows no key's making and no file
+    "result_folder": set(),                       # that disk over a real folder; nothing of the player
     "held": {"cut"},                              # a pickle and a stamp, and what a walk read of its cut; the window writes and reads it
     "walk": {"budget", "density", "graph", "registry", "stream", "wire"},         # of the stream, the words a begin says what began it by; no Qt, see below
     "worker": {"decoder", "graph", "stream", "walk"},

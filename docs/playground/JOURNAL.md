@@ -373,6 +373,37 @@ full walk; smooth is handed the window's rows alone and pads with NaN (`walk.py:
 (`held.py:261`) and `walked_rows` (`held.py:330`) merges runs row by row, earliest first, whose
 consumer I have not looked for. If that feeds anything exact it is reported to him, not mended.
 
+Five more Haiku checks the same day (their quoted lines, not reread by me):
+
+- Every tool already says how far it reads: `reach_in_rows` gives (rows before, rows after),
+  None for a side without bound, (0, 0) for a row-by-row tool, and an undeclared tool is
+  taken as unbounded both ways (`sieve_player/registry/__init__.py:33`, `:206`). Background
+  declares none and is `STATIC`. `KIND` is frame, series or selector and says nothing of
+  reach. So no new declaration is wanted: a row a walk made is exact when the reach summed
+  along what is upstream of it, cut off at its extent's ends, lay inside the walk's range,
+  and window-grade otherwise. A window's inner rows of smooth are exact and the full walk's
+  to reuse; only its edges are not.
+- Region always crops in memory; `serve clip` puts a baked clip in its place. `key_params` is
+  plate and rect only; `serve clip` and `quality` reach the key only through the file branch
+  of `plan.py:205` and `:266`. The bake is libx264 preset medium, crf 18 by default or qp 0;
+  a landed key is not baked again; the cut file's key is footage, extent and recipe. Whether
+  two bakes give the same bytes nothing in the code says.
+- A looped row is painted from the memo's full-size array (`window.py:1240`, `graph.py:864`),
+  copied into a QPixmap each paint; no smaller copy is kept. A row the memo let go is made
+  again by the worker every pass. So a loop that does not fit the memo recomputes for ever,
+  which is the cost he named, and a proxy is new.
+- `walked_rows` has one caller, `heldwalks.py:70`, and what it merges is handed to a walk as
+  a period's results (`walk.py:187`, `worker.py:125`): it feeds computing, not drawing.
+- A bare walk walks the whole clip and takes nothing from a held run. The csv card writes
+  the result the window hands it (`window.py:1284`, `tools/_csvfile.py:121`), which may be a
+  held run of a window's range. For him: whether a csv written from a window is meant to be
+  exact; under his words it is the window's, and the bare walk's is the exact one.
+
+The simulation's gap, seen while reading it for this: it has a single row looked at and a walk
+of the whole clip, and no walk of a window, which is what the player does most. Its look at a
+tracker's row makes every chunk before it exactly, which the player does not and he does not
+want.
+
 Withdrawn: asking a reach tool's input for rows either side so that a window is exact. He does
 not want a window exact. The ledger experiment counts this as a second miss no claim named,
 caught by him.

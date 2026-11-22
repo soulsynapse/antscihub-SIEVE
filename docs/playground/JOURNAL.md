@@ -417,6 +417,15 @@ the exact address the first seed with a window breaks. Not in it: a window over 
 or a gate (the op passes them over), the gate a window would make of its own rows, proxies
 (they are `loop.py`'s), and a baked cut.
 
+Baking a cut twice, tried (2026-11-21, by hand, not kept as a script): the crossings clip
+cropped to 640x480 through ffmpeg with `_cutfile.py`'s standard arguments three times gave one
+sha1, and a fourth time with `-threads 3` the same bytes again; ffmpeg here is the gyan.dev
+build of 2025-02-06. So on one machine and one ffmpeg a bake let go and made again is the same
+clip, and "dropping an entry changes time and nothing else" holds of it. It is not shown
+across ffmpeg or x264 versions, which a cluster's nodes or an upgrade would differ in: the
+cut file's key holds footage, extent and recipe and not the encoder's version. To hold across
+machines the key wants the encoder's print in it. His to hear at the stop; nothing is built.
+
 ## What a loop costs, planes against proxies (`sim/proxyrate.py`, `sim/loop.py`)
 
 Measured on this machine from the crossings clip (`proxyrate.py video-tests/00000_168-178.mp4`):

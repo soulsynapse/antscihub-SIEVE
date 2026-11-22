@@ -27,8 +27,7 @@ MAY_IMPORT = {
     "plot": {"density", "document", "theme"},       # document.shown is the one statement of what is drawn
     "timeline": {"theme"},
     "decoder": set(),
-    "result_store": set(),                        # a store of results over a disk it is handed, and that disk over a real folder; it knows no key's making
-    "result_keeper": {"budget", "recent", "registry", "result_store", "wire"},  # a frame node's rows by an address of its key, code and libraries; the Graph is handed one and imports none
+    "result_keeper": {"wire"},                    # a frame node's small rows in memory by an address of its key; the Graph is handed one and imports none, and the checkpoint is handed its `kept`
     "held": {"cut"},                              # a pickle and a stamp, and what a walk read of its cut; the window writes and reads it
     "walk": {"budget", "cut", "density", "graph", "registry", "stream", "wire"},         # of the stream, the words a begin says what began it by; no Qt, see below
     "worker": {"decoder", "graph", "stream", "walk"},

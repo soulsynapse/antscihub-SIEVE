@@ -6,6 +6,7 @@ changed; the window carries the change to the runtime, built on every load of a 
 re-synced on every change, and carries the runtime's results and standings back to the widgets.
 The display reads the memo and never waits on the decoder. It opens on whatever the document names, or empty, and never prompts.
 """
+import functools
 import json
 import os
 import pickle
@@ -1124,7 +1125,7 @@ class PlayerWindow(QMainWindow):
         decoder_module.read_frame_times_ahead(path, lambda rows, path=str(path): self.framesCounted.emit(path, rows))     # the first seek would wait on it: docs/findings/2026-11-15-a-file-whose-times-do-not-count-its-rows.md
         self.stream = Emitter()
         self._file = held.File(held.path_for(self.doc.path), HELD_BYTES) if self.doc.path else None
-        loaded, keeper = self._file.load() if self._file is not None else [], Keeper()
+        loaded, keeper = self._file.load() if self._file is not None else [], Keeper(HELD_BYTES)
         keeper.lend(self._file.chunks if self._file is not None else {})
         self.graph = Graph(self.doc, decoder, self.tools, stream=self.stream, cut_result=self._cut_result, memo_bytes=budget.here()["memo"], keeper=keeper)
         # the one line a report of this video's run needs beside the log's tracebacks
@@ -1592,20 +1593,22 @@ class PlayerWindow(QMainWindow):
                 if not self._bare_stands():
                     return
                 with open(said["results"], "rb") as f:
-                    results, start, fps, periods = pickle.load(f)
+                    results, start, fps, periods, rows = pickle.load(f)
                 self._end_bare(f"bare: the clip in {clock(took)}, {getattr(self, '_bare_rate', 0.0):.0f} rows a second"
                                + (f"; {', '.join(results)} read back" if results else "")
                                + (f", and {len(periods)} periods" if periods else ""))
-                self._take_bare(results, start, fps, periods)
+                self._take_bare(results, start, fps, periods, rows)
             elif "refused" in said:
                 self._end_bare(f"bare: {said['refused']}")
             elif "failed" in said:
                 row, nid, text = said["failed"]
                 self._end_bare(f"bare: {nid or 'a tool'} raised at row {row}: {text}")
 
-    def _take_bare(self, results, start, fps, periods):
+    def _take_bare(self, results, start, fps, periods, rows):
         """What a bare walk left, as bare.py's file has it, is held as a clip walk's is: the clip's
-        results at once, so the cuts they make are the plan's before each cut's own are held."""
+        results at once, so the cuts they make are the plan's before each cut's own are held; and
+        its small rows are the keeper's, for the checkpoint to carry."""
+        self.graph.keeper.take(rows)
         if results:
             self._clip_ended = True
             self._clip_ready(results, start, fps)
@@ -1711,9 +1714,11 @@ class PlayerWindow(QMainWindow):
 
     def _write_held(self, wait=False):
         """A clip walk's results that stand are held as a run, and the runs held since the checkpoint
-        was written go into it when the document has been saved, with the kept rows walks read and
-        the document as it stands, on a thread of their own, which pickles only what the file has
-        not had; `wait` returns once the file has landed. A write that did not land is made again
+        was written go into it when the document has been saved, with the keeper's whole chunks the
+        file lacks and the document as it stands, on a thread of their own, which pickles only what
+        the file has not had; `wait` returns once the file has landed. A save and the video's close
+        wait, and they write the chunks short of their rows too, and a close writes where the keeper
+        has a chunk no write took though no run was held. A write that did not land is made again
         with the next, the one at the video's close included."""
         if self.graph is None:
             return
@@ -1729,12 +1734,13 @@ class PlayerWindow(QMainWindow):
         if self._write_failed.is_set() and not self._writer.is_alive():
             self._write_failed.clear()
             self._unwritten = True
-        if path and self._unwritten:
+        keeper = self.graph.keeper
+        if path and (self._unwritten or (wait and keeper.waiting())):
             self._unwritten = False
             if self._file is None or self._file.path != path:
                 self._file = held.File(path, HELD_BYTES)       # the document saved under another name: nothing there is known to be this one's
-            self._writer = threading.Thread(target=_save_held, args=(self._file, list(self.runs), self.graph.keeper.kept, json.loads(self._text()),
-                                                                     self._write_failed), name="held")
+            self._writer = threading.Thread(target=_save_held, args=(self._file, list(self.runs), functools.partial(keeper.kept, short=wait),
+                                                                     json.loads(self._text()), self._write_failed), name="held")
             self._writer.start()
             if wait:
                 self._writer.join()

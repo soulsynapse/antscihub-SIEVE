@@ -1,39 +1,17 @@
-"""What walks keep of a frame node's rows between processes, the player's and a bare walk's: a
-Graph handed a Keeper asks it on a memo miss and tells it each row it made; the rows go to
-result_store over its Folder a chunk at a time. Only rows that are no image (ndim < 2 arrays, tables, scalars) of frame nodes that
-are not static, served or stepped are kept. A document's checkpoint (held.File) lends it the chunks
-it carries, answered before the folder, and takes the chunks walks read through `kept`. No failure
-of the folder reaches the caller.
+"""A frame node's small rows in memory, by address: a Graph handed a Keeper asks it on a memo miss
+and tells it each row it made. Only rows that are no image (ndim < 2 arrays, tables, scalars) of
+frame nodes that are not static, served or stepped are kept. It has no disk of its own: a
+document's checkpoint (held.File) lends it the chunks it carries and takes through `kept` those it
+lacks, and a bare walk hands back what its Keeper holds, which the player's `take`s.
 """
 import hashlib
-import itertools
-import os
 import threading
-from collections import OrderedDict
-from pathlib import Path
 
-import cv2
 import numpy as np
 
-from .budget import gb
-from .recent import app_folder
-from .result_store import Address, Folder, Store
 from .wire import nbytes
 
 CHUNK = 256         # rows a chunk holds; in every address's name
-ANSWERS = 8         # chunks read back held at once: a walk in order reads one a node, and a tool near its row the one before
-FOLDER_ENV, BUDGET_ENV = "SIEVE_RESULTS", "SIEVE_RESULTS_GB"
-BUDGET = 20 << 30
-_OPENED = itertools.count()     # in a Folder's writer name, so two Keepers of one process write no one part
-
-
-def player_print():
-    """A digest of sieve_player's own .py files as they lie on disk now."""
-    h = hashlib.sha1()
-    root = Path(__file__).parent
-    for path in sorted(root.rglob("*.py")):
-        h.update(path.relative_to(root).as_posix().encode() + b"\0" + path.read_bytes() + b"\0")
-    return h.hexdigest()[:16]
 
 
 def keepable(row):
@@ -42,134 +20,114 @@ def keepable(row):
 
 
 class Keeper:
-    """The rows of walks over `root`, `budget` bytes of disk; the user's folder and budget, by
-    FOLDER_ENV and BUDGET_ENV over the defaults, with neither handed. An address is the row's raw
-    key, which holds the footage as decoder.footage_print samples it and the code of every tool
-    above as discover imported it, the cut's rows, the node's reach, and this player's code and
-    libraries: footage changed only where that print does not sample it is taken for the one
-    before. Any thread may call it, one at a time under its lock. `close()` puts every chunk filled
-    any of since the last, and is called as a walk ends and before the Keeper is let go; a chunk
-    short of CHUNK rows is read back at its next ask and filled on."""
+    """The small rows walks made or were lent, as {(address key, chunk): {row: value}}, `limit`
+    bytes of them by wire.nbytes, None no bound: past it no chunk is begun and none taken, and none
+    held is let go. An address is the row's raw key, which holds the footage as
+    decoder.footage_print samples it, the code of every tool above as discover imported it and the
+    params, with the cut's rows and the node's reach: footage changed only where that print does
+    not sample it is taken for the one before, and nothing of the player's own code or its
+    libraries is in it. A chunk lent or taken is whole as it came, and one made here when it has
+    every row of its CHUNK the cut holds, so one of a node walked uncut that ends the footage is
+    never whole. Any thread, each call short under its lock."""
 
-    def __init__(self, root=None, budget=None):
-        self.answers, self.pending, self.lent = OrderedDict(), {}, {}
-        self.asked, self.changed, self.done, self.addresses = set(), set(), set(), {}
-        self.touched = set()        # the addresses answered from or put since this Keeper was made
+    def __init__(self, limit=None):
+        self.limit, self._bytes = limit, 0
+        self._chunks = {}           # (key, chunk) -> {row: value}
+        self._spans = {}            # (key, chunk) -> (first row, row past the last) of the rows it is whole with
+        self._waiting = set()       # the chunks made or taken that no `kept` has handed out
+        self._addresses = {}
         self._lock = threading.Lock()
-        try:
-            root = root or os.environ.get(FOLDER_ENV) or os.path.join(app_folder(), "results")
-            self.store = Store(Folder(root, f"keeper{os.getpid()}-{next(_OPENED)}"), 0, budget or gb(BUDGET_ENV, os.environ) or BUDGET)
-            self.libraries = (player_print(), np.__version__, cv2.__version__)
-        except Exception:
-            self.store = None
 
     def ask(self, e, row, cut):
-        """`e`'s row `row` in `cut` as a walk before kept it, read-only, or None."""
+        """`e`'s row `row` in `cut` as a walk kept it or a checkpoint lent it, read-only, or None."""
         with self._lock:
             a = self._address(e, row, cut)
-            if a is None:
-                return None
-            if a not in self.asked:
-                self.asked.add(a)
-                self.answers[a] = held = self.lent.get(a) or self._read(a)
-                if held:
-                    self.touched.add(a)
-                if len(held) >= CHUNK:
-                    self.done.add(a)
-                elif held:
-                    self.pending[a] = dict(held)
-                while len(self.answers) > ANSWERS:
-                    self.answers.popitem(last=False)
-            return self.answers.get(a, {}).get(row)
+            return None if a is None else self._chunks.get(a, {}).get(row)
 
     def made(self, e, row, cut, value):
-        """`value` is what `e` made at `row` in `cut`, as the memo holds it."""
+        """`value` is what `e` made at `row` in `cut`, as the memo holds it, read-only."""
         if not keepable(value):
             return
         with self._lock:
             a = self._address(e, row, cut)
-            if a is None or a in self.done:
+            if a is None:
                 return
-            rows = self.pending.setdefault(a, {})
-            rows[row] = value
-            self.changed.add(a)
-            if len(rows) >= CHUNK:
-                self._put(a)
-
-    def close(self):
-        with self._lock:
-            for a in list(self.pending):
-                self._put(a)
+            rows = self._chunks.get(a)
+            if rows is None:
+                if self.limit is not None and self._bytes >= self.limit:
+                    return
+                rows = self._chunks[a] = {}
+                self._waiting.add(a)
+            if row not in rows:
+                rows[row] = value
+                self._bytes += nbytes(None, value)
 
     def lend(self, chunks):
-        """Answers from `chunks`, (address key, chunk) to {row: value} as held.File.chunks has them,
-        before the folder; called before the first ask."""
-        lent = {}
+        """Answers from `chunks`, (address key, chunk) to {row: value} as held.File.chunks has
+        them, where they are rows of that chunk; a checkpoint's, which `kept` hands out again only
+        to a checkpoint that lacks them."""
+        self._add(chunks, waiting=False)
+
+    def take(self, chunks):
+        """Answers from `chunks`, as `lend` takes them, that no checkpoint has had: a bare walk's."""
+        self._add(chunks, waiting=True)
+
+    def waiting(self):
+        """Whether a chunk made or taken has not been handed out by `kept`."""
+        with self._lock:
+            return bool(self._waiting)
+
+    def kept(self, had=(), short=False):
+        """(address key, chunk, rows) of each chunk held that is none of `had`, (key, chunk) pairs,
+        whole, or with `short` whatever its rows: a copy of the rows held as it is handed. A
+        generator, so what is not taken is not copied."""
+        had = set(had)
+        with self._lock:
+            self._waiting -= had
+            todo = sorted(self._chunks.keys() - had)
+        for a in todo:
+            with self._lock:
+                rows = self._chunks[a]
+                lo, hi = self._spans[a]
+                if not (short or len(rows) >= hi - lo):
+                    continue
+                rows = dict(rows)
+                self._waiting.discard(a)
+            yield (*a, rows)
+
+    def _add(self, chunks, waiting):
+        took = {}
         for (key, chunk), rows in chunks.items():
-            if isinstance(rows, dict) and all(isinstance(r, int) and r // CHUNK == chunk and keepable(v) for r, v in rows.items()):
+            if isinstance(key, str) and isinstance(chunk, int) and isinstance(rows, dict) and all(
+                    isinstance(r, int) and r // CHUNK == chunk and keepable(v) for r, v in rows.items()):
                 for v in rows.values():
                     if isinstance(v, np.ndarray):
                         v.setflags(write=False)
-                lent[Address(key, chunk)] = rows
+                took[(key, chunk)] = rows
         with self._lock:
-            self.lent.update(lent)
-
-    def kept(self, had=()):
-        """(address key, chunk, rows) of each chunk answered from or put since this Keeper was made
-        and not being filled now, none of `had`, (key, chunk) pairs: rows memory holds, else read
-        back from the folder outside the lock, a chunk that does not read left out. A generator, so
-        what is not taken is not read; any thread."""
-        with self._lock:
-            todo = sorted(a for a in self.touched if (a.key, a.chunk) not in had and a not in self.pending)
-        for a in todo:
-            with self._lock:
-                rows = self.answers.get(a) or self.lent.get(a)
-            if not rows:
-                try:
-                    got = self.store.disk.read(a.name, touch=False)
-                except Exception:
-                    got = None
-                rows = None if got is None else self._valid(a, got[0])
-            if rows:
-                yield a.key, a.chunk, rows
+            for a, rows in took.items():
+                held = self._chunks.get(a)
+                if held is None:
+                    if self.limit is not None and self._bytes >= self.limit:
+                        continue
+                    held = self._chunks[a] = {}
+                self._spans[a] = (0, 0)
+                new = {r: v for r, v in rows.items() if r not in held}
+                held.update(new)
+                self._bytes += sum(nbytes(None, v) for v in new.values())
+                if waiting and new:
+                    self._waiting.add(a)
 
     def _address(self, e, row, cut):
-        if self.store is None or e.kind != "frame" or e.static or e.file is not None or e.steps:
+        if e.kind != "frame" or e.static or e.file is not None or e.steps:
             return None
-        at = (e.raw_key, None if cut.extent.rows is None else tuple(cut.extent.rows), e.reach)
-        if at not in self.addresses:
-            self.addresses[at] = hashlib.sha1(repr((at, self.libraries)).encode()).hexdigest()[:24] + f"-{CHUNK}rows"
-        return Address(self.addresses[at], row // CHUNK)
-
-    def _read(self, a):
-        try:
-            return self._valid(a, self.store.get(a))
-        except Exception:
-            return {}
-
-    @staticmethod
-    def _valid(a, got):
-        """`got` read-only where it is rows of the chunk at `a`, else {}."""
-        if not isinstance(got, dict) or not all(isinstance(r, int) and r // CHUNK == a.chunk and keepable(v) for r, v in got.items()):
-            return {}
-        for v in got.values():
-            if isinstance(v, np.ndarray):
-                v.setflags(write=False)
-        return got
-
-    def _put(self, a):
-        rows = self.pending.pop(a)
-        self.asked.discard(a)
-        self.answers.pop(a, None)
-        if len(rows) >= CHUNK:
-            self.done.add(a)
-        if a not in self.changed:
-            return
-        self.changed.discard(a)
-        self.touched.add(a)
-        try:
-            if self.store.disk.size(a.name) is not None:
-                self.store.drop(a, "disk")
-            self.store.put(a, rows, sum(nbytes(None, v) for v in rows.values()), keep=True)
-        except Exception:
-            pass
+        rows = None if cut.extent.rows is None else tuple(cut.extent.rows)
+        at = (e.raw_key, rows, e.reach)
+        key = self._addresses.get(at)
+        if key is None:
+            key = self._addresses[at] = hashlib.sha1(repr(at).encode()).hexdigest()[:24] + f"-{CHUNK}rows"
+        a = (key, row // CHUNK)
+        if a not in self._spans:
+            lo, hi = a[1] * CHUNK, (a[1] + 1) * CHUNK
+            self._spans[a] = (lo, hi) if rows is None else (max(lo, rows[0]), min(hi, rows[1]))
+        return a

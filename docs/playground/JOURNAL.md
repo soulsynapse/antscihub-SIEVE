@@ -25,6 +25,11 @@ overrule them. His freeing me from a spec's decision endorses neither side of it
 
 ## The oracles
 
+O1 to O6 were written of a machine-wide store of results, which is gone; none is shown to hold.
+O2, O3 and O6 have no subject left: there is no entry to drop, no checkpoint of the store's, no
+second writer of one address. O1, O4 and O5 read on as claims about the memo, the keeper and the
+checkpoint that nothing checks.
+
 - O1. What is handed out for an address equals a cold recompute of it, under any sequence of
   edit, scrub, walk, evict, crash mid-write and reopen.
 - O2. Dropping any entry no checkpoint names changes speed and nothing else.
@@ -42,16 +47,19 @@ overrule them. His freeing me from a spec's decision endorses neither side of it
 - O10, his: the window shows what is asked of it, every series node's line over its rows, whether
   or not a clip walk was made.
 - O11, his: a colleague's laptop gets the document and its checkpoint, and what lives in the
-  checkpoint is what should be beside it: copied to another folder and opened with an empty
-  results folder, it serves every run held without walking, and after an edit below a frame node
+  checkpoint is what should be beside it: copied to another folder and opened with no other
+  source of rows, it serves every run held without walking, and after an edit below a frame node
   that makes small rows a clip walk runs that node zero times.
-- O12, from O7: what one more cut in time costs the keeper, in steps of `result_keeper.py` and
-  `result_store.py`, in the folder's writes and their bytes, reads and lock takes, does not grow
-  with how many there are, and no chunk is put more than twice.
+- O12, from O7: what one more cut in time costs the kept rows, in steps of `result_keeper.py` and
+  in the checkpoint's bytes, does not grow with how many there are, and no chunk is written to
+  the checkpoint twice.
+- O13, his: what a bare walk computed of a frame node's small rows reaches the checkpoint: handed
+  back with its results, held by the player's keeper, written at the save, and a player of a
+  copy runs that node zero times after an edit below it.
 
 ## What checks the work
 
-- `sim/miniature.py`, the player itself over a clip made for it, says which of O7 to O12 hold.
+- `sim/miniature.py`, the player itself over a clip made for it, says which of O7 to O13 hold.
   It writes nothing outside a temp folder. It does not see real threads, decode or disk.
 - What caught real defects: an adversary told to prove a break in a scratch copy; an unanchored
   reader tracing one path; a profile of the real document
@@ -64,7 +72,7 @@ overrule them. His freeing me from a spec's decision endorses neither side of it
 ## Next
 
 `sim/miniature.py` is the player's own window, worker, plan, held runs and tools over a clip made
-for it, the worker's turns taken on one thread, and it says which of O7 to O12 hold. A defect
+for it, the worker's turns taken on one thread, and it says which of O7 to O13 hold. A defect
 found on a real document is pinned there. An alternative holder goes behind the seam the held
 runs sit behind and is driven against the same checks.
 
@@ -82,12 +90,14 @@ testing, and a restart now and then is fine.
 
 - In the player, to be verified in the tree: holders sized from the machine's RAM (`budget.py`);
   the window-against-full test over the registry; display proxies; a tool's code in every node's
-  key; a frame node's small rows kept on disk by the player's walks and a bare walk's alike
-  (`result_store.py`, `result_keeper.py`) under the node's raw key; a checkpoint beside the
-  document, one append-only file of its held runs, the keeper's chunks its walks read and the
-  document's form (`held.py`), whose document record nothing reads yet.
-- Not in the player: the memo, the decode cache, the held runs, and cut files are each their own
-  holder still; no one ask. Series and stepped results are kept by nothing across a bare walk.
+  key; a frame node's small rows held in memory by the session's keeper (`result_keeper.py`)
+  under the node's raw key, the cut's rows and its reach, a bare walk's handed back with its
+  results; a checkpoint beside the document, one append-only file of its held runs, the keeper's
+  chunks and the document's form (`held.py`), the one place on disk the small rows lie, whose
+  document record nothing reads yet.
+- Not in the player: the memo, the decode cache, the held runs, the keeper and cut files are each
+  their own holder still; no one ask. Series and stepped results are kept by nothing across a
+  bare walk but the runs its results are held as.
 - Findings of this branch: `docs/findings/2026-11-21-the-player-died-walking-856-periods.md`,
   `docs/findings/2026-11-21-bare-walk-crashes-on-the-full-file.md`,
   `docs/findings/window-against-full.md`.
@@ -98,13 +108,18 @@ testing, and a restart now and then is fine.
 - The keeper decides what to keep by a value's shape, and saves no stepped state at a chunk's edge.
 - A cut file served to a bare walk, and a row the keeper keeps, are named by the sampled footage
   print: footage changed only between its samples is taken for the one before.
+- A kept row's address holds nothing of the player's own code or numpy's and cv2's versions, as a
+  held run's key does not: an edit of the walking code or a library leaves kept rows answering.
+- A crash loses every kept chunk no write has taken; a write a held run waits on takes the whole
+  ones, a save and a close the rest.
 - Whether the mark of other code reaches nodes under a cut in time is unread.
 - The registry's types are unchecked for a set of periods as a value, a gate of two inputs, a
   matrix of time by scale.
 
 ## His to decide, none blocking
 
-- Where a bare walk's results live and how much disk they may take.
+- How much of the checkpoint the kept rows may take: the window hands the keeper and the file the
+  held runs' figure, `budget.py`'s "held", as their bound.
 - Whether a csv written from a window's card says it is the window's.
 - The encoder's version is in no cut file's key.
 - A test in `tests/test_graph.py` asserting wall time failed once and is not marked `simulation`.

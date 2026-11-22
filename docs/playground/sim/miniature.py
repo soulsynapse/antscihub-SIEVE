@@ -3,9 +3,9 @@ player to ask: O7, what one more cut in time costs does not grow with how many t
 bare walk and a clip walk hold the same; O9, nothing walked for the window is held, and a clip
 walk holds the same whatever the window walked first; O10, the window shows a line of every
 series node the document has, a clip walk made or not; O11, a document and its checkpoint taken to
-another folder open where they were left; O12, O7's for the keeper: what a cut costs it in steps,
-writes, bytes, reads and lock takes does not grow with the cuts; O13, a bare walk's small rows
-reach the checkpoint the player writes.
+another folder open where they were left; O12, O7's for the keeper: what a cut costs the kept rows
+in steps and in checkpoint bytes does not grow with the cuts, and no chunk is written twice; O13, a
+bare walk's small rows reach the checkpoint the player writes.
 
 The player's own window, worker, plan, held runs and tools, offscreen, over a clip of tiny frames
 made here whose gray cycles so that a banded `reduce` gates a `period` into one cut every PERIOD
@@ -17,10 +17,10 @@ so a loop that calls nothing is counted as one that does; a function is said to 
 steps a cut at the larger count pass GROWS times those at the smaller. The monitor's modules are
 left out: the clock turns them, and what they cost a cut is not seen here. O8 to O11 are asked of
 clips of CHECKED cuts; the bare walk is bare.main's, in this process. No checkpoint is written but
-O11's and O13's, whose document is their own: detect below threshold, whose tables the keeper
-keeps, and size; each player of them has a keeper's folder of its own.
-O12 walks O7's gate and period with those three below the period, at O7's two counts, counting the
-keeper's Folder calls and the steps in result_keeper.py and result_store.py alone.
+O11's, O12's and O13's. O11 and O13 have a document of their own: detect below threshold, whose
+tables the keeper keeps, and size. O12 walks O7's gate and period with those three below the
+period, at O7's two counts, then saves twice, counting the rows records the checkpoint writes and
+the steps in result_keeper.py alone.
 
 Run: .venv/Scripts/python.exe -X utf8 docs/playground/sim/miniature.py [tree] [small large]
 `tree` is a checkout of the repository to drive, this one with none; `0 0` leaves O7 and O12 out. Exit 1
@@ -48,7 +48,7 @@ CHECKED = 40
 SHOWN = 12
 
 SCRATCH = tempfile.mkdtemp(prefix="sieve-miniature-")
-os.environ.update(QT_QPA_PLATFORM="offscreen", SIEVE_STORE=os.path.join(SCRATCH, "store"), SIEVE_RESULTS=os.path.join(SCRATCH, "results"))
+os.environ.update(QT_QPA_PLATFORM="offscreen", SIEVE_STORE=os.path.join(SCRATCH, "store"))
 sys.path.insert(0, str(TREE))
 os.chdir(TREE)
 
@@ -56,7 +56,7 @@ import cv2  # noqa: E402
 import numpy as np  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
-from sieve_player import bare, decoder, held, result_keeper, result_store, store, window  # noqa: E402
+from sieve_player import bare, decoder, held, result_keeper, store, window  # noqa: E402
 from sieve_player import document as D  # noqa: E402
 from sieve_player.registry import discover  # noqa: E402
 from sieve_player.stream import HAND  # noqa: E402
@@ -225,7 +225,6 @@ def copied(home, name):
 
 def player(folder):
     """A player on the document saved in `folder`, not playing, its worker not turned."""
-    os.environ["SIEVE_RESULTS"] = str(folder / "results")       # a Keeper over a root of nothing
     win = window.PlayerWindow(str(folder / "doc.json"), "t", TOOLS)
     if win.playing:
         win.toggle_play()
@@ -253,7 +252,7 @@ def checkpoint_travels():
     other source of rows, serves every run the first player held without walking, and after an edit
     below a frame node that makes small rows, a clip walk runs that frame node zero times; opened
     with the checkpoint's kept rows withheld, it runs it again, or the check would show nothing."""
-    said, results = [], os.environ["SIEVE_RESULTS"]
+    said = []
     home = tables_home("travels")
     held.File.write = WRITE
     DETECT.run = counted_run
@@ -286,7 +285,6 @@ def checkpoint_travels():
             said += [f"detect ran {walked_ran} times in the clip walk after the edit"] * bool(walked_ran) + sized(win, size)
     finally:
         held.File.write, DETECT.run = (lambda self, *a: []), RUN
-        os.environ["SIEVE_RESULTS"] = results
     return said
 
 
@@ -295,7 +293,7 @@ def bare_rows_travel():
     hands its document to a bare walk and takes what it left as the window does, the document is
     saved, and a player of a copy, with no other source of rows, opens it and runs detect zero times,
     as it opens and in a clip walk after an edit of size."""
-    said, results = [], os.environ["SIEVE_RESULTS"]
+    said = []
     home = tables_home("bare-rows")
     held.File.write = WRITE
     try:
@@ -321,7 +319,6 @@ def bare_rows_travel():
         said += [f"detect ran {walked_ran} times in the clip walk after the edit"] * bool(walked_ran) + sized(win, size)
     finally:
         held.File.write, DETECT.run = (lambda self, *a: []), RUN
-        os.environ["SIEVE_RESULTS"] = results
     return said
 
 
@@ -370,46 +367,25 @@ def walked(cuts, callers=False):
     return steps, sum(run.cut is not None for run in win.runs), prof
 
 
-KEPT_FILES = ("result_keeper.py", "result_store.py")
-CHUNK_WRITES = 2    # a chunk is put once when its walk ends, and once more where a walk of the window put its first rows short
+KEPT_FILES = ("result_keeper.py",)
 
 
 def kept_walk(cuts):
     """O12's figures over a clip walk of `cuts` cuts of the document with KEPT_BELOW under its
-    period, on a results folder of its own whose clock stands still, so no count of its bytes
-    is walked for a timer's sake: {figure: total}, function of the keeper or the store -> its
-    steps, each entry's puts, and the cuts held."""
-    t0, made, results = result_store.time.time(), result_keeper.Folder, os.environ["SIEVE_RESULTS"]
-    os.environ["SIEVE_RESULTS"] = os.path.join(SCRATCH, f"kept-results-{cuts}")
-    result_keeper.Folder = lambda root, writer: made(root, writer, now=lambda: t0)
-    try:
-        win = opened(f"kept-{cuts}", cuts, KEPT_BELOW)
-    finally:
-        result_keeper.Folder, os.environ["SIEVE_RESULTS"] = made, results
-    F, was = result_store.Folder, {n: getattr(result_store.Folder, n) for n in ("write", "read", "rename", "lock", "size")}
-    counts, puts, steps, names = dict.fromkeys(("writes", "bytes", "reads", "locks", "sizes"), 0), {}, {}, {}
+    period and two saves after it, the write a held run waits HOLD_MS for never made, so the
+    writes are the same every run: the bytes of the rows records each save wrote, function of
+    the keeper -> its steps, (address key, chunk) -> the rows records written of it, and the cuts
+    held."""
+    win = opened(f"kept-{cuts}", cuts, KEPT_BELOW)
+    win._hold.setInterval(1 << 30)
+    put, saves, writes, steps, names = held._put, [], {}, {}, {}
 
-    def write(self, name, value, size, durable=False):
-        ok = was["write"](self, name, value, size, durable)
-        counts["writes"] += 1
-        counts["bytes"] += os.path.getsize(self._path(name)) if ok else 0
-        return ok
-
-    def rename(self, old, new):
-        puts[new] = puts.get(new, 0) + new.startswith(result_store.ENTRIES)
-        return was["rename"](self, old, new)
-
-    def read(self, name, touch=True):
-        counts["reads"] += 1
-        return was["read"](self, name, touch)
-
-    def lock(self):
-        counts["locks"] += self._depth == 0
-        return was["lock"](self)
-
-    def size(self, name):
-        counts["sizes"] += 1
-        return was["size"](self, name)
+    def counted_put(f, record):
+        n = put(f, record)
+        if record[0] == held.ROWS:
+            saves[-1] += n
+            writes[record[1][:2]] = writes.get(record[1][:2], 0) + 1
+        return n
 
     def step(code, *_):
         name = names.get(code)
@@ -420,7 +396,7 @@ def kept_walk(cuts):
             return sys.monitoring.DISABLE
         steps[name] = steps.get(name, 0) + 1
 
-    F.write, F.rename, F.read, F.lock, F.size = write, rename, read, lock, size
+    held._put, held.File.write = counted_put, WRITE
     sys.monitoring.use_tool_id(TOOL, "miniature")
     sys.monitoring.register_callback(TOOL, sys.monitoring.events.LINE, step)
     sys.monitoring.register_callback(TOOL, sys.monitoring.events.JUMP, step)
@@ -428,31 +404,31 @@ def kept_walk(cuts):
     try:
         win._toggle_clip()
         settled(win)
+        for _ in range(2):
+            saves.append(0)
+            win.save_document()
     finally:
         sys.monitoring.set_events(TOOL, 0)
         sys.monitoring.free_tool_id(TOOL)
-        for n, f in was.items():
-            setattr(F, n, f)
-    return counts, steps, {n: k for n, k in puts.items() if k}, sum(run.cut is not None for run in win.runs)
+        held._put, held.File.write = put, (lambda self, *a: [])
+    return saves, steps, writes, sum(run.cut is not None for run in win.runs)
 
 
 def kept_rows():
-    """O12: what the keeper costs a cut in time, on the disk and in steps, does not grow with how
-    many there are, and no entry is put more than CHUNK_WRITES times."""
-    (c_small, s_small, p_small, h_small), (c_large, s_large, p_large, h_large) = kept_walk(SMALL), kept_walk(LARGE)
-    a_cut = {f: (c_small[f] / SMALL, c_large[f] / LARGE) for f in c_small}
-    a_cut["steps"] = (sum(s_small.values()) / SMALL, sum(s_large.values()) / LARGE)
-    most = max(p_large.values(), default=0)
+    """O12: what a cut in time costs the kept rows, in the keeper's steps and in the checkpoint's
+    bytes, does not grow with how many there are, and no chunk is written to the checkpoint twice."""
+    (b_small, s_small, w_small, h_small), (b_large, s_large, w_large, h_large) = kept_walk(SMALL), kept_walk(LARGE)
+    a_cut = {"steps": (sum(s_small.values()) / SMALL, sum(s_large.values()) / LARGE), "bytes": (sum(b_small) / SMALL, sum(b_large) / LARGE)}
     print(f"O12 figures a cut at {SMALL} and {LARGE} cuts: " + ", ".join(f"{f} {a:.1f} and {b:.1f}" for f, (a, b) in a_cut.items())
-          + f"; entries put {len(p_small)} and {len(p_large)}, the most puts of one {max(p_small.values(), default=0)} and {most}")
+          + f"; rows bytes of the second save {b_small[1]} and {b_large[1]}; chunks written {len(w_small)} and {len(w_large)},"
+          + f" the most writes of one {max(w_small.values(), default=0)} and {max(w_large.values(), default=0)}")
     said = [f"{h} of {n} cuts held" for h, n in ((h_small, SMALL), (h_large, LARGE)) if h != n]
-    said += [f"no entry put at {LARGE} cuts"] * (not p_large)
-    said += [f"{f} a cut grew {b / a:.1f}x, {a:.1f} -> {b:.1f}" for f in ("steps", "writes", "bytes")
-             if (a := a_cut[f][0]) and (b := a_cut[f][1]) > GROWS * a]
+    said += [f"no chunk written at {LARGE} cuts"] * (not w_large)
+    said += [f"{f} a cut grew {b / a:.1f}x, {a:.1f} -> {b:.1f}" for f, (a, b) in a_cut.items() if a and b > GROWS * a]
     said += [f"grows {(s_large[f] / LARGE) / (n / SMALL):5.1f}x  {n / SMALL:9.1f} -> {s_large[f] / LARGE:9.1f} steps a cut  {f}"
              for f, n in sorted(s_small.items(), key=lambda fn: -s_large.get(fn[0], 0))
              if n >= SMALL and s_large.get(f, 0) / LARGE > GROWS * n / SMALL]
-    said += [f"{name} put {k} times" for name, k in sorted(p_large.items(), key=lambda nk: -nk[1]) if k > CHUNK_WRITES]
+    said += [f"{a} written {k} times" for a, k in sorted(w_large.items(), key=lambda ak: -ak[1]) if k > 1]
     return said
 
 

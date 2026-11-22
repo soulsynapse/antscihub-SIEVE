@@ -131,3 +131,20 @@ folder holds; a window walking a cut the clip lane has not reached while that la
 keeper at each period: by the code, each close then reads the window's short chunk back, lets it
 go under the lock and writes it whole again, and the lock makes the next put walk the folder's
 count. That is read, not measured.
+
+## What the kept rows cost a period with no results folder, 2026-11-22
+
+With `result_store.py` gone and the keeper in memory, its chunks on disk only in the checkpoint,
+the miniature's O12 is the same walk followed by two saves, the write a held run waits for never
+made. Counted a cut: the lines run and jumps back in `result_keeper.py`, and the bytes of the rows
+records the checkpoint wrote; and each chunk's rows records.
+
+| a cut at                  | 200   | 800   |
+|---------------------------|-------|-------|
+| steps                     | 370.3 | 388.1 |
+| rows bytes, first save    | 704.4 | 704.8 |
+| rows bytes, second save   | 0     | 0     |
+
+Chunks written: 200 and 800, each once. Not seen by it: the writes a held run's HOLD_MS brings
+during a walk, each of which sets every chunk held against the file's had, nor the pickling of
+the runs beside them.

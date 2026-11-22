@@ -4,20 +4,41 @@ Stage 2 of `docs/playground/JOURNAL.md`. Each line is an assertion that holds of
 `docs/playground/sim/` is this contract in code, and where the two differ the simulation is right
 and this file is behind. A line marked (open) is a choice not yet settled.
 
+## What is exact and what is a window's
+
+- A full walk's results and what a checkpoint names are exact. What a window shows is best
+  effort, in a way the user can predict: enough to judge what the full walk will give.
+- A row a walk made is exact when the rows it reads, by the reach each tool upstream declares
+  summed along the chain and cut off at the ends of its extent, lay inside the walk's range and
+  were themselves exact. Any other row is the window's. No tool declares more for this than
+  its reach.
+- An exact value has the address below. A window's value has an address that also holds the
+  range it was made over, is held in memory only, and no checkpoint names it.
+- A window's value never answers a full walk, a checkpoint's fill or a bare walk. An exact
+  value answers a window. A window is answered again by its own values only for the same range.
+- What a loop displays is a proxy when the planes it shows do not fit free memory: a small
+  picture made from the exact plane as its row is made, held in memory, addressed apart from
+  every value, and never handed to a tool. A tool reads decoded frames and exact planes only.
+- (open: a csv written from a window's card is the window's; whether the card says so.)
+
 ## The address
 
 - A caller addresses a result by a key and a row. The key is `plan.py`'s. A result with no rows
   has one address.
 - A key holds everything the value depends on and nothing else: the tool's name, the digest of
   its code, the params its run reads, the keys of what it reads, the footage's print, and the cut
-  it was made inside. Two values under one address are equal.
+  it was made inside. Two values under one address are equal. (open: a cut baked to a clip is
+  encoded; if baking it twice gives other pixels, what was made from the first bake does not
+  outlive it, and the bake is kept as long as a checkpoint names what was made from it.)
 - The footage's print changes when the file's bytes change anywhere in it, to the odds its
   sampling gives, and costs no more than a seek's worth of time to make.
 - A chunk is how the disk packs the rows of a key: consecutive rows on a grid sized by the bytes
   of the node's own row and not by a count. The grid is part of an entry's name, so entries of
   two grids are never taken for one another. No caller names a chunk.
-- A stepped tool's row depends on the rows before it in its cut. Its address is the same; the ask
-  makes its rows in order from the cut's first row or from the end of the last chunk held.
+- A stepped tool's row depends on the rows before it in its cut: its reach before has no bound.
+  A full walk makes its rows in order from the cut's first row or from the end of the last chunk
+  held, and those are exact; a window starts it at the window's first row, and those are the
+  window's.
 
 ## The store
 
@@ -72,7 +93,8 @@ and this file is behind. A line marked (open) is a choice not yet settled.
 - Computing reserves the memory its output and its live inputs take, asks for what it reads,
   puts what it made, and returns it. A missing input is made, never waited on. A value is alive
   under a reservation or in the store and nowhere else.
-- A look at one row makes that row. A walk makes chunks.
+- A look at one row makes that row. A window makes its rows, in order, once; a loop over it
+  makes nothing again. A full walk makes chunks.
 - An ask the user is looking at is answered before one that is not. (open: nothing does this yet.)
 - Inside one clip, work is given the few cores it gains from. Cores past that go to pieces that
   share nothing, a process each, which the store's many writers allow; a process started as one

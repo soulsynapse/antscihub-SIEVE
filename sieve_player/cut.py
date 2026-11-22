@@ -60,25 +60,31 @@ def _both(a, b, meet):
 @dataclass(frozen=True)
 class Record:
     """One cut. `file` is (path, footage print) of the file that holds the cut's pixels where one
-    is served, and is no part of which cut it is."""
+    is served, and is no part of which cut it is. A `provisional` cut is made of, or inside one
+    made of, a result the window walked and nothing holds: it is walked by the window alone and
+    never held. One `cut_off` is provisional and may run on past the rows that result is over."""
     footage: str
     made_from: tuple = ()
     extent: Extent = Extent()
     file: tuple | None = field(default=None, compare=False)
+    provisional: bool = False
+    cut_off: bool = False
 
-    def cut(self, rows=None, rect=None, rects=None, file=None):
+    def cut(self, rows=None, rect=None, rects=None, file=None, provisional=False, cut_off=False):
         """The cut a node reading this one makes: `rows` the footage's, `rect` or `rects`, one a
-        row of `rows`, in the pixels of this cut's frames. ValueError for `rects` that are not one
-        a row."""
+        row of `rows`, in the pixels of this cut's frames; provisional and cut off where this one
+        is or the flags say. ValueError for `rects` that are not one a row."""
         if rects is not None and (rows is None or rect is not None or len(rects) != rows[1] - rows[0]):
             raise ValueError("a shape a row is one rect for each row of its rows, and no rect beside them")
         said = Extent(rows and tuple(rows), rect and tuple(rect), rects and tuple(map(tuple, rects)))
-        return Record(self.footage, (self,), _both(self.extent, said, _placed), file)
+        return Record(self.footage, (self,), _both(self.extent, said, _placed), file,
+                      self.provisional or provisional or cut_off, self.cut_off or cut_off)
 
     def __and__(self, other):
         if self.footage != other.footage:
             raise ValueError("two cuts of two footages have no intersection")
-        return Record(self.footage, (self, other), _both(self.extent, other.extent, _met))
+        return Record(self.footage, (self, other), _both(self.extent, other.extent, _met), None,
+                      self.provisional or other.provisional, self.cut_off or other.cut_off)
 
     def origin(self, row=None):
         """(x, y) on the footage of the first pixel of the cut's frame at `row`, which a cut of one

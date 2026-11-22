@@ -7,7 +7,9 @@ import pytest
 from sieve_player import document as D
 from sieve_player.cut import Extent, Record, holding, place_in
 from sieve_player.graph import Graph
-from sieve_player.plan import plan
+from sieve_player.plan import Provisional, plan
+from sieve_player.walk import window_legs
+from sieve_player.worker import _clip_legs
 from tests.test_graph import Dec, gray
 
 RECT, ROWS = (10, 30, 20, 50), (3, 9)
@@ -79,6 +81,17 @@ def test_a_tool_cuts_by_its_declaration_alone_and_a_tool_below_two_cuts_is_told_
     assert [c.extent.rows for c in e["below"].cuts] == [(0, 2)] and asked == [("gated", e["sig"].key)]       # asked under the key the node wired there has
     e = of(None)
     assert e["gated"].cuts == () and not e["below"].fed and e["gated"].standing == "gate waits on sig's walk"
+    doc.add_node("sig", (0, 0), None, "under")
+    doc.connect("below", "under")
+    seen = lambda answer: plan(doc, tools, "base", cut_result=lambda nid, key, within: answer, footage="print", count=20)
+    p = seen(Provisional([(0, 2), (3, 5)], (3, 9)))     # the window's walk of the gate over rows 3 to 9, nothing held
+    cuts = p.entries["below"].cuts
+    assert [(c.extent.rows, c.provisional, c.cut_off) for c in cuts] == [((3, 5), True, True), ((6, 8), True, False)]
+    assert p.entries["below"].fed and p.unheld == {"gated"} and p.entries["gated"].standing.startswith("gate waits on sig's walk")
+    assert _clip_legs(p) == [] and [leg.best for leg in window_legs(p, 3, 6)] == [{"under"}, set()]
+    held = seen([(3, 5), (6, 8)])
+    assert held.unheld == set() and not any(c.provisional for c in held.entries["below"].cuts) and len(_clip_legs(held)) == 2
+    doc.remove_node("under")
     doc.add_node("pick")
     doc.connect("pick", "gated", "periods")
     assert of([(0, 2)])["gated"].standing == "fed both: periods by a file and gate by sig; one cuts it"

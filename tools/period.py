@@ -5,7 +5,8 @@ The periods are fed by a file a `file` selector finds, wired into `periods`, or 
 wired into `gate`, and never both. A gate's periods are the runs of rows its gate keeps over each
 cut the node reads, the whole footage or the periods of a `period` above, each [first, end) and
 named by its first row, so two that touch are one; while no walk of each such cut is held under the
-key the node wired there has, there are none, and the plan says the `period` waits on it. A file is JSON:
+key the node wired there has, the plan says the `period` waits on it, and its periods are none but
+those the window's own walk of the gate keeps, provisional (`sieve_player/cut.py:Record`). A file is JSON:
 `{"rows": the footage's count of rows, "periods": [{"name": ..., "first": ..., "end": ...}, ...]}`,
 `first` the footage row a period begins at and `end` the row past its last, so a period is the
 rows [first, end). Periods may touch and may overlap, each its own. A top-level key other than
@@ -109,7 +110,7 @@ def reach_in_rows(params):
 def settings(parent=None):
     """The card: Write, live while a gate cuts the node, asks where with `<stem>_periods.json`
     beside the footage filled in, the dialog asking before it writes over a file, and writes the
-    periods the gate gives the node now."""
+    periods the gate gives the node now, none of them provisional."""
     from PySide6.QtWidgets import QFileDialog, QPushButton
 
     from sieve_player import ParamWidget

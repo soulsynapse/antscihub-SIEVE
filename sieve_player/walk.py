@@ -417,7 +417,8 @@ def window_legs(p, s, n):
     """Each cut in time of the Plan `p` that the window of `n` rows from `s` overlaps, as the window
     walks it alone, a Leg each. The walk reaches past the window by its chain's largest bounded
     reach each side, a side with no bound reaching none, and never outside the cut; a node is best
-    effort where a side it has no bound on is cut short of the cut's edge."""
+    effort where a side it has no bound on is cut short of the cut's edge, and every node is over a
+    cut that is cut off."""
     legs = []
     for w in p.timed:
         reach = {nid: p.entries[nid].reach for nid in w.chain}
@@ -427,7 +428,7 @@ def window_legs(p, s, n):
             if first >= end:
                 continue
             a, b = max(first, s - before), min(end, s + n + after)
-            best = frozenset(nid for nid, (rb, ra) in reach.items() if (rb is None and a > first) or (ra is None and b < end))
+            best = frozenset(nid for nid, (rb, ra) in reach.items() if c.cut_off or (rb is None and a > first) or (ra is None and b < end))
             legs.append(Leg(p.entries[w.heads[0]].src, c, a, b, best))
     return legs
 

@@ -6,9 +6,10 @@ Graph calls it at every sync and holds the result under its lock; nothing here i
 """
 import hashlib
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
+from typing import NamedTuple
 
-from .cut import Record
+from .cut import INF, Record
 from .document import INPUT, VIDEO_TOOL, fed, fits, frame_inputs, kind_of, produces, video_output, wants
 from .registry import cuts as tool_cuts
 from .registry import computed, cut_by, cut_extents_of, fold_of, is_selector, key_params_of, optional, paths, reach_of, serves_cut_file, static, steps
@@ -16,6 +17,13 @@ from .wire import overlaid
 
 
 FED_ABSENT = "a gated-out row is absent"     # in the key of a series node another feeds: what it is handed at a row that one's band shuts out
+
+
+class Provisional(NamedTuple):
+    """A cut_result answer that nothing holds: `result` as the window walked it, over the footage's
+    `rows`, (first, the row past the last), the only rows of it known."""
+    result: object
+    rows: tuple
 
 
 def _key(*parts):
@@ -63,6 +71,7 @@ class Plan:
     shown: str | None = None                      # the display flag, when it names a node
     over: str | None = None                       # the overlay flag, when it names a one-plane node
     timed: list = field(default_factory=list)     # a Walk for each extent cut in time that heads read: none of it on `chain`
+    unheld: frozenset = frozenset()               # the cutting nodes whose CUT_BY wire's result is not held over every cut they read: each waits, or is cut provisionally
 
     @property
     def walk(self):
@@ -162,7 +171,8 @@ def plan(doc, tools, base, cut_file=None, cut_result=None, footage=None, count=N
     every cut's rows held short of it, None for no bound, `cut_result(nid, key, within)`
     answering the result a cutting node reads on its CUT_BY wire over `within`, one of the cuts it
     reads, its rows counted from that cut's first, `key` that of the node wired there and None with
-    none, the answer None where no such result is held, and
+    none, the answer None where no such result is held nor walked by the window, and a Provisional
+    where the window walked it and nothing holds it, and
     `cut_file(nid, up)` answering (path, footage print) of the file that holds a cutting node's cut
     of the footage it reads, or None: `up` is that footage as the node above answered, None for the
     video. It is asked only of a node whose tool cuts, has the cut_file facet and that reads the video
@@ -180,7 +190,9 @@ def plan(doc, tools, base, cut_file=None, cut_result=None, footage=None, count=N
     reads, the rows it answers of a result over a cut in time lifted by that cut's first row. A cutting node
     is refused, saying why, where its CUT_BY input is wired beside a
     path input, and where the node wired into it reads it; one whose CUT_BY wire's result is not held
-    cuts no cut and waits on that node's walk, and one with neither wired is refused. A tool that
+    over a cut it reads waits on that node's walk, and cuts no cut where no answer is Provisional,
+    and else cuts of each answer it has, provisionally of a Provisional one, as cut.Record says, and
+    serves no file; both are among `unheld`. One with neither wired is refused. A tool that
     raises in `cut_extents` otherwise cuts nothing. A node's reach is its tool's, the registry's `reach_of`, added a side
     to the furthest of the nodes it reads, and without bound where either is; the video node and
     a node that serves its file read their own row. A node reads one piece of the plate: one
@@ -294,7 +306,7 @@ def plan(doc, tools, base, cut_file=None, cut_result=None, footage=None, count=N
             reads[nid] = (root,) if src is None else cuts_of(src, (*stack, nid))
         return reads[nid]
 
-    waiting = {}
+    waiting, provisional = {}, {}
 
     def reads_node(nid, other, stack=()):
         return any(s == other or (s not in stack and reads_node(s, other, (*stack, nid))) for s in wired(nid).values() if s is not None)
@@ -314,14 +326,17 @@ def plan(doc, tools, base, cut_file=None, cut_result=None, footage=None, count=N
                     refused[nid] = f"fed both: {', '.join(filed)} by a file and {by[0]} by {gate}; one cuts it"
                 elif gate is not None and reads_node(gate, nid):
                     refused[nid] = f"in a cycle: {by[0]} is fed by {gate}, which reads {nid}"
-                elif gate is not None and None in (results := [cut_result and cut_result(nid, key_of(gate, (*stack, nid)), r) for r in above]):
+                elif gate is not None and _waits(results := [cut_result and cut_result(nid, key_of(gate, (*stack, nid)), r) for r in above]):
                     waiting[nid], made[nid] = f"{by[0]} waits on {gate}'s walk", ()
                 else:
                     try:
                         given = results if gate is not None else [cut_result(nid, None, r) if cut_result else None for r in above]
-                        extents = [(r, list(cut_extents_of(tool)(computed(tool, node.params), g))) for r, g in zip(above, given)]
-                        file = file_of(nid) if sum(len(xs) for _, xs in extents) == 1 else None
-                        made[nid] = tuple(r.cut(**_within(_lifted(x, r, g), count), file=file) for (r, xs), g in zip(extents, given) for x in xs)
+                        if any(isinstance(g, Provisional) for g in given):
+                            provisional[nid] = f"{by[0]} waits on {gate}'s walk; cut provisionally over the window meanwhile"
+                        extents = [(r, g, list(cut_extents_of(tool)(computed(tool, node.params), g.result if isinstance(g, Provisional) else g)))
+                                   for r, g in zip(above, given) if g is not None or gate is None]
+                        file = file_of(nid) if nid not in provisional and sum(len(xs) for *_, xs in extents) == 1 else None
+                        made[nid] = tuple(_made(r, x, g, count, file) for r, g, xs in extents for x in xs)
                     except Exception:       # a tool's rule is user code: one that fails cuts nothing
                         pass
         return made[nid]
@@ -400,13 +415,38 @@ def plan(doc, tools, base, cut_file=None, cut_result=None, footage=None, count=N
         enders[nid] = nid if own else enders.get(e.src)
         e.steps, e.whole_by = enders[nid] is None, None if own else enders[nid]
     by_period = {nid: w for w in timed for nid in w.chain}
+    unsure = {id(w): sum(c.provisional for c in w.cuts) for w in timed}
     for nid, e in entries.items():
-        e.standing = (crossings.get(nid) or refused.get(nid) or waiting.get(nid)
-                      or (f"walked over each of {len(by_period[nid].cuts)} periods alone, by the clip walk and by the window where it overlaps one" if nid in by_period else "")
+        e.standing = (crossings.get(nid) or refused.get(nid) or waiting.get(nid) or provisional.get(nid)
+                      or (f"walked over each of {len(by_period[nid].cuts)} periods alone, by the clip walk and by the window where it overlaps one"
+                          + (f"; {n} provisional, by the window alone" if (n := unsure[id(by_period[nid])]) else "") if nid in by_period else "")
                       or (f"reads {e.src}, which cuts no rows" if e.kind == "series" and e.fed and e.src and not entries[e.src].cuts else "")
                       or _standing(doc, tools, entries, heads, walked_chains, nid))
     over = doc.overlay if doc.overlay in entries and overlaid(produces(doc, tools, doc.overlay)) else None
-    return Plan(entries, heads, chain, [s for s in series if s not in walked_chains], doc.display if doc.display in entries else None, over, timed)
+    return Plan(entries, heads, chain, [s for s in series if s not in walked_chains], doc.display if doc.display in entries else None, over, timed,
+                frozenset({*waiting, *provisional}))
+
+
+def _waits(results):
+    """Whether a cutting node answered `results`, one a cut it reads, cuts nothing and waits: one
+    is not held and none is provisional, so held answers alone never cut a part of what it reads."""
+    return None in results and not any(isinstance(g, Provisional) for g in results)
+
+
+def _made(within, extent, answer, count, file):
+    """The cut inside the cut.Record `within` of `extent`, as a tool's cut_extents answered it of
+    `answer`, served from `file`. Of a Provisional answer it is provisional, its rows counted from
+    the answer's first, and cut off where it reaches an edge of the answer's rows that is not
+    `within`'s, the footage's `count` rows its last."""
+    if not isinstance(answer, Provisional):
+        return within.cut(**_within(_lifted(extent, within, answer), count), file=file)
+    first, end = answer.rows
+    if (rows := extent.get("rows")) is not None:
+        extent = {**extent, "rows": (rows[0] + first, rows[1] + first)}
+    made = within.cut(**_within(extent, count), provisional=True)
+    lo, hi = within.extent.rows or (0, INF if count is None else count)
+    a, b = made.extent.rows or (lo, hi)
+    return replace(made, cut_off=True) if (a <= first and lo < first) or (b >= end and end < hi) else made
 
 
 def _within(extent, count):

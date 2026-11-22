@@ -3,7 +3,7 @@ condition it waits on. Each rung is a job, _Scrub or one of walk.py's _Walk, hol
 thing with a turn; the GUI side sets a job's ask under the lock and the scheduler takes it and tells the job to
 begin, once. The clip walk runs behind a finished window so what is viewed never waits on it, and a frame change
 abandons it and its rows. Behind its own range each lane walks cuts in time one at a time through a _Legs: the
-clip lane each cut of the plan's `timed` whole, given what give_periods says is held, the window each it
+clip lane each cut of the plan's `timed` not provisional whole, given what give_periods says is held, the window each it
 overlaps over walk.window_legs; either passes over one give_periods says is held whole."""
 import sys
 import threading
@@ -178,8 +178,8 @@ class _Legs:
 
 
 def _clip_legs(p):
-    """Every cut in time of the Plan `p` as the clip lane walks it, whole."""
-    return [Leg(p.entries[w.heads[0]].src, c, *c.extent.rows) for w in p.timed for c in w.cuts]
+    """Every cut in time of the Plan `p` as the clip lane walks it, whole; none provisional."""
+    return [Leg(p.entries[w.heads[0]].src, c, *c.extent.rows) for w in p.timed for c in w.cuts if not c.provisional]
 
 
 class _OfCut:

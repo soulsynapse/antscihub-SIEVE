@@ -1,7 +1,8 @@
 """What the held runs are to a plan's walks, apart from the window: a chain as held.Runs is told it,
 held results as the worker is given them, what the runs hold of each cut in time and list of a node's, a walked
 period's results as the run they are held as, what the window shows of each period it overlaps and
-of the one holding a row, and the result a cutting node is cut by. No Qt; the window composes it with the worker."""
+of the one holding a row, and the result a cutting node is cut by, held or as the window walked it.
+No Qt; the window composes it with the worker."""
 from typing import NamedTuple
 
 from . import held, wire
@@ -47,7 +48,7 @@ def held_periods(p, runs, was=None, moved=None):
     """What the held.Runs `runs` hold of each cut in time of the Plan `p`, as Worker.give_periods
     takes it. `was` is what it answered of this same Plan, the same object, and of runs since
     changed by `moved` alone, the rows Runs.hold returned: a cut holding no row of those is as
-    `was` has it, and the answer costs the cuts that hold one."""
+    `was` has it, and the answer costs the cuts that hold one. A provisional cut has nothing held."""
     again = was is not None and moved is not None
     out = dict(was) if again else {}
     for w in p.timed:
@@ -56,7 +57,7 @@ def held_periods(p, runs, was=None, moved=None):
         keys = period_keys(sub)
         for c in [w.cuts[i] for i in touching(w.cuts, moved)] if again else w.cuts:
             s, e = c.extent.rows
-            if e <= s:
+            if e <= s or c.provisional:
                 continue
             spared = runs.over(s, e - s, chain, (s, e), (s, e)) is not None
             given = {} if spared else as_given(p, runs.part(s, e - s, chain, (s, e), (s, e)))
@@ -88,13 +89,13 @@ def listed_cuts(runs, nid, chain, cuts, count, was=None, moved=None):
 
 def period_run(p, results, start, of):
     """The PeriodRun `periodReady`'s `results` from `start` over the cut `of`, (the node its walk
-    reads, the cut.Record), are held as under the Plan `p`; None where `p` has no such cut, or the
-    results are not every chain node's over the cut whole."""
+    reads, the cut.Record), are held as under the Plan `p`; None where `p` has no such cut, it is
+    provisional, or the results are not every chain node's over the cut whole."""
     walked_node, cut = of
     has = {nid: r for nid, r in results.items() if isinstance(r, dict) and "signal" in r}
     rows = max((len(r["signal"]) for r in has.values()), default=0)
     w = next((w for w in p.timed if p.entries[w.heads[0]].src == walked_node and among(cut, w.cuts)), None)
-    if w is None or not rows or set(has) != set(w.chain) or cut.extent.rows != (start, start + rows):
+    if w is None or cut.provisional or not rows or set(has) != set(w.chain) or cut.extent.rows != (start, start + rows):
         return None
     folds = {q.walk: q.fold for q in p.of(w).parts()}
     walked = tuple((*stack, sum(wire.nbytes(None if folds[stack[0]] is not None else p.entries[stack[0]].produces, r) for r in stack[2]))
@@ -116,12 +117,21 @@ def gate_result(runs, src, key, within, count):
     return None if run is None else run.results[src]
 
 
+def window_gate_result(results, start, src, key, within):
+    """(the result of `src` under `key` over the cut.Record `within`, the footage rows it is over)
+    as the window's own walk's `results` from `start` have it, for a `within` of every row; None
+    for a cut in time, whose result the window's walk of it does not answer, and where the window
+    has no such result."""
+    r = results.get(src)
+    return (r, (start, start + len(r["signal"]))) if within.extent.rows is None and held.good(r, key) else None
+
+
 def window_periods(p, runs, s, n):
     """What the window of `n` rows from `s` shows of each cut in time of the Plan `p` it overlaps:
     (the node its walk reads, the cut.Record) to its Shown. A cut whose every chain node the
     held.Runs `runs` serve over the whole cut, as the worker's give_periods is told it, is that walk
-    over the window's rows; another is the window's own walk of it, as walk.window_legs has it, its
-    results {} until the worker's windowPeriodReady hands them."""
+    over the window's rows; another, and every provisional one, is the window's own walk of it, as
+    walk.window_legs has it, its results {} until the worker's windowPeriodReady hands them."""
     out = {}
     for leg in window_legs(p, s, n):
         c = leg.cut
@@ -129,7 +139,7 @@ def window_periods(p, runs, s, n):
         first, end = c.extent.rows
         lo, hi = max(first, s), min(end, s + n)
         chain = held_chain(p, w.chain)
-        if runs.over(first, end - first, chain, (first, end), (first, end)) is not None:
+        if not c.provisional and runs.over(first, end - first, chain, (first, end), (first, end)) is not None:
             out[(leg.walked, c)] = Shown(lo, runs.over(lo, hi - lo, chain, (first, end), (first, end)), frozenset(), True)
         else:
             out[(leg.walked, c)] = Shown(leg.first, {}, leg.best, False)

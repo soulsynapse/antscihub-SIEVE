@@ -34,7 +34,7 @@ from .pace import Pace, clock
 from .pacecontrol import PaceControl
 from .storecontrol import StoreControl
 from .pane import Pane
-from .plan import stands, walked_keys
+from .plan import Provisional, stands, walked_keys
 from . import registry
 from .registry import CATEGORIES, Entry, category, description, signature
 from .stream import ASKED, EDIT, HAND, Emitter
@@ -42,7 +42,7 @@ from .theme import GAP, PAD, ROW_H, readout
 from .timeline import Timeline
 from .trace import Dump
 from .plot import Plot, Stage
-from .heldwalks import Shown, as_given, gate_result, held_chain, held_periods, listed_cuts, period_run, shown_at, touched_periods, window_periods
+from .heldwalks import Shown, as_given, gate_result, held_chain, held_periods, listed_cuts, period_run, shown_at, touched_periods, window_gate_result, window_periods
 from .worker import Worker
 
 STALE_MS = 250              # how long the cards' marks of other code may wait on a run held alone
@@ -850,7 +850,9 @@ class PlayerWindow(QMainWindow):
         self.pane.set_source(self.decoder.path, self.fps, {n.id: self.graph.footage(n.id) for n in self.doc.nodes})
         self.pane.set_cut_files_in_use(self.graph.cut_files_in_use())
         cutting = {n.id: e for n in self.doc.nodes if (e := self.graph.entry(n.id)) is not None and registry.cuts(e.tool)}
-        self.pane.set_cuts({nid: (e.cuts, self.count, w.src if (by := registry.cut_by(e.tool)) and (w := self.doc.source(nid, by[0])) else None)
+        unheld = self.graph.snapshot().unheld      # a card is handed no provisional cut, so none is written to a file
+        self.pane.set_cuts({nid: (tuple(c for c in e.cuts if not c.provisional) if nid in unheld else e.cuts, self.count,
+                                  w.src if (by := registry.cut_by(e.tool)) and (w := self.doc.source(nid, by[0])) else None)
                             for nid, e in cutting.items()})
         self.timeline.strip.set_periods({nid: [s for r in e.cuts if (s := cut_in_time(r))] for nid, e in cutting.items()})
         for n in self.doc.nodes:
@@ -1517,6 +1519,7 @@ class PlayerWindow(QMainWindow):
 
     def _series_ready(self, results, start, fps):
         self.results, self.result_start = results, start
+        self._cut_again(results)
         self._show_lines()
         self._restate()
         for nid, result in results.items():
@@ -1760,10 +1763,24 @@ class PlayerWindow(QMainWindow):
     def _cut_result(self, nid, key, within):
         """What plan.plan asks of a cutting node `nid` cut by a result on a wire over `within`, a
         cut.Record: the result of the node wired there under `key`, as a held run from row 0 to the
-        clip's last row has it, or for a cut in time a run of that cut walked whole; None with none."""
+        clip's last row has it, or for a cut in time a run of that cut walked whole; with neither,
+        as heldwalks.window_gate_result has it, a plan.Provisional; None with none."""
         by = registry.cut_by(self.tools.get(self.doc.node(nid).tool))
         w = by and self.doc.source(nid, by[0])
-        return gate_result(self.runs, w.src, key, within, self.count) if w else None
+        if not w:
+            return None
+        got = gate_result(self.runs, w.src, key, within, self.count)
+        if got is None and (seen := window_gate_result(self.results, self.result_start, w.src, key, within)):
+            return Provisional(*seen)
+        return got
+
+    def _cut_again(self, results):
+        """The window walked `results`: where one is of a node whose result a cutting node waits on or
+        is cut provisionally by, the cuts are made again. Nothing is asked where none is."""
+        unheld = self.graph.snapshot().unheld
+        if unheld and any((w := self.doc.source(nid, by[0])) and w.src in results
+                          for nid in unheld if (by := registry.cut_by(self.tools.get(self.doc.node(nid).tool)))):
+            self._recut()
 
     def _recut(self, resume=False, by_count=False):
         """The graph synced where a cutting node is cut by a result on a wire, or any cutting node

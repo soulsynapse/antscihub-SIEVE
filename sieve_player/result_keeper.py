@@ -33,25 +33,45 @@ def player_print():
     return h.hexdigest()[:16]
 
 
+def whole_print(path):
+    """A digest of every byte of the file at `path`, read through once; OSError with no file."""
+    with open(path, "rb") as f:
+        return hashlib.file_digest(f, "sha1").hexdigest()
+
+
 def keepable(row):
     """Whether a row made is of a shape the keeper keeps: no image, no reference to another store's array."""
     return (isinstance(row, np.ndarray) and row.ndim < 2) or isinstance(row, (np.generic, int, float))
 
 
 class Keeper:
-    """The rows of one walk over `root`, `budget` bytes of disk; the user's folder and budget,
-    by FOLDER_ENV and BUDGET_ENV over the defaults, with neither handed. A walk asks and tells it
-    on its one thread and calls `close()` when it ends, which puts every chunk it filled any of."""
+    """The rows of one walk of the file at `footage` over `root`, `budget` bytes of disk; the
+    user's folder and budget, by FOLDER_ENV and BUDGET_ENV over the defaults, with neither handed.
+    Every address holds whole_print of the footage, which is read through once and kept
+    under its path, size and mtime: a file changed with all three as they were is taken for the
+    one before. A walk asks and tells it on its one thread and calls `close()` when it ends, which
+    puts every chunk it filled any of."""
 
-    def __init__(self, root=None, budget=None):
+    def __init__(self, footage, root=None, budget=None):
         self.answers, self.pending = OrderedDict(), {}
         self.asked, self.changed, self.done, self.addresses = set(), set(), set(), {}
         try:
-            self.libraries = (player_print(), np.__version__, cv2.__version__)
             root = root or os.environ.get(FOLDER_ENV) or os.path.join(app_folder(), "results")
             self.store = Store(Folder(root, f"bare{os.getpid()}"), 0, budget or gb(BUDGET_ENV, os.environ) or BUDGET)
+            self.libraries = (player_print(), np.__version__, cv2.__version__, self._footage(footage))
         except Exception:
             self.store = None
+
+    def _footage(self, path):
+        path = os.path.abspath(path)
+        st = os.stat(path)
+        stamp = hashlib.sha1(repr((os.path.normcase(path), st.st_size, st.st_mtime_ns)).encode()).hexdigest()[:24]
+        a = Address(f"{stamp}-footage", 0)
+        whole = self.store.get(a)
+        if not isinstance(whole, str):
+            whole = whole_print(path)
+            self.store.put(a, whole, len(whole), keep=True)
+        return whole
 
     def ask(self, plan, e, row, cut):
         """`e`'s row `row` in `cut` as a walk before kept it, read-only, or None."""

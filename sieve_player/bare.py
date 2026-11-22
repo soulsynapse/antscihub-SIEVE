@@ -57,7 +57,7 @@ def main(path):
     tools = {e.name: e.module for e in discover(*j["roots"]) if e.ok}
     doc = Document.from_dict(j["document"], tools)
     doc.path = j["path"]
-    keeper = Keeper()
+    keeper = Keeper(j["video"])
     g = Graph(doc, Decoder(j["video"], cache_bytes=HOLD), tools, memo_bytes=HOLD, keeper=keeper)
     g.sync()
     p = g.snapshot()

@@ -9,7 +9,7 @@ import cv2
 import numpy as np
 import pytest
 
-from sieve_player import bare, registry
+from sieve_player import bare, decoder, registry
 from sieve_player import document as D
 from sieve_player.registry import discover
 from sieve_player.result_folder import Folder
@@ -68,7 +68,7 @@ def test_a_second_walk_reads_detect_back_and_gives_the_same_results(clip):
     second, again = walk()
     assert made == ROWS and again == 0 and same_results(first, second)
     disk = Folder(str(folder))
-    kept = {r: v for n in disk.names(ENTRIES) for r, v in disk.read(n)[0].items()}
+    kept = {r: v for n in disk.names(ENTRIES) if "rows/" in n for r, v in disk.read(n)[0].items()}
     assert kept.keys() == tables.keys() and all(same(kept[r], tables[r]) and kept[r].dtype.metadata for r in kept)
 
 
@@ -81,10 +81,19 @@ def test_a_changed_param_or_code_print_makes_rows_again(clip, monkeypatch):
     assert walk(min_area=5)[1] == ROWS and walk(min_area=5)[1] == 0
 
 
+def test_footage_the_sampled_print_takes_for_the_same_makes_rows_again(clip, monkeypatch, tmp_path):
+    walk, _, _ = clip
+    monkeypatch.setattr(decoder, "footage_print", lambda path: "one print")
+    walk()
+    with open(tmp_path / "v.avi", "ab") as f:
+        f.write(b"\0")
+    assert walk()[1] == ROWS and walk()[1] == 0
+
+
 def test_a_chunk_cut_short_is_made_again_and_nothing_raises(clip):
     walk, folder, _ = clip
     first, _ = walk()
-    chunks = [os.path.join(at, f) for at, _, fs in os.walk(folder / "entries") for f in fs]
+    chunks = [os.path.join(at, f) for at, _, fs in os.walk(folder / "entries") if at.endswith("rows") for f in fs]
     assert len(chunks) == 2
     with open(chunks[0], "r+b") as f:
         f.truncate(os.path.getsize(chunks[0]) // 2)

@@ -61,10 +61,22 @@ this file where they differ.
   He has been told.
 - `video-tests/purb-settings.json` is refused by a bare walk ("nothing reaches a walked
   node"), which may be the document's own state.
+- The machine stopped whole at 19:53 (bugcheck 0x50, in the finding); the tree was clean and
+  `git fsck` found nothing. He takes it for the processor's known fault and said to keep
+  working and not stress the machine: a restart now and then is fine by him. After one, the
+  orchestrator's window is closed and `orchestrator list` refuses until he opens it on this
+  project.
+- (b) is done here, not queued: the keeper's every address holds a digest of the whole
+  footage file (`result_keeper.whole_print`), read once and kept in the store under the
+  file's path, size and mtime, as Git's index does. Only a bare walk has it; `footage_print`
+  and every key made of it are as they were, so nothing on disk but the keeper's own rows is
+  orphaned. About a second for the 2.1 GB camera file here, the file cache's state unknown.
+  The stamp's entry sits under `entries/` beside the chunks, named `-footage`. Not covered:
+  a cut file a bare walk is served is still named by the sampled print.
 - Next action, in order: (a) series and stepped nodes under the keeper, track above all
-  (`walk.py:136`, `:291`), as a queued slice. (b) The whole-file footage hash. (c) A long
-  walk's figure with rows kept, once the machine is settled or on another. `held.py` and his
-  ticked decision stay untouched.
+  (`walk.py:136`, `:291`), as a queued slice, once the window is open. (c) A long walk's
+  figure with rows kept, on another machine or when he says. `held.py` and his ticked
+  decision stay untouched.
 - For him besides: `tests/test_graph.py::test_events_carry_start_thread_and_cpu...` failed
   once in run 8's first full run and passed after; run 8 says it asserts wall time and is not
   marked `simulation`. By CLAUDE.md that is a defect in the test or a race, his to settle.

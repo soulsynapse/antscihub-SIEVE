@@ -49,6 +49,16 @@ component: Processor Core. Error Source: Corrected Machine Check. Error Type: In
 error. Processor APIC ID: 24": one on 2026-11-12 and two on 2026-11-21 at 18:52 and 18:54, inside
 the hour these loops were run.
 
+At 19:53 the same evening the machine itself stopped: bugcheck 0x50, page fault in nonpaged area,
+arguments `(0xffffbf0ff1587588, 0x11, 0xffffbf0ff1587588, 2)`, the faulting address and the
+instruction's address the same, which is the kernel made to execute at an address holding no
+code. `C:\WINDOWS\MEMORY.DMP` is that stop's dump and was not opened; no debugger is installed.
+The System log holds a second 0x50 on 2026-11-03 and a loss of power without a bugcheck on
+2026-11-16. In the Application log over the same days `spoolsv.exe` died of 0xC0000005 and
+`OneDrive.exe` of 0xC0000374 in `ntdll.dll`, both on 2026-11-19.
+
+The processor's microcode, read from the registry's `Update Revision`, is 0x133.
+
 ## What it shows and does not
 
 - The fault is not SIEVE's, not this branch's, and not one numpy's: plain Python dies of it.
@@ -58,8 +68,11 @@ the hour these loops were run.
 - A processor core reporting corrected parity errors while short allocation-heavy loops die of
   access violations at places that move is what an unstable processor looks like, and this
   model is one Intel has acknowledged an instability in. That this machine has it is an
-  inference from those two things together, not a diagnosis: no memory test was run, no core
-  was taken out of use to see the faults stop, and the BIOS's microcode was not read.
+  inference from those two things together, not a diagnosis: no memory test was run and no core
+  was taken out of use to see the faults stop.
+- The faults are not Python's either: the kernel and two programs of Windows' own died in the
+  same weeks. That leaves the processor, the memory or a driver, and a driver does not make a
+  core report parity errors.
 - Until it is settled, a result this machine computed is under the same doubt as the walks that
   died: a core that faults loudly some of the time may also compute wrongly without faulting.
 
@@ -67,4 +80,5 @@ the hour these loops were run.
 
 The loops above pinned to cores other than the one of APIC ID 24, and then to it alone; a memory
 test; the same loops on another machine; the BIOS and microcode against Dell's and Intel's
-current ones for this processor.
+current ones for this processor; the stop's dump read in a kernel debugger for the module that
+made the jump.

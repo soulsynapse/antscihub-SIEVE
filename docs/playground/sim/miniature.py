@@ -3,8 +3,9 @@ player to ask: O7, what one more cut in time costs does not grow with how many t
 bare walk and a clip walk hold the same; O9, nothing walked for the window is held, and a clip
 walk holds the same whatever the window walked first; O10, the window shows a line of every
 series node the document has, a clip walk made or not; O11, a document and its checkpoint taken to
-another folder and a results folder of nothing open where they were left; O12, O7's for the keeper:
-what a cut costs it in steps, writes, bytes, reads and lock takes does not grow with the cuts.
+another folder open where they were left; O12, O7's for the keeper: what a cut costs it in steps,
+writes, bytes, reads and lock takes does not grow with the cuts; O13, a bare walk's small rows
+reach the checkpoint the player writes.
 
 The player's own window, worker, plan, held runs and tools, offscreen, over a clip of tiny frames
 made here whose gray cycles so that a banded `reduce` gates a `period` into one cut every PERIOD
@@ -16,7 +17,8 @@ so a loop that calls nothing is counted as one that does; a function is said to 
 steps a cut at the larger count pass GROWS times those at the smaller. The monitor's modules are
 left out: the clock turns them, and what they cost a cut is not seen here. O8 to O11 are asked of
 clips of CHECKED cuts; the bare walk is bare.main's, in this process. No checkpoint is written but
-O11's, whose document is its own: detect below threshold, whose tables the keeper keeps, and size.
+O11's and O13's, whose document is their own: detect below threshold, whose tables the keeper
+keeps, and size; each player of them has a keeper's folder of its own.
 O12 walks O7's gate and period with those three below the period, at O7's two counts, counting the
 keeper's Folder calls and the steps in result_keeper.py and result_store.py alone.
 
@@ -192,42 +194,69 @@ def window_shows():
     return said + [f"no line of {nid} after a clip walk" for nid in sorted(nodes - set(win.plot.lines))]
 
 
-def checkpoint_travels():
-    """O11: a document saved with its checkpoint, copied to another folder and opened with an empty
-    results folder, serves every run the first player held without walking, and after an edit below
-    a frame node that makes small rows, a clip walk runs that frame node zero times; opened with the
-    checkpoint's kept rows withheld, it runs it again, or the check would show nothing."""
-    by_name = {e.name: e.module for e in TOOLS}
-    detect, ran, said = by_name["detect"], [0], []
-    run = detect.run
+BY_NAME = {e.name: e.module for e in TOOLS}
+DETECT, RAN = BY_NAME["detect"], [0]     # O11's and O13's frame node that makes small rows, and its runs counted
+RUN = DETECT.run
 
-    def counted(frames, row, params):
-        ran[0] += 1
-        return run(frames, row, params)
 
-    def player(folder):
-        os.environ["SIEVE_RESULTS"] = str(folder / "results")       # a Keeper over a root of nothing
-        win = window.PlayerWindow(str(folder / "doc.json"), "t", TOOLS)
-        if win.playing:
-            win.toggle_play()
-        return win
+def counted_run(frames, row, params):
+    RAN[0] += 1
+    return RUN(frames, row, params)
 
-    def edited_and_walked(win):
-        size = next(n.id for n in win.doc.nodes if n.tool == "size")
-        win.doc.node(size).params["method"] = "max"
-        win._params_changed(size)
-        ran[0] = 0
-        win._toggle_clip()
-        settled(win)
-        return ran[0], size
 
-    home, results = Path(SCRATCH) / "travels", os.environ["SIEVE_RESULTS"]
+def tables_home(name):
+    """A folder of a clip of CHECKED cuts and a document of gray, threshold, detect and size over it."""
+    home = Path(SCRATCH) / name
     home.mkdir()
-    doc = D.from_tools([by_name[n] for n in ("gray", "threshold", "detect", "size")], "v.avi")
+    doc = D.from_tools([BY_NAME[n] for n in ("gray", "threshold", "detect", "size")], "v.avi")
     clip(home / "v.avi", CHECKED)
     D.save(doc, home / "doc.json")
+    return home
+
+
+def copied(home, name):
+    """The document, clip and checkpoint of `home` copied to a folder `name` of nothing else."""
+    away = Path(SCRATCH) / name
+    away.mkdir()
+    for f in ("doc.json", "v.avi", Path(held.path_for("doc.json")).name):
+        (away / f).write_bytes((home / f).read_bytes())
+    return away
+
+
+def player(folder):
+    """A player on the document saved in `folder`, not playing, its worker not turned."""
+    os.environ["SIEVE_RESULTS"] = str(folder / "results")       # a Keeper over a root of nothing
+    win = window.PlayerWindow(str(folder / "doc.json"), "t", TOOLS)
+    if win.playing:
+        win.toggle_play()
+    return win
+
+
+def edited_and_walked(win):
+    """detect's runs in a clip walk of `win` after an edit of size, and size's node."""
+    size = next(n.id for n in win.doc.nodes if n.tool == "size")
+    win.doc.node(size).params["method"] = "max"
+    win._params_changed(size)
+    RAN[0] = 0
+    win._toggle_clip()
+    settled(win)
+    return RAN[0], size
+
+
+def sized(win, size):
+    return [f"the clip walk after the edit held no size of {win.count} rows"] * (
+        not any(nid == size and len(v) == win.count for (nid, _, _), v in holds(win).items()))
+
+
+def checkpoint_travels():
+    """O11: a document saved with its checkpoint, copied to another folder and opened there with no
+    other source of rows, serves every run the first player held without walking, and after an edit
+    below a frame node that makes small rows, a clip walk runs that frame node zero times; opened
+    with the checkpoint's kept rows withheld, it runs it again, or the check would show nothing."""
+    said, results = [], os.environ["SIEVE_RESULTS"]
+    home = tables_home("travels")
     held.File.write = WRITE
-    detect.run = counted
+    DETECT.run = counted_run
     try:
         first = player(home)
         turned(first)
@@ -237,19 +266,16 @@ def checkpoint_travels():
         want = holds(first)
         said += [f"the first player holds {len(want)} results and none"] * (not want)
         for name, withheld in (("colleague", False), ("withheld", True)):
-            away = Path(SCRATCH) / name
-            away.mkdir()
-            for f in ("doc.json", "v.avi", Path(held.path_for("doc.json")).name):
-                (away / f).write_bytes((home / f).read_bytes())
+            away = copied(home, name)
             lend = result_keeper.Keeper.lend
             if withheld:
                 result_keeper.Keeper.lend = lambda self, chunks: None
             try:
-                ran[0] = 0
+                RAN[0] = 0
                 win = player(away)
                 got = holds(win)
                 turned(win)
-                opened_ran = ran[0]
+                opened_ran = RAN[0]
                 walked_ran, size = edited_and_walked(win)
             finally:
                 result_keeper.Keeper.lend = lend
@@ -257,11 +283,44 @@ def checkpoint_travels():
                 said += [f"with the kept rows withheld the clip walk ran detect {walked_ran} times"] * (not walked_ran)
                 continue
             said += apart(want, got) + [f"detect ran {opened_ran} times as it opened"] * bool(opened_ran)
-            said += [f"detect ran {walked_ran} times in the clip walk after the edit"] * bool(walked_ran)
-            said += [f"the clip walk after the edit held no size of {win.count} rows"] * (
-                not any(nid == size and len(v) == win.count for (nid, _, _), v in holds(win).items()))
+            said += [f"detect ran {walked_ran} times in the clip walk after the edit"] * bool(walked_ran) + sized(win, size)
     finally:
-        held.File.write, detect.run = (lambda self, *a: []), run
+        held.File.write, DETECT.run = (lambda self, *a: []), RUN
+        os.environ["SIEVE_RESULTS"] = results
+    return said
+
+
+def bare_rows_travel():
+    """O13: what a bare walk computed of a frame node's small rows reaches the checkpoint: a player
+    hands its document to a bare walk and takes what it left as the window does, the document is
+    saved, and a player of a copy, with no other source of rows, opens it and runs detect zero times,
+    as it opens and in a clip walk after an edit of size."""
+    said, results = [], os.environ["SIEVE_RESULTS"]
+    home = tables_home("bare-rows")
+    held.File.write = WRITE
+    try:
+        first = player(home)        # never turned: what reaches the checkpoint of detect's rows is the bare walk's
+        job, out = home / "job.json", home / "results.pkl"
+        job.write_text(json.dumps(bare.job(first.doc, first.decoder.path, first.tools, str(out))), encoding="utf-8")
+        with contextlib.redirect_stdout(io.StringIO()) as told:
+            code = bare.main(str(job))
+        if code:
+            return [f"the bare walk ended with {code}: {told.getvalue().splitlines()[-1]}"]
+        with open(out, "rb") as f:
+            left = pickle.load(f)
+        first._take_bare(*left)
+        first.save_document()
+        said += [f"the first player holds {len(holds(first))} results and none"] * (not holds(first))
+        DETECT.run = counted_run
+        RAN[0] = 0
+        win = player(copied(home, "bare-rows-away"))
+        turned(win)
+        opened_ran = RAN[0]
+        walked_ran, size = edited_and_walked(win)
+        said += [f"detect ran {opened_ran} times as it opened"] * bool(opened_ran)
+        said += [f"detect ran {walked_ran} times in the clip walk after the edit"] * bool(walked_ran) + sized(win, size)
+    finally:
+        held.File.write, DETECT.run = (lambda self, *a: []), RUN
         os.environ["SIEVE_RESULTS"] = results
     return said
 
@@ -413,7 +472,7 @@ if LARGE:
         print(f"O7 {'fails' if grew else 'holds'}: {len(grew)} functions' steps a cut grew past {GROWS}x from {SMALL} cuts to {LARGE}")
     if prof:
         pstats.Stats(prof, stream=sys.stdout).strip_dirs().print_callers(os.environ["MINIATURE_WHY"])
-for oracle, check in (("O8", bare_and_clip), ("O9", window_first), ("O10", window_shows), ("O11", checkpoint_travels)) + ((("O12", kept_rows),) if LARGE else ()):
+for oracle, check in (("O8", bare_and_clip), ("O9", window_first), ("O10", window_shows), ("O11", checkpoint_travels), ("O13", bare_rows_travel)) +((("O12", kept_rows),) if LARGE else ()):
     try:
         said = check()
     except Exception as e:

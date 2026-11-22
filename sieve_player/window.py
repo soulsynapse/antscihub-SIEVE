@@ -897,6 +897,7 @@ class PlayerWindow(QMainWindow):
         s, n = self.window_
         if s + n > count:
             self.set_window(s, n)
+        self._show_held()
         if self.row >= count:
             self.goto(count - 1, commit=True)
 
@@ -967,6 +968,7 @@ class PlayerWindow(QMainWindow):
         gone, so they are dropped here and now rather than when the worker gets to it."""
         self.worker.invalidate()
         self._ask_window(EDIT)
+        self._show_held()
         self._clip_asked = False
         self.header.set_walking(False)
         self.header.clear_note()
@@ -1168,6 +1170,7 @@ class PlayerWindow(QMainWindow):
         selected, window = recent.view_of(recent.views_beside(self.noted), self.doc.path) if self.noted and self.doc.path else (None, None)
         s, n = window or (0, min(self.count, round(10 * self.fps)))
         self.set_window(s, n, by=HAND)
+        self._show_held()
         self.goto(self.window_[0], commit=True)
         if any(n.id == selected for n in self.doc.nodes):
             self.canvas.select([selected])
@@ -1390,7 +1393,8 @@ class PlayerWindow(QMainWindow):
         self._show_lines()
         if got is not None:
             self._series_ready(got, s, self.fps)
-        self._show_held()
+        else:
+            self._show_pinned()
 
     def _as_given(self, part):
         return as_given(self.graph.snapshot(), part)
@@ -1488,6 +1492,7 @@ class PlayerWindow(QMainWindow):
             except OSError as e:
                 self.timeline.controls.progress.setText(f"could not write {os.path.basename(self._file.path)}: {e}")
         self._ask_window(by=HAND)
+        self._show_held()
 
     def _chain(self, nodes=None):
         """The series chain, or `nodes` of the plan, as held.Runs is told it; one of no nodes with no video open."""

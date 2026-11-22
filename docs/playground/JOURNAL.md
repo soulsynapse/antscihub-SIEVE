@@ -38,7 +38,14 @@ that nothing checks.
 - O5. Memory held stays under the budget given; a budget too small for one row's work is said.
 - O6. Two processes writing the same address leave one whole entry.
 - O7, from the 850 periods: what one more cut, run or node costs a turn of either thread does
-  not grow with how many there are.
+  not grow with how many there are. The miniature asks it of a clip walk's steps a cut, and of a
+  window moved, whose steps with 800 cuts held are not to pass 1.5 times those with 200. A window
+  moved took 193630, 338240 and 980519 steps with 200, 800 and 3200 held while it asked
+  `_show_held` of every cut and run, and takes 131920, 145120 and 261610 now. What still grows,
+  about 22 steps a cut, is `_restate` on each window result: `graph.footage` over every read of a
+  node below a cut in time, and the strip handed every cut in time (`timeline.lanes`). At 3200 a
+  dataclass `__init__` the monitor's `ledger._view` runs takes some 64000 steps more; generated
+  code is counted whoever calls it.
 
 - O8, his: a bare walk and a clip walk leave the same held; bare is only the faster for having
   no window beside it.
@@ -77,9 +84,7 @@ runs sit behind and is driven against the same checks.
 2. O10 is open for a gate inside a cut in time: a cutting node whose CUT_BY wire's node is below
    another cut in time is answered by held runs alone (`heldwalks.window_gate_result` answers
    none for a cut in time) and the window shows nothing below it until that cut is walked whole.
-3. A window moved costs more with more cuts held: the miniature prints the steps of one beside O7.
-   Which function grows is unread.
-4. The held runs onto the store behind that seam, driven against today's. Goal 2 moves here.
+3. The held runs onto the store behind that seam, driven against today's. Goal 2 moves here.
 
 Not to be done on this machine: long walks or timing runs for their own sake. He said no stress
 testing, and a restart now and then is fine.

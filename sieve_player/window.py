@@ -108,6 +108,11 @@ def to_qimage(a, top=None):
     """`a` as an image. uint8 and bool are shown as they are; any other plane is shown over `top`, its
     own maximum when not given. A flow field, (H, W, 2), is the colour wheel: hue is direction and
     brightness magnitude over `top`."""
+    return image_of(painted(a, top))
+
+
+def painted(a, top=None):
+    """The uint8 pixels to_qimage shows for `a` and `top`: (H, W) gray or (H, W, 3) BGR."""
     a = np.asarray(a)
     if a.dtype == bool:
         a = a.astype(np.uint8) * 255
@@ -119,6 +124,10 @@ def to_qimage(a, top=None):
         a = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
     elif a.dtype != np.uint8:
         a = over(a, flow_top(a) if top is None else top)
+    return np.ascontiguousarray(a)
+
+
+def image_of(a):
     a = np.ascontiguousarray(a)
     if a.ndim == 2:
         fmt = QImage.Format_Grayscale8
@@ -133,6 +142,24 @@ def over(a, top):
     """`a`, a measured plane, as uint8 over `top`: 0 at or below zero, 255 at `top` and above."""
     a = np.asarray(a).astype(np.float32, copy=False)
     return cv2.convertScaleAbs(cv2.max(a, 0.0), alpha=255.0 / max(float(top), 1e-6))   # abs, so zero the negatives first
+
+
+PROXY_W, PROXY_H, PROXY_QUALITY = 1280, 720, 85
+PROXY_BYTES = budget.here()["proxy"]
+
+
+def packed(img):
+    """`img`, uint8 pixels, as jpeg bytes within PROXY_W by PROXY_H, its aspect kept and never enlarged."""
+    h, w = img.shape[:2]
+    s = min(1.0, PROXY_W / w, PROXY_H / h)
+    if s < 1:
+        img = cv2.resize(img, (max(1, round(w * s)), max(1, round(h * s))), interpolation=cv2.INTER_AREA)
+    return cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, PROXY_QUALITY])[1]
+
+
+def loop_spills(rows, plane, limit):
+    """Whether `rows` of the shown `plane` together pass `limit`, the memo's bytes."""
+    return rows * np.asarray(plane).nbytes > limit
 
 
 # BGRA LUT over theme.HEAT: the colour by value, alpha with it up to theme.HEAT_ALPHA. One cv2.LUT
@@ -174,7 +201,8 @@ class Display(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._pix, self.reason = None, ""
+        self._pix, self._size, self.reason = None, None, ""   # _size: the frame's own, which a proxy's smaller _pix stands for
+        self._proxies, self._proxy_under, self._proxy_bytes, self.proxied = {}, None, 0, False   # row -> proxy, oldest first; what they picture
         self._over, self._over_key, self._top = None, None, 0.0   # the overlay image, whose node's key, its running max
         self._frame_key, self._frame_top = None, 0.0               # the shown node's key and running max, for a measured plane
         self.drawers, self.row, self.results, self.start, self.starts = [], 0, {}, 0, {}   # drawers: [(node id, tool, node)]
@@ -199,12 +227,57 @@ class Display(QWidget):
         top = None
         if a.dtype not in (np.uint8, bool):
             self._frame_top = top = max(self._frame_top, flow_top(a))
-        self._pix, self.reason = QPixmap.fromImage(to_qimage(a, top)), ""
+        self._pix, self.reason, self.proxied = QPixmap.fromImage(to_qimage(a, top)), "", False
+        self._size = self._pix.size()
         self.update()
+
+    def keep(self, row, under, frame, plane, limit):
+        """Packs what was just painted at `row`, from `frame` and the overlay's `plane` as set_frame and
+        set_overlay were handed them and the drawers' frame_results and places, as a proxy of what
+        `under` names. Proxies of another `under` are let go first, and the oldest while all pass `limit` bytes."""
+        if under != self._proxy_under:
+            self.drop_proxies()
+            self._proxy_under = under
+        if row in self._proxies:
+            return
+        frame = np.asarray(frame)
+        top = None if frame.dtype in (np.uint8, bool) else self._frame_top
+        gray = otop = None
+        if plane is not None:
+            plane = np.asarray(plane)
+            otop = None if plane.dtype == bool else self._top
+            gray = packed(plane.view(np.uint8) * np.uint8(255) if otop is None else over(plane, otop))
+        jpg = packed(painted(frame, top))
+        results = dict(self.frame_results)
+        n = jpg.nbytes + (0 if gray is None else gray.nbytes) + sum(wire.table_bytes(v) for v in results.values())
+        self._proxies[row] = (jpg, top, gray, otop, self._size, results, dict(self.places), n)
+        self._proxy_bytes += n
+        while self._proxy_bytes > limit and self._proxies:
+            self._proxy_bytes -= self._proxies.pop(next(iter(self._proxies)))[-1]
+
+    def show_proxy(self, row, under):
+        """Paints the proxy of `row` kept under `under`, the measured planes over the running tops now;
+        False where there is none. Under another `under` than they were kept under, all are let go."""
+        if under != self._proxy_under:
+            self.drop_proxies()
+        got = self._proxies.get(row)
+        if got is None:
+            return False
+        jpg, top, gray, otop, self._size, self.frame_results, self.places, _ = got
+        img = cv2.imdecode(jpg, cv2.IMREAD_UNCHANGED)
+        if top is not None and self._frame_top > top:
+            img = cv2.convertScaleAbs(img, alpha=top / self._frame_top)
+        self._pix, self.reason, self.proxied = QPixmap.fromImage(image_of(img)), "", True
+        self._over = None if gray is None else heat(cv2.imdecode(gray, cv2.IMREAD_UNCHANGED), 255.0 if otop is None else 255.0 * max(self._top, otop) / max(otop, 1e-6))
+        self.update()
+        return True
+
+    def drop_proxies(self):
+        self._proxies, self._proxy_under, self._proxy_bytes = {}, None, 0
 
     def clear(self, reason=""):
         """No frame; `reason` is the one line that says why, so an empty frame never reads as a stall."""
-        self._pix, self.reason = None, reason
+        self._pix, self.reason, self.proxied = None, reason, False
         self.set_overlay(None, None)
 
     def set_overlay(self, a, key):
@@ -242,7 +315,7 @@ class Display(QWidget):
         # Window/viewport rather than translate/scale: the same mapping, and a drawer can read the
         # frame's rect back from painter.window() when its own data is another resolution.
         p.setViewport(x, y, pix.width(), pix.height())
-        p.setWindow(0, 0, self._pix.width(), self._pix.height())
+        p.setWindow(0, 0, self._size.width(), self._size.height())
         for nid, tool, node in self.drawers:
             if nid not in self.places:
                 continue
@@ -267,7 +340,7 @@ class Display(QWidget):
         """Where the frame sits in the widget, (x, y, width, height): fit inside, centred, or None with no frame."""
         if self._pix is None:
             return None
-        scaled = self._pix.size().scaled(self.size(), Qt.KeepAspectRatio)
+        scaled = self._size.scaled(self.size(), Qt.KeepAspectRatio)
         return (self.width() - scaled.width()) // 2, (self.height() - scaled.height()) // 2, scaled.width(), scaled.height()
 
     def to_frame(self, pos):
@@ -276,13 +349,14 @@ class Display(QWidget):
         if r is None:
             return None
         x, y, w, h = r
-        fx, fy = (pos.x() - x) * self._pix.width() / w, (pos.y() - y) * self._pix.height() / h
-        return (fx, fy) if 0 <= fx < self._pix.width() and 0 <= fy < self._pix.height() else None
+        fw, fh = self._size.width(), self._size.height()
+        fx, fy = (pos.x() - x) * fw / w, (pos.y() - y) * fh / h
+        return (fx, fy) if 0 <= fx < fw and 0 <= fy < fh else None
 
     def mousePressEvent(self, e):
         if e.button() != Qt.LeftButton or (point := self.to_frame(e.position())) is None:
             return
-        shape = (self._pix.height(), self._pix.width())
+        shape = (self._size.height(), self._size.width())
         for nid, tool, node in reversed(self.drawers):
             pick, result = registry.pick_of(tool), self.frame_results.get(nid, self.results.get(nid))
             if pick is None or result is None or nid not in self.places:
@@ -1146,6 +1220,7 @@ class PlayerWindow(QMainWindow):
         self.plot.set_lines({})
         self.plot.set_fields({}, 0)
         self.display.clear()
+        self.display.drop_proxies()
 
     # -- state (every entry is a no-op until something is loaded) --------
     def set_window(self, start, length, playhead=None, by=ASKED):
@@ -1169,7 +1244,7 @@ class PlayerWindow(QMainWindow):
 
     def goto(self, row, commit):
         """Show `row` of the flagged node. A commit may ask the worker; a guess is served from the
-        memo or not at all."""
+        memo, or while playing a display proxy, or not at all. A row a proxy shows asks nothing."""
         if self.graph is None:
             return
         self.row = row = max(0, min(self.count - 1, int(row)))
@@ -1219,6 +1294,8 @@ class PlayerWindow(QMainWindow):
             self.timer.start(max(1, int(round(1000 / self.fps))))
         else:
             self.timer.stop()
+            if self.display.proxied:
+                self.goto(self.row, commit=True)
         self.timeline.controls.set_playing(self.playing)
 
     def _tick(self):
@@ -1232,20 +1309,23 @@ class PlayerWindow(QMainWindow):
     def _show(self, row):
         """The shown node's frame at `row` from the memo, with the overlay node's plane over it and
         the drawing frame nodes' outputs if the memo has those too; False when any is not there
-        yet, so a commit asks the worker for them all. At a row outside the shown node's cuts the
-        frame says so, and nothing is asked."""
+        yet, so a commit asks the worker for them all. While playing, a row the memo lacks is
+        painted from the display's proxy of it where there is one, and True. A row painted whole
+        while the window's rows of its plane pass the memo's limit is kept as a proxy. At a row
+        outside the shown node's cuts the frame says so, and nothing is asked."""
         if outside := outside_cuts(self.graph.entry(self.graph.shown), self.graph.shown, row):
             self.display.clear(outside)
             return True
+        under = self._pictured()
         frame = self.graph.peek(row)
         if frame is None:
-            return False
+            return self.playing and self.display.show_proxy(row, under)
         src = self.graph.shown
         while not imageable(frame):       # a table, blobs: show the nearest image upstream, with its draw() over it
             src = self.graph.source(src)
             frame = None if src is None else self.graph.peek(row, src)
             if frame is None:
-                return False
+                return self.playing and self.display.show_proxy(row, under)
         self.display.set_frame(frame, self.graph.key(self.graph.shown))
         self.display.places = self._places(src, row, frame.shape[:2])
         walked = self._walked_nodes()
@@ -1254,7 +1334,19 @@ class PlayerWindow(QMainWindow):
         plane = None if over is None else self.graph.peek(row, over)
         self.display.set_overlay(plane, None if over is None else self.graph.key(over))
         drawn = all(self.display.frame_results.get(nid, True) is not None for nid in self.graph.drawing())
-        return drawn and (over is None or plane is not None)
+        if not (drawn and (over is None or plane is not None)):
+            return self.playing and self.display.show_proxy(row, under)
+        if loop_spills(self.window_[1], frame, self.graph.memo.limit):
+            self.display.keep(row, under, frame, plane, PROXY_BYTES)
+        return True
+
+    def _pictured(self):
+        """What a proxy pictures, so one kept under another is let go: the shown node's key, the
+        overlay's, those of the drawers the memo serves, which hold the footage and every param,
+        and the loop's range."""
+        walked, g = self._walked_nodes(), self.graph
+        drawers = tuple(self._key(nid) for nid, *_ in self.display.drawers if nid not in walked)
+        return g.key(g.shown), None if g.over is None else g.key(g.over), drawers, self.window_
 
     def _row_ready(self, row):
         if row == self.row and self.graph is not None:

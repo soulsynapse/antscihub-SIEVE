@@ -58,6 +58,7 @@ class Scheme:
     chunk_bytes: int = 64 * MB   # a chunk is as many rows as fit this, by the pipeline's widest row
     worth: bool = True           # the store's policy, see Store
     locked: bool = True
+    window_apart: bool = True    # a window's value is addressed with its range, apart from an exact one
 
 
 class Crash(Exception):
@@ -175,7 +176,7 @@ class Disk:
 @dataclass
 class Tool:
     name: str
-    kind: str            # "frame": a chunk of its inputs' same chunk; "stepped": and of its own chunk before; "whole": one chunk of all of its input's
+    kind: str            # "frame": a chunk of its inputs' same chunk; "stepped": and of its own chunk before; "whole": one chunk of all of its input's; "reach": of its input's rows within its node's `reach` either side
     ms_per_row: float
     bytes_per_row: int
     code: int = 0
@@ -202,14 +203,17 @@ def pipeline(footage="1080p"):
         Tool("gray", "frame", 1.5 if big else 0.2, int(2 * MB * px)),
         Tool("motion", "frame", 0.5 * px, int(2 * MB * px)), Tool("energy", "frame", 0.12 * px, 64),
         Tool("gate", "whole", 0.002, 16), Tool("detect", "frame", 2.4 * px, 1200),
-        Tool("track", "stepped", 0.75, 1208))}
+        Tool("track", "stepped", 0.75, 1208), Tool("smooth", "reach", 0.001, 8),
+        Tool("trail", "stepped", 0.01, 64))}
     nodes = {n.name: n for n in (
         Node("video", "decode"), Node("gray", "gray", ("video",)),
         Node("motion", "motion", ("gray",), {"span": 2}, frozenset({"span"})),
         Node("energy", "energy", ("motion",)),
         Node("gate", "gate", ("energy",), {"keep": 20}, frozenset({"keep"})),
         Node("detect", "detect", ("gray",), {"level": 40, "outline": 1}, frozenset({"level"}), "gate"),
-        Node("track", "track", ("detect",), {"reach": 8}, frozenset({"reach"}), "gate"))}
+        Node("track", "track", ("detect",), {"reach": 8}, frozenset({"reach"}), "gate"),
+        Node("smooth", "smooth", ("energy",), {"reach": 5}, frozenset({"reach"})),
+        Node("trail", "trail", ("energy",)))}
     return tools, nodes, (0.49 if big else 0.1)
 
 
@@ -267,6 +271,9 @@ class World:
                 out.append((read, 0))
             elif kind == "whole":
                 out += [(read, c) for c in self.chunks_of(read)]
+            elif kind == "reach":
+                span = -(-node.params["reach"] // self.chunk)
+                out += [(read, c) for c in range(chunk - span, chunk + span + 1) if 0 <= c < self.chunks]
             else:
                 out.append((read, chunk))
         if node.cut_by:
@@ -392,7 +399,10 @@ class Ask:
         live = tool.bytes_per_row + sum(w.tools[w.nodes[n].tool].bytes_per_row for n, _ in reads)
         self.store.reserve(live)
         try:
-            for n, c in reads:
+            if tool.kind == "reach":
+                for r in range(max(0, row - node.params["reach"]), min(w.rows, row + node.params["reach"] + 1)):
+                    self._looked(node.reads[0], r)
+            for n, c in () if tool.kind == "reach" else reads:
                 if n == name or w.tools[w.nodes[n].tool].kind == "whole":
                     self._value(n, c)
                 elif tool.kind == "stepped":
@@ -415,6 +425,54 @@ class Ask:
         value = digest(w.truth(name, chunk), row)
         self.store.put(alone, value, tool.bytes_per_row, self.clock[0] - began, memory_only=True)
         return value
+
+    def window(self, name, start, count):
+        """Rows `start` to `start + count` of an uncut node as a window makes them, each as
+        (value, whether it is exact). A row is exact when every row it reads lay inside the
+        window, or past an end of the clip, and was exact; any other is the window's own, made of
+        what the window had, and is kept under an address that holds the window's range."""
+        seen = {}
+        return [self._windowed(name, row, (start, count), seen) for row in range(start, start + count)]
+
+    def _windowed(self, name, row, span, seen):
+        if (name, row) in seen:
+            return seen[name, row]
+        w, node = self.world, self.world.nodes[name]
+        tool, chunk = w.tools[node.tool], row // w.chunk
+        alone, whole = Address(w.key(name), -1 - row), Address(w.key(name), chunk)
+        apart = Address(f"{w.key(name)}@{span}", row)
+        found = None
+        if alone in self.store.held:
+            found = self.store.get(alone), True
+        elif self.store.covered(whole.key, [chunk]) and (got := self.store.get(whole)) is not None:
+            found = digest(got, row), True
+        elif apart in self.store.held:
+            found = self.store.get(apart), False
+        if found is None:
+            inside = lambda r: span[0] <= r < span[0] + span[1]   # noqa: E731
+            began, exact = self.clock[0], True
+            if tool.kind == "reach":
+                reach = node.params["reach"]
+                for r in range(max(0, row - reach), min(w.rows, row + reach + 1)):
+                    exact &= inside(r) and self._windowed(node.reads[0], r, span, seen)[1]
+            else:
+                for read in node.reads:
+                    exact &= self._windowed(read, row, span, seen)[1]
+                if tool.kind == "stepped" and row > 0:
+                    exact &= inside(row - 1) and self._windowed(name, row - 1, span, seen)[1]
+            seconds = tool.ms_per_row / 1000 * self.profile.slow
+            if not node.reads:
+                ahead = -1 if self.decoded is None else row - self.decoded
+                seconds += (ahead * tool.ms_per_row / 1000 if 0 <= ahead <= AHEAD else w.seek_s) * self.profile.slow
+                self.decoded = row + 1
+            self.clock[0] += seconds
+            self.stats.computed += 1
+            value = digest(w.truth(name, chunk), row) if exact else digest("a window's", w.key(name), span, row)
+            at = alone if exact or not w.scheme.window_apart else apart
+            self.store.put(at, value, tool.bytes_per_row, self.clock[0] - began, memory_only=True)
+            found = value, exact
+        seen[name, row] = found
+        return found
 
     def walk(self, name):
         self.speed, self.passing = min(self.profile.cores, WITHIN), True
@@ -440,7 +498,7 @@ class Ask:
 
 OPS = (("scrub", 30), ("walk", 8), ("edit", 10), ("edit draw", 4), ("code", 3), ("footage", 1),
        ("evict", 6), ("delete", 3), ("reopen", 4), ("crash", 3), ("other", 5), ("checkpoint", 3),
-       ("restore", 3), ("race", 5), ("unmark", 2))
+       ("restore", 3), ("race", 5), ("unmark", 2), ("window", 12))
 
 
 def sequence(seed, length, world):
@@ -477,6 +535,17 @@ def run(ops, profile, scheme, rows=1024):
                     stats.scrubs.append(clock[0] - start)
             elif kind == "walk":
                 ask.walk(name)
+            elif kind == "window":
+                if node.cut_by is None and world.tools[node.tool].kind != "whole":
+                    start, count = (chunk * world.chunk + pick) % (world.rows - 40), 8 + pick % 32
+                    first = ask.window(name, start, count)
+                    if ask.window(name, start, count) != first:
+                        stats.broken.append(("O7 a window twice", name, start))
+                    for row, (value, exact) in zip(range(start, start + count), first):
+                        if exact and value != digest(world.truth(name, row // world.chunk), row):
+                            stats.broken.append(("O7 said exact", name, row))
+                    ask.look(name, start)   # an exact ask at the window's edges, which O1 judges
+                    ask.look(name, start + count - 1)
             elif kind in ("edit", "edit draw"):
                 wanted = [p for p in node.params if (p in node.computed) == (kind == "edit")]
                 if wanted:
@@ -700,6 +769,7 @@ def main(seeds=200):
         "footage print of size and ends (today)": Scheme(strong_print=False),
         "entries written in place": Scheme(atomic=False),
         "no lock about letting go and naming": Scheme(locked=False),
+        "a window's rows kept as exact ones": Scheme(window_apart=False),
     }
     for label, scheme in schemes.items():
         found = torture(scheme, seeds)

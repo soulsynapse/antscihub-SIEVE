@@ -408,6 +408,15 @@ Withdrawn: asking a reach tool's input for rows either side so that a window is 
 not want a window exact. The ledger experiment counts this as a second miss no claim named,
 caught by him.
 
+In the simulation since: a tool of kind reach (smooth, over energy), an uncut stepped one
+(trail), and `Ask.window`, which makes a window's rows and says of each whether it is exact;
+a window's own value is put under the key with the range, in memory only. The torture's
+window op asks the window twice, checks every row said exact against the truth, and then
+looks exactly at the window's two edge rows. 200 seeds pass; with a window's rows kept under
+the exact address the first seed with a window breaks. Not in it: a window over a cut node
+or a gate (the op passes them over), the gate a window would make of its own rows, proxies
+(they are `loop.py`'s), and a baked cut.
+
 ## What a loop costs, planes against proxies (`sim/proxyrate.py`, `sim/loop.py`)
 
 Measured on this machine from the crossings clip (`proxyrate.py video-tests/00000_168-178.mp4`):

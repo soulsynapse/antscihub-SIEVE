@@ -27,8 +27,8 @@ overrule them. His freeing me from a spec's decision endorses neither side of it
 
 O1 to O6 were written of a machine-wide store of results, which is gone; none is shown to hold.
 O2, O3 and O6 have no subject left: there is no entry to drop, no checkpoint of the store's, no
-second writer of one address. O1, O4 and O5 read on as claims about the memo, the keeper and the
-checkpoint that nothing checks.
+second writer of one address. O1, O4 and O5 read on as claims about the memo and the checkpoint
+that nothing checks.
 
 - O1. What is handed out for an address equals a cold recompute of it, under any sequence of
   edit, scrub, walk, evict, crash mid-write and reopen.
@@ -46,20 +46,15 @@ checkpoint that nothing checks.
   file.
 - O10, his: the window shows what is asked of it, every series node's line over its rows, whether
   or not a clip walk was made.
-- O11, his: a colleague's laptop gets the document and its checkpoint, and what lives in the
-  checkpoint is what should be beside it: copied to another folder and opened with no other
-  source of rows, it serves every run held without walking, and after an edit below a frame node
-  that makes small rows a clip walk runs that node zero times.
-- O12, from O7: what one more cut in time costs the kept rows, in steps of the trip to the
-  checkpoint (`result_keeper.py` and the memo's lent tier) and in the checkpoint's bytes, does
-  not grow with how many there are, and no chunk is written to the checkpoint twice.
-- O13, his: what a bare walk computed of a frame node's small rows reaches the checkpoint: handed
-  back with its results, lent to the player's memo, written at the save, and a player of a
-  copy runs that node zero times after an edit below it.
+- O11, his: a full run made and the document saved, the document and its checkpoint copied
+  elsewhere and opened: every run the first player held is served without walking.
+- O14, his ruling: a held run made under a tool's older code is served after the tool's code
+  changes, and its node is marked as of other code.
+- O12 and O13 were of a frame node's small rows in the checkpoint, which he ruled out of it.
 
 ## What checks the work
 
-- `sim/miniature.py`, the player itself over a clip made for it, says which of O7 to O13 hold.
+- `sim/miniature.py`, the player itself over a clip made for it, says which of O7 to O11 and O14 hold.
   It writes nothing outside a temp folder. It does not see real threads, decode or disk.
 - What caught real defects: an adversary told to prove a break in a scratch copy; an unanchored
   reader tracing one path; a profile of the real document
@@ -72,7 +67,7 @@ checkpoint that nothing checks.
 ## Next
 
 `sim/miniature.py` is the player's own window, worker, plan, held runs and tools over a clip made
-for it, the worker's turns taken on one thread, and it says which of O7 to O13 hold. A defect
+for it, the worker's turns taken on one thread, and it says which of O7 to O11 and O14 hold. A defect
 found on a real document is pinned there. An alternative holder goes behind the seam the held
 runs sit behind and is driven against the same checks.
 
@@ -80,8 +75,6 @@ runs sit behind and is driven against the same checks.
 2. O10: a cutting node cut by a result on a wire makes no cut until a run of that result over
    the whole clip is held (`heldwalks.gate_result`), so the window shows nothing below it.
 3. The held runs onto the store behind that seam, driven against today's. Goal 2 moves here.
-4. The keeper's address follows `cut.read`, as the memo's does; then series and stepped nodes
-   under it, `track` above all.
 
 Not to be done on this machine: long walks or timing runs for their own sake. He said no stress
 testing, and a restart now and then is fine.
@@ -89,18 +82,27 @@ testing, and a restart now and then is fine.
 ## Where things are
 
 - In the player, to be verified in the tree: holders sized from the machine's RAM (`budget.py`);
-  the window-against-full test over the registry; display proxies; a tool's code in every node's
-  key; a frame node's small rows held in memory by the graph's memo alone, those this session made
-  under their memo keys and those a checkpoint or a bare walk lent in chunks beside them, one limit
-  over both; the keeper (`result_keeper.py`) holds no row, only each row's address across sessions,
-  the node's raw key, the cut's rows and its reach, and which chunks the file has had; a bare walk's
-  handed back with its results; the held runs and the window's own runs within `budget.py`'s
-  "held"; a checkpoint beside the document, one append-only file of its held runs, the kept
-  chunks and the document's form (`held.py`), the one place on disk the small rows lie, whose
-  document record nothing reads yet.
+  the window-against-full test over the registry; display proxies; a frame node's rows held by
+  the graph's memo for a session and nowhere after it; the held runs and the window's own runs
+  within `budget.py`'s "held", the window's held apart and never written; a bare walk walking the
+  clip and its cuts in time and handing back their results; a checkpoint beside the document,
+  `<document>.checkpoint`, one append-only file of its held runs and nothing else (`held.py`),
+  written at a save where a run was held or the path changed. A tool's code is in no key: a run
+  held under older code is served and its node marked (`held.marked`, the window's `_show_stale`).
 - Not in the player: the memo, the decode cache, the held runs and cut files are each their own
-  holder still; no one ask. Series and stepped results are kept by nothing across a bare walk but
-  the runs its results are held as.
+  holder still; no one ask. Frame, series and stepped results are kept by nothing across sessions
+  but the runs the series chain's results are held as.
+
+## His rulings
+
+- On a tool's code in the key: "Mark stale." A result made under older code is found by its key
+  and marked; the code is not in the key. A trace on this branch (commit 16e54fe7, not reread
+  since) found that such a result is drawn, feeds walks, cuts a `period` and is written to a csv
+  whose card reads "on disk: this graph's", the `!` on its card the one mark.
+- On the checkpoint: "if the user did a full run and hit save, it opens on that too." It holds the
+  held runs, and not a frame node's small rows or the document's form.
+- The footage print is v5's, size and the first and last `decoder.SLICE` bytes: sampling between
+  them guarded a rare case and moved every key against v5.
 - Findings of this branch: `docs/findings/2026-11-21-the-player-died-walking-856-periods.md`,
   `docs/findings/2026-11-21-bare-walk-crashes-on-the-full-file.md`,
   `docs/findings/window-against-full.md`.
@@ -108,29 +110,18 @@ testing, and a restart now and then is fine.
 ## Known open, mine
 
 - Five tools declare a reach without bound and no measurement stands behind it.
-- The keeper decides what to keep by a value's shape, and saves no stepped state at a chunk's edge.
-- A cut file served to a bare walk, and a row the keeper keeps, are named by the sampled footage
-  print: footage changed only between its samples is taken for the one before.
-- A kept row's address holds nothing of the player's own code or numpy's and cv2's versions, as a
-  held run's key does not: an edit of the walking code or a library leaves kept rows answering.
-- A small row the memo lets go before a write is not written; the memo lets them go only after
-  every image. A bare walk's memo is `budget.py`'s "hold", well under "held": past that many
-  bytes of small rows its earliest are not handed back.
-- A crash loses every kept chunk no write has taken; a write a held run waits on takes the whole
-  ones, a save and a close the rest.
+- A cut file served to a bare walk, and every key, are named by the footage print: footage
+  changed only between its first and last `decoder.SLICE` bytes, at the same size, is taken for
+  the one before.
 - Whether the mark of other code reaches nodes under a cut in time is unread.
 - The registry's types are unchecked for a set of periods as a value, a gate of two inputs, a
   matrix of time by scale.
 
 ## His to decide, none blocking
 
-- How much of the checkpoint the kept rows may take: the window hands the file the held runs'
-  figure, `budget.py`'s "held", as their bound on disk; in memory they are the memo's.
 - Whether a csv written from a window's card says it is the window's.
 - The encoder's version is in no cut file's key.
 - A test in `tests/test_graph.py` asserting wall time failed once and is not marked `simulation`.
-- `docs/spec/what-a-node-declares.md` and `docs/spec/held-results.md` say the key holds no code;
-  the tree now does otherwise, and the specs are his.
 
 ## Standing words of his
 

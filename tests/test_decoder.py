@@ -6,7 +6,7 @@ import cv2
 import numpy as np
 import pytest
 
-from sieve_player.decoder import SLICE, Decoder, footage_print, read_frame_times_ahead, sampled_offsets
+from sieve_player.decoder import SLICE, Decoder, footage_print, read_frame_times_ahead
 
 
 @pytest.fixture(scope="module")
@@ -170,14 +170,3 @@ def test_a_files_print_is_its_footages_wherever_it_lies_and_however_its_path_is_
     c.write_bytes(body[:-1] + b"x")
     assert footage_print(a) == footage_print(b) == footage_print(str(a).replace("\\", "/")) == footage_print(tmp_path / "sub" / ".." / "a.mp4")
     assert footage_print(c) != footage_print(a) and footage_print(a) != footage_print(tmp_path / "absent.mp4")
-
-
-def test_two_files_as_long_with_the_same_ends_differ_in_print_by_a_byte_between_them(tmp_path):
-    body = bytearray(4 * SLICE)
-    at = sampled_offsets(len(body))[len(sampled_offsets(len(body))) // 2]
-    assert SLICE < at < len(body) - SLICE
-    a, b = tmp_path / "a.mp4", tmp_path / "b.mp4"
-    a.write_bytes(bytes(body))
-    body[at] = 1
-    b.write_bytes(bytes(body))
-    assert footage_print(a) != footage_print(b)

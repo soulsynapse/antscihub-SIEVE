@@ -16,13 +16,20 @@ this file where they differ.
   the contract in code: `.venv/Scripts/python.exe docs/playground/sim/sim.py 150` runs the
   torture in about ten seconds and prints a line a scheme. Read "What the simulation has shown"
   before touching either file.
-- Next action, in order: (a) read run 8's diff when it lands (display proxies for a loop that
-  does not fit the memo) and its final message; run the suite; he tries the player on it.
-  (b) Tell him "The plan turned over" below and take his word on it before anything of
-  `held.py` is touched. (c) If the order below stands: move `store.py` and `folder.py` into
-  `sieve_player` under the cut files and the full walks' tables, with `folder_check.py`'s
-  seams and the window-against-full rule as tests. (d) Code beside the key, once he has
-  answered. (e) The whole-file footage hash.
+- STOPPED HERE for him to try the player (2026-11-21): run 8's proxies are in
+  (`e1e63ba8`, `984461fb`), the suite is 286 passed, and nothing of it has been seen on a
+  screen. Not to be gone past without his word on "The plan turned over" below.
+- Next action, in order, once he has spoken: (a) what he finds wrong in the loop. (b) The
+  proxy check's known hole: `loop_spills` sets the loop's rows of the one painted plane
+  against the memo's limit and ignores the other planes the memo holds a row, so a chain of
+  several planes can pass it and still be made again each pass; and a video node's frame is
+  the decoder cache's, not the memo's. (c) If the order below stands: `store.py` and
+  `folder.py` into `sieve_player` under the cut files and the full walks' tables, with
+  `folder_check.py`'s seams and the window-against-full rule as tests. (d) Code beside the
+  key, once he has answered. (e) The whole-file footage hash.
+- For him besides: `tests/test_graph.py::test_events_carry_start_thread_and_cpu...` failed
+  once in run 8's first full run and passed after; run 8 says it asserts wall time and is not
+  marked `simulation`. By CLAUDE.md that is a defect in the test or a race, his to settle.
 - Done since the second adversary: its twelve items mended and its scripts run again; the
   contract's section "What is exact and what is a window's"; the simulation's window walk
   and its oracle; a loop priced as planes and as proxies; a bake tried twice.
@@ -56,7 +63,7 @@ this file where they differ.
   passes corrected two of my claims. Not for searching, not for judging a design.
 - Run the simulation: `.venv/Scripts/python.exe docs/playground/sim/sim.py 150` (torture, a line
   a scheme) and `... sim.py prices 1080p [profile]` (the table below), a few seconds each.
-- Counters: queued runs 7 of 25, all seven landed (his figure, 2026-11-21). No cap on design cycles, by the same word: a
+- Counters: queued runs 8 of 25, all eight landed (his figure, 2026-11-21). No cap on design cycles, by the same word: a
   cycle on the simulation is run when a slice raises a question whose answer would change it.
 - Context: `bash ~/.claude/tools/context-used.sh 300` prints what is left before the auto-compact
   window (300k by his `/autocompact` on 2026-11-21). Bring this file up to date before a step
@@ -610,6 +617,7 @@ with its own limit stated. Run them in one message, in parallel.
 
 | # | What | Wall | Context, turns | Verdict |
 |---|---|---|---|---|
+| 8 | Slice 3: a looping window's rows the memo let go are painted from display proxies, with the outcome and what must hold stated and the design left to it | about 7m | not read | 110 lines in `window.py`, two seam tests, suite green. It found what my prompt had wrong and said so: an overlay cannot be baked into the jpeg because each plane is shown over a running maximum, pausing never re-showed the row, and my 70 KB is 490 KB on noise. I read the whole diff; the hole it named in its own fit check is real. A prompt that states outcomes and asks for contradictions gets a better design than one that states a design. |
 | 7 | One-off over every registered tool: a window's walk against the clip's, row by row, against declared reach (`docs/findings/window-against-full.md`) | about 8m | not read | On brief and frank about what its 38 HOLDS do not show; corrected my prompt (five tools declare no reach) and found two things about how a walk is driven that I did not know. A one-off asked to say what it could not determine says it. |
 | 6 | Second adversary (Opus) against `sim/folder.py`, told to use real processes, kills and a held lock, and to time the calls | 15m 26s | not read | Twelve items, eleven proved with scripts kept outside the repo, which I ran again after mending; the scripts being kept is what made the mending checkable. Worth its place before anything is moved onto the folder. |
 | 5 | Adversary (Opus) against the contract, `store.py` and `sim.py`, told to prove each break in a scratch copy and to use Haiku for single claims | 11m 44s | not read | The best run so far: eight proved breaks with sequences and line numbers, four of them holes in my own oracles; contract lines nothing checks; where the simulated disk flatters. Worth repeating before each thing I am about to trust: the on-disk store, then the first migrated holder. |

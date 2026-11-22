@@ -330,6 +330,9 @@ class Worker(QThread):
         except BaseException:
             traceback.print_exc()   # _serve answers for a tool's exceptions; one reaching here ends the thread, and `finished` says so
             raise
+        finally:
+            if self.graph.keeper is not None:   # not a daemon: the interpreter waits on it at exit, and stop() does not
+                threading.Thread(target=self.graph.keeper.close, name="keeper").start()
 
     def _serve(self):
         """The loop: waits until a rung is due, takes its turn, and reads the asks again."""

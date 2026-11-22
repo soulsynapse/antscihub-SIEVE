@@ -1,10 +1,12 @@
-"""What a bare walk keeps of a frame node's rows between processes: a Graph handed a Keeper asks it
-on a memo miss and tells it each row it made; the rows go to result_store over its Folder a
-chunk at a time. Only rows that are no image (ndim < 2 arrays, tables, scalars) of frame nodes that
+"""What walks keep of a frame node's rows between processes, the player's and a bare walk's: a
+Graph handed a Keeper asks it on a memo miss and tells it each row it made; the rows go to
+result_store over its Folder a chunk at a time. Only rows that are no image (ndim < 2 arrays, tables, scalars) of frame nodes that
 are not static, served or stepped are kept. No failure of the folder reaches the caller.
 """
 import hashlib
+import itertools
 import os
+import threading
 from collections import OrderedDict
 from pathlib import Path
 
@@ -20,6 +22,7 @@ CHUNK = 256         # rows a chunk holds; in every address's name
 ANSWERS = 8         # chunks read back held at once: a walk in order reads one a node, and a tool near its row the one before
 FOLDER_ENV, BUDGET_ENV = "SIEVE_RESULTS", "SIEVE_RESULTS_GB"
 BUDGET = 20 << 30
+_OPENED = itertools.count()     # in a Folder's writer name, so two Keepers of one process write no one part
 
 
 def player_print():
@@ -40,50 +43,58 @@ class Keeper:
     """The rows of walks over `root`, `budget` bytes of disk; the user's folder and budget, by
     FOLDER_ENV and BUDGET_ENV over the defaults, with neither handed. An address is the row's raw
     key, which holds the footage as decoder.footage_print samples it and the code of every tool
-    above as discover imported it, the cut's rows, the node's reach, and this player's code and libraries: footage changed
-    only where that print does not sample it is taken for the one before. A walk asks and tells it
-    on its one thread and calls `close()` when it ends, which puts every chunk it filled any of."""
+    above as discover imported it, the cut's rows, the node's reach, and this player's code and
+    libraries: footage changed only where that print does not sample it is taken for the one
+    before. Any thread may call it, one at a time under its lock. `close()` puts every chunk filled
+    any of since the last, and is called as a walk ends and before the Keeper is let go; a chunk
+    short of CHUNK rows is read back at its next ask and filled on."""
 
     def __init__(self, root=None, budget=None):
         self.answers, self.pending = OrderedDict(), {}
         self.asked, self.changed, self.done, self.addresses = set(), set(), set(), {}
+        self._lock = threading.Lock()
         try:
             root = root or os.environ.get(FOLDER_ENV) or os.path.join(app_folder(), "results")
-            self.store = Store(Folder(root, f"bare{os.getpid()}"), 0, budget or gb(BUDGET_ENV, os.environ) or BUDGET)
+            self.store = Store(Folder(root, f"keeper{os.getpid()}-{next(_OPENED)}"), 0, budget or gb(BUDGET_ENV, os.environ) or BUDGET)
             self.libraries = (player_print(), np.__version__, cv2.__version__)
         except Exception:
             self.store = None
 
     def ask(self, e, row, cut):
         """`e`'s row `row` in `cut` as a walk before kept it, read-only, or None."""
-        a = self._address(e, row, cut)
-        if a is None:
-            return None
-        if a not in self.asked:
-            self.asked.add(a)
-            self.answers[a] = held = self._read(a)
-            if len(held) >= CHUNK:
-                self.done.add(a)
-            elif held:
-                self.pending[a] = dict(held)
-            while len(self.answers) > ANSWERS:
-                self.answers.popitem(last=False)
-        return self.answers.get(a, {}).get(row)
+        with self._lock:
+            a = self._address(e, row, cut)
+            if a is None:
+                return None
+            if a not in self.asked:
+                self.asked.add(a)
+                self.answers[a] = held = self._read(a)
+                if len(held) >= CHUNK:
+                    self.done.add(a)
+                elif held:
+                    self.pending[a] = dict(held)
+                while len(self.answers) > ANSWERS:
+                    self.answers.popitem(last=False)
+            return self.answers.get(a, {}).get(row)
 
     def made(self, e, row, cut, value):
         """`value` is what `e` made at `row` in `cut`, as the memo holds it."""
-        a = self._address(e, row, cut)
-        if a is None or a in self.done or not keepable(value):
+        if not keepable(value):
             return
-        rows = self.pending.setdefault(a, {})
-        rows[row] = value
-        self.changed.add(a)
-        if len(rows) >= CHUNK:
-            self._put(a)
+        with self._lock:
+            a = self._address(e, row, cut)
+            if a is None or a in self.done:
+                return
+            rows = self.pending.setdefault(a, {})
+            rows[row] = value
+            self.changed.add(a)
+            if len(rows) >= CHUNK:
+                self._put(a)
 
     def close(self):
-        for a in list(self.pending):
-            self._put(a)
+        with self._lock:
+            for a in list(self.pending):
+                self._put(a)
 
     def _address(self, e, row, cut):
         if self.store is None or e.kind != "frame" or e.static or e.file is not None or e.steps:
@@ -107,9 +118,13 @@ class Keeper:
 
     def _put(self, a):
         rows = self.pending.pop(a)
-        self.done.add(a)
+        self.asked.discard(a)
+        self.answers.pop(a, None)
+        if len(rows) >= CHUNK:
+            self.done.add(a)
         if a not in self.changed:
             return
+        self.changed.discard(a)
         try:
             if self.store.disk.size(a.name) is not None:
                 self.store.drop(a, "disk")

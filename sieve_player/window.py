@@ -37,6 +37,7 @@ from .pane import Pane
 from .plan import stands, walked_keys
 from . import registry
 from .registry import CATEGORIES, Entry, category, description, signature
+from .result_keeper import Keeper
 from .stream import ASKED, EDIT, HAND, Emitter
 from .theme import GAP, PAD, ROW_H, readout
 from .timeline import Timeline
@@ -1123,7 +1124,7 @@ class PlayerWindow(QMainWindow):
         decoder_module.STORE = store.folder
         decoder_module.read_frame_times_ahead(path, lambda rows, path=str(path): self.framesCounted.emit(path, rows))     # the first seek would wait on it: docs/findings/2026-11-15-a-file-whose-times-do-not-count-its-rows.md
         self.stream = Emitter()
-        self.graph = Graph(self.doc, decoder, self.tools, stream=self.stream, cut_result=self._cut_result, memo_bytes=budget.here()["memo"])
+        self.graph = Graph(self.doc, decoder, self.tools, stream=self.stream, cut_result=self._cut_result, memo_bytes=budget.here()["memo"], keeper=Keeper())
         # the one line a report of this video's run needs beside the log's tracebacks
         print(f"SIEVE {time.strftime('%H:%M:%S')}: opened {path}: {decoder.width}x{decoder.height} at {decoder.fps:.3f} fps, "
               f"{decoder.count} rows claimed, luma plane {'read' if decoder.luma else 'converted'}; "

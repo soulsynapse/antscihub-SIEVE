@@ -505,9 +505,12 @@ class Graph:
         self._shown_at = row
 
     def rests(self):
-        """This thread's lane's walk is at no row: it finished, was stopped, or begins again.
-        Worker threads only."""
+        """This thread's lane's walk is at no row: it finished, was stopped, or begins again. On the
+        clip lane the keeper puts what it was told, so a clip walk and each cut in time's leave
+        their rows on disk as they end. Worker threads only."""
         self._walks_at = {lane: row for lane, row in self._walks_at.items() if lane != self.stream.lane}
+        if self.keeper is not None and self.stream.lane == "clip":
+            self.keeper.close()
 
     def _row_order(self):
         """A store's order of its rows, as Memo.order: None for a row outside holds() and more than

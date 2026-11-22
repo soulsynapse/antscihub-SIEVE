@@ -45,11 +45,22 @@ this file where they differ.
   first made, so a tool edited mid-walk stores old code's rows under the new print
   (`registry.imported_print` would close it); rows a tool gives as None are made again each
   walk; two bare processes at once over one chunk are untried.
-- Next action, in order: (a) close the mid-walk edit hole with `imported_print`. (b) One
-  long real walk twice (`video-tests/00000.MTS` with `video-tests/purb-settings.json`) for a
-  figure. (c) Series and stepped nodes under the keeper, track above all: its `given` is
-  already there (`walk.py:136`, `:291`). (d) The whole-file footage hash. `held.py` and his
-  ticked decision stay untouched.
+- The mid-walk edit hole is closed (`imported_print` first). The three-walk script is kept
+  as `docs/findings/experiments/bare_walk_thrice.py`.
+- FOUND, and above everything else here for his goal: a bare walk of the whole
+  `video-tests/00000.MTS` (38100 rows) under the clip's document dies of an access violation
+  every time, on `v5` as on this branch, at a row that moves, the fault handler naming
+  `tools/track.py:80`. `docs/findings/2026-11-21-bare-walk-crashes-on-the-full-file.md`. Not
+  caused by the playground and not understood. `video-tests/purb-settings.json` is refused by
+  a bare walk ("nothing reaches a walked node"), which may be the document's own state.
+- I ran `git worktree prune` after removing my own temporary checkout of v5; it cleared the
+  admin entries of worktrees whose folders were already gone (it printed permission errors
+  for about 25 of them). No branch was touched; `git worktree list` shows six, none prunable.
+  He has been told.
+- Next action, in order: (a) the crash, as the finding's last section says: without track,
+  with memory printed, to find whether it is memory run out or memory spoiled. (b) Series and
+  stepped nodes under the keeper, track above all (`walk.py:136`, `:291`). (c) The whole-file
+  footage hash. `held.py` and his ticked decision stay untouched.
 - For him besides: `tests/test_graph.py::test_events_carry_start_thread_and_cpu...` failed
   once in run 8's first full run and passed after; run 8 says it asserts wall time and is not
   marked `simulation`. By CLAUDE.md that is a defect in the test or a race, his to settle.

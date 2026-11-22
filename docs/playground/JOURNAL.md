@@ -485,6 +485,39 @@ mechanism for its own sake, in which case its file becomes a checkpoint's manife
 document. The stop we agreed, "after the held file and the walks' results are on the store",
 is therefore not where I will stop; I stop after run 8 for him to try the loop, and say this.
 
+## The exact path, read for where the store goes under it (an Opus read, 2026-11-21, its lines)
+
+- A bare walk is its own process (`python -m sieve_player.bare job.json`, started at
+  `window.py:1527`), builds a Graph, walks `p.chain` over the whole clip with nothing given
+  or handed, and pickles `(results, start, fps)` (`bare.py:43-92`). It never walks `p.timed`.
+- A frame node's row is made at `graph.py:817` and memoized at `:833`, inside
+  `Graph._compute` (`:812-833`). That is the narrowest seam for frame nodes: on a memo miss
+  ask the store, after `to_hold` put. The memo's address is `(raw_key, row, read_of_cut)`
+  (`graph.py:85-93`), so the cut is in the memo's address and not in the key. A detect row
+  is a read-only structured array whose dtype metadata holds `units` and `plane`; pickle
+  keeps that metadata (tried), and gives back a writeable array, so a stored row must be
+  made read-only again. The same value is read by downstream `Frames`, `walk_row` and the
+  stack, `density`, and `peek` on the GUI thread.
+- Series nodes run once at the end in `run_chain` (`walk.py:516`); stepped ones a row at a
+  time with state from the range's first row (`walk.py:312`), and already have `given`,
+  which bare does not pass.
+- `key_of` (`plan.py:261-272`) holds upstream keys, the tool's name and its keyed params; no
+  code. `code_print` (`registry:305-323`) digests the tool's file and its folder's `_*.py`
+  only: not other imports, not `sieve_player`, not numpy or cv2. So "code in the key" as it
+  stands would not see a change in `sieve_player` or a library; a store shared across
+  machines wants the versions of those in its key too.
+- Not a function of key and row: stepped state; `Series.start`; a read past the cut giving
+  None; background over `(0, live count)` so a corrected count changes it under one key
+  (unrun); whether a seek and a step decode the same bits (unchecked, and it matters: a
+  window seeks and a full walk steps).
+- A stopped bare walk keeps nothing (`window.py:1585`).
+
+What I take from it for the store under the exact path: the address is the memo's, with the
+code print and the library versions added; rows are packed a chunk at a time by the layer
+between `_compute` and the store, which a bare walk fills in order and a later one reads in
+order; only nodes whose rows are small (tables, scalars) are put, by the cost rule. First to
+settle, by a one-off: that a row decoded after a seek equals the row decoded in sequence.
+
 ## What a loop costs, planes against proxies (`sim/proxyrate.py`, `sim/loop.py`)
 
 Measured on this machine from the crossings clip (`proxyrate.py video-tests/00000_168-178.mp4`):

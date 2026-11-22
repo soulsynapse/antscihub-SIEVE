@@ -62,6 +62,10 @@ def _walks(p):
     return out
 
 
+def _keyed(leg):
+    return leg.walked, leg.cut.extent.rows
+
+
 def _stacked(sub):
     """What a walk under the Plan `sub` stacks its rows under: each walked node's key and stacked_key."""
     return tuple((q.walk, q.entries[q.walk].key, stacked_key(q)) for q in sub.parts())
@@ -73,35 +77,52 @@ class _Legs:
     says is held whole, is passed over and the rest walked on; one under way is begun again where
     what its rows are stacked under moves. Its progress goes out on `signal` with the legs left that
     will be walked, and once more where the last were passed over. `given` says whether a leg is
-    given what is held of its cut. `held()` is what Worker.give_periods was last told, a dict made
-    anew each telling. No turn's cost grows with the cuts but the first under a plan, a queue or
-    a `held()` that moved."""
+    given what is held of its cut. `held()` is what Worker.give_periods was last told. No turn's
+    cost grows with the cuts but the first under a plan or a queue that moved, or after a
+    give_periods that did not say which cuts it changed."""
 
     def __init__(self, walk, signal, held, given):
         self.walk, self.signal, self.held, self.given = walk, signal, held, given
         self.queue, self.by, self.plan, self.leg, self.under = [], ASKED, None, None, None
         self._walks = (None, {})    # the plan _walks was asked of, and its answer
-        self._left = None           # (the plan, held(), the legs queued, how many of them will be walked) as last counted
+        self._queued = {}           # as give_periods keys a cut -> its leg in `queue`
+        self._will = None           # (the plan, as give_periods keys a cut -> its queued leg that will be walked) as last counted; None to count again
+        self._told = []             # what each give_periods since changed, as `told` takes it, for the worker's thread to take
         walk.progress = self
 
+    def told(self, changed):
+        """give_periods was told: `changed` the cuts it changed, as it keys them, or None for any. Any thread."""
+        self._told.append(changed)
+
     def emit(self, done, total, ran):
-        now = self.plan, self.held(), len(self.queue)
-        if self._left is None or self._left[0] is not now[0] or self._left[1] is not now[1] or self._left[2] != now[2]:
-            self._left = (*now, sum(self._ask(leg) is not None for leg in self.queue))
-        self.signal.emit(done, total, self._left[3])
+        told = [self._told.pop(0) for _ in range(len(self._told))]
+        if self._will is None or self._will[0] is not self.plan or any(changed is None for changed in told):
+            self._will = (self.plan, {_keyed(leg): leg for leg in self.queue if self._ask(leg) is not None})
+        else:
+            will, queued = self._will[1], self._queued
+            for key in (key for changed in told for key in changed if key in queued):
+                if self._ask(queued[key]) is None:
+                    will.pop(key, None)
+                else:
+                    will[key] = queued[key]
+        self.signal.emit(done, total, len(self._will[1]))
+
+    def _set(self, legs):
+        self.queue[:], self._will = legs, None
+        self._queued = {_keyed(leg): leg for leg in legs}
 
     def begin(self, legs, by):
         """Walks `legs` from the first, a leg under way halted with the rows it has standing; `by`
         as Worker.set_window's."""
-        self.queue[:], self.by, self._left = legs, by, None
+        self._set(legs)
+        self.by = by
         if self.walk.i < self.walk.length:
             self.walk.halt()
 
     def requeue(self, legs):
         """Walks `legs` behind the leg under way, which goes on where `legs` has its cut and is halted where not."""
         w = self.walk
-        self.queue[:] = [leg for leg in legs if w.i >= w.length or (leg.walked, leg.cut) != (w.walked, w.cut)]
-        self._left = None
+        self._set([leg for leg in legs if w.i >= w.length or (leg.walked, leg.cut) != (w.walked, w.cut)])
 
     def _under(self, walked, cut):
         if self._walks[0] is not self.plan:
@@ -122,11 +143,14 @@ class _Legs:
             w.plan = sub
             return [(w, w.turn)]
         if not on:
-            self.queue.clear()
+            self._set([])
             return None
         passed = False
         while self.queue:
             leg = self.queue.pop(0)
+            self._queued.pop(_keyed(leg), None)
+            if self._will is not None:
+                self._will[1].pop(_keyed(leg), None)
             if (got := self._ask(leg)) is not None:
                 return [(w, lambda: self._start(leg, *got))]
             passed = True
@@ -258,12 +282,15 @@ class Worker(QThread):
         with self._cv:
             self._clip.ask = (0, rows, False, dict(given))
 
-    def give_periods(self, held):
+    def give_periods(self, held, changed=None):
         """What the caller holds of each cut in time, (the node its timed Walk's first head reads,
         the cut's rows) to a walk.HeldCut: one spared is walked by neither lane, and one whose keys
-        the plan has left is walked as though nothing were held."""
+        the plan has left is walked as though nothing were held. `changed` is the keys whose
+        HeldCut is not what the last call gave, where the caller knows them."""
         with self._cv:
             self._held_periods = dict(held)
+            self._clip_legs.told(changed)
+            self._window_legs.told(changed)
 
     def recut(self):
         """The cuts in time moved and nothing either lane's own range walks did: each lane walks the

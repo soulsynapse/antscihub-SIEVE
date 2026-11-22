@@ -90,7 +90,16 @@ After: the longest turn is 93 ms and a `_period_ready` 8 ms.
   node is cut by. A period's run below its gate holds none.
 - A run held alone marks the cards of other code within `STALE_MS`, once for the runs held meanwhile.
 
-What still grows with the periods, a hold: `held.Runs.hold` asks `stands_in` of every run, twice;
-`heldwalks.window_periods` asks `Runs.over`, a scan of every run, twice a period the window
-overlaps; the lane's count is made again after each `give_periods`. Together about 6 ms a period
-at 850 under the profiler. Not measured at several thousand.
+What still grew with the periods after that, a hold, was found by
+`docs/playground/sim/miniature.py`: the player's own window, worker, plan, held runs and tools
+over a clip of tiny frames, its turns taken on one thread and every line run counted to its
+function, at 200 cuts and at 800. On the commit before any of this a cut costs 78770 steps at 50
+cuts and 421897 at 200. With the four changes above it still named `held.Runs.hold` asking every
+run, `heldwalks.held_periods` and `listed_cuts` looking at every cut, `walk.window_legs` and three
+searches for a cut by equality, and the lane's count made again after each `give_periods`. Each
+now costs the runs or cuts a held run touches: the runs are indexed by row, a node's cuts by
+record and by row (`cut.among`, `cut.touching`), and `give_periods` is told which cuts changed. A
+cut then costs 28188 steps at 200 cuts and 28884 at 800, and no function's steps a cut grow.
+
+Not seen by it: the monitor's modules, which the clock turns; what Qt does with 850 results
+queued; a count of several thousand.

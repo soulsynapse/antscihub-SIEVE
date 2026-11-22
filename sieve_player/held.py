@@ -225,6 +225,20 @@ class Runs:
 
     def __init__(self, limit, size_of):
         self.limit, self.size_of, self.all = limit, size_of, []
+        self._index = (None, None, None, 0)     # (`all` as indexed, each run's first row, its row past the last, their bytes together)
+
+    def _indexed(self):
+        """`_index` of the runs as they are: made again where `all` is another list or another length,
+        so a caller that sets or takes `all` needs say nothing."""
+        if self._index[0] is not self.all or len(self._index[1]) != len(self.all):
+            rows = np.array([(run.start, run.start + run.rows) for run in self.all], np.int64).reshape(-1, 2)
+            self._index = (self.all, rows[:, 0].copy(), rows[:, 1].copy(), sum(run.size for run in self.all))
+        return self._index
+
+    def _near(self, a, b):
+        """The runs holding a row of `a` to `b`, oldest first, at the cost of those and not of every run."""
+        runs, starts, ends, _ = self._indexed()
+        return [runs[i] for i in np.flatnonzero((starts < b) & (a < ends)).tolist()]
 
     def __iter__(self):
         return iter(self.all)
@@ -239,7 +253,7 @@ class Runs:
     def _earliest(self, over=None):
         """The runs, the one that began earliest first; with `over`, (first row, row past the last),
         those alone that hold a row of it."""
-        runs = self.all if over is None else [run for run in self.all if run.start < over[1] and over[0] < run.start + run.rows]
+        runs = self.all if over is None else self._near(*over)
         return sorted(runs, key=lambda run: (run.start, -run.rows))
 
     @staticmethod
@@ -294,18 +308,25 @@ class Runs:
         kept = {nid: results[nid] for nid in nodes}
         new = Run(start, rows, kept, sum(self.size_of(nid, r) for nid, r in kept.items()) + sum(w[3] for w in walked or ()),
                   cut, None if walked is None else tuple(tuple(w[:3]) for w in walked))
-        if any(stands_in(run, new) and (new.walked is None or run.walked is not None) for run in self.all):
+        near = self._near(start, start + rows)      # a run that serves the new one, or that it serves, holds a row of it
+        if any(stands_in(run, new) and (new.walked is None or run.walked is not None) for run in near):
             return False
-        was = self.all
-        self.all = [run for run in self.all if not stands_in(new, run) or (run.walked is not None and new.walked is None)]
-        self.all.append(new)
-        while len(self.all) > 1 and sum(run.size for run in self.all) > self.limit:
+        gone = [run for run in near if stands_in(new, run) and not (run.walked is not None and new.walked is None)]
+        if gone:
+            self.all = [run for run in self.all if not any(run is g for g in gone)]
+        runs, starts, ends, size = self._indexed()
+        runs.append(new)
+        self._index = (runs, np.append(starts, start), np.append(ends, start + rows), size + new.size)
+        came = [new]
+        while len(self.all) > 1 and self._indexed()[3] > self.limit:
             has = {run: len(self._has(run.results, worth or chain)) * run.rows for run in self.all}
             most = max(reversed(self.all), key=lambda run: (has[run], run.rows))
             spare = [run for run in self.all if run is not most]
             left = [run for run in spare if not has[run]]
-            self.all.remove((left or spare)[0])
-        return [(run.start, run.start + run.rows) for run in set(was) ^ set(self.all)]
+            out = (left or spare)[0]
+            (came.clear if out is new else lambda: gone.append(out))()
+            self.all = [run for run in self.all if run is not out]
+        return [(run.start, run.start + run.rows) for run in (*gone, *came)]
 
     def over(self, s, n, chain, walk, cut=None):
         """The chain's results over `n` rows from `s` to a walk over `walk`, (first row, row past the

@@ -8,6 +8,8 @@ the footage's pixels. Imports nothing of the player.
 from dataclasses import dataclass, field
 from typing import NamedTuple
 
+import numpy as np
+
 INF = float("inf")
 
 
@@ -133,19 +135,38 @@ def holding(records, row):
     return next((r for r in records if r.extent.holds(row)), None)
 
 
-_PLACES = {}    # id of a node's cuts -> (those cuts, each to its first place among them): asked a compute, of cuts a gate makes by the thousand
+_KNOWN = {}    # id of a node's cuts -> (those cuts, each to its first place among them, their first rows, their rows past the last): asked a compute and a run held, of cuts a gate makes by the thousand
+EVERY_ROW = 1 << 62
 
 
-def _places(records):
-    had = _PLACES.get(id(records))
+def _known(records):
+    had = _KNOWN.get(id(records))
     if had is None or had[0] is not records:
-        if len(_PLACES) > 256:
-            _PLACES.clear()
+        if len(_KNOWN) > 256:
+            _KNOWN.clear()
         places = {}
         for i, r in enumerate(records):
             places.setdefault(r, i)
-        had = _PLACES[id(records)] = (records, places)
-    return had[1]
+        rows = np.array([r.extent.rows or (0, EVERY_ROW) for r in records], np.int64).reshape(-1, 2)
+        had = _KNOWN[id(records)] = (records, places, rows[:, 0].copy(), rows[:, 1].copy())
+    return had
+
+
+def among(record, records):
+    """Whether `record` is one of `records`, at the cost of one look and not of `records`, which
+    is to be the same tuple from one ask to the next."""
+    return record in _known(records)[1]
+
+
+def touching(records, spans):
+    """The places among `records`, in order, of those holding a row of any of `spans`, each (first
+    row, row past the last), a record of every row holding all; at the cost of those found and
+    not of `records`, which is to be the same tuple from one ask to the next."""
+    _, _, starts, ends = _known(records)
+    hit = np.zeros(len(starts), bool)
+    for a, b in spans:
+        hit |= (starts < b) & (a < ends)
+    return np.flatnonzero(hit).tolist()
 
 
 def _above(record):
@@ -162,7 +183,7 @@ def computed_in(records, cut, row):
     if len(records) == 1:
         return records[0]
     if cut is not None:
-        places = _places(records)
+        places = _known(records)[1]
         at = min((places[r] for r in _above(cut) if r in places), default=None)
         return None if at is None else records[at]
     return holding(records, row)

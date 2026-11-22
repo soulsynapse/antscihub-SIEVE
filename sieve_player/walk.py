@@ -13,6 +13,7 @@ from typing import NamedTuple
 import numpy as np
 
 from . import budget, density
+from .cut import among, touching
 from .registry import fold_of, imported_print
 from .graph import Series, absent_dtype, gated, kept
 from .stream import ASKED, GIVEN, HAND, SHAPE
@@ -421,9 +422,9 @@ def window_legs(p, s, n):
     for w in p.timed:
         reach = {nid: p.entries[nid].reach for nid in w.chain}
         before, after = (max((r[i] for r in reach.values() if r[i] is not None), default=0) for i in (0, 1))
-        for c in w.cuts:
+        for c in (w.cuts[i] for i in touching(w.cuts, [(s, s + n)])):
             first, end = c.extent.rows
-            if first >= end or end <= s or first >= s + n:
+            if first >= end:
                 continue
             a, b = max(first, s - before), min(end, s + n + after)
             best = frozenset(nid for nid, (rb, ra) in reach.items() if (rb is None and a > first) or (ra is None and b < end))
@@ -487,7 +488,7 @@ def run_chain(graph, stack, start, done, folds, stepped=None, p=None, cut=None):
 
     def told(nid):
         reads = p.entries[nid].reads
-        return reads[0] if len(reads) == 1 else cut if cut in reads else None
+        return reads[0] if len(reads) == 1 else cut if among(cut, reads) else None
 
     for nid, tool, params, band, src in chain:
         if stepped is not None and nid in stepped:

@@ -31,9 +31,9 @@ MAY_IMPORT = {
     "result_folder": set(),                       # that disk over a real folder; nothing of the player
     "result_keeper": {"budget", "recent", "registry", "result_folder", "result_store", "wire"},  # a frame node's rows by an address of its key, code and libraries; the Graph is handed one and imports none
     "held": {"cut"},                              # a pickle and a stamp, and what a walk read of its cut; the window writes and reads it
-    "walk": {"budget", "density", "graph", "registry", "stream", "wire"},         # of the stream, the words a begin says what began it by; no Qt, see below
+    "walk": {"budget", "cut", "density", "graph", "registry", "stream", "wire"},         # of the stream, the words a begin says what began it by; no Qt, see below
     "worker": {"decoder", "graph", "stream", "walk"},
-    "heldwalks": {"held", "walk", "wire"},       # the held runs as the walks take them; no Qt, so a one-off drives them without a window
+    "heldwalks": {"cut", "held", "walk", "wire"},       # the held runs as the walks take them; no Qt, so a one-off drives them without a window
     "bare": {"budget", "decoder", "document", "graph", "registry", "result_keeper", "walk"},      # the clip walk's own process: no window, no stream's reader, no Qt
     "density": set(),
     "recent": set(),

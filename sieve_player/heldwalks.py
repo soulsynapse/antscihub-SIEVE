@@ -5,6 +5,7 @@ of the one holding a row, and the result a cutting node is cut by. No Qt; the wi
 from typing import NamedTuple
 
 from . import held, wire
+from .cut import among, touching
 from .walk import WALKED, HeldCut, period_keys, stacked_key, window_legs
 
 
@@ -42,26 +43,20 @@ def as_given(p, part):
             for nid, r in part.items()}
 
 
-def _apart(rows, moved):
-    return all(b <= rows[0] or rows[1] <= a for a, b in moved)
-
-
 def held_periods(p, runs, was=None, moved=None):
     """What the held.Runs `runs` hold of each cut in time of the Plan `p`, as Worker.give_periods
-    takes it. `was` is what it answered under the same chains of runs since changed by `moved`
-    alone, the rows Runs.hold returned: a cut holding no row of those is as `was` has it."""
-    out = {}
+    takes it. `was` is what it answered of this same Plan, the same object, and of runs since
+    changed by `moved` alone, the rows Runs.hold returned: a cut holding no row of those is as
+    `was` has it, and the answer costs the cuts that hold one."""
+    again = was is not None and moved is not None
+    out = dict(was) if again else {}
     for w in p.timed:
         sub, chain = p.of(w), held_chain(p, w.chain)
         src, stacks = p.entries[w.heads[0]].src, [(q.walk, stacked_key(q)) for q in sub.parts()]
         keys = period_keys(sub)
-        for c in w.cuts:
+        for c in [w.cuts[i] for i in touching(w.cuts, moved)] if again else w.cuts:
             s, e = c.extent.rows
             if e <= s:
-                continue
-            had = None if was is None or moved is None else was.get((src, (s, e)))
-            if had is not None and had.keys == keys and _apart((s, e), moved):
-                out[(src, (s, e))] = had
                 continue
             spared = runs.over(s, e - s, chain, (s, e), (s, e)) is not None
             given = {} if spared else as_given(p, runs.part(s, e - s, chain, (s, e), (s, e)))
@@ -72,13 +67,23 @@ def held_periods(p, runs, was=None, moved=None):
     return out
 
 
+def touched_periods(p, moved):
+    """The cuts in time of the Plan `p` holding a row of `moved`, the rows Runs.hold returned, each
+    as held_periods keys it."""
+    return [(p.entries[w.heads[0]].src, w.cuts[i].extent.rows) for w in p.timed for i in touching(w.cuts, moved)]
+
+
 def listed_cuts(runs, nid, chain, cuts, count, was=None, moved=None):
     """`nid`'s values in each cut.Record of `cuts`, a held.Listed each as Runs.listed answers under
-    `chain` and the footage's `count` rows. `was` is what it answered under the same of runs since
-    changed by `moved` alone, as held_periods takes them: a cut holding no row of those is as
-    `was` has it."""
-    had = {} if was is None or moved is None else {lst.record: lst for lst in was}
-    return [had[c] if c in had and _apart(c.extent.rows or (0, count), moved) else runs.listed(nid, chain, c, count) for c in cuts]
+    `chain` and the footage's `count` rows. `was` is what it answered of these same `cuts`, the
+    same tuple, and of runs since changed by `moved` alone, as held_periods takes them: a cut
+    holding no row of those is as `was` has it."""
+    if was is None or moved is None or len(was) != len(cuts):
+        return [runs.listed(nid, chain, c, count) for c in cuts]
+    out = list(was)
+    for i in touching(cuts, moved):
+        out[i] = runs.listed(nid, chain, cuts[i], count)
+    return out
 
 
 def period_run(p, results, start, of):
@@ -88,7 +93,7 @@ def period_run(p, results, start, of):
     walked_node, cut = of
     has = {nid: r for nid, r in results.items() if isinstance(r, dict) and "signal" in r}
     rows = max((len(r["signal"]) for r in has.values()), default=0)
-    w = next((w for w in p.timed if p.entries[w.heads[0]].src == walked_node and cut in w.cuts), None)
+    w = next((w for w in p.timed if p.entries[w.heads[0]].src == walked_node and among(cut, w.cuts)), None)
     if w is None or not rows or set(has) != set(w.chain) or cut.extent.rows != (start, start + rows):
         return None
     folds = {q.walk: q.fold for q in p.of(w).parts()}
@@ -120,7 +125,7 @@ def window_periods(p, runs, s, n):
     out = {}
     for leg in window_legs(p, s, n):
         c = leg.cut
-        w = next(w for w in p.timed if c in w.cuts and p.entries[w.heads[0]].src == leg.walked)
+        w = next(w for w in p.timed if among(c, w.cuts) and p.entries[w.heads[0]].src == leg.walked)
         first, end = c.extent.rows
         lo, hi = max(first, s), min(end, s + n)
         chain = held_chain(p, w.chain)

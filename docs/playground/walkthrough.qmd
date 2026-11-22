@@ -514,3 +514,22 @@ bugcheck. The evidence is in
 That the processor is the cause is a hypothesis, not a finding: no core was isolated and no
 memory test was run. It is the reason no long walk has been timed on this branch, and it is not
 an explanation to reach for when a check fails.
+
+## What it was, how it changed {.smaller}
+
+*The player only. "Same" rows are as much the state of the branch as the changed ones.*
+
+| | At `v5` | On this branch | |
+|---|---|---|---|
+| What bounds a holder | Seven constants, about 10.5 GB, none read off the machine | Each holder's limit shared out of half the machine's RAM, the constants as ceilings | Changed |
+| Which footage a file is | Its size and its first and last MB | Those plus 32 slices through it; a bare walk's kept rows by a digest of every byte | Changed |
+| A loop that outgrows the memo | Every row made again on every pass | Painted from display proxies, 70 KB a row | Changed |
+| A window against the full walk | Nothing checked it; five tools declared no reach | A test over every registered tool, 40 cases; a wrong reach fails by name | Changed |
+| A bare walk run a second time | Reuses nothing; full cost every time | Reads back a frame node's small rows: 2.5 s, then 0.9 s on the crossings clip | Changed |
+| Tool code and library versions in an address | In no key | In the address of a bare walk's kept rows; still not in `plan.py`'s key, by your ticked decision | Partly |
+| Results on disk under many writers | The held file, appended in place | A store with atomic, checksummed entries and a folder lock, called by the bare walk alone | Partly |
+| A bare walk's series and stepped nodes, `track` above all | Made every walk | Made every walk | Same |
+| A bare walk and cuts in time | Never walks them | Never walks them | Same |
+| What a window is answered from | The memo | The memo | Same |
+| A saved file opening where you left off | `held.py`'s file beside the document | `held.py`, untouched; the checkpoint is in the simulation only | Same |
+| What a tool author touches | Several holders for anything but a plain frame tool | The same, with reach now checked for them | Same |

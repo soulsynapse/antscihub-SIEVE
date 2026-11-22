@@ -22,7 +22,7 @@ from sieve_player.registry import discover  # noqa: E402
 from sieve_player.window import PlayerWindow  # noqa: E402
 
 SECONDS = float(sys.argv[2]) if len(sys.argv) > 2 else 20.0
-held.File.write = lambda self, runs: []
+held.File.write = lambda self, *a: []
 app = QApplication([])
 win = PlayerWindow(os.path.abspath(sys.argv[1]), "t", discover("tools"))
 if win.playing:

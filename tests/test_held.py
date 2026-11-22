@@ -1,5 +1,5 @@
-"""What a later session reads back of the held file and what it refuses, that a write's cost is
-the runs the file has not had, which run a range is served from and which goes at the limit, and
+"""What a later session reads back of the checkpoint and what it refuses, that a write's cost is
+the runs and chunks the file has not had, which run a range is served from and which goes at the limit, and
 which nodes are said stale by the code their held results were made under."""
 import os
 import pickle
@@ -45,32 +45,49 @@ def test_a_held_file_reads_back_by_the_form_of_its_records_alone_and_is_let_go_b
     assert read() == [] and held.File(str(tmp_path / "absent")).load() == []
 
 
-def test_a_run_is_pickled_once_however_the_file_is_written_after(tmp_path):
-    file = held.File(str(tmp_path / "doc.json.series"))
+def test_a_run_and_a_chunk_are_pickled_once_however_the_file_is_written_after_and_a_bad_record_ends_the_load(tmp_path):
+    chunks, handed = [("k", 0, {0: np.arange(2.0)}), ("k", 1, {256: np.arange(3.0)}), ("k", 2, {512: np.float64(1)})], []
+
+    def kept(had):
+        for chunk in chunks:
+            if chunk[:2] not in had:
+                handed.append(chunk[:2])
+                yield chunk
+    room = len(pickle.dumps((held.ROWS, chunks[0]), protocol=pickle.HIGHEST_PROTOCOL)) + 8     # the first chunk alone
+    file = held.File(held.path_for(str(tmp_path / "doc.json")), room)
     tables = np.empty(3, object)
     tables[:] = [np.zeros(n, [("id", "<i4")]) for n in (2, 0, 1)]
     run = lambda start, **more: (start, 3, {"track": {"signal": np.full(3, start, np.float32), **more}}, 0)
     scalars = np.empty(3, object)
     scalars[:] = [np.array(float(n)) for n in range(3)]     # arrays with no rows to concatenate
     a, b, c, d = run(0, rows=tables, scalars=scalars), run(10), run(20), run(30)
-    file.write([a, b])
+    file.write([a, b], kept, {"nodes": [1]})
+    assert handed == [("k", 0), ("k", 1)]                   # the second passes the limit, and the third is never read
     for was in (a, b):
         was[2]["track"]["unpicklable"] = lambda: None       # a second pickling of a run the file has would raise
-    file.write([a, b, c])                                   # added behind
-    file.write([a, c, d])                                   # b let go: the file made again
+    file.write([a, b, c], kept)                             # added behind
+    file.write([a, c, d], kept, {"nodes": [2]})             # b let go: the file made again
     never = run(40, fn=lambda: None)
-    assert file.write([a, c, d, never]) == [never] and file.write([a, c, d, never]) == []     # left out once, the others' records standing
-    back = held.File(file.path)
-    kept = back.load()
-    assert [(s, r["track"]["signal"].tolist()) for s, _, r, *_ in kept] == [(0, [0.0] * 3), (20, [20.0] * 3), (30, [30.0] * 3)]
-    first = kept[0][2]["track"]["rows"]
+    assert file.write([a, c, d, never], kept) == [never] and file.write([a, c, d, never], kept) == []     # left out once, the others' records standing
+    assert handed == [("k", 0), ("k", 1)]
+    back = held.File(file.path, room)
+    kept_runs = back.load()
+    assert [(s, r["track"]["signal"].tolist()) for s, _, r, *_ in kept_runs] == [(0, [0.0] * 3), (20, [20.0] * 3), (30, [30.0] * 3)]
+    assert list(back.chunks) == [("k", 0)] and back.chunks[("k", 0)][0].tolist() == [0.0, 1.0] and back.document == {"nodes": [2]}
+    first = kept_runs[0][2]["track"]["rows"]
     assert [len(t) for t in first] == [2, 0, 1] and first[0].dtype == tables[0].dtype
-    assert [float(x) for x in kept[0][2]["track"]["scalars"]] == [0.0, 1.0, 2.0]
+    assert [float(x) for x in kept_runs[0][2]["track"]["scalars"]] == [0.0, 1.0, 2.0]
     with open(file.path, "r+b") as f:
-        f.truncate(os.path.getsize(file.path) - 4)          # a write cut short in its last record
-    kept = back.load()
-    back.write([*kept, d])
-    assert [s for s, *_ in held.File(file.path).load()] == [0, 20, 30]
+        f.truncate(os.path.getsize(file.path) - 4)          # a write cut short in its last record, the document's
+    assert len(back.load()) == 3 and back.document is None
+    with open(file.path, "ab") as f:
+        pickle.dump(("a tag of no form", None), f)          # a later player's record
+        pickle.dump(held._record(run(50)), f)
+    kept_runs = back.load()
+    assert [s for s, *_ in kept_runs] == [0, 20, 30]
+    back.write(kept_runs, kept, {"nodes": [3]})
+    again = held.File(file.path)
+    assert [s for s, *_ in again.load()] == [0, 20, 30] and list(again.chunks) == [("k", 0)] and again.document == {"nodes": [3]}
 
 
 def test_bytes_are_said_in_the_first_unit_that_holds_them_under_1024_and_a_badge_has_a_colour_for_no_other():

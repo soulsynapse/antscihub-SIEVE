@@ -7,7 +7,7 @@ verified with `git log --oneline v5..HEAD`, never taken from this file.
 ## What Kendrick asked for
 
 He develops tools and runs experiments to publish, and wants to stop thinking about the back end:
-the decode cache, the memo, the series, the held file, what periods and other tools keep. A
+the decode cache, the memo, the series, the checkpoint, what periods and other tools keep. A
 collaborator's weak computer runs it and a strong one too; above all no worry as tools are added.
 
 1. Windows are reliable and fast.
@@ -41,10 +41,14 @@ overrule them. His freeing me from a spec's decision endorses neither side of it
   file.
 - O10, his: the window shows what is asked of it, every series node's line over its rows, whether
   or not a clip walk was made.
+- O11, his: a colleague's laptop gets the document and its checkpoint, and what lives in the
+  checkpoint is what should be beside it: copied to another folder and opened with an empty
+  results folder, it serves every run held without walking, and after an edit below a frame node
+  that makes small rows a clip walk runs that node zero times.
 
 ## What checks the work
 
-- `sim/miniature.py`, the player itself over a clip made for it, says which of O7 to O10 hold.
+- `sim/miniature.py`, the player itself over a clip made for it, says which of O7 to O11 hold.
   It writes nothing outside a temp folder. It does not see real threads, decode or disk.
 - What caught real defects: an adversary told to prove a break in a scratch copy; an unanchored
   reader tracing one path; a profile of the real document
@@ -57,7 +61,7 @@ overrule them. His freeing me from a spec's decision endorses neither side of it
 ## Next
 
 `sim/miniature.py` is the player's own window, worker, plan, held runs and tools over a clip made
-for it, the worker's turns taken on one thread, and it says which of O7 to O10 hold. A defect
+for it, the worker's turns taken on one thread, and it says which of O7 to O11 hold. A defect
 found on a real document is pinned there. An alternative holder goes behind the seam the held
 runs sit behind and is driven against the same checks.
 
@@ -76,10 +80,11 @@ testing, and a restart now and then is fine.
 - In the player, to be verified in the tree: holders sized from the machine's RAM (`budget.py`);
   the window-against-full test over the registry; display proxies; a tool's code in every node's
   key; a frame node's small rows kept on disk by the player's walks and a bare walk's alike
-  (`result_store.py`, `result_keeper.py`) under the node's raw key.
-- Not in the player: the memo, the decode cache, the held runs and their file, and cut files are
-  each their own holder still. No checkpoint, no one ask. Series and stepped results are kept by
-  nothing across a bare walk.
+  (`result_store.py`, `result_keeper.py`) under the node's raw key; a checkpoint beside the
+  document, one append-only file of its held runs, the keeper's chunks its walks read and the
+  document's form (`held.py`), whose document record nothing reads yet.
+- Not in the player: the memo, the decode cache, the held runs, and cut files are each their own
+  holder still; no one ask. Series and stepped results are kept by nothing across a bare walk.
 - Findings of this branch: `docs/findings/2026-11-21-the-player-died-walking-856-periods.md`,
   `docs/findings/2026-11-21-bare-walk-crashes-on-the-full-file.md`,
   `docs/findings/window-against-full.md`.

@@ -76,11 +76,11 @@ DOCUMENT_SUFFIX = "json"
 DOCUMENT_FILTER = f"SIEVE document (*.{DOCUMENT_SUFFIX});;All (*)"
 
 
-def _save_held(file, runs, failed):
+def _save_held(file, runs, kept, document, failed):
     """held.File.write on the writer's thread, where a failure can only be said on stderr;
     `failed` is set when the file did not land."""
     try:
-        for start, rows, _, _ in file.write(runs):
+        for start, rows, *_ in file.write(runs, kept, document):
             print(f"SIEVE {time.strftime('%H:%M:%S')}: the run of {rows} rows from {start} does not pickle and is not in {file.path}", file=sys.stderr)
     except Exception as e:
         failed.set()
@@ -499,9 +499,9 @@ class PlayerWindow(QMainWindow):
         self._clip_ended = False                  # the clip walk told of its last row and its results have not yet come
         self._clip_rests = False                  # the clip walk last told of every row of its range done: the clip's last, or the one it was stopped at
         self._given = False                       # the window walk was given held results for some of the chain and steps the rest
-        self._unwritten = False                   # a run was held since the file was written
+        self._unwritten = False                   # a run was held, or the document saved, since the checkpoint was written
         self._file = None                         # the held.File the runs were read from or last written to; the writer's thread's while that lives
-        self._writer = None                       # the thread writing the held file, or the last that did
+        self._writer = None                       # the thread writing the checkpoint, or the last that did
         self._write_failed = threading.Event()    # the last writer's file did not land: the next write carries its runs
         self._taken = {}      # (node id, path input) -> (the file last handed to its loader, its mtime)
         self._watch = QFileSystemWatcher(self)
@@ -652,7 +652,6 @@ class PlayerWindow(QMainWindow):
         path = path or self.doc.path
         if not path:
             return self._save_as()
-        was = self.doc.path
         try:
             document.save(self.doc, path)
         except OSError as e:
@@ -660,7 +659,7 @@ class PlayerWindow(QMainWindow):
             return False
         self._written = self._text()
         self._note()
-        self._unwritten |= was != self.doc.path
+        self._unwritten = True      # the checkpoint holds the document as saved
         self._write_held(wait=True)
         self._retitle()
         return True
@@ -1124,7 +1123,10 @@ class PlayerWindow(QMainWindow):
         decoder_module.STORE = store.folder
         decoder_module.read_frame_times_ahead(path, lambda rows, path=str(path): self.framesCounted.emit(path, rows))     # the first seek would wait on it: docs/findings/2026-11-15-a-file-whose-times-do-not-count-its-rows.md
         self.stream = Emitter()
-        self.graph = Graph(self.doc, decoder, self.tools, stream=self.stream, cut_result=self._cut_result, memo_bytes=budget.here()["memo"], keeper=Keeper())
+        self._file = held.File(held.path_for(self.doc.path), HELD_BYTES) if self.doc.path else None
+        loaded, keeper = self._file.load() if self._file is not None else [], Keeper()
+        keeper.lend(self._file.chunks if self._file is not None else {})
+        self.graph = Graph(self.doc, decoder, self.tools, stream=self.stream, cut_result=self._cut_result, memo_bytes=budget.here()["memo"], keeper=keeper)
         # the one line a report of this video's run needs beside the log's tracebacks
         print(f"SIEVE {time.strftime('%H:%M:%S')}: opened {path}: {decoder.width}x{decoder.height} at {decoder.fps:.3f} fps, "
               f"{decoder.count} rows claimed, luma plane {'read' if decoder.luma else 'converted'}; "
@@ -1160,8 +1162,7 @@ class PlayerWindow(QMainWindow):
         self.timeline.setEnabled(True)
         self.worker.start()
         self.sync()
-        self._file = held.File(held.path_for(self.doc.path)) if self.doc.path else None
-        self._take_runs(self._file.load() if self._file is not None else [])
+        self._take_runs(loaded)
         self._recut()
         selected, window = recent.view_of(recent.views_beside(self.noted), self.doc.path) if self.noted and self.doc.path else (None, None)
         s, n = window or (0, min(self.count, round(10 * self.fps)))
@@ -1713,10 +1714,11 @@ class PlayerWindow(QMainWindow):
         return {nid: r for nid, r in has.items() if len(r["signal"]) == rows}, rows
 
     def _write_held(self, wait=False):
-        """A clip walk's results that stand are held as a run, and the runs held since the file was
-        written go beside the document when it has been saved, on a thread of their own, which
-        pickles only the runs the file has not had; `wait` returns once the file has landed. A
-        write that did not land is made again with the next, the one at the video's close included."""
+        """A clip walk's results that stand are held as a run, and the runs held since the checkpoint
+        was written go into it when the document has been saved, with the kept rows walks read and
+        the document as it stands, on a thread of their own, which pickles only what the file has
+        not had; `wait` returns once the file has landed. A write that did not land is made again
+        with the next, the one at the video's close included."""
         if self.graph is None:
             return
         stands, rows = self._stands()
@@ -1734,8 +1736,9 @@ class PlayerWindow(QMainWindow):
         if path and self._unwritten:
             self._unwritten = False
             if self._file is None or self._file.path != path:
-                self._file = held.File(path)       # the document saved under another name: nothing there is known to be this one's
-            self._writer = threading.Thread(target=_save_held, args=(self._file, list(self.runs), self._write_failed), name="held")
+                self._file = held.File(path, HELD_BYTES)       # the document saved under another name: nothing there is known to be this one's
+            self._writer = threading.Thread(target=_save_held, args=(self._file, list(self.runs), self.graph.keeper.kept, json.loads(self._text()),
+                                                                     self._write_failed), name="held")
             self._writer.start()
             if wait:
                 self._writer.join()

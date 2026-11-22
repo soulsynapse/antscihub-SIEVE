@@ -1,7 +1,9 @@
 """What walks keep of a frame node's rows between processes, the player's and a bare walk's: a
 Graph handed a Keeper asks it on a memo miss and tells it each row it made; the rows go to
 result_store over its Folder a chunk at a time. Only rows that are no image (ndim < 2 arrays, tables, scalars) of frame nodes that
-are not static, served or stepped are kept. No failure of the folder reaches the caller.
+are not static, served or stepped are kept. A document's checkpoint (held.File) lends it the chunks
+it carries, answered before the folder, and takes the chunks walks read through `kept`. No failure
+of the folder reaches the caller.
 """
 import hashlib
 import itertools
@@ -50,8 +52,9 @@ class Keeper:
     short of CHUNK rows is read back at its next ask and filled on."""
 
     def __init__(self, root=None, budget=None):
-        self.answers, self.pending = OrderedDict(), {}
+        self.answers, self.pending, self.lent = OrderedDict(), {}, {}
         self.asked, self.changed, self.done, self.addresses = set(), set(), set(), {}
+        self.touched = set()        # the addresses answered from or put since this Keeper was made
         self._lock = threading.Lock()
         try:
             root = root or os.environ.get(FOLDER_ENV) or os.path.join(app_folder(), "results")
@@ -68,7 +71,9 @@ class Keeper:
                 return None
             if a not in self.asked:
                 self.asked.add(a)
-                self.answers[a] = held = self._read(a)
+                self.answers[a] = held = self.lent.get(a) or self._read(a)
+                if held:
+                    self.touched.add(a)
                 if len(held) >= CHUNK:
                     self.done.add(a)
                 elif held:
@@ -96,6 +101,38 @@ class Keeper:
             for a in list(self.pending):
                 self._put(a)
 
+    def lend(self, chunks):
+        """Answers from `chunks`, (address key, chunk) to {row: value} as held.File.chunks has them,
+        before the folder; called before the first ask."""
+        lent = {}
+        for (key, chunk), rows in chunks.items():
+            if isinstance(rows, dict) and all(isinstance(r, int) and r // CHUNK == chunk and keepable(v) for r, v in rows.items()):
+                for v in rows.values():
+                    if isinstance(v, np.ndarray):
+                        v.setflags(write=False)
+                lent[Address(key, chunk)] = rows
+        with self._lock:
+            self.lent.update(lent)
+
+    def kept(self, had=()):
+        """(address key, chunk, rows) of each chunk answered from or put since this Keeper was made
+        and not being filled now, none of `had`, (key, chunk) pairs: rows memory holds, else read
+        back from the folder outside the lock, a chunk that does not read left out. A generator, so
+        what is not taken is not read; any thread."""
+        with self._lock:
+            todo = sorted(a for a in self.touched if (a.key, a.chunk) not in had and a not in self.pending)
+        for a in todo:
+            with self._lock:
+                rows = self.answers.get(a) or self.lent.get(a)
+            if not rows:
+                try:
+                    got = self.store.disk.read(a.name, touch=False)
+                except Exception:
+                    got = None
+                rows = None if got is None else self._valid(a, got[0])
+            if rows:
+                yield a.key, a.chunk, rows
+
     def _address(self, e, row, cut):
         if self.store is None or e.kind != "frame" or e.static or e.file is not None or e.steps:
             return None
@@ -106,15 +143,19 @@ class Keeper:
 
     def _read(self, a):
         try:
-            got = self.store.get(a)
-            if not isinstance(got, dict) or not all(isinstance(r, int) and r // CHUNK == a.chunk and keepable(v) for r, v in got.items()):
-                return {}
-            for v in got.values():
-                if isinstance(v, np.ndarray):
-                    v.setflags(write=False)
-            return got
+            return self._valid(a, self.store.get(a))
         except Exception:
             return {}
+
+    @staticmethod
+    def _valid(a, got):
+        """`got` read-only where it is rows of the chunk at `a`, else {}."""
+        if not isinstance(got, dict) or not all(isinstance(r, int) and r // CHUNK == a.chunk and keepable(v) for r, v in got.items()):
+            return {}
+        for v in got.values():
+            if isinstance(v, np.ndarray):
+                v.setflags(write=False)
+        return got
 
     def _put(self, a):
         rows = self.pending.pop(a)
@@ -125,6 +166,7 @@ class Keeper:
         if a not in self.changed:
             return
         self.changed.discard(a)
+        self.touched.add(a)
         try:
             if self.store.disk.size(a.name) is not None:
                 self.store.drop(a, "disk")

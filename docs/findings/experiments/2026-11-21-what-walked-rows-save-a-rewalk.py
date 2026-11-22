@@ -41,7 +41,7 @@ store.CHOICE = os.path.join(SCRATCH, "store.txt")
 decoder.read_frame_times_ahead = lambda path, then=None: None
 decoder.STORE = None
 decoder.QUIET = True
-held.File.write = lambda self, runs: []
+held.File.write = lambda self, *a: []
 window.TELL = 0.0
 Worker.start = lambda self, *a: None
 window.PlayerWindow.ask_unsaved = lambda self: "discard"

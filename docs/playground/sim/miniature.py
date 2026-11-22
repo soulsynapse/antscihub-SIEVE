@@ -2,7 +2,8 @@
 player to ask: O7, what one more cut in time costs does not grow with how many there are; O8, a
 bare walk and a clip walk hold the same; O9, nothing walked for the window is held, and a clip
 walk holds the same whatever the window walked first; O10, the window shows a line of every
-series node the document has, a clip walk made or not.
+series node the document has, a clip walk made or not; O11, a document and its checkpoint taken to
+another folder and a results folder of nothing open where they were left.
 
 The player's own window, worker, plan, held runs and tools, offscreen, over a clip of tiny frames
 made here whose gray cycles so that a banded `reduce` gates a `period` into one cut every PERIOD
@@ -12,8 +13,9 @@ is one thread and the calls it makes are the same every time. A clip walk is ask
 its end at two counts of cuts with every line run and every jump back counted to its function,
 so a loop that calls nothing is counted as one that does; a function is said to grow where its
 steps a cut at the larger count pass GROWS times those at the smaller. The monitor's modules are
-left out: the clock turns them, and what they cost a cut is not seen here. O8 to O10 are asked of
-clips of CHECKED cuts; the bare walk is bare.main's, in this process.
+left out: the clock turns them, and what they cost a cut is not seen here. O8 to O11 are asked of
+clips of CHECKED cuts; the bare walk is bare.main's, in this process. No checkpoint is written but
+O11's, whose document is its own: detect below threshold, whose tables the keeper keeps, and size.
 
 Run: .venv/Scripts/python.exe -X utf8 docs/playground/sim/miniature.py [tree] [small large]
 `tree` is a checkout of the repository to drive, this one with none; `0 0` leaves O7 out. Exit 1
@@ -49,7 +51,7 @@ import cv2  # noqa: E402
 import numpy as np  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
-from sieve_player import bare, decoder, held, store, window  # noqa: E402
+from sieve_player import bare, decoder, held, result_keeper, store, window  # noqa: E402
 from sieve_player import document as D  # noqa: E402
 from sieve_player.registry import discover  # noqa: E402
 from sieve_player.stream import HAND  # noqa: E402
@@ -59,7 +61,7 @@ store.CHOICE = os.path.join(SCRATCH, "store.txt")
 decoder.read_frame_times_ahead = lambda path, then=None: None
 decoder.STORE = None
 decoder.QUIET = True
-held.File.write = lambda self, runs: []
+WRITE, held.File.write = held.File.write, lambda self, *a: []
 window.TELL = 0.0                   # every row told: no telling waits on a clock
 Worker.start = lambda self, *a: None
 window.PlayerWindow.ask_unsaved = lambda self: "discard"
@@ -183,6 +185,80 @@ def window_shows():
     return said + [f"no line of {nid} after a clip walk" for nid in sorted(nodes - set(win.plot.lines))]
 
 
+def checkpoint_travels():
+    """O11: a document saved with its checkpoint, copied to another folder and opened with an empty
+    results folder, serves every run the first player held without walking, and after an edit below
+    a frame node that makes small rows, a clip walk runs that frame node zero times; opened with the
+    checkpoint's kept rows withheld, it runs it again, or the check would show nothing."""
+    by_name = {e.name: e.module for e in TOOLS}
+    detect, ran, said = by_name["detect"], [0], []
+    run = detect.run
+
+    def counted(frames, row, params):
+        ran[0] += 1
+        return run(frames, row, params)
+
+    def player(folder):
+        os.environ["SIEVE_RESULTS"] = str(folder / "results")       # a Keeper over a root of nothing
+        win = window.PlayerWindow(str(folder / "doc.json"), "t", TOOLS)
+        if win.playing:
+            win.toggle_play()
+        return win
+
+    def edited_and_walked(win):
+        size = next(n.id for n in win.doc.nodes if n.tool == "size")
+        win.doc.node(size).params["method"] = "max"
+        win._params_changed(size)
+        ran[0] = 0
+        win._toggle_clip()
+        settled(win)
+        return ran[0], size
+
+    home, results = Path(SCRATCH) / "travels", os.environ["SIEVE_RESULTS"]
+    home.mkdir()
+    doc = D.from_tools([by_name[n] for n in ("gray", "threshold", "detect", "size")], "v.avi")
+    clip(home / "v.avi", CHECKED)
+    D.save(doc, home / "doc.json")
+    held.File.write = WRITE
+    detect.run = counted
+    try:
+        first = player(home)
+        turned(first)
+        first._toggle_clip()
+        settled(first)
+        first.save_document()
+        want = holds(first)
+        said += [f"the first player holds {len(want)} results and none"] * (not want)
+        for name, withheld in (("colleague", False), ("withheld", True)):
+            away = Path(SCRATCH) / name
+            away.mkdir()
+            for f in ("doc.json", "v.avi", Path(held.path_for("doc.json")).name):
+                (away / f).write_bytes((home / f).read_bytes())
+            lend = result_keeper.Keeper.lend
+            if withheld:
+                result_keeper.Keeper.lend = lambda self, chunks: None
+            try:
+                ran[0] = 0
+                win = player(away)
+                got = holds(win)
+                turned(win)
+                opened_ran = ran[0]
+                walked_ran, size = edited_and_walked(win)
+            finally:
+                result_keeper.Keeper.lend = lend
+            if withheld:
+                said += [f"with the kept rows withheld the clip walk ran detect {walked_ran} times"] * (not walked_ran)
+                continue
+            said += apart(want, got) + [f"detect ran {opened_ran} times as it opened"] * bool(opened_ran)
+            said += [f"detect ran {walked_ran} times in the clip walk after the edit"] * bool(walked_ran)
+            said += [f"the clip walk after the edit held no size of {win.count} rows"] * (
+                not any(nid == size and len(v) == win.count for (nid, _, _), v in holds(win).items()))
+    finally:
+        held.File.write, detect.run = (lambda self, *a: []), run
+        os.environ["SIEVE_RESULTS"] = results
+    return said
+
+
 TOOL = sys.monitoring.COVERAGE_ID
 EVENTS = sys.monitoring.events.LINE | sys.monitoring.events.JUMP
 
@@ -244,7 +320,7 @@ if LARGE:
         print(f"O7 {'fails' if grew else 'holds'}: {len(grew)} functions' steps a cut grew past {GROWS}x from {SMALL} cuts to {LARGE}")
     if prof:
         pstats.Stats(prof, stream=sys.stdout).strip_dirs().print_callers(os.environ["MINIATURE_WHY"])
-for oracle, check in (("O8", bare_and_clip), ("O9", window_first), ("O10", window_shows)):
+for oracle, check in (("O8", bare_and_clip), ("O9", window_first), ("O10", window_shows), ("O11", checkpoint_travels)):
     try:
         said = check()
     except Exception as e:

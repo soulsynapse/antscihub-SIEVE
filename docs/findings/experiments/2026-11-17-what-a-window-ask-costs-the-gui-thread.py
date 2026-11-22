@@ -11,7 +11,7 @@ from PySide6.QtWidgets import QApplication
 from sieve_player import held
 from sieve_player.registry import discover
 from sieve_player.window import PlayerWindow
-held.File.write = lambda self, runs: []
+held.File.write = lambda self, *a: []
 app = QApplication([])
 win = PlayerWindow(docpath, "t", discover("tools"))
 if win.playing:

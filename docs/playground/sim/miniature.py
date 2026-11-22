@@ -1,8 +1,9 @@
 """The player in miniature, held to the oracles of docs/playground/JOURNAL.md that take the whole
 player to ask: O7, what one more cut in time costs does not grow with how many there are; O8, a
-bare walk and a clip walk hold the same; O9, nothing walked for the window is held, and a clip
-walk holds the same whatever the window walked first; O10, the window shows a line of every
-series node the document has, a clip walk made or not; O11, a full run made and the document
+bare walk and a clip walk hold the same; O9, nothing walked for the window is held, written to
+the checkpoint or to the store, and a clip walk holds the same whatever the window walked first;
+O10, the window shows a line of every series node the document has over its rows, a clip walk
+made or not, best effort where a period runs on past the window and no clip walk was made; O11, a full run made and the document
 saved, the two copied elsewhere and opened serve every run held without walking; O14, a held run
 made under a tool's older code is served after the code changes, its node marked as of other code.
 
@@ -13,7 +14,8 @@ taken here, one at a time, and its signals land in the window's slots inside the
 is one thread and the calls it makes are the same every time. A clip walk is asked and turned to
 its end at two counts of cuts with every line run and every jump back counted to its function,
 so a loop that calls nothing is counted as one that does; a function is said to grow where its
-steps a cut at the larger count pass GROWS times those at the smaller. The monitor's modules are
+steps a cut at the larger count pass GROWS times those at the smaller; beside it the steps of a
+window moved with either count held and with none, a figure and no verdict. The monitor's modules are
 left out: the clock turns them, and what they cost a cut is not seen here. O8 to O11 are asked of
 clips of CHECKED cuts; the bare walk is bare.main's, in this process. No checkpoint is written but
 O11's and O14's, which have a document of their own: gray, threshold, detect and size, detect's
@@ -157,16 +159,37 @@ def bare_and_clip():
     return [f"a clip walk holds {len(want)} results and none"] * (not want) + apart(want, holds(by_bare))
 
 
+def stored():
+    """Every file under the store's folder."""
+    return {str(Path(d) / f) for d, _, fs in os.walk(store.folder()) for f in fs}
+
+
 def window_first():
-    """O9: a window walked at three places holds nothing, and with it walked there and an edit below
-    the period made after a clip walk, what is held is what a clip walk of the edited document holds."""
-    win = opened("first")
-    for at in (0, 2 * PERIOD + 1, CHECKED * PERIOD // 2):
-        win.set_window(at, win.window_[1], by=HAND)
-        settled(win)
+    """O9: a window walked at three places and the document saved holds nothing, writes no run to
+    the checkpoint and no file to the store, a clip walk then holds what a clip walk alone holds,
+    and with it walked there and an edit below the period, what a clip walk of the edited document holds."""
+    had = stored()
+    held.File.write = WRITE
+    try:
+        win = opened("first")
+        for at in (0, 2 * PERIOD + 1, CHECKED * PERIOD // 2):
+            win.set_window(at, win.window_[1], by=HAND)
+            settled(win)
+        win.save_document()
+        win._write_held(wait=True)
+    finally:
+        held.File.write = lambda self, *a: []
     said = [f"{len(list(win.runs))} runs held of a window's walks alone"] * bool(list(win.runs))
+    written = held.File(held.path_for(win.doc.path)).load()
+    said += [f"the checkpoint holds {len(written)} runs of a window's walks alone"] * bool(written)
+    said += [f"the store holds {f} of a window's walks alone" for f in sorted(stored() - had)]
     win._toggle_clip()
     settled(win)
+    by_clip = opened("first-alone")
+    by_clip._toggle_clip()
+    settled(by_clip)
+    want = holds(by_clip)
+    said += [f"after the windows: {d}" for d in apart(want, holds(win))]
     win.doc.node("smooth").params["reach"] += 2
     win._params_changed("smooth")
     for at in (3 * PERIOD, 0):
@@ -181,14 +204,51 @@ def window_first():
     return said + [f"a clip walk holds {len(want)} results and none"] * (not want) + apart(want, holds(win))
 
 
+WINDOWS = (("inside a period", 5 * PERIOD + 1, 2), ("over two whole periods", 3 * PERIOD - 2, 2 * PERIOD),
+           ("cutting periods at both edges", 2 * PERIOD + 2, 2 * PERIOD))
+
+
+def drawn(win, nid, s, n):
+    """(the rows of the window `nid`'s line covers, those of them said best effort)."""
+    rows, best = set(), set()
+    for line in win.plot.lines[nid].pieces if nid in win.plot.lines else []:
+        got = set(range(line.start, line.start + len(line.values))) & set(range(s, s + n))
+        rows |= got
+        best |= got if line.best else set()
+    return rows, best
+
+
+def lines_over(win, when, cut_off):
+    """What of the period's rows in each of WINDOWS the lines below it miss, and where they are said
+    best effort other than at a period cut off at the window's edge, where `cut_off` says they are."""
+    said = []
+    for name, s, n in WINDOWS:
+        win.set_window(s, n, by=HAND)
+        settled(win)
+        window = range(s, s + n)
+        want = {r for r in window if r % PERIOD < KEPT}
+        edges = {r for r in want if (r - r % PERIOD < s) or (r - r % PERIOD + KEPT > s + n)} if cut_off else set()
+        for nid in (nid for nid, *_ in BELOW):
+            rows, best = drawn(win, nid, s, n)
+            said += [f"{when}, a window {name}: {nid} draws {len(rows & want)} of its {len(want)} rows of periods"] * (rows != want)
+            said += [f"{when}, a window {name}: {nid} is best effort at {len(best)} rows and is to be at {len(edges)}"] * (best != edges)
+    return said
+
+
 def window_shows():
-    """O10: the series nodes the plot has no line of, in a player opened and no clip walk asked, and after one."""
+    """O10: the series nodes the plot has no line of, in a player opened and no clip walk asked, and
+    after one; and over windows inside a period, over whole ones and cutting them, the period's rows
+    the lines below it miss, best effort at a period cut off at the window's edge before a clip walk alone."""
     win = opened("shows")
-    nodes = {"gate", "below", "smooth"}
+    nodes = {"gate", *(nid for nid, *_ in BELOW)}
     said = [f"no line of {nid} before a clip walk" for nid in sorted(nodes - set(win.plot.lines))]
+    said += lines_over(win, "before a clip walk", True)
     win._toggle_clip()
     settled(win)
-    return said + [f"no line of {nid} after a clip walk" for nid in sorted(nodes - set(win.plot.lines))]
+    win.set_window(0, round(10 * win.fps), by=HAND)
+    settled(win)
+    said += [f"no line of {nid} after a clip walk" for nid in sorted(nodes - set(win.plot.lines))]
+    return said + lines_over(win, "after a clip walk", False)
 
 
 BY_NAME = {e.name: e.module for e in TOOLS}
@@ -304,10 +364,9 @@ def named(code):
     return f"{Path(fn).name}:{code.co_name}" if own and Path(fn).name not in CLOCKED else None
 
 
-def walked(cuts, callers=False):
-    """function of the player or a tool -> its lines run and jumps back, over a clip walk of `cuts`
-    cuts turned to its end; the cuts held; and with `callers` a cProfile of the same."""
-    win = opened(str(cuts), cuts)
+def stepped(act, prof=None):
+    """function of the player or a tool -> its lines run and jumps back over `act()`, `prof` a
+    cProfile enabled over the same where one is handed."""
     steps, names = {}, {}
 
     def step(code, *_):
@@ -318,26 +377,40 @@ def walked(cuts, callers=False):
             return sys.monitoring.DISABLE
         steps[name] = steps.get(name, 0) + 1
 
-    prof = cProfile.Profile() if callers else None
     sys.monitoring.use_tool_id(TOOL, "miniature")
     sys.monitoring.register_callback(TOOL, sys.monitoring.events.LINE, step)
     sys.monitoring.register_callback(TOOL, sys.monitoring.events.JUMP, step)
     sys.monitoring.set_events(TOOL, EVENTS)
     if prof:
         prof.enable()
-    win._toggle_clip()
-    settled(win)
+    act()
     if prof:
         prof.disable()
     sys.monitoring.set_events(TOOL, 0)
     sys.monitoring.free_tool_id(TOOL)
-    return steps, sum(run.cut is not None for run in win.runs), prof
+    return steps
+
+
+def walked(cuts, callers=False):
+    """Over a clip walk of `cuts` cuts turned to its end: function of the player or a tool -> its
+    lines run and jumps back; the cuts held; with `callers` a cProfile of the same; and the player."""
+    win = opened(str(cuts), cuts)
+    prof = cProfile.Profile() if callers else None
+    steps = stepped(lambda: (win._toggle_clip(), settled(win)), prof)
+    return steps, sum(run.cut is not None for run in win.runs), prof, win
+
+
+def window_moved(win):
+    """The steps of the player and the tools over the window moved to the middle of the clip and turned to its end."""
+    return sum(stepped(lambda: (win.set_window(win.count // 2, win.window_[1], by=HAND), settled(win))).values())
 
 
 failed = False
 if LARGE:
-    small, held_small, _ = walked(SMALL)
-    large, held_large, prof = walked(LARGE, bool(os.environ.get("MINIATURE_WHY")))
+    small, held_small, _, win_small = walked(SMALL)
+    large, held_large, prof, win_large = walked(LARGE, bool(os.environ.get("MINIATURE_WHY")))
+    print(f"a window moved: {window_moved(win_small)} steps with {SMALL} cuts held, {window_moved(win_large)} with {LARGE}, "
+          f"{window_moved(opened(f'{SMALL}-unheld', SMALL))} with none held of {SMALL}")
     print(f"{TREE.name}: {held_small} of {SMALL} cuts held, {held_large} of {LARGE}; steps a cut {sum(small.values()) / SMALL:.0f} and {sum(large.values()) / LARGE:.0f}")
     grew = sorted(((large[f] / LARGE) / (n / SMALL), large[f] / LARGE, n / SMALL, f) for f, n in small.items()
                   if n >= SMALL and f in large and large[f] / LARGE > GROWS * n / SMALL)

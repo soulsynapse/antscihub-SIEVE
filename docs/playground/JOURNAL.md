@@ -16,14 +16,17 @@ this file where they differ.
   the contract in code: `.venv/Scripts/python.exe docs/playground/sim/sim.py 150` runs the
   torture in about ten seconds and prints a line a scheme. Read "What the simulation has shown"
   before touching either file.
-- Next action, in order: (a) read `docs/playground/adversary-2.md` when run 6 lands (Opus,
-  against `sim/folder.py`, the real folder under `store.py`) and mend what it proves, with
-  `folder_check.py` grown to see each. (b) Per-node chunk grids in the entry's name, then a
-  one-off that walks real footage through `Store` over `Folder` and sets its time beside the
-  simulation's. (c) Move `store.py` and `folder.py` into `sieve_player` and queue the slices
-  onto them: the held file, then the walks' results. Then STOP for him to try the player,
-  before the memo is touched. (d) Code beside the key, once he has answered. (e) The
-  whole-file footage hash.
+- Next action, in order: (a) mend `sim/folder.py` and `store.py` for what `adversary-2.md`
+  proved (its twelve items and my answer to each are under "The second adversary"), with
+  `folder_check.py` grown to see what it can. (b) Rewrite `contract.md` and the simulation
+  around "Windows are best effort" below: the exact and window split, a range-reading tool, a
+  cut that re-encodes, a loop in the price table, display proxies. (c) The invariant over the
+  registry that a window and a full walk agree where a tool says they do (a test, it is a
+  seam). (d) Per-node chunk grids in the entry's name, then one real walk through `Store` over
+  `Folder` beside the simulation's figure. (e) Move the store into `sieve_player` and queue the
+  slices: the held file, then the walks' results. Then STOP for him to try the player, before
+  the memo is touched. (f) Code beside the key, once he has answered. (g) The whole-file
+  footage hash.
 - `sim/folder.py` is the disk of `store.py` over real files: a header of length and crc32, a
   write flushed before its rename, a truncated file counted absent, Windows' refusals passed
   over, the lock a folder made and removed, the bytes used walked afresh under the lock.
@@ -49,7 +52,7 @@ this file where they differ.
   passes corrected two of my claims. Not for searching, not for judging a design.
 - Run the simulation: `.venv/Scripts/python.exe docs/playground/sim/sim.py 150` (torture, a line
   a scheme) and `... sim.py prices 1080p [profile]` (the table below), a few seconds each.
-- Counters: queued runs 6 of 25 (his figure, 2026-11-21). No cap on design cycles, by the same word: a
+- Counters: queued runs 6 of 25, all six landed (his figure, 2026-11-21). No cap on design cycles, by the same word: a
   cycle on the simulation is run when a slice raises a question whose answer would change it.
 - Context: `bash ~/.claude/tools/context-used.sh 300` prints what is left before the auto-compact
   window (300k by his `/autocompact` on 2026-11-21). Bring this file up to date before a step
@@ -333,6 +336,68 @@ unflagged bites: the grain is wrong and the idea goes.
   letting go is a rename into a `trash/` folder, emptied of what has lain there past a grace;
   a checkpoint that finds an entry gone takes it back out of the trash by a rename.
 - Disk lets go by GreedyDual-Size now, the floor kept on the disk for every writer.
+
+## Windows are best effort (his words, 2026-11-21; the contract does not say this yet)
+
+He asked whether I was assuming a window shows exactly what a key names. I was, and it is false.
+What he then said, which outranks the contract where they differ:
+
+- A window is fast and helps the user set up the full run. It is best effort in a predictable
+  way: accurate enough that the user can judge whether the full run will be. Full walks and
+  saved checkpoints are what must be exact. He does not want to think about the back end.
+- So the rule runs one way. A window's value never answers an exact ask (a full walk, a
+  checkpoint's fill, a csv); an exact value may answer a window; a window's own results are
+  found again only for the range they were made over. What a window makes of row-by-row tools
+  is exact and is the full walk's to reuse; only what sits downstream of a tool that reads a
+  range is window-grade. To be derived from the kind a tool already declares, unverified that
+  the registry carries enough.
+- Best effort is checkable, and that helps tool development: for each registered tool a window
+  and a full walk are compared at the same rows; a row-by-row tool differs nowhere, a
+  range-reading one only where it says. This replaces a Haiku claim a tool.
+- The store serves a looping window: the same ten seconds over and over. Tools are handed real
+  decoded frames, so no error builds up; what the loop displays may be a cheap proxy that
+  looks right. So a display proxy is its own kind of entry, made from an exact value, held in
+  memory, and never an answer to a tool's ask. Unmeasured: a proxy's size; what the window
+  holds for display today. The simulation prices no loop yet.
+- Region either passes a crop through or cuts, and a cut is encoded, so its pixels differ; a
+  known choice of his. Unchecked: that the mode is in the key, and whether baking a cut twice
+  gives the same bytes. If it does not, a baked cut a held result was made from cannot be let
+  go while that result is kept, and "dropping an entry changes time and nothing else" is false
+  of cuts.
+
+What three Haiku checks found in the tree (their quoted lines, not reread by me): background
+samples the cut it is computed in or the whole footage and that extent is in its memo key
+(`tools/background.py:50`, `graph.py:257`, `graph.py:91`), so it agrees between a window and a
+full walk; smooth is handed the window's rows alone and pads with NaN (`walk.py:343`,
+`tools/smooth.py:31`), as its docstring says; a held run answers a window it contains
+(`held.py:261`) and `walked_rows` (`held.py:330`) merges runs row by row, earliest first, whose
+consumer I have not looked for. If that feeds anything exact it is reported to him, not mended.
+
+Withdrawn: asking a reach tool's input for rows either side so that a window is exact. He does
+not want a window exact. The ledger experiment counts this as a second miss no claim named,
+caught by him.
+
+## The second adversary (run 6, `adversary-2.md`, against `sim/folder.py`)
+
+Its scripts are in `Code/Scratch/sieve-adversary-2/`. Twelve items, eleven proved. My answers:
+
+1. `lock()` meets `PermissionError` from a `mkdir` against another's pending `rmdir`: every
+   `OSError` there is a wait and another try.
+2. `used()` raises when a file goes between listing and sizing: each file's size is tried.
+3, 5, 7. A pending manifest is a file of its own name beside the finished one, never over it; a
+   finished manifest that did not land, or a release that did not delete, raises; a read does
+   not touch a manifest, so a pending one ages.
+4. A read whose touch is refused is still a read.
+6. A name that is no entry's is passed over; a manifest that does not read is passed over.
+8, 9. A lock is stale when this process has watched the same one for the stale time by its own
+   monotonic clock, no two machines' clocks compared; a lock that cannot be removed is waited
+   on; a holder removes only the lock it made.
+10. A write the disk refuses is a refusal said, not an exception.
+11. The count is walked again once this writer has written a twentieth of the budget, so the
+    budget is passed by no more than that a writer.
+12. A put was 6 ms whatever its size, the flush: only what a checkpoint names is flushed, a
+    torn entry being caught by its length and checksum. `names` of 3000 entries is 130 ms and
+    the walk 490 ms, paid when room is made. Left: `made-*.log` grows without end.
 
 ## A decision of his the contract ran into
 

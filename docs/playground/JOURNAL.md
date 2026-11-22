@@ -32,12 +32,24 @@ this file where they differ.
   `folder.py` are now `sieve_player/result_store.py` and `result_folder.py`, named in
   `tests/test_seams.py` as importing nothing of the player, and the simulation imports them
   from there. Nothing in the player calls them yet.
-- Next action, in order: (a) read run 10 (the store under a bare walk's small frame rows, as
-  "The layer between a frame node and the store" below), run the suite, read its diff whole:
-  it touches `graph.py`. (b) One real bare walk twice on the crossings clip with the purb
-  document, timed, beside the simulation's figure; say the screen is not needed, it is a
-  process. (c) `folder_check.py`'s seams as a test if run 10 did not bring them. (d) The
-  whole-file footage hash. `held.py` and his ticked decision stay untouched.
+- Run 10 is in (`e7503afe`, `2df9bc9c`): `sieve_player/result_keeper.py`, asked at
+  `graph.py:814` and told at `:837`, handed to the Graph by `bare.py` alone; suite 330
+  passed. Tried by me on the crossings clip with `video-tests/purb-168-178.json`, three bare
+  walks as processes over one scratch folder: 2.5 s, then 0.9 s and 0.9 s, all four result
+  nodes equal field by field (a table's `contour` field is an object, so bytes of a table
+  must not be compared), 5.8 MB kept. Ten seconds of clip is too short to price; a long one
+  has not been walked.
+- A bare walk now writes to `recent.app_folder()/results` (20 GiB, `SIEVE_RESULTS`,
+  `SIEVE_RESULTS_GB`) on his machine. He has not been asked about the place or the figure.
+- Left open by run 10 and not mended: the code print is read off disk when an address is
+  first made, so a tool edited mid-walk stores old code's rows under the new print
+  (`registry.imported_print` would close it); rows a tool gives as None are made again each
+  walk; two bare processes at once over one chunk are untried.
+- Next action, in order: (a) close the mid-walk edit hole with `imported_print`. (b) One
+  long real walk twice (`video-tests/00000.MTS` with `video-tests/purb-settings.json`) for a
+  figure. (c) Series and stepped nodes under the keeper, track above all: its `given` is
+  already there (`walk.py:136`, `:291`). (d) The whole-file footage hash. `held.py` and his
+  ticked decision stay untouched.
 - For him besides: `tests/test_graph.py::test_events_carry_start_thread_and_cpu...` failed
   once in run 8's first full run and passed after; run 8 says it asserts wall time and is not
   marked `simulation`. By CLAUDE.md that is a defect in the test or a race, his to settle.
@@ -74,7 +86,7 @@ this file where they differ.
   passes corrected two of my claims. Not for searching, not for judging a design.
 - Run the simulation: `.venv/Scripts/python.exe docs/playground/sim/sim.py 150` (torture, a line
   a scheme) and `... sim.py prices 1080p [profile]` (the table below), a few seconds each.
-- Counters: queued runs 10 of 25, the tenth in flight when this was written (his figure, 2026-11-21). No cap on design cycles, by the same word: a
+- Counters: queued runs 10 of 25, all ten landed (his figure, 2026-11-21). No cap on design cycles, by the same word: a
   cycle on the simulation is run when a slice raises a question whose answer would change it.
 - Context: `bash ~/.claude/tools/context-used.sh 300` prints what is left before the auto-compact
   window (300k by his `/autocompact` on 2026-11-21). Bring this file up to date before a step
@@ -514,7 +526,7 @@ is therefore not where I will stop; I stop after run 8 for him to try the loop, 
   None; background over `(0, live count)` so a corrected count changes it under one key
   (unrun); whether a seek and a step decode the same bits (unchecked, and it matters: a
   window seeks and a full walk steps).
-- A stopped bare walk keeps nothing (`window.py:1585`).
+- A stopped bare walk's results are not kept (`window.py:1585`); since run 10 the chunks of frame rows it filled whole are.
 
 Tried the same evening (a script in the scratchpad, not kept): 60 rows reached by a fresh
 decoder's seek and 60 by one decoder jumping about, against the same rows read in order, on
@@ -685,6 +697,7 @@ with its own limit stated. Run them in one message, in parallel.
 
 | # | What | Wall | Context, turns | Verdict |
 |---|---|---|---|---|
+| 10 | Slice 5: a bare walk's small frame rows kept in the result store and read by the next | about 8m | whole | Found that my address could not be one a chunk (the read of the cut varies by row) and put the cut's rows and the node's reach in the digest instead; found the per-user folder convention I had misnamed; said that `stepping.same` on bare results compares only folded lengths and compared the kept tables themselves. 135 lines, no change to the store. |
 | 9 | Slice 4: the window-against-full rule as a test over the registry, explicit reach on the five tools that had none | about 6m | not read | Did more than asked and said so: the check that a declared reach is not larger than the true one is stricter than mine, a tool listed as undrivable that becomes drivable fails, and it mutated smooth's reach both ways to show the messages. Named one declaration looser than the truth (kinematics after, 0 not None) and left it. This is the slice nearest his goal. |
 | 8 | Slice 3: a looping window's rows the memo let go are painted from display proxies, with the outcome and what must hold stated and the design left to it | about 7m | not read | 110 lines in `window.py`, two seam tests, suite green. It found what my prompt had wrong and said so: an overlay cannot be baked into the jpeg because each plane is shown over a running maximum, pausing never re-showed the row, and my 70 KB is 490 KB on noise. I read the whole diff; the hole it named in its own fit check is real. A prompt that states outcomes and asks for contradictions gets a better design than one that states a design. |
 | 7 | One-off over every registered tool: a window's walk against the clip's, row by row, against declared reach (`docs/findings/window-against-full.md`) | about 8m | not read | On brief and frank about what its 38 HOLDS do not show; corrected my prompt (five tools declare no reach) and found two things about how a walk is driven that I did not know. A one-off asked to say what it could not determine says it. |

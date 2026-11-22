@@ -14,8 +14,9 @@ taken here, one at a time, and its signals land in the window's slots inside the
 is one thread and the calls it makes are the same every time. A clip walk is asked and turned to
 its end at two counts of cuts with every line run and every jump back counted to its function,
 so a loop that calls nothing is counted as one that does; a function is said to grow where its
-steps a cut at the larger count pass GROWS times those at the smaller; beside it the steps of a
-window moved with either count held and with none, a figure and no verdict. The monitor's modules are
+steps a cut at the larger count pass GROWS times those at the smaller; and a window moved with the
+larger count held is not to take GROWS times the steps of one with the smaller, the steps of one
+with none held printed beside them. The monitor's modules are
 left out: the clock turns them, and what they cost a cut is not seen here. O8 to O11 are asked of
 clips of CHECKED cuts; the bare walk is bare.main's, in this process. No checkpoint is written but
 O11's and O14's, which have a document of their own: gray, threshold, detect and size, detect's
@@ -409,18 +410,21 @@ failed = False
 if LARGE:
     small, held_small, _, win_small = walked(SMALL)
     large, held_large, prof, win_large = walked(LARGE, bool(os.environ.get("MINIATURE_WHY")))
-    print(f"a window moved: {window_moved(win_small)} steps with {SMALL} cuts held, {window_moved(win_large)} with {LARGE}, "
+    moved_small, moved_large = window_moved(win_small), window_moved(win_large)
+    moved_grew = moved_large > GROWS * moved_small
+    print(f"a window moved: {moved_small} steps with {SMALL} cuts held, {moved_large} with {LARGE}, "
           f"{window_moved(opened(f'{SMALL}-unheld', SMALL))} with none held of {SMALL}")
-    print(f"{TREE.name}: {held_small} of {SMALL} cuts held, {held_large} of {LARGE}; steps a cut {sum(small.values()) / SMALL:.0f} and {sum(large.values()) / LARGE:.0f}")
+    print(f"{TREE.name}:{held_small} of {SMALL} cuts held, {held_large} of {LARGE}; steps a cut {sum(small.values()) / SMALL:.0f} and {sum(large.values()) / LARGE:.0f}")
     grew = sorted(((large[f] / LARGE) / (n / SMALL), large[f] / LARGE, n / SMALL, f) for f, n in small.items()
                   if n >= SMALL and f in large and large[f] / LARGE > GROWS * n / SMALL)
     for ratio, at_large, at_small, f in grew[::-1][:SHOWN]:
         print(f"  grows {ratio:5.1f}x  {at_small:9.1f} -> {at_large:9.1f} steps a cut  {f}")
-    failed = bool(grew) or (held_small, held_large) != (SMALL, LARGE)
+    failed = bool(grew) or moved_grew or (held_small, held_large) != (SMALL, LARGE)
     if (held_small, held_large) != (SMALL, LARGE):
         print("O7 is not shown: the cuts were not all walked and held")
     else:
-        print(f"O7 {'fails' if grew else 'holds'}: {len(grew)} functions' steps a cut grew past {GROWS}x from {SMALL} cuts to {LARGE}")
+        print(f"O7 {'fails' if grew or moved_grew else 'holds'}: {len(grew)} functions' steps a cut grew past {GROWS}x from {SMALL} cuts to {LARGE}, "
+              f"and a window moved {'grew' if moved_grew else 'did not grow'} past {GROWS}x ({moved_large / moved_small:.2f}x)")
     if prof:
         pstats.Stats(prof, stream=sys.stdout).strip_dirs().print_callers(os.environ["MINIATURE_WHY"])
 for oracle, check in (("O8", bare_and_clip), ("O9", window_first), ("O10", window_shows), ("O11", checkpoint_travels), ("O14", other_code)):

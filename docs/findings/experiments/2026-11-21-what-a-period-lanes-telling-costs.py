@@ -24,7 +24,7 @@ from sieve_player.decoder import Decoder
 from sieve_player.graph import Graph
 from sieve_player.heldwalks import gate_result
 from sieve_player.registry import cut_by, discover
-from sieve_player.worker import _clip_legs, _walking
+from sieve_player.worker import _clip_legs, _walks
 
 DOC = os.path.join(ROOT, "video-tests", "GoPro-stress-test-periods-in-period-analysis.json")
 decmod.QUIET = True
@@ -50,7 +50,8 @@ legs = _clip_legs(p)
 
 def emit_cost(plan, legs):
     t = time.perf_counter()
-    n = sum(_walking(plan, leg.walked, leg.cut) is not None for leg in legs)
+    under = _walks(plan)
+    n = sum((leg.walked, leg.cut) in under for leg in legs)
     return 1000 * (time.perf_counter() - t), n
 
 

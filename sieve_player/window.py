@@ -45,6 +45,7 @@ from .plot import Plot, Stage
 from .heldwalks import Shown, as_given, gate_result, held_chain, held_periods, listed_cuts, period_run, shown_at, window_periods
 from .worker import Worker
 
+STALE_MS = 250              # how long the cards' marks of other code may wait on a run held alone
 HOLD_MS = 2000              # how long the held runs rest, nothing new held, before they are written beside the document
 HELD_BYTES = budget.here()["held"]      # what the held runs may take together, as wire.result_bytes counts them, before the oldest go
 TELL = 0.1                  # s between the worker's tellings of a walk's rows; docs/findings/2026-11-13-a-signal-a-row.md
@@ -603,6 +604,10 @@ class PlayerWindow(QMainWindow):
         self._hold.setSingleShot(True)
         self._hold.setInterval(HOLD_MS)
         self._hold.timeout.connect(lambda: self._write_held())
+        self._stale_due = QTimer(self)            # running while a run held alone waits for the cards to be marked: the marks read the tools' files, once for however many are held meanwhile
+        self._stale_due.setSingleShot(True)
+        self._stale_due.setInterval(STALE_MS)
+        self._stale_due.timeout.connect(lambda: self._show_stale(self._chain()))
         self.timeline.setEnabled(False)
         ct.progress.setText("no video")
         if from_file:
@@ -1405,7 +1410,10 @@ class PlayerWindow(QMainWindow):
             self.window_periods.update({of: v for of, v in window_periods(self.graph.snapshot(), self.runs, *self.window_).items()
                                         if v.held and of in self.window_periods})
             self._show_lines()
-        self._show_stale(chain)
+        if moved is None:
+            self._show_stale(chain)
+        elif not self._stale_due.isActive():
+            self._stale_due.start()
         self._show_pinned()
         self._show_listed(listed, moved)
 
@@ -1709,12 +1717,21 @@ class PlayerWindow(QMainWindow):
         """Holds `results` as a run where held.Runs.hold does, under `chain`, the window's with none,
         inside a cut of rows `cut`, with `walked` as hold takes it, weighed against the others by
         every walk's chain; and one held is written once nothing more has been for HOLD_MS. A run
-        `of_clip` is a clip walk's."""
+        `of_clip` is a clip walk's. The cuts are made again only where a run that went or came has
+        a result some cutting node is cut by: no other run moves a cut."""
+        was = set(self.runs)
         if moved := self.runs.hold(start, rows, results, chain or self._chain(), cut, worth=self._chain(self._walked_nodes()), walked=walked):
             self._unwritten = True
             self._hold.start()
             self._show_held(moved)
-            self._recut(resume=of_clip)
+            gates = self._cut_by_nodes()
+            if any(nid in run.results for run in was ^ set(self.runs) for nid in gates):
+                self._recut(resume=of_clip)
+
+    def _cut_by_nodes(self):
+        """The nodes wired into a cutting node's CUT_BY input."""
+        wires = ((by, n.id) for n in self.doc.nodes if (by := registry.cut_by(self.tools.get(n.tool))))
+        return {w.src for by, nid in wires if (w := self.doc.source(nid, by[0]))}
 
     def _cut_result(self, nid, key, within):
         """What plan.plan asks of a cutting node `nid` cut by a result on a wire over `within`, a

@@ -133,19 +133,38 @@ def holding(records, row):
     return next((r for r in records if r.extent.holds(row)), None)
 
 
-def made_from(record, other):
-    """Whether `record` is `other` or a cut made from it, through any of the cuts between."""
-    return record is other or record == other or any(made_from(r, other) for r in record.made_from)
+_PLACES = {}    # id of a node's cuts -> (those cuts, each to its first place among them): asked a compute, of cuts a gate makes by the thousand
+
+
+def _places(records):
+    had = _PLACES.get(id(records))
+    if had is None or had[0] is not records:
+        if len(_PLACES) > 256:
+            _PLACES.clear()
+        places = {}
+        for i, r in enumerate(records):
+            places.setdefault(r, i)
+        had = _PLACES[id(records)] = (records, places)
+    return had[1]
+
+
+def _above(record):
+    yield record
+    for r in record.made_from:
+        yield from _above(r)
 
 
 def computed_in(records, cut, row):
     """Of `records`, a node's cuts, the one its value at `row` is computed in: its one record; or
-    the one `cut`, the cut its reader computes in, is or was made from; or with no `cut` the first
-    holding `row`. None where none is."""
+    the first `cut`, the cut its reader computes in, is or was made from; or with no `cut` the
+    first holding `row`. None where none is. With a `cut` it costs the cuts between `cut` and the
+    footage, not `records`, which is to be the same tuple from one ask to the next."""
     if len(records) == 1:
         return records[0]
     if cut is not None:
-        return next((r for r in records if made_from(cut, r)), None)
+        places = _places(records)
+        at = min((places[r] for r in _above(cut) if r in places), default=None)
+        return None if at is None else records[at]
     return holding(records, row)
 
 

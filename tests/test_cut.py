@@ -271,8 +271,12 @@ def test_a_node_above_a_period_is_walked_as_with_none_and_one_below_is_walked_ov
                 g.serving(turn[0], job.name)
                 act()
 
+    asks, ask = [], w._clip_legs._ask
+    w._clip_legs._ask = lambda leg: asks.append(leg) or ask(leg)
     w.walk_clip()
     turned()
+    w._clip_legs._ask = ask
+    assert len(asks) == 3      # each leg as it is begun, and the one behind the first counted once for all the first's rows told: no telling costs the cuts
     assert w._clip.length == 0 and periods == [2, 4]                         # the clip's own range walks no shown node for no one
     assert sorted(row for nid, row in stepped if nid == below) == [2, 3, 4, 4, 5, 6, 7] and {nid for nid, _ in stepped} == {below}
 

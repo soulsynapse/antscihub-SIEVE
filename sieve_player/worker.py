@@ -48,11 +48,18 @@ class _Scrub:
         self.failed.emit(self.row, getattr(exc, "sieve_node", ""))
 
 
-def _walking(p, nid, cut):
-    """The plan `p` with the timed Walk for its chain whose walked node is `nid` and which has `cut`
-    among its cuts; None where `p` has none, or that node is not fed."""
-    w = next((w for w in p.timed if p.entries[w.heads[0]].src == nid and cut in w.cuts), None)
-    return None if w is None or not p.entries[nid].fed else p.of(w)
+def _walks(p):
+    """(walked node, cut.Record) to (the Plan a walk of that cut runs under, its period_keys), for
+    each cut in time of the Plan `p` whose walked node is fed; the first timed Walk's where two
+    have one."""
+    out = {}
+    for w in p.timed:
+        nid = p.entries[w.heads[0]].src
+        if p.entries[nid].fed:
+            under = (sub := p.of(w), period_keys(sub))
+            for c in w.cuts:
+                out.setdefault((nid, c), under)
+    return out
 
 
 def _stacked(sub):
@@ -66,20 +73,27 @@ class _Legs:
     says is held whole, is passed over and the rest walked on; one under way is begun again where
     what its rows are stacked under moves. Its progress goes out on `signal` with the legs left that
     will be walked, and once more where the last were passed over. `given` says whether a leg is
-    given what is held of its cut."""
+    given what is held of its cut. `held()` is what Worker.give_periods was last told, a dict made
+    anew each telling. No turn's cost grows with the cuts but the first under a plan, a queue or
+    a `held()` that moved."""
 
     def __init__(self, walk, signal, held, given):
         self.walk, self.signal, self.held, self.given = walk, signal, held, given
         self.queue, self.by, self.plan, self.leg, self.under = [], ASKED, None, None, None
+        self._walks = (None, {})    # the plan _walks was asked of, and its answer
+        self._left = None           # (the plan, held(), the legs queued, how many of them will be walked) as last counted
         walk.progress = self
 
     def emit(self, done, total, ran):
-        self.signal.emit(done, total, sum(self._ask(leg) is not None for leg in self.queue))
+        now = self.plan, self.held(), len(self.queue)
+        if self._left is None or self._left[0] is not now[0] or self._left[1] is not now[1] or self._left[2] != now[2]:
+            self._left = (*now, sum(self._ask(leg) is not None for leg in self.queue))
+        self.signal.emit(done, total, self._left[3])
 
     def begin(self, legs, by):
         """Walks `legs` from the first, a leg under way halted with the rows it has standing; `by`
         as Worker.set_window's."""
-        self.queue[:], self.by = legs, by
+        self.queue[:], self.by, self._left = legs, by, None
         if self.walk.i < self.walk.length:
             self.walk.halt()
 
@@ -87,13 +101,19 @@ class _Legs:
         """Walks `legs` behind the leg under way, which goes on where `legs` has its cut and is halted where not."""
         w = self.walk
         self.queue[:] = [leg for leg in legs if w.i >= w.length or (leg.walked, leg.cut) != (w.walked, w.cut)]
+        self._left = None
+
+    def _under(self, walked, cut):
+        if self._walks[0] is not self.plan:
+            self._walks = (self.plan, _walks(self.plan))
+        return self._walks[1].get((walked, cut))
 
     def due(self, p, on=True):
         """The (job, call) steps of the lane's next turn under the Plan `p`, or None with nothing to
         walk. `on` False halts the leg under way and drops the rest."""
         w, self.plan = self.walk, p
         if w.i < w.length:
-            sub = _walking(p, w.walked, w.cut) if on else None
+            sub = (self._under(w.walked, w.cut) or (None,))[0] if on else None
             if sub is None:
                 return [(w, w.halt)]
             if _stacked(sub) != self.under:
@@ -113,10 +133,17 @@ class _Legs:
         return [(w, w.report)] if passed else None
 
     def _ask(self, leg):
-        """(the Plan `leg` is walked under, the HeldCut of it or None), or None for a leg not to walk."""
-        sub = None if leg.end <= leg.first else _walking(self.plan, leg.walked, leg.cut)
-        ask = None if sub is None else self.held(sub, leg.walked, leg.cut)
-        return None if sub is None or (ask is not None and ask.spared) else (sub, ask)
+        """(the Plan `leg` is walked under, the HeldCut of it or None), or None for a leg not to
+        walk. A HeldCut of other keys than that Plan's, or handed rows short of the cut, is None."""
+        got = None if leg.end <= leg.first else self._under(leg.walked, leg.cut)
+        if got is None:
+            return None
+        sub, keys = got
+        first, end = leg.cut.extent.rows
+        ask = self.held().get((leg.walked, (first, end)))
+        if ask is not None and (ask.keys != keys or any(len(served) != end - first for served, _ in (ask.handed or {}).values())):
+            ask = None
+        return None if ask is not None and ask.spared else (sub, ask)
 
     def _start(self, leg, sub, ask):
         w = self.walk
@@ -178,11 +205,11 @@ class Worker(QThread):
         of_period = _OfCut(self.periodReady)
         of_period.walk = _Walk(graph, name="clip", every=1 << 62, progress=None, ready=of_period,
                                refused=self.clipRefused, failed=self.failed, tell_every=tell_every, keeps=True)
-        self._clip_legs = _Legs(of_period.walk, self.periodWalked, self._held, given=True)     # every cut in time, set as the clip walk begins and on a recut
+        self._clip_legs = _Legs(of_period.walk, self.periodWalked, lambda: self._held_periods, given=True)     # every cut in time, set as the clip walk begins and on a recut
         told = _OfCut(self.windowPeriodReady)
         told.walk = _Walk(graph, name="window", every=every, progress=None, ready=told, refused=self.walkRefused,
                           failed=self.failed, tell_every=tell_every)
-        self._window_legs = _Legs(told.walk, self.windowPeriodWalked, self._held, given=False)     # walk.window_legs of the window as last asked
+        self._window_legs = _Legs(told.walk, self.windowPeriodWalked, lambda: self._held_periods, given=False)     # walk.window_legs of the window as last asked
 
     # -- GUI-side calls --------------------------------------------------
     def request_row(self, row):
@@ -370,12 +397,3 @@ class Worker(QThread):
             return "walk", [(clip, clip.halt), (clip, clip.emit)]   # the chain over the rows it stopped at: the cadence's last result is short of them
         steps = self._clip_legs.due(p, self._clip_on)
         return None if steps is None else ("walk", steps)
-
-    def _held(self, sub, nid, cut):
-        """The HeldCut give_periods was told of `cut`, a cut.Record the Plan `sub` walks from `nid`,
-        where it is of the keys `sub` has; else None."""
-        first, end = cut.extent.rows
-        ask = self._held_periods.get((nid, (first, end)))
-        if ask is None or ask.keys != period_keys(sub) or any(len(served) != end - first for served, _ in (ask.handed or {}).values()):
-            return None
-        return ask

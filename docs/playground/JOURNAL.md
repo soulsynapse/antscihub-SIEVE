@@ -399,6 +399,21 @@ Its scripts are in `Code/Scratch/sieve-adversary-2/`. Twelve items, eleven prove
     torn entry being caught by its length and checksum. `names` of 3000 entries is 130 ms and
     the walk 490 ms, paid when room is made. Left: `made-*.log` grows without end.
 
+All of it is in, and the adversary's own scripts were run again against the mended files:
+1, 2, 4, 5, 6, 7, 8, 10 and 11 no longer come out (two writers of 19 MB under 20 MB leave 0.90
+of the budget, were 1.90). Of 3 the raced case is 0 of 300; its held-open case opens a file
+name that is no longer written, so it shows nothing either way. 9 was not seen to finish: a
+lock no one can remove now raises `OSError` after a quarter past the stale time, 150 s, which
+`put` and `drop` take as no room; a holder killed still stalls another's making of room for the
+stale time, once. A put of 1 KB is 4.3 ms without the flush, the price of making a file on
+this Windows; that is paid a chunk, not a row, a row looked at being memory's alone.
+`folder_check.py 40` and the torture over 200 seeds find nothing.
+
+His note on proxies (2026-11-21): what is downstream is pulled, so a proxy is made when it is
+needed and not before; the same likely holds for overlays drawn over a frame. The aim he gave:
+a cheap laptop shows what a strong machine holding everything in memory shows, without paying
+for the loop each time round.
+
 ## A decision of his the contract ran into
 
 `docs/spec/what-a-node-declares.md:263` is ticked in his name: held results outlive an edit to a

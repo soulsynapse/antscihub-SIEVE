@@ -79,17 +79,26 @@ class Disk:
                 self.crash_in = None
                 raise Crash()
 
-    def write(self, name, value, size, worth=0.0):
+    def write(self, name, value, size, durable=False, worth=0.0):
         self.total += size - (self.size(name) or 0)
         self.files[name] = [TORN, size, self._tick(), self.low + worth, worth]
         self._step()
         self.clock[0] += self.write_seconds(size)
         self.files[name][0] = value
         self._step()
+        return True
 
     def rename(self, old, new):
         self.total -= self.files[new][1] if new in self.files else 0
         self.files[new] = self.files.pop(old)
+        return True
+
+    def budgeted(self, size):
+        pass
+
+    def touch(self, name):
+        if name in self.files:
+            self.files[name][2] = self._tick()
 
     @contextmanager
     def lock(self):
@@ -100,14 +109,15 @@ class Disk:
         finally:
             self.busy = was
 
-    def read(self, name):
+    def read(self, name, touch=True):
         if name not in self.files:
             return None
         self._meddled()
         if name not in self.files:
             return None
         value, size = self.files[name][:2]
-        self.files[name][2:4] = self._tick(), self.low + self.files[name][4]
+        if touch:
+            self.files[name][2:4] = self._tick(), self.low + self.files[name][4]
         self.clock[0] += self.profile.seek_s + size / self.profile.read_bps
         return value, size
 

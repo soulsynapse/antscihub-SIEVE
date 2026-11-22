@@ -1,7 +1,7 @@
 """The candidate store of docs/playground/contract.md: a memory tier over a disk tier, under budgets.
 
 It reaches a disk only through the object it is handed (`write`, `rename`, `read`, `names`,
-`delete`, `size`, `age`, `used`, `write_seconds`, `read_seconds`, `mark`, `marked`, `lock`), so the
+`delete`, `size`, `age`, `touch`, `used`, `budgeted`, `write_seconds`, `read_seconds`, `mark`, `marked`, `lock`), so the
 simulation hands it a simulated one and the player a real one.
 """
 import heapq
@@ -11,6 +11,7 @@ from dataclasses import dataclass
 SURE = 10      # a value costing this many times its write to make goes to disk the first time it is made
 GRACE = 2000   # the age, in the disk's own measure, past which a part or a pending manifest is a crash's leaving
 ENTRIES, MANIFESTS, PARTS = "entries/", "checkpoints/", "parts/"
+PENDING = ".pending"   # a manifest whose entries are still being filled; it names them, and is no checkpoint yet
 
 
 class Refused(Exception):
@@ -28,8 +29,9 @@ class Address:
 
 
 def address_of(name):
-    key, chunk = name[len(ENTRIES):].rsplit("/", 1)
-    return Address(key, int(chunk))
+    """The address a file under `ENTRIES` is the entry of, None of a file that is no entry's."""
+    key, _, chunk = name[len(ENTRIES):].rpartition("/")
+    return Address(key, int(chunk)) if key and chunk.isdecimal() else None
 
 
 class Store:
@@ -50,6 +52,7 @@ class Store:
         self.held_bytes = 0
         self.reserved = 0
         self.parts = 0
+        disk.budgeted(disk_budget)
 
     def get(self, address):
         if address in self.held:
@@ -77,8 +80,7 @@ class Store:
             wanted = cost >= SURE * write or (again and cost >= write and room)
             self.disk.mark(address.name)
         if wanted and self.disk.size(address.name) is None:
-            if self._make_room(size):
-                self._land(address.name, value, size)
+            if self._make_room(size) and self._land(address.name, value, size, durable=keep):
                 self.emit("put", address, "disk")
             else:
                 self.emit("refused", address, "disk")
@@ -88,7 +90,7 @@ class Store:
     def to_disk(self, address):
         """Write an entry held in memory to disk whatever the policy thinks of it; whether it is there."""
         if self.disk.size(address.name) is None and address in self.held and self._make_room(self.held[address][1]):
-            self._land(address.name, *self.held[address][:2])
+            self._land(address.name, *self.held[address][:2], durable=True)
         return self.disk.size(address.name) is not None
 
     def forget(self):
@@ -120,52 +122,68 @@ class Store:
             del self.rank[address]
             self.emit("let go", address, "memory")
         if tier in (None, "disk"):
-            with self._lock():
-                if address not in self.named() and self.disk.size(address.name) is not None:
-                    self.disk.delete(address.name)
-                    self.emit("let go", address, "disk")
+            try:
+                with self._lock():
+                    if address not in self.named() and self.disk.size(address.name) is not None:
+                        self.disk.delete(address.name)
+                        self.emit("let go", address, "disk")
+            except OSError:
+                pass
 
     def checkpoint(self, name, snapshot, addresses, sizes, fill):
         """Name `addresses`, of `sizes` bytes, and `snapshot` as a checkpoint, calling
         `fill(address)` for each not on disk. Refused before any filling, with the figures, when
         it and the checkpoints kept would pass the disk budget; refused after, naming nothing,
-        when an entry is still not on disk. The manifest lands as pending before the filling, so
-        filling one entry lets go of no other, and is finished after a look under the lock."""
+        when an entry is still not on disk, when the manifest will not land, or when `name` is a
+        checkpoint already. A pending manifest lands before the filling, so filling one entry lets
+        go of no other; the finished one lands after a look under the lock, beside it and never
+        over a checkpoint that stands."""
         kept = sum(self.disk.size(a.name) or 0 for a in self.named() - set(addresses))
         if kept + sum(sizes) > self.disk_budget:
             self.emit("refused", name, "disk")
             raise Refused(f"checkpoint {name}: its {sum(sizes)} bytes and the {kept} of the checkpoints kept "
                           f"pass a disk budget of {self.disk_budget}")
-        at = MANIFESTS + name
-        self._land(at, (snapshot, tuple(addresses), False), 0)
+        at, body = MANIFESTS + name, (snapshot, tuple(addresses))
         try:
+            if self.disk.size(at) is not None:
+                raise Refused(f"checkpoint {name}: there is one of that name; let it go first")
+            if not self._land(at + PENDING, body, 0, durable=True):
+                raise Refused(f"checkpoint {name}: its manifest could not be written")
             for address in addresses:
                 if self.disk.size(address.name) is None:
                     fill(address)
-            with self._lock():
-                absent = [a for a in addresses if self.disk.size(a.name) is None]
+                    self.disk.touch(at + PENDING)
+            try:
+                with self._lock():
+                    absent = [a for a in addresses if self.disk.size(a.name) is None]
+            except OSError as error:
+                raise Refused(f"checkpoint {name}: the folder's lock could not be taken") from error
             if absent:
                 raise Refused(f"checkpoint {name}: {len(absent)} of {len(addresses)} entries are not on disk")
+            if not self._land(at, body, 0, durable=True) or self.disk.read(at, touch=False) is None:
+                raise Refused(f"checkpoint {name}: its manifest could not be written")
         except Refused:
-            self.disk.delete(at)
             self.emit("refused", name, "disk")
             raise
-        self._land(at, (snapshot, tuple(addresses), True), 0)
+        finally:
+            self.disk.delete(at + PENDING)
 
     def release_checkpoint(self, name):
-        """Name nothing by `name` any longer; its entries are let go as any others are."""
+        """Name nothing by `name` any longer, its entries then let go as any others are; whether
+        it is gone, which it is not while another process holds its manifest open."""
         self.disk.delete(MANIFESTS + name)
+        return self.disk.size(MANIFESTS + name) is None
 
     def manifest(self, name):
         """(snapshot, addresses) of a finished checkpoint, None of one unfinished or absent."""
-        found = self.disk.read(MANIFESTS + name)
-        return found[0][:2] if found is not None and found[0][2] else None
+        found = self.disk.read(MANIFESTS + name, touch=False)
+        return found[0] if found is not None else None
 
     def named(self):
         """Every address a manifest on the disk names, a pending one's among them."""
         out = set()
         for name in self.disk.names(MANIFESTS):
-            found = self.disk.read(name)
+            found = self.disk.read(name, touch=False)
             if found is not None:
                 out |= set(found[0][1])
         return out
@@ -175,8 +193,8 @@ class Store:
         finished checkpoint missing any."""
         out = {}
         for name in self.disk.names(MANIFESTS):
-            found = self.disk.read(name)
-            if found is not None and found[0][2]:
+            found = None if name.endswith(PENDING) else self.disk.read(name, touch=False)
+            if found is not None:
                 missing = [a for a in found[0][1] if self.disk.size(a.name) is None]
                 if missing:
                     out[name[len(MANIFESTS):]] = missing
@@ -185,14 +203,13 @@ class Store:
     def _lock(self):
         return self.disk.lock() if self.locked else nullcontext()
 
-    def _land(self, name, value, size):
+    def _land(self, name, value, size, durable=False):
+        """Whether `value` is now under `name`, whole; a disk that refuses the write is no error."""
         if not self.atomic:
-            self.disk.write(name, value, size)
-            return
+            return self.disk.write(name, value, size, durable)
         self.parts += 1
         part = f"{PARTS}{self.writer}-{self.parts}"
-        self.disk.write(part, value, size)
-        self.disk.rename(part, name)
+        return self.disk.write(part, value, size, durable) and self.disk.rename(part, name)
 
     def _make_room(self, size):
         """Whether `size` more bytes fit the disk budget, after letting go under the lock of what
@@ -202,21 +219,25 @@ class Store:
             return False
         if self.disk.used() + size <= self.disk_budget:
             return True
-        with self._lock():
-            for name in self.disk.names(PARTS) + self.disk.names(MANIFESTS):
-                age = self.disk.age(name)
-                if age is not None and age > GRACE and (name.startswith(PARTS) or not self.disk.read(name)[0][2]):
+        try:
+            with self._lock():
+                for name in self.disk.names(PARTS) + [n for n in self.disk.names(MANIFESTS) if n.endswith(PENDING)]:
+                    age = self.disk.age(name)
+                    if age is not None and age > GRACE:
+                        self.disk.delete(name)
+                named = self.named()
+                loose = sorted(((age, n) for n in self.disk.names(ENTRIES)
+                                if (age := self.disk.age(n)) is not None
+                                and (a := address_of(n)) is not None and a not in named), reverse=True)
+                used = self.disk.used()
+                for _, name in loose:
+                    if used + size <= self.disk_budget * 0.9:
+                        break
+                    used -= self.disk.size(name) or 0
                     self.disk.delete(name)
-            named = self.named()
-            loose = sorted(((age, n) for n in self.disk.names(ENTRIES)
-                            if (age := self.disk.age(n)) is not None and address_of(n) not in named), reverse=True)
-            used = self.disk.used()
-            for _, name in loose:
-                if used + size <= self.disk_budget * 0.9:
-                    break
-                used -= self.disk.size(name) or 0
-                self.disk.delete(name)
-                self.emit("let go", address_of(name), "disk")
+                    self.emit("let go", address_of(name), "disk")
+        except OSError:
+            return False
         return self.disk.used() + size <= self.disk_budget
 
     def _shrink(self, size):

@@ -117,6 +117,32 @@ print and a commit message's to hold, not this file's.
 9. What is proven here and no part of the question, to be put to him as a merge of its own: the
    850 periods' fix, `budget.py`, the checkpoint, the display proxies.
 
+## Done when
+
+A proposal of mine, his to cut. The question the branch was cut for is answered, one store is
+not needed, and the finding holds why. What is left is for the answer to stand on a tree that
+passes its own checks, and for the playground to go.
+
+1. The miniature holds O7 to O11 and O14 under `period`, `pad1`, `pad3` and `nested`. What fails,
+   by the miniature's own print and not by this line:
+   - nested, O7: a plan made whole at each gate's run held. The cuts of one cut in time are made
+     again without the others'.
+   - nested and `period`, the window's cuts walked again as each turns from provisional to held:
+     the worker walks again the cut that moved and no other. Not an oracle yet; the miniature
+     counts it first.
+   - `pad1`, O7 of a window moved: unread.
+   - `pad1` and `pad3`, O10 between two of the gate's runs: waits on item 2's first ruling.
+2. His rulings, each changing what item 1 builds: whether a cutting tool declares a reach over
+   the result that cuts it, or a window says best effort wherever a cutter may read past it;
+   whether a gate's held run is the document's and never let go for a budget; whether a cutter
+   of two gates is wanted at all.
+3. The period spec's box the tree contradicts, and the two one-offs that read what is gone, are
+   settled by him.
+4. The playground goes: this journal and `contract.md` deleted, what of them still binds said
+   where it binds; `sim/miniature.py` and `sim/cutters/` kept as a one-off under
+   `docs/findings/experiments/` or deleted, his to say.
+5. The branch reaches `v5` as he chooses, whole or the proven fixes first.
+
 Not to be done on this machine: long walks or timing runs for their own sake. He said no stress
 testing, and a restart now and then is fine.
 

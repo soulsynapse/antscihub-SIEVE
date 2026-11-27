@@ -152,7 +152,12 @@ and the list below is the one it left. The order is the order of work.
      of every provisional cut, `period`'s too.
    - whether a gate's held run is the document's and never let go for a budget.
    - whether a cutter of two gates is wanted at all.
-2. Defects, each with a run in `sim/adversary.py` or the miniature that shows it:
+2. Defects, each with a run in `sim/adversary.py` or the miniature that shows it. Done, to be
+   verified by those runs: the first (`_show_stale` reads every walked node's chain; the
+   miniature's O14 asks it below a cut) and the third (`plan` refuses a node whose `cut_extents`
+   raised, its standing "cuts nothing:" and what was raised; `region` raises its "no geometry"
+   there too, and a region of no geometry is no longer fed where its `run` used to raise, a
+   change he can see; the registry README does not say the rule yet, item 4). The rest are open:
    - a result made under a tool's older code is not marked below a cut in time (`_show_stale` is
      handed the chain no cut in time is in). His "Mark stale." does not hold under a period.
    - the key, as ruled in item 1.

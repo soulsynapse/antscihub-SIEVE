@@ -206,6 +206,8 @@ def key_params(params):
 
 
 def cut_extents(params, result):
+    if not params["plate"]:
+        raise ValueError("no geometry; wire a file selector into geometry")
     return [{"rect": served(params)}]
 
 

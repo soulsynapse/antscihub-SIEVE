@@ -337,8 +337,9 @@ def plan(doc, tools, base, cut_file=None, cut_result=None, footage=None, count=N
                                    for r, g in zip(above, given) if g is not None or gate is None]
                         file = file_of(nid) if nid not in provisional and sum(len(xs) for *_, xs in extents) == 1 else None
                         made[nid] = tuple(_made(r, x, g, count, file) for r, g, xs in extents for x in xs)
-                    except Exception:       # a tool's rule is user code: one that fails cuts nothing
-                        pass
+                    except Exception as e:  # a tool's rule is user code: one that fails cuts nothing, and the node says what it raised
+                        provisional.pop(nid, None)
+                        refused[nid] = f"cuts nothing: {e}" if str(e) else f"cuts nothing: its cut_extents raised {type(e).__name__}"
         return made[nid]
 
     reaches = {}

@@ -136,8 +136,7 @@ def test_a_frame_of_another_shape_than_the_plate_is_refused_and_said():
     assert g.standing("region") == "" and g.compute("region", 0).shape == (H, W, 3)
     doc.node("region").params["plate"] = []
     g.sync()
-    with pytest.raises(ValueError, match="no geometry"):
-        g.compute("region", 0)
+    assert "no geometry" in g.standing("region") and not g.snapshot().entries["region"].fed
 
 
 def test_a_region_is_keyed_by_the_rect_it_cuts_and_run_reads_no_more_of_its_params():

@@ -1,6 +1,7 @@
-# Playground: one store
+# Playground: a back end he does not think about
 
-Branch `v5-playground-one-store`, cut from `v5`. Notes to resume from, not rules: where the tree
+Branch `v5-playground-one-store`, cut from `v5`; the name is the question it was cut to ask,
+answered no, and not what it builds. Notes to resume from, not rules: where the tree
 or the work shows a line here wrong, the line goes. Deleted before anything merges. State is
 verified with `git log --oneline v5..HEAD`, never taken from this file.
 
@@ -15,9 +16,25 @@ collaborator's weak computer runs it and a strong one too; above all no worry as
 3. Walk bare and walk clip keep working as tools are added.
 4. What is likely to be revisited does not cost the user much.
 
-Results are held in several separate places, each with its own rule. His suspicion, and the
-evening of the 850 periods is evidence for it: consolidating them is a simplification everything
-benefits from. "One store" is a name for that and not the goal.
+Whether holding every result in one store would get him that was the branch's first question. It
+would not: `docs/findings/2026-11-27-one-store-was-simulated-and-taken-out.md`. No store is built
+here and none is argued for.
+
+The goal, restated with him on 2026-11-27 so that each part can fail a check:
+
+- G1. Adding a tool of a kind the player has, frame, series, stepped, cutting, cut by a result,
+  serving a file, edits no file of `sieve_player/` and needs no rule of keys, held runs,
+  checkpoints or what is computed again but those `sieve_player/registry/README.md` says a tool
+  declares.
+- G2. Ordinary work, a scrub, the window moved, a param edited, a wire made or broken, a clip
+  walk or a bare one, a save, a reopen, the document handed to a colleague, never shows a result
+  that is wrong, missing or of older code without saying so; where the player cannot show a
+  thing yet it says that, and what will make it appear.
+- G3. What an ordinary act costs does not grow with what was done before it, the cuts, runs and
+  nodes there are; and nothing likely to be looked at again is computed again without need.
+
+"Never thinks about the back end" whole is more than this branch. The branch is done by "Done
+when" below, which is G1 to G3 for the kinds of tool the tree has now.
 
 The branch is mine to build: forks are decided here with the reasoning said to him, specs are
 historical referents and not rulings, and player-visible decisions are reported so he can
@@ -25,18 +42,15 @@ overrule them. His freeing me from a spec's decision endorses neither side of it
 
 ## The oracles
 
-O1 to O6 were written of a machine-wide store of results, which is gone; none is shown to hold.
-O2, O3 and O6 have no subject left: there is no entry to drop, no checkpoint of the store's, no
-second writer of one address. O1, O4 and O5 read on as claims about the memo and the checkpoint
-that nothing checks.
+Each oracle is of G1, G2 or G3. O2, O3 and O6 were of a store's entries and went with it.
 
-- O1. What is handed out for an address equals a cold recompute of it, under any sequence of
-  edit, scrub, walk, evict, crash mid-write and reopen.
-- O2. Dropping any entry no checkpoint names changes speed and nothing else.
-- O3. A checkpoint is served after a reopen, or the store says it is gone; never a wrong one.
-- O4. Adding a tool changes no file of the store, the walk or the monitor.
-- O5. Memory held stays under the budget given; a budget too small for one row's work is said.
-- O6. Two processes writing the same address leave one whole entry.
+- O1, of G2. What is held or shown under a key equals what a fresh player computes of the same
+  document, after any edit. Fails for a cutting tool whose `run` changes the frame; the
+  miniature does not ask it yet.
+- O4, of G1. A tool of a kind the player has is added with no edit of `sieve_player/`. Asked by
+  the cutters of `sim/cutters/`; no check asks it of the other kinds.
+- O5, of G3. Memory held stays under the budget given; a budget too small for one row's work is
+  said. Nothing checks it.
 - O7, from the 850 periods: what one more cut, run or node costs a turn of either thread does
   not grow with how many there are. The miniature asks it of a clip walk's steps a cut, and of a
   window moved, whose steps with 800 cuts held are not to pass 1.5 times those with 200. A window
@@ -77,10 +91,10 @@ that nothing checks.
 
 `sim/miniature.py` is the player's own window, worker, plan, held runs and tools over a clip made
 for it, the worker's turns taken on one thread, and it says which of O7 to O11 and O14 hold. A defect
-found on a real document is pinned there. An alternative holder goes behind the seam the held
-runs sit behind and is driven against the same checks.
+found on a real document is pinned there.
 
-The question the branch was cut to answer is whether one store is needed at all. The earlier runs
+What follows is the record of what the cutters showed; the list of work is "Done when". The
+question the branch was cut to answer was whether one store is needed at all. The earlier runs
 tested a store and never the thing he asked for, a tool added without the back end being thought
 of; the plan below tests that, by cutting tools that are not `period` driven through the miniature
 (`MINIATURE_CUTTER`, the tools under `sim/cutters/`). The figures of a run are the miniature's to

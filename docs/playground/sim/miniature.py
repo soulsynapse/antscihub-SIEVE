@@ -389,10 +389,11 @@ EVENTS = sys.monitoring.events.LINE | sys.monitoring.events.JUMP
 CLOCKED = ("machine.py", "ledger.py", "catalogue.py")      # the monitor's: turned by the clock, so their steps follow how long a run took
 
 
-def named(code):
+def named(code, frame):
     fn = code.co_filename
-    if fn == "<string>":
-        return f"generated:{code.co_name}"      # a dataclass's __eq__, which a search by equality runs once a candidate
+    if fn == "<string>":      # a dataclass's __eq__, which a search by equality runs once a candidate; the monitor's own are left out with its modules
+        of = type(frame.f_locals.get("self")).__module__.rsplit(".", 1)[-1] + ".py"
+        return None if of in CLOCKED else f"generated:{code.co_name}"
     own = "sieve_player" in fn or os.sep + "tools" + os.sep in fn
     return f"{Path(fn).name}:{code.co_name}" if own and Path(fn).name not in CLOCKED else None
 
@@ -405,7 +406,7 @@ def stepped(act, prof=None):
     def step(code, *_):
         name = names.get(code)
         if name is None:
-            name = names[code] = named(code) or False
+            name = names[code] = named(code, sys._getframe(1)) or False
         if name is False:
             return sys.monitoring.DISABLE
         steps[name] = steps.get(name, 0) + 1

@@ -326,6 +326,23 @@ def T():
             print(f"    {1000 * cum:7.1f} ms in all, {1000 * own:6.1f} its own, {calls:6d} calls: {Path(file).name}:{fn}")
 
 
+def W():
+    """Which functions' steps grow over a window moved, with 200 and 800 cuts held, and who makes the dataclasses made at 800."""
+    import cProfile, pstats
+    out = {}
+    for cuts in (200, 800):
+        win = opened(f"W{cuts}", cuts)
+        win._toggle_clip(); settled(win)
+        prof = cProfile.Profile()
+        out[cuts] = stepped(lambda: (win.set_window(win.count // 2, win.window_[1], by=HAND), settled(win)), prof)
+    print(f"  in all: {sum(out[200].values())} and {sum(out[800].values())}")
+    for more, f in sorted(((n - out[200].get(f, 0), f) for f, n in out[800].items()), reverse=True)[:6]:
+        print(f"    {more:7d} more steps, {out[200].get(f, 0)} to {out[800][f]}: {f}")
+    for (file, line, fn), (_, calls, own, cum, callers) in pstats.Stats(prof).stats.items():
+        if file == "<string>" and fn == "__init__":
+            print(f"    {calls} calls of a dataclass's __init__, from", sorted(((n[0], Path(c[0]).name, c[2]) for c, n in callers.items()), reverse=True)[:5])
+
+
 for name in WHICH:
     fn = globals()[name]
     print(f"== {name}: {fn.__doc__}  (cutter {CUTTER})")

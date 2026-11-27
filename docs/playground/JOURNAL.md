@@ -175,7 +175,11 @@ and the list below is the one it left. The order is the order of work.
      again without the others'.
    - the window's cuts walked again as each turns from provisional to held: the worker walks
      again the cut that moved and no other; the miniature counts walks of a cut unmoved, none.
-   - `pad1`, O7 of a window moved: unread.
+   - `pad1`, O7 of a window moved: read, and holds. What grew was the monitor's ledger, a
+     dataclass's `__init__` made from `ledger._span`, counted because generated code names no
+     module; the miniature now leaves out the monitor's generated code with its modules. Why the
+     ledger made more of them under `pad1` at the larger count and none more under `period` is
+     unread, and is the monitor's cost, which the miniature does not ask (`sim/adversary.py W`).
    - `pad1` and `pad3`, O10 between two of the gate's runs, as item 1 rules.
 3. The miniature asks what it did not: O11 and O14 of the cutter's own document, which they are
    blind to; O1 as an edited player against a fresh one, with a cutter that changes the frame; O7

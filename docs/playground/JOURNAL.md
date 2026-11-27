@@ -123,25 +123,51 @@ A proposal of mine, his to cut. The question the branch was cut for is answered,
 not needed, and the finding holds why. What is left is for the answer to stand on a tree that
 passes its own checks, and for the playground to go.
 
-1. The miniature holds O7 to O11 and O14 under `period`, `pad1`, `pad3` and `nested`. What fails,
-   by the miniature's own print and not by this line:
-   - nested, O7: a plan made whole at each gate's run held. The cuts of one cut in time are made
+An adversary was set on the first form of this list, told to assume it done; what it proved is
+`docs/findings/2026-11-27-an-adversary-against-the-plan-to-finish.md`, its runs `sim/adversary.py`,
+and the list below is the one it left. The order is the order of work.
+
+1. His rulings first, each changing what is built below:
+   - how the player knows a cutting tool hands down what it reads. It takes any tool that cuts
+     rows alone for one (`plan.py`'s `in_time_alone`) and leaves it out of the keys below, so one
+     whose `run` changes the frame serves the old values after its param is edited. Mine to
+     recommend: a cutting tool with no `run` hands down what it reads and no other does, a rule
+     taken away and not one added; `period`'s check of its file's rows moves to `cut_extents`.
+   - whether a cutting tool declares a reach over the result that cuts it. Without one the player
+     cannot tell which cutter reads past a window's rows, and to say best effort it must say it
+     of every provisional cut, `period`'s too.
+   - whether a gate's held run is the document's and never let go for a budget.
+   - whether a cutter of two gates is wanted at all.
+2. Defects, each with a run in `sim/adversary.py` or the miniature that shows it:
+   - a result made under a tool's older code is not marked below a cut in time (`_show_stale` is
+     handed the chain no cut in time is in). His "Mark stale." does not hold under a period.
+   - the key, as ruled in item 1.
+   - a cutting tool that raises in `cut_extents`, or one with no path input and its gate unwired,
+     passes the whole footage and has no standing. The standing says what the tool raised.
+   - a param edited costs the window's thread more the more cuts are held (`_show_held` asked of
+     every cut).
+   - nested: a plan made whole at each gate's run held; the cuts of one cut in time are made
      again without the others'.
-   - nested and `period`, the window's cuts walked again as each turns from provisional to held:
-     the worker walks again the cut that moved and no other. Not an oracle yet; the miniature
-     counts it first.
+   - the window's cuts walked again as each turns from provisional to held: the worker walks
+     again the cut that moved and no other; the miniature counts walks of a cut unmoved, none.
    - `pad1`, O7 of a window moved: unread.
-   - `pad1` and `pad3`, O10 between two of the gate's runs: waits on item 2's first ruling.
-2. His rulings, each changing what item 1 builds: whether a cutting tool declares a reach over
-   the result that cuts it, or a window says best effort wherever a cutter may read past it;
-   whether a gate's held run is the document's and never let go for a budget; whether a cutter
-   of two gates is wanted at all.
-3. The period spec's box the tree contradicts, and the two one-offs that read what is gone, are
-   settled by him.
-4. The playground goes: this journal and `contract.md` deleted, what of them still binds said
-   where it binds; `sim/miniature.py` and `sim/cutters/` kept as a one-off under
+   - `pad1` and `pad3`, O10 between two of the gate's runs, as item 1 rules.
+3. The miniature asks what it did not: O11 and O14 of the cutter's own document, which they are
+   blind to; O1 as an edited player against a fresh one, with a cutter that changes the frame; O7
+   of a param edited; a cutter that raises. Then it holds every oracle under every cutter.
+4. `sieve_player/registry/README.md` says what a cutting tool declares and what the player does
+   of it, every rule items 1 and 2 leave: adding a tool is to need that file and no other.
+5. A seam test of a cutting tool that is not `period`, small, so what the miniature showed
+   outlives it: `tests/` holds none.
+6. The period spec's box the tree contradicts, the two one-offs that read what is gone, and what
+   "Known open, mine" still lists are each settled or carried out of this file to where they bind.
+7. The playground goes: this journal and `contract.md` deleted; `sim/` kept as one-offs under
    `docs/findings/experiments/` or deleted, his to say.
-5. The branch reaches `v5` as he chooses, whole or the proven fixes first.
+8. The branch reaches `v5` as he chooses, whole or the proven fixes first.
+
+Not asked by any of it, and said so: O5, the budget on a weak machine; a tool of unbounded reach
+below a cut; a checkpoint deleted or footage replaced before a reopen; periods of a file that
+overlap.
 
 Not to be done on this machine: long walks or timing runs for their own sake. He said no stress
 testing, and a restart now and then is fine.

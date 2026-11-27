@@ -109,10 +109,9 @@ print and a commit message's to hold, not this file's.
    `plan`'s `cut_result`, so letting it go changes results and not speed alone, where every other
    holder is a cache. The referent is an analysis written into the document (Nuke's CurveTool and
    Tracker write knobs), never let go for a budget; a provisional cut is its preview.
-7. A finding of why the machine-wide store was built in simulation and taken out, from the
-   commits of this branch, before the journal that held it is deleted.
-8. `contract.md` says a tool's code is in the key, against his ruling; its lines of the store and
-   the address describe what was taken out. Cut to what is still a hypothesis, the ask.
+7. Done: `docs/findings/2026-11-27-one-store-was-simulated-and-taken-out.md`. Two one-offs it
+   names read a module and a variable the tree no longer has; whether they go is his.
+8. Done: `contract.md` is the address and the ask, without the store.
 9. What is proven here and no part of the question, to be put to him as a merge of its own: the
    850 periods' fix, `budget.py`, the checkpoint, the display proxies.
 

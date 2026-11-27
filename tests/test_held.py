@@ -168,3 +168,15 @@ def test_a_node_is_marked_by_the_code_its_held_result_was_made_under_and_so_is_e
     assert marked({"code": made}, {**now, "other": "o2", "drawn": "d2"}) == set()      # neither is above a held result
     assert marked({}) == marked({"code": None}) == {"blobs", "track", "count", "drawn"}     # a result that says nothing of its code
     assert marked({}, keys={"track": "left", "count": "left"}) == set()                 # held under keys the chain has left
+
+
+def test_a_gate_inside_a_cut_in_time_is_answered_by_the_windows_walk_of_that_cut_alone():
+    from sieve_player.heldwalks import Shown, window_gate_result
+    root = cut.Record("f")
+    a, b = root.cut(rows=(8, 12)), root.cut(rows=(16, 20))
+    r = {"signal": np.arange(3.0), "key": "k"}
+    shown = {("gray", a): Shown(9, {"gate": r}, frozenset(), False), ("gray", b): Shown(16, {}, frozenset(), False)}
+    assert window_gate_result({}, 0, shown, "gate", "k", a) == (r, (9, 12))
+    assert window_gate_result({}, 0, shown, "gate", "other", a) is None
+    assert window_gate_result({"gate": r}, 0, shown, "gate", "k", b) is None
+    assert window_gate_result({"gate": r}, 4, shown, "gate", "k", root) == (r, (4, 7))

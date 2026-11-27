@@ -93,9 +93,15 @@ print and a commit message's to hold, not this file's.
 2. A cut reaching past its gate's run is not shown by a window that holds none of the run, and
    nothing says so: `cut_extents` declares no reach over the result it is handed, so a
    provisional cut is made of the window's rows of the gate as if they were all of it.
-3. O10 is open for a gate inside a cut in time: a cutting node whose CUT_BY wire's node is below
-   another cut in time is answered by held runs alone (`heldwalks.window_gate_result` answers
-   none for a cut in time) and the window shows nothing below it until that cut is walked whole.
+3. Done, to be verified by the miniature under `nested`: a gate inside a cut in time is answered
+   by the window's walk of that cut (`heldwalks.window_gate_result` reads the window's
+   `window_periods`), the cuts made again once a pass where a result moved (`cuts_alike`), and
+   what the window walked of a cut kept when the plan moves under others (`walked_before`).
+   Open under it, both seen in the miniature's steps a cut of a nested clip walk: `gate_result`
+   looks through every held run for each cut a plan asks of, so a plan costs the square of the
+   cuts, as it did before this; and each of the window's cuts turning from provisional to held
+   has the worker walk every cut of the window again, a cost of the window's size and not of the
+   clip's, which nesting makes larger.
 4. A window moved grew past O7's bound under `pad1` and not under `pad3` or `period`; unread.
 5. `registry.cut_by` answers a tool's first CUT_BY input and no other: a cutter of two gates has
    no way in. Unbuilt, and whether one is wanted is his.

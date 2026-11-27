@@ -5,6 +5,8 @@ of the one holding a row, and the result a cutting node is cut by, held or as th
 No Qt; the window composes it with the worker."""
 from typing import NamedTuple
 
+import numpy as np
+
 from . import held, wire
 from .cut import among, touching
 from .walk import WALKED, HeldCut, period_keys, stacked_key, window_legs
@@ -117,13 +119,44 @@ def gate_result(runs, src, key, within, count):
     return None if run is None else run.results[src]
 
 
-def window_gate_result(results, start, src, key, within):
+def window_gate_result(results, start, shown, src, key, within):
     """(the result of `src` under `key` over the cut.Record `within`, the footage rows it is over)
-    as the window's own walk's `results` from `start` have it, for a `within` of every row; None
-    for a cut in time, whose result the window's walk of it does not answer, and where the window
-    has no such result."""
+    as the window walked it: for a `within` of every row its own walk's `results` from `start`,
+    and for a cut in time what `shown`, as window_periods answers, has of that cut. None where the
+    window has no such result."""
+    if within.extent.rows is not None:
+        rows = within.extent.rows       # compared first: a record's equality reads every cut it was made from
+        of = next((v for (_, c), v in shown.items() if c.extent.rows == rows and c == within), None)
+        start, results = (of.start, of.results) if of is not None else (start, {})
     r = results.get(src)
-    return (r, (start, start + len(r["signal"]))) if within.extent.rows is None and held.good(r, key) else None
+    return (r, (start, start + len(r["signal"]))) if held.good(r, key) else None
+
+
+def cuts_alike(a, b):
+    """Whether the results `a` and `b` of one node, either None, cut a node they are wired into
+    alike: one key, and the signal and the gate of one equal to the other's."""
+    if a is None or b is None or a.get("key") != b.get("key"):
+        return False
+
+    def equal(f):
+        x, y = a.get(f), b.get(f)
+        if x is None or y is None:
+            return x is y
+        x, y = np.asarray(x), np.asarray(y)
+        return x.shape == y.shape and bool(np.array_equal(x, y, equal_nan=x.dtype.kind == "f" and y.dtype.kind == "f"))
+    return equal("signal") and equal("gate")
+
+
+def walked_before(shown, was, key_of):
+    """`shown`, as window_periods answers, with what `was`, an earlier answer, has of the window's
+    own walk of a cut both show from one row, under the keys `key_of` answers of its nodes now: a
+    plan moved under other cuts leaves what the window walked of this one."""
+    out = dict(shown)
+    for of, v in shown.items():
+        had = was.get(of)
+        if had is not None and not v.held and not had.held and had.start == v.start and not v.results:
+            out[of] = v._replace(results={nid: r for nid, r in had.results.items() if held.good(r, key_of(nid))})
+    return out
 
 
 def window_periods(p, runs, s, n):

@@ -42,7 +42,7 @@ from .theme import GAP, PAD, ROW_H, readout
 from .timeline import Timeline
 from .trace import Dump
 from .plot import Plot, Stage
-from .heldwalks import Shown, as_given, gate_result, held_chain, held_periods, listed_cuts, period_run, shown_at, touched_periods, window_gate_result, window_periods
+from .heldwalks import Shown, as_given, gate_result, held_chain, held_periods, listed_cuts, period_run, cuts_alike, shown_at, touched_periods, walked_before, window_gate_result, window_periods
 from .worker import Worker
 
 STALE_MS = 250              # how long the cards' marks of other code may wait on a run held alone
@@ -490,6 +490,7 @@ class PlayerWindow(QMainWindow):
         self.results, self.result_start = {}, 0   # node id -> the series chain's results, and the row they start at
         self.clip_results = {}                    # the same over the clip walk's rows, from row 0; {} when there are none
         self.window_periods = {}                  # what the window shows of each cut in time it overlaps, as heldwalks.window_periods has it
+        self._moved_in_periods = set()            # nodes whose result the window walked of a cut in time since the cuts were last made of them; a plan is asked once a pass, each costing every cut
         self._clip_asked = False                  # a clip walk was asked for and has not finished or been stopped
         self._of_plan = None                      # the Plan _of_cuts was answered of
         self._of_cuts = (None, None, {})          # (the walked nodes' chain and the count, held_periods, node -> listed_cuts) as _show_held last answered them; the first None once the runs are taken whole
@@ -958,7 +959,7 @@ class PlayerWindow(QMainWindow):
         """The plan moved under the cuts in time and under nothing either own range walks: each lane
         walks the cuts the plan now has that the runs do not hold, and neither own range begins again."""
         self._restate()
-        self.window_periods = window_periods(self.graph.snapshot(), self.runs, *self.window_)
+        self.window_periods = walked_before(window_periods(self.graph.snapshot(), self.runs, *self.window_), self.window_periods, self._key)
         self._show_held()
         self.worker.recut()
         self.goto(self.row, commit=True)
@@ -1677,10 +1678,16 @@ class PlayerWindow(QMainWindow):
 
     def _window_period_ready(self, results, start, of, fps):
         """The window's walk of one cut in time, `of` as window_periods keys it; one of a window
-        since left, or of a cut whose walk is held, is dropped."""
+        since left, or of a cut whose walk is held, is dropped. Once every cut the window walks has
+        its results, the cuts are made again where a result among them cuts a node otherwise than
+        the one the window had of that cut."""
         got = self.window_periods.get(of)
         if got is not None and not got.held and got.start == start:
+            self._moved_in_periods |= {nid for nid, r in results.items() if isinstance(r, dict) and not cuts_alike(got.results.get(nid), r)}
             self.window_periods[of] = Shown(start, results, got.best, False)
+            if self._moved_in_periods and all(v.held or v.results for v in self.window_periods.values()):
+                moved, self._moved_in_periods = self._moved_in_periods, set()
+                self._cut_again(moved)
             self._show_lines()
             self._update_display()
             self._show_pinned()
@@ -1769,13 +1776,13 @@ class PlayerWindow(QMainWindow):
         """What plan.plan asks of a cutting node `nid` cut by a result on a wire over `within`, a
         cut.Record: the result of the node wired there under `key`, as a held run from row 0 to the
         clip's last row has it, or for a cut in time a run of that cut walked whole; with neither,
-        as heldwalks.window_gate_result has it, a plan.Provisional; None with none."""
+        as the window walked it, by heldwalks.window_gate_result, a plan.Provisional; None with none."""
         by = registry.cut_by(self.tools.get(self.doc.node(nid).tool))
         w = by and self.doc.source(nid, by[0])
         if not w:
             return None
         got = gate_result(self.runs, w.src, key, within, self.count)
-        if got is None and (seen := window_gate_result(self.results, self.result_start, w.src, key, within)):
+        if got is None and (seen := window_gate_result(self.results, self.result_start, self.window_periods, w.src, key, within)):
             return Provisional(*seen)
         return got
 

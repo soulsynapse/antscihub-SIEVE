@@ -15,7 +15,8 @@ feeds; the value is called with the picked file and answers the params to merge.
 with `CUT_BY` has one input more, which no row is read through: the result wired into it over
 each cut the node reads is what its `cut_extents` is handed, once a cut, and a result over a cut in
 time counts its rows from that cut's first, the rows answered of it lifted to the footage's by the
-player. A series tool
+player. A `cut_extents` that raises cuts nothing: its node is refused, its standing what was
+raised, and no node below it is fed. A series tool
 that steps says `step` beside `run`: handed the state it returned for the row before, None at the
 first, one folded row and its index, it returns the next state and that row's share of `run`'s
 result, so the shares accumulated over a series equal `run` over it; `run` stays mandatory and is

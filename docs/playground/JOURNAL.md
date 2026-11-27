@@ -102,7 +102,9 @@ print and a commit message's to hold, not this file's.
 
 1. Done, to be verified by running it: a `pad` cutter, each of the gate's runs widened so a cut
    reads rows its gate does not keep, disjoint (`pad1`) and overlapping (`pad3`), and a `period`
-   under a `period` (`nested`). No module of `sieve_player` names a tool that cuts; the player
+   under a `period` (`nested`). No module of `sieve_player` asks a cutting tool's name to walk or hold what it cuts
+   (`document.py` names `region` to read an older document, and `plan`'s standing says "periods"
+   of any cutter's cuts); the player
    knows one by `cut_extents` and `CUT_BY` alone. What the cutters showed is items 2 to 4.
 2. A cut reaching past its gate's run is not shown by a window that holds none of the run, and
    nothing says so: `cut_extents` declares no reach over the result it is handed, so a
@@ -163,8 +165,12 @@ and the list below is the one it left. The order is the order of work.
    - the key, as ruled in item 1.
    - a cutting tool that raises in `cut_extents`, or one with no path input and its gate unwired,
      passes the whole footage and has no standing. The standing says what the tool raised.
-   - a param edited costs the window's thread more the more cuts are held (`_show_held` asked of
-     every cut).
+   - a param edited costs the window's thread more the more cuts are held. Less than it did and
+     not flat: `_show_held` answers of the window's cuts at once and of the rest when
+     `_whole_due` runs out, the clip lane walking nothing meanwhile; `sim/adversary.py T` says
+     the milliseconds by cuts held. What still grows is the plan made whole at each sync and
+     `Runs.spans` over every run. A card's values in every cut and its mark of other code wait
+     on the same timer, a change he can see.
    - nested: a plan made whole at each gate's run held; the cuts of one cut in time are made
      again without the others'.
    - the window's cuts walked again as each turns from provisional to held: the worker walks

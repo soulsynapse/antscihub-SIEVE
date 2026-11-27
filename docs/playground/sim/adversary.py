@@ -302,6 +302,30 @@ def H2():
         print("  most steps at", k, top[k])
 
 
+def T():
+    """Milliseconds on the window's own thread, no worker turn taken, of one edit below the cuts, the least of five, by cuts held."""
+    import time
+    G["held"].File.write = WRITE
+    for cuts in (100, 400, 1600):
+        win = opened(f"T{cuts}", cuts)
+        win._toggle_clip(); settled(win)
+        took = []
+        for _ in range(5):
+            at = time.perf_counter()
+            win.doc.node("smooth").params["reach"] += 2; win._params_changed("smooth")
+            took.append(1000 * (time.perf_counter() - at))
+            settled(win)
+        print(f"  {cuts} cuts held: {min(took):.1f} ms")
+    import cProfile, pstats
+    prof = cProfile.Profile()
+    win.doc.node("smooth").params["reach"] += 2
+    prof.runcall(win._params_changed, "smooth")
+    rows = sorted(pstats.Stats(prof).stats.items(), key=lambda kv: -kv[1][3])
+    for (file, line, fn), (_, calls, own, cum, _) in rows[:22]:
+        if "sieve_player" in file:
+            print(f"    {1000 * cum:7.1f} ms in all, {1000 * own:6.1f} its own, {calls:6d} calls: {Path(file).name}:{fn}")
+
+
 for name in WHICH:
     fn = globals()[name]
     print(f"== {name}: {fn.__doc__}  (cutter {CUTTER})")

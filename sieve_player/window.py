@@ -45,7 +45,8 @@ from .plot import Plot, Stage
 from .heldwalks import Shown, as_given, gate_result, held_chain, held_periods, listed_cuts, period_run, cuts_alike, shown_at, touched_periods, walked_before, window_gate_result, window_periods
 from .worker import Worker
 
-STALE_MS = 250              # how long the cards' marks of other code may wait on a run held alone
+WHOLE_MS = 150              # how long what is held of the cuts outside the window may wait on a change of any of it
+STALE_MS = 250             # how long the cards' marks of other code may wait on a run held alone
 HOLD_MS = 2000              # how long the held runs rest, nothing new held, before they are written beside the document
 HELD_BYTES = budget.here()["held"]      # what the held runs and the window's own take together, as wire.result_bytes counts them, before the oldest go
 WINDOW_RUNS_BYTES = HELD_BYTES // 8     # the window's own runs' part of it
@@ -612,6 +613,10 @@ class PlayerWindow(QMainWindow):
         self._stale_due.setSingleShot(True)
         self._stale_due.setInterval(STALE_MS)
         self._stale_due.timeout.connect(self._show_stale)
+        self._whole_due = QTimer(self)            # running while _show_held has answered of the window's cuts alone: a param dragged pays for the rest once
+        self._whole_due.setSingleShot(True)
+        self._whole_due.setInterval(WHOLE_MS)
+        self._whole_due.timeout.connect(self._show_held_whole)
         self.timeline.setEnabled(False)
         ct.progress.setText("no video")
         if from_file:
@@ -1416,7 +1421,15 @@ class PlayerWindow(QMainWindow):
         under = None if p is None else (self._chain(self._walked_nodes()), self.count)
         again = moved is not None and under == self._of_cuts[0] and p is self._of_plan
         _, periods, listed = self._of_cuts if again else (None, None, {})
-        periods = None if self.worker is None else held_periods(p, self.runs, periods, moved)
+        if self.worker is None:
+            periods = None
+        elif again:
+            periods = held_periods(p, self.runs, periods, moved)
+        else:
+            s, n = self.window_
+            periods = held_periods(p, self.runs, {}, [(s, s + n)])
+            self._whole_due.start()
+        waits = self.worker is not None and self._whole_due.isActive()
         self._of_cuts, self._of_plan = (under, periods, {}), p
         own = changed is None or any(nid in run.results for run in changed for nid in chain.keys)
         if own:
@@ -1424,16 +1437,31 @@ class PlayerWindow(QMainWindow):
         if self.worker is not None:
             if own:
                 self.worker.give_clip(self.count, self._as_given(self.runs.part(0, self.count, chain, (0, self.count))))
-            self.worker.give_periods(periods, touched_periods(p, moved) if again else None)
+            self.worker.give_periods(periods, touched_periods(p, moved) if again else None, whole=not waits)
             self.window_periods.update({of: v for of, v in window_periods(self.graph.snapshot(), self.runs, *self.window_).items()
                                         if v.held and of in self.window_periods})
             self._show_lines()
+        self._show_pinned()
+        if waits:
+            return
         if moved is None:
             self._show_stale()
         elif not self._stale_due.isActive():
             self._stale_due.start()
-        self._show_pinned()
         self._show_listed(listed, moved)
+
+    def _show_held_whole(self):
+        """What _show_held left of the cuts outside the window: the worker is given what is held of
+        every cut in time, and the cards their marks of other code and their values in every cut."""
+        self._whole_due.stop()
+        if self.graph is None or self.worker is None:
+            return
+        p = self.graph.snapshot()
+        periods = held_periods(p, self.runs)
+        self._of_cuts, self._of_plan = ((self._chain(self._walked_nodes()), self.count), periods, {}), p
+        self.worker.give_periods(periods)
+        self._show_stale()
+        self._show_listed({}, None)
 
     def _show_listed(self, was, moved):
         """Each card of a node below a cut in time is shown its values in every cut it is of, as the

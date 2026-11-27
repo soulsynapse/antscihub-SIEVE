@@ -121,11 +121,14 @@ def document(path, video):
 
 
 def turned(win):
-    """Takes the worker's turns until none is due."""
+    """Takes the worker's turns until none is due, the window's wait to answer of every cut over at once."""
     w, g = win.worker, win.graph
     while True:
         with w._cv:
             turn = w._turn()
+        if turn is None and win._whole_due.isActive():
+            win._show_held_whole()
+            continue
         if turn is None:
             return
         for job, act in turn[1]:

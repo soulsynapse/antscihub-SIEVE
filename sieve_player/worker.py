@@ -226,6 +226,7 @@ class Worker(QThread):
         self._clip = _Walk(graph, name="clip", every=every, progress=self.clipWalked, ready=self.clipReady,
                            refused=self.clipRefused, failed=self.failed, tell_every=tell_every)
         self._held_periods = {}               # (walked node, (first, end)) -> the HeldCut give_periods was told of that cut
+        self._periods_whole = True            # give_periods' `whole` as last told
         of_period = _OfCut(self.periodReady)
         of_period.walk = _Walk(graph, name="clip", every=1 << 62, progress=None, ready=of_period,
                                refused=self.clipRefused, failed=self.failed, tell_every=tell_every, keeps=True)
@@ -282,15 +283,18 @@ class Worker(QThread):
         with self._cv:
             self._clip.ask = (0, rows, False, dict(given))
 
-    def give_periods(self, held, changed=None):
+    def give_periods(self, held, changed=None, whole=True):
         """What the caller holds of each cut in time, (the node its timed Walk's first head reads,
         the cut's rows) to a walk.HeldCut: one spared is walked by neither lane, and one whose keys
         the plan has left is walked as though nothing were held. `changed` is the keys whose
-        HeldCut is not what the last call gave, where the caller knows them."""
+        HeldCut is not what the last call gave, where the caller knows them. `whole` False says
+        `held` is of the window's cuts alone and the rest is to come: the clip lane walks nothing
+        until a call says whole."""
         with self._cv:
-            self._held_periods = dict(held)
+            self._held_periods, self._periods_whole = dict(held), whole
             self._clip_legs.told(changed)
             self._window_legs.told(changed)
+            self._cv.notify()
 
     def recut(self):
         """The cuts in time moved and nothing either lane's own range walks did: each lane walks the
@@ -422,5 +426,5 @@ class Worker(QThread):
             if self._clip_on and chained:
                 return "walk", [(clip, clip.turn)]
             return "walk", [(clip, clip.halt), (clip, clip.emit)]   # the chain over the rows it stopped at: the cadence's last result is short of them
-        steps = self._clip_legs.due(p, self._clip_on)
+        steps = self._clip_legs.due(p, self._clip_on) if self._periods_whole or not self._clip_on else None
         return None if steps is None else ("walk", steps)

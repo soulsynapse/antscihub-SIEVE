@@ -97,11 +97,13 @@ print and a commit message's to hold, not this file's.
    by the window's walk of that cut (`heldwalks.window_gate_result` reads the window's
    `window_periods`), the cuts made again once a pass where a result moved (`cuts_alike`), and
    what the window walked of a cut kept when the plan moves under others (`walked_before`).
-   Open under it, both seen in the miniature's steps a cut of a nested clip walk: `gate_result`
-   looks through every held run for each cut a plan asks of, so a plan costs the square of the
-   cuts, as it did before this; and each of the window's cuts turning from provisional to held
-   has the worker walk every cut of the window again, a cost of the window's size and not of the
-   clip's, which nesting makes larger.
+   Open under it, both seen in the miniature's steps a cut of a nested clip walk, which fails
+   O7: each outer cut's run held makes the cuts again, and `plan` is made whole, asking
+   `cut_result` of every cut, so a clip walk of nested cuts costs the square of them (the look
+   through every held run inside each ask is gone, `held.Runs.of_cut`); and each of the window's
+   cuts turning from provisional to held has the worker walk every cut of the window again, a
+   cost of the window's size and not of the clip's, which nesting makes larger. The first is the
+   ask being the whole document's and not one cut's.
 4. A window moved grew past O7's bound under `pad1` and not under `pad3` or `period`; unread.
 5. `registry.cut_by` answers a tool's first CUT_BY input and no other: a cutter of two gates has
    no way in. Unbuilt, and whether one is wanted is his.

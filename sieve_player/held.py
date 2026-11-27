@@ -239,6 +239,10 @@ class Runs:
         runs, starts, ends, _ = self._indexed()
         return [runs[i] for i in np.flatnonzero((starts < b) & (a < ends)).tolist()]
 
+    def of_cut(self, rows):
+        """The runs of the cut in time of `rows` walked whole, oldest first, at _near's cost."""
+        return [run for run in self._near(*rows) if run.cut == rows and (run.start, run.start + run.rows) == rows]
+
     def __iter__(self):
         return iter(self.all)
 

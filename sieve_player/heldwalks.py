@@ -114,8 +114,7 @@ def gate_result(runs, src, key, within, count):
     if rows is None:
         run = runs.from_first_row(src, key)
         return run.results[src] if run is not None and run.rows >= count else None
-    run = next((run for run in runs if run.cut == rows and (run.start, run.start + run.rows) == rows
-                and held.good(run.results.get(src), key)), None)
+    run = next((run for run in runs.of_cut(rows) if held.good(run.results.get(src), key)), None)
     return None if run is None else run.results[src]
 
 

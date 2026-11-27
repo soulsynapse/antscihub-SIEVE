@@ -440,8 +440,8 @@ if LARGE:
                   if n >= SMALL and f in large and large[f] / LARGE > GROWS * n / SMALL)
     for ratio, at_large, at_small, f in grew[::-1][:SHOWN]:
         print(f"  grows {ratio:5.1f}x  {at_small:9.1f} -> {at_large:9.1f} steps a cut  {f}")
-    failed = bool(grew) or moved_grew or (held_small, held_large) != (SMALL, LARGE)
-    if (held_small, held_large) != (SMALL, LARGE):
+    failed = bool(grew) or moved_grew or (held_small, held_large) != (SMALL * (1 + NESTED), LARGE * (1 + NESTED))
+    if (held_small, held_large) != (SMALL * (1 + NESTED), LARGE * (1 + NESTED)):
         print("O7 is not shown: the cuts were not all walked and held")
     else:
         print(f"O7 {'fails' if grew or moved_grew else 'holds'}: {len(grew)} functions' steps a cut grew past {GROWS}x from {SMALL} cuts to {LARGE}, "

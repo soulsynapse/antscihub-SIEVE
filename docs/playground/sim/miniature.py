@@ -26,6 +26,9 @@ and edits no file.
 Run: .venv/Scripts/python.exe -X utf8 docs/playground/sim/miniature.py [tree] [small large]
 `tree` is a checkout of the repository to drive, this one with none; `0 0` leaves O7 out. Exit 1
 where an oracle fails.
+With MINIATURE_CUTTER set, the cutting node is not a `period` cut by its gate's runs: `pad1` and
+`pad3` make it a `pad` of sim/cutters/ widening each run by that many rows, the second overlapping
+its neighbours; `nested` puts a second gate and `period` below the first, cutting the same rows.
 With MINIATURE_WHY set to a function's name, the larger count is walked under cProfile as well and
 who called it is printed.
 """
@@ -72,7 +75,15 @@ window.TELL = 0.0                   # every row told: no telling waits on a cloc
 Worker.start = lambda self, *a: None
 window.PlayerWindow.ask_unsaved = lambda self: "discard"
 app = QApplication([])
-TOOLS = [e for e in discover("tools") if e.ok]
+TOOLS = [e for e in discover("tools", str(Path(__file__).resolve().parent / "cutters")) if e.ok]
+CUTTER = os.environ.get("MINIATURE_CUTTER", "period")
+PAD = {"pad1": 1, "pad3": 3}.get(CUTTER, 0)
+NESTED = CUTTER == "nested"
+
+
+def cuts_of(count):
+    """[first, end) of every cut the document's cutting node makes of a clip `count` rows long."""
+    return [(max(0, a - PAD), min(count, a + KEPT + PAD)) for a in range(0, count, PERIOD)]
 
 
 def clip(path, cuts):
@@ -84,18 +95,27 @@ def clip(path, cuts):
     return str(path)
 
 
-BELOW = (("below", "reduce", "period"), ("smooth", "smooth", "below"))
+LOWEST = "inner" if NESTED else "period"     # the cutting node the series nodes read
+BELOW = (("below", "reduce", LOWEST), ("smooth", "smooth", "below"))
+INNER = (("gate2", "reduce", "period", None), ("inner", "period", "period", None), ("inner", None, "gate2", "gate")) if NESTED else ()
 
 
 def document(path, video):
+    """gray, a gate and the cutting node it cuts, `period` or with MINIATURE_CUTTER pad1 or pad3 a
+    `pad` of that many rows, and BELOW; with nested, a second gate below the period cutting a
+    second period by the same band, whose cuts are the first's."""
     doc = D.Document(video=video)
     doc.add_node(D.VIDEO_TOOL)
-    for nid, tool, src, into in (("gray", "gray", D.VIDEO_TOOL, None), ("gate", "reduce", "gray", None), ("period", "period", "gray", None),
-                                 *((n, t, s, None) for n, t, s in BELOW), (None, None, "gate", "gate")):
+    for nid, tool, src, into in (("gray", "gray", D.VIDEO_TOOL, None), ("gate", "reduce", "gray", None),
+                                 ("period", "pad" if PAD else "period", "gray", None), ("period", None, "gate", "gate"),
+                                 *INNER, *((n, t, s, None) for n, t, s in BELOW)):
         if tool is not None:
             doc.add_node(tool, (0.0, 100.0 * len(doc.nodes)), None, nid)
-        doc.connect(src, nid or "period", *([into] if into else []))
-    doc.node("gate").band = (100.0, 255.0)
+        doc.connect(src, nid, *([into] if into else []))
+    for gate in ("gate", "gate2")[:1 + NESTED]:
+        doc.node(gate).band = (100.0, 255.0)
+    if PAD:
+        doc.node("period").params["pad"] = PAD
     D.save(doc, path)
     return str(path)
 
@@ -206,7 +226,8 @@ def window_first():
 
 
 WINDOWS = (("inside a period", 5 * PERIOD + 1, 2), ("over two whole periods", 3 * PERIOD - 2, 2 * PERIOD),
-           ("cutting periods at both edges", 2 * PERIOD + 2, 2 * PERIOD))
+           ("cutting periods at both edges", 2 * PERIOD + 2, 2 * PERIOD),
+           ("between two of the gate's runs", 3 * PERIOD + KEPT, PERIOD - KEPT - 1))    # rows of a cut only where a cut reads past its gate's run
 
 
 def drawn(win, nid, s, n):
@@ -226,9 +247,9 @@ def lines_over(win, when, cut_off):
     for name, s, n in WINDOWS:
         win.set_window(s, n, by=HAND)
         settled(win)
-        window = range(s, s + n)
-        want = {r for r in window if r % PERIOD < KEPT}
-        edges = {r for r in want if (r - r % PERIOD < s) or (r - r % PERIOD + KEPT > s + n)} if cut_off else set()
+        window, cuts = set(range(s, s + n)), cuts_of(win.count)
+        want = {r for a, b in cuts for r in range(a, b)} & window
+        edges = {r for a, b in cuts if a < s or b > s + n for r in range(a, b)} & window if cut_off else set()
         for nid in (nid for nid, *_ in BELOW):
             rows, best = drawn(win, nid, s, n)
             said += [f"{when}, a window {name}: {nid} draws {len(rows & want)} of its {len(want)} rows of periods"] * (rows != want)
@@ -241,7 +262,7 @@ def window_shows():
     after one; and over windows inside a period, over whole ones and cutting them, the period's rows
     the lines below it miss, best effort at a period cut off at the window's edge before a clip walk alone."""
     win = opened("shows")
-    nodes = {"gate", *(nid for nid, *_ in BELOW)}
+    nodes = {"gate", *(nid for nid, *_ in BELOW), *(["gate2"] if NESTED else [])}
     said = [f"no line of {nid} before a clip walk" for nid in sorted(nodes - set(win.plot.lines))]
     said += lines_over(win, "before a clip walk", True)
     win._toggle_clip()
@@ -414,7 +435,7 @@ if LARGE:
     moved_grew = moved_large > GROWS * moved_small
     print(f"a window moved: {moved_small} steps with {SMALL} cuts held, {moved_large} with {LARGE}, "
           f"{window_moved(opened(f'{SMALL}-unheld', SMALL))} with none held of {SMALL}")
-    print(f"{TREE.name}:{held_small} of {SMALL} cuts held, {held_large} of {LARGE}; steps a cut {sum(small.values()) / SMALL:.0f} and {sum(large.values()) / LARGE:.0f}")
+    print(f"{TREE.name}, cut by {CUTTER}: {held_small} of {SMALL} cuts held, {held_large} of {LARGE}; steps a cut {sum(small.values()) / SMALL:.0f} and {sum(large.values()) / LARGE:.0f}")
     grew = sorted(((large[f] / LARGE) / (n / SMALL), large[f] / LARGE, n / SMALL, f) for f, n in small.items()
                   if n >= SMALL and f in large and large[f] / LARGE > GROWS * n / SMALL)
     for ratio, at_large, at_small, f in grew[::-1][:SHOWN]:

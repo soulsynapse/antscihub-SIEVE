@@ -80,11 +80,35 @@ for it, the worker's turns taken on one thread, and it says which of O7 to O11 a
 found on a real document is pinned there. An alternative holder goes behind the seam the held
 runs sit behind and is driven against the same checks.
 
-1. Which of the places results are held in are apart for no reason, and can be one.
-2. O10 is open for a gate inside a cut in time: a cutting node whose CUT_BY wire's node is below
+The question the branch was cut to answer is whether one store is needed at all. The earlier runs
+tested a store and never the thing he asked for, a tool added without the back end being thought
+of; the plan below tests that, by cutting tools that are not `period` driven through the miniature
+(`MINIATURE_CUTTER`, the tools under `sim/cutters/`). The figures of a run are the miniature's to
+print and a commit message's to hold, not this file's.
+
+1. Done, to be verified by running it: a `pad` cutter, each of the gate's runs widened so a cut
+   reads rows its gate does not keep, disjoint (`pad1`) and overlapping (`pad3`), and a `period`
+   under a `period` (`nested`). No module of `sieve_player` names a tool that cuts; the player
+   knows one by `cut_extents` and `CUT_BY` alone. What the cutters showed is items 2 to 4.
+2. A cut reaching past its gate's run is not shown by a window that holds none of the run, and
+   nothing says so: `cut_extents` declares no reach over the result it is handed, so a
+   provisional cut is made of the window's rows of the gate as if they were all of it.
+3. O10 is open for a gate inside a cut in time: a cutting node whose CUT_BY wire's node is below
    another cut in time is answered by held runs alone (`heldwalks.window_gate_result` answers
    none for a cut in time) and the window shows nothing below it until that cut is walked whole.
-3. The held runs onto the store behind that seam, driven against today's. Goal 2 moves here.
+4. A window moved grew past O7's bound under `pad1` and not under `pad3` or `period`; unread.
+5. `registry.cut_by` answers a tool's first CUT_BY input and no other: a cutter of two gates has
+   no way in. Unbuilt, and whether one is wanted is his.
+6. The standing of a gate's held run, to be argued to him and not built unasked: it is read by
+   `plan`'s `cut_result`, so letting it go changes results and not speed alone, where every other
+   holder is a cache. The referent is an analysis written into the document (Nuke's CurveTool and
+   Tracker write knobs), never let go for a budget; a provisional cut is its preview.
+7. A finding of why the machine-wide store was built in simulation and taken out, from the
+   commits of this branch, before the journal that held it is deleted.
+8. `contract.md` says a tool's code is in the key, against his ruling; its lines of the store and
+   the address describe what was taken out. Cut to what is still a hypothesis, the ask.
+9. What is proven here and no part of the question, to be put to him as a merge of its own: the
+   850 periods' fix, `budget.py`, the checkpoint, the display proxies.
 
 Not to be done on this machine: long walks or timing runs for their own sake. He said no stress
 testing, and a restart now and then is fine.

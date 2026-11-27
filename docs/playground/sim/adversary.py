@@ -117,7 +117,7 @@ def Dm():
     try:
         marks = {}
         win.pane.set_stale = lambda nid, tip: marks.__setitem__(nid, bool(tip))
-        win._show_stale(win._chain())
+        win._show_stale()
         print("  reduce's code said changed; marked:", {n: marks.get(n) for n in ("gate", "gate2", "below", "smooth") if n in marks})
         print("  runs held of below under its key:", sum(1 for k in holds(win) if k[0] == "below"))
     finally:

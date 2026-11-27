@@ -352,7 +352,7 @@ def checkpoint_travels():
 
 def other_code():
     """O14: a held run made under a tool's older code is served after the tool's code changes, and
-    its node is marked as of other code: a full run saved, then detect's code said changed, as the
+    its node is marked as of other code, a node below a cut in time as one above: a full run saved, then detect's code said changed, as the
     process imported it and as its file lies, and a player of a copy opened."""
     held.File.write = WRITE
     imported, on_disk = registry._IMPORTED[id(DETECT)], registry.code_print
@@ -363,9 +363,17 @@ def other_code():
         win, said = served_unwalked(want, copied(home, "other-code-away"))
         marks = {}
         win.pane.set_stale = lambda nid, tip: marks.__setitem__(nid, bool(tip))
-        win._show_stale(win._chain())
+        win._show_stale()
         detect = next(n.id for n in win.doc.nodes if n.tool == "detect")
-        return said + [f"{detect} is not marked as of other code"] * (not marks.get(detect))
+        said += [f"{detect} is not marked as of other code"] * (not marks.get(detect))
+        cut, reduce_ = opened("other-code-cut"), BY_NAME["reduce"]
+        cut._toggle_clip()
+        settled(cut)
+        registry.code_print = lambda tool, seen=None: "other code" if tool is reduce_ else on_disk(tool, seen)
+        marks = {}
+        cut.pane.set_stale = lambda nid, tip: marks.__setitem__(nid, bool(tip))
+        cut._show_stale()
+        return said + [f"{nid}, of a tool of other code and below a cut in time, is not marked" for nid, tool, _ in BELOW if tool == "reduce" and not marks.get(nid)]
     finally:
         held.File.write, registry.code_print = (lambda self, *a: []), on_disk
         registry._IMPORTED[id(DETECT)] = imported

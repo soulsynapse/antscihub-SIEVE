@@ -611,7 +611,7 @@ class PlayerWindow(QMainWindow):
         self._stale_due = QTimer(self)            # running while a run held alone waits for the cards to be marked: the marks read the tools' files, once for however many are held meanwhile
         self._stale_due.setSingleShot(True)
         self._stale_due.setInterval(STALE_MS)
-        self._stale_due.timeout.connect(lambda: self._show_stale(self._chain()))
+        self._stale_due.timeout.connect(self._show_stale)
         self.timeline.setEnabled(False)
         ct.progress.setText("no video")
         if from_file:
@@ -1429,7 +1429,7 @@ class PlayerWindow(QMainWindow):
                                         if v.held and of in self.window_periods})
             self._show_lines()
         if moved is None:
-            self._show_stale(chain)
+            self._show_stale()
         elif not self._stale_due.isActive():
             self._stale_due.start()
         self._show_pinned()
@@ -1450,8 +1450,10 @@ class PlayerWindow(QMainWindow):
                     now[nid] = listed_cuts(self.runs, nid, chain, e.cuts, self.count, was.get(nid), moved)
                     w.show_listed(now[nid], self.fps)
 
-    def _show_stale(self, chain):
-        """Each card says whether its node is of held.marked, by the tools' files as they lie."""
+    def _show_stale(self):
+        """Each card says whether its node is of held.marked, by the tools' files as they lie, over every
+        node a walk holds results of, those below a cut in time among them."""
+        chain = self._chain() if self.graph is None else self._chain(self._walked_nodes())
         entries = {} if self.graph is None else {n.id: e for n in self.doc.nodes if (e := self.graph.entry(n.id)) is not None}
         ran = {nid: e for nid, e in entries.items() if e.file is None}
         seen = {}

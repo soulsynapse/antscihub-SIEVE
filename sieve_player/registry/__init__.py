@@ -30,6 +30,7 @@ _HINTS = {
     "STATIC": "STATIC = True  # the same output at every row: computed once per key, held once, counted per change",
     "PATHS": 'PATHS = {"settings": load_settings}  # path inputs: name -> params from the file',
     "CUT_BY": 'CUT_BY = {"gate": ("signal", "tracks")}  # a cutting tool\'s input that is no frame input: name -> the types it expects; the result its wire hands over each cut the node reads is the result cut_extents is handed, once a cut and never a row at a time',
+    "CUT_BY_A_PART": "CUT_BY_A_PART = True  # a tool with CUT_BY: the cuts its cut_extents answers of a part of the rows of its result are those it answers of them all, inside that part, a cut that touches the part's first or last row aside; the node is then cut by what the window walked before a walk of the clip is held, and unsaid it waits for that walk",
     "key_params": "def key_params(params): ...  # what of params run reads, a JSON value, the same for any two params under which run hands out the same result of the same input: the node is keyed by it in place of its params",
     "reach_in_rows": "def reach_in_rows(params): ...  # (rows before, rows after) the row it is asked at that its result there reads, each a count or None for a side without bound; a frame tool that reads a row outside what it says raises; unsaid, neither side has a bound",
     "select": "def select(folder, params): ...  # a selector: the path it picks under folder, or None",
@@ -180,6 +181,11 @@ def cut_by(tool):
     return next(((n, _tuple(t)) for n, t in said.items()), None)
 
 
+def cut_by_a_part(tool):
+    """Whether the tool says its cuts of a part of its CUT_BY result's rows are its cuts of them all."""
+    return bool(probe(tool, "CUT_BY_A_PART"))
+
+
 def static(tool):
     """Whether the tool's output is the same at every row."""
     return bool(probe(tool, "STATIC"))
@@ -266,7 +272,7 @@ def matches_of(tool):
 READERS = {
     "NAME": ("name", "by_name"), "KIND": ("kind",), "EXPECTS": ("expects", "is_selector"),
     "PRODUCES": ("produces", "is_selector"), "PARAMS": ("params", "defaults", "changes_nothing", "computed"), "settings": ("settings_of",), "INPUTS": ("inputs",),
-    "OPTIONAL": ("optional",), "STATIC": ("static",), "PATHS": ("paths",), "CUT_BY": ("cut_by",), "cut_extents": ("cuts", "hands_down_what_it_reads", "cut_extents_of"), "cut_file": ("serves_cut_file",), "reach_in_rows": ("reach_of",),
+    "OPTIONAL": ("optional",), "STATIC": ("static",), "PATHS": ("paths",), "CUT_BY": ("cut_by",), "CUT_BY_A_PART": ("cut_by_a_part",), "cut_extents": ("cuts", "hands_down_what_it_reads", "cut_extents_of"), "cut_file": ("serves_cut_file",), "reach_in_rows": ("reach_of",),
     "cut_files": ("names_cut_files",), "step": ("steps",), "draw": ("draws",), "fold": ("fold_of",),
     "key_params": ("key_params_of",), "pick": ("pick_of",), "matches": ("matches_of",),
 }
@@ -441,4 +447,4 @@ def signature(tool):
 
 __all__ = ["MARKER", "FACETS", "WIDGET_FACETS", "READERS", "KINDS", "Entry", "is_tool", "probe", "hint", "discover", "code_print", "imported_print", "types", "CATEGORIES", "category",
            "description", "signature", "name", "by_name", "kind", "expects", "produces", "params", "defaults", "changes_nothing", "computed", "settings_of", "inputs", "optional", "cut_by", "static", "paths",
-           "is_selector", "cuts", "hands_down_what_it_reads", "cut_extents_of", "reach_of", "serves_cut_file", "names_cut_files", "steps", "draws", "fold_of", "key_params_of", "pick_of", "matches_of"]
+           "is_selector", "cuts", "hands_down_what_it_reads", "cut_extents_of", "cut_by_a_part", "reach_of", "serves_cut_file", "names_cut_files", "steps", "draws", "fold_of", "key_params_of", "pick_of", "matches_of"]

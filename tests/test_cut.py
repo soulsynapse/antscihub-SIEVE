@@ -69,7 +69,7 @@ def test_a_tool_cuts_by_its_declaration_alone_and_a_tool_below_two_cuts_is_told_
 
     sig = Tool(NAME="sig", KIND="series", EXPECTS="gray", PRODUCES="signal", run=lambda series, params: None)
     pick = Tool(NAME="pick", PRODUCES="path", select=lambda folder, params: None)
-    gated = runs("gated", PATHS={"periods": lambda path: {}}, CUT_BY={"gate": "signal"}, cut_extents=lambda params, result, count: [{"rows": r} for r in result])
+    gated = runs("gated", PATHS={"periods": lambda path: {}}, CUT_BY={"gate": "signal"}, CUT_BY_A_PART=True, cut_extents=lambda params, result, count: [{"rows": r} for r in result])
     tools = {t.NAME: t for t in (gray, sig, pick, gated, tools["below"])}
     doc = D.from_tools([gray, gated, tools["below"]])
     doc.add_node("sig")
@@ -96,6 +96,10 @@ def test_a_tool_cuts_by_its_declaration_alone_and_a_tool_below_two_cuts_is_told_
     a, b, lacking = Record("print").cut(rows=(0, 4)), Record("print").cut(rows=(4, 8)), {}
     walked = Provisional("seen", (0, 2))       # one cut held and one not: cut by what the window walked alone, the held one left out
     assert _all_held_or_seen("n", (a, b), [walked, "held"], lacking) == [walked, None] and lacking == {"n": {(0, 4)}}
+    del gated.CUT_BY_A_PART        # a tool that does not say its cuts of a part stand waits for the walk
+    p = seen(Provisional([(0, 2), (3, 5)], (3, 9)))
+    assert p.entries["gated"].cuts == () and p.entries["gated"].standing == "gate waits on sig's walk" and p.unheld == {"gated"}
+    gated.CUT_BY_A_PART = True
     doc.remove_node("under")
     doc.add_node("pick")
     doc.connect("pick", "gated", "periods")

@@ -73,6 +73,7 @@ def select(folder, params) -> str | None
 # a cutting tool: what it reads cut in rows, in pixels or in both, every node below run inside each cut
 NAME = "period"; KIND = "frame"; PRODUCES = "same"
 CUT_BY = {"gate": ("signal", "tracks")}       # optional: a wire whose result cuts (period)
+CUT_BY_A_PART = True                          # optional: its cuts of the rows the window walked stand, so it cuts before a clip walk
 def cut_extents(params, result, count) -> list  # one dict a cut; with no run each row goes down as it was read
 ```
 

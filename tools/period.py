@@ -75,6 +75,7 @@ def load_periods(path):
 
 PATHS = {"periods": load_periods}
 CUT_BY = {"gate": ("signal", "tracks")}
+CUT_BY_A_PART = True
 
 
 def periods_text(rows, cuts):

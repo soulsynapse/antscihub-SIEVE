@@ -15,7 +15,13 @@ feeds; the value is called with the picked file and answers the params to merge.
 with `CUT_BY` has one input more, which no row is read through: the result wired into it over
 each cut the node reads is what its `cut_extents` is handed, once a cut, and a result over a cut in
 time counts its rows from that cut's first, the rows answered of it lifted to the footage's by the
-player. `cut_extents` is handed the footage's rows third, None before they are known. A cutting
+player. `cut_extents` is handed the footage's rows third, None before they are known. Before a
+walk of the clip is held the window has walked a part of that result's rows: a tool that says
+`CUT_BY_A_PART` is cut by that part meanwhile, provisionally, and says by it that its cuts of a
+part are its cuts of the whole inside the part, a cut touching the part's first or last row
+aside, which the player says is cut off; a tool that does not say it waits for the walk, and
+its node says so. A tool whose cut reaches past the rows that made it, or is made or not by
+rows away from it, does not say it. A cutting
 tool says `run` only where it changes what it reads: one with none hands each row down as it read
 it and is in no key below it, so a cut that moves moves no result of a cut that did not; one with
 a `run` is keyed as any tool is. A `cut_extents` that raises cuts nothing: its node is refused, its standing what was
@@ -88,6 +94,7 @@ category beside each tool.
 - `hands_down_what_it_reads(tool)` -- whether it cuts and has no `run`: the player hands down each row as the node read it and leaves the node out of every key below it
 - `cut_extents_of(tool)` -- its `cut_extents`, or None
 - `cut_by(tool)` -- (name, a tuple of types) of `CUT_BY`, or None
+- `cut_by_a_part(tool)` -- whether it says `CUT_BY_A_PART`
 - `reach_of(tool, given)` -- (rows before, rows after) its result at a row reads, of `reach_in_rows`; None a side without bound, both unsaid
 - `serves_cut_file(tool)` -- whether it has `cut_file`
 - `names_cut_files(tool)` -- whether it has `cut_files`

@@ -3,7 +3,8 @@ player to ask: O7, what one more cut in time costs does not grow with how many t
 bare walk and a clip walk hold the same; O9, nothing walked for the window is held, written to
 the checkpoint or to the store, and a clip walk holds the same whatever the window walked first;
 O10, the window shows a line of every series node the document has over its rows, a clip walk
-made or not, best effort where a period runs on past the window and no clip walk was made; O11, a full run made and the document
+made or not, best effort where a period runs on past the window and no clip walk was made, and
+under a cutter that does not say CUT_BY_A_PART no line below it before a clip walk, its node saying it waits; O11, a full run made and the document
 saved, the two copied elsewhere and opened serve every run held without walking; O14, a held run
 made under a tool's older code is served after the code changes, its node marked as of other code.
 
@@ -79,6 +80,7 @@ TOOLS = [e for e in discover("tools", str(Path(__file__).resolve().parent / "cut
 CUTTER = os.environ.get("MINIATURE_CUTTER", "period")
 PAD = {"pad1": 1, "pad3": 3, "norun1": 1}.get(CUTTER, 0)
 NESTED = CUTTER == "nested"
+WAITS = bool(PAD)       # a cutter that does not say CUT_BY_A_PART: it cuts nothing before a clip walk, and says it waits
 
 
 def cuts_of(count):
@@ -250,7 +252,7 @@ def lines_over(win, when, cut_off):
     for name, s, n in WINDOWS:
         win.set_window(s, n, by=HAND)
         settled(win)
-        window, cuts = set(range(s, s + n)), cuts_of(win.count)
+        window, cuts = set(range(s, s + n)), [] if cut_off and WAITS else cuts_of(win.count)
         want = {r for a, b in cuts for r in range(a, b)} & window
         edges = {r for a, b in cuts if a < s or b > s + n for r in range(a, b)} & window if cut_off else set()
         for nid in (nid for nid, *_ in BELOW):
@@ -266,7 +268,9 @@ def window_shows():
     the lines below it miss, best effort at a period cut off at the window's edge before a clip walk alone."""
     win = opened("shows")
     nodes = {"gate", *(nid for nid, *_ in BELOW), *(["gate2"] if NESTED else [])}
-    said = [f"no line of {nid} before a clip walk" for nid in sorted(nodes - set(win.plot.lines))]
+    said = [f"no line of {nid} before a clip walk" for nid in sorted((nodes & {"gate"} if WAITS else nodes) - set(win.plot.lines))]
+    if WAITS and "waits on" not in (standing := win.graph.standing("period")):
+        said.append(f"before a clip walk the cutting node does not say it waits: {standing!r}")
     said += lines_over(win, "before a clip walk", True)
     win._toggle_clip()
     settled(win)

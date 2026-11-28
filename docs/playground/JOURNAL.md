@@ -67,7 +67,11 @@ Each oracle is of G1, G2 or G3. O2, O3 and O6 were of a store's entries and went
 - O10, his: the window shows what is asked of it, every series node's line over its rows, whether
   or not a clip walk was made. The miniature asks it over a window inside a period, one over two
   whole periods and one cutting periods at both edges; before a clip walk the lines at a period
-  cut off by the window's edge are to be best effort, and after one none is.
+  cut off by the window's edge are to be best effort, and after one none is. By his ruling a
+  cutting tool cut by a wire whose cuts of a part of the result are not its cuts of the whole
+  shows no line below it before a clip walk and its node says it waits: the tool that says
+  `CUT_BY_A_PART` is cut by what the window walked, `period` among them, and one that says
+  nothing waits (`sieve_player/registry/README.md`).
 - O11, his: a full run made and the document saved, the document and its checkpoint copied
   elsewhere and opened: every run the first player held is served without walking.
 - O14, his ruling: a held run made under a tool's older code is served after the tool's code
@@ -229,7 +233,10 @@ and the list below is the one it left. The order is the order of work.
      module; the miniature now leaves out the monitor's generated code with its modules. Why the
      ledger made more of them under `pad1` at the larger count and none more under `period` is
      unread, and is the monitor's cost, which the miniature does not ask (`sim/adversary.py W`).
-   - `pad1` and `pad3`, O10 between two of the gate's runs, as item 1 rules.
+   - `pad1` and `pad3`, O10 between two of the gate's runs. Done, to be verified by the
+     miniature holding O10 under `pad1`, `pad3` and `norun1`: a cutting tool that does not say
+     `CUT_BY_A_PART` waits for the clip walk and says so, where it was cut by what the window
+     walked and a cut reaching in from a row the window did not walk was missing unsaid.
    - what the audit's finding lists, each a cell of `sim/audit.py` by cuts. Done, to be verified
      by the audit's cells of those acts: a window moved or lengthened with cuts held
      (`cut.first_served`, `cut.cuts_in_time`, the strip handed periods only where they are

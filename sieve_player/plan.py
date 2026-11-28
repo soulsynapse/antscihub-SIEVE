@@ -12,7 +12,7 @@ from typing import NamedTuple
 from .cut import INF, Record
 from .document import INPUT, VIDEO_TOOL, fed, fits, frame_inputs, kind_of, produces, video_output, wants
 from .registry import cuts as tool_cuts
-from .registry import computed, cut_by, cut_extents_of, fold_of, hands_down_what_it_reads, is_selector, key_params_of, optional, paths, reach_of, serves_cut_file, static, steps
+from .registry import computed, cut_by, cut_by_a_part, cut_extents_of, fold_of, hands_down_what_it_reads, is_selector, key_params_of, optional, paths, reach_of, serves_cut_file, static, steps
 from .wire import overlaid
 
 
@@ -332,7 +332,7 @@ def plan(doc, tools, base, cut_file=None, cut_result=None, footage=None, count=N
                     refused[nid] = f"fed both: {', '.join(filed)} by a file and {by[0]} by {gate}; one cuts it"
                 elif gate is not None and reads_node(gate, nid):
                     refused[nid] = f"in a cycle: {by[0]} is fed by {gate}, which reads {nid}"
-                elif gate is not None and _waits(results := _all_held_or_seen(nid, above, [cut_result and cut_result(nid, key_of(gate, (*stack, nid)), r) for r in above], lacking)):
+                elif gate is not None and _waits(results := _all_held_or_seen(nid, above, [cut_result and cut_result(nid, key_of(gate, (*stack, nid)), r) for r in above], lacking, cut_by_a_part(tool))):
                     waiting[nid], made[nid] = f"{by[0]} waits on {gate}'s walk", ()
                 else:
                     try:
@@ -442,15 +442,16 @@ def plan(doc, tools, base, cut_file=None, cut_result=None, footage=None, count=N
                 frozenset({*waiting, *provisional}), lacking)
 
 
-def _all_held_or_seen(nid, above, answers, lacking):
+def _all_held_or_seen(nid, above, answers, lacking, by_a_part=True):
     """The cut_result `answers` of a node, one a cut of `above`, as it is cut by them: the held
-    ones where every cut has one, and else the Provisional alone, None for the rest; `lacking[nid]`
-    is then the rows of each cut with none held."""
+    ones where every cut has one, and else the Provisional alone, None for the rest, and None for
+    all where its tool is not cut `by_a_part`; `lacking[nid]` is then the rows of each cut with
+    none held."""
     held = [g.held if isinstance(g, Provisional) else g for g in answers]
     if None not in held:
         return held
     lacking[nid] = frozenset(r.extent.rows for r, h in zip(above, held) if h is None)
-    return [g if isinstance(g, Provisional) else None for g in answers]
+    return [g if by_a_part and isinstance(g, Provisional) else None for g in answers]
 
 
 def _waits(results):

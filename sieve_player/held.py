@@ -224,6 +224,7 @@ class Runs:
 
     def __init__(self, limit, size_of):
         self.limit, self.size_of, self.all = limit, size_of, []
+        self._made = (None, 0, set())
         self._index = (None, None, None, 0)     # (`all` as indexed, each run's first row, its row past the last, their bytes together)
 
     def _indexed(self):
@@ -233,6 +234,12 @@ class Runs:
             rows = np.array([(run.start, run.start + run.rows) for run in self.all], np.int64).reshape(-1, 2)
             self._index = (self.all, rows[:, 0].copy(), rows[:, 1].copy(), sum(run.size for run in self.all))
         return self._index
+
+    def made_under(self):
+        """_made_under of the runs as they are, made again where `_indexed` would be."""
+        if self._made[0] is not self.all or self._made[1] != len(self.all):
+            self._made = (self.all, len(self.all), _made_under(self.all))
+        return self._made[2]
 
     def _near(self, a, b):
         """The runs holding a row of `a` to `b`, oldest first, at the cost of those and not of every run."""
@@ -320,6 +327,8 @@ class Runs:
         runs, starts, ends, size = self._indexed()
         runs.append(new)
         self._index = (runs, np.append(starts, start), np.append(ends, start + rows), size + new.size)
+        if self._made[0] is runs and self._made[1] == len(runs) - 1:
+            self._made = (runs, len(runs), self._made[2] | _made_under([new]))
         came = [new]
         while len(self.all) > 1 and self._indexed()[3] > self.limit:
             has = {run: len(self._has(run.results, worth or chain)) * run.rows for run in self.all}
@@ -423,6 +432,12 @@ class Runs:
         return out
 
 
+def _made_under(runs):
+    """Each (node, key, the items of its "code") some series result of `runs` says, once."""
+    return {(nid, r["key"], frozenset((r.get("code") or {}).items()))
+            for _, _, results, *_ in runs for nid, r in results.items() if isinstance(r, dict) and "signal" in r and r.get("key") is not None}
+
+
 def marked(runs, chain, now, above):
     """The nodes whose results held in `runs` under the keys of `chain` are to be said stale.
     `now` is node to the digest of its tool's code as it lies, of every node whose tool runs and
@@ -432,18 +447,19 @@ def marked(runs, chain, now, above):
     result says another digest of it or none, and with it every node below one marked. A result
     under a key the chain has left marks nothing."""
     out = set()
-    for _, _, results, *_ in runs:
-        for nid in Runs._has(results, chain):
-            made = results[nid].get("code") or {}
-            todo, seen = [nid], set()
-            while todo:
-                n = todo.pop()
-                if n in seen:
-                    continue
-                seen.add(n)
-                if n in now and made.get(n) != now[n]:
-                    out.add(n)
-                todo += above.get(n, ())
+    for nid, key, code in runs.made_under() if isinstance(runs, Runs) else _made_under(runs):
+        if key != chain.keys.get(nid):
+            continue
+        made = dict(code)
+        todo, seen = [nid], set()
+        while todo:
+            n = todo.pop()
+            if n in seen:
+                continue
+            seen.add(n)
+            if n in now and made.get(n) != now[n]:
+                out.add(n)
+            todo += above.get(n, ())
     while more := {n for n, ups in above.items() if n not in out and any(u in out for u in ups)}:
         out |= more
     return out

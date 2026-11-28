@@ -31,7 +31,7 @@ from sieve_player.worker import Worker  # noqa: E402
 
 store.CHOICE = os.path.join(SCRATCH, "store.txt")
 decoder.QUIET = True
-held.File.write = lambda self, *a: []
+WRITE, held.File.write = held.File.write, lambda self, *a: []
 window.TELL = 0.0
 Worker.start = lambda self, *a: None
 window.PlayerWindow.ask_unsaved = lambda self: "discard"
@@ -131,6 +131,20 @@ print(f"the edited player holds {len(got)} results and the fresh one {len(want)}
 for name, some in (("differs", differ), ("lacks", lacks), ("beside", more)):
     for k in some[:4]:
         print(f"  {name}: {k}")
+held.File.write = WRITE
+win.save_document()
+win._write_held(wait=True)
+held.File.write = lambda self, *a: []
+filed = held.File(held.path_for(win.doc.path)).load()
+good = lambda run: {nid for nid, r in run.results.items() if held.good(r, win._key(nid))}
+in_file = {(nid, run.cut, run.start) for run in filed for nid in good(run)}
+none_good = sum(1 for run in filed if not good(run))
+of_none = sum(1 for run in filed if run.cut is not None and run.cut not in {r.cut for r in fresh.runs})
+stacks = sum(1 for run in filed if run.walked is not None and good(run) != set(run.results))
+print(f"the edited document saved: its checkpoint holds {len(filed)} runs where the player holds {len(win.runs)} and the fresh one {len(fresh.runs)}; "
+      f"{len(want.keys() - in_file)} of the fresh one's results are not in it, {none_good} runs in it have no result under a key a node has, "
+      f"{of_none} are of a cut that is none, and {stacks} hold walked rows beside a result under a key left behind")
+differ = differ or ["the checkpoint"] * bool(none_good or of_none or want.keys() - in_file)
 sys.stdout.flush()
 
 

@@ -31,3 +31,11 @@ the two edits then made, once with `held.Runs.hold` told which runs serve nothin
 Both keep all 1189 results of the edited document, in 1094 runs told and 1134 not. The runs of
 the cuts that went are the oldest held, and the oldest went first before the rule; the rule
 holds for any order what age held here. The first pass's figures were the same to the turn.
+
+## What the checkpoint has of it
+
+The edited document saved, its checkpoint holds 617 runs where the player holds 1529 and a
+fresh player 594. Every result of the fresh player's is in it, no run in it is without a result
+under a key a node has, and none is of a cut that is none. The 23 beside the fresh player's
+hold the walked rows of a cut with a result under a key an edit left behind, the run made after
+the edit holding the results and no walked rows.

@@ -670,7 +670,7 @@ class PlayerWindow(QMainWindow):
             return False
         self._written = self._text()
         self._note()
-        self._unwritten |= was != self.doc.path
+        self._unwritten |= was != self.doc.path or (self.graph is not None and len(self._runs_to_write()) != len(self.runs))
         self._write_held(wait=True)
         self._retitle()
         return True
@@ -1771,7 +1771,7 @@ class PlayerWindow(QMainWindow):
 
     def _write_held(self, wait=False):
         """A clip walk's results that stand are held as a run, and the runs held since the checkpoint
-        was written go into it when the document has been saved, on a thread of their own, which
+        was written go into it when the document has been saved, those of _runs_to_write alone, on a thread of their own, which
         pickles only the runs the file has not had; `wait` returns once the file has landed. A
         write that did not land is made again with the next, the one at the video's close included."""
         if self.graph is None:
@@ -1792,10 +1792,20 @@ class PlayerWindow(QMainWindow):
             self._unwritten = False
             if self._file is None or self._file.path != path:
                 self._file = held.File(path)       # the document saved under another name: nothing there is known to be this one's
-            self._writer = threading.Thread(target=_save_held, args=(self._file, list(self.runs), self._write_failed), name="held")
+            self._writer = threading.Thread(target=_save_held, args=(self._file, self._runs_to_write(), self._write_failed), name="held")
             self._writer.start()
             if wait:
                 self._writer.join()
+
+    def _runs_to_write(self):
+        """The held runs the checkpoint is to have: while the document is as it was last saved,
+        those with a result under a key its node now has that were walked inside no cut in time
+        or one that is a cut now, a result made under other code among them; every run while it
+        differs, the saved document's keys and cuts then not the ones to ask."""
+        if self.differs():
+            return list(self.runs)
+        of_no_cut = self._of_no_cut()
+        return [run for run in self.runs if any(held.good(r, self._key(nid)) for nid, r in run.results.items()) and not (of_no_cut and of_no_cut(run))]
 
     def _hold_run(self, start, rows, results, chain=None, cut=None, of_clip=False, walked=None):
         """Holds `results` as a run where held.Runs.hold does, under `chain`, the window's with none,

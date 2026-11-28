@@ -80,10 +80,11 @@ def test_a_tool_cuts_by_its_declaration_alone_and_a_tool_below_two_cuts_is_told_
     assert [c.extent.rows for c in p.entries["below"].cuts] == [(0, 2), (5, 7)] and not asked and p.entries["found"].file is None
     assert plan(doc, tools, "base", footage="print").entries["below"].cuts == (Record("print"),)        # a declaration that raises cuts nothing
 
-    sig = Tool(NAME="sig", KIND="series", EXPECTS="gray", PRODUCES="signal", run=lambda series, params: None)
+    sig = Tool(NAME="sig", KIND="series", EXPECTS="gray", PRODUCES="signal", run=lambda series, params: None, reach_in_rows=lambda params: (0, 0))
     pick = Tool(NAME="pick", PRODUCES="path", select=lambda folder, params: None)
     gated = runs("gated", PATHS={"periods": lambda path: {}}, CUT_BY={"gate": "signal"}, CUT_BY_A_PART=True, cut_extents=lambda params, result, count: [{"rows": r} for r in result])
-    tools = {t.NAME: t for t in (gray, sig, pick, gated, tools["below"])}
+    own_row = Tool(**{**vars(gray), "reach_in_rows": lambda params: (0, 0)})     # a tool that says no reach reads without bound, and a gate below it is none a part cuts by
+    tools = {t.NAME: t for t in (own_row, sig, pick, gated, tools["below"])}
     doc = D.from_tools([gray, gated, tools["below"]])
     doc.add_node("sig")
     doc.connect("gray", "sig")
@@ -113,6 +114,10 @@ def test_a_tool_cuts_by_its_declaration_alone_and_a_tool_below_two_cuts_is_told_
     p = seen(Provisional([(0, 2), (3, 5)], (3, 9)))
     assert p.entries["gated"].cuts == () and p.entries["gated"].standing == "gate waits on sig's walk" and p.unheld == {"gated"}
     gated.CUT_BY_A_PART = True
+    reach, sig.reach_in_rows = sig.reach_in_rows, lambda params: (None, 0)      # a gate whose result at a row reads every row before it: over a part it is not its result over the whole
+    p = seen(Provisional([(0, 2), (3, 5)], (3, 9)))
+    assert p.entries["gated"].cuts == () and p.entries["gated"].standing == "gate waits on sig's walk"
+    sig.reach_in_rows = reach
     doc.remove_node("under")
     doc.add_node("pick")
     doc.connect("pick", "gated", "periods")

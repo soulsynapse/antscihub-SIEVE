@@ -20,7 +20,8 @@ walk of the clip is held the window has walked a part of that result's rows: a t
 `CUT_BY_A_PART` is cut by that part meanwhile, provisionally, and says by it that its cuts of a
 part are its cuts of the whole inside the part, a cut touching the part's first or last row
 aside, which the player says is cut off; a tool that does not say it waits for the walk, and
-its node says so. A tool whose cut reaches past the rows that made it, or is made or not by
+its node says so, as does any tool cut by a node whose `reach_in_rows`, or that of a node above
+it, has no bound a side: its result over a part is not its result over the whole. A tool whose cut reaches past the rows that made it, or is made or not by
 rows away from it, does not say it; tests/cutting.py holds a tool to it, and the player takes
 its word. A cutting
 tool says `run` only where it changes what it reads: one with none hands each row down as it read

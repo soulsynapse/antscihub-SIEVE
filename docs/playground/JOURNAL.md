@@ -175,9 +175,9 @@ How it is built, each a thing found while planning it:
   window shows, and until settled by all that it made stale and the window walked again; the
   marks by the chain alone, and let go at once by the chain. `EXPECTED` in the script is the
   table.
-- Not measured by it and to be said in the finding: a wire made or broken, a param edited above
-  the cut, play, the cards open, the budget, and anything that is flat and dear, which a
-  wall-time profile of the same acts on his GoPro document is for.
+- Not measured by it: anything that is flat and dear, which a wall-time profile of the same acts
+  on his GoPro document is for. A limit on the held runs is `sim/budget.py`'s, which asks whether
+  a clip walk under one comes to rest and keeps no result other than a walk's under none.
 
 ## Done when
 
@@ -315,6 +315,9 @@ testing, and a restart now and then is fine.
   changed only between its first and last `decoder.SLICE` bytes, at the same size, is taken for
   the one before.
 - Whether the mark of other code reaches nodes under a cut in time is unread.
+- A gate's band edited moves the cuts below it, and the runs held of the cuts that were stay
+  held under keys still good: they serve nothing, are written with the document and count
+  against the limit (`docs/findings/2026-11-27-the-nested-gopro-document-edited-against-walked-fresh.md`).
 - The registry's types are unchecked for a set of periods as a value, a gate of two inputs, a
   matrix of time by scale.
 
@@ -341,8 +344,9 @@ testing, and a restart now and then is fine.
   or left out is one whose answer could not have moved. His ruling on the
   node the window walked a result of: it is cut by what the window walked alone until every cut
   it reads has a held result, and then by those, never a held one beside the provisional
-  (`plan._all_held_or_seen`). What is unread for them: whether the window's result
-  of a series node whose `reach_in_rows` has no bound is said best effort, and whether a
-  `period` cut provisionally by such a result says so or waits; the window's value of such a
-  tool is another than the clip's. Under another cut a series node runs inside one outer cut at
+  (`plan._all_held_or_seen`). A cutting node whose gate, or a node above the gate, reads
+  without bound a side is cut by no result of the window's and waits for the walk, the window's
+  value of such a tool being another than the clip's (`plan`, where it asks `reach_of_node` of
+  the gate). The window's own line of such a node, outside any cut in time, is not said best
+  effort, where `walk.window_legs` says it of one inside a cut. Under another cut a series node runs inside one outer cut at
   a time and never over all of them together.

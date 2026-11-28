@@ -195,6 +195,8 @@ def plan(doc, tools, base, cut_file=None, cut_result=None, footage=None, count=N
     is refused, saying why, where its CUT_BY input is wired beside a
     path input, and where the node wired into it reads it; one whose CUT_BY wire's result is not held
     over a cut it reads waits on that node's walk, and cuts no cut where no answer is Provisional,
+    or its tool does not say CUT_BY_A_PART, or the node wired there reads without bound a side, its
+    result over the rows the window walked not its result over them all,
     and else cuts of each answer it has, provisionally of a Provisional one, as cut.Record says, and
     serves no file; both are among `unheld`. One with neither wired is refused. A tool that
     raises in `cut_extents` otherwise cuts nothing. `cuts_made` is a dict the caller keeps from one plan to the next, written here:
@@ -332,7 +334,7 @@ def plan(doc, tools, base, cut_file=None, cut_result=None, footage=None, count=N
                     refused[nid] = f"fed both: {', '.join(filed)} by a file and {by[0]} by {gate}; one cuts it"
                 elif gate is not None and reads_node(gate, nid):
                     refused[nid] = f"in a cycle: {by[0]} is fed by {gate}, which reads {nid}"
-                elif gate is not None and _waits(results := _all_held_or_seen(nid, above, [cut_result and cut_result(nid, key_of(gate, (*stack, nid)), r) for r in above], lacking, cut_by_a_part(tool))):
+                elif gate is not None and _waits(results := _all_held_or_seen(nid, above, [cut_result and cut_result(nid, key_of(gate, (*stack, nid)), r) for r in above], lacking, cut_by_a_part(tool) and None not in reach_of_node(gate))):
                     waiting[nid], made[nid] = f"{by[0]} waits on {gate}'s walk", ()
                 else:
                     try:

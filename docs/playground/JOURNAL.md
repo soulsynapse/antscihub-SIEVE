@@ -137,8 +137,10 @@ print and a commit message's to hold, not this file's.
 
 Asked for by him on 2026-11-27, the defects of cost having been found one at a time by whoever
 picked a case: every act against every size that can grow, measured, and set against what the
-act is to cost. It is G3 made a table. To be built as `sim/audit.py` and its result filed as a
-finding; nothing of it is built until `git log` shows the script.
+act is to cost. It is G3 made a table. It is `sim/audit.py`, and a run of it is filed as
+`docs/findings/2026-11-27-what-each-act-costs-against-each-size.md`: what it found, and the work
+that follows of it, is there and in "Done when". A change meant to take a cost away is judged by
+the cells of its column going to what they are to be, and by no other cell passing it.
 
 The method is empirical growth, as Goldsmith, Aiken and Wilkerson's "Measuring Empirical
 Computational Complexity" has it: one size is varied over three or four values spaced by
@@ -155,7 +157,8 @@ How it is built, each a thing found while planning it:
 - Two counts an act: the steps of the act alone, which is the window's thread at once, and the
   steps of `settled(win)` after it, the worker's turns and the slots they land in.
 - The sizes: cuts 50, 100, 200, 400; rows a cut 4, 8, 16 (`KEPT`, `PERIOD` twice it); the
-  window's length 1, 2, 4 times the one it opens at; nodes added to the chain 0, 2, 6. The base
+  window's length 1, 2, 4 times three cuts, so the longest lengthened ends inside the shortest
+  clip, which the script asserts; nodes added to the chain 0, 2, 6. The base
   is 100 cuts, 4 rows, 1, 0. It is run under `MINIATURE_CUTTER` unset and `nested`, depth being
   two points and no slope.
 - The acts, in this order on one player a size: a window moved with none held; a clip walk; a
@@ -163,9 +166,11 @@ How it is built, each a thing found while planning it:
   (`_show_stale`); a save; a reopen (`player(folder)`, the new player settled); a param edited
   below the cuts (`smooth`'s `reach`); the gate's band edited to cut the same rows; let go.
 - What each is to cost, the table the measures are set against, his to correct: a scrub by the
-  chain alone; a window moved or lengthened by the window and the chain; a clip walk, a save and
-  a reopen by cuts, rows and chain, once each; an edit at once by the window and the chain, and
-  until settled by all that it made stale; the marks and let go by the chain alone.
+  chain alone; a window moved or lengthened by the window, the rows of a cut and the chain; a
+  clip walk, a save and a reopen by cuts, rows and chain, once each; an edit at once by what the
+  window shows, and until settled by all that it made stale and the window walked again; the
+  marks by the chain alone, and let go at once by the chain. `EXPECTED` in the script is the
+  table.
 - Not measured by it and to be said in the finding: a wire made or broken, a param edited above
   the cut, play, the cards open, the budget, and anything that is flat and dear, which a
   wall-time profile of the same acts on his GoPro document is for.
@@ -224,6 +229,15 @@ and the list below is the one it left. The order is the order of work.
      ledger made more of them under `pad1` at the larger count and none more under `period` is
      unread, and is the monitor's cost, which the miniature does not ask (`sim/adversary.py W`).
    - `pad1` and `pad3`, O10 between two of the gate's runs, as item 1 rules.
+   - what the audit's finding lists, each a cell of `sim/audit.py` by cuts and none built: the
+     marks of other code (`held.marked`); a window moved or lengthened with cuts held and a param
+     edited at once (`cut.served`, `cut.cut_in_time`, `window._restate`, `held._serving`, and
+     `timeline.lanes`, which draws every cut and is his to say whether it is to); the gate's band
+     edited at once; a reopen until settled; the decoder's packet times read on the first walk.
+     They are one thing, the window's thread asking every cut held to answer of those it shows,
+     and the two lines above of the plan made whole are the same thing in the plan. Mine to
+     recommend and not begun: what is held of a cut is asked by its rows, the cuts in order, so
+     that an act of the window reads the cuts the window meets; shown in the audit first.
 3. The miniature asks what it did not: O11 and O14 of the cutter's own document, which they are
    blind to; O1 as an edited player against a fresh one, with a cutter that changes the frame; O7
    of a param edited; a cutter that raises. Then it holds every oracle under every cutter.

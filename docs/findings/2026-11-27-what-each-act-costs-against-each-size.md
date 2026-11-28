@@ -225,3 +225,31 @@ and `window._cut_result` 73 of them over 1601 calls, `held._near` 43. The audit'
 the cost grows with the cuts and this says by how much: sixteen times the cuts, eight times the
 milliseconds. Answering it of fewer asks would take a held answer kept from one sync to the
 next and let go wherever a run or the window's walk moves, which is not built.
+
+## Four acts more, and what a card open costs
+
+`sim/audit.py` takes four acts it did not: eight rows played, three cards opened one after
+another, the wire into a series node below the cuts broken and made, and a param of the gate
+above the cuts edited. The cards are opened before the edits, so the edits after them run with
+a node selected and the strip drawing it, where every run before had none selected.
+
+Played rows are flat against every size. The other three grow with the cuts at once, and one
+function is most of each: `held.Runs.beside`, which the strip's `window._show_pinned` asks for
+the selected node's signal over every run held, and which reads every run to answer.
+
+| act, at once, by cuts | period: steps 50 to 400 cuts | exponent | nested: steps | exponent |
+|---|---|---|---|---|
+| cards opened | 1937 to 11390 | 0.85 | 2616 to 16611 | 0.89 |
+| wire below the cuts broken and made | 26499 to 67799 | 0.45 | 51585 to 174785 | 0.59 |
+| gate's band edited | 8252 to 18052 | 0.38 | 13112 to 27804 | 0.36 |
+| param edited above the cuts | 7541 to 13141 | 0.27 | 12124 to 20532 | 0.25 |
+
+The band edit was within what is expected with no node selected and is over with one. A strip
+that draws the clip draws a piece a run held, so growth by the cuts at once is what it is; the
+steps are few.
+
+What is not is under `nested`, the param edited below the cuts until settled: 1.25 where 1 is
+expected, 365371 to 4942962 steps, `held.py:beside` 1590050 of the growth. Each run that
+arrives draws the strip again and each drawing reads every run, so the walk after an edit is of
+the cuts squared while a node below the cuts is selected. It is not measured in milliseconds
+and is not taken away.

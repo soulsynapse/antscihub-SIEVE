@@ -30,13 +30,17 @@ EXPECTED = {    # act -> (the sizes its steps at once may grow with, and until s
     "window moved, none held": (SHOWN, SHOWN),
     "clip walk": ({}, ALL),
     "scrub": (CHAIN, CHAIN),
+    "played eight rows": (CHAIN, CHAIN),
     "window moved, cuts held": (SHOWN, SHOWN),
     "window lengthened, cuts held": (SHOWN, SHOWN),
     "marks of other code": (CHAIN, {}),
+    "cards opened": (CHAIN, CHAIN),
     "save": (ALL, {}),
     "reopen": (ALL, SHOWN),
     "param edited below the cuts": (SHOWN, AGAIN),
+    "wire below the cuts broken and made": (SHOWN, AGAIN),
     "gate's band edited": (SHOWN, AGAIN),
+    "param edited above the cuts": (SHOWN, AGAIN),
     "let go": (CHAIN, AGAIN),
 }
 
@@ -70,20 +74,42 @@ def measured(tag, size):
         win.save_document()
         win._write_held(wait=True)
 
+    def play():
+        for _ in range(8):
+            win._tick()
+
+    def cards():
+        for nid in ("smooth", "period", "gate"):
+            win.canvas.select([nid])
+
+    def rewire():
+        win.doc.disconnect("smooth")
+        win.sync()
+        win.doc.connect("below", "smooth")
+        win.sync()
+
+    def edit_above():
+        win.doc.node("gate").params["method"] = "max"
+        win._params_changed("gate")
+
     act("window moved, none held", lambda: win.set_window(mid, n, by=HAND))
     win.set_window(0, n, by=HAND)
     settled(win)
     act("clip walk", win._toggle_clip)
     act("scrub", lambda: win.goto(mid + 3, commit=True))
+    act("played eight rows", play)
     act("window moved, cuts held", lambda: win.set_window(mid, n, by=HAND))
     act("window lengthened, cuts held", lambda: win.set_window(mid, 2 * n, by=HAND))
     win.set_window(mid, n, by=HAND)
     settled(win)
     act("marks of other code", win._show_stale)
+    act("cards opened", cards)
     act("save", save)
     act("reopen", lambda: player(Path(G["SCRATCH"]) / tag), then=lambda other: other)
     act("param edited below the cuts", edit_below)
+    act("wire below the cuts broken and made", rewire)
     act("gate's band edited", edit_band)
+    act("param edited above the cuts", edit_above)
     act("let go", win.let_go)
     return out
 

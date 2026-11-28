@@ -326,15 +326,16 @@ testing, and a restart now and then is fine.
   logs, and never the assumed cause.
 - He reopens the player mid-change: a change that orphans held results is said before it lands.
 - A run is queued through the orchestrator, whose window he opens on this project.
-- SIEVE is to have cutting tools whose cuts are set by a value inferred from the whole of what
-  they are cut by (`docs/spec/todo.md`), and a fix here leaves room for them. What that holds a
+- SIEVE is to have series tools whose result is set by a value inferred from the whole clip, a
+  `period` below cut by it (`docs/spec/todo.md`), and a fix here leaves room for them. What that holds a
   fix to: a cutting node's cuts are of the results it was handed and nothing else, and stand
   while those results do, an edit below moving none (`plan`'s `cuts_made`); a node cut by held
   results alone is cut by all of them or waits, never by a part (`plan._waits`); a sync put off
   or left out is one whose answer could not have moved. His ruling on the
   node the window walked a result of: it is cut by what the window walked alone until every cut
   it reads has a held result, and then by those, never a held one beside the provisional
-  (`plan._all_held_or_seen`). What is not there for them: a provisional
-  cut of such a tool is by another value than the held one, and nothing tells the tool which it
-  is handed but the result's length against `count`; under another cut a tool is handed one
-  outer cut's result at a time and never all of them together.
+  (`plan._all_held_or_seen`). What is unread for them: whether the window's result
+  of a series node whose `reach_in_rows` has no bound is said best effort, and whether a
+  `period` cut provisionally by such a result says so or waits; the window's value of such a
+  tool is another than the clip's. Under another cut a series node runs inside one outer cut at
+  a time and never over all of them together.

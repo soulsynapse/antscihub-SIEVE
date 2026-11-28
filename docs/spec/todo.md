@@ -7,10 +7,12 @@ This is kendrick's running list of todos.
 - Make things that invalidate the cache loud so it doesn't surprise the user
 - Add preferences window
 - field inputs should be dropdowns, never manually entered
-- A cutting tool that sets its cuts by a value inferred from the whole of what it is cut by: walk
-  the clip, fit two means to the signal, threshold by a rule (isodata, Otsu), cut by that. Its
-  kin: the longest bouts kept, a bout criterion from every gap, two walks joined. What the back
-  end is held to for it is in `docs/playground/JOURNAL.md`, "Standing words of his".
+- A series tool whose result is set by a value inferred from the whole clip: walk the clip, fit
+  two means to the signal, threshold by a rule (isodata, Otsu), and a `period` below cuts by
+  that. Its kin, each a series tool on a gate with `period` cutting by it: runs padded, short
+  ones dropped, those across a short gap joined, the longest kept, a bout criterion from every
+  gap, two walks joined. What the back end is held to for it is in
+  `docs/playground/JOURNAL.md`, "Standing words of his".
 
 ## Node displays
 

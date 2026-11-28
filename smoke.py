@@ -57,7 +57,7 @@ def run_graph():
     check(out is not None and out.ndim == 2 and out.dtype == np.uint8, "motion output")
     check(g.peek(0) is out, "peek did not find the shown row")
     stack = np.stack([g.walk_row(r) for r in range(5)])   # through reduce's fold, as the worker does
-    result, feed = gated(g.series_tool.run(Series(stack, g.key(g.walk), 0, g.fps), g.series_params()), None)
+    result, feed = gated(g.series_tool.run(Series(stack, g.key(g.walk), 0, g.fps), g.series_params()), None, reduce.PRODUCES)
     check(len(result["signal"]) == 5 and result["gate"].all() and len(feed) == 5, "reduce series, gated by the player")
     key = g.key("threshold")
     doc.node("threshold").params["thresh"] = 200
@@ -91,10 +91,13 @@ def run_window():
                                                       ("threshold", "motion"), ("motion", "reduce")], f"default wiring {doc.wires}")
         check(doc.display == "motion" and win.graph.shown == "motion", "the flag should start on the last fed frame node")
         check(doc.overlay is None and win.graph.over is None and win.display._over is None, "the overlay should start off")
-        gen = win.worker._gen
+        asked, set_window, invalidate = [], win.worker.set_window, win.worker.invalidate
+        win.worker.set_window = lambda *a, **k: asked.append("window") or set_window(*a, **k)
+        win.worker.invalidate = lambda: asked.append("invalidate") or invalidate()
         win.canvas.set_overlay("threshold")
+        win.worker.set_window, win.worker.invalidate = set_window, invalidate
         check(win.graph.over == "threshold", "the overlay flag did not reach the runtime")
-        check(win.worker._gen == gen, "a flag restarted the walk")
+        check(not asked, f"a flag restarted the walk: {asked}")
         check(win.display.reason == "" and win.graph.peek(win.row) is not None, "the flagged node is not on the frame")
         # selection drives the pane; the flag stays
         win.canvas.select(["gray", "rescale"])
@@ -146,10 +149,17 @@ def run_window():
         win.canvas.delete_selected()
         check(doc.display is None and win.graph.shown is None and win.display.reason == "" and win.display._pix is None,
               "deleting the flagged node did not clear the frame")
+
+    def then_quit():        # a step that raises is a failure said, never a loop left running
+        try:
+            after()
+        except Exception as e:
+            check(False, f"raised {type(e).__name__}: {e}")
+        win.ask_unsaved = lambda: "discard"     # the document differs by now, and no one is there to answer the dialog
         win.close()
         app.quit()
 
-    QTimer.singleShot(2500, after)
+    QTimer.singleShot(2500, then_quit)
     app.exec()
 
 

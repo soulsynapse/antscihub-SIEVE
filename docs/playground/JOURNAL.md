@@ -330,8 +330,11 @@ testing, and a restart now and then is fine.
   they are cut by (`docs/spec/todo.md`), and a fix here leaves room for them. What that holds a
   fix to: a cutting node's cuts are of the results it was handed and nothing else, and stand
   while those results do, an edit below moving none (`plan`'s `cuts_made`); a node cut by held
-  results is cut by all of them or waits, never by a part (`plan._waits`); a sync put off or
-  left out is one whose answer could not have moved. What is not there for them: a provisional
+  results alone is cut by all of them or waits, never by a part (`plan._waits`); a sync put off
+  or left out is one whose answer could not have moved. Where the window walked one of the
+  results, the tree cuts by a part: each held result cuts its own outer cut beside the
+  provisional ones, as it comes, which such a tool cannot be handed, and whether that stands is
+  his to say. What is not there for them: a provisional
   cut of such a tool is by another value than the held one, and nothing tells the tool which it
   is handed but the result's length against `count`; under another cut a tool is handed one
   outer cut's result at a time and never all of them together.

@@ -133,6 +133,43 @@ print and a commit message's to hold, not this file's.
 9. What is proven here and no part of the question, to be put to him as a merge of its own: the
    850 periods' fix, `budget.py`, the checkpoint, the display proxies.
 
+## The audit of what each act costs
+
+Asked for by him on 2026-11-27, the defects of cost having been found one at a time by whoever
+picked a case: every act against every size that can grow, measured, and set against what the
+act is to cost. It is G3 made a table. To be built as `sim/audit.py` and its result filed as a
+finding; nothing of it is built until `git log` shows the script.
+
+The method is empirical growth, as Goldsmith, Aiken and Wilkerson's "Measuring Empirical
+Computational Complexity" has it: one size is varied over three or four values spaced by
+doubling with the others fixed, the steps of each function are counted, and the slope of log
+steps on log size is the exponent, 0 flat, 1 linear, 2 quadratic. A cell is a finding where the
+exponent measured passes the one expected by more than a quarter and the steps at the largest
+size are more than noise; the finding lists the functions by how much of the growth is theirs.
+
+How it is built, each a thing found while planning it:
+- It execs the miniature's text up to `failed = False` as `sim/adversary.py` does, and sets the
+  miniature's globals in that namespace before a player is opened: `PERIOD` and `KEPT` for the
+  rows of a cut, `BELOW` lengthened by `smooth` nodes each reading the last for the chain,
+  `opened(name, cuts)` for the cuts. `held.File.write` is put back to `WRITE` so a save writes.
+- Two counts an act: the steps of the act alone, which is the window's thread at once, and the
+  steps of `settled(win)` after it, the worker's turns and the slots they land in.
+- The sizes: cuts 50, 100, 200, 400; rows a cut 4, 8, 16 (`KEPT`, `PERIOD` twice it); the
+  window's length 1, 2, 4 times the one it opens at; nodes added to the chain 0, 2, 6. The base
+  is 100 cuts, 4 rows, 1, 0. It is run under `MINIATURE_CUTTER` unset and `nested`, depth being
+  two points and no slope.
+- The acts, in this order on one player a size: a window moved with none held; a clip walk; a
+  scrub; a window moved and a window lengthened with every cut held; the marks of other code
+  (`_show_stale`); a save; a reopen (`player(folder)`, the new player settled); a param edited
+  below the cuts (`smooth`'s `reach`); the gate's band edited to cut the same rows; let go.
+- What each is to cost, the table the measures are set against, his to correct: a scrub by the
+  chain alone; a window moved or lengthened by the window and the chain; a clip walk, a save and
+  a reopen by cuts, rows and chain, once each; an edit at once by the window and the chain, and
+  until settled by all that it made stale; the marks and let go by the chain alone.
+- Not measured by it and to be said in the finding: a wire made or broken, a param edited above
+  the cut, play, the cards open, the budget, and anything that is flat and dear, which a
+  wall-time profile of the same acts on his GoPro document is for.
+
 ## Done when
 
 A proposal of mine, his to cut. The question the branch was cut for is answered, one store is

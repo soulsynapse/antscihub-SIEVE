@@ -194,6 +194,11 @@ def test_dragging_a_handle_saves_the_band_and_fades_the_pinned_while_held(tmp_pa
     win.canvas.select(["head"])
     plot, inner = win.plot, win.plot._inner()
     assert plot.shown() == ["head", "down"] and plot.ink_alpha() == INK_ALPHA
+    unbound = win.graph.entry("head").reach[0] is None      # a line over rows short of the clip's edge is best effort where its node reads without bound that side, a clip walk's never
+    assert win._cut_short("head", 1, win.count - 1) == unbound and not win._cut_short("head", 0, win.count)
+    win._of_clip = True
+    assert not win._cut_short("head", 1, 1)
+    win._of_clip = False
     at_down = (int(inner.left() + inner.width() * 0.1), int(inner.bottom() - inner.height() * 0.9))   # down's line, high where head is low
     assert plot.grab().toImage().pixelColor(*at_down).red() > 100
     x = inner.left() + inner.width() * 0.75

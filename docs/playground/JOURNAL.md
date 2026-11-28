@@ -347,6 +347,7 @@ testing, and a restart now and then is fine.
   (`plan._all_held_or_seen`). A cutting node whose gate, or a node above the gate, reads
   without bound a side is cut by no result of the window's and waits for the walk, the window's
   value of such a tool being another than the clip's (`plan`, where it asks `reach_of_node` of
-  the gate). The window's own line of such a node, outside any cut in time, is not said best
-  effort, where `walk.window_legs` says it of one inside a cut. Under another cut a series node runs inside one outer cut at
+  the gate). The window's own line of such a node, outside any cut in time, is drawn best
+  effort where its rows stop short of the clip's edge on that side and are no clip walk's
+  (`window._cut_short`), as `walk.window_legs` says it of one inside a cut. Under another cut a series node runs inside one outer cut at
   a time and never over all of them together.

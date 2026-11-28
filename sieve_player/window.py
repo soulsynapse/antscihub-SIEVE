@@ -500,6 +500,7 @@ class PlayerWindow(QMainWindow):
         self.runs = held.Runs(HELD_BYTES - WINDOW_RUNS_BYTES, self._result_bytes)  # the held runs, the file's and this session's walks of the clip and its cuts
         self.window_runs = held.Runs(WINDOW_RUNS_BYTES, self._result_bytes)   # the window's own walks: they serve the window again and nothing else reads them
         self._spared = False                      # the window's results are a held run's, and the worker runs no chain over it
+        self._of_clip = False                     # that held run is a walk of the clip
         self._clip_ended = False                  # the clip walk told of its last row and its results have not yet come
         self._clip_rests = False                  # the clip walk last told of every row of its range done: the clip's last, or the one it was stopped at
         self._given = False                       # the window walk was given held results for some of the chain and steps the rest
@@ -1219,7 +1220,7 @@ class PlayerWindow(QMainWindow):
         self._take_runs([])
         self._unwritten, self._file = False, None
         self._write_failed.clear()
-        self._spared = self._given = False
+        self._spared = self._given = self._of_clip = False
         self.worker.stop()
         self.lateness.stop()
         self.machine.close()
@@ -1400,6 +1401,7 @@ class PlayerWindow(QMainWindow):
         got = self._held_over(chain)
         part = {} if got is not None else self.runs.part(s, n, chain, (s, s + n)) or self.window_runs.part(s, n, chain, (s, s + n))
         self._spared, self._given = got is not None, bool(part)
+        self._of_clip = got is not None and self.runs.over(s, n, chain, (0, self.count)) is not None
         self.worker.set_window(s, n, self._spared, self._as_given(part), by)
         self.window_periods = window_periods(self.graph.snapshot(), self.runs, s, n)
         self._show_lines()
@@ -1731,13 +1733,20 @@ class PlayerWindow(QMainWindow):
     def _show_lines(self):
         """The plot is handed each node's line in pieces: the window walk's from its first row, and
         one a period the window shows, each from the row its results begin at and said best effort
-        where window_periods says so of its node."""
+        where window_periods says so of its node. The walk's own is best effort where its node
+        reads without bound a side the results stop short of the clip's edge on, unless they are
+        a clip walk's: over those rows alone it is not the node's result over the clip."""
         lines = {}
-        for start, results, best in [(self.result_start, self.results, ()), *((v.start, v.results, v.best) for v in self.window_periods.values())]:
+        for start, results, best in [(self.result_start, self.results, None), *((v.start, v.results, v.best) for v in self.window_periods.values())]:
             for nid, r in results.items():
                 if isinstance(r, dict) and "signal" in r:
-                    lines.setdefault(nid, []).append((r["signal"], r.get("gate"), start, nid in best))
+                    lines.setdefault(nid, []).append((r["signal"], r.get("gate"), start,
+                                                      self._cut_short(nid, start, len(r["signal"])) if best is None else nid in best))
         self.plot.set_lines(lines)
+
+    def _cut_short(self, nid, start, rows):
+        e = None if self._of_clip or self.graph is None else self.graph.entry(nid)
+        return e is not None and ((e.reach[0] is None and start > 0) or (e.reach[1] is None and start + rows < self.count))
 
     def _clip_ready(self, results, start, fps):
         self.clip_results = results

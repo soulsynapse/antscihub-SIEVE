@@ -12,7 +12,7 @@ from typing import NamedTuple
 from .cut import INF, Record
 from .document import INPUT, VIDEO_TOOL, fed, fits, frame_inputs, kind_of, produces, video_output, wants
 from .registry import cuts as tool_cuts
-from .registry import computed, cut_by, cut_extents_of, fold_of, is_selector, key_params_of, optional, paths, reach_of, serves_cut_file, static, steps
+from .registry import computed, cut_by, cut_extents_of, fold_of, hands_down_what_it_reads, is_selector, key_params_of, optional, paths, reach_of, serves_cut_file, static, steps
 from .wire import overlaid
 
 
@@ -254,7 +254,7 @@ def plan(doc, tools, base, cut_file=None, cut_result=None, footage=None, count=N
     def in_time_alone(nid, stack):
         """Whether `nid` cuts what it reads in its rows and nothing else, so that what it hands
         down is what it reads, row for row."""
-        if not cuts(nid) or file_of(nid):
+        if not hands_down_what_it_reads(tools.get(doc.node(nid).tool)) or file_of(nid):
             return False
         made_here = cuts_of(nid, stack)
         return made_here != reads_of(nid, stack) and all(
@@ -333,7 +333,7 @@ def plan(doc, tools, base, cut_file=None, cut_result=None, footage=None, count=N
                         given = results if gate is not None else [cut_result(nid, None, r) if cut_result else None for r in above]
                         if any(isinstance(g, Provisional) for g in given):
                             provisional[nid] = f"{by[0]} waits on {gate}'s walk; cut provisionally over the window meanwhile"
-                        extents = [(r, g, list(cut_extents_of(tool)(computed(tool, node.params), g.result if isinstance(g, Provisional) else g)))
+                        extents = [(r, g, list(cut_extents_of(tool)(computed(tool, node.params), g.result if isinstance(g, Provisional) else g, count)))
                                    for r, g in zip(above, given) if g is not None or gate is None]
                         file = file_of(nid) if nid not in provisional and sum(len(xs) for *_, xs in extents) == 1 else None
                         made[nid] = tuple(_made(r, x, g, count, file) for r, g, xs in extents for x in xs)

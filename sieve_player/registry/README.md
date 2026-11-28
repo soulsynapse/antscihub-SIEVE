@@ -15,7 +15,10 @@ feeds; the value is called with the picked file and answers the params to merge.
 with `CUT_BY` has one input more, which no row is read through: the result wired into it over
 each cut the node reads is what its `cut_extents` is handed, once a cut, and a result over a cut in
 time counts its rows from that cut's first, the rows answered of it lifted to the footage's by the
-player. A `cut_extents` that raises cuts nothing: its node is refused, its standing what was
+player. `cut_extents` is handed the footage's rows third, None before they are known. A cutting
+tool says `run` only where it changes what it reads: one with none hands each row down as it read
+it and is in no key below it, so a cut that moves moves no result of a cut that did not; one with
+a `run` is keyed as any tool is. A `cut_extents` that raises cuts nothing: its node is refused, its standing what was
 raised, and no node below it is fed. A series tool
 that steps says `step` beside `run`: handed the state it returned for the row before, None at the
 first, one folded row and its index, it returns the next state and that row's share of `run`'s
@@ -82,6 +85,7 @@ category beside each tool.
 - `paths(tool)` -- `PATHS`, name -> loader
 - `is_selector(tool)`
 - `cuts(tool)` -- whether it has `cut_extents`: it cuts what it reads, whether or not it writes a file
+- `hands_down_what_it_reads(tool)` -- whether it cuts and has no `run`: the player hands down each row as the node read it and leaves the node out of every key below it
 - `cut_extents_of(tool)` -- its `cut_extents`, or None
 - `cut_by(tool)` -- (name, a tuple of types) of `CUT_BY`, or None
 - `reach_of(tool, given)` -- (rows before, rows after) its result at a row reads, of `reach_in_rows`; None a side without bound, both unsaid

@@ -21,7 +21,7 @@ from tools import _cutfile as C
 from tools import region
 
 cut = Tool(NAME="cut", KIND="frame", EXPECTS="bgr", PRODUCES="bgr", run=lambda frames, row, params: frames(row),
-           cut_extents=lambda params, result: [{}], cut_file=lambda video, footage, params: None)
+           cut_extents=lambda params, result, count: [{}], cut_file=lambda video, footage, params: None)
 both = Tool(NAME="both", KIND="frame", EXPECTS="gray", PRODUCES="gray", INPUTS={"other": "gray"},
             run=lambda frames, row, params: frames(row))
 TOOLS = {t.NAME: t for t in (cut, gray, add, same, both)}

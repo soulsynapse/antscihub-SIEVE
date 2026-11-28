@@ -46,7 +46,7 @@ for n, k in CASES:
     periods = [(i * step, i * step + LENGTH) for i in range(n)]
     count = periods[-1][1]
     period = Tool(NAME="period", KIND="frame", EXPECTS="gray", PRODUCES="gray", PARAMS={},
-                  run=lambda frames, row, params: frames(row), cut_extents=lambda params, result, periods=periods: [{"rows": r} for r in periods])
+                  run=lambda frames, row, params: frames(row), cut_extents=lambda params, result, count, periods=periods: [{"rows": r} for r in periods])
     tools = {t.NAME: t for t in (gray, period, series("a", "gray"), series("b", "signal"), series("c", "signal"))}
     p = plan(D.from_tools(list(tools.values())), tools, "base", footage="print", count=count)
     (w,) = p.timed

@@ -45,7 +45,7 @@ for n in COUNTS:
     each = COUNT // n
     periods = [(i * each, i * each + each) for i in range(n)]
     period = Tool(NAME="period", KIND="frame", EXPECTS="gray", PRODUCES="gray", PARAMS={},
-                  run=lambda frames, row, params: frames(row), cut_extents=lambda params, result, periods=periods: [{"rows": r} for r in periods])
+                  run=lambda frames, row, params: frames(row), cut_extents=lambda params, result, count, periods=periods: [{"rows": r} for r in periods])
     tools = {t.NAME: t for t in (gray, period, series("a", "gray"), series("b", "signal"), series("c", "signal"))}
     doc = D.from_tools(list(tools.values()))
     made = []

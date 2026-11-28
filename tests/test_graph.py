@@ -630,7 +630,7 @@ def test_a_sync_event_carries_the_plan_it_began(tmp_path):
     doc = fan_out()
     doc.pin("same", TOOLS)
     (tmp_path / "cut.mp4").write_bytes(b"cut")
-    cuts = Tool(**{**vars(gray), "cut_extents": lambda params, result: [{}], "cut_file": lambda video, footage, params: tmp_path / "cut.mp4"})
+    cuts = Tool(**{**vars(gray), "cut_extents": lambda params, result, count: [{}], "cut_file": lambda video, footage, params: tmp_path / "cut.mp4"})
     g = Graph(doc, Dec(), {**TOOLS, "gray": cuts})
     events = []
     g.on_event = events.append

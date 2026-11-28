@@ -9,7 +9,7 @@ PARAMS = {"gain": {"default": 1, "kind": "int", "range": (0, 4)}}
 CUT_BY = {"gate": ("signal", "tracks")}
 
 
-def cut_extents(params, result):
+def cut_extents(params, result, count):
     if result is None:
         raise ValueError("no gate; wire a series node into gate")
     n, gate = len(result["signal"]), result.get("gate")

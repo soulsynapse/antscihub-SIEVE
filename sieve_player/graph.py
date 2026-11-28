@@ -18,7 +18,7 @@ from .cut import computed_in
 from .cut import read as read_of_cut
 from .decoder import CLEAR, Decoder, EndOfStream, footage_print_by_stamp, letting_go
 from .document import INPUT, VIDEO_TOOL, video_output
-from .registry import by_name, computed, names_cut_files, reach_of
+from .registry import by_name, computed, hands_down_what_it_reads, names_cut_files, reach_of
 from .plan import _key, base_key, facts, plan
 from .stream import Emitter
 from .wire import ROWS, is_table, nbytes, own_bytes
@@ -814,7 +814,7 @@ class Graph:
             frames = Frames(self, plan, nid, e.srcs, e.src_key, e.types, row, c)
             with self.probe(nid, row, e.raw_key, reader) as ev:
                 try:
-                    v = e.tool.run(frames, row, e.computed)
+                    v = frames(row) if hands_down_what_it_reads(e.tool) else e.tool.run(frames, row, e.computed)
                 except Cancelled:
                     raise
                 except Exception as exc:

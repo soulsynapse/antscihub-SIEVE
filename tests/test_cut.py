@@ -48,9 +48,9 @@ def test_a_tool_cuts_by_its_declaration_alone_and_a_tool_below_two_cuts_is_told_
     def runs(name, **more):
         return Tool(NAME=name, KIND="frame", EXPECTS="gray", PRODUCES="gray", run=lambda frames, row, params: told.append((name, frames.cut)) or frames(row), **more)
 
-    period = runs("period", PARAMS={"rows": {"default": list(ROWS)}}, cut_extents=lambda params, result: [{"rows": params["rows"]}])
-    region = runs("region", cut_extents=lambda params, result: [{"rect": (1, 3, 2, 6)}])
-    found = runs("found", cut_extents=lambda params, result: [{"rows": r} for r in result])
+    period = runs("period", PARAMS={"rows": {"default": list(ROWS)}}, cut_extents=lambda params, result, count: [{"rows": params["rows"]}])
+    region = runs("region", cut_extents=lambda params, result, count: [{"rect": (1, 3, 2, 6)}])
+    found = runs("found", cut_extents=lambda params, result, count: [{"rows": r} for r in result])
     tools = {t.NAME: t for t in (gray, period, region, found, runs("below"))}
     doc = D.from_tools([gray, period, region, tools["below"]])
     g = Graph(doc, Dec(), tools)
@@ -69,7 +69,7 @@ def test_a_tool_cuts_by_its_declaration_alone_and_a_tool_below_two_cuts_is_told_
 
     sig = Tool(NAME="sig", KIND="series", EXPECTS="gray", PRODUCES="signal", run=lambda series, params: None)
     pick = Tool(NAME="pick", PRODUCES="path", select=lambda folder, params: None)
-    gated = runs("gated", PATHS={"periods": lambda path: {}}, CUT_BY={"gate": "signal"}, cut_extents=lambda params, result: [{"rows": r} for r in result])
+    gated = runs("gated", PATHS={"periods": lambda path: {}}, CUT_BY={"gate": "signal"}, cut_extents=lambda params, result, count: [{"rows": r} for r in result])
     tools = {t.NAME: t for t in (gray, sig, pick, gated, tools["below"])}
     doc = D.from_tools([gray, gated, tools["below"]])
     doc.add_node("sig")
@@ -114,7 +114,7 @@ def test_a_value_is_one_in_every_period_holding_its_row_but_where_it_read_an_edg
 
     period = Tool(NAME="period", KIND="frame", EXPECTS="gray", PRODUCES="gray", PARAMS={"rows": {"default": [[2, 8], [5, 10]]}},
                   run=lambda frames, row, params: frames(row), key_params=lambda params: {}, reach_in_rows=lambda params: (0, 0),
-                  cut_extents=lambda params, result: [{"rows": r} for r in params["rows"]])
+                  cut_extents=lambda params, result, count: [{"rows": r} for r in params["rows"]])
     own, back, walk, ahead = reads("own", 0, 0), reads("back", 1, 0, lambda row: row - 1), reads("walk", None, 0), reads("ahead", 0, 1)
     gray_own_row = Tool(**{**vars(gray), "reach_in_rows": lambda params: (0, 0)})         # a tool that says nothing reads both edges
     tools = {t.NAME: t for t in (gray_own_row, period, own, back, walk, ahead)}
@@ -158,8 +158,8 @@ def test_a_node_below_a_period_is_keyed_as_beside_it_and_neither_computes_at_nor
     detect = counted("detect", lambda frames, row, params: frames(row), lambda params: (0, 0))
     moved = counted("motion", motion.run, motion.reach_in_rows)
     period = Tool(NAME="period", KIND="frame", EXPECTS="gray", PRODUCES="gray", PARAMS={"rows": {"default": [[2, 6], [5, 9]]}},
-                  run=lambda frames, row, params: frames(row), key_params=lambda params: {}, reach_in_rows=lambda params: (0, 0),
-                  cut_extents=lambda params, result: [{"rows": r} for r in params["rows"]])
+                  key_params=lambda params: {}, reach_in_rows=lambda params: (0, 0),
+                  cut_extents=lambda params, result, count: [{"rows": r} for r in params["rows"]])
     gray_own_row = Tool(**{**vars(gray), "reach_in_rows": lambda params: (0, 0)})
     tools = {t.NAME: t for t in (gray_own_row, period, detect, moved)}
     doc = D.from_tools([gray_own_row, period])
@@ -228,7 +228,7 @@ def test_a_node_above_a_period_is_walked_as_with_none_and_one_below_is_walked_ov
     sig = Tool(NAME="sig", KIND="series", EXPECTS="gray", PRODUCES="signal", run=run, step=step)
     period = Tool(NAME="period", KIND="frame", EXPECTS="gray", PRODUCES="gray", PARAMS={"rows": {"default": []}},
                   run=lambda frames, row, params: frames(row), key_params=lambda params: {}, reach_in_rows=lambda params: (0, 0),
-                  cut_extents=lambda params, result: [{"rows": r} for r in params["rows"]])
+                  cut_extents=lambda params, result, count: [{"rows": r} for r in params["rows"]])
     tools = {t.NAME: t for t in (gray, period, sig)}
     doc = D.from_tools([gray, sig])
     doc.add_node("period", (0, 200), {"rows": [[2, 5], [4, 8]]})

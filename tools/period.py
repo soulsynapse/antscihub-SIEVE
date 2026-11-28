@@ -94,12 +94,14 @@ def key_params(params):
     return {}
 
 
-def cut_extents(params, result):
+def cut_extents(params, result, count):
     if result is not None:
         gate = result.get("gate")       # a result no band was applied to keeps every row
         return [{"rows": rows} for rows in kept(np.ones(len(result["signal"]), bool) if gate is None else gate)]
     if not params["periods"]:
         raise ValueError("no periods; wire a file selector into periods" if not params["rows"] else "the file has no periods")
+    if params["rows"] and count is not None and params["rows"] != count:
+        raise ValueError(f"the footage is {count} rows and the file's {params['rows']}; a period's rows are its footage's")
     return [{"rows": (p["first"], p["end"])} for p in params["periods"]]
 
 
@@ -160,9 +162,3 @@ def settings(parent=None):
     return _Widget(parent)
 
 
-def run(frames, row, params):
-    if params["rows"] and not params["periods"]:
-        raise ValueError("the file has no periods")
-    if params["rows"] and params["rows"] != frames.count:
-        raise ValueError(f"the footage is {frames.count} rows and the file's {params['rows']}; a period's rows are its footage's")
-    return frames(row)

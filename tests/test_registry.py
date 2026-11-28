@@ -25,8 +25,8 @@ def test_over_the_catalogue_csv_is_a_transform():
     assert signature(by_name["blobs"]) == "mask, gray → blobs" and signature(by_name["file"]) == "→ path"
     assert "key_params" in FACETS and hint("key_params").startswith("def key_params(params)")
     assert "key_params" not in {f for e in discover("tools") if e.name == "region" for f in e.missing}
-    assert cuts(by_name["region"]) and cuts(Tool(cut_extents=lambda params, result: [])) and not cuts(Tool(cut_file=lambda *a: None))
-    assert serves_cut_file(by_name["region"]) and not serves_cut_file(Tool(cut_extents=lambda params, result: []))
+    assert cuts(by_name["region"]) and cuts(Tool(cut_extents=lambda params, result, count: [])) and not cuts(Tool(cut_file=lambda *a: None))
+    assert serves_cut_file(by_name["region"]) and not serves_cut_file(Tool(cut_extents=lambda params, result, count: []))
 
 
 def test_a_param_is_declared_once_and_a_declaration_that_cannot_be_read_is_its_entrys_error(tmp_path):

@@ -143,7 +143,13 @@ An adversary was set on the first form of this list, told to assume it done; wha
 `docs/findings/2026-11-27-an-adversary-against-the-plan-to-finish.md`, its runs `sim/adversary.py`,
 and the list below is the one it left. The order is the order of work.
 
-1. His rulings first, each changing what is built below:
+1. His rulings first, each changing what is built below. The first is built as recommended, on
+   his "fix the defects then": `registry.hands_down_what_it_reads`, a cutting tool with no `run`;
+   `cut_extents` is handed the footage's rows third, where `period`'s check of its file's rows
+   now is, `period` having no `run`. To be verified by `MINIATURE_CUTTER=norun1` holding what
+   `pad1` holds and by `sim/adversary.py A` saying no held result differs from a fresh player's.
+   Found on the way and unread: a tool whose file does not import leaves its node not fed with
+   no standing in the plan; whether the card says it is not known.
    - how the player knows a cutting tool hands down what it reads. It takes any tool that cuts
      rows alone for one (`plan.py`'s `in_time_alone`) and leaves it out of the keys below, so one
      whose `run` changes the frame serves the old values after its param is edited. Mine to

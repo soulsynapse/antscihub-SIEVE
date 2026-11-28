@@ -77,7 +77,7 @@ window.PlayerWindow.ask_unsaved = lambda self: "discard"
 app = QApplication([])
 TOOLS = [e for e in discover("tools", str(Path(__file__).resolve().parent / "cutters")) if e.ok]
 CUTTER = os.environ.get("MINIATURE_CUTTER", "period")
-PAD = {"pad1": 1, "pad3": 3}.get(CUTTER, 0)
+PAD = {"pad1": 1, "pad3": 3, "norun1": 1}.get(CUTTER, 0)
 NESTED = CUTTER == "nested"
 
 
@@ -107,7 +107,7 @@ def document(path, video):
     doc = D.Document(video=video)
     doc.add_node(D.VIDEO_TOOL)
     for nid, tool, src, into in (("gray", "gray", D.VIDEO_TOOL, None), ("gate", "reduce", "gray", None),
-                                 ("period", "pad" if PAD else "period", "gray", None), ("period", None, "gate", "gate"),
+                                 ("period", "norun" if CUTTER == "norun1" else "pad" if PAD else "period", "gray", None), ("period", None, "gate", "gate"),
                                  *INNER, *((n, t, s, None) for n, t, s in BELOW)):
         if tool is not None:
             doc.add_node(tool, (0.0, 100.0 * len(doc.nodes)), None, nid)

@@ -326,6 +326,17 @@ def T():
             print(f"    {1000 * cum:7.1f} ms in all, {1000 * own:6.1f} its own, {calls:6d} calls: {Path(file).name}:{fn}")
 
 
+def N():
+    """What the player says of each node of the miniature's own document, opened and after a clip walk."""
+    win = opened("N")
+    for when in ("opened", "after a clip walk"):
+        for n in win.doc.nodes:
+            e = win.graph.entry(n.id)
+            print(f"  [{when}] {n.id} ({n.tool}): fed={getattr(e, 'fed', None)} standing={win.graph.standing(n.id)!r}")
+        print(f"  [{when}] held of below: {sum(1 for k in holds(win) if k[0] == 'below')}")
+        win._toggle_clip(); settled(win)
+
+
 def W():
     """Which functions' steps grow over a window moved, with 200 and 800 cuts held, and who makes the dataclasses made at 800."""
     import cProfile, pstats

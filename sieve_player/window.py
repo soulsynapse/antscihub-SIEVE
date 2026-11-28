@@ -25,7 +25,7 @@ from . import bare, budget, dev, document, filemenu, held, recent, store, theme,
 from . import decoder as decoder_module
 from .canvas import Canvas
 from .catalogue import Log
-from .cut import cut_in_time, holding, place_in
+from .cut import cuts_in_time, holding, place_in
 from .decoder import Decoder
 from .graph import Graph
 from .ledger import Ledger, row_cost
@@ -490,6 +490,7 @@ class PlayerWindow(QMainWindow):
         self._resume = False  # playback to restore when a playhead drag ends
         self.results, self.result_start = {}, 0   # node id -> the series chain's results, and the row they start at
         self.clip_results = {}                    # the same over the clip walk's rows, from row 0; {} when there are none
+        self._periods_drawn = {}                  # node to the list of its cuts in time the strip was last handed
         self.window_periods = {}                  # what the window shows of each cut in time it overlaps, as heldwalks.window_periods has it
         self._moved_in_periods = set()            # nodes whose result the window walked of a cut in time since the cuts were last made of them; a plan is asked once a pass, each costing every cut
         self._clip_asked = False                  # a clip walk was asked for and has not finished or been stopped
@@ -860,7 +861,10 @@ class PlayerWindow(QMainWindow):
         self.pane.set_cuts({nid: (tuple(c for c in e.cuts if not c.provisional) if nid in unheld else e.cuts, self.count,
                                   w.src if (by := registry.cut_by(e.tool)) and (w := self.doc.source(nid, by[0])) else None)
                             for nid, e in cutting.items()})
-        self.timeline.strip.set_periods({nid: [s for r in e.cuts if (s := cut_in_time(r))] for nid, e in cutting.items()})
+        periods = {nid: cuts_in_time(e.cuts) for nid, e in cutting.items()}
+        if periods.keys() != self._periods_drawn.keys() or any(v is not self._periods_drawn[nid] for nid, v in periods.items()):
+            self._periods_drawn = periods
+            self.timeline.strip.set_periods(periods)
         for n in self.doc.nodes:
             text = self.graph.standing(n.id)
             self.pane.set_standing(n.id, text)
@@ -1235,6 +1239,7 @@ class PlayerWindow(QMainWindow):
         self.timeline.strip.set_series({})
         self.timeline.strip.set_held([])
         self.timeline.strip.set_periods({})
+        self._periods_drawn = {}
         self.row, self.window_ = 0, (0, 0)
         self.plot.set_window(0, 0)
         self.plot.set_lines({})

@@ -158,6 +158,30 @@ def _known(records):
     return had
 
 
+_OF = {}    # (what, id of a node's cuts) -> (those cuts, the answer of them)
+
+
+def _once(what, records, make):
+    had = _OF.get((what, id(records)))
+    if had is None or had[0] is not records:
+        if len(_OF) > 512:
+            _OF.clear()
+        had = _OF[what, id(records)] = (records, make())
+    return had[1]
+
+
+def first_served(records):
+    """The file the first of `records` to be served one is served, as Record.served has it, or
+    None; at the cost of one look where `records` is the same tuple from one ask to the next."""
+    return _once("served", records, lambda: next((f for r in records if (f := r.served()) is not None), None))
+
+
+def cuts_in_time(records):
+    """cut_in_time of each of `records` that has one, in their order; the same list, at the cost
+    of one look, where `records` is the same tuple from one ask to the next."""
+    return _once("in time", records, lambda: [s for r in records if (s := cut_in_time(r))])
+
+
 def among(record, records):
     """Whether `record` is one of `records`, at the cost of one look and not of `records`, which
     is to be the same tuple from one ask to the next."""

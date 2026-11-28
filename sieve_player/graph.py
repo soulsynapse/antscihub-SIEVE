@@ -14,7 +14,7 @@ from typing import NamedTuple
 import numpy as np
 
 from . import density
-from .cut import computed_in
+from .cut import computed_in, first_served
 from .cut import read as read_of_cut
 from .decoder import CLEAR, Decoder, EndOfStream, footage_print_by_stamp, letting_go
 from .document import INPUT, VIDEO_TOOL, video_output
@@ -550,8 +550,7 @@ class Graph:
     def _footage(self, entries, nid):
         """`footage` under the plan's `entries`, as (path, footage print)."""
         e = entries.get(nid)
-        served = next((f for r in (() if e is None else e.reads) if (f := r.served()) is not None), None)
-        return served or (self.decoder.path, self.decoder.footage_print)
+        return (None if e is None else first_served(e.reads)) or (self.decoder.path, self.decoder.footage_print)
 
     @contextmanager
     def scrubbing(self):

@@ -5,14 +5,27 @@ from types import SimpleNamespace as Tool
 import pytest
 
 from sieve_player import document as D
+from sieve_player import registry
 from sieve_player.cut import Extent, Record, holding, place_in
 from sieve_player.graph import Graph
 from sieve_player.plan import Provisional, _all_held_or_seen, plan
 from sieve_player.walk import window_legs
 from sieve_player.worker import _clip_legs
+from tests.cutting import cuts, hold
 from tests.test_graph import Dec, gray
 
 RECT, ROWS = (10, 30, 20, 50), (3, 9)
+
+
+def test_every_tool_that_says_it_is_cut_by_a_part_cuts_a_part_as_the_whole():
+    gate = [0, 1, 1, 0, 0, 1, 0, 1, 1, 1, 0, 1]
+    said = [e.module for e in registry.discover("tools") if e.ok and registry.cut_by_a_part(e.module)]
+    assert said
+    for tool in said:
+        hold(tool, registry.defaults(tool), gate)
+    padded = Tool(NAME="padded", cut_extents=lambda params, result, count: [{"rows": (max(0, a - 1), b + 1)} for a, b in cuts(said[0], params, result["gate"])])
+    with pytest.raises(AssertionError):
+        hold(padded, registry.defaults(said[0]), gate)
 
 
 def test_a_region_within_a_period_and_a_period_within_a_region_have_one_extent_and_a_place_lifts_to_the_footage():

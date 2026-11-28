@@ -215,3 +215,13 @@ Still over under `nested`: a param edited at once by cuts, 0.48, the plan asking
 every outer cut and the window now asked what it walked of each; a reopen until settled, 0.33; a
 clip walk by the window, 0.32; the decoder's packet times, 0.27. Under `period` the one cell
 over is the decoder's, 0.48.
+
+## What the cell still over under nested is in milliseconds
+
+`sim/adversary.py T` under `nested`, the tree of the section above: one param edited below the
+cuts, on the window's own thread with no worker turn taken, the least of five, 8.2 ms with 100
+cuts held, 25.3 with 400 and 64.1 with 1600. Under the profile at 1600, `plan` is 87 ms of 122
+and `window._cut_result` 73 of them over 1601 calls, `held._near` 43. The audit's exponent says
+the cost grows with the cuts and this says by how much: sixteen times the cuts, eight times the
+milliseconds. Answering it of fewer asks would take a held answer kept from one sync to the
+next and let go wherever a run or the window's walk moves, which is not built.

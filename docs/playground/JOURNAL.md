@@ -241,8 +241,11 @@ and the list below is the one it left. The order is the order of work.
      walk: each outer cut's gate run held was a sync that made every inner cut again, and a run
      held now syncs only where a cutting node's cuts could be others for it
      (`window._could_cut_anew`, of the plan's `lacking`), which the ruling under "Standing words
-     of his" makes the last run alone. Open: a param edited at once under `nested`, each plan
-     still asking `cut_result` of every outer cut; and, his to say
+     of his" makes the last run alone. Left as it is, his to say otherwise: a param edited at
+     once under `nested`, each plan still asking `cut_result` of every outer cut, which
+     `sim/adversary.py T` times and the finding holds, and which fewer asks would close only by
+     a held answer kept across syncs and let go wherever a run or the window's walk moves. And,
+     his to say
      whether they are defects, a reopen's one pass over every cut held and the decoder's packet
      times read on the first walk.
 3. The miniature asks what it did not: O11 and O14 of the cutter's own document, which they are

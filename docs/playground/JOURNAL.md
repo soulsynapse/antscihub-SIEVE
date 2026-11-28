@@ -238,7 +238,14 @@ and the list below is the one it left. The order is the order of work.
      rows); a param edited at once (`plan`'s `cuts_made`, which the graph keeps: a cutting node
      asked the same of the same cuts and results makes the tuple it made, where every sync made
      each cut again and everything known of the tuple by its identity with it). Open: `nested`'s
-     clip walk, where each plan still asks `cut_result` of every outer cut; and, his to say
+     clip walk, where each plan still asks `cut_result` of every outer cut. Asking it cheaper
+     does not close it: the gate's key taken once for all the cuts left the audit's cell where
+     it was, and was not kept. Each outer cut's gate run held is a sync, and a sync whose inner
+     cuts moved makes a tuple of every inner cut that everything known by its identity is made
+     again of, so a clip walk is a sync an outer cut and each a pass over the cuts. What closes
+     it is fewer syncs, the inner cuts made again of several held runs at once, and when they
+     then show during a clip walk is his to say; reasoned from the audit's profile, no batching
+     measured. And, his to say
      whether they are defects, a reopen's one pass over every cut held and the decoder's packet
      times read on the first walk.
 3. The miniature asks what it did not: O11 and O14 of the cutter's own document, which they are

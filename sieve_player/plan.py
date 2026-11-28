@@ -165,7 +165,7 @@ def facts(p, pinned):
             "pinned": list(pinned)}
 
 
-def plan(doc, tools, base, cut_file=None, cut_result=None, footage=None, count=None):
+def plan(doc, tools, base, cut_file=None, cut_result=None, footage=None, count=None, cuts_made=None):
     """The plan for `doc` under `tools`, name to module, with `base` the video node's key,
     `footage` what the cuts' records say they are of, `base` with none, `count` the footage's rows,
     every cut's rows held short of it, None for no bound, `cut_result(nid, key, within)`
@@ -185,7 +185,7 @@ def plan(doc, tools, base, cut_file=None, cut_result=None, footage=None, count=N
     registry's `computed`, or what its tool's `key_params` answers of them where it has one that
     does not raise. A node that serves its file reads nothing, and its key is the one a document opened on
     that file gives its video node, so everything below it is keyed as that document's is. A node that cuts
-    in its rows alone enters no key below it: what reads it is keyed by what it reads. A node's cuts are its inputs', and a cutting node's are made from them, one for
+    in its rows alone, its tool of no `run`, enters no key below it: what reads it is keyed by what it reads. A node's cuts are its inputs', and a cutting node's are made from them, one for
     each extent its tool's `cut_extents` answers of its params and of `cut_result` over each cut it
     reads, the rows it answers of a result over a cut in time lifted by that cut's first row. A cutting node
     is refused, saying why, where its CUT_BY input is wired beside a
@@ -193,7 +193,9 @@ def plan(doc, tools, base, cut_file=None, cut_result=None, footage=None, count=N
     over a cut it reads waits on that node's walk, and cuts no cut where no answer is Provisional,
     and else cuts of each answer it has, provisionally of a Provisional one, as cut.Record says, and
     serves no file; both are among `unheld`. One with neither wired is refused. A tool that
-    raises in `cut_extents` otherwise cuts nothing. A node's reach is its tool's, the registry's `reach_of`, added a side
+    raises in `cut_extents` otherwise cuts nothing. `cuts_made` is a dict the caller keeps from one plan to the next, written here:
+    a cutting node asked the same of the same cuts and results makes the tuple of cuts it made, itself, so what is
+    known of a tuple of cuts by its identity stands; with none every plan makes its cuts anew. A node's reach is its tool's, the registry's `reach_of`, added a side
     to the furthest of the nodes it reads, and without bound where either is; the video node and
     a node that serves its file read their own row. A node reads one piece of the plate: one
     whose inputs are of two, the plate among them, is not fed, nor is anything that reads it, and
@@ -333,10 +335,18 @@ def plan(doc, tools, base, cut_file=None, cut_result=None, footage=None, count=N
                         given = results if gate is not None else [cut_result(nid, None, r) if cut_result else None for r in above]
                         if any(isinstance(g, Provisional) for g in given):
                             provisional[nid] = f"{by[0]} waits on {gate}'s walk; cut provisionally over the window meanwhile"
+                        asked = (tool, json.dumps(computed(tool, node.params), sort_keys=True, default=repr), count, file_of(nid), gate is None)
+                        had = None if cuts_made is None else cuts_made.get(nid)
+                        if (nid not in provisional and had is not None and had[0] == asked and had[1] == above
+                                and len(had[2]) == len(given) and all(a is b for a, b in zip(had[2], given))):
+                            made[nid] = had[3]
+                            return made[nid]
                         extents = [(r, g, list(cut_extents_of(tool)(computed(tool, node.params), g.result if isinstance(g, Provisional) else g, count)))
                                    for r, g in zip(above, given) if g is not None or gate is None]
                         file = file_of(nid) if nid not in provisional and sum(len(xs) for *_, xs in extents) == 1 else None
                         made[nid] = tuple(_made(r, x, g, count, file) for r, g, xs in extents for x in xs)
+                        if nid not in provisional and cuts_made is not None:
+                            cuts_made[nid] = (asked, above, given, made[nid])
                     except Exception as e:  # a tool's rule is user code: one that fails cuts nothing, and the node says what it raised
                         provisional.pop(nid, None)
                         refused[nid] = f"cuts nothing: {e}" if str(e) else f"cuts nothing: its cut_extents raised {type(e).__name__}"

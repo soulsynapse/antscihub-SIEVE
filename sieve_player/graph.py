@@ -370,6 +370,7 @@ class Graph:
         self._in_use = set()                # the files the cutting nodes' tools named at the last sync, see cut_files_named
         self._failing, self._failed = {}, {}    # node -> what its tool's cut_file or cut_files raised: at the sync under way, and at the last
         self.memo = Memo(memo_bytes)
+        self._cuts_made = {}                # plan's `cuts_made`, kept from one sync to the next
         self._lock = threading.Lock()
         self.halt = False                   # set by whoever is stopping the worker: every Frames read from then on raises Cancelled
         self.stream = stream or Emitter()
@@ -450,7 +451,7 @@ class Graph:
         self.decoder.output = output        # a change empties its cache; a read in flight under the old plan is cancelled
         self._base = base_key(self.decoder.footage_print, output)
         self._failing = {}
-        p = plan(self.doc, self.tools, self._base, self.cut_file, self.cut_result, footage=self.decoder.footage_print, count=self.decoder.count)
+        p = plan(self.doc, self.tools, self._base, self.cut_file, self.cut_result, footage=self.decoder.footage_print, count=self.decoder.count, cuts_made=self._cuts_made)
         self._in_use = self._named(p.entries)
         self.readers.keep({e.file[0] for e in p.entries.values() if e.file is not None})
         for d in self.readers.decoders():

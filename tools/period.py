@@ -19,8 +19,9 @@ The card's Write writes a gate's periods to a file of this form, `periods_text`'
 `cut_extents` is a cut a period, none chosen over another, of the gate's result where one is
 handed and else of the file's. The key holds nothing of where the periods lie, and a node below is
 keyed as the same node beside it reading what the `period` reads, its values told apart by the cut
-each read (`sieve_player/cut.py:read`). A frame whose footage is not `rows` long raises with the two
-counts, as does a file of no periods.
+each read (`sieve_player/cut.py:read`). It has no `run`: each row goes down as it was read. A file
+whose `rows` is not the footage's count raises there with the two counts, as does a file of no
+periods, and the node then cuts nothing and says so.
 """
 import json
 import os

@@ -45,8 +45,8 @@ overrule them. His freeing me from a spec's decision endorses neither side of it
 Each oracle is of G1, G2 or G3. O2, O3 and O6 were of a store's entries and went with it.
 
 - O1, of G2. What is held or shown under a key equals what a fresh player computes of the same
-  document, after any edit. Fails for a cutting tool whose `run` changes the frame; the
-  miniature does not ask it yet.
+  document, after any edit. `sim/adversary.py A` asks it of a cutting tool whose `run` changes
+  the frame, which failed it until such a tool was keyed; the miniature does not ask it yet.
 - O4, of G1. A tool of a kind the player has is added with no edit of `sieve_player/`. Asked by
   the cutters of `sim/cutters/`; no check asks it of the other kinds.
 - O5, of G3. Memory held stays under the budget given; a budget too small for one row's work is
@@ -55,11 +55,10 @@ Each oracle is of G1, G2 or G3. O2, O3 and O6 were of a store's entries and went
   not grow with how many there are. The miniature asks it of a clip walk's steps a cut, and of a
   window moved, whose steps with 800 cuts held are not to pass 1.5 times those with 200. A window
   moved took 193630, 338240 and 980519 steps with 200, 800 and 3200 held while it asked
-  `_show_held` of every cut and run, and takes 131920, 145120 and 261610 now. What still grows,
-  about 22 steps a cut, is `_restate` on each window result: `graph.footage` over every read of a
-  node below a cut in time, and the strip handed every cut in time (`timeline.lanes`). At 3200 a
-  dataclass `__init__` the monitor's `ledger._view` runs takes some 64000 steps more; generated
-  code is counted whoever calls it.
+  `_show_held` of every cut and run, and took 131920, 145120 and 261610 after that. What then
+  grew, `_restate` on each window result asking every cut its file and its rows in time, does
+  not: `sim/audit.py`'s cell of a window moved with cuts held says what it takes now. O7 is two
+  acts by one size; the audit is every act by every size, and a cost is judged there.
 
 - O8, his: a bare walk and a clip walk leave the same held; bare is only the faster for having
   no window beside it.
@@ -120,7 +119,8 @@ print and a commit message's to hold, not this file's.
    cuts turning from provisional to held has the worker walk every cut of the window again, a
    cost of the window's size and not of the clip's, which nesting makes larger. The first is the
    ask being the whole document's and not one cut's.
-4. A window moved grew past O7's bound under `pad1` and not under `pad3` or `period`; unread.
+4. A window moved grew past O7's bound under `pad1` and not under `pad3` or `period`: read, and
+   the monitor's own ledger counted as the player's; "Done when" item 2 says it.
 5. `registry.cut_by` answers a tool's first CUT_BY input and no other: a cutter of two gates has
    no way in. Unbuilt, and whether one is wanted is his.
 6. The standing of a gate's held run, to be argued to him and not built unasked: it is read by
@@ -234,8 +234,10 @@ and the list below is the one it left. The order is the order of work.
      (`cut.first_served`, `cut.cuts_in_time`, the strip handed periods only where they are
      another list); the marks of other code (`Runs.made_under`); the gate's band edited at once
      (`Runs._holding`, the fewer of the runs with a result of the node and the runs near the
-     rows). Open: a param edited at once, and `nested`'s clip walk, which are the two lines above
-     of the plan made whole, and whose callers the audit does not yet name; and, his to say
+     rows); a param edited at once (`plan`'s `cuts_made`, which the graph keeps: a cutting node
+     asked the same of the same cuts and results makes the tuple it made, where every sync made
+     each cut again and everything known of the tuple by its identity with it). Open: `nested`'s
+     clip walk, where each plan still asks `cut_result` of every outer cut; and, his to say
      whether they are defects, a reopen's one pass over every cut held and the decoder's packet
      times read on the first walk.
 3. The miniature asks what it did not: O11 and O14 of the cutter's own document, which they are

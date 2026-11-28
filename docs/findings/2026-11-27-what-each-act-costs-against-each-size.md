@@ -192,3 +192,14 @@ by the rows of a cut or the chain is over, and none that was under is over now.
 The first form of the third fix took every run with a result of a node where the runs near
 the rows were fewer, and the audit said so before it was committed: a window moved with cuts
 held went to 0.70 and a param edited until settled to 1.65.
+
+## The cells after the plan keeps the cuts it made
+
+Run again with the commit that holds this section over `218bb4a4`: the graph keeps what each
+cutting node last made and `plan` hands back the same tuple of cuts where it is asked the same
+of the same cuts and results. A param edited below the cuts, at once, by cuts: 0.14 under
+`period`, where it was 0.51, and 0.45 under `nested`, where it was 0.68. Under `period` one
+cell is over, the first walk's `decoder._packet_times`, 0.48. Under `nested` five are: that
+param edited, in `plan.<genexpr>`, `document.node` and `window._cut_result`, the plan asking
+`cut_result` of every outer cut at each sync; a clip walk until settled by cuts, 1.40, of the
+same; a reopen until settled, 0.33; a clip walk by the window, 0.27; and the decoder's, 0.27.

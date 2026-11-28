@@ -483,6 +483,8 @@ def _lifted(extent, within, result):
 
 def _standing(doc, tools, entries, heads, chain, nid):
     e = entries[nid]
+    if e.tool is None and doc.node(nid).tool != VIDEO_TOOL:
+        return f"no tool named {doc.node(nid).tool} is loaded"
     if e.kind in ("video", "selector") or e.tool is None or e.file is not None:
         return ""
     for name, src in e.srcs.items():

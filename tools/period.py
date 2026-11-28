@@ -161,5 +161,3 @@ def settings(parent=None):
                                 "a file selector wired into periods, and the gate's wire broken, cuts by them")
 
     return _Widget(parent)
-
-

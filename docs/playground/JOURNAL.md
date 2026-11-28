@@ -190,8 +190,9 @@ and the list below is the one it left. The order is the order of work.
    `cut_extents` is handed the footage's rows third, where `period`'s check of its file's rows
    now is, `period` having no `run`. To be verified by `MINIATURE_CUTTER=norun1` holding what
    `pad1` holds and by `sim/adversary.py A` saying no held result differs from a fresh player's.
-   Found on the way and unread: a tool whose file does not import leaves its node not fed with
-   no standing in the plan; whether the card says it is not known.
+   Found on the way: a tool whose file does not import left its node not fed with no standing,
+   the menu alone saying why; the plan's standing now names the tool that is not loaded, and
+   the node below says it waits on that node.
    - how the player knows a cutting tool hands down what it reads. It takes any tool that cuts
      rows alone for one (`plan.py`'s `in_time_alone`) and leaves it out of the keys below, so one
      whose `run` changes the frame serves the old values after its param is edited. Mine to

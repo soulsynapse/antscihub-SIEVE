@@ -172,3 +172,23 @@ cut by nested; base {'cuts': 100, 'rows a cut': 4, 'window': 1, 'chain': 0}
  - reopen, until settled, by cuts: 0.39 where 0 is expected, 138557 to 309763 steps; held.py:marked +43050, cut.py:reading +33600, cut.py:read +26600, held.py:_serving +18900, held.py:_serves +7700
  - gate's band edited, at once, by cuts: 0.38 where 0 is expected, 13236 to 28994 steps; held.py:_serving +6300, held.py:_serves +2100, held.py:_has +2100, held.py:<genexpr> +2100, held.py:good +1050
  - window moved, none held, until settled, by cuts: 0.27 where 0 is expected, 50623 to 93159 steps; decoder.py:_packet_times +16012, document.py:node +3483, generated:__init__ +1779, graph.py:_compute +1128, walk.py:step +1056
+
+## The cells after three of them were taken away
+
+Run again with `7071e32c`, `102533a8` and the commit that holds this section, which are the
+restating of cuts at a window's walk, the marks of other code, and what is held of a node asked
+of every run. The tables above are the tree before them. By cuts, under `period` and `nested`:
+a window moved with cuts held 0.00 and 0.00, lengthened 0.00 and 0.00, the marks of other code
+0.00 and 0.00, the gate's band edited at once 0.09 and under the floor of a quarter in both, a
+reopen until settled 0.24 and 0.33.
+
+What is still over: a param edited below the cuts, at once, 0.51 and 0.68, and under `nested` a
+clip walk until settled 1.47, both the plan made whole (`plan.<genexpr>`, `plan._within`,
+`document.node`, and `timeline.lanes` laid again of cuts the plan made again); the first walk's
+`decoder._packet_times`, 0.48 and 0.27; under `nested` a reopen until settled, 0.33, one pass
+over every cut held; and under `nested` a clip walk by the window, 0.25, at the line. No cell
+by the rows of a cut or the chain is over, and none that was under is over now.
+
+The first form of the third fix took every run with a result of a node where the runs near
+the rows were fewer, and the audit said so before it was committed: a window moved with cuts
+held went to 0.70 and a param edited until settled to 1.65.

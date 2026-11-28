@@ -225,6 +225,7 @@ class Runs:
     def __init__(self, limit, size_of):
         self.limit, self.size_of, self.all = limit, size_of, []
         self._made = (None, 0, set())
+        self._by_node = (None, 0, {})
         self._index = (None, None, None, 0)     # (`all` as indexed, each run's first row, its row past the last, their bytes together)
 
     def _indexed(self):
@@ -240,6 +241,22 @@ class Runs:
         if self._made[0] is not self.all or self._made[1] != len(self.all):
             self._made = (self.all, len(self.all), _made_under(self.all))
         return self._made[2]
+
+    def _holding(self, nodes, over=None):
+        """The runs with a result of any of `nodes`, oldest first; with `over`, (first row, row past
+        the last), those that hold a row of it, and any other run that does. At the cost of the
+        fewer of the runs with such a result and the runs holding such a row, never of every run."""
+        if self._by_node[0] is not self.all or self._by_node[1] != len(self.all):
+            by = {}
+            for run in self.all:
+                for nid in run.results:
+                    by.setdefault(nid, []).append(run)
+            self._by_node = (self.all, len(self.all), by)
+        by = self._by_node[2]
+        if over is not None and len(near := self._near(*over)) <= sum(len(by.get(nid, ())) for nid in nodes):
+            return near
+        return [run for run in dict.fromkeys(run for nid in nodes for run in by.get(nid, ()))
+                if over is None or (run.start < over[1] and over[0] < run.start + run.rows)]
 
     def _near(self, a, b):
         """The runs holding a row of `a` to `b`, oldest first, at the cost of those and not of every run."""
@@ -289,7 +306,7 @@ class Runs:
         """Node of `nodes` to its result over `n` rows from `s`, cut from the run that began earliest
         and serves it, for each one served."""
         out = {}
-        for run in self._earliest((s, s + n)):
+        for run in sorted(self._holding(nodes, (s, s + n)), key=lambda run: (run.start, -run.rows)):
             for nid in nodes:
                 if nid not in out and self._serves(run, nid, s, n, walk, cut, chain):
                     out[nid] = rows_of(run.results[nid], run.rows, s - run.start, n)
@@ -329,6 +346,10 @@ class Runs:
         self._index = (runs, np.append(starts, start), np.append(ends, start + rows), size + new.size)
         if self._made[0] is runs and self._made[1] == len(runs) - 1:
             self._made = (runs, len(runs), self._made[2] | _made_under([new]))
+        if self._by_node[0] is runs and self._by_node[1] == len(runs) - 1:
+            for nid in new.results:
+                self._by_node[2].setdefault(nid, []).append(new)
+            self._by_node = (runs, len(runs), self._by_node[2])
         came = [new]
         while len(self.all) > 1 and self._indexed()[3] > self.limit:
             has = {run: len(self._has(run.results, worth or chain)) * run.rows for run in self.all}
@@ -402,7 +423,7 @@ class Runs:
         none touching the next: the union of those runs. `over` serves a range inside one run,
         so one that lies in a stretch across two is not served."""
         spans = []      # says whether a row is served, never how many times
-        for s, n in sorted((run.start, run.rows) for run in self.all if self._whole(run.results, chain)):
+        for s, n in sorted((run.start, run.rows) for run in self._holding(chain.keys) if self._whole(run.results, chain)):
             if spans and s <= sum(spans[-1]):
                 spans[-1] = (spans[-1][0], max(sum(spans[-1]), s + n) - spans[-1][0])
             else:

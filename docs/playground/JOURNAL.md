@@ -229,15 +229,15 @@ and the list below is the one it left. The order is the order of work.
      ledger made more of them under `pad1` at the larger count and none more under `period` is
      unread, and is the monitor's cost, which the miniature does not ask (`sim/adversary.py W`).
    - `pad1` and `pad3`, O10 between two of the gate's runs, as item 1 rules.
-   - what the audit's finding lists, each a cell of `sim/audit.py` by cuts and none built: the
-     marks of other code (`held.marked`); a window moved or lengthened with cuts held and a param
-     edited at once (`cut.served`, `cut.cut_in_time`, `window._restate`, `held._serving`, and
-     `timeline.lanes`, which draws every cut and is his to say whether it is to); the gate's band
-     edited at once; a reopen until settled; the decoder's packet times read on the first walk.
-     They are one thing, the window's thread asking every cut held to answer of those it shows,
-     and the two lines above of the plan made whole are the same thing in the plan. Mine to
-     recommend and not begun: what is held of a cut is asked by its rows, the cuts in order, so
-     that an act of the window reads the cuts the window meets; shown in the audit first.
+   - what the audit's finding lists, each a cell of `sim/audit.py` by cuts. Done, to be verified
+     by the audit's cells of those acts: a window moved or lengthened with cuts held
+     (`cut.first_served`, `cut.cuts_in_time`, the strip handed periods only where they are
+     another list); the marks of other code (`Runs.made_under`); the gate's band edited at once
+     (`Runs._holding`, the fewer of the runs with a result of the node and the runs near the
+     rows). Open: a param edited at once, and `nested`'s clip walk, which are the two lines above
+     of the plan made whole, and whose callers the audit does not yet name; and, his to say
+     whether they are defects, a reopen's one pass over every cut held and the decoder's packet
+     times read on the first walk.
 3. The miniature asks what it did not: O11 and O14 of the cutter's own document, which they are
    blind to; O1 as an edited player against a fresh one, with a cutter that changes the frame; O7
    of a param edited; a cutter that raises. Then it holds every oracle under every cutter.

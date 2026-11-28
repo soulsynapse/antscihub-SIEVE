@@ -70,7 +70,8 @@ def main(path):
     g = Graph(doc, footage, tools, memo_bytes=HOLD, cut_result=cut_result)
     g.sync()
     p = g.snapshot()
-    if not g.fed(p.walk):
+    chained = g.fed(p.walk) and bool(p.chain)       # as the Worker: the clip's own range runs a chain or is not walked
+    if not chained and not any(c.extent.rows[0] < c.extent.rows[1] for w in p.timed for c in w.cuts):
         say(refused="nothing reaches a walked node")
         return 1
     t0 = [None]
@@ -82,7 +83,7 @@ def main(path):
 
     ready, refused, failed = _Told(), _Told(), _Told()
     walk = _Walk(g, name="clip", every=g.count, progress=_Told(told), ready=ready, refused=refused, failed=failed, tell_every=TELL, plan=p)
-    walk.begin(0, g.count)
+    walk.begin(0, g.count if chained else 0)
     try:
         while walk.i < walk.length:
             walk.turn()
@@ -119,6 +120,9 @@ def main(path):
                 leg.begin(c.extent.rows[0], c.extent.rows[1] - c.extent.rows[0])
                 while leg.i < leg.length:
                     leg.turn()
+                if refused.last:
+                    say(refused=refused.last[0])
+                    return 1
                 if leg.ready.last is None:
                     continue
                 got, first, _ = leg.ready.last

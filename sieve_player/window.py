@@ -670,7 +670,9 @@ class PlayerWindow(QMainWindow):
             return False
         self._written = self._text()
         self._note()
-        self._unwritten |= was != self.doc.path or (self.graph is not None and len(self._runs_to_write()) != len(self.runs))
+        if self._writer is not None:
+            self._writer.join()
+        self._unwritten |= was != self.doc.path or (self.graph is not None and not (self._file is not None and self._file.has(self._runs_to_write())))
         self._write_held(wait=True)
         self._retitle()
         return True
@@ -1374,10 +1376,10 @@ class PlayerWindow(QMainWindow):
 
     def _pictured(self):
         """What a proxy pictures, so one kept under another is let go: the shown node's key, the
-        overlay's, those of the drawers the memo serves, which hold the footage and every param,
-        and the loop's range."""
+        overlay's, the nodes that draw and the keys of those the memo serves, which hold the
+        footage and every param, and the loop's range."""
         walked, g = self._walked_nodes(), self.graph
-        drawers = tuple(self._key(nid) for nid, *_ in self.display.drawers if nid not in walked)
+        drawers = tuple((nid, None if nid in walked else self._key(nid)) for nid, *_ in self.display.drawers)
         return g.key(g.shown), None if g.over is None else g.key(g.over), drawers, self.window_
 
     def _row_ready(self, row):
@@ -1416,6 +1418,7 @@ class PlayerWindow(QMainWindow):
 
     def _take_runs(self, runs):
         self.runs.take(runs)
+        self.window_runs.take([])
         self._of_cuts = (None, None, {})
 
     def _show_held(self, moved=None, changed=None):
@@ -1515,8 +1518,8 @@ class PlayerWindow(QMainWindow):
             self.let_go()
 
     def let_go(self):
-        """Lets go of every run held, the file's with them, and of the clip walk's results; the
-        window is walked again."""
+        """Lets go of every run held, the window's own and the file's with them, and of the clip
+        walk's results; a node cut by one is cut again and the window is walked again."""
         if self.graph is None:
             return
         self._hold.stop()
@@ -1531,6 +1534,7 @@ class PlayerWindow(QMainWindow):
                 self._file.write([])
             except OSError as e:
                 self.timeline.controls.progress.setText(f"could not write {os.path.basename(self._file.path)}: {e}")
+        self._recut()
         self._ask_window(by=HAND)
         self._show_held()
 

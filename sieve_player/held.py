@@ -130,6 +130,12 @@ class File:
         except Exception:       # the file's end, or a truncated or foreign pickle, which raises whatever its bytes spell
             return [run for run, _, _ in had]
 
+    def has(self, runs):
+        """Whether the path is known to hold `runs` and no other run; of no runs, whether nothing is there."""
+        if self._had is None:
+            return not runs and not os.path.exists(self.path)
+        return len(self._had) == len(runs) and {id(run) for run, _, _ in self._had} == {id(run) for run in runs}
+
     def write(self, runs):
         """Leaves `runs` at the path in their order, those the file has first: the new are added
         behind the file's when it has no other, and else the file is made again, whole or not at
@@ -225,7 +231,7 @@ class Runs:
     def __init__(self, limit, size_of):
         self.limit, self.size_of, self.all = limit, size_of, []
         self._made = (None, 0, set())
-        self._by_node = (None, 0, {})
+        self._by_node = (None, 0, {}, {})
         self._index = (None, None, None, 0)     # (`all` as indexed, each run's first row, its row past the last, their bytes together)
 
     def _indexed(self):
@@ -251,12 +257,12 @@ class Runs:
             for run in self.all:
                 for nid in run.results:
                     by.setdefault(nid, []).append(run)
-            self._by_node = (self.all, len(self.all), by)
-        by = self._by_node[2]
+            self._by_node = (self.all, len(self.all), by, {run: i for i, run in enumerate(self.all)})
+        _, _, by, age = self._by_node
         if over is not None and len(near := self._near(*over)) <= sum(len(by.get(nid, ())) for nid in nodes):
             return near
-        return [run for run in dict.fromkeys(run for nid in nodes for run in by.get(nid, ()))
-                if over is None or (run.start < over[1] and over[0] < run.start + run.rows)]
+        return sorted({run for nid in nodes for run in by.get(nid, ())
+                       if over is None or (run.start < over[1] and over[0] < run.start + run.rows)}, key=age.get)
 
     def _near(self, a, b):
         """The runs holding a row of `a` to `b`, oldest first, at the cost of those and not of every run."""
@@ -322,7 +328,8 @@ class Runs:
         together pass the limit the oldest goes that is not the one
         `worth`, a Chain and `chain` with none, has most of, a run it has nothing of before any other.
         What it has of a run is the run's rows for each node of `_has`, the longer run of two it has
-        as much of and the one held last of two as long. The last run stays whatever it takes.
+        as much of and the one held last of two as long. The last run stays whatever it takes, and
+        where the one that came is the one to go, the runs it served stay as they were.
         `cut_by` is node to key of each result a cutting node is cut by: a run good of one goes
         after every run that is not, and of those the one held last first, so with such runs
         alone past the limit the one that came is the one refused and the runs held do not
@@ -346,6 +353,7 @@ class Runs:
         if any(stands_in(run, new) and (new.walked is None or run.walked is not None) for run in near):
             return False
         gone = [run for run in near if stands_in(new, run) and not (run.walked is not None and new.walked is None)]
+        before, served = self.all, len(gone)
         if gone:
             self.all = [run for run in self.all if not any(run is g for g in gone)]
         runs, starts, ends, size = self._indexed()
@@ -356,7 +364,8 @@ class Runs:
         if self._by_node[0] is runs and self._by_node[1] == len(runs) - 1:
             for nid in new.results:
                 self._by_node[2].setdefault(nid, []).append(new)
-            self._by_node = (runs, len(runs), self._by_node[2])
+            self._by_node[3][new] = len(runs) - 1
+            self._by_node = (runs, len(runs), *self._by_node[2:])
         came = [new]
         while len(self.all) > 1 and self._indexed()[3] > self.limit:
             dead = {run for run in self.all if serves_nothing and run is not new and serves_nothing(run)}
@@ -365,8 +374,13 @@ class Runs:
             spare = [run for run in self.all if run is not most]
             uncut = [run for run in spare if run in dead or not any(good(run.results.get(nid), key) for nid, key in (cut_by or {}).items())]
             out = ([run for run in uncut if not has[run]] or uncut)[0] if uncut else new if came else spare[-1]
-            (came.clear if out is new else lambda: gone.append(out))()
-            self.all = [run for run in self.all if run is not out]
+            if out is new:      # refused: the runs it stood in for stay
+                came.clear()
+                del gone[:served]
+                self.all = [run for run in before if run is not new and not any(run is g for g in gone)]
+            else:
+                gone.append(out)
+                self.all = [run for run in self.all if run is not out]
         return [(run.start, run.start + run.rows) for run in (*gone, *came)]
 
     def over(self, s, n, chain, walk, cut=None):

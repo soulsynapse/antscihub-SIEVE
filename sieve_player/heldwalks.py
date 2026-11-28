@@ -125,7 +125,7 @@ def window_gate_result(results, start, shown, src, key, within):
     window has no such result."""
     if within.extent.rows is not None:
         rows = within.extent.rows       # compared first: a record's equality reads every cut it was made from
-        of = next((v for (_, c), v in shown.items() if c.extent.rows == rows and c == within), None)
+        of = next((v for (_, c), v in shown.items() if c.extent.rows == rows and c == within and held.good(v.results.get(src), key)), None)
         start, results = (of.start, of.results) if of is not None else (start, {})
     r = results.get(src)
     return (r, (start, start + len(r["signal"]))) if held.good(r, key) else None

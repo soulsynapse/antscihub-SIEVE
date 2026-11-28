@@ -200,7 +200,7 @@ def plan(doc, tools, base, cut_file=None, cut_result=None, footage=None, count=N
     and else cuts of each answer it has, provisionally of a Provisional one, as cut.Record says, and
     serves no file; both are among `unheld`. One with neither wired is refused. A tool that
     raises in `cut_extents` otherwise cuts nothing. `cuts_made` is a dict the caller keeps from one plan to the next, written here:
-    a cutting node asked the same of the same cuts and results makes the tuple of cuts it made, itself, so what is
+    a cutting node asked the same of the same cuts, served from the same files, and results makes the tuple of cuts it made, itself, so what is
     known of a tuple of cuts by its identity stands; with none every plan makes its cuts anew. A node's reach is its tool's, the registry's `reach_of`, added a side
     to the furthest of the nodes it reads, and without bound where either is; the video node and
     a node that serves its file read their own row. A node reads one piece of the plate: one
@@ -341,7 +341,7 @@ def plan(doc, tools, base, cut_file=None, cut_result=None, footage=None, count=N
                         given = results if gate is not None else [cut_result(nid, None, r) if cut_result else None for r in above]
                         if any(isinstance(g, Provisional) for g in given):
                             provisional[nid] = f"{by[0]} waits on {gate}'s walk; cut provisionally over the window meanwhile"
-                        asked = (tool, json.dumps(computed(tool, node.params), sort_keys=True, default=repr), count, file_of(nid), gate is None)
+                        asked = (tool, json.dumps(computed(tool, node.params), sort_keys=True, default=repr), count, file_of(nid), gate is None, tuple(map(_files, above)))
                         had = None if cuts_made is None else cuts_made.get(nid)
                         if (nid not in provisional and had is not None and had[0] == asked and had[1] == above
                                 and len(had[2]) == len(given) and all(a is b for a, b in zip(had[2], given))):
@@ -350,7 +350,8 @@ def plan(doc, tools, base, cut_file=None, cut_result=None, footage=None, count=N
                         extents = [(r, g, list(cut_extents_of(tool)(computed(tool, node.params), g.result if isinstance(g, Provisional) else g, count)))
                                    for r, g in zip(above, given) if g is not None or gate is None]
                         file = file_of(nid) if nid not in provisional and sum(len(xs) for *_, xs in extents) == 1 else None
-                        made[nid] = tuple(_made(r, x, g, count, file) for r, g, xs in extents for x in xs)
+                        reach = reach_of_node(gate) if nid in provisional else (0, 0)
+                        made[nid] = tuple(_made(r, x, g, count, file, reach) for r, g, xs in extents for x in xs)
                         if nid not in provisional and cuts_made is not None:
                             cuts_made[nid] = (asked, above, given, made[nid])
                     except Exception as e:  # a tool's rule is user code: one that fails cuts nothing, and the node says what it raised
@@ -463,11 +464,17 @@ def _waits(results):
     return None in results and not any(isinstance(g, Provisional) for g in results)
 
 
-def _made(within, extent, answer, count, file):
+def _files(record):
+    """The file of `record` and of every cut it was made from: what two equal records may differ in."""
+    return (record.file, *map(_files, record.made_from))
+
+
+def _made(within, extent, answer, count, file, reach=(0, 0)):
     """The cut inside the cut.Record `within` of `extent`, as a tool's cut_extents answered it of
     `answer`, served from `file`. Of a Provisional answer it is provisional, its rows counted from
-    the answer's first, and cut off where it reaches an edge of the answer's rows that is not
-    `within`'s, the footage's `count` rows its last."""
+    the answer's first, and cut off where it comes within `reach`, the (rows before, rows after) a
+    row of the answer reads, of an edge of the answer's rows that is not `within`'s, the footage's
+    `count` rows its last: the answer there read rows it was not over."""
     if not isinstance(answer, Provisional):
         return within.cut(**_within(_lifted(extent, within, answer), count), file=file)
     first, end = answer.rows
@@ -476,7 +483,7 @@ def _made(within, extent, answer, count, file):
     made = within.cut(**_within(extent, count), provisional=True)
     lo, hi = within.extent.rows or (0, INF if count is None else count)
     a, b = made.extent.rows or (lo, hi)
-    return replace(made, cut_off=True) if (a <= first and lo < first) or (b >= end and end < hi) else made
+    return replace(made, cut_off=True) if (a <= first + reach[0] and lo < first) or (b >= end - reach[1] and end < hi) else made
 
 
 def _within(extent, count):

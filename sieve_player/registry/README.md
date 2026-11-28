@@ -18,15 +18,17 @@ time counts its rows from that cut's first, the rows answered of it lifted to th
 player. `cut_extents` is handed the footage's rows third, None before they are known. Before a
 walk of the clip is held the window has walked a part of that result's rows: a tool that says
 `CUT_BY_A_PART` is cut by that part meanwhile, provisionally, and says by it that its cuts of a
-part are its cuts of the whole inside the part, a cut touching the part's first or last row
-aside, which the player says is cut off; a tool that does not say it waits for the walk, and
+part are its cuts of the whole inside the part, a cut aside that comes within the reach of the
+node it is cut by of the part's first or last row, which the player says is cut off; a tool that does not say it waits for the walk, and
 its node says so, as does any tool cut by a node whose `reach_in_rows`, or that of a node above
 it, has no bound a side: its result over a part is not its result over the whole. A tool whose cut reaches past the rows that made it, or is made or not by
 rows away from it, does not say it; tests/cutting.py holds a tool to it, and the player takes
 its word. A cutting
 tool says `run` only where it changes what it reads: one with none hands each row down as it read
-it and is in no key below it, so a cut that moves moves no result of a cut that did not; one with
-a `run` is keyed as any tool is. A `cut_extents` that raises cuts nothing: its node is refused, its standing what was
+it and, where it cuts rows alone and serves no file, is in no key below it, so a cut that moves
+moves no result of a cut that did not; one with a `run`, or that cuts a rect, is keyed as any tool
+is. `cut_extents` answers by the params, the result and the count it is handed and nothing
+else: the player keeps its answer while those stand. A `cut_extents` that raises cuts nothing: its node is refused, its standing what was
 raised, and no node below it is fed. A series tool
 that steps says `step` beside `run`: handed the state it returned for the row before, None at the
 first, one folded row and its index, it returns the next state and that row's share of `run`'s
@@ -93,7 +95,7 @@ category beside each tool.
 - `paths(tool)` -- `PATHS`, name -> loader
 - `is_selector(tool)`
 - `cuts(tool)` -- whether it has `cut_extents`: it cuts what it reads, whether or not it writes a file
-- `hands_down_what_it_reads(tool)` -- whether it cuts and has no `run`: the player hands down each row as the node read it and leaves the node out of every key below it
+- `hands_down_what_it_reads(tool)` -- whether it cuts and has no `run`: the player hands down each row as the node read it and, where it cuts rows alone and serves no file, leaves the node out of every key below it
 - `cut_extents_of(tool)` -- its `cut_extents`, or None
 - `cut_by(tool)` -- (name, a tuple of types) of `CUT_BY`, or None
 - `cut_by_a_part(tool)` -- whether it says `CUT_BY_A_PART`

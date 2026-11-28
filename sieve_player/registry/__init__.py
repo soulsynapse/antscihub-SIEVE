@@ -19,7 +19,7 @@ _HINTS = {
     "EXPECTS": 'EXPECTS = "gray"  # or a tuple; the report lists the types in use',
     "PRODUCES": 'PRODUCES = "gray"  # or "same": out as in',
     "PARAMS": 'PARAMS = {"radius": {"default": 3, "kind": "int", "range": (1, 15)}}  # every param, once, in the order of its rows: its default, the kind of its value among KINDS, and "range" for an int or a float, "decimals" for a float, "choices" for a choice with "unlisted": True where a value outside them is taken; one of a default alone has no row; "changes result": False for one a draw or a card alone reads: it is in no key, and run, step, key_params, reach_in_rows, cut_extents, cut_file, cut_files, select and matches are handed the params without it',
-    "run": "def run(frames, row, params): ...  # a cutting tool with none hands down each row as it read it, and is in no key below it; one with a run is keyed as any tool",
+    "run": "def run(frames, row, params): ...  # a cutting tool with none hands down each row as it read it and, cutting rows alone and serving no file, is in no key below it; one with a run is keyed as any tool",
     "fold": "def fold(frame): ...  # a series tool: what the walk stacks per row in place of the frame",
     "step": "def step(state, row, i, params): ...  # a series tool that steps: (the next state, {field: this row's share of run's result}); state is None at the first row",
     "settings": "def settings(parent=None): ...  # a card of the tool's own; unsaid, the player makes the widget of PARAMS",

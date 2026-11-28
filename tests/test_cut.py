@@ -74,6 +74,14 @@ def test_a_tool_cuts_by_its_declaration_alone_and_a_tool_below_two_cuts_is_told_
     assert cut.extent == Extent(ROWS, (1, 3, 2, 6)) and cut.made_from == e["period"].cuts and cut.served() is None
     assert dict(told) == {"period": footage, "region": footage.cut(rows=ROWS), "below": cut}
 
+    bgr = lambda tool, **more: Tool(**{**vars(tool), "EXPECTS": "bgr", "PRODUCES": "bgr", **more})
+    serving = {t.NAME: t for t in (bgr(region, cut_file=lambda video, footage, params: None), bgr(period), bgr(tools["below"]))}
+    doc, kept, files = D.from_tools(list(serving.values())), {}, (None, ("a.mp4", "a"), ("b.mp4", "b"))
+    doc.add_node(D.VIDEO_TOOL)
+    doc.connect(D.VIDEO_TOOL, "region")
+    reads =lambda file: plan(doc, serving, "base", cut_file=lambda nid, up: file if nid == "region" else None, footage="print", cuts_made=kept).entries["below"].reads[0].served()
+    assert tuple(map(reads, files)) == files        # cuts kept from one plan are not the next's where the node above serves another file
+
     doc = D.from_tools([gray, found, tools["below"]])
     asked = []
     p = plan(doc, tools, "base", cut_file=lambda nid, up: asked.append(nid), cut_result=lambda nid, key, within: [(0, 2), (5, 7)], footage="print")
@@ -118,6 +126,8 @@ def test_a_tool_cuts_by_its_declaration_alone_and_a_tool_below_two_cuts_is_told_
     reach, sig.reach_in_rows = sig.reach_in_rows, lambda params: (None, 0)      # a gate whose result at a row reads every row before it: over a part it is not its result over the whole
     p = seen(Provisional([(0, 2), (3, 5)], (3, 9)))
     assert p.entries["gated"].cuts == () and p.entries["gated"].standing == "gate waits on sig's walk"
+    sig.reach_in_rows = lambda params: (0, 1)       # a gate that reads the row after: its last row over a part read a row the part has not
+    assert [c.cut_off for c in seen(Provisional([(0, 2), (3, 5)], (3, 9))).entries["below"].cuts] == [True, True]
     sig.reach_in_rows = reach
     doc.remove_node("under")
     doc.add_node("pick")

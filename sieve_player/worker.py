@@ -95,7 +95,8 @@ class _Legs:
         self._told.append(changed)
 
     def emit(self, done, total, ran):
-        told = [self._told.pop(0) for _ in range(len(self._told))]
+        told = self._told[:len(self._told)]
+        del self._told[:len(told)]      # one told meanwhile lies behind these and stays
         if self._will is None or self._will[0] is not self.plan or any(changed is None for changed in told):
             self._will = (self.plan, {_keyed(leg): leg for leg in self.queue if self._ask(leg) is not None})
         else:

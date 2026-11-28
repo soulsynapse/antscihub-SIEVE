@@ -36,10 +36,11 @@ def test_a_held_file_reads_back_by_the_form_of_its_records_alone_and_is_let_go_b
             f.write(records)
         return read()
     assert begun_with((held.VERSION + 1,)) == [] and begun_with(held.VERSION) == []
-    file = held.File(path)
-    file.write(begun_with((held.VERSION,)))
+    file, had = held.File(path), begun_with((held.VERSION,))
+    file.write(had)
+    assert file.has(had) and not file.has([])
     file.write([])
-    assert read() == []
+    assert read() == [] and file.has([]) and not file.has(had)      # what a save asks before it leaves the file as it is
     with open(path, "wb") as f:
         f.write(b"not a pickle")
     assert read() == [] and held.File(str(tmp_path / "absent")).load() == []
@@ -112,6 +113,9 @@ def test_a_range_is_served_from_the_run_that_covers_it_under_the_chains_keys_and
     touching = held.Runs(100, lambda nid, r: len(r))
     assert touching.hold(0, 4, of(0, 4, now), now) and touching.hold(4, 4, of(4, 4, now), now)
     assert touching.spans(now) == [(0, 8)] and touching.over(2, 4, now, walk) is None       # held across two runs, served from neither
+    by_rows = held.Runs(12, lambda nid, r: len(r["signal"]))
+    assert by_rows.hold(0, 5, of(0, 5, now), now) and by_rows.hold(10, 1, of(10, 1, now), now)
+    assert not by_rows.hold(10, 4, of(10, 4, now), now) and [run[:2] for run in by_rows] == [(0, 5), (10, 1)]      # refused for the limit: the run it stood in for is held still
 
 
 def test_a_run_serves_a_node_where_its_rows_read_the_same_of_the_run_as_of_the_walk_asking():
@@ -177,6 +181,7 @@ def test_a_gate_inside_a_cut_in_time_is_answered_by_the_windows_walk_of_that_cut
     r = {"signal": np.arange(3.0), "key": "k"}
     shown = {("gray", a): Shown(9, {"gate": r}, frozenset(), False), ("gray", b): Shown(16, {}, frozenset(), False)}
     assert window_gate_result({}, 0, shown, "gate", "k", a) == (r, (9, 12))
+    assert window_gate_result({}, 0, {("other", a): Shown(8, {}, frozenset(), False), **shown}, "gate", "k", a) == (r, (9, 12))     # another walked node's walk of an equal cut has no gate
     assert window_gate_result({}, 0, shown, "gate", "other", a) is None
     assert window_gate_result({"gate": r}, 0, shown, "gate", "k", b) is None
     assert window_gate_result({"gate": r}, 4, shown, "gate", "k", root) == (r, (4, 7))

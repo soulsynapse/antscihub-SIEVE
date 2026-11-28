@@ -23,3 +23,11 @@ on the held runs. Before a clip walk both cutting nodes said their gate waits on
 that they were cut provisionally over the window.
 
 One run, one machine, no window on screen; the seconds are of that run and are not a measure.
+
+## With the runs limited
+
+Run again with a second pass: a player whose runs are limited to the bytes its clip walk held,
+the two edits then made, once with `held.Runs.hold` told which runs serve nothing and once not.
+Both keep all 1189 results of the edited document, in 1094 runs told and 1134 not. The runs of
+the cuts that went are the oldest held, and the oldest went first before the rule; the rule
+holds for any order what age held here. The first pass's figures were the same to the turn.

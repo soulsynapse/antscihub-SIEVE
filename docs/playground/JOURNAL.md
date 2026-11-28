@@ -314,10 +314,14 @@ testing, and a restart now and then is fine.
 - A cut file served to a bare walk, and every key, are named by the footage print: footage
   changed only between its first and last `decoder.SLICE` bytes, at the same size, is taken for
   the one before.
-- Whether the mark of other code reaches nodes under a cut in time is unread.
 - A gate's band edited moves the cuts below it, and the runs held of the cuts that were stay
-  held under keys still good: they serve nothing, are written with the document and count
-  against the limit (`docs/findings/2026-11-27-the-nested-gopro-document-edited-against-walked-fresh.md`).
+  held under keys still good, as a run under a key left behind stays: a band moved back is
+  served by them. They serve nothing meanwhile, are written with the document, and go before
+  any run that serves once the runs pass their limit (`held.Runs.hold`'s `serves_nothing`;
+  `docs/findings/2026-11-27-the-nested-gopro-document-edited-against-walked-fresh.md`).
+  Whether they are let go at once instead is his.
+- A window's walk given held rows of its stepped nodes draws a node that reads without bound
+  best effort, where the rows given may be a clip walk's and the line the clip's.
 - The registry's types are unchecked for a set of periods as a value, a gate of two inputs, a
   matrix of time by scale.
 

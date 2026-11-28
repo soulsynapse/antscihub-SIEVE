@@ -396,6 +396,11 @@ def test_a_period_cut_by_a_gate_is_cut_by_the_gates_held_run_and_holding_its_per
         g.sync()
         assert g.snapshot().entries["period"].cuts == cuts
     assert len(runs) == 4
+    gates, of_gate = held.Runs(2, lambda nid, r: 1), held.Chain({"sig": "k"}, frozenset())
+    leaf, sig = {"below": {"signal": np.zeros(2), "key": "b"}}, lambda: {"sig": {"signal": np.zeros(2), "key": "k"}}
+    assert gates.hold(0, 2, leaf, held.Chain({"below": "b"}, frozenset())) and gates.hold(2, 2, sig(), of_gate, cut_by={"sig": "k"})
+    assert gates.hold(4, 2, sig(), of_gate, cut_by={"sig": "k"}) == [(0, 2), (4, 6)]      # the run no node is cut by goes first
+    assert not gates.hold(6, 2, sig(), of_gate, cut_by={"sig": "k"}) and [r.start for r in gates] == [2, 4]     # of runs a node is cut by, the one that came is refused: no run held moves, so nothing is walked again
     g.decoder.count = 9     # a count lowered under a period's end
     g.sync()
     lowered = g.snapshot()

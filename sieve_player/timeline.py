@@ -117,8 +117,8 @@ class Strip(QWidget):
         self.count, self.fps = 1, 30.0
         self.playhead, self.window = 0, (0, 0)
         self.hover = -1
-        self.series, self.selection = {}, None   # node -> (values, start, gate) drawn; the selection's in colour, the rest in ink
-        self.more = {}           # node -> its further stretches, see set_series
+        self._drawn = ({}, {}, None)    # series, node -> (values, start, gate) drawn; more, node -> its further stretches, see set_series; the selection, drawn in colour, the rest in ink
+        self._answer = None             # what show_series was last told and has not asked
         self.held = []           # (start, rows) spans drawn along the top edge, see set_held
         self.lanes = []          # (node, [(first, end), ...]) drawn along the bottom edge, see set_periods
         self._lanes = None       # (the size and lanes it was painted for, the pixmap of the lanes alone)
@@ -158,11 +158,27 @@ class Strip(QWidget):
         draws none. `more` is {node: [(values, start, gate), ...]}, the same node's signal over
         other stretches of the clip, drawn as its first is; a node's stretches share one scale,
         the largest value among them."""
-        cast = lambda v, start, g: (np.asarray(v, np.float32), int(start), None if g is None else np.asarray(g, bool))
-        self.series = {nid: cast(*seg) for nid, seg in series.items()}
-        self.more = {nid: [cast(*seg) for seg in segs] for nid, segs in (more or {}).items() if nid in self.series}
-        self.selection = selection
+        self.show_series(lambda: (series, selection, more))
+
+    def show_series(self, answer):
+        """As set_series of what `answer()` returns, (series, selection, more), asked once, when the
+        strip next paints or its series, more or selection is read: of many told before a paint
+        only the last is asked."""
+        self._answer = answer
         self._redraw()
+
+    def _settled(self):
+        if (answer := self._answer) is not None:
+            self._answer = None
+            series, selection, more = answer()
+            cast = lambda v, start, g: (np.asarray(v, np.float32), int(start), None if g is None else np.asarray(g, bool))
+            drawn = {nid: cast(*seg) for nid, seg in series.items()}
+            self._drawn = (drawn, {nid: [cast(*seg) for seg in segs] for nid, segs in (more or {}).items() if nid in drawn}, selection)
+        return self._drawn
+
+    series = property(lambda self: self._settled()[0])
+    more = property(lambda self: self._settled()[1])
+    selection = property(lambda self: self._settled()[2])
 
     def set_held(self, spans):
         """The stretches of the clip, (start, rows) each, a window placed wholly inside one of which

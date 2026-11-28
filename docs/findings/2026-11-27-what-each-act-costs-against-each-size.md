@@ -253,3 +253,23 @@ expected, 365371 to 4942962 steps, `held.py:beside` 1590050 of the growth. Each 
 arrives draws the strip again and each drawing reads every run, so the walk after an edit is of
 the cuts squared while a node below the cuts is selected. It is not measured in milliseconds
 and is not taken away.
+
+## The cells after the strip asks once a paint, and a clip walk under a limit
+
+The strip is told what to ask and asks it when it next paints or is read
+(`timeline.Strip.show_series`), so of the runs that arrive before a paint the last alone is
+answered. With a node selected `held.Runs.beside` is in no cell's growth: under `period` one cell
+is over, the decoder's `_packet_times` at 0.48 as before, and under `nested` five, the four it
+had and the wire below the cuts broken and made at once, 0.47, 43806 to 116606 steps, which is
+`plan` asked twice of what a param edited below the cuts asks it once.
+
+`sim/budget.py` walks the clip with the held runs limited to a half, an eighth and a
+sixty-fourth of what the walk holds. Under `period` and `pad1` the worker rested in the turns a
+walk under no limit takes and kept no result other than that walk's. Under `nested` at a half
+it never rested: 200000 turns where the walk takes 1481, each `gate2` run held putting out the
+`gate2` run held longest, `inner` then lacking it, the clip walk walking it again and its run
+putting out the next. `held.Runs.hold` is now told the results a cutting node is cut by: a run
+good of one goes after every run that is not, and where such runs alone pass the limit the run
+that came is refused and no run held moves. Under `nested` the walk rests in 1481 turns at a
+half with 49 of 121 results kept, and at an eighth and a sixty-fourth in 1091 with `inner`
+saying it waits; no result kept under any limit differs from the walk's under none.

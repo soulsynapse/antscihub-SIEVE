@@ -1795,7 +1795,9 @@ class PlayerWindow(QMainWindow):
         a result some cutting node is cut by, and that node's cuts could be others for it: no other
         run moves a cut."""
         was = set(self.runs)
-        if moved := self.runs.hold(start, rows, results, chain or self._chain(), cut, worth=self._chain(self._walked_nodes()), walked=walked):
+        wired = [self.doc.source(n.id, by[0]) for n in self.doc.nodes if (by := registry.cut_by(self.tools.get(n.tool)))]
+        if moved := self.runs.hold(start, rows, results, chain or self._chain(), cut, worth=self._chain(self._walked_nodes()), walked=walked,
+                                   cut_by={w.src: self._key(w.src) for w in wired if w}):
             self._unwritten = True
             self._hold.start()
             changed = was ^ set(self.runs)
@@ -1931,6 +1933,10 @@ class PlayerWindow(QMainWindow):
         first as held.Runs.over serves, so no row is drawn twice. A node below a cut in time has no
         range of its own: its signal is over each run held under its key, or with none held over
         each period the window walked."""
+        self.timeline.strip.show_series(self._pinned_series)
+
+    def _pinned_series(self):
+        """(series, selection, more) as timeline's set_series takes them, of the player as it is when asked."""
         series, more = {}, {}
         below = set() if self.graph is None else {nid for w in self.graph.snapshot().timed for nid in w.chain}
         for nid in document.shown(self.selection, self.doc.pinned) if self.doc is not None else []:
@@ -1945,7 +1951,7 @@ class PlayerWindow(QMainWindow):
                     (v.results[nid]["signal"], v.start, v.results[nid].get("gate")) for v in self.window_periods.values()
                     if isinstance(v.results.get(nid), dict) and "signal" in v.results[nid]]):
                 series[nid], more[nid] = pieces[0], pieces[1:]
-        self.timeline.strip.set_series(series, self.selection, more)
+        return series, self.selection, more
 
     def _set_length(self, rows):
         """The plot's x axis is the window, so a walk fills in at its place instead of stretching."""

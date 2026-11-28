@@ -312,7 +312,7 @@ class Runs:
                     out[nid] = rows_of(run.results[nid], run.rows, s - run.start, n)
         return out
 
-    def hold(self, start, rows, results, chain, cut=None, worth=None, walked=None):
+    def hold(self, start, rows, results, chain, cut=None, worth=None, walked=None, cut_by=None):
         """Holds `results` as a run over `rows` rows from `start` inside a cut of rows `cut` when every
         chain node has `rows` rows in it under a key, unless a run held serves every node it has over
         its rows under the same key and its walk and cut, and holds the walked rows if it has them.
@@ -322,7 +322,11 @@ class Runs:
         together pass the limit the oldest goes that is not the one
         `worth`, a Chain and `chain` with none, has most of, a run it has nothing of before any other.
         What it has of a run is the run's rows for each node of `_has`, the longer run of two it has
-        as much of and the one held last of two as long. The last run stays whatever it takes."""
+        as much of and the one held last of two as long. The last run stays whatever it takes.
+        `cut_by` is node to key of each result a cutting node is cut by: a run good of one goes
+        after every run that is not, and of those the one held last first, so with such runs
+        alone past the limit the one that came is the one refused and the runs held do not
+        change. A caller that walks again what went would else walk without end."""
         nodes = list(chain.keys)
         if not nodes or not all(isinstance(r := results.get(nid), dict) and "signal" in r and len(r["signal"]) == rows
                                 and r.get("key") is not None for nid in nodes):
@@ -355,8 +359,8 @@ class Runs:
             has = {run: len(self._has(run.results, worth or chain)) * run.rows for run in self.all}
             most = max(reversed(self.all), key=lambda run: (has[run], run.rows))
             spare = [run for run in self.all if run is not most]
-            left = [run for run in spare if not has[run]]
-            out = (left or spare)[0]
+            uncut = [run for run in spare if not any(good(run.results.get(nid), key) for nid, key in (cut_by or {}).items())]
+            out = ([run for run in uncut if not has[run]] or uncut)[0] if uncut else new if came else spare[-1]
             (came.clear if out is new else lambda: gone.append(out))()
             self.all = [run for run in self.all if run is not out]
         return [(run.start, run.start + run.rows) for run in (*gone, *came)]

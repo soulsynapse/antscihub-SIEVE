@@ -7,7 +7,7 @@ import pytest
 from sieve_player import document as D
 from sieve_player.cut import Extent, Record, holding, place_in
 from sieve_player.graph import Graph
-from sieve_player.plan import Provisional, plan
+from sieve_player.plan import Provisional, _all_held_or_seen, plan
 from sieve_player.walk import window_legs
 from sieve_player.worker import _clip_legs
 from tests.test_graph import Dec, gray
@@ -91,6 +91,11 @@ def test_a_tool_cuts_by_its_declaration_alone_and_a_tool_below_two_cuts_is_told_
     assert _clip_legs(p) == [] and [leg.best for leg in window_legs(p, 3, 6)] == [{"under"}, set()]
     held = seen([(3, 5), (6, 8)])
     assert held.unheld == set() and not any(c.provisional for c in held.entries["below"].cuts) and len(_clip_legs(held)) == 2
+    both = seen(Provisional([(0, 2)], (3, 9), [(3, 5), (6, 8)]))       # walked by the window and held: cut by the held
+    assert both.unheld == set() and [c.extent.rows for c in both.entries["below"].cuts] == [(3, 5), (6, 8)]
+    a, b, lacking = Record("print").cut(rows=(0, 4)), Record("print").cut(rows=(4, 8)), {}
+    walked = Provisional("seen", (0, 2))       # one cut held and one not: cut by what the window walked alone, the held one left out
+    assert _all_held_or_seen("n", (a, b), [walked, "held"], lacking) == [walked, None] and lacking == {"n": {(0, 4)}}
     doc.remove_node("under")
     doc.add_node("pick")
     doc.connect("pick", "gated", "periods")

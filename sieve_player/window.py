@@ -491,6 +491,7 @@ class PlayerWindow(QMainWindow):
         self.results, self.result_start = {}, 0   # node id -> the series chain's results, and the row they start at
         self.clip_results = {}                    # the same over the clip walk's rows, from row 0; {} when there are none
         self._periods_drawn = {}                  # node to the list of its cuts in time the strip was last handed
+        self._lacking_of, self._lacking = None, {}  # a plan, and its `lacking` less every cut a run was held of since
         self.window_periods = {}                  # what the window shows of each cut in time it overlaps, as heldwalks.window_periods has it
         self._moved_in_periods = set()            # nodes whose result the window walked of a cut in time since the cuts were last made of them; a plan is asked once a pass, each costing every cut
         self._clip_asked = False                  # a clip walk was asked for and has not finished or been stopped
@@ -1791,34 +1792,52 @@ class PlayerWindow(QMainWindow):
         inside a cut of rows `cut`, with `walked` as hold takes it, weighed against the others by
         every walk's chain; and one held is written once nothing more has been for HOLD_MS. A run
         `of_clip` is a clip walk's. The cuts are made again only where a run that went or came has
-        a result some cutting node is cut by: no other run moves a cut."""
+        a result some cutting node is cut by, and that node's cuts could be others for it: no other
+        run moves a cut."""
         was = set(self.runs)
         if moved := self.runs.hold(start, rows, results, chain or self._chain(), cut, worth=self._chain(self._walked_nodes()), walked=walked):
             self._unwritten = True
             self._hold.start()
             changed = was ^ set(self.runs)
             self._show_held(moved, changed)
-            gates = self._cut_by_nodes()
-            if any(nid in run.results for run in changed for nid in gates):
+            if self._could_cut_anew(changed, was):
                 self._recut(resume=of_clip)
 
-    def _cut_by_nodes(self):
-        """The nodes wired into a cutting node's CUT_BY input."""
-        wires = ((by, n.id) for n in self.doc.nodes if (by := registry.cut_by(self.tools.get(n.tool))))
-        return {w.src for by, nid in wires if (w := self.doc.source(nid, by[0]))}
+    def _could_cut_anew(self, changed, was):
+        """Whether the runs `changed`, each held now or in `was` and gone, could move a cutting
+        node's cuts: one has a result the node is cut by, and the node is cut by held results, or
+        a run it could be cut by went, or no cut it reads is left with none held. A node that
+        waits, or is cut by what the window walked, is cut the same until the last comes."""
+        p = self.graph.snapshot()
+        if self._lacking_of is not p:
+            self._lacking_of, self._lacking = p, {nid: set(rows) for nid, rows in p.lacking.items()}
+        for n in self.doc.nodes:
+            by = registry.cut_by(self.tools.get(n.tool))
+            w = by and self.doc.source(n.id, by[0])
+            touched = [run for run in changed if w and w.src in run.results]
+            if not touched:
+                continue
+            left = self._lacking.get(n.id)
+            if left is None or any(run in was for run in touched):
+                return True
+            left.difference_update(run.cut for run in touched)
+            if not left:
+                return True
+        return False
 
     def _cut_result(self, nid, key, within):
         """What plan.plan asks of a cutting node `nid` cut by a result on a wire over `within`, a
         cut.Record: the result of the node wired there under `key`, as a held run from row 0 to the
-        clip's last row has it, or for a cut in time a run of that cut walked whole; with neither,
-        as the window walked it, by heldwalks.window_gate_result, a plan.Provisional; None with none."""
+        clip's last row has it, or for a cut in time a run of that cut walked whole; where the
+        window walked it, by heldwalks.window_gate_result, a plan.Provisional with the held one in
+        it; None with neither."""
         by = registry.cut_by(self.tools.get(self.doc.node(nid).tool))
         w = by and self.doc.source(nid, by[0])
         if not w:
             return None
         got = gate_result(self.runs, w.src, key, within, self.count)
-        if got is None and (seen := window_gate_result(self.results, self.result_start, self.window_periods, w.src, key, within)):
-            return Provisional(*seen)
+        if seen := window_gate_result(self.results, self.result_start, self.window_periods, w.src, key, within):
+            return Provisional(*seen, got)
         return got
 
     def _cut_again(self, results):

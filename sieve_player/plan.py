@@ -20,10 +20,13 @@ FED_ABSENT = "a gated-out row is absent"     # in the key of a series node anoth
 
 
 class Provisional(NamedTuple):
-    """A cut_result answer that nothing holds: `result` as the window walked it, over the footage's
-    `rows`, (first, the row past the last), the only rows of it known."""
+    """A cut_result answer the window walked: `result` over the footage's `rows`, (first, the row
+    past the last), the only rows of it known, and `held` the answer a run holds of the same cut,
+    None with none. A node is cut by the held answers where every cut it reads has one, and
+    else by what the window walked alone."""
     result: object
     rows: tuple
+    held: object = None
 
 
 def _key(*parts):
@@ -72,7 +75,7 @@ class Plan:
     over: str | None = None                       # the overlay flag, when it names a one-plane node
     timed: list = field(default_factory=list)     # a Walk for each extent cut in time that heads read: none of it on `chain`
     unheld: frozenset = frozenset()               # the cutting nodes whose CUT_BY wire's result is not held over every cut they read: each waits, or is cut provisionally
-
+    lacking: dict = field(default_factory=dict)   # each of `unheld` -> the rows of every cut it reads that no held result is over, None for the footage's own
     @property
     def walk(self):
         """The first of `walks`; with no chain, what is shown."""
@@ -172,7 +175,8 @@ def plan(doc, tools, base, cut_file=None, cut_result=None, footage=None, count=N
     answering the result a cutting node reads on its CUT_BY wire over `within`, one of the cuts it
     reads, its rows counted from that cut's first, `key` that of the node wired there and None with
     none, the answer None where no such result is held nor walked by the window, and a Provisional
-    where the window walked it and nothing holds it, and
+    where the window walked it, a node cut by the held answers where every cut it reads has one
+    and else by the Provisional alone, and
     `cut_file(nid, up)` answering (path, footage print) of the file that holds a cutting node's cut
     of the footage it reads, or None: `up` is that footage as the node above answered, None for the
     video. It is asked only of a node whose tool cuts, has the cut_file facet and that reads the video
@@ -308,7 +312,7 @@ def plan(doc, tools, base, cut_file=None, cut_result=None, footage=None, count=N
             reads[nid] = (root,) if src is None else cuts_of(src, (*stack, nid))
         return reads[nid]
 
-    waiting, provisional = {}, {}
+    waiting, provisional, lacking = {}, {}, {}
 
     def reads_node(nid, other, stack=()):
         return any(s == other or (s not in stack and reads_node(s, other, (*stack, nid))) for s in wired(nid).values() if s is not None)
@@ -328,7 +332,7 @@ def plan(doc, tools, base, cut_file=None, cut_result=None, footage=None, count=N
                     refused[nid] = f"fed both: {', '.join(filed)} by a file and {by[0]} by {gate}; one cuts it"
                 elif gate is not None and reads_node(gate, nid):
                     refused[nid] = f"in a cycle: {by[0]} is fed by {gate}, which reads {nid}"
-                elif gate is not None and _waits(results := [cut_result and cut_result(nid, key_of(gate, (*stack, nid)), r) for r in above]):
+                elif gate is not None and _waits(results := _all_held_or_seen(nid, above, [cut_result and cut_result(nid, key_of(gate, (*stack, nid)), r) for r in above], lacking)):
                     waiting[nid], made[nid] = f"{by[0]} waits on {gate}'s walk", ()
                 else:
                     try:
@@ -435,7 +439,18 @@ def plan(doc, tools, base, cut_file=None, cut_result=None, footage=None, count=N
                       or _standing(doc, tools, entries, heads, walked_chains, nid))
     over = doc.overlay if doc.overlay in entries and overlaid(produces(doc, tools, doc.overlay)) else None
     return Plan(entries, heads, chain, [s for s in series if s not in walked_chains], doc.display if doc.display in entries else None, over, timed,
-                frozenset({*waiting, *provisional}))
+                frozenset({*waiting, *provisional}), lacking)
+
+
+def _all_held_or_seen(nid, above, answers, lacking):
+    """The cut_result `answers` of a node, one a cut of `above`, as it is cut by them: the held
+    ones where every cut has one, and else the Provisional alone, None for the rest; `lacking[nid]`
+    is then the rows of each cut with none held."""
+    held = [g.held if isinstance(g, Provisional) else g for g in answers]
+    if None not in held:
+        return held
+    lacking[nid] = frozenset(r.extent.rows for r, h in zip(above, held) if h is None)
+    return [g if isinstance(g, Provisional) else None for g in answers]
 
 
 def _waits(results):

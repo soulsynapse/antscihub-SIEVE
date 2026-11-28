@@ -237,15 +237,12 @@ and the list below is the one it left. The order is the order of work.
      (`Runs._holding`, the fewer of the runs with a result of the node and the runs near the
      rows); a param edited at once (`plan`'s `cuts_made`, which the graph keeps: a cutting node
      asked the same of the same cuts and results makes the tuple it made, where every sync made
-     each cut again and everything known of the tuple by its identity with it). Open: `nested`'s
-     clip walk, where each plan still asks `cut_result` of every outer cut. Asking it cheaper
-     does not close it: the gate's key taken once for all the cuts left the audit's cell where
-     it was, and was not kept. Each outer cut's gate run held is a sync, and a sync whose inner
-     cuts moved makes a tuple of every inner cut that everything known by its identity is made
-     again of, so a clip walk is a sync an outer cut and each a pass over the cuts. What closes
-     it is fewer syncs, the inner cuts made again of several held runs at once, and when they
-     then show during a clip walk is his to say; reasoned from the audit's profile, no batching
-     measured. And, his to say
+     each cut again and everything known of the tuple by its identity with it). And `nested`'s clip
+     walk: each outer cut's gate run held was a sync that made every inner cut again, and a run
+     held now syncs only where a cutting node's cuts could be others for it
+     (`window._could_cut_anew`, of the plan's `lacking`), which the ruling under "Standing words
+     of his" makes the last run alone. Open: a param edited at once under `nested`, each plan
+     still asking `cut_result` of every outer cut; and, his to say
      whether they are defects, a reopen's one pass over every cut held and the decoder's packet
      times read on the first walk.
 3. The miniature asks what it did not: O11 and O14 of the cutter's own document, which they are
@@ -331,10 +328,10 @@ testing, and a restart now and then is fine.
   fix to: a cutting node's cuts are of the results it was handed and nothing else, and stand
   while those results do, an edit below moving none (`plan`'s `cuts_made`); a node cut by held
   results alone is cut by all of them or waits, never by a part (`plan._waits`); a sync put off
-  or left out is one whose answer could not have moved. Where the window walked one of the
-  results, the tree cuts by a part: each held result cuts its own outer cut beside the
-  provisional ones, as it comes, which such a tool cannot be handed, and whether that stands is
-  his to say. What is not there for them: a provisional
+  or left out is one whose answer could not have moved. His ruling on the
+  node the window walked a result of: it is cut by what the window walked alone until every cut
+  it reads has a held result, and then by those, never a held one beside the provisional
+  (`plan._all_held_or_seen`). What is not there for them: a provisional
   cut of such a tool is by another value than the held one, and nothing tells the tool which it
   is handed but the result's length against `count`; under another cut a tool is handed one
   outer cut's result at a time and never all of them together.

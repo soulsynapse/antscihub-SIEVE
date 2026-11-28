@@ -203,3 +203,15 @@ cell is over, the first walk's `decoder._packet_times`, 0.48. Under `nested` fiv
 param edited, in `plan.<genexpr>`, `document.node` and `window._cut_result`, the plan asking
 `cut_result` of every outer cut at each sync; a clip walk until settled by cuts, 1.40, of the
 same; a reopen until settled, 0.33; a clip walk by the window, 0.27; and the decoder's, 0.27.
+
+## The cells after a run held syncs only where a cut could move
+
+Run again with the commit that holds this section. A node cut by a result on a wire is cut by
+the held results where every cut it reads has one and else by what the window walked alone, so
+a run held of one outer cut moves no cut until the last, and the window syncs then and not
+before. Under `nested`, a clip walk until settled by cuts: 1.01 where it was 1.40, 7972255 steps
+at 400 cuts where it took 34387578, and the miniature holds O7 under `nested`, which it failed.
+Still over under `nested`: a param edited at once by cuts, 0.48, the plan asking `cut_result` of
+every outer cut and the window now asked what it walked of each; a reopen until settled, 0.33; a
+clip walk by the window, 0.32; the decoder's packet times, 0.27. Under `period` the one cell
+over is the decoder's, 0.48.

@@ -312,7 +312,7 @@ class Runs:
                     out[nid] = rows_of(run.results[nid], run.rows, s - run.start, n)
         return out
 
-    def hold(self, start, rows, results, chain, cut=None, worth=None, walked=None, cut_by=None):
+    def hold(self, start, rows, results, chain, cut=None, worth=None, walked=None, cut_by=None, serves_nothing=None):
         """Holds `results` as a run over `rows` rows from `start` inside a cut of rows `cut` when every
         chain node has `rows` rows in it under a key, unless a run held serves every node it has over
         its rows under the same key and its walk and cut, and holds the walked rows if it has them.
@@ -326,7 +326,10 @@ class Runs:
         `cut_by` is node to key of each result a cutting node is cut by: a run good of one goes
         after every run that is not, and of those the one held last first, so with such runs
         alone past the limit the one that came is the one refused and the runs held do not
-        change. A caller that walks again what went would else walk without end."""
+        change. A caller that walks again what went would else walk without end.
+        `serves_nothing` answers of a run whether it can serve no node as the plan now is, its keys
+        good or not, as a run walked inside a cut that is no cut now: `worth` has nothing of such
+        a run and it is good of no `cut_by`, so it goes before any run that serves."""
         nodes = list(chain.keys)
         if not nodes or not all(isinstance(r := results.get(nid), dict) and "signal" in r and len(r["signal"]) == rows
                                 and r.get("key") is not None for nid in nodes):
@@ -356,10 +359,11 @@ class Runs:
             self._by_node = (runs, len(runs), self._by_node[2])
         came = [new]
         while len(self.all) > 1 and self._indexed()[3] > self.limit:
-            has = {run: len(self._has(run.results, worth or chain)) * run.rows for run in self.all}
+            dead = {run for run in self.all if serves_nothing and run is not new and serves_nothing(run)}
+            has = {run: 0 if run in dead else len(self._has(run.results, worth or chain)) * run.rows for run in self.all}
             most = max(reversed(self.all), key=lambda run: (has[run], run.rows))
             spare = [run for run in self.all if run is not most]
-            uncut = [run for run in spare if not any(good(run.results.get(nid), key) for nid, key in (cut_by or {}).items())]
+            uncut = [run for run in spare if run in dead or not any(good(run.results.get(nid), key) for nid, key in (cut_by or {}).items())]
             out = ([run for run in uncut if not has[run]] or uncut)[0] if uncut else new if came else spare[-1]
             (came.clear if out is new else lambda: gone.append(out))()
             self.all = [run for run in self.all if run is not out]

@@ -103,6 +103,7 @@ def test_a_tool_cuts_by_its_declaration_alone_and_a_tool_below_two_cuts_is_told_
     assert [(c.extent.rows, c.provisional, c.cut_off) for c in cuts] == [((3, 5), True, True), ((6, 8), True, False)]
     assert p.entries["below"].fed and p.unheld == {"gated"} and p.entries["gated"].standing.startswith("gate waits on sig's walk")
     assert _clip_legs(p) == [] and [leg.best for leg in window_legs(p, 3, 6)] == [{"under"}, set()]
+    assert seen(Provisional([], (3, 9))).entries["under"].standing == "reads below, which cuts no rows of those the window walked; gated waits on its gate's walk"
     held = seen([(3, 5), (6, 8)])
     assert held.unheld == set() and not any(c.provisional for c in held.entries["below"].cuts) and len(_clip_legs(held)) == 2
     both = seen(Provisional([(0, 2)], (3, 9), [(3, 5), (6, 8)]))       # walked by the window and held: cut by the held
@@ -406,6 +407,8 @@ def test_a_period_cut_by_a_gate_is_cut_by_the_gates_held_run_and_holding_its_per
     assert gates.hold(0, 2, leaf, held.Chain({"below": "b"}, frozenset())) and gates.hold(2, 2, sig(), of_gate, cut_by={"sig": "k"})
     assert gates.hold(4, 2, sig(), of_gate, cut_by={"sig": "k"}) == [(0, 2), (4, 6)]      # the run no node is cut by goes first
     assert not gates.hold(6, 2, sig(), of_gate, cut_by={"sig": "k"}) and [r.start for r in gates] == [2, 4]     # of runs a node is cut by, the one that came is refused: no run held moves, so nothing is walked again
+    gone = lambda run: run.start == 4       # a run that serves nothing now goes before one that serves, though a node is cut by it and the other is older
+    assert gates.hold(8, 2, leaf, held.Chain({"below": "b"}, frozenset()), serves_nothing=gone, cut_by={"sig": "k"}) == [(4, 6), (8, 10)]
     g.decoder.count = 9     # a count lowered under a period's end
     g.sync()
     lowered = g.snapshot()

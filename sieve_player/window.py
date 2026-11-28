@@ -501,6 +501,7 @@ class PlayerWindow(QMainWindow):
         self.window_runs = held.Runs(WINDOW_RUNS_BYTES, self._result_bytes)   # the window's own walks: they serve the window again and nothing else reads them
         self._spared = False                      # the window's results are a held run's, and the worker runs no chain over it
         self._of_clip = False                     # that held run is a walk of the clip
+        self._cuts_of, self._cuts_now = None, {}  # the plan _of_no_cut last read, and its nodes below a cut in time to the rows of each cut
         self._clip_ended = False                  # the clip walk told of its last row and its results have not yet come
         self._clip_rests = False                  # the clip walk last told of every row of its range done: the clip's last, or the one it was stopped at
         self._given = False                       # the window walk was given held results for some of the chain and steps the rest
@@ -1806,13 +1807,23 @@ class PlayerWindow(QMainWindow):
         was = set(self.runs)
         wired = [self.doc.source(n.id, by[0]) for n in self.doc.nodes if (by := registry.cut_by(self.tools.get(n.tool)))]
         if moved := self.runs.hold(start, rows, results, chain or self._chain(), cut, worth=self._chain(self._walked_nodes()), walked=walked,
-                                   cut_by={w.src: self._key(w.src) for w in wired if w}):
+                                   cut_by={w.src: self._key(w.src) for w in wired if w}, serves_nothing=self._of_no_cut()):
             self._unwritten = True
             self._hold.start()
             changed = was ^ set(self.runs)
             self._show_held(moved, changed)
             if self._could_cut_anew(changed, was):
                 self._recut(resume=of_clip)
+
+    def _of_no_cut(self):
+        """Answers of a held run whether it was walked inside a cut in time that no node it has a
+        result of is cut by now; None while a cutting node waits or is cut provisionally, its
+        cuts then not the ones it will have."""
+        p = self.graph.snapshot()
+        if self._cuts_of is not p:
+            self._cuts_of, self._cuts_now = p, {nid: frozenset(c.extent.rows for c in w.cuts) for w in p.timed for nid in w.chain}
+        now = self._cuts_now
+        return None if p.unheld else lambda run: run.cut is not None and not any(run.cut in now.get(nid, ()) for nid in run.results)
 
     def _could_cut_anew(self, changed, was):
         """Whether the runs `changed`, each held now or in `was` and gone, could move a cutting

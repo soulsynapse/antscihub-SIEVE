@@ -132,4 +132,26 @@ for name, some in (("differs", differ), ("lacks", lacks), ("beside", more)):
     for k in some[:4]:
         print(f"  {name}: {k}")
 sys.stdout.flush()
+
+
+def under_limit(name, told):
+    """The results of `want` a player keeps whose runs are limited to what its clip walk held, the two edits made after; `told` False, no run is said to serve nothing."""
+    w = opened(name, False)
+    w._toggle_clip()
+    rested(w)
+    w.runs.limit = w.runs._indexed()[3]
+    if not told:
+        w._of_no_cut = lambda: None
+    for nid, set_it in (("smooth_below", lambda n: n.params.update(reach=4)), ("smooth_in", lambda n: setattr(n, "band", (12.0, float("inf"))))):
+        set_it(w.doc.node(nid))
+        w._params_changed(nid)
+        rested(w)
+    return sum(1 for k in holds(w) if k in want), len(w.runs)
+
+
+for told in (False, True):
+    kept, runs = under_limit(f"limit-{told}", told)
+    print(f"the runs limited to what the clip walk held, a run of a cut that is none {'said to serve nothing' if told else 'not said'}: "
+          f"{kept} of the {len(want)} results kept, {runs} runs")
+    sys.stdout.flush()
 os._exit(1 if differ or lacks or not want else 0)

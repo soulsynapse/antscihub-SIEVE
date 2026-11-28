@@ -437,7 +437,8 @@ def plan(doc, tools, base, cut_file=None, cut_result=None, footage=None, count=N
         e.standing = (crossings.get(nid) or refused.get(nid) or waiting.get(nid) or provisional.get(nid)
                       or (f"walked over each of {len(by_period[nid].cuts)} periods alone, by the clip walk and by the window where it overlaps one"
                           + (f"; {n} provisional, by the window alone" if (n := unsure[id(by_period[nid])]) else "") if nid in by_period else "")
-                      or (f"reads {e.src}, which cuts no rows" if e.kind == "series" and e.fed and e.src and not entries[e.src].cuts else "")
+                      or (f"reads {e.src}, which cuts no rows" + next((f" of those the window walked; {c} waits on its gate's walk" for c in provisional if reads_node(nid, c)), "")
+                          if e.kind == "series" and e.fed and e.src and not entries[e.src].cuts else "")
                       or _standing(doc, tools, entries, heads, walked_chains, nid))
     over = doc.overlay if doc.overlay in entries and overlaid(produces(doc, tools, doc.overlay)) else None
     return Plan(entries, heads, chain, [s for s in series if s not in walked_chains], doc.display if doc.display in entries else None, over, timed,
